@@ -283,39 +283,48 @@ describe("current wh-review helpers", () => {
   it("preserves provider unavailability and keeps WorkflowHub recovery to one call", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-provider-unavailable-")));
     temporary.push(attachmentRoot);
-    const calls = [];
-    const result = await runSimpleReview({
-      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
-    }, {
-      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
-      client: {
-        async runGroup() {
-          calls.push(true);
-          return { runtimeId: "runtime-1", outcome: "unavailable", providers: [{
-            provider: "other/model", status: "failed", identity: { provider: "other/model" }, session_id: null,
-            error: { code: "RATE_LIMITED", message: "retry budget exhausted" }, timing: null, usage: null,
-          }] };
+    const sinkRoot = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-recovery-sink-")));
+    temporary.push(sinkRoot);
+    const previousSinkRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+    process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = sinkRoot;
+    try {
+      const calls = [];
+      const result = await runSimpleReview({
+        stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+      }, {
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+        resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+        selectProviders: () => ({ providers: ["other/model"] }),
+        client: {
+          async runGroup() {
+            calls.push(true);
+            return { runtimeId: "runtime-1", outcome: "unavailable", providers: [{
+              provider: "other/model", status: "failed", identity: { provider: "other/model" }, session_id: null,
+              error: { code: "RATE_LIMITED", message: "retry budget exhausted" }, timing: null, usage: null,
+            }] };
+          },
         },
-      },
-    });
-    expect(result).toMatchObject({
-      status: "unavailable",
-      provider_results: [{ status: "failed", error: { code: "RATE_LIMITED" } }],
-      error: { code: "RATE_LIMITED", message: "retry budget exhausted" },
-    });
-    expect(calls).toHaveLength(1);
+      });
+      expect(result).toMatchObject({
+        status: "unavailable",
+        provider_results: [{ status: "failed", error: { code: "RATE_LIMITED" } }],
+        error: { code: "RATE_LIMITED", message: "retry budget exhausted" },
+      });
+      expect(calls).toHaveLength(1);
 
-    const { runReviewRecovery } = await import("../wh-review-cli.mjs");
-    const recoveryCalls = [];
-    const recovered = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
-      runRound: async (input) => {
-        recoveryCalls.push(input);
-        return { status: "unavailable", error_code: "RATE_LIMITED", snapshot_tree: input.snapshot_tree, material_id: input.material_id };
-      },
-    });
-    expect(recovered).toMatchObject({ status: "unavailable", error_code: "RATE_LIMITED" });
-    expect(recoveryCalls).toHaveLength(1);
+      const { runReviewRecovery } = await import("../wh-review-cli.mjs");
+      const recoveryCalls = [];
+      const recovered = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+        runRound: async (input) => {
+          recoveryCalls.push(input);
+          return { status: "unavailable", error_code: "RATE_LIMITED", snapshot_tree: input.snapshot_tree, material_id: input.material_id };
+        },
+      });
+      expect(recovered).toMatchObject({ status: "unavailable", error_code: "RATE_LIMITED" });
+      expect(recoveryCalls).toHaveLength(1);
+    } finally {
+      if (previousSinkRoot === undefined) delete process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+      else process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = previousSinkRoot;
+    }
   });
 });

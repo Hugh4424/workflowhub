@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
@@ -24,7 +25,7 @@ import { validateCanonicalTestReceipt } from "../../../runtime/evidence/canonica
 import { validateAcceptanceEvidence } from "../../../runtime/evidence/acceptance-evidence-validator.mjs";
 import { validateBrowserQaEvidence } from "../../../runtime/evidence/stage-content-evidence.mjs";
 import { qualityFactDigest } from "../../../runtime/evidence/quality-fact.mjs";
-import { recordTaskBoundE2eReviewResult, recordTaskBoundE2eReviewUnavailable } from "../../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest, recordTaskBoundE2eReviewResult, recordTaskBoundE2eReviewUnavailable } from "../../../runtime/review/review-record-route.mjs";
 import {
   createSimpleReviewPacket,
   dispatchFrozenProviderInput,
@@ -40,11 +41,142 @@ const ACCEPTANCE_EVIDENCE_REF = /^quality\/evidence\/acceptance\/build-code\/[A-
 const STAGE_QUALITY_EVIDENCE_REF = /^quality\/evidence\/stage-quality\/build-code\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const BROWSER_QA_EVIDENCE_REF = /^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const HOST_PATH = /(?:\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+)/g;
+const bareSinkLocks = new Map();
 
 function safeRecoveryError(error) {
   const code = typeof error?.code === "string" && error.code !== "" ? error.code : "WORKFLOWHUB_LOCAL_ERROR";
   const message = String(error?.message ?? error).replace(HOST_PATH, "<host-path-redacted>");
   return { code, message };
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function bareSinkMaterialId(request) {
+  // Recovery requests may already carry the material identity. Use
+  // it directly so a bare request cannot collide with another request that
+  // has no material payload (for example, a stale unavailable recovery fact).
+  if (typeof request?.material_id === "string" && request.material_id !== "") return request.material_id;
+  if (typeof request?.materialId === "string" && request.materialId !== "") return request.materialId;
+  try {
+    return createSimpleReviewPacket({
+      stage: request.stage,
+      review_track: request.review_track ?? request.reviewTrack ?? null,
+      review_kind: request.review_kind ?? request.reviewKind ?? null,
+      materials: request.materials,
+    }).material_id;
+  } catch {
+    return createHash("sha256").update(stableJson({ materials: request.materials ?? null })).digest("hex");
+  }
+}
+
+function bareSinkKey(request) {
+  return createHash("sha256").update(stableJson({
+    stage: request.stage ?? null,
+    review_track: request.review_track ?? request.reviewTrack ?? null,
+    review_kind: request.review_kind ?? request.reviewKind ?? null,
+    review_scope: request.review_scope ?? request.reviewScope ?? null,
+    subject: request.subject ?? null,
+    review_policy: request.review_policy ?? request.reviewPolicy ?? null,
+    reason: request.reason ?? request.reason_code ?? request.recheck_reason ?? null,
+    host_provider: request.host_provider ?? request.hostProvider ?? null,
+    material_id: bareSinkMaterialId(request),
+  })).digest("hex");
+}
+
+function bareSinkRecord(request, result, key) {
+  return {
+    version: "workflowhub-review-sink.v1",
+    authoritative: false,
+    request_key: key,
+    request: {
+      stage: request.stage ?? null,
+      review_track: request.review_track ?? request.reviewTrack ?? null,
+      review_kind: request.review_kind ?? request.reviewKind ?? null,
+      review_scope: request.review_scope ?? request.reviewScope ?? null,
+      subject: request.subject ?? null,
+      review_policy: request.review_policy ?? request.reviewPolicy ?? null,
+      host_provider: request.host_provider ?? request.hostProvider ?? null,
+      material_id: bareSinkMaterialId(request),
+    },
+    result: {
+      status: result?.status ?? "unavailable",
+      ...(result?.error_code ? { error_code: result.error_code } : {}),
+      error: result?.error ?? (result?.error_code ? { code: result.error_code, message: "review recovery failed" } : null),
+      attempt_ref: result?.attempt_ref ?? result?.attemptRef ?? null,
+      result_ref: result?.result_ref ?? result?.resultRef ?? null,
+      report_ref: result?.report_ref ?? result?.reportRef ?? null,
+    },
+  };
+}
+
+function bareSinkLocation(request) {
+  const root = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT || `${homedir()}/.workflowhub/review-sink`;
+  return { root, ref: `${root}/${bareSinkKey(request)}.json` };
+}
+
+function readBareReviewSink(request) {
+  const { ref } = bareSinkLocation(request);
+  if (!existsSync(ref)) return null;
+  try {
+    const value = JSON.parse(readFileSync(ref, "utf8"));
+    if (value?.version !== "workflowhub-review-sink.v1" || value.request_key !== bareSinkKey(request)) return null;
+    return { ...value, sink_ref: ref };
+  } catch { return null; }
+}
+
+function writeBareReviewSink(request, result) {
+  const key = bareSinkKey(request);
+  const { root, ref } = bareSinkLocation(request);
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const record = bareSinkRecord(request, result, key);
+  const bytes = `${JSON.stringify(record)}\n`;
+  if (existsSync(ref)) {
+    const existing = readFileSync(ref, "utf8");
+    if (existing !== bytes) {
+      const error = new Error("review sink key already contains different bytes");
+      error.code = "REVIEW_SINK_CONFLICT";
+      throw error;
+    }
+    return { sink_ref: ref, authoritative: false, reused: true };
+  }
+  writeFileSync(ref, bytes, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  return { sink_ref: ref, authoritative: false, reused: false };
+}
+
+async function runBareReview(request, runRound) {
+  const key = bareSinkKey(request);
+  const previous = bareSinkLocks.get(key) ?? Promise.resolve();
+  const current = previous.then(async () => {
+    const existing = readBareReviewSink(request);
+    if (existing) return { ...existing.result, sink_ref: existing.sink_ref, authoritative: false, reused: true };
+    let result;
+    try {
+      result = await runRound(request);
+    } catch (error) {
+      const diagnostic = safeRecoveryError(error);
+      const review = error?.reviewResult;
+      result = {
+        status: "unavailable", recovery: "run_round_exception", error_code: diagnostic.code,
+        error: diagnostic,
+        ...(request.snapshot_tree === undefined ? {} : { snapshot_tree: request.snapshot_tree }),
+        ...(request.material_id === undefined ? {} : { material_id: request.material_id }),
+        ...(review?.attemptRef ? { attempt_ref: review.attemptRef } : {}),
+        ...(review?.resultRef ? { result_ref: review.resultRef } : {}),
+        ...(review?.reportRef ? { report_ref: review.reportRef } : {}),
+      };
+    }
+    return { ...result, ...writeBareReviewSink(request, result) };
+  });
+  const tracked = current.catch(() => undefined);
+  bareSinkLocks.set(key, tracked);
+  try { return await current; }
+  finally {
+    if (bareSinkLocks.get(key) === tracked) bareSinkLocks.delete(key);
+  }
 }
 
 export function resolveTrustedReviewSubject(input) {
@@ -767,27 +899,19 @@ export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
   });
 }
 
-export async function runReviewRecovery(input, { runRound = runReviewRound, sameSourceFallback = null } = {}) {
+export async function runReviewRecovery(input, { runRound = runReviewRound, recordContext = null, sameSourceFallback = null } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review recovery input is required");
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
   if (sameSourceFallback !== null) throw new TypeError("sameSourceFallback is retired; 3rd-review owns heterologous recovery");
   const request = structuredClone(input);
   for (const field of RETIRED_RECOVERY_FIELDS) delete request[field];
-  try {
-    return await runRound(request);
-  } catch (error) {
-    const diagnostic = safeRecoveryError(error);
-    const review = error?.reviewResult;
-    return {
-      status: "unavailable", recovery: "run_round_exception", error_code: diagnostic.code,
-      error: diagnostic,
-      ...(request.snapshot_tree === undefined ? {} : { snapshot_tree: request.snapshot_tree }),
-      ...(request.material_id === undefined ? {} : { material_id: request.material_id }),
-      ...(review?.attemptRef ? { attempt_ref: review.attemptRef } : {}),
-      ...(review?.resultRef ? { result_ref: review.resultRef } : {}),
-      ...(review?.reportRef ? { report_ref: review.reportRef } : {}),
-    };
+  if (recordContext !== null) {
+    if (!recordContext || typeof recordContext !== "object" || !recordContext.task || !recordContext.kernel) {
+      throw new TypeError("recordContext requires the authenticated task and kernel");
+    }
+    return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound });
   }
+  return runBareReview(request, runRound);
 }
 
 export async function runReviewRound(input) {

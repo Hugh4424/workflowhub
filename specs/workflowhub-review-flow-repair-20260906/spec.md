@@ -2,7 +2,7 @@
 
 - **功能名**：WorkflowHub 审查流程修复
 - **来源**：decision-log.md R-001～R-009、D-001～D-014；D-010～D-014为2026-09-07用户授权的当前范围增量，原重审预算排除保留。
-- **状态**：当前范围增量已纳入；原规格审查仅覆盖旧范围，当前修订待增量审查与分析，不宣称正式完成。用户要求本轮停在build-code前。
+- **状态**：当前范围增量已纳入；原规格审查仅覆盖旧范围，当前修订已完成实现与事实复核，最终 acceptance 仍 pending。此前 handoff 要求停在 build-code 前；用户于 2026-09-07 后续明确授权按计划执行 build-code，该授权已 supersede 旧停步边界。
 - **内容合同**：spec-content.v3。
 
 ## 材料导航
@@ -244,9 +244,9 @@ WorkflowHub 配置加载、现有审查入口内静态预检、审查记录与�
   - **owner、影响**：build-plan 主会话；RISK-001、OPEN-001；不能承诺相邻统计正确或放宽复用身份。
   - **关联**：FR-SAFETY-002、FR-COMPAT-001、FR-RECORD-003 及对应同号 AC。
 
-- **PFACT-007**：用户已授权当前任务范围增量，且要求本轮在build-code前停止。
+- **PFACT-007**：用户先授权当前任务范围增量并要求在 build-code 前停止；随后于 2026-09-07 明确授权按计划执行 build-code，后者 supersede 旧 handoff 停步边界。
   - **status**：verified
-  - **证据**：quality/evidence/scope-repair-20260907/authorization.json；decision-log.md R-008/R-009、D-010～D-014。
+  - **证据**：quality/evidence/scope-repair-20260907/authorization.json；当前会话用户指令“好的，按计划执行吧，尽快结束任务吧”（2026-09-07）；decision-log.md R-008/R-009、D-010～D-014。
   - **关联**：FR-CONTRACT-001～007、FR-LIFECYCLE-001～004及对应同号AC。
 - **PFACT-008**：当前合法N/A写法在两消费者间互斥，ID与模板冲突及词法误判已用纯函数重放确认。
   - **status**：verified

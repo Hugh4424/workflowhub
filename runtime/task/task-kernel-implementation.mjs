@@ -659,6 +659,13 @@ export function buildTaskKernel(taskHandle, {
     task,
     readInput,
     currentVNextSnapshot,
+    currentVNextContext() {
+      const context = currentContext();
+      return Object.freeze({
+        snapshot: context.snapshot,
+        materialRevision: context.revision.revision_id,
+      });
+    },
     currentVNextMaterialRevision() {
       return currentContext().revision.revision_id;
     },

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-import { validateAcFourSegmentCards, validateDiagnosticReport, validateMaterialOracleContract, validateTaskOracleContract } from "../../runtime/stage/stage-content-contracts.mjs";
+import { validateAcFourSegmentCards, validateDiagnosticReport, validateExecutablePlanTaskMinimum, validateMaterialOracleContract, validateTaskOracleContract } from "../../runtime/stage/stage-content-contracts.mjs";
 import { buildStageInputPacket, verifyStageInputPacket } from "../../runtime/task/material-workspace.mjs";
 
 const goodAc = `### AC-TEST-001\n可观察的阶段完成事实\n验证：运行契约测试\n通过：结果状态为 recorded\n失败：结果状态为 incomplete\n证据：test\n`;
@@ -18,6 +20,29 @@ describe("Phase 2 material and oracle contracts", () => {
     expect(validateTaskOracleContract(goodOracle("RED", "T002", false))).toMatchObject({ ok: false, status: "incomplete" });
     expect(validateTaskOracleContract(goodOracle("GREEN", "T001", false))).toMatchObject({ ok: true, status: "ready" });
     expect(validateMaterialOracleContract({ spec: goodAc, plan: goodAc, tasks: goodOracle("GREEN", "T001", false) })).toMatchObject({ ok: true, status: "ready" });
+  });
+
+  it("consumes the current D-xxx risk references and reasoned N/A roles as one contract", () => {
+    const root = join(process.cwd(), "specs", "workflowhub-review-flow-repair-20260906");
+    const decisionLog = readFileSync(join(root, "decision-log.md"), "utf8");
+    const spec = readFileSync(join(root, "spec.md"), "utf8");
+    const plan = readFileSync(join(root, "plan.md"), "utf8");
+    const tasks = readFileSync(join(root, "tasks.md"), "utf8");
+    expect(validateMaterialOracleContract({ spec, plan, tasks })).toMatchObject({ ok: true, errors: [] });
+    expect(validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionLog })).toMatchObject({ ok: true, errors: [] });
+    expect(validateMaterialOracleContract({ spec, plan, tasks: tasks.replace("N/A — non-behavior change: 验证已实现修复", "N/A") })).toMatchObject({ ok: false });
+  });
+
+  it("does not treat a decision token mentioned in prose as a declared decision", () => {
+    const root = join(process.cwd(), "specs", "workflowhub-review-flow-repair-20260906");
+    const decisionLog = readFileSync(join(root, "decision-log.md"), "utf8") + "\n正文说明 D-999 只是待排查编号。\n";
+    const spec = readFileSync(join(root, "spec.md"), "utf8");
+    const plan = readFileSync(join(root, "plan.md"), "utf8");
+    const tasks = readFileSync(join(root, "tasks.md"), "utf8")
+      .replace('["D-002","D-003","D-005","D-006","D-007"]', '["D-999","D-003","D-005","D-006","D-007"]');
+    const result = validateExecutablePlanTaskMinimum({ spec, plan, tasks, decisionLog });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("; ")).toMatch(/unknown D-999/);
   });
 });
 

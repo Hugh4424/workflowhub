@@ -21,11 +21,48 @@ Claude 不把 transcript 交给 WorkflowHub 反查。宿主将当前任务的结
     "source_family": "claude-code",
     "source_ref": "<claude-run-ref>",
     "status": "incomplete",
-    "events": [],
+    "events": [
+      {
+        "subject_kind": "step",
+        "subject_id": "stage-end-spec-analyze",
+        "task_id": "<task-id>",
+        "stage": "build-code",
+        "started_at_ms": 100,
+        "ended_at_ms": 140,
+        "status": "incomplete",
+        "input_refs": ["quality/evidence/current-material.json"],
+        "result_summary": "stage-end analyzer returned an incomplete fact",
+        "reason": "host result was partial",
+        "output_refs": ["quality/evidence/host-produced.json"]
+      },
+      {
+        "subject_kind": "skill",
+        "subject_id": "spec-analyze",
+        "task_id": "<task-id>",
+        "stage": "build-code",
+        "status": "incomplete",
+        "trigger": true,
+        "executed": true,
+        "version": "<skill-version>",
+        "input_refs": ["quality/evidence/current-material.json"],
+        "output_refs": ["quality/evidence/spec-analyze-output.json"],
+        "result_summary": "spec-analyze result was unavailable",
+        "reason": "host result was partial"
+      }
+    ],
     "spec_analyze": {}
   }
 }
 ```
+
+`started_at_ms` and `ended_at_ms` are optional. When both are present they
+must be non-negative and ordered; when omitted the bridge preserves the
+explicit event array order and records cost as `unavailable` rather than
+guessing elapsed time. An event may declare task-local `output_refs`; these
+references are preserved separately from evidence refs and absolute paths,
+parent traversal, and cross-task paths are rejected. This bridge accepts an
+explicit host packet only; it is not an automatic Claude hook or transcript
+recovery mechanism.
 
 ## 本任务回放事实
 

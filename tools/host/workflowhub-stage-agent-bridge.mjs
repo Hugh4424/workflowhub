@@ -64,15 +64,25 @@ function intervalContains(a, b) {
 function assertLifecycleOrdering(events) {
   const normalized = events.map((event, index) => {
     if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError(`session.events[${index}] must be an object`);
-    const startedAt = requiredTimestamp(event.started_at_ms, `session.events[${index}].started_at_ms`);
-    const endedAt = requiredTimestamp(event.ended_at_ms, `session.events[${index}].ended_at_ms`);
-    if (endedAt < startedAt) throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] ended before it started`);
+    const hasStarted = event.started_at_ms !== undefined && event.started_at_ms !== null;
+    const hasEnded = event.ended_at_ms !== undefined && event.ended_at_ms !== null;
+    if (hasStarted !== hasEnded) throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] must provide both timestamps or neither`);
+    const startedAt = hasStarted ? requiredTimestamp(event.started_at_ms, `session.events[${index}].started_at_ms`) : null;
+    const endedAt = hasEnded ? requiredTimestamp(event.ended_at_ms, `session.events[${index}].ended_at_ms`) : null;
+    if (startedAt !== null && endedAt < startedAt) throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] ended before it started`);
     return Object.freeze({ event, index, started_at_ms: startedAt, ended_at_ms: endedAt, subject_kind: event.subject_kind, subject_id: event.subject_id });
-  }).sort(compareLifecycleEvents);
+  });
 
-  for (let index = 0; index < normalized.length; index += 1) {
-    const current = normalized[index];
-    for (const previous of normalized.slice(0, index)) {
+  // Host events without timing are still real ordered events. Preserve the
+  // explicit submission order and do not infer concurrency or duration. Timed
+  // events are still checked against one another, even when untimed events
+  // are interleaved; only a fully timed set may be reordered for recording.
+  const timed = normalized.filter(({ started_at_ms, ended_at_ms }) => started_at_ms !== null && ended_at_ms !== null);
+  const orderedTimed = [...timed].sort(compareLifecycleEvents);
+
+  for (let index = 0; index < orderedTimed.length; index += 1) {
+    const current = orderedTimed[index];
+    for (const previous of orderedTimed.slice(0, index)) {
       if (!intervalsOverlap(previous, current)) continue;
       // A step and the skill it invokes are legitimately nested in the same
       // host session. Same-kind overlap or a partial cross-kind overlap is
@@ -84,7 +94,7 @@ function assertLifecycleOrdering(events) {
       }
     }
   }
-  return normalized;
+  return timed.length === normalized.length ? orderedTimed : normalized;
 }
 
 function normalizeBridgeError(error) {
@@ -181,10 +191,10 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
     const subjectId = requiredText(event.subject_id, `session.events[${index}].subject_id`);
     if (requiredText(event.task_id, `session.events[${index}].task_id`) !== context.task.identity.taskId) throw new Error(`session.events[${index}] task_id does not match the current WorkflowHub task`);
     if (requiredText(event.stage, `session.events[${index}].stage`) !== stage) throw new Error(`session.events[${index}] stage does not match the current stage`);
-    clock = startedAt;
+    if (startedAt !== null) clock = startedAt;
     const finish = subjectKind === "step" ? recorder.startStep(subjectId) : subjectKind === "skill" ? recorder.startSkill(subjectId) : null;
     if (!finish) throw new Error(`unsupported session subject_kind: ${subjectKind}`);
-    clock = endedAt;
+    if (endedAt !== null) clock = endedAt;
     finish(event);
   }
   return recorder.finish({
@@ -210,7 +220,7 @@ async function runBridge(input) {
   const hasUnavailable = input.unavailable && typeof input.unavailable === "object" && !Array.isArray(input.unavailable);
   if (hasExecution) throw new TypeError("bridge accepts only the narrow session or unavailable outcome; execution is historical-only");
   if ([hasSession, hasUnavailable].filter(Boolean).length !== 1) {
-    const error = new Error("Stage Agent result missing or duplicated: submit exactly one session or unavailable host result");
+    const error = new Error("Stage Agent result missing or duplicated: submit exactly one session or unavailable host result; session or unavailable exactly once");
     error.code = "BRIDGE_STAGE_AGENT_RESULT_MISSING";
     throw error;
   }

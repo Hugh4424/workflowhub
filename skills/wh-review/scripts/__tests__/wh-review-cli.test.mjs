@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -38,7 +38,18 @@ const reviewAttemptRecord = {
 };
 const reviewSemanticAttemptRecord = { ...reviewAttemptRecord, terminal_status: "semantic", error: null };
 function git(cwd, args) { return String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim(); }
-afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+let previousSinkRoot;
+beforeEach(() => {
+  previousSinkRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+  const sinkRoot = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-test-sink-")));
+  roots.push(sinkRoot);
+  process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = sinkRoot;
+});
+afterEach(() => {
+  if (previousSinkRoot === undefined) delete process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+  else process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = previousSinkRoot;
+  while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
+});
 
 describe("wh-review production CLI", () => {
   it("records current unavailable evidence when the build-code outcome is missing", async () => {
@@ -591,6 +602,32 @@ describe("wh-review production CLI", () => {
     });
   });
 
+  it("review flow sink writes one non-authoritative record and reuses it concurrently", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const sink = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-sink-"))); roots.push(sink);
+    const previousRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+    process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = sink;
+    try {
+      let calls = 0;
+      const request = { stage: "build-code", host_provider: "codex", materials: { raw: "sink fixture" } };
+      const runRound = async () => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 10)); return { status: "unavailable", error_code: "MATERIAL_INCOMPLETE" }; };
+      const [first, second] = await Promise.all([runReviewRecovery(request, { runRound }), runReviewRecovery(request, { runRound })]);
+      expect(calls).toBe(1);
+      expect(first).toMatchObject({ authoritative: false, reused: false });
+      expect(first).toMatchObject({ error_code: "MATERIAL_INCOMPLETE" });
+      expect(second).toMatchObject({ authoritative: false, reused: true, sink_ref: first.sink_ref, error_code: "MATERIAL_INCOMPLETE" });
+      expect(readdirSync(sink)).toHaveLength(1);
+      expect(JSON.parse(readFileSync(first.sink_ref, "utf8"))).toMatchObject({ authoritative: false, request_key: expect.any(String) });
+      const distinct = await runReviewRecovery({ ...request, subject: { ref: "other-subject" }, review_policy: { mode: "strict" } }, { runRound });
+      expect(distinct.reused).toBe(false);
+      expect(distinct.sink_ref).not.toBe(first.sink_ref);
+      expect(readdirSync(sink)).toHaveLength(2);
+    } finally {
+      if (previousRoot === undefined) delete process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+      else process.env.WORKFLOWHUB_REVIEW_SINK_ROOT = previousRoot;
+    }
+  });
+
   it("preserves review refs when stage-fact publication fails", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const review = { status: "available", attemptRef: "quality/reviews/attempts/one/attempt.json", resultRef: "quality/reviews/results/one.json", reportRef: "quality/reviews/reports/one.md" };
@@ -623,7 +660,7 @@ describe("wh-review production CLI", () => {
       { status: "available", result_ref: "semantic", findings: [{ severity: "minor" }], snapshot_tree: "tree-1", material_id: "material-1" },
     ]) {
       const calls = [];
-      const result = await runReviewRecovery({ task_path: "/tmp/task", stage: "build-code", snapshot_tree: "tree-1", material_id: "material-1" }, {
+      const result = await runReviewRecovery({ task_path: "/tmp/task", stage: "build-code", reason: envelope.error_code ?? "semantic-findings", snapshot_tree: "tree-1", material_id: "material-1" }, {
         runRound: async () => { calls.push(true); return envelope; },
       });
       expect(calls).toHaveLength(1);
@@ -634,14 +671,14 @@ describe("wh-review production CLI", () => {
   it("preserves missing-route and provider identity failures after one call", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const routeCalls = [];
-    const routeResult = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+    const routeResult = await runReviewRecovery({ stage: "build-code", reason: "missing-route", snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async () => { routeCalls.push(true); return { status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE", snapshot_tree: "tree-1", material_id: "material-1" }; },
     });
     expect(routeCalls).toHaveLength(1);
     expect(routeResult).toMatchObject({ status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE" });
 
     const identityCalls = [];
-    const identityResult = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+    const identityResult = await runReviewRecovery({ stage: "build-code", reason: "provider-identity", snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async () => { identityCalls.push(true); return { status: "unavailable", error_code: "AUTH", attempt_ref: `attempt-${identityCalls.length}`, snapshot_tree: "tree-1" }; },
     });
     expect(identityCalls).toHaveLength(1);
@@ -652,7 +689,7 @@ describe("wh-review production CLI", () => {
     const { runReviewRecovery } = await import(cli.href);
     for (const error_code of ["PROTOCOL_INCOMPATIBLE", "PUBLIC_RESULT_INVALID", "PROFILE_MISMATCH", "OUTPUT_INVALID", "PROVIDER_OUTPUT_INVALID"]) {
       const calls = [];
-      const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+      const result = await runReviewRecovery({ stage: "build-code", reason: error_code, snapshot_tree: "tree-1", material_id: "material-1" }, {
         runRound: async () => {
           calls.push(true);
           return { status: "unavailable", attempt_ref: `attempt-${error_code}`, error_code, snapshot_tree: "tree-1", material_id: "material-1" };
@@ -663,7 +700,7 @@ describe("wh-review production CLI", () => {
     }
 
     const calls = [];
-    const result = await runReviewRecovery({ snapshot_tree: "tree-1", material_id: "material-1" }, {
+    const result = await runReviewRecovery({ stage: "build-code", reason: "cancelled", snapshot_tree: "tree-1", material_id: "material-1" }, {
       runRound: async () => {
         calls.push(true);
         return { status: "unavailable", attempt_ref: "cancelled", error_code: "CANCELLED", snapshot_tree: "tree-1", material_id: "material-1" };
@@ -727,7 +764,7 @@ describe("wh-review production CLI", () => {
     expect(result).not.toHaveProperty("error_code");
   });
 
-  it("uses the production run entry for one broker request and preserves provider failure", async () => {
+  it("uses the production run entry for the paired broker requests and preserves provider failure", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-recovery-entry-"))); roots.push(root);
     const home = join(root, "home");
     const configDir = join(home, ".config", "workflowhub"); mkdirSync(configDir, { recursive: true });
@@ -792,7 +829,6 @@ process.stdout.write(JSON.stringify({
       third_review: { command: [process.execPath, broker], config: brokerConfig, attachment_root: packetRoot },
       wh_review: {
         version: 2,
-        profiles: { kimi: { model: null, effort: null, thinking: null, priority: 1 } },
         stages: { "make-decision": { direction: { initial: ["kimi"], minimum_heterologous: 1, mode: "single_round" } } },
       },
     }));
@@ -811,11 +847,18 @@ process.stdout.write(JSON.stringify({
     const result = JSON.parse(execFileSync(process.execPath, [fileURLToPath(cli), "run", inputPath], {
       encoding: "utf8", env: { ...process.env, HOME: home, FAKE_REVIEW_COUNTER: counter },
     }));
-    expect(Number(readFileSync(counter, "utf8"))).toBe(1);
+    // make-decision direction is one logical paired review: red and blue
+    // each issue one broker request and retain role provenance. The fixture
+    // counter is intentionally a best-effort side effect because the two
+    // child processes may update it concurrently.
+    expect(Number(readFileSync(counter, "utf8"))).toBeGreaterThan(0);
     expect(result).toMatchObject({ status: "unavailable" });
     expect(result).not.toHaveProperty("error_code");
     expect(result).not.toHaveProperty("attempt_ref");
-    expect(result.provider_results).toHaveLength(1);
-    expect(result.provider_results[0]).toMatchObject({ provider: "kimi", status: "failed", error: { code: "AUTH" } });
+    expect(result.provider_results).toHaveLength(2);
+    expect(result.provider_results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "kimi", role: "red", status: "failed", error: expect.objectContaining({ code: "AUTH" }) }),
+      expect.objectContaining({ provider: "kimi", role: "blue", status: "failed", error: expect.objectContaining({ code: "AUTH" }) }),
+    ]));
   });
 });

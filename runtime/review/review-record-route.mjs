@@ -5,6 +5,7 @@ import { aggregateCanonicalProviderResults, providerAdapter } from "./canonical-
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const MATERIAL_REVISION = /^revision-[a-f0-9]{64}$/;
+const IN_PROCESS_REQUEST_LOCKS = new Map();
 
 function textHash(text) {
   return createHash("sha256").update(text).digest("hex");
@@ -22,6 +23,11 @@ function assertTaskHandle(task) {
   return task;
 }
 
+function createCanonicalRecord(task, relativePath, data) {
+  if (typeof task.createRecordAtomic === "function") return task.createRecordAtomic(relativePath, data);
+  return task.writeRecordAtomic(relativePath, data);
+}
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -31,6 +37,129 @@ function canonicalJson(value) {
 }
 function policyHash(policy) {
   return createHash("sha256").update(canonicalJson(policy)).digest("hex");
+}
+
+function reviewRequestMaterialId(request, materialIdForRequest = null) {
+  if (typeof materialIdForRequest === "function") {
+    const value = materialIdForRequest(request);
+    if (typeof value !== "string" || !SHA256_HEX.test(value)) throw new TypeError("materialIdForRequest must return a sha256 hex string");
+    return value;
+  }
+  for (const value of [request?.material_id, request?.materialId]) {
+    if (typeof value === "string" && SHA256_HEX.test(value)) return value;
+  }
+  return textHash(canonicalJson({
+    stage: request?.stage ?? null,
+    review_track: request?.review_track ?? request?.reviewTrack ?? null,
+    review_kind: request?.review_kind ?? request?.reviewKind ?? null,
+    materials: request?.materials ?? null,
+  }));
+}
+
+function requestLockHash(request, materialId) {
+  const stable = {
+    stage: request.stage,
+    review_track: request.review_track ?? request.reviewTrack ?? null,
+    review_kind: request.review_kind ?? request.reviewKind ?? null,
+    review_scope: request.review_scope ?? request.reviewScope ?? null,
+    subject: request.subject ?? null,
+    reason: request.reason ?? request.reason_code ?? request.recheck_reason ?? null,
+    review_policy: request.review_policy ?? request.reviewPolicy ?? null,
+    host_provider: request.host_provider ?? request.hostProvider ?? null,
+    material_id: materialId,
+  };
+  return textHash(canonicalJson(stable));
+}
+
+function findReusableReview({ task, request, identity, materialId, requestKey }) {
+  if (typeof task.listCanonicalReviewAttemptRefs !== "function" || (materialId === null && !requestKey)) return null;
+  let partial = null;
+  const attempts = task.listCanonicalReviewAttemptRefs();
+  for (const attemptRef of attempts) {
+    let attempt;
+    try { attempt = JSON.parse(task.readRecord(attemptRef)); } catch { continue; }
+    if (attempt.task_id !== task.identity.taskId
+        || attempt.stage !== request.stage
+        || (attempt.review_track ?? null) !== (request.review_track ?? request.reviewTrack ?? null)
+        || (attempt.review_kind ?? null) !== (request.review_kind ?? request.reviewKind ?? null)
+        || attempt.snapshot_tree !== identity.tree
+        || attempt.material_revision !== identity.materialRevision
+        || (materialId !== null && attempt.material_id !== materialId)) continue;
+    if (requestKey) {
+      if (typeof attempt.request_key === "string") {
+        if (attempt.request_key !== requestKey) continue;
+      } else {
+        if (typeof attempt.report_ref !== "string") continue;
+        let report;
+        try { report = task.readRecord(attempt.report_ref); } catch { continue; }
+        if (!report.includes(`request_key: ${requestKey}`)) continue;
+      }
+      // The report is part of the canonical request record. A matching
+      // attempt/result without a readable report is a partial write and must
+      // fail closed instead of being treated as reusable success.
+      if (typeof attempt.report_ref !== "string") {
+        partial ??= { attempt_ref: attemptRef, result_ref: null, incomplete: true };
+        continue;
+      }
+      try { task.readRecord(attempt.report_ref); }
+      catch {
+        partial ??= { attempt_ref: attemptRef, result_ref: null, incomplete: true };
+        continue;
+      }
+    }
+    // An unavailable attempt is a complete terminal fact when its immutable
+    // report exists. It has no result record by design, so do not classify it
+    // as a partially written attempt or dispatch the same request again.
+    if (attempt.terminal_status === "unavailable" && typeof attempt.report_ref === "string") {
+      try {
+        task.readRecord(attempt.report_ref);
+        return { attempt_ref: attemptRef, result_ref: null, report_ref: attempt.report_ref };
+      } catch { /* keep scanning for a readable immutable pair */ }
+    }
+    const resultRefs = typeof task.listCanonicalReviewResultRefs === "function" ? task.listCanonicalReviewResultRefs() : [];
+    for (const resultRef of resultRefs) {
+      try {
+        const result = JSON.parse(task.readRecord(resultRef));
+        if (result.attempt_ref === attemptRef) return { attempt_ref: attemptRef, result_ref: resultRef, report_ref: attempt.report_ref ?? null };
+      } catch { /* retain only a complete readable pair */ }
+    }
+    // A partially written attempt must not hide a later complete immutable
+    // pair for the same request. Keep scanning; only reuse the partial record
+    // when no complete pair exists, and let the caller fail closed rather than
+    // dispatching a duplicate request.
+    partial ??= { attempt_ref: attemptRef, result_ref: null, incomplete: true };
+  }
+  return partial;
+}
+
+function reviewReportRef(stage, resultId) {
+  return `quality/reviews/reports/${stage}-simple-${resultId}.md`;
+}
+
+function reviewReportBody({ attempt, result = null, requestKey = null }) {
+  const status = attempt.terminal_status === "semantic" ? "available" : "unavailable";
+  return [
+    "# WorkflowHub review record",
+    "",
+    `status: ${status}`,
+    `terminal_status: ${attempt.terminal_status}`,
+    `task_id: ${attempt.task_id}`,
+    `stage: ${attempt.stage}`,
+    `attempt_id: ${attempt.attempt_id}`,
+    `snapshot_tree: ${attempt.snapshot_tree}`,
+    `material_id: ${attempt.material_id}`,
+    `dispatch_state: ${attempt.dispatch_state ?? "legacy_unclassified"}`,
+    ...(requestKey ? [`request_key: ${requestKey}`] : []),
+    `error: ${attempt.error ? JSON.stringify(attempt.error) : "null"}`,
+    ...(result ? ["", "```json", JSON.stringify({ findings: result.findings, provider_results: result.provider_results }), "```"] : []),
+    "",
+  ].join("\n");
+}
+
+function reviewRequestError(error) {
+  const code = typeof error?.code === "string" && error.code.trim() !== "" ? error.code : "REVIEW_EXECUTION_FAILED";
+  const message = typeof error?.message === "string" && error.message.trim() !== "" ? error.message : "review request failed before a semantic result";
+  return { code, message };
 }
 
 function recordError(error, fallback) {
@@ -122,8 +251,11 @@ function assertAuthenticatedReviewIdentity(task, kernel) {
       || typeof taskKernel.currentVNextMaterialRevision !== "function") {
     throw new TypeError("review record requires the authenticated TaskKernel for this task");
   }
-  const snapshot = taskKernel.currentVNextSnapshot();
-  const materialRevision = taskKernel.currentVNextMaterialRevision();
+  const context = typeof taskKernel.currentVNextContext === "function"
+    ? taskKernel.currentVNextContext()
+    : { snapshot: taskKernel.currentVNextSnapshot(), materialRevision: taskKernel.currentVNextMaterialRevision() };
+  const snapshot = context.snapshot;
+  const materialRevision = context.materialRevision;
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
     throw new TypeError("review record requires an authenticated current snapshot");
   }
@@ -147,7 +279,87 @@ function assertAuthenticatedReviewIdentity(task, kernel) {
   });
 }
 
-export function recordSimpleReviewResult({ task, result, kernel }) {
+/**
+ * Authenticated host request path. The request is dispatched and persisted
+ * under one task lock; a second identical current request reuses the
+ * immutable canonical refs instead of dispatching a second provider call.
+ */
+export async function recordSimpleReviewRequest({ task, kernel, request, runRound, materialIdForRequest = null } = {}) {
+  const taskHandle = assertTaskHandle(task);
+  if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("review request must be an object");
+  if (Object.hasOwn(request, "result")) throw new TypeError("review request cannot contain a result field");
+  for (const field of ["snapshot_tree", "material_revision", "task_id", "task_path", "project_name"]) {
+    if (Object.hasOwn(request, field)) throw new TypeError(`review request identity field is host-owned: ${field}`);
+  }
+  if (typeof request.stage !== "string" || request.stage.trim() === "") throw new TypeError("review request stage is required");
+  if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
+  const before = assertAuthenticatedReviewIdentity(taskHandle, kernel);
+  const materialId = reviewRequestMaterialId(request, materialIdForRequest);
+  const authenticatedMaterialId = typeof materialIdForRequest === "function"
+    || [request.material_id, request.materialId].some((value) => typeof value === "string" && SHA256_HEX.test(value))
+    ? materialId : null;
+  const lockRef = `quality/reviews/request-locks/${requestLockHash(request, materialId)}.lock`;
+  const requestKey = requestLockHash(request, materialId);
+  const operation = async () => {
+    const reusable = findReusableReview({ task: taskHandle, request, identity: before, materialId: authenticatedMaterialId, requestKey });
+    if (reusable?.incomplete) {
+      const error = new Error("an immutable review attempt exists without a complete result");
+      error.code = "REVIEW_RECORD_INCOMPLETE";
+      error.attempt_ref = reusable.attempt_ref;
+      throw error;
+    }
+    if (reusable) return { status: "recorded", reused: true, dispatch_state: "reused", ...reusable };
+    let result;
+    try {
+      result = await runRound(structuredClone(request));
+    } catch (error) {
+      result = {
+        status: "unavailable",
+        stage: request.stage,
+        review_track: request.review_track ?? request.reviewTrack ?? null,
+        review_kind: request.review_kind ?? request.reviewKind ?? null,
+        material_id: materialId ?? textHash(canonicalJson(request)),
+        runtime_id: null,
+        outcome: "unavailable",
+        provider_results: [],
+        findings: [],
+        error: reviewRequestError(error),
+      };
+    }
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review runner must return a result object");
+    const after = assertAuthenticatedReviewIdentity(taskHandle, kernel);
+    if (after.tree !== before.tree || after.materialRevision !== before.materialRevision) {
+      const error = new Error("review source changed while dispatching; result was not recorded");
+      error.code = "REVIEW_SOURCE_DRIFT";
+      throw error;
+    }
+    if (authenticatedMaterialId !== null && result.material_id !== materialId) {
+      const error = new Error("review result material_id does not match the authenticated request material");
+      error.code = "REVIEW_MATERIAL_MISMATCH";
+      throw error;
+    }
+    const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey });
+    return {
+      status: "recorded",
+      reused: false,
+      dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+      ...refs,
+    };
+  };
+  const lockKey = `${taskHandle.identity.taskId}:${lockRef}`;
+  const previous = IN_PROCESS_REQUEST_LOCKS.get(lockKey) ?? Promise.resolve();
+  const current = previous.then(() => typeof taskHandle.withRecordLock === "function"
+    ? taskHandle.withRecordLock(lockRef, operation)
+    : operation());
+  const tracked = current.catch(() => undefined);
+  IN_PROCESS_REQUEST_LOCKS.set(lockKey, tracked);
+  try { return await current; }
+  finally {
+    if (IN_PROCESS_REQUEST_LOCKS.get(lockKey) === tracked) IN_PROCESS_REQUEST_LOCKS.delete(lockKey);
+  }
+}
+
+export function recordSimpleReviewResult({ task, result, kernel, requestKey = null }) {
   const taskHandle = assertTaskHandle(task);
   const currentIdentity = assertAuthenticatedReviewIdentity(taskHandle, kernel);
   if (!result || typeof result !== "object" || Array.isArray(result)) {
@@ -196,9 +408,9 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
   const source = currentIdentity.source;
 
   const commonSubject = {
-    subject_kind: "worktree",
-    phase_id: null,
-    review_scope: stage === "build-code" ? "integration" : null,
+    subject_kind: result.subject_kind ?? "worktree",
+    phase_id: result.phase_id ?? null,
+    review_scope: result.review_scope ?? (stage === "build-code" ? "integration" : null),
   };
 
   if (result.status === "unavailable") {
@@ -218,14 +430,19 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
       snapshot_tree: tree,
       material_id: materialId,
       material_revision: currentIdentity.materialRevision,
+      ...(requestKey ? { request_key: requestKey } : {}),
       provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id)),
       terminal_status: "unavailable",
+      dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
       error,
       review_policy: policyResult.policy,
       policy_snapshot_hash: policyResult.policy_snapshot_hash,
     };
-    taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
-    return { attempt_ref: attemptRef, result_ref: null };
+    const reportRef = reviewReportRef(stage, resultId);
+    attempt.report_ref = reportRef;
+    createCanonicalRecord(taskHandle, attemptRef, JSON.stringify(attempt));
+    createCanonicalRecord(taskHandle, reportRef, reviewReportBody({ attempt, requestKey }));
+    return { attempt_ref: attemptRef, result_ref: null, report_ref: reportRef };
   }
 
   // available: canonicalize provider outputs and run aggregation
@@ -234,6 +451,25 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
   const providerOutputRecords = new Map();
 
   const semanticResults = result.provider_results.filter((item) => item.status === "completed" && item.error === null);
+  const providerAttemptRecords = result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, null));
+  if (semanticResults.length === 0) {
+    const attempt = {
+      version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage,
+      review_track: reviewTrack, review_kind: reviewKind, ...commonSubject, base_tree: tree,
+      candidate_tree: tree, source, snapshot_tree: tree, material_id: materialId,
+      material_revision: currentIdentity.materialRevision, provider_attempts: providerAttemptRecords,
+      ...(requestKey ? { request_key: requestKey } : {}),
+      terminal_status: "unavailable", dispatch_state: "dispatched",
+      error: recordError(result.error, { code: "REVIEW_ALL_PROVIDERS_FAILED", message: "all provider results failed" }),
+      review_policy: buildPolicy(result).policy,
+      policy_snapshot_hash: buildPolicy(result).policy_snapshot_hash,
+    };
+    const reportRef = reviewReportRef(stage, resultId);
+    attempt.report_ref = reportRef;
+    createCanonicalRecord(taskHandle, attemptRef, JSON.stringify(attempt));
+    createCanonicalRecord(taskHandle, reportRef, reviewReportBody({ attempt, requestKey }));
+    return { attempt_ref: attemptRef, result_ref: null, report_ref: reportRef };
+  }
   for (let index = 0; index < semanticResults.length; index += 1) {
     const item = semanticResults[index];
     const providerFindings = (result.findings ?? []).filter((f) => f.provider === item.provider);
@@ -281,10 +517,10 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
   }
 
   for (const [outputRef, outputRecord] of providerOutputRecords) {
-    taskHandle.writeRecordAtomic(outputRef, JSON.stringify(outputRecord));
+    createCanonicalRecord(taskHandle, outputRef, JSON.stringify(outputRecord));
   }
 
-  const providerAttemptRecords = result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, providerOutputRefs.get(item.provider) ?? null));
+  const providerAttemptRecordsWithOutputs = result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, providerOutputRefs.get(item.provider) ?? null));
 
   const resultFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
 
@@ -304,8 +540,10 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
     snapshot_tree: tree,
     material_id: materialId,
     material_revision: currentIdentity.materialRevision,
-    provider_attempts: providerAttemptRecords,
+    ...(requestKey ? { request_key: requestKey } : {}),
+    provider_attempts: providerAttemptRecordsWithOutputs,
     terminal_status: "semantic",
+    dispatch_state: "dispatched",
     error: null,
     review_policy: policyResult.policy,
     policy_snapshot_hash: policyResult.policy_snapshot_hash,
@@ -330,10 +568,15 @@ export function recordSimpleReviewResult({ task, result, kernel }) {
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
   };
 
-  taskHandle.writeRecordAtomic(attemptRef, JSON.stringify(attempt));
-  taskHandle.writeRecordAtomic(resultRef, JSON.stringify(resultRecord));
+  const reportRef = reviewReportRef(stage, resultId);
+  attempt.report_ref = reportRef;
+  resultRecord.report_ref = reportRef;
 
-  return { attempt_ref: attemptRef, result_ref: resultRef };
+  createCanonicalRecord(taskHandle, attemptRef, JSON.stringify(attempt));
+  createCanonicalRecord(taskHandle, resultRef, JSON.stringify(resultRecord));
+  createCanonicalRecord(taskHandle, reportRef, reviewReportBody({ attempt, result: resultRecord, requestKey }));
+
+  return { attempt_ref: attemptRef, result_ref: resultRef, report_ref: reportRef };
 }
 
 function taskBoundIdentity({ task, result, snapshot_tree: snapshotTree, material_revision: materialRevision }) {

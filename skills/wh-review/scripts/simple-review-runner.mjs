@@ -11,6 +11,7 @@ import {
 } from "./third-review-host-config.mjs";
 import { redactProviderHostPaths } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
+import { reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 
 function redactHostPaths(value) {
   if (typeof value !== "string") return value;
@@ -309,6 +310,108 @@ function unavailableResult(input, error, pair = null, extra = {}) {
   };
 }
 
+function preflightMaterialPresent(value) {
+  if (Buffer.isBuffer(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== null && typeof value === "object" && Object.keys(value).length > 0;
+}
+
+function preflightDiagnostic({ field, expected, actual, nextAction }) {
+  return {
+    field,
+    expected: redactHostPaths(String(expected)),
+    actual: redactHostPaths(String(actual)),
+    next_action: nextAction,
+  };
+}
+
+function blockedPreflight(input, code, message, diagnostic, pair = null) {
+  const error = { code, message: redactHostPaths(message), diagnostic };
+  return unavailableResult(input, error, pair, {
+    dispatch_state: "blocked_before_dispatch",
+    provider_results: [],
+    findings: [],
+  });
+}
+
+function staticReviewRule(input) {
+  const reviewKind = input.review_kind ?? input.reviewKind ?? null;
+  const stage = reviewKind ?? input.stage;
+  const track = reviewKind === null ? (input.review_track ?? input.reviewTrack ?? null) : null;
+  const scope = reviewKind === null ? (input.review_scope ?? input.reviewScope ?? null) : null;
+  return reviewRuleFor(stage, track, scope);
+}
+
+function shouldRunMaterialPreflight(input, rule) {
+  if (input.preflight === true) return true;
+  // Integration review requests have a closed material contract. Run the
+  // contract check even when a caller supplies only unknown keys so those
+  // invocations cannot bypass required/forbidden material validation.
+  if (input.review_scope === "integration" || input.reviewScope === "integration") return true;
+  const materials = input.materials;
+  if (!materials || typeof materials !== "object" || Array.isArray(materials)) return false;
+  const contractKeys = new Set([...(rule.required ?? []), ...(rule.optional ?? []), ...(rule.generated ?? []), ...(rule.forbidden ?? [])]);
+  return Object.keys(materials).some((key) => contractKeys.has(key));
+}
+
+function runStaticPreflight(input, { route, providerSelection }, pair = null) {
+  let rule;
+  try {
+    rule = staticReviewRule(input);
+  } catch (error) {
+    return blockedPreflight(input, "MATERIAL_INCOMPLETE", error?.message ?? "review material contract is unavailable", preflightDiagnostic({
+      field: "stage",
+      expected: "supported review surface",
+      actual: input.stage,
+      nextAction: "use a configured review surface and retry",
+    }), pair);
+  }
+  if (!route || !Array.isArray(route.initial) || route.initial.length === 0) {
+    return blockedPreflight(input, "ROUTE_UNAVAILABLE", "review route has no initial provider", preflightDiagnostic({
+      field: "route",
+      expected: "non-empty initial provider list",
+      actual: "empty",
+      nextAction: "configure an enabled initial provider and retry",
+    }), pair);
+  }
+  if (!providerSelection || !Array.isArray(providerSelection.providers) || providerSelection.providers.length === 0) {
+    return blockedPreflight(input, "ROUTE_UNAVAILABLE", "review provider selection is empty", preflightDiagnostic({
+      field: "provider_selection",
+      expected: "at least one heterologous provider",
+      actual: "empty",
+      nextAction: "configure an enabled heterologous provider and retry",
+    }), pair);
+  }
+  if (!shouldRunMaterialPreflight(input, rule)) return null;
+  const materials = input.materials;
+  const generated = new Set(rule.generated ?? []);
+  const required = (rule.required ?? []).filter((key) => !generated.has(key));
+  const missing = required.find((key) => !Object.hasOwn(materials, key) || !preflightMaterialPresent(materials[key]));
+  if (missing) {
+    return blockedPreflight(input, "MATERIAL_INCOMPLETE", `required material ${missing} is missing or empty`, preflightDiagnostic({
+      field: missing,
+      expected: "non-empty caller material",
+      actual: Object.hasOwn(materials, missing) ? "empty" : "missing",
+      nextAction: "supply current material and retry",
+    }), pair);
+  }
+  // Generated fields are derived by the runner and may still be present in
+  // compatibility callers; they are excluded from the required check but do
+  // not make an otherwise valid request invalid. Only explicit forbidden
+  // fields are rejected here.
+  const forbidden = (rule.forbidden ?? []).find((key) => Object.hasOwn(materials, key));
+  if (forbidden) {
+    return blockedPreflight(input, "MATERIAL_FORBIDDEN", `material ${forbidden} is generated or forbidden for this review`, preflightDiagnostic({
+      field: forbidden,
+      expected: "caller-owned material only",
+      actual: "present",
+      nextAction: "remove the generated or forbidden material and retry",
+    }), pair);
+  }
+  return null;
+}
+
 function evidenceAnchorValidity(bundleRoot, findings) {
   return findings.map((finding) => {
     if (!finding || typeof finding.path !== "string" || finding.path.startsWith("/")
@@ -388,13 +491,43 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     trusted = loadConfig({ requestedStage: input.stage, requestedTrack: reviewTrack, requestedReviewKind: reviewKind });
     route = resolveRoute(trusted.whReview, input.stage, reviewTrack, reviewKind);
   } catch (error) {
-    return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: String(error?.message ?? error) }, pair);
+    return blockedPreflight(input, "ROUTE_UNAVAILABLE", String(error?.message ?? error), preflightDiagnostic({
+      field: "route_config",
+      expected: "valid host configuration and route",
+      actual: "unavailable",
+      nextAction: "repair the trusted review route and retry",
+    }), pair);
   }
-  if (!route) return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" }, pair);
-  const selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
+  if (!route) return blockedPreflight(input, "ROUTE_UNAVAILABLE", "no heterologous review route is configured", preflightDiagnostic({
+    field: "route",
+    expected: "configured review route",
+    actual: "missing",
+    nextAction: "configure the review route and retry",
+  }), pair);
+  let selection;
+  try {
+    selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
+  } catch (error) {
+    const source = String(error?.message ?? error);
+    return blockedPreflight(input, "ROUTE_UNAVAILABLE", source, preflightDiagnostic({
+      field: /same.source|same source|host.*reviewer/i.test(source) ? "host_provider" : "provider_selection",
+      expected: /same.source|same source|host.*reviewer/i.test(source) ? "heterologous provider" : "enabled provider selection",
+      actual: "unavailable",
+      nextAction: "repair the provider route and retry",
+    }), pair);
+  }
   let providerSelection;
   try { providerSelection = providerSelectionShape(selection); }
-  catch (error) { return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: error.message }, pair); }
+  catch (error) {
+    return blockedPreflight(input, "ROUTE_UNAVAILABLE", error.message, preflightDiagnostic({
+      field: "provider_selection",
+      expected: "unique enabled provider selection",
+      actual: "invalid",
+      nextAction: "repair the provider route and retry",
+    }), pair);
+  }
+  const preflight = runStaticPreflight(input, { route, providerSelection }, pair);
+  if (preflight) return preflight;
   const selectedProviders = providerSelection.providers;
   const selectedIdentities = providerSelection.provider_identities ?? null;
   const selectedSet = new Set(selectedProviders);

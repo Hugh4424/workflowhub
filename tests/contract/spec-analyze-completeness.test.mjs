@@ -74,6 +74,7 @@ describe("spec-analyze completeness contract", () => {
       expected_behavior: "用户真实需求语义",
       actual_behavior: "文件存在",
       semantic_match: false,
+      semantic_status: "completed",
       scenario_refs: ["SCN-001"],
       oracle_refs: ["ORACLE-001"],
       artifact_refs: ["spec"],
@@ -108,6 +109,7 @@ describe("spec-analyze completeness contract", () => {
       expected_behavior: "需求文档完整",
       actual_behavior,
       semantic_match: true,
+      semantic_status: "completed",
       scenario_refs: ["SCN-001"],
       oracle_refs: ["ORACLE-001"],
       artifact_refs: ["spec"],
@@ -149,6 +151,7 @@ describe("spec-analyze completeness contract", () => {
       expected_behavior: "支持批量提问",
       actual_behavior: "支持批量提问且存在重试机制",
       semantic_match: true,
+      semantic_status: "completed",
       scenario_refs: ["SCN-001"],
       oracle_refs: ["ORACLE-001"],
       artifact_refs: ["spec"],
@@ -176,6 +179,7 @@ describe("spec-analyze completeness contract", () => {
       expected_behavior,
       actual_behavior,
       semantic_match: true,
+      semantic_status: "completed",
       scenario_refs: ["SCN-001"],
       oracle_refs: ["ORACLE-001"],
       artifact_refs: ["spec"],
@@ -215,6 +219,7 @@ describe("spec-analyze completeness contract", () => {
       expected_behavior,
       actual_behavior,
       semantic_match: true,
+      semantic_status: "completed",
       scenario_refs: ["SCN-001"],
       oracle_refs: ["ORACLE-001"],
       artifact_refs: ["spec"],
@@ -228,6 +233,86 @@ describe("spec-analyze completeness contract", () => {
     expect(result.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "semantic_mismatch", requirement_id: "R-001" }),
     ]));
+  });
+
+  it("does not trust semantic_match or a lexical phrase followed by a contradiction", () => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior: "支持快速失败",
+      actual_behavior: "支持快速失败未启用",
+      semantic_match: true,
+      semantic_status: "completed",
+      scenario_refs: ["SCN-001"], oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"], evidence_refs: ["spec"], status: "covered",
+    }];
+    source.original_requirements = [{ id: "R-001", summary: "支持快速失败" }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [{ ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) }];
+    const result = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "semantic_mismatch", requirement_id: "R-001" }),
+    ]));
+  });
+
+  it("keeps a missing semantic status incomplete even when lexical text matches", () => {
+    const source = complete();
+    source.coverage = [{
+      requirement_id: "R-001",
+      expected_behavior: "支持批量提问",
+      actual_behavior: "支持批量提问并产生当前结果",
+      semantic_match: true,
+      scenario_refs: ["SCN-001"],
+      oracle_refs: ["ORACLE-001"],
+      artifact_refs: ["spec"],
+      evidence_refs: ["spec"],
+      status: "covered",
+    }];
+    source.original_requirements = [{ id: "R-001", summary: "支持批量提问" }];
+    source.materials = { original_requirement: "原始需求", decision_log: source.decisionLog, spec: source.spec, plan: source.plan, tasks: source.tasks };
+    source.evidence = [{ ref: "spec", kind: "specification", status: "fresh", hash: "a".repeat(64), snapshot_tree: "b".repeat(40) }];
+    const result = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: source });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "semantic_mismatch", requirement_id: "R-001" }),
+    ]));
+  });
+
+  it("keeps downstream introduced and external OPEN ownership without inventing decision history", () => {
+    const source = complete();
+    source.spec += "\nOPEN-101 engineering handoff\nOPEN-202 external dependency\n";
+    source.plan += "\nOPEN-101 owner=build-plan trigger=design handoff=tasks close=verified\n";
+    source.tasks += "\nOPEN-101 owner=build-plan trigger=implementation handoff=tests close=acceptance\n";
+    const result = validateSpecAnalyzeCompleteness({
+      ...source,
+      openItems: [
+        { id: "OPEN-101", introduced_stage: "build-spec", owner: "build-plan", trigger: "design", handoff: "tasks", close_condition: "verified" },
+        { id: "OPEN-202", introduced_stage: "build-spec", owner: "external upstream", trigger: "external delivery" },
+      ],
+    });
+    expect(result.errors.join("; ")).not.toMatch(/OPEN-101.*decision-log/);
+    expect(result.facts.deferred_open_ids).toEqual(expect.arrayContaining(["OPEN-101", "OPEN-202"]));
+  });
+
+  it("keeps make-decision OPEN items bound to decision-log history", () => {
+    const source = complete();
+    source.spec += "\nOPEN-303 make-decision item\n";
+    const result = validateSpecAnalyzeCompleteness({
+      ...source,
+      openItems: [{ id: "OPEN-303", introduced_stage: "make-decision", owner: "product", trigger: "direction", handoff: "build-spec", close_condition: "recorded" }],
+    });
+    expect(result.errors.join("; ")).toMatch(/OPEN-303.*decision-log/);
+  });
+
+  it("does not let an unknown introduced stage bypass decision-log binding", () => {
+    const source = complete();
+    source.spec += "\nOPEN-304 item with an invalid stage\n";
+    const result = validateSpecAnalyzeCompleteness({
+      ...source,
+      openItems: [{ id: "OPEN-304", introduced_stage: "future-stage", owner: "product", trigger: "direction", handoff: "build-spec", close_condition: "recorded" }],
+    });
+    expect(result.errors.join("; ")).toMatch(/OPEN-304.*decision-log/);
   });
 
   it("rejects unknown and duplicate coverage rows instead of using order-dependent results", () => {
@@ -244,7 +329,7 @@ describe("spec-analyze completeness contract", () => {
     };
     const coverage = {
       requirement_id: "R-001", expected_behavior: "第一条原始要求", actual_behavior: "第一条原始要求已实现",
-      semantic_match: true, scenario_refs: ["SCN-001"], oracle_refs: ["ORACLE-001"], artifact_refs: ["spec"], evidence_refs: ["spec"], status: "covered",
+      semantic_match: true, semantic_status: "completed", scenario_refs: ["SCN-001"], oracle_refs: ["ORACLE-001"], artifact_refs: ["spec"], evidence_refs: ["spec"], status: "covered",
     };
     const unknown = validateStageSpecAnalyzeProfile({ stage: "build-plan", packet: { ...base, coverage: [{ ...coverage, requirement_id: "R-999" }] } });
     expect(unknown.ok).toBe(false);

@@ -158,7 +158,7 @@ function stageAgentExecution(stage) {
         original_requirements: [{ id: "R-FIXTURE-1", summary: "当前用户需求" }],
         coverage: [{
           requirement_id: "R-FIXTURE-1", expected_behavior: "当前用户需求",
-          actual_behavior: "当前用户需求已由 Stage Agent 实际执行并产生当前结果", semantic_match: true,
+          actual_behavior: "当前用户需求已由 Stage Agent 实际执行并产生当前结果", semantic_match: true, semantic_status: "completed",
           scenario_refs: ["SCN-real-stage-agent"], oracle_refs: ["ORACLE-real-stage-agent"],
           artifact_refs: ["decision_log"], evidence_refs: ["decision-log"], status: "covered",
         }],

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -577,4 +577,122 @@ describe("simple material-only review", () => {
     expect(member.error.message).toContain("broker member identity was degraded");
   });
 
+});
+
+describe("review flow static preflight", () => {
+  function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"], mode: "single_round" }, selection = { providers: ["other/model"] }, broker = null } = {}) {
+    let brokerCalls = 0;
+    const dependencies = {
+      loadConfig: () => ({
+        whReview: {},
+        config: "/unused/config.json",
+        attachmentRoot,
+        command: ["unused"],
+        brokerProbe: { status: "unknown", reason: "probe intentionally unavailable" },
+      }),
+      resolveRoute: () => route,
+      selectProviders: () => selection,
+      client: {
+        async runGroup(request) {
+          brokerCalls += 1;
+          return broker?.(request) ?? { runtimeId: "runtime-preflight", outcome: "unavailable", providers: [] };
+        },
+      },
+    };
+    return { dependencies, calls: () => brokerCalls };
+  }
+
+  it("blocks missing required caller material before bundle, lock, or broker and exposes only the diagnostic fields", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-missing-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot);
+    const secret = "/Users/Hugh/private/review-input.md";
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: { raw_requirement: `sensitive ${secret}`, approved_decision: "decision" },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_results: [],
+      findings: [],
+      error: {
+        code: "MATERIAL_INCOMPLETE",
+        diagnostic: {
+          field: "draft_spec",
+          expected: "non-empty caller material",
+          actual: "missing",
+          next_action: "supply current material and retry",
+        },
+      },
+    });
+    expect(Object.keys(result.error.diagnostic).sort()).toEqual(["actual", "expected", "field", "next_action"]);
+    expect(JSON.stringify(result.error)).not.toContain(secret);
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it.each([
+    ["empty route", { initial: [], mode: "single_round" }, { providers: ["other/model"] }, "route"],
+    ["same-source route", { initial: ["codex/luna"], mode: "single_round" }, new Error("SAME_SOURCE: host and reviewer share an adapter"), "host_provider"],
+  ])("rejects %s before provider dispatch", async (_label, route, selection, field) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-route-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot, { route });
+    if (selection instanceof Error) dependencies.selectProviders = () => { throw selection; };
+    else dependencies.selectProviders = () => selection;
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: { raw_requirement: "requirement", approved_decision: "decision", draft_spec: "spec" },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "ROUTE_UNAVAILABLE", diagnostic: { field } },
+    });
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("does not block a legal request when broker health is unknown and does not require generated materials", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-unknown-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot, {
+      broker: async () => ({ runtimeId: "runtime-unknown-health", outcome: "unavailable", providers: [] }),
+    });
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: { raw_requirement: "requirement", approved_decision: "decision", draft_spec: "spec" },
+    }, dependencies);
+
+    expect(calls()).toBe(1);
+    expect(result).toMatchObject({ status: "unavailable", outcome: "unavailable" });
+    expect(result).not.toHaveProperty("dispatch_state", "blocked_before_dispatch");
+    expect(result.error?.code).not.toBe("ROUTE_UNAVAILABLE");
+  });
+
+  it("fails closed for unknown material keys on integration review requests", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-unknown-integration-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code",
+      review_scope: "integration",
+      host_provider: "codex",
+      materials: { mystery_material: "unrecognized" },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "MATERIAL_INCOMPLETE", diagnostic: { field: "approved_spec" } },
+    });
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
 });

@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
-import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
+import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -127,12 +127,13 @@ describe("review record route", () => {
 
   it("persists an unavailable simple review result", async () => {
     const { task, kernel } = makeTask();
+    const request = { stage: "build-code", materials: { implementation: "" } };
     const result = {
       status: "unavailable",
       stage: "build-code",
       review_track: null,
       review_kind: null,
-      material_id: "8192849eab3a861772ed1e409e72ff43eae462b16bc6437193483fc905d8260d",
+      material_id: createSimpleReviewPacket(request).material_id,
       runtime_id: "runtime-456",
       outcome: "partial",
       provider_results: [],
@@ -249,5 +250,100 @@ describe("review record route", () => {
     const duplicate = baseResult();
     duplicate.provider_results = [...duplicate.provider_results, { ...duplicate.provider_results[0] }];
     expect(() => recordSimpleReviewResult({ task, result: duplicate, kernel })).toThrow(/provider is duplicated/i);
+  });
+});
+
+describe("review flow task record", () => {
+  it("runs one authenticated request, records the result, and reuses the immutable refs without a second dispatch", async () => {
+    const { task, kernel } = makeTask();
+    let dispatches = 0;
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "bytes" } };
+    const runRound = async () => { dispatches += 1; return { ...baseResult(), material_id: createSimpleReviewPacket(request).material_id }; };
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    const second = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+
+    expect(dispatches).toBe(1);
+    expect(first).toMatchObject({ status: "recorded", reused: false });
+    expect(second).toMatchObject({ status: "recorded", reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+    expect(JSON.parse(task.readRecord(first.attempt_ref)).provider_attempts[0].execution.usage).toBeNull();
+  });
+
+  it("serializes concurrent identical requests under the TaskHandle record lock", async () => {
+    const { task, kernel } = makeTask();
+    let dispatches = 0;
+    const request = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "concurrent bytes" } };
+    const runRound = async () => {
+      dispatches += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { ...baseResult(), material_id: createSimpleReviewPacket(request).material_id };
+    };
+    const [first, second] = await Promise.all([
+      recordSimpleReviewRequest({ task, kernel, request, runRound }),
+      recordSimpleReviewRequest({ task, kernel, request, runRound }),
+    ]);
+    expect(dispatches).toBe(1);
+    expect(new Set([first.attempt_ref, second.attempt_ref]).size).toBe(1);
+    expect(new Set([first.result_ref, second.result_ref]).size).toBe(1);
+  });
+
+  it("persists a blocked-before-dispatch result with no provider or semantic result", async () => {
+    const { task, kernel } = makeTask();
+    let dispatches = 0;
+    const request = { stage: "build-code", materials: { implementation: "" } };
+    const result = {
+      status: "unavailable", dispatch_state: "blocked_before_dispatch", stage: "build-code",
+      review_track: null, review_kind: null,
+      material_id: createSimpleReviewPacket(request).material_id,
+      runtime_id: null, outcome: "unavailable", provider_results: [], findings: [],
+      error: { code: "MATERIAL_INCOMPLETE", message: "required material is missing" },
+    };
+    const refs = await recordSimpleReviewRequest({ task, kernel, request, runRound: async () => { dispatches += 1; return result; } });
+    const reused = await recordSimpleReviewRequest({ task, kernel, request, runRound: async () => { dispatches += 1; return result; } });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(dispatches).toBe(1);
+    expect(refs.result_ref).toBeNull();
+    expect(refs.report_ref).toMatch(/^quality\/reviews\/reports\//);
+    expect(reused).toMatchObject({ status: "recorded", reused: true, attempt_ref: refs.attempt_ref, result_ref: null, report_ref: refs.report_ref });
+    expect(attempt.provider_attempts).toEqual([]);
+    expect(attempt.error).toEqual(result.error);
+  });
+
+  it("persists all-provider failure as unavailable while retaining provider facts", () => {
+    const { task, kernel } = makeTask();
+    const result = baseResult();
+    result.provider_results = result.provider_results.map((item) => ({
+      ...item,
+      status: "failed",
+      error: { code: "PROVIDER_NO_TERMINAL_RESULT", message: "provider ended without a result" },
+      evidence_anchor_valid: [],
+    }));
+    result.findings = [];
+    const refs = recordSimpleReviewResult({ task, result, kernel });
+    expect(refs.result_ref).toBeNull();
+    expect(refs.report_ref).toMatch(/^quality\/reviews\/reports\//);
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.terminal_status).toBe("unavailable");
+    expect(attempt.provider_attempts).toHaveLength(1);
+    expect(attempt.error.code).toBe("REVIEW_ALL_PROVIDERS_FAILED");
+  });
+
+  it("rejects a runner result whose material fingerprint is not the requested material", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", materials: { implementation: "requested" } };
+    await expect(recordSimpleReviewRequest({
+      task, kernel, request,
+      materialIdForRequest: (value) => createSimpleReviewPacket(value).material_id,
+      runRound: async () => ({ ...baseResult(), material_id: createSimpleReviewPacket({ stage: "build-code", materials: { implementation: "other" } }).material_id }),
+    })).rejects.toMatchObject({ code: "REVIEW_MATERIAL_MISMATCH" });
+  });
+
+  it("binds an explicitly supplied material fingerprint without trusting the runner", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", material_id: "a".repeat(64), materials: { implementation: "requested" } };
+    await expect(recordSimpleReviewRequest({
+      task, kernel, request,
+      runRound: async () => ({ ...baseResult(), material_id: "b".repeat(64) }),
+    })).rejects.toMatchObject({ code: "REVIEW_MATERIAL_MISMATCH" });
   });
 });

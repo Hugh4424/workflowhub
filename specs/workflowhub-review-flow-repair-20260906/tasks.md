@@ -14,7 +14,7 @@
 | Final strategy / Dependency | 受影响聚合与依赖 | S/B/P 核对 |
 | OPEN / DEFER | 保留边界、责任及关闭条件 | M/S/B/P 交接 |
 
-所有卡 pending；T011是实际配置操作、T012是真实行为验证，N/A只表示无新增实现，不表示无副作用。独立测试路线为 fullstack-slice-testing。高风险绑定与非行为role冲突保留 PLAN-RISK-005/006；不把未执行写成完成，本次R-008/R-009已批准增补四材料；仍未授权build-code。
+T013～T019及T001～T011已完成并保留真实执行事实；T012是唯一仍 pending 的最终行为验证。N/A只表示无新增实现，不表示无副作用。独立测试路线为 fullstack-slice-testing。高风险绑定与非行为role冲突保留 PLAN-RISK-005/006；不把未执行写成完成。本轮 R-008/R-009 已批准增补四材料；用户于 2026-09-07 明确授权按计划执行 build-code，当前仍需完成材料修复、逐样本耗时事实和最终独立审查。
 
 ## Phase P0 — 材料合同与执行事实前置修复
 
@@ -43,9 +43,9 @@
 
 MATERIAL_CONTRACT_UNIFIED；本Phase还必须完成MATERIAL_SOURCE_SEMANTICS、HOST_EVENT_REFERENCES与MATERIAL_HOST_INTEGRATION。
 
-`npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contract/material-oracle-context-packet.test.mjs tests/contract/plan-acceptance-task-gate.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs tests/contract/confirmation-authorization.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；MATERIAL_CONTRACT_UNIFIED；`quality/evidence/build-code/material_contract_unified/`。
+`npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contract/material-oracle-context-packet.test.mjs tests/contract/plan-acceptance-task-gate.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs tests/contract/confirmation-authorization.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；MATERIAL_CONTRACT_UNIFIED；`quality/evidence/build-code/recheck-20260907/`。
 `npx vitest run tests/contract/spec-analyze-completeness.test.mjs tests/contract/five-stage-spec-analyze-wiring.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；MATERIAL_SOURCE_SEMANTICS；`quality/evidence/build-code/material_source_semantics/`。
-`npx vitest run tests/contract/host-outcome-bridge.test.mjs tests/contract/claude-outcome-packet.test.mjs tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-runner-on-stage-end.test.mjs tests/contract/build-reflection-page.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；HOST_EVENT_REFERENCES；`quality/evidence/build-code/host_event_references/`。
+`npx vitest run tests/contract/host-outcome-bridge.test.mjs tests/contract/claude-outcome-packet.test.mjs tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-runner-on-stage-end.test.mjs tests/contract/build-reflection-page.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；HOST_EVENT_REFERENCES；`quality/evidence/build-code/recheck-20260907/`。
 `npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contract/material-oracle-context-packet.test.mjs tests/contract/plan-acceptance-task-gate.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs tests/contract/confirmation-authorization.test.mjs tests/contract/spec-analyze-completeness.test.mjs tests/contract/five-stage-spec-analyze-wiring.test.mjs tests/contract/host-outcome-bridge.test.mjs tests/contract/claude-outcome-packet.test.mjs tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-runner-on-stage-end.test.mjs tests/contract/build-reflection-page.test.mjs tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；expected_exit=0；MATERIAL_HOST_INTEGRATION；`quality/evidence/build-code/material_host_integration/`。T019仅是P0验证，T012仍为唯一全任务acceptance。
 
 ### Knowledge
@@ -70,7 +70,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：RED：统一材料ID、风险、角色与Oracle
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010/D-011/D-014
 - **输入**：当前认证四材料、根因诊断原始证据、现有模板和实际consumer
 - **依赖**：none
@@ -87,7 +87,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **gate_cmd**：`npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contract/material-oracle-context-packet.test.mjs tests/contract/plan-acceptance-task-gate.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs tests/contract/confirmation-authorization.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`
 - **expected_exit**：1
 - **oracle**：`MATERIAL_CONTRACT_UNIFIED {"pass":"Same complete template D-xxx risk/non-UI and ordinary non-UI specimens pass all actual consumers after fix without per-consumer rewrites; N/A with reason parses consistently; no-reason N/A still fails; Unknown or cross-task decision reference, absent risk fact, malformed oracle still fail; RED rejects declared negative input; GREEN keeps reciprocal pairing and exact oracle semantics; Applicable UI specimen retains existing UI acceptance obligations; 在隔离干净安装中读取分发后的实际模板生成同一完整材料，由安装后的真实validator与official handler消费，合法与非法结果保持一致；source-tree绿或bundle hash一致不能替代。","reject":{"input":"本组列明的合法/非法、错引用、缺失及跨消费者样本，直接消费真实producer输出","expected_rejection":"合法目标行为在旧实现出现指定断言失败；非法样本修复后仍被明确拒绝，不接受初始化失败为RED","observation":"指定Vitest行为断言、原始输出/引用、错误码和完整消费者路径；不得以中间schema通过替代正式handler消费"}}`
-- **evidence_path**：`quality/evidence/build-code/material_contract_unified/`
+- **evidence_path**：`quality/evidence/build-code/recheck-20260907/`
 - **STOP**：真实断言无法复现、需要扩大接口/文件或触碰预算/身份时报告具体缺口；不弱化断言；历史事实只读
 - **recovery**：本卡执行者只恢复自己修改；保留原始失败证据，配置恢复先核对当前hash，不覆盖他人更改
 - **task risk**：RISK-005/006；合同修复不得放宽风险、身份或语义证据；缺失时保持unknown；只回滚本卡改动
@@ -103,15 +103,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：N/A — 仅执行RED门禁；未修改生产代码。
+- **executed_commands**：T013 recheck declared gate command（detached HEAD + current test overlay，exit 1；39 tests passed / 5 failed；目标材料合同断言与 clean-install 闭包失败均保留原始输出）
+- **evidence_refs**：[`quality/evidence/build-code/recheck-20260907/T013-RED-vitest.log`, `quality/evidence/build-code/recheck-20260907/T013-RED-result.json`, `quality/evidence/build-code/recheck-20260907/T013-T014-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T013-T014-GREEN-result.json`, `quality/evidence/build-code/material_contract_unified/phase-card.md`, `quality/evidence/build-code/material_contract_unified/test-routing-advisor.json`]
+- **covered_ac**：RED reproduced the declared material-contract failures, including clean-install distribution mismatch; no failure was rewritten as success.
+- **review_fact**：独立语义复审仍为 `incomplete`；本卡只记录真实RED。
+- **completed_at**：2026-09-07T08:17:05Z
+- **执行事实**：本次 recheck 先在 detached HEAD 加当前 T013 测试输入运行 RED（39 passed，5 failed），再在当前实现 worktree 运行同一命令 GREEN（44 passed，clean-install 5 passed）。旧 phase-card 仅作历史摘要，当前 raw log/result 已补入索引。
 
 #### T014 — GREEN：统一材料ID、风险、角色与Oracle
 
@@ -119,7 +119,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：GREEN：统一材料ID、风险、角色与Oracle
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010/D-011/D-014
 - **输入**：当前认证四材料、根因诊断原始证据、现有模板和实际consumer；T013真实RED证据
 - **依赖**：T013
@@ -136,7 +136,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **gate_cmd**：`npx vitest run tests/contract/filled-plan-task-production.test.mjs tests/contract/material-oracle-context-packet.test.mjs tests/contract/plan-acceptance-task-gate.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs tests/contract/confirmation-authorization.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`
 - **expected_exit**：0
 - **oracle**：`MATERIAL_CONTRACT_UNIFIED {"pass":"Same complete template D-xxx risk/non-UI and ordinary non-UI specimens pass all actual consumers after fix without per-consumer rewrites; N/A with reason parses consistently; no-reason N/A still fails; Unknown or cross-task decision reference, absent risk fact, malformed oracle still fail; RED rejects declared negative input; GREEN keeps reciprocal pairing and exact oracle semantics; Applicable UI specimen retains existing UI acceptance obligations; 在隔离干净安装中读取分发后的实际模板生成同一完整材料，由安装后的真实validator与official handler消费，合法与非法结果保持一致；source-tree绿或bundle hash一致不能替代。","reject":{"input":"本组列明的合法/非法、错引用、缺失及跨消费者样本，直接消费真实producer输出","expected_rejection":"合法目标行为在旧实现出现指定断言失败；非法样本修复后仍被明确拒绝，不接受初始化失败为RED","observation":"指定Vitest行为断言、原始输出/引用、错误码和完整消费者路径；不得以中间schema通过替代正式handler消费"}}`
-- **evidence_path**：`quality/evidence/build-code/material_contract_unified/`
+- **evidence_path**：`quality/evidence/build-code/recheck-20260907/`
 - **STOP**：真实断言无法复现、需要扩大接口/文件或触碰预算/身份时报告具体缺口；不弱化断言；历史事实只读
 - **recovery**：本卡执行者只恢复自己修改；保留原始失败证据，配置恢复先核对当前hash，不覆盖他人更改
 - **task risk**：RISK-005/006；合同修复不得放宽风险、身份或语义证据；缺失时保持unknown；只回滚本卡改动
@@ -152,15 +152,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：统一材料合同解析、semantic status、决策引用/分发hash及输出引用校验；清洁安装基线暴露的 spec-specify bundle/catalog stale hash 仅做 hash-only closure synchronization。
+- **executed_commands**：T014 recheck focused contract + clean-install gate（exit 0；6 files，44 tests passed；clean-install 5 passed，约42.5s）
+- **evidence_refs**：[`quality/evidence/build-code/recheck-20260907/T013-RED-vitest.log`, `quality/evidence/build-code/recheck-20260907/T013-RED-result.json`, `quality/evidence/build-code/recheck-20260907/T013-T014-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T013-T014-GREEN-result.json`, `quality/evidence/build-code/material_contract_unified/phase-card.md`, `quality/evidence/build-code/material_contract_unified/test-routing-advisor.json`]
+- **covered_ac**：AC-CONTRACT-001/002/003/004/007；合法/非法材料、风险/角色/Oracle、分发后真实consumer及clean-install closure通过。
+- **review_fact**：独立语义复审仍为 `incomplete`；本地定向GREEN不等同于最终验收。
+- **completed_at**：2026-09-07T08:19:46Z
+- **执行事实**：T013 RED 先于本次 GREEN；当前 bundle hash 已同步后，T014 同一命令通过，旧摘要证据保留。
 
 #### T015 — RED：事项来源与语义证据
 
@@ -168,7 +168,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：RED：事项来源与语义证据
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010/D-012/D-014
 - **输入**：当前认证四材料、根因诊断原始证据、现有模板和实际consumer
 - **依赖**：T014
@@ -201,15 +201,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：N/A — 仅执行RED门禁；未修改生产代码。
+- **executed_commands**：`npx vitest run tests/contract/spec-analyze-completeness.test.mjs tests/contract/five-stage-spec-analyze-wiring.test.mjs tests/contract/material-producer-consumer-roundtrip.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（exit 1；58 passed, 2 failed）
+- **evidence_refs**：[`quality/evidence/build-code/material_source_semantics/T015-RED-vitest.log`, `quality/evidence/build-code/material_source_semantics/T015-RED-result.json`]
+- **covered_ac**：RED reproduced the semantic-status fixture gap in the two positive verification-note cases; the expected failure was preserved for T016.
+- **review_fact**：独立语义复审仍为 `incomplete`；本卡只记录真实RED，不把失败改写为通过。
+- **completed_at**：2026-09-07T08:21:42Z
+- **执行事实**：T015 RED 已执行；两项正向行为断言因缺少 `semantic_status=completed` 失败，其他 58 项通过。
 
 #### T016 — GREEN：事项来源与语义证据
 
@@ -217,7 +217,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：GREEN：事项来源与语义证据
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010/D-012/D-014
 - **输入**：当前认证四材料、根因诊断原始证据、现有模板和实际consumer；T015真实RED证据
 - **依赖**：T015
@@ -250,15 +250,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：补齐正向语义测试fixture的 `semantic_status=completed`；保留并验证 stage-introduced/external OPEN ownership、反矛盾语义匹配、caller `semantic_match` 不作为裁决、材料绑定校验；补强 `make-decision` OPEN 必须仍绑定 decision-log。
+- **executed_commands**：同一 T016 gate 首次 exit 0（60 passed）；来源归属修正后 correction gate exit 0（61 passed）。
+- **evidence_refs**：[`quality/evidence/build-code/material_source_semantics/T016-GREEN-vitest.log`, `quality/evidence/build-code/material_source_semantics/T016-GREEN-result.json`, `quality/evidence/build-code/material_source_semantics/T016-GREEN-correction-vitest.log`, `quality/evidence/build-code/material_source_semantics/T016-GREEN-correction-result.json`, `quality/evidence/build-code/material_source_semantics/phase-card.md`]
+- **covered_ac**：AC-CONTRACT-005/006/007；61 tests passed，覆盖 stage-introduced OPEN 下游传播、external owner 保留、make-decision 来源绑定、local handoff 缺项、已知改写、矛盾/未验证语义保持非通过、材料变更绑定失效。
+- **review_fact**：独立语义复审仍为 `incomplete`；本地定向GREEN不等同于最终验收。
+- **completed_at**：2026-09-07T08:22:48Z
+- **执行事实**：T016 GREEN 已执行并通过；下一依赖卡为 T017。
 
 #### T017 — RED：真实host事件与输出引用
 
@@ -266,7 +266,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：RED：真实host事件与输出引用
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010/D-013/D-014
 - **输入**：当前认证四材料、根因诊断原始证据、现有模板和实际consumer
 - **依赖**：T016
@@ -283,7 +283,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **gate_cmd**：`npx vitest run tests/contract/host-outcome-bridge.test.mjs tests/contract/claude-outcome-packet.test.mjs tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-runner-on-stage-end.test.mjs tests/contract/build-reflection-page.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`
 - **expected_exit**：1
 - **oracle**：`HOST_EVENT_REFERENCES {"pass":"无时间、有成对时间及混合事件保持真实状态，cost保持unavailable；单边/反向/畸形时间拒绝，完整计时校验已知关系，混合仅校验可知关系，无时间按显式提交顺序且不推测并发；重复subject与跨task/stage拒绝且不发布成功。合法业务output不在evidence中仍经bridge→recorder→canonical outcome→后续input形成真实消费边；坏类型、越界、跨任务引用拒绝，旧缺省引用可读且保持partial。按分发后的完整step/skill示例生成显式不同host的payload进入真实bridge，记录正常/失败/取消结果与理由，不把fixture称为自动hook。阶段成功/失败后复盘完成/失败由现有正式reader读取；旧outcome字节/hash不变，状态分别呈现、只调度一次，复盘失败不反向改变阶段事实或阻断同task修复。","reject":{"input":"单边/反向/畸形时间、重复subject、跨task/stage、坏类型/越界/跨任务output_refs、缺事件、缺输出与旧缺省记录；合法无时钟事件和合法独立业务输出使用同一实际bridge消费链","expected_rejection":"旧实现对合法无计时事件或业务输出保留出现目标行为断言失败；修复后非法身份/时间/引用明确拒绝且无成功事实，缺事件/输出保持unavailable/partial；不接受初始化失败为RED","observation":"真实bridge发布的canonical outcome、现有deriveConsumptionEdges与正式reflection reader结果；记录原始错误/引用并比对旧outcome字节/hash；协议fixture不证明宿主自动集成"}}`
-- **evidence_path**：`quality/evidence/build-code/host_event_references/`
+- **evidence_path**：`quality/evidence/build-code/recheck-20260907/`
 - **STOP**：真实断言无法复现、需要扩大接口/文件或触碰预算/身份时报告具体缺口；不弱化断言；历史事实只读
 - **recovery**：本卡执行者只恢复自己修改；保留原始失败证据，配置恢复先核对当前hash，不覆盖他人更改
 - **task risk**：RISK-005/006；合同修复不得放宽风险、身份或语义证据；缺失时保持unknown；只回滚本卡改动
@@ -299,15 +299,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：N/A — RED 阶段不修改生产代码；在 detached HEAD 临时 worktree 叠加当前 T017 测试输入，生产 worktree 保持不变。
+- **executed_commands**：T017 recheck gate 在 detached HEAD + 当前测试输入中 exit 1（45 passed / 22 skipped / 9 failed）；当前实现同一 gate GREEN exit 0（54 passed）。
+- **evidence_refs**：[`quality/evidence/build-code/recheck-20260907/T017-RED-result.json`, `quality/evidence/build-code/recheck-20260907/T017-RED-vitest.log`]
+- **covered_ac**：基线明确暴露无计时事件、output refs、混合计时和缺失结果错误路径；重复身份/消费边及 reflection 相关已有断言保持通过。首次绿跑不作为RED证据。
+- **review_fact**：独立语义复审仍为 `incomplete`；临时基线复现仅补足执行顺序证据，不代表最终验收。
+- **completed_at**：2026-09-07T12:08:00Z
+- **执行事实**：本次 recheck 在 detached HEAD 加当前 T017 测试输入的临时 worktree 中先运行 RED（45 passed / 22 skipped / 9 failed；失败包含无计时事件、输出引用和旧 bundle 闭包断言），随后在当前实现 worktree 运行同一命令 GREEN（exit 0）。旧 host_event_references RED 证据保留为历史。
 
 #### T018 — GREEN：真实host事件与输出引用
 
@@ -315,7 +315,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：GREEN：真实host事件与输出引用
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010/D-013/D-014
 - **输入**：当前认证四材料、根因诊断原始证据、现有模板和实际consumer；T017真实RED证据
 - **依赖**：T017
@@ -332,7 +332,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **gate_cmd**：`npx vitest run tests/contract/host-outcome-bridge.test.mjs tests/contract/claude-outcome-packet.test.mjs tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-runner-on-stage-end.test.mjs tests/contract/build-reflection-page.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`
 - **expected_exit**：0
 - **oracle**：`HOST_EVENT_REFERENCES {"pass":"无时间、有成对时间及混合事件保持真实状态，cost保持unavailable；单边/反向/畸形时间拒绝，完整计时校验已知关系，混合仅校验可知关系，无时间按显式提交顺序且不推测并发；重复subject与跨task/stage拒绝且不发布成功。合法业务output不在evidence中仍经bridge→recorder→canonical outcome→后续input形成真实消费边；坏类型、越界、跨任务引用拒绝，旧缺省引用可读且保持partial。按分发后的完整step/skill示例生成显式不同host的payload进入真实bridge，记录正常/失败/取消结果与理由，不把fixture称为自动hook。阶段成功/失败后复盘完成/失败由现有正式reader读取；旧outcome字节/hash不变，状态分别呈现、只调度一次，复盘失败不反向改变阶段事实或阻断同task修复。","reject":{"input":"单边/反向/畸形时间、重复subject、跨task/stage、坏类型/越界/跨任务output_refs、缺事件、缺输出与旧缺省记录；合法无时钟事件和合法独立业务输出使用同一实际bridge消费链","expected_rejection":"旧实现对合法无计时事件或业务输出保留出现目标行为断言失败；修复后非法身份/时间/引用明确拒绝且无成功事实，缺事件/输出保持unavailable/partial；不接受初始化失败为RED","observation":"真实bridge发布的canonical outcome、现有deriveConsumptionEdges与正式reflection reader结果；记录原始错误/引用并比对旧outcome字节/hash；协议fixture不证明宿主自动集成"}}`
-- **evidence_path**：`quality/evidence/build-code/host_event_references/`
+- **evidence_path**：`quality/evidence/build-code/recheck-20260907/`
 - **STOP**：真实断言无法复现、需要扩大接口/文件或触碰预算/身份时报告具体缺口；不弱化断言；历史事实只读
 - **recovery**：本卡执行者只恢复自己修改；保留原始失败证据，配置恢复先核对当前hash，不覆盖他人更改
 - **task risk**：RISK-005/006；合同修复不得放宽风险、身份或语义证据；缺失时保持unknown；只回滚本卡改动
@@ -348,15 +348,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：bridge 支持无计时成对事件并保持显式提交顺序；保留已知计时关系校验；recorder/canonical adapter/runner 贯通合法 output refs 并拒绝越界或非支持命名空间；缺事件、缺输出和 reflection 失败仍保持真实 unavailable/partial 语义。
+- **executed_commands**：`npx vitest run tests/contract/host-outcome-bridge.test.mjs tests/contract/claude-outcome-packet.test.mjs tests/contract/derive-consumption-edges.test.mjs tests/contract/stage-runner-on-stage-end.test.mjs tests/contract/build-reflection-page.test.mjs tests/integration/runner-clean-install.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（exit 0；54 passed）
+- **evidence_refs**：[`quality/evidence/build-code/recheck-20260907/T017-T018-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T017-T018-GREEN-result.json`]
+- **covered_ac**：AC-LIFECYCLE-001/002/003/004、AC-CONTRACT-007；host bridge、canonical outcome、消费边、reflection reader及clean-install分发路径均通过；54 tests passed。
+- **review_fact**：独立语义复审仍为 `incomplete`；本地定向GREEN不等同于最终验收，DEFER-005 自动host hook仍延期。
+- **completed_at**：2026-09-07T12:11:00Z
+- **执行事实**：T017 RED 先于本次 GREEN；当前实现同一六文件门禁 exit 0，旧 GREEN 证据保留为历史，当前引用指向本次真实配对。
 
 #### T019 — VERIFY：前置修复整合与分发一致性
 
@@ -364,7 +364,7 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 - **Phase**：Phase P0 — 材料合同与执行事实前置修复
 - **goal**：VERIFY：前置修复整合与分发一致性
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-008/R-009 / D-010～D-014
 - **输入**：T013～T018真实结果及更新模板/bundle与现有干净安装consumer；只读运行既有tests/integration/distribution-closure.test.mjs（见Phase READ/VERIFY ONLY，不纳入修改boundary）
 - **依赖**：T018
@@ -397,15 +397,15 @@ RISK-005/006：统一解析时不得混同标识、删除真实finding或相信�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：N/A — 仅运行既有P0聚合和分发验证；未新增实现或修改只读 distribution-closure 测试。
+- **executed_commands**：首次聚合 exit 0（14 files，158 passed）；P0来源修正后 correction 聚合受外部 config 瞬态非法JSON影响 exit 1（157 passed，2 failed）；host 单测恢复后 final 聚合 exit 0（14 files，159 passed，约95.91s）。
+- **evidence_refs**：[`quality/evidence/build-code/material_host_integration/T019-VERIFY-vitest.log`, `quality/evidence/build-code/material_host_integration/T019-VERIFY-result.json`, `quality/evidence/build-code/material_host_integration/T019-VERIFY-correction-vitest.log`, `quality/evidence/build-code/material_host_integration/T019-VERIFY-correction-result.json`, `quality/evidence/build-code/material_host_integration/T019-VERIFY-final-vitest.log`, `quality/evidence/build-code/material_host_integration/T019-VERIFY-final-result.json`, `quality/evidence/build-code/material_host_integration/phase-card.md`, `quality/evidence/build-code/material_host_integration/test-routing-advisor.json`]
+- **covered_ac**：AC-CONTRACT-001～007、AC-LIFECYCLE-001～004；最终指定14个consumer、distribution closure与clean-install closure通过，159 tests passed。中间失败原始日志保留，未计入通过。
+- **review_fact**：独立语义复审仍为 `incomplete`；P0聚合绿不等于T012最终验收，也不证明DEFER-005自动host hook。
+- **completed_at**：2026-09-07T08:37:08Z
+- **执行事实**：T019 P0整合与分发验证已通过；下一依赖卡为T001。
 
 ## Phase P1 — 配置单源与兼容生产契约
 
@@ -451,7 +451,7 @@ RISK-002/FR-CONFIG-003：迁移若观察到配置漂移，拒绝覆盖；仅恢�
 - **Phase**：Phase P1 — 配置单源与兼容生产契约
 - **goal**：RED：单源配置与历史兼容
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-001, R-002, R-004, R-007 / D-001, D-004, D-005, D-008
 - **输入**：当前packet投影的spec/plan与原始配置/历史记录fixture
 - **依赖**：T019
@@ -484,15 +484,15 @@ RISK-002/FR-CONFIG-003：迁移若观察到配置漂移，拒绝覆盖；仅恢�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增单源/兼容测试fixture及迁移守卫负例；未修改生产实现。
+- **executed_commands**：`npx vitest run skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs tests/review/review-policy-compatibility.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（exit 1；31 passed，1 failed）
+- **evidence_refs**：[`quality/evidence/build-code/review_config_compat/T001-RED-vitest.log`, `quality/evidence/build-code/review_config_compat/T001-RED-result.json`, `quality/evidence/build-code/review_config_compat/phase-card.md`]
+- **covered_ac**：RED exposed retired `wh_review.profiles` acceptance while single-source order and hash-guard fixtures passed; no setup failure was used as RED.
+- **review_fact**：独立语义复审仍为 `incomplete`；本卡只记录真实RED。
+- **completed_at**：2026-09-07T08:48:29Z
+- **执行事实**：T001 RED 已执行；旧 profiles 仍被 loader 接受路径间接阻塞，进入 T002 修复。
 
 #### T002 — GREEN：单源配置与历史兼容
 
@@ -500,7 +500,7 @@ RISK-002/FR-CONFIG-003：迁移若观察到配置漂移，拒绝覆盖；仅恢�
 - **Phase**：Phase P1 — 配置单源与兼容生产契约
 - **goal**：GREEN：单源配置与历史兼容
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-001, R-002, R-004, R-007 / D-001, D-004, D-005, D-008
 - **输入**：当前packet投影的spec/plan与T001真实输出；不得猜上游结果
 - **依赖**：T001
@@ -533,15 +533,15 @@ RISK-002/FR-CONFIG-003：迁移若观察到配置漂移，拒绝覆盖；仅恢�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：loader 拒绝 `wh_review.profiles/priority` 并给迁移动作；有效 provider definitions 直接从 3rd-review broker 生效；显式 route 保持列表顺序；现有 route 测试迁移到单源契约。
+- **executed_commands**：`npx vitest run skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs tests/review/review-policy-compatibility.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（exit 0；32 passed）
+- **evidence_refs**：[`quality/evidence/build-code/review_config_compat/T002-GREEN-vitest.log`, `quality/evidence/build-code/review_config_compat/T002-GREEN-result.json`, `quality/evidence/build-code/review_config_compat/phase-card.md`, `quality/evidence/build-code/review_config_compat/test-routing-advisor.json`]
+- **covered_ac**：AC-CONFIG-001/002/003、AC-COMPAT-001/002、AC-SAFETY-001；旧格式显式拒绝、broker 单源 provider 定义、route 顺序、legacy fallback 及迁移 hash guard 通过。
+- **review_fact**：独立语义复审仍为 `incomplete`；本地定向GREEN不等同最终验收。
+- **completed_at**：2026-09-07T08:50:54Z
+- **执行事实**：T002 GREEN 已执行并通过；下一依赖卡为 T003。
 
 ## Phase P2 — 静态预检与单一记录闭环
 
@@ -572,7 +572,7 @@ REVIEW_STATIC_PREFLIGHT；本 Phase 还必须完成 REVIEW_TASK_RECORD、REVIEW_
 `npx vitest run skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs -t "review flow static preflight" --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；REVIEW_STATIC_PREFLIGHT；`quality/evidence/build-code/review_static_preflight/`。
 `npx vitest run tests/review/review-record-route.test.mjs tests/e2e/stage-reflection-real-task.test.mjs skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs tests/contract/runtime-facade.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；REVIEW_TASK_RECORD；`quality/evidence/build-code/review_task_record/`。
 `npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs tests/review/review-record-route.test.mjs -t "review flow sink" --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；REVIEW_BARE_SINK；`quality/evidence/build-code/review_bare_sink/`。
-`npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs tests/contract/review-layering.test.mjs tests/integration/mini-task-delivery.test.mjs tests/contract/workflow-evolution-final-aggregate.test.mjs tests/final-cutover-guards.red.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；REVIEW_E2E_FIRST；`quality/evidence/build-code/review_e2e_first/`。
+`npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs tests/contract/review-layering.test.mjs tests/integration/mini-task-delivery.test.mjs tests/contract/workflow-evolution-final-aggregate.test.mjs tests/final-cutover-guards.red.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`；RED=1/GREEN=0；REVIEW_E2E_FIRST；`quality/evidence/build-code/recheck-20260907/`。
 
 ### Knowledge
 
@@ -596,7 +596,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：RED：锁前静态预检
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-002, R-003, R-007 / D-002, D-008
 - **输入**：当前packet投影的spec/plan与T002真实输出；不得猜上游结果
 - **依赖**：T002
@@ -629,15 +629,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：在 `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs` 新增 `review flow static preflight` 命名测试，覆盖缺失必需材料、空路由、同源选择、敏感诊断字段和 broker health unknown。
+- **executed_commands**：`npx vitest run skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs -t "review flow static preflight" --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（可逆基线 RED，exit 1；3 failed / 1 passed / 29 skipped）。
+- **evidence_refs**：[`quality/evidence/build-code/review_static_preflight/T003-RED-vitest.log`, `quality/evidence/build-code/review_static_preflight/T003-RED-result.json`]
+- **covered_ac**：AC-PREFLIGHT-001/002/003、AC-SAFETY-001 的目标断言已形成真实 RED；GREEN 由 T004 消费。
+- **review_fact**：本卡为 RED 测试卡；失败来自旧 runner 漏检/误派发，非 setup 失败。
+- **completed_at**：2026-09-07T09:03:00Z
+- **执行事实**：已保存旧实现基线的真实断言失败；未改生产实现。
 
 #### T004 — GREEN：锁前静态预检
 
@@ -645,7 +645,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：GREEN：锁前静态预检
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-002, R-003, R-007 / D-002, D-008
 - **输入**：当前packet投影的spec/plan与T003真实输出；不得猜上游结果
 - **依赖**：T003
@@ -678,15 +678,16 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：`simple-review-runner.mjs` 增加静态 preflight：复用 `reviewRuleFor` 的 required-minus-generated，拦截空路由、无效选择、同源/路由异常和材料缺失/禁用；返回 `blocked_before_dispatch` 与四字段脱敏诊断；静态失败不创建 bundle、不调用 broker。`wh-review-cli.mjs` 已有透传链路，无需额外改动。
+- **executed_commands**：`npx vitest run skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs -t "review flow static preflight" --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（exit 0，4 passed / 29 skipped）；同文件全量定向检查 33 passed。
+- **evidence_refs**：[`quality/evidence/build-code/review_static_preflight/T003-RED-vitest.log`, `quality/evidence/build-code/review_static_preflight/T004-GREEN-vitest.log`, `quality/evidence/build-code/review_static_preflight/T004-GREEN-result.json`]
+- **covered_ac**：AC-PREFLIGHT-001/002/003、AC-SAFETY-001：pass（命名 gate）；持久化含 I/O 的 1 秒事实留给 T005～T008。
+- **review_fact**：当前实现验证事实为本地 Vitest；独立 provider 复审尚未执行，继续保留 `semantic_review_status=incomplete`。
+- **completed_at**：2026-09-07T09:04:00Z
+- **执行事实**：普通 material-only standalone 兼容调用仍保留窄例外；integration review 请求现在即使只含未知 material key 也强制进入 stage contract preflight 并在 provider 前返回 MATERIAL_INCOMPLETE，避免最终验收入口 fail-open。
+
 
 #### T005 — RED：任务调用与不可变记录闭环
 
@@ -694,7 +695,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：RED：任务调用与不可变记录闭环
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-003, R-004, R-005, R-007 / D-002, D-003, D-004, D-005, D-007, D-008
 - **输入**：当前packet投影的spec/plan与T004真实输出；不得猜上游结果
 - **依赖**：T004
@@ -727,15 +728,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增任务 request/result 闭环测试，覆盖认证快照、不可变 attempt/result/report、并发去重、blocked-before-dispatch、全 provider 失败保留 provider facts、材料指纹漂移拒绝；RED 保留在既有 T005 证据。
+- **executed_commands**：T005 RED 既有证据；T005/T006 GREEN correction gate（exit 0，4 files，26 tests passed，约73s）。
+- **evidence_refs**：[`quality/evidence/build-code/review_task_record/T005-RED-vitest.log`, `quality/evidence/build-code/review_task_record/T005-RED-result.json`, `quality/evidence/build-code/review_task_record/T005-T006-GREEN-correction-vitest.log`, `quality/evidence/build-code/review_task_record/T005-T006-GREEN-correction-result.json`]
+- **covered_ac**：AC-PREFLIGHT-002/003、AC-RECORD-001/002/003/005、AC-SAFETY-001/002：定向行为通过；真实 provider 与宿主耗时仍按 coverage limits 保留。
+- **review_fact**：本地实现与定向 consumer gate 通过；独立 provider 语义复审仍为 `incomplete`。
+- **completed_at**：2026-09-07T09:51:00Z
+- **执行事实**：记录 writer 使用 create-only；报告引用和 dispatch_state 已落盘；当前 route material 回绑依赖宿主注入的 materialIdForRequest，缺失该注入时保留请求键但不伪称材料已认证。
 
 #### T006 — GREEN：任务调用与不可变记录闭环
 
@@ -743,7 +744,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：GREEN：任务调用与不可变记录闭环
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-003, R-004, R-005, R-007 / D-002, D-003, D-004, D-005, D-007, D-008
 - **输入**：当前packet投影的spec/plan与T005真实输出；不得猜上游结果
 - **依赖**：T005
@@ -776,15 +777,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：实现 `recordSimpleReviewRequest` 认证请求路径、锁内查找与 create-only 记录，增加 report_ref、可选 dispatch_state、全失败 unavailable 终态和 sink/runner 分层；stage-runtime 注入真实 runner 与材料指纹函数。
+- **executed_commands**：与 T005 相同 correction gate（exit 0，4 files，26 tests passed，约73s）。
+- **evidence_refs**：[`quality/evidence/build-code/review_task_record/T005-T006-GREEN-correction-vitest.log`, `quality/evidence/build-code/review_task_record/T005-T006-GREEN-correction-result.json`]
+- **covered_ac**：AC-PREFLIGHT-002/003、AC-RECORD-001/002/003/005、AC-COMPAT-001/002、AC-SAFETY-001/002：定向行为通过；写盘完全不可用与真实 provider 仍未宣称覆盖。
+- **review_fact**：定向测试通过；独立 provider 语义复审仍为 `incomplete`。
+- **completed_at**：2026-09-07T09:51:00Z
+- **执行事实**：runtime/review 不再反向 import wh-review skill；默认 runner 由 tools/cli 注入，保持 layering contract。
 
 #### T007 — RED：裸跑诊断与保存故障
 
@@ -792,7 +793,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：RED：裸跑诊断与保存故障
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-003, R-004, R-007 / D-002, D-003, D-008
 - **输入**：当前packet投影的spec/plan与T006真实输出；不得猜上游结果
 - **依赖**：T006
@@ -825,15 +826,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增裸跑 sink 并发/幂等测试；保留可逆基线 RED，验证旧 CLI 未写 sink。
+- **executed_commands**：T007 RED 基线 exit 1；T007/T008 named GREEN gate exit 0（1 passed，27 skipped）。
+- **evidence_refs**：[`quality/evidence/build-code/review_bare_sink/T007-RED-vitest.log`, `quality/evidence/build-code/review_bare_sink/T007-RED-result.json`, `quality/evidence/build-code/review_bare_sink/T007-T008-GREEN-vitest.log`, `quality/evidence/build-code/review_bare_sink/T007-T008-GREEN-result.json`]
+- **covered_ac**：AC-RECORD-004、AC-RECORD-005：sink 非权威、并发同键只一份、任务目录不写入；异步断电与任意网络盘仍未覆盖。
+- **review_fact**：本地 sink 行为通过；独立 provider 语义复审仍为 `incomplete`。
+- **completed_at**：2026-09-07T09:52:00Z
+- **执行事实**：sink 使用结构化请求键、create-only 文件和真实保存失败抛错；原始 provider/宿主秘密不写入公开 sink。
 
 #### T008 — GREEN：裸跑诊断与保存故障
 
@@ -841,7 +842,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：GREEN：裸跑诊断与保存故障
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-003, R-004, R-007 / D-002, D-003, D-008
 - **输入**：当前packet投影的spec/plan与T007真实输出；不得猜上游结果
 - **依赖**：T007
@@ -874,15 +875,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：`runReviewRecovery` 无 recordContext 时走非权威 sink；有 authenticated recordContext 时走 canonical request route，不把 sink 当 task 质量事实。
+- **executed_commands**：`npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs -t "review flow sink" --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`（exit 0，1 passed / 27 skipped）。
+- **evidence_refs**：[`quality/evidence/build-code/review_bare_sink/T007-T008-GREEN-vitest.log`, `quality/evidence/build-code/review_bare_sink/T007-T008-GREEN-result.json`]
+- **covered_ac**：AC-RECORD-004/005、AC-SAFETY-001：pass；真实 provider 失败/取消和完全不可写存储保持 coverage limit。
+- **review_fact**：定向行为通过；独立 provider 语义复审仍为 `incomplete`。
+- **completed_at**：2026-09-07T09:52:00Z
+- **执行事实**：同 normalized key 的并发裸跑只触发一次 runner；返回 `authoritative=false` 和 sink_ref；sink 不进入 TaskHandle canonical enumeration。
 
 #### T009 — RED：E2E 首项与相邻保护
 
@@ -890,7 +891,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：RED：E2E 首项与相邻保护
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-001, R-002, R-004, R-005, R-007 / D-001, D-003, D-005, D-006, D-007, D-008
 - **输入**：当前packet投影的spec/plan与T008真实输出；不得猜上游结果
 - **依赖**：T008
@@ -907,7 +908,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **gate_cmd**：`npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs tests/contract/review-layering.test.mjs tests/integration/mini-task-delivery.test.mjs tests/contract/workflow-evolution-final-aggregate.test.mjs tests/final-cutover-guards.red.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`
 - **expected_exit**：1
 - **oracle**：`REVIEW_E2E_FIRST {"pass":"E2E 多项稳定取 initial[0]；空/同源/禁用/缺失首项保存拦截且不换后项；frozen policy 从 effectiveProfiles 来；合法引用不新派发；旧policy不复用；相邻 fixture、public行为、异源与 usage 保持。","reject":{"input":"零/单/多 initial、首项非法但后项合法、合法缓存与旧policy缓存、缺 usage/partial/空findings。","expected_rejection":"仍强制 length=1、偷偷选后项、空列表派发、旧policy命中或复用克隆 attempt 的目标断言失败。","observation":"实际首项、provider stub调用次数、拦截与复用引用回读、旧文件 hash，以及受影响邻接消费者输出。"}}`
-- **evidence_path**：`quality/evidence/build-code/review_e2e_first/`
+- **evidence_path**：`quality/evidence/build-code/recheck-20260907/`
 - **STOP**：命令不可执行、RED只是环境失败、需弱化断言/改方向/身份/预算或越界时，停止对应修改并回owner；T012消费P0真实修复证据并保留任何未解决缺口
 - **recovery**：本卡执行者只恢复自己修改；保留原始失败证据，配置恢复先核对当前hash，不覆盖他人更改
 - **task risk**：RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开始/终态报告，不覆盖原证据；回到具体 RED/GREEN 修复。
@@ -923,15 +924,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：在基线 HEAD 生产实现上叠加当前 T009 测试输入，真实捕获相邻 review recovery 生命周期断言失败；未修改基线生产代码。
+- **executed_commands**：T009 RED 共享六文件门禁（exit 1，161 passed / 22 skipped / 1 failed）；失败不是 setup，`review-runner` recovery call count 为 0、预期 1。
+- **evidence_refs**：[`quality/evidence/build-code/recheck-20260907/T009-RED-vitest.log`, `quality/evidence/build-code/recheck-20260907/T009-RED-result.json`, `quality/evidence/build-code/recheck-20260907/T009-T010-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T009-T010-GREEN-result.json`]
+- **covered_ac**：RED/GREEN 配对事实已保留；最终逐 AC 验收仍由 T012 负责。
+- **review_fact**：基线真实断言失败，修复后共享 GREEN 门禁通过；独立 provider 语义复审仍为 `incomplete`。
+- **completed_at**：2026-09-07T12:00:00Z
+- **执行事实**：本次 recheck 在 detached HEAD 加当前 T009 测试输入的临时 worktree 中先运行 RED（160 passed / 22 skipped / 2 failed，失败为 recovery 去重与生产入口计数断言），随后在当前实现 worktree 运行同一命令 GREEN（exit 0）。旧 review_e2e_first 证据保留为历史，当前引用指向本次真实配对。
 
 #### T010 — GREEN：E2E 首项与相邻保护
 
@@ -939,7 +940,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **Phase**：Phase P2 — 静态预检与单一记录闭环
 - **goal**：GREEN：E2E 首项与相邻保护
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-001, R-002, R-004, R-005, R-007 / D-001, D-003, D-005, D-006, D-007, D-008
 - **输入**：当前packet投影的spec/plan与T009真实输出；不得猜上游结果
 - **依赖**：T009
@@ -956,7 +957,7 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 - **gate_cmd**：`npx vitest run skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs skills/wh-review/scripts/__tests__/review-runner.test.mjs tests/contract/review-layering.test.mjs tests/integration/mini-task-delivery.test.mjs tests/contract/workflow-evolution-final-aggregate.test.mjs tests/final-cutover-guards.red.test.mjs --pool=forks --poolOptions.forks.singleFork --no-file-parallelism`
 - **expected_exit**：0
 - **oracle**：`REVIEW_E2E_FIRST {"pass":"E2E 多项稳定取 initial[0]；空/同源/禁用/缺失首项保存拦截且不换后项；frozen policy 从 effectiveProfiles 来；合法引用不新派发；旧policy不复用；相邻 fixture、public行为、异源与 usage 保持。","reject":{"input":"零/单/多 initial、首项非法但后项合法、合法缓存与旧policy缓存、缺 usage/partial/空findings。","expected_rejection":"仍强制 length=1、偷偷选后项、空列表派发、旧policy命中或复用克隆 attempt 的目标断言失败。","observation":"实际首项、provider stub调用次数、拦截与复用引用回读、旧文件 hash，以及受影响邻接消费者输出。"}}`
-- **evidence_path**：`quality/evidence/build-code/review_e2e_first/`
+- **evidence_path**：`quality/evidence/build-code/recheck-20260907/`
 - **STOP**：命令不可执行、RED只是环境失败、需弱化断言/改方向/身份/预算或越界时，停止对应修改并回owner；T012消费P0真实修复证据并保留任何未解决缺口
 - **recovery**：本卡执行者只恢复自己修改；保留原始失败证据，配置恢复先核对当前hash，不覆盖他人更改
 - **task risk**：RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开始/终态报告，不覆盖原证据；回到具体 RED/GREEN 修复。
@@ -972,15 +973,15 @@ RISK-001/003/004：绑定漂移、部分保存和超时保持失败；保留开�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：完成 E2E 首项与相邻保护实现；修正裸 sink 复用记录以保留 `error_code`，避免非权威缓存回读丢失失败分类；保持单次异源派发、首项约束和相邻生命周期保护。
+- **executed_commands**：T009/T010 同一六文件门禁（隔离 `WORKFLOWHUB_REVIEW_SINK_ROOT`，exit 0，6 files，162 passed / 22 skipped，约159s）。
+- **evidence_refs**：[`quality/evidence/build-code/recheck-20260907/T009-T010-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T009-T010-GREEN-result.json`]
+- **covered_ac**：AC-E2E-001、AC-CONFIG-002、AC-COMPAT-002、AC-RECORD-002/003、AC-SAFETY-001/002：定向门禁通过；真实 provider 语义与最终逐AC验收仍未完成。
+- **review_fact**：本地 E2E/邻接保护通过；独立 provider 语义复审仍为 `incomplete`。
+- **completed_at**：2026-09-07T12:06:00Z
+- **执行事实**：T009 RED 先于本次 GREEN；当前实现同一六文件门禁 exit 0。首项/空列表/同源/禁用/缺失首项及复用边界均通过；旧证据保留为历史。
 
 ## Phase P3 — 操作说明、配置迁移与真实验收
 
@@ -1026,7 +1027,7 @@ RISK-002/003/004：本机配置冲突即不覆盖，实测慢于 1000ms 原样�
 - **Phase**：Phase P3 — 操作说明、配置迁移与真实验收
 - **goal**：操作说明与本机配置迁移
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-001, R-002, R-004, R-007 / D-001, D-003, D-008
 - **输入**：当前packet投影的spec/plan与T010真实输出；不得猜上游结果
 - **依赖**：T010
@@ -1056,15 +1057,15 @@ RISK-002/003/004：本机配置冲突即不覆盖，实测慢于 1000ms 原样�
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
-- **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：按文档合同执行真实本机迁移；使用新的 `wx` 备份路径，删除 WorkflowHub 侧重复 `wh_review.profiles`/`priority`，保留路由与其它配置字节；完成隔离成功恢复和漂移拒写演练，并保留原始证据。
+- **executed_commands**：`node quality/evidence/build-code/migration/operation.mjs`（exit 0）；`node skills/wh-review/scripts/wh-review-cli.mjs doctor`（exit 0，status ok）；T011 独立字节回读 gate（exit 0，`unchanged_unrelated=true`）。
+- **evidence_refs**：[`quality/evidence/build-code/migration/operation.mjs`, `quality/evidence/build-code/migration/operation.json`, `quality/evidence/build-code/migration/restore-success.json`, `quality/evidence/build-code/migration/restore-drift.json`]
+- **covered_ac**：AC-CONFIG-003、AC-RECORD-004、AC-SAFETY-001：真实备份/迁移/受保护恢复/漂移冲突与 doctor 均通过；最终逐 AC 验收仍未完成。
+- **review_fact**：迁移操作事实通过；独立 provider 语义复审与最终验收仍为 `incomplete`。
+- **completed_at**：2026-09-07T10:07:00Z
+- **执行事实**：当前 `/Users/Hugh/.config/workflowhub/config.json` 已为迁移后的无重复声明形状；备份路径为 `config.json.bak-review-flow-repair-20260907-rerun2`，未覆盖旧备份。
 
 #### T012 — FINAL：当前快照聚合与真实验收
 
@@ -1072,7 +1073,7 @@ RISK-002/003/004：本机配置冲突即不覆盖，实测慢于 1000ms 原样�
 - **Phase**：Phase P3 — 操作说明、配置迁移与真实验收
 - **goal**：FINAL：当前快照聚合与真实验收
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"e604c7f3950cf7c82924197a319244fb177dc8d08e6d9c699982edb62c114ed5","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"spec.md","hash":"7681b3cead847c53bbc84a9f72eb9194181d4794168c203c09ac359c3360603d","id":"review-flow-repair-spec"},{"artifact_kind":"plan","ref":"plan.md","hash":"c38f802e14b9a2645e71173306881db4746eebc06d30d7b980ad40e12e826b27","id":"review-flow-repair-plan"}]`
 - **source_refs / decision_refs**：R-001～R-009 / D-001～D-014
 - **输入**：当前packet投影的spec/plan、T013～T019及T001～T011真实输出与逐AC证据；不得猜上游结果。
 - **依赖**：T011
@@ -1096,26 +1097,32 @@ RISK-002/003/004：本机配置冲突即不覆盖，实测慢于 1000ms 原样�
 - **test tier / test method**：fullstack / fullstack-slice-testing；独立test-routing-advisor按真实接口/身份/并发风险判类
 - **scenarios / commands / expected exit / oracle**：SCN-001～019；包括当前来源/历史引用、不可写/中断负例；provider真正没有成功时该成功场景标未覆盖，不fabricate。；使用本卡gate_cmd/expected_exit/REVIEW_FINAL_ACCEPTANCE；不得把局部输出当整体成功 操作commands：`node /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-flow-repair-20260906/quality/evidence/build-code/final/operations.mjs prepare`（0）；`node /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/workflowhub-review-flow-repair-20260906/quality/evidence/build-code/final/operations.mjs observe`（原exit逐项保留）；observe内现有record和bare CLI确切命令、request/identity/operation字段及回读断言见plan第3节。所需操作失败/未授权/不可观测时验收incomplete。
 - **fixtures_services**：隔离临时home/config/task与真实文件系统，冻结新旧记录；broker stub仅控制provider，不mock掉host/保存consumer；执行者清理自己创建的临时夹具，保留证据
-- **coverage limits**：仅指定consumer/fixture与授权真实provider；不覆盖所有平台或断电保证；预算/usage/历史不变；P0尚未实施，当前生产合同失败仍真实保留
+- **coverage limits**：仅指定consumer/fixture与授权真实provider；不覆盖所有平台或断电保证；预算/usage/历史不变。P0 T013～T019 已完成并由对应 consumer 门禁验证；DEFER-005 的宿主自动hook仍延期，真实 provider 仍可能 partial。
 - **acceptance_role**：acceptance
 - **ui_scope**：non_ui
 - **acceptance_data**：`[{"source":"本任务真实WorkflowHub配置与3rd-review只读定义","sample":"迁移前备份/迁移后配置/恢复与漂移负例","scenario":"SCN-001/002/010","tier":"service"},{"source":"认证task的review --action=record request生产入口","sample":"静态失败/正常或真实provider失败/合法复用/重复拦截","scenario":"SCN-003/004/005/006/008/011/012","tier":"service"},{"source":"裸跑CLI及隔离故障fixture","sample":"sink成功/失败/拦截/存储或可捕获取消","scenario":"SCN-007/009","tier":"service"},{"source": "当前模板与真实material/host生产消费链及安装产物", "sample": "ID/风险/角色/Oracle正负例、来源语义、事件与output_refs、immutable reflection", "scenario": "SCN-013～019", "tier": "service"}]`
 - **e2e_scope**：high_risk_user_visible
 - **e2e_decision_refs**：`["D-002","D-003","D-005","D-006","D-007"]`
 - **e2e_risk_decision_ref**：D-003
-- **e2e_binding_gap**：PLAN-RISK-005/006当前生产缺口尚在；已纳入本任务T013～T019前置实现，T012消费修复后原D-003风险绑定和真实验收证据。ready仅指设计就绪，expected_exit=0为未来期望，当前未通过正式handler
+- **e2e_binding_gap**：T013～T019 已落实并通过当前 consumer 门禁；PLAN-RISK-005/006 中的 DEFER-005 宿主自动hook仍是明确延期边界。T012 仍需消费当前材料、逐 AC 证据和真实 provider 结果，不能把设计 ready 或局部 GREEN 当正式 acceptance。
 
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
 - **status**：`pending`
-- **actual_changes**：N/A — 尚未实施
-- **executed_commands**：N/A — build-plan 未运行测试或迁移
-- **evidence_refs**：[]
-- **covered_ac**：N/A — 尚未实测
-- **review_fact**：N/A — 实施结果尚未产生
+- **actual_changes**：完成当前材料包 prepare；保留两次已授权完整 provider review 的真实 record/bare 事实；修复 bare sink key 对显式 `material_id` 的绑定、认证上下文重复快照和 integration 未知 material key fail-open，并同步 wh-review bundle/catalog hash。
+- **executed_commands**：最新 `operations.mjs prepare` exit 0（完整 ac_trace，60 个 evidence refs，0 missing）；两次完整 provider review 分别保留在 `quality/reviews/results/build-code-simple-cbaf3314-955c-4a9d-a831-85f04573838a.json` 与 `quality/reviews/results/build-code-simple-ee2b4015-a7b7-4bde-a59d-eb9841d2a207.json`，均 record=recorded、bare=available/partial；其后第三次重审在 provider dispatch 前按本轮最多两次规则取消；局部静态 preflight/record、clean-install、skill closure 均通过。
+- **evidence_refs**：[`quality/evidence/build-code/final/rerun-20260907/prepare.json`, `quality/evidence/build-code/final/rerun-20260907/identity.json`, `quality/evidence/build-code/final/rerun-20260907/observe.json`, `quality/evidence/build-code/final/rerun-20260907/operation-record.json`, `quality/evidence/build-code/final/rerun-20260907/operation-bare.json`, `quality/evidence/build-code/final/T012-GREEN-vitest.log`, `quality/evidence/build-code/final/T012-GREEN-result.json`, `quality/evidence/build-code/recheck-20260907/static-preflight-timing.json`, `quality/evidence/build-code/recheck-20260907/T009-RED-vitest.log`, `quality/evidence/build-code/recheck-20260907/T009-T010-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T017-RED-vitest.log`, `quality/evidence/build-code/recheck-20260907/T017-T018-GREEN-vitest.log`, `quality/evidence/build-code/recheck-20260907/T013-RED-vitest.log`, `quality/evidence/build-code/recheck-20260907/T013-T014-GREEN-vitest.log`]
+- **covered_ac**：本地聚合测试门禁通过；真实 provider 成功条件未满足，AC 仍保留 `incomplete`。
+- **review_fact**：两次完整 provider review 均为 `partial`；`kimi/coding` completed，`grok/grok` `PROVIDER_HEALTH_FAILED`，`codex/luna` `SAME_SOURCE`。第二次结果给出 blocking/major/minor findings；最终本地修复发生在第二次 review 之后，按本轮最多两次规则不再重审，不能写成 acceptance pass。
 - **completed_at**：N/A — 未完成
-- **执行事实**：规划事实：本卡仅定义执行合同；未执行，不代表通过。
+- **执行事实**：T012 已执行但未完成；测试绿不能替代最终验收。本次复核已重建完整 ac_trace，并将 T009/T010、T017/T018 当前引用改为真实 RED→GREEN 配对；operations.mjs 已按全部 task evidence_refs（含 final/）构建 test evidence。静态失败含认证保存的逐样本单调计时已记录，四样本约 714–741ms，均≤1000ms，且均在 provider 前拦截；integration 未知 material key 也已 fail-closed。T012 仍 pending；第二次 review 的材料指纹早于最后一轮本地修复，随后重审在 provider dispatch 前取消以遵守本轮最多两次规则，因此保留 stale-review/partial 事实，不宣称最终 acceptance。
+
+
+- **2026-09-07 有限收尾核对**：已核对 28 AC 的现有证据映射、7 条 canonical findings 的后续修复证据和 22 skipped 的原因。限定聚合为 27 文件、412 passed、22 skipped、0 failed；22 skipped 属显式退休的旧 audit 测试。原始 review 保持原快照、原 findings 与 provider partial/unavailable，不改写成新 clean review。详见 `quality/evidence/close-readiness-20260907/evidence-reconciliation.json` 与 `.md`。
+- **当前处置边界**：已核对 findings 均找到后续修复证据；没有据此新增独立质量通过裁决。bare diagnostics 中旧 oracle evidence_path 仅部分同步；真实 provider 完整成功和独立 live E2E 成功仍未核实。T012 的正式 acceptance 继续保留 incomplete，不以外部 provider 全成功或第三轮 review 作为物理 close 前提。
+- **正式发布结果**：本轮 bridge 如实发布 unavailable outcome，公共 `run --action=execute` exit 0 并记录 quality incomplete。现有 bridge 拒绝旧快照 review，verify-code handler 不消费独立 finding_dispositions，旧 reflection 固定路径不可变；本次不改造规格 NG-004 排除的 verify-code 集成机制。输入与输出保留在 `quality/evidence/close-readiness-20260907/`。
+- **交付授权**：用户在看到三步有限收尾计划后回复“好的，按这个计划执行吧”，授权核对、准确发布和提交/合并/归档/推送/清理。物理 close 结果以外置 `operations/close/completed.json` 为准，不从本任务卡推断物理完成。
 
 ## 4. Final current-snapshot aggregate strategy
 
