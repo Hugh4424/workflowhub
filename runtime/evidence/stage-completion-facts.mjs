@@ -333,7 +333,12 @@ export function buildStageCompletion(stage, input) {
 
 function outcomeCount(entries, label) {
   if (!Array.isArray(entries)) throw new TypeError(`${label} must be an array`);
-  const counts = Object.fromEntries(["completed", "skipped", "incomplete", "unavailable"].map((status) => [status, 0]));
+  // Stage Agent adapters may legitimately classify a declared skill as
+  // `not_applicable` (for example frontend-testing when this task has no
+  // product route). Keep that fact in the execution summary instead of
+  // rejecting the whole stage publication. It remains non-completed
+  // disclosure, but it is not the same as an incomplete or unavailable run.
+  const counts = Object.fromEntries(["completed", "skipped", "not_applicable", "incomplete", "unavailable"].map((status) => [status, 0]));
   const nonCompleted = [];
   for (const [index, entry] of entries.entries()) {
     const item = object(entry, `${label}[${index}]`);

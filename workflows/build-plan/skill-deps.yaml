@@ -5,6 +5,7 @@ skills:
   - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage }
   - { name: plan-eng-review, path: skills/plan-eng-review/SKILL.md, execution: inline, trigger: engineering_plan_check, bundle: skills/plan-eng-review/skill-bundle.json, owner: stage }
   - { name: testing-system-blueprint, path: skills/testing-system-blueprint/SKILL.md, execution: inline, trigger: phase_test_design, bundle: skills/testing-system-blueprint/skill-bundle.json, owner: stage }
+  - { name: frontend-component-quality, path: skills/frontend-component-quality/SKILL.md, execution: inline, trigger: ui_scope, bundle: skills/frontend-component-quality/skill-bundle.json, owner: stage }
   - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, trigger: task_test_routing, bundle: skills/test-routing-advisor/skill-bundle.json, owner: stage }
   - { name: spec-tasks, path: skills/spec-tasks/SKILL.md, execution: inline, trigger: task_design, bundle: skills/spec-tasks/skill-bundle.json, owner: stage }
   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }

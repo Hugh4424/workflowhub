@@ -62,6 +62,32 @@
 - **UI / external code**：[填写：信息层级、交互、可访问性或最小 hook；无则 N/A — reason]
 - **Fail-loud behavior**：[填写：无效输入或状态如何明确失败]
 
+## UI Delivery Contract (仅 UI phase/task 使用)
+
+- **UI applicability**：`ui_scope` / `non_ui` / `unknown`；若无 UI 改动填 `N/A — reason`。
+- **Component action**：`reuse` / `modify` / `extend-state-or-variant` / `add-local` / `extract-shared` / `remove-after-no-consumers`。
+- **Real consumer**：[填写真实页面/组件消费者；没有时写 `unknown — reason`]
+- **State owner**：[填写状态所属组件或 hook]
+- **Typed ViewModel**：[填写输入/输出类型、adapter 或 `N/A — reason`]
+- **CSS/token owner**：[填写样式与 token 所有者、边界和禁止的 global override]
+- **Fixture / viewport**：[填写假数据 fixture、viewport 名称/尺寸和 responsive 断点]
+- **Browser / a11y / performance**：[填写交互、keyboard、a11y、performance 测试路线]
+- **Screenshot handoff**：[填写截图路径/命令；blocked/unknown 时写失败原因]
+- **Coverage limits**：[填写不覆盖的浏览器、视觉、API 或性能范围]
+- **N/A / unknown reason**：[填写为什么无法执行或只能人工确认]
+
+### Design-gap handoff (不改变 Design.md 权威)
+
+- **design_status**：`approved` / `acknowledged` / `not_approved` / `unknown`。
+- **missing_items / reason**：[填写缺项和原因；没有缺项填 `[]`]
+- **fallback_visual_basis**：[填写真实组件+假数据、设计工具结果或 `N/A — reason`]
+- **constraints / assumptions**：[填写交互、label、组件限制和实现假设]
+- **rework_risk / human_confirmation**：[填写返工风险与人工确认事实]
+- **current_material_ref / design_revision**：[填写当前四份材料引用和 Design.md 版本字符串]
+- **visible_labels**：[填写页面和操作的可见 label]
+- **preview_refs / fixture_refs / viewport_refs / screenshot_refs**：[填写可回放引用；缺失必须保留 `unknown` 或 `N/A — reason`]
+- **responsive / a11y**：[每个状态填写窄视口重排、溢出、焦点、键盘、语义和错误关联意图]
+
 ## File Boundary
 
 ### NEW

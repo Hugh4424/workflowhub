@@ -4,37 +4,37 @@
     "make-decision/direction": {
       "contract": "contracts/make-decision.md",
       "problem_order": ["problem", "constraints", "failure_consequence", "smaller_reversible_option"],
-      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction", "direction_flow"]
+      "semantic_fields": ["raw_requirement", "objective_facts", "direction_constraints", "current_selection", "independent_reconstruction", "direction_flow", "ui_applicability", "project_inventory", "planned_or_changed_frontend_fact"]
     },
     "make-decision/detail": {
       "contract": "contracts/make-decision.md",
       "problem_order": ["scope", "user_flow", "states", "acceptance", "risk", "simplicity"],
-      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "objective_facts"]
+      "semantic_fields": ["raw_requirement", "approved_direction", "draft_spec_or_acceptance", "objective_facts", "ui_applicability", "ui_contract"]
     },
     "build-spec": {
       "contract": "contracts/build-spec.md",
       "problem_order": ["requirement_coverage", "journey_states", "failure_recovery", "oracle", "scope"],
-      "semantic_fields": ["raw_requirement", "approved_decision", "draft_spec", "acceptance_criteria", "user_flow", "data_states", "failure_boundaries"]
+      "semantic_fields": ["raw_requirement", "approved_decision", "draft_spec", "acceptance_criteria", "user_flow", "data_states", "failure_boundaries", "ui_applicability", "ui_contract", "design_status", "missing_items", "human_confirmation"]
     },
     "build-plan": {
       "contract": "contracts/build-plan.md",
       "problem_order": ["causal_graph", "dependencies", "consumers", "verification", "recovery", "necessity"],
-      "semantic_fields": ["raw_requirement", "approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "dependencies", "verification"]
+      "semantic_fields": ["raw_requirement", "approved_spec", "acceptance_criteria", "draft_plan", "draft_tasks", "dependencies", "verification", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
     },
     "build-code/phase": {
       "contract": "contracts/build-code.md",
       "problem_order": ["spec_conformance", "correctness", "necessity"],
-      "semantic_fields": ["approved_spec", "acceptance_criteria", "phase_map", "impact_map", "reuse_map", "acceptance_map", "change_map", "test_evidence"]
+      "semantic_fields": ["approved_spec", "acceptance_criteria", "phase_map", "impact_map", "reuse_map", "acceptance_map", "change_map", "test_evidence", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
     },
     "build-code/integration": {
       "contract": "contracts/build-code.md",
       "problem_order": ["user_flow", "cross_phase_seams", "interfaces", "failure_recovery", "necessity"],
-      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "implementation_context", "test_evidence", "open_risks"]
+      "semantic_fields": ["approved_spec", "acceptance_criteria", "implementation_summary", "implementation_context", "test_evidence", "open_risks", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner"]
     },
     "verify-code": {
       "contract": "contracts/verify-code.md",
       "problem_order": ["implementation", "consumer", "correctness", "lifecycle_security", "test_strength"],
-      "semantic_fields": ["changed_files", "implementation_assessment", "test_context", "open_risks", "architect_assessment"]
+      "semantic_fields": ["changed_files", "implementation_assessment", "test_context", "open_risks", "architect_assessment", "ui_applicability", "ui_contract", "component_quality_map", "real_consumer", "state_owner", "typed_view_model", "css_token_owner", "design_alignment"]
     },
     "mini-task/design": {
       "contract": "contracts/mini-task-design.md",

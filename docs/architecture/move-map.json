@@ -1885,6 +1885,87 @@
       "consumer": "WorkflowHub workflow skills",
       "delete_condition": "remove when semantic step/skill events are supplied by the host",
       "content_change": "declared same-session step/skill boundaries and transcript usage windows"
+    },
+    {
+      "source": "skills/spec-plan/templates/plan-template.md",
+      "destination": "skills/spec-plan/templates/plan-template.md",
+      "status": "modify",
+      "owner": "spec-plan UI delivery template",
+      "consumer": "build-plan UI phases and downstream build-code tasks",
+      "delete_condition": "remove UI fields only when an approved replacement plan format is the sole consumer",
+      "content_change": "component, state, fixture, viewport, browser, screenshot, and design-gap handoff fields"
+    },
+    {
+      "source": "skills/spec-tasks/templates/tasks-template.md",
+      "destination": "skills/spec-tasks/templates/tasks-template.md",
+      "status": "modify",
+      "owner": "spec-tasks UI task template",
+      "consumer": "build-code UI task execution and verify-code evidence",
+      "delete_condition": "remove UI task fields only when an approved replacement tasks format is the sole consumer",
+      "content_change": "executable UI phase/task and design-gap handoff fields"
+    },
+    {
+      "source": "skills/frontend-testing/SKILL.md",
+      "destination": "skills/frontend-testing/SKILL.md",
+      "status": "modify",
+      "owner": "build-code frontend testing route",
+      "consumer": "real frontend changed files and UI task evidence",
+      "delete_condition": "remove when frontend-testing has no stage reference and an approved replacement is the sole consumer",
+      "content_change": "state, interaction, component/CSS negative, accessibility, and screenshot evidence contract"
+    },
+    {
+      "source": "skills/isolated-browser-qa/SKILL.md",
+      "destination": "skills/isolated-browser-qa/SKILL.md",
+      "status": "modify",
+      "owner": "isolated browser QA route",
+      "consumer": "real UI acceptance and verify-code browser evidence",
+      "delete_condition": "remove when browser QA has no consumer or an approved replacement route is the sole consumer",
+      "content_change": "state/viewport/fixture/design revision and blocked/unknown failure reason semantics"
+    },
+    {
+      "source": "runtime/schemas/browser-qa-evidence.v1.json",
+      "destination": "runtime/schemas/browser-qa-evidence.v1.json",
+      "status": "modify",
+      "owner": "browser QA evidence schema",
+      "consumer": "isolated-browser-qa evidence and verify-code validation",
+      "delete_condition": "remove only with an approved successor schema and migrated consumers",
+      "content_change": "UI state, viewport, fixture, design revision, visual/a11y and truthful blocked/unknown fields"
+    },
+    {
+      "source": "skills/catalog.yaml",
+      "destination": "skills/catalog.yaml",
+      "status": "modify",
+      "owner": "skill provenance catalog",
+      "consumer": "skill closure checker and release builder",
+      "delete_condition": "remove only when catalog is retired and a single replacement provenance source is adopted",
+      "content_change": "UI testing governance owner/consumer/deletion records"
+    },
+    {
+      "source": "skills/reuse-registry.md",
+      "destination": "skills/reuse-registry.md",
+      "status": "modify",
+      "owner": "human-readable skill reuse projection",
+      "consumer": "maintainers reviewing UI skill reuse and provenance",
+      "delete_condition": "remove only when catalog projection is no longer a supported human surface",
+      "content_change": "frontend/browser QA governance and deletion handoff"
+    },
+    {
+      "source": "CONTEXT.md",
+      "destination": "CONTEXT.md",
+      "status": "modify",
+      "owner": "WorkflowHub shared vocabulary",
+      "consumer": "stage agents and task authors reading UI delivery boundaries",
+      "delete_condition": "remove UI vocabulary only with an approved replacement terminology source",
+      "content_change": "UI phase/task, browser evidence, component and failure semantics"
+    },
+    {
+      "source": "THIRD_PARTY_NOTICES.md",
+      "destination": "THIRD_PARTY_NOTICES.md",
+      "status": "modify",
+      "owner": "third-party provenance notices",
+      "consumer": "release reviewers and skill closure audit",
+      "delete_condition": "remove only when the project provenance notice is retired with its catalog consumer",
+      "content_change": "UI delivery governance local-contract notice"
     }
   ]
 }

@@ -1,5 +1,7 @@
 # Skill 复用与溯源登记
 
+UI governance records include an explicit owner, consumer, and delete condition.
+
 机器真相：[`catalog.yaml`](catalog.yaml)。本文件是人读投影。固定版本、完整 `upstream`、依赖闭包和更新策略以 catalog 为准；禁止用 `main/latest` 代替固定 commit。`unresolved-*-snapshot` 表示历史导入未保存 commit，更新前必须先补齐，不能假装已固定。
 
 ## 兼容索引
@@ -32,6 +34,9 @@
 | audit-summary-carrier | 自研 | skills/audit-summary-carrier/SKILL.md | P0 bounded audit-summary contract；审计任务保留 |
 | requirement-lineage | 自研 | skills/requirement-lineage/SKILL.md | P0 requirement evidence contract；审计任务保留 |
 | workflowhub-multica-sync | 自研 | skills/workflowhub-multica-sync/SKILL.md | 固定 main 快照并做 Git 连通性预检，按阶段三件套审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
+| ui-project-init | 自研 | skills/ui-project-init/SKILL.md | new/legacy 最小 UI 基线；owner/consumer/deletion 条件见 catalog |
+| design-source-readiness | 自研 | skills/design-source-readiness/SKILL.md | Design.md → Screen Read Map；不打分、不设 gate |
+| frontend-component-quality | 外部改造适配 | skills/frontend-component-quality/SKILL.md + Vercel pinned guide | Component Quality Map；React/Next 只读内部 lens |
 
 ## 仓内运行技能
 
@@ -69,9 +74,12 @@
 - `test-routing-advisor` — adapted；build-plan 预判、build-code 真实范围变化时重判。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON 并保留预判/重判事实。
 - `testing-system-blueprint` — adapted；build-plan 的 advisory 测试设计输入，供 build-code 按真实改动消费；不承担执行器、交付 gate 或第二控制面。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint)，MIT。
 - `backend-testing` — adapted；build-code 真实后端改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing)，MIT。保留真实后端边界测试和报告字段，不新增执行器控制面。
-- `frontend-testing` — adapted；build-code 真实 UI 改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，不把 browser pass 当推进 gate。
+- `frontend-testing` — adapted；build-code 真实 UI 改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，owner 是 build-code 前端测试路由，consumer 是真实 changed files；不把 browser pass 当推进 gate；无阶段引用时可删除。
 - `fullstack-slice-testing` — adapted；build-code 真实跨边界改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing)，MIT。保留真实 seam slice 和报告，不恢复强制 worktree/commit/release gate。
-- `isolated-browser-qa` — adopted；verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。搬完整资产、去绝对路径；有公开上游后补固定 URL/commit。
+- `isolated-browser-qa` — adopted；verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。owner 是 browser QA 路由，consumer 是真实 UI 验收与 verify-code；blocked/unknown 必须保留 failure_reason；无 browser QA consumer 时可删除。
+- `ui-project-init` — native；暂不直接接入阶段。为新项目/历史项目建立最小设计源、组件边界、fixture 和 Preview 事实；owner 是 UI 交付合同，唯一预期 consumer 是 build-spec UI 分支；所有 consumer 迁移后才删除。
+- `design-source-readiness` — native；暂不直接接入阶段。只读项目级 `Design.md`，派生 Screen Read Map 和 bindable/not_bindable/unknown 事实；不打分、不设 gate、不复制设计源；唯一预期 consumer 是现有 `plan-design-review` 输入。
+- `frontend-component-quality` — adapted；暂不直接接入阶段。Component Quality Map 支持 reuse/modify/extend-state-or-variant/add-local/extract-shared/remove-after-no-consumers；React/Next 只读 Vercel MIT 固定 commit `dd089a8c752c966dee8bf0f27cb625ba193ffd9e`；不替代 frontend-testing，不创建第二 workflow 或 gate。
 
 ## 已吸收
 

@@ -14,6 +14,30 @@ research, Grill, and the decision log. `build-spec` is the only owner of
 Clarify; make-decision must not run a second Clarify. Downstream stages consume
 the result; they do not replay these activities or infer missing decisions.
 
+## UI applicability (conditional fact, not a new stage)
+
+When a task may touch a page or frontend, make-decision records one
+recomputable applicability fact from the same three inputs:
+
+- `raw_requirement` — the user's original page, interaction, or non-UI
+  request;
+- `project_inventory` — the current routes, frontend technology, and existing
+  component/consumer facts;
+- `planned_or_changed_frontend_fact` — the accepted plan or the actual
+  frontend change that may make the scope UI-relevant.
+
+The three sources are merged by evidence, not by a caller label. A credible UI
+signal produces `ui`; credible exclusion from all three sources produces
+`non_ui`; missing, conflicting, or upstream-unfrozen evidence produces
+`unknown` with `source_reasons`, risk, and a handoff to make-decision. A caller
+request to downgrade `ui` to `non_ui` is retained as a request but cannot lower
+the trusted conclusion. When the plan or frontend fact changes, re-evaluate the
+three inputs and recompute the result; do not reuse the previous conclusion.
+
+This is a conditional fact consumed by the existing five stages. It adds no
+new stage, public command, fifth material, independent state machine, or gate.
+No new stage or no gate is introduced by this applicability check.
+
 ## 同一会话自动记录
 
 本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；这是工作流内部动作，用户不需要手工提醒。命令失败就保留真实 incomplete/unavailable，不能补填成功。

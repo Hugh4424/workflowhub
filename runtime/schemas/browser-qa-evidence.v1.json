@@ -14,6 +14,68 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "interaction": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "width", "height"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "data_ref": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "path": { "$ref": "#/$defs/nonEmpty" },
+        "ref": { "$ref": "#/$defs/nonEmpty" }
+      },
+      "anyOf": [
+        { "required": ["path"] },
+        { "required": ["ref"] }
+      ]
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["observed", "not_observed", "not_applicable"] },
+        "reason": { "$ref": "#/$defs/nonEmpty" },
+        "screenshot_refs": { "type": "array", "items": { "$ref": "#/$defs/nonEmpty" } }
+      }
+    },
+    "a11y": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["checked", "not_checked", "not_applicable"] },
+        "reason": { "$ref": "#/$defs/nonEmpty" },
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/nonEmpty" } }
+      }
+    },
     "notApplicable": {
       "type": "object",
       "additionalProperties": false,
@@ -35,6 +97,13 @@
         "tool",
         "engine",
         "session",
+        "state",
+        "viewport",
+        "fixture",
+        "component",
+        "design_revision",
+        "visual",
+        "a11y",
         "auth",
         "performance",
         "screenshots",
@@ -51,6 +120,14 @@
         "tool": { "$ref": "#/$defs/nonEmpty" },
         "engine": { "$ref": "#/$defs/nonEmpty" },
         "session": { "$ref": "#/$defs/nonEmpty" },
+        "state": { "$ref": "#/$defs/state" },
+        "viewport": { "$ref": "#/$defs/viewport" },
+        "fixture": { "$ref": "#/$defs/fixture" },
+        "component": { "$ref": "#/$defs/component" },
+        "design_revision": { "$ref": "#/$defs/nonEmpty" },
+        "visual": { "$ref": "#/$defs/visual" },
+        "a11y": { "$ref": "#/$defs/a11y" },
+        "failure_reason": { "$ref": "#/$defs/nonEmpty" },
         "auth": {
           "type": "object",
           "additionalProperties": false,
@@ -100,7 +177,7 @@
         },
         "screenshots": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -137,15 +214,44 @@
       "allOf": [
         {
           "if": { "properties": { "result": { "const": "pass" } }, "required": ["result"] },
-          "then": { "properties": { "test": { "properties": { "exit_code": { "const": 0 } } } } }
+          "then": {
+            "properties": {
+              "test": { "properties": { "exit_code": { "const": 0 } } },
+              "screenshots": { "minItems": 1 }
+            }
+          }
         },
         {
           "if": { "properties": { "result": { "const": "fail" } }, "required": ["result"] },
-          "then": { "properties": { "test": { "properties": { "exit_code": { "not": { "const": 0 } } } } } }
+          "then": {
+            "properties": {
+              "test": { "properties": { "exit_code": { "not": { "const": 0 } } } },
+              "screenshots": { "minItems": 1 }
+            }
+          }
         },
         {
           "if": { "properties": { "result": { "enum": ["blocked", "unknown"] } }, "required": ["result"] },
-          "then": { "properties": { "test": { "properties": { "exit_code": { "not": { "const": 0 } } } } } }
+          "then": {
+            "required": ["failure_reason"],
+            "properties": { "test": { "properties": { "exit_code": { "not": { "const": 0 } } } } }
+          }
+        },
+        {
+          "if": { "properties": { "visual": { "properties": { "status": { "enum": ["not_observed", "not_applicable"] } }, "required": ["status"] } }, "required": ["visual"] },
+          "then": { "properties": { "visual": { "required": ["reason"] } } }
+        },
+        {
+          "if": { "properties": { "visual": { "properties": { "status": { "const": "observed" } }, "required": ["status"] } }, "required": ["visual"] },
+          "then": { "properties": { "visual": { "required": ["screenshot_refs"], "properties": { "screenshot_refs": { "minItems": 1 } } } } }
+        },
+        {
+          "if": { "properties": { "a11y": { "properties": { "status": { "enum": ["not_checked", "not_applicable"] } }, "required": ["status"] } }, "required": ["a11y"] },
+          "then": { "properties": { "a11y": { "required": ["reason"] } } }
+        },
+        {
+          "if": { "properties": { "a11y": { "properties": { "status": { "const": "checked" } }, "required": ["status"] } }, "required": ["a11y"] },
+          "then": { "properties": { "a11y": { "required": ["checks"], "properties": { "checks": { "minItems": 1 } } } } }
         },
         {
           "if": { "properties": { "auth": { "properties": { "mode": { "const": "reused" } }, "required": ["mode"] } }, "required": ["auth"] },

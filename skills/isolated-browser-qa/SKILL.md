@@ -223,6 +223,7 @@ For details, read `references/auth.md`.
 For UI scope, publish `browser-qa-evidence.v1` with:
 
 - route, page, and scenario tested
+- the actual component previewed, including its name and a path/ref when available
 - tool, selected engine, and derived session
 - auth mode `reused`, `fresh`, or `none`, consistent with whether login state was reused
 - performance status: `measured` with metrics, or `not_measured` / `not_applicable` with a reason
@@ -237,6 +238,15 @@ profile content must never be included in evidence.
 
 For non-UI scope, publish only `applicability: not_applicable` and a reason.
 This disclosure is not a global browser Gate.
+
+For UI scope, bind the evidence to the plan/task card's state, viewport, fixture,
+`design_revision`, visual observation, and `a11y` result. A blocked or unknown run
+may have zero screenshots, but it must include a non-empty `failure_reason` and a
+non-zero test exit; never convert a missing preview, missing fixture, or unavailable
+engine into a pass. A pass/fail run keeps the normal screenshot and test evidence.
+If visual status is `not_observed`/`not_applicable`, or a11y status is
+`not_checked`/`not_applicable`, include a non-empty reason; a `pass` result never
+silently skips those checks.
 
 If the selected engine stayed blocked, report:
 

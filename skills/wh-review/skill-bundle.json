@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "187567a97fee99dbb364af89ccedbe6824b5dc31dfda643e258b0f0e2e181f99"
+      "sha256": "1d74d56e00391591cfc280778f9cfbf72fb1465046a45eff29a9ef1269de45bc"
     },
     {
       "path": "contracts/build-code.md",
@@ -12,15 +12,15 @@
     },
     {
       "path": "contracts/build-plan.md",
-      "sha256": "b25ba38b39fad97e02d4bcdca62957961d3c52bc41152bc62f92e073fdf3a71f"
+      "sha256": "bc2aa4aa424cef644d8887824dd9aa5dc4ee121d96d6fb61939ea29d82c03116"
     },
     {
       "path": "contracts/build-spec.md",
-      "sha256": "cd973094b09b2c2a41ec917957cb46f0dfb23feecb7639ad9336765ffbf297c4"
+      "sha256": "c316ec03ebb9c7f974ba01f2fdf737fa55016fca2838b029d8765c5a2c449b62"
     },
     {
       "path": "contracts/make-decision.md",
-      "sha256": "f4f2d1a4731dd07c62e44ea1a06585edc6bd47973e34548b3de19669b4252610"
+      "sha256": "da877920d0702f9f730c224eb69131e2247d6e32d846e63378e00f1797bf8ad8"
     },
     {
       "path": "contracts/mini-task-design.md",
@@ -104,7 +104,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "622fdab67cab0a653443dae83fc2c064498d1a1dc5d3582fa0344979bdc9bf20"
+      "sha256": "2e93c4e4228dc86e9dea7254c29e9d8698bba3e9988851a05260c8ddd28c91f1"
     },
     {
       "path": "stage-skill-plan.json",

@@ -105,6 +105,31 @@ describe("stage completion facts", () => {
     expect(summary).not.toHaveProperty("completion");
   });
 
+  it("preserves a legitimate not_applicable skill without rejecting the stage summary", () => {
+    const summary = summarizeStageOutcome({
+      stage: "build-code",
+      stageOutcomeRef: "quality/evidence/stage-outcomes/build-code/" + HASH + ".json",
+      stageOutcomeHash: HASH,
+      stageOutcomeStatus: "incomplete",
+      stepOutcomes: [{
+        step_slug: "run-tests",
+        status: "completed",
+        cost: { status: "recorded", duration_ms: 2, tokens: 3 },
+      }],
+      skillOutcomes: [{
+        skill_id: "frontend-testing",
+        status: "not_applicable",
+        reason: "no target product UI route",
+        cost: { status: "unavailable", duration_ms: null, tokens: null, reason: "not applicable" },
+      }],
+    });
+    expect(summary).toMatchObject({
+      status: "incomplete",
+      declared_status: "incomplete",
+      skills: { total: 1, not_applicable: 1, incomplete: 0, unavailable: 0 },
+    });
+  });
+
   it("rejects an artifact without a content hash", () => {
     expect(() => fixture({ artifacts: [{ label: "实现结果", ref: "quality/evidence/implementation.json", hash: "missing" }] }))
       .toThrow(/artifact hash must be sha256/);

@@ -5,6 +5,8 @@ skills:
   - { name: spec-specify, path: skills/spec-specify/SKILL.md, execution: inline, trigger: spec_draft, bundle: skills/spec-specify/skill-bundle.json, owner: stage }
   - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage }
   - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: inline, trigger: product_direction_check, bundle: skills/plan-ceo-review/skill-bundle.json, owner: stage }
+  - { name: ui-project-init, path: skills/ui-project-init/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/ui-project-init/skill-bundle.json, owner: stage }
+  - { name: design-source-readiness, path: skills/design-source-readiness/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/design-source-readiness/skill-bundle.json, owner: stage }
   - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json, owner: stage }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }
   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }

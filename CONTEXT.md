@@ -31,6 +31,21 @@
 **技能（skill）**：
 完成某一阶段或某一横切能力的独立单元，可独立调用、可搬运。一个阶段对应一个技能。
 
+**UI Contract**：
+一个 UI 任务对引用设计源、页面区域、状态、交互、组件、fixture、视口和视觉证据的当前 spec 约定。
+
+**设计源（Design.md）**：
+项目设计 owner 维护的视觉与交互意图来源，不是任务的第五份当前材料。
+
+**设计源就绪检查（design-source-readiness）**：
+把整份项目设计源变成每页短阅读卡，并报告可自动发现的缺项和必须由设计 owner 决定的事项。它不保存 task 状态；task 只记录所用的项目 `Design.md` revision。
+
+**UI 项目初始化（ui-project-init）**：
+为新项目建立最小设计与预览地基，或为历史项目只读盘点并生成局部迁移入口的可搬运技能。
+
+**前端组件质量（frontend-component-quality）**：
+把一个 UI phase 的组件动作、真实消费者、状态、样式归属和实际验证命令接入既有计划、实现和验收的可搬运技能。
+
 **四阶梯判断（four-tier judgment）**：
 spec-plan 动手写代码前的复用检查，依次问四步：①需要存在？（真需要才做，不需要就跳过）②已有覆盖？（仓库/依赖里已有能直接用的）③复用？（现成的改一改能不能凑合用）④最小新增（前三条都不行才写，且只写刚好够用的）。源自 ponytail 七阶梯 YAGNI 法的压缩版；第4条的写法纪律由 simplicity-guard 技能约束（先想后写/最小代码/手术式修改）。
 
@@ -155,6 +170,13 @@ pointer、reopen、rebind 和 continuation 来修复阶段记录。这些对象�
 
 **组件所有权（component ownership）**：
 一个组件在一个阶段中唯一归属于阶段执行或审查执行的责任边界。
+
+**UI phase/task 交付合同**：
+
+UI 范围的 plan/task 必须把 component action、real consumer、state owner、typed ViewModel、
+CSS/token owner、fixture、viewport、browser、a11y、performance、screenshot 和 coverage
+limits 写清。真实浏览器执行只在 build-code/verify-code 发生；没有 route 时记录 `N/A — reason`，
+blocked/unknown 必须保留 failure reason，不把截图或浏览器通过当作普遍 gate。
 
 **3rd-review**：
 全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。
