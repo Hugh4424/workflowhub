@@ -1,0 +1,126 @@
+import { describe, expect, it } from "vitest";
+import { STAGE_PREDICATES } from "../../core/completion-predicates.mjs";
+import { evaluateFactFreshness, sha256 } from "../../core/freshness.mjs";
+import { createMaterialRevision } from "../../core/material-revision.mjs";
+import { createPublication, rebuildPublication } from "../../core/publication.mjs";
+import { createQualityFact, publishQualityFact } from "../../core/quality-fact.mjs";
+
+const materials = { "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks" };
+const requirements = {
+  ledger: { ref: "requirements/ledger.json", hash: "1".repeat(64) },
+  coverage: { ref: "requirements/coverage.json", hash: "2".repeat(64) },
+};
+
+function store() {
+  const records = new Map();
+  return {
+    records,
+    read(ref) {
+      if (!records.has(ref)) { const error = new Error("missing"); error.code = "ENOENT"; throw error; }
+      return records.get(ref);
+    },
+    create(ref, raw) {
+      if (records.has(ref)) { const error = new Error("exists"); error.code = "EEXIST"; throw error; }
+      records.set(ref, raw);
+    },
+  };
+}
+
+function evidenceType(kind) {
+  return { test: "test_receipt", review: "review_result", acceptance_criterion: "acceptance_evidence", confirmation: "human_confirmation" }[kind];
+}
+
+function currentFacts({ io, stage, revision, tree = "b".repeat(40) }) {
+  return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind]) => {
+    const nested = kind === "review" ? {
+      version: "wh-review-result.v1", task_id: "task", stage, review_track: stage === "make-decision" ? "detail" : null,
+      source: { target_commit: "a".repeat(40), base_commit: "a".repeat(40), base_tree: "a".repeat(40), captured_head: "a".repeat(40) },
+      snapshot_tree: tree, material_id: "a".repeat(64), attempt_ref: "reviews/attempts/a/attempt.json",
+      subject_kind: subject === "phase_reviews" ? "phase" : "worktree",
+      phase_id: subject === "phase_reviews" ? "phase-1" : null,
+      review_scope: subject === "phase_reviews" ? "phase" : stage === "build-code" ? "integration" : null,
+      ...(subject === "phase_reviews" ? { base_tree: "a".repeat(40), candidate_tree: "a".repeat(40) } : {}),
+      provider_results: [{ provider: "fixture", output: { verdict: "pass", summary: "pass", findings: [] } }],
+      verdict: "pass", findings: [],
+    } : kind === "test" ? {
+      schema_version: "workflowhub-receipt.v1", task_id: "task", stage,
+      producer: { stage, component: subject, version: "1" }, exit_code: 0,
+      snapshot_tree: tree, output_ref: `evidence/${subject}.output`, output_hash: sha256("output"),
+    } : kind === "acceptance_criterion" ? {
+      schema_version: "acceptance-evidence.v1", acceptance_criterion_id: subject,
+      result: "pass", snapshot_tree: tree,
+      refs: [{ ref: `evidence/${subject}.leaf`, sha256: sha256("leaf") }],
+    } : {
+      schema_version: "human-confirmation.v1", task_id: "task", stage,
+      attempt_ref: "attempt-0001.json", decision: "accepted", confirmed_at: "2026-07-31T00:00:00Z",
+    };
+    const nestedRaw = `${JSON.stringify(nested)}\n`;
+    const nestedRef = `evidence/${subject}.json`;
+    if (kind === "test") io.create(nested.output_ref, "output");
+    if (kind === "acceptance_criterion") io.create(nested.refs[0].ref, "leaf");
+    io.create(nestedRef, nestedRaw);
+    const fact = createQualityFact({
+      taskId: "task", stage, materialRevision: revision.revision_id, snapshotTree: tree,
+      kind, status: "passed", subject,
+      evidence: [{ ref: nestedRef, sha256: sha256(nestedRaw), evidence_type: evidenceType(kind) }],
+      recordedAt: "2026-07-31T00:00:00Z",
+    });
+    publishQualityFact({ fact, ...io });
+    const freshness = evaluateFactFreshness(
+      { ...fact.value, ref: fact.ref, sha256: fact.sha256 },
+      { material_revision: revision.revision_id, snapshot_tree: tree },
+      { read: io.read },
+    );
+    return { fact, freshness };
+  });
+}
+
+describe("derived publication", () => {
+  it("persists predicate results/fact refs and rebuilds without trusting serialized completion", () => {
+    const revision = createMaterialRevision({ taskId: "task", materials, requirements, changeSummary: "initial", sourceRefs: [{ ref: "source", hash: "a".repeat(64) }] });
+    const io = store();
+    const observations = currentFacts({ io, stage: "build-code", revision: revision.revision });
+    const input = {
+      taskId: "task", stage: "build-code", materialRevision: revision.revision,
+      qualityFacts: observations.map((entry) => entry.fact),
+      freshness: observations.map((entry) => entry.freshness),
+      snapshotTree: "b".repeat(40), read: io.read,
+    };
+    const publication = createPublication(input);
+    expect(publication.value.completion.fact_refs).toHaveLength(Object.keys(STAGE_PREDICATES["build-code"]).length);
+    const tampered = { ...publication.value, completion: { status: "completed", missing: [] } };
+    const rebuilt = rebuildPublication({ publication: tampered, materialRevision: revision.revision, qualityFacts: input.qualityFacts, freshness: input.freshness, read: io.read });
+    expect(rebuilt.value.completion.predicates).toEqual(publication.value.completion.predicates);
+  });
+
+  it("rejects missing, stale, unauthenticated and canonical-byte-tampered facts", () => {
+    const revision = createMaterialRevision({ taskId: "task", materials, requirements, changeSummary: "initial", sourceRefs: [{ ref: "source", hash: "a".repeat(64) }] });
+    const io = store();
+    const observations = currentFacts({ io, stage: "verify-code", revision: revision.revision });
+    const base = {
+      taskId: "task", stage: "verify-code", materialRevision: revision.revision,
+      qualityFacts: observations.map((entry) => entry.fact),
+      freshness: observations.map((entry) => entry.freshness),
+      snapshotTree: "b".repeat(40), read: io.read,
+    };
+    expect(() => createPublication({ ...base, qualityFacts: base.qualityFacts.slice(1), freshness: base.freshness.slice(1) })).toThrow(/derived completion/);
+    expect(() => createPublication({ ...base, freshness: [{ ...base.freshness[0], status: "stale", authenticated: false }, ...base.freshness.slice(1)] })).toThrow(/derived completion/);
+    io.records.set(base.qualityFacts[0].ref, `${base.qualityFacts[0].raw}tampered`);
+    expect(() => createPublication(base)).toThrow(/canonical bytes/);
+  });
+
+  it("uses a time-independent fact_id and idempotently keeps first immutable bytes", () => {
+    const nested = { ref: "evidence/review.json", sha256: "3".repeat(64), evidence_type: "review_result" };
+    const args = {
+      taskId: "task", stage: "verify-code", materialRevision: `revision-${"a".repeat(64)}`,
+      snapshotTree: "tree", kind: "review", status: "passed", subject: "independent_review", evidence: [nested],
+    };
+    const first = createQualityFact({ ...args, recordedAt: "2026-07-31T00:00:00Z" });
+    const retry = createQualityFact({ ...args, recordedAt: "2026-07-31T01:00:00Z" });
+    expect(retry.value.fact_id).toBe(first.value.fact_id);
+    const io = store();
+    expect(publishQualityFact({ fact: first, ...io })).toMatchObject({ idempotent: false });
+    expect(publishQualityFact({ fact: retry, ...io })).toMatchObject({ idempotent: true });
+    expect(io.records.get(first.ref)).toBe(first.raw);
+  });
+});

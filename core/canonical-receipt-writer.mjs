@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+export { createPublication, publishImmutable } from "./publication.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +16,7 @@ import { authenticateAuditRetryEvidence, buildAuditSummaryFromJournalEvents } fr
 import { carryAuditSummary, verifyAuditSummary } from "./audit-summary-carrier.mjs";
 import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
+import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
@@ -486,6 +488,9 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
         const outputHash = sha256(output), commandHash = sha256(command);
         write(outputRef, output);
         const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
+        validateCanonicalTestReceipt(receipt, {
+          taskId: safeTask.identity.taskId, stage, snapshotTree: treeBefore, subject: component,
+        });
         const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
         return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
       }, { waitMs: TEST_CAPTURE_LOCK_WAIT_MS });

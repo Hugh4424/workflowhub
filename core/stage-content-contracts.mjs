@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+export { MATERIAL_FILES, createMaterialRevision } from "./material-revision.mjs";
 
 import Ajv2020 from "ajv/dist/2020.js";
 

@@ -26,6 +26,7 @@ import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-iden
 import { inspectRunnerIdentity } from "./runner-identity.mjs";
 import { buildTaskKernel } from "./task-kernel-implementation.mjs";
 import { canonical } from "./canonical-utils.mjs";
+export { publishImmutable } from "./publication.mjs";
 
 const FORBIDDEN_MANIFEST_FIELDS = new Set([
   "status", "stage_map", "updated_at", "lock", "worktree", "worktree_root",
@@ -654,6 +655,7 @@ function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode =
     assertOpenedPath(fd, temporary, ancestorSnapshot[0].real, "record temporary");
     openedTemporary = realpathSync(temporary);
     writeFileSync(fd, data, { encoding });
+    testHooks?.afterTemporaryWrite?.();
     testHooks?.beforeFileFsync?.();
     fsyncSync(fd);
     closeSync(fd); fd = undefined;
@@ -699,6 +701,7 @@ function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 
     fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, mode);
     assertOpenedPath(fd, temporary, ancestorSnapshot[0].real, "create-only temporary");
     writeFileSync(fd, data, { encoding });
+    testHooks?.afterTemporaryWrite?.();
     testHooks?.beforeFileFsync?.();
     fsyncSync(fd);
     closeSync(fd); fd = undefined;

@@ -940,8 +940,8 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 
 ### Files
 
-- **NEW**：`core/material-revision.mjs`、`core/quality-fact.mjs`、`core/freshness.mjs`、`core/completion-predicates.mjs`、`core/publication.mjs`、`schemas/quality-fact.v1.json`、`schemas/publication.v1.json`、`tests/contract/stage-completion.test.mjs`、`tests/integration/material-revision.test.mjs`、`tests/integration/derived-publication.test.mjs`、`tests/integration/atomic-write-faults.test.mjs`
-- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/stage-content-contracts.mjs`、`core/stage-skill-invocation.mjs`、`core/stage-completion-facts.mjs`、`core/canonical-receipt-writer.mjs`、`core/receipt-schema.mjs`、`core/task-handle.mjs`
+- **NEW**：`core/material-revision.mjs`、`core/quality-fact.mjs`、`core/freshness.mjs`、`core/completion-predicates.mjs`、`core/publication.mjs`、`core/canonical-evidence-validators.mjs`、`schemas/quality-fact.v1.json`、`schemas/publication.v1.json`、`tests/contract/stage-completion.test.mjs`、`tests/integration/material-revision.test.mjs`、`tests/integration/derived-publication.test.mjs`、`tests/integration/atomic-write-faults.test.mjs`
+- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/stage-content-contracts.mjs`、`core/stage-skill-invocation.mjs`、`core/stage-completion-facts.mjs`、`core/canonical-receipt-writer.mjs`、`core/receipt-schema.mjs`、`core/task-handle.mjs`、`core/schemas/task-material-revision.v1.json`、`tests/stage-content-continuation.test.mjs`
 - **DO NOT TOUCH**：`scripts/stage-runtime.mjs`、`core/task-recovery.mjs`
 
 ### Tasks

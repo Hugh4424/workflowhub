@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+export { assertFresh, bindFreshness } from "./freshness.mjs";
 
 const NAME = /^[a-z][a-z0-9-]*$/;
 const KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;

@@ -34,7 +34,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "enum": ["decision-log.md", "spec.md", "plan.md", "tasks.md"] }
+      "items": { "enum": ["decision-log.md", "spec.md", "plan.md", "tasks.md", "requirements"] }
     },
     "change_summary": { "type": "string", "minLength": 1 },
     "source_refs": {
@@ -55,6 +55,15 @@
       "required": ["decision-log.md", "spec.md", "plan.md", "tasks.md"],
       "propertyNames": { "enum": ["decision-log.md", "spec.md", "plan.md", "tasks.md"] },
       "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ledger", "coverage"],
+      "properties": {
+        "ledger": { "$ref": "#/$defs/ref" },
+        "coverage": { "$ref": "#/$defs/ref" }
+      }
     }
   },
   "allOf": [
@@ -74,5 +83,16 @@
       }
     }
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "hash"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
 }
