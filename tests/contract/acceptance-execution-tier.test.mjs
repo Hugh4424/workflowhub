@@ -779,6 +779,22 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(JSON.stringify(records)).not.toContain('"run_id":"p9-attempt-A"');
   });
 
+  it("expands only the authenticated task directory in command argv", async () => {
+    const state = p9Fixture({
+      executionOverride: (execution) => ({
+        ...execution,
+        args: ["acceptance-command.mjs", "--task-dir=$TASK_DIR", "--output=${TASK_DIR}/quality/tests/final/current-snapshot.json", "$UNSUPPORTED_VAR"],
+      }),
+    });
+    await p9Execute(state);
+    const observed = JSON.parse(readFileSync(join(state.marker, "started.json"), "utf8"));
+    expect(observed.argv).toEqual([
+      `--task-dir=${state.task.taskPath}`,
+      `--output=${state.task.taskPath}/quality/tests/final/current-snapshot.json`,
+      "$UNSUPPORTED_VAR",
+    ]);
+  });
+
   it("rejects the cached pre-command identity when execution changes a build-code material", async () => {
     const state = p9Fixture({ mutateMaterialDuringExecution: true });
     const before = state.context.kernel.currentVNextContext({ fresh: true });

@@ -207,6 +207,25 @@ describe("T013 final current snapshot producer", () => {
     ]));
   });
 
+  it("does not authenticate an absolute evidence reference outside the task directory", () => {
+    const state = fixture();
+    const outsidePath = join(state.root, "outside.log");
+    writeFileSync(outsidePath, FIXTURE_RAW);
+    const receiptPath = join(state.taskDir, "quality/tests/S3/green/result.json");
+    const value = JSON.parse(readFileSync(receiptPath, "utf8"));
+    value.evidence = [{ ref: outsidePath, sha256: hash(FIXTURE_RAW) }];
+    writeFileSync(receiptPath, `${JSON.stringify(value)}\n`);
+
+    const result = produceFinalCurrentSnapshot({ taskId: "fixture-task", ...state });
+    expect(result.aggregate_status).toBe("incomplete");
+    expect(result.targeted_routes.S3.status).toBe("incomplete");
+    expect(result.assertions.find((entry) => entry.ac_id === "AC-S3-01")).toMatchObject({ status: "incomplete" });
+    expect(result.targeted_routes.S3.receipts[0].raw_refs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ref: "quality/tests/S3/green/result.json" }),
+    ]));
+    expect(JSON.stringify(result)).not.toContain(outsidePath);
+  });
+
   it("rejects a task declaration that omits or adds an active AC", () => {
     const state = fixture({ declaration: true });
     const wrong = readFileSync(state.tasksPath, "utf8").replace("AC-S7-01", "AC-EXTRA-99");

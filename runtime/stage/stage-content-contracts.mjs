@@ -4192,8 +4192,9 @@ function parseSliceAdvisoryRisk(value, taskId) {
   const errors = [];
   for (const line of String(value ?? "").split(/\r?\n/)) {
     const trimmed = line.trim();
-    const candidate = trimmed.replace(/^`([\s\S]*)`$/, "$1").trim();
-    if (!candidate.includes("slice-advisory:")) continue;
+    const markerStart = trimmed.indexOf("slice-advisory:");
+    if (markerStart < 0) continue;
+    const candidate = trimmed.slice(markerStart).replace(/`\s*$/, "").trim();
     const match = candidate.match(SLICE_ADVISORY_MARKER);
     if (!match || match.slice(1).some((part) => part.trim() === "")) {
       errors.push(`${taskId} task risk contains a malformed slice-advisory marker`);

@@ -16,11 +16,11 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   unlinkSync,
   linkSync,
   writeSync,
@@ -245,6 +245,25 @@ function relativeTaskRef(taskDir, path) {
   return rel;
 }
 
+function evidencePath(taskDir, ref) {
+  const target = resolve(taskDir, ref);
+  const relativeRef = relativeTaskRef(taskDir, target);
+  try {
+    const realTaskDir = realpathSync(taskDir);
+    const realTarget = realpathSync(target);
+    const realRelative = relative(realTaskDir, realTarget).split(sep).join("/");
+    if (!realRelative || realRelative.startsWith("../") || realRelative === ".." || isAbsolute(realRelative)) {
+      throw new Error("evidence path resolves outside task directory");
+    }
+  } catch (error) {
+    // A missing target is authenticated as unavailable by the read below. A
+    // present symlink or path component resolving outside the task namespace
+    // is rejected before any host file is read.
+    if (error?.code !== "ENOENT") throw error;
+  }
+  return { target, relativeRef };
+}
+
 function evidenceStatus(value) {
   if (!object(value)) return "unknown";
   const positive = new Set(["passed", "pass", "success", "green"]);
@@ -292,8 +311,16 @@ function authenticateEvidence(value, taskDir, receiptPath) {
   for (const candidate of candidates) {
     const declared = candidate.sha256;
     const ref = candidate.ref;
-    const target = isAbsolute(ref) ? resolve(ref) : resolve(taskDir, ref);
-    const relativeRef = isAbsolute(ref) ? ref : relativeTaskRef(taskDir, target);
+    let target;
+    let relativeRef;
+    try {
+      ({ target, relativeRef } = evidencePath(taskDir, ref));
+    } catch {
+      status = "conflict";
+      errors.push("evidence path is outside task directory");
+      refs.push({ ref: "outside-task-directory", sha256: declared, field: candidate.field });
+      continue;
+    }
     const record = { ref: relativeRef, sha256: declared, field: candidate.field };
     if (!HASH.test(String(declared ?? ""))) {
       status = "conflict";
@@ -554,7 +581,8 @@ function planAcceptanceCheck({ planText, tasksText, t013Declared, activeIds, mat
   if (!/^-\s+\*\*e2e_scope\*\*：not_required$/mi.test(block)) errors.push("T013 e2e_scope must be not_required");
   const gate = block.match(/^-\s+\*\*gate_cmd\*\*\s*[:：]\s*`([^`]+)`/mi)?.[1] ?? "";
   const shellQuoteFreeGate = gate.replaceAll(/[\"']/g, "");
-  if (!shellQuoteFreeGate.includes("produce-final-current-snapshot.mjs") || !shellQuoteFreeGate.includes("--task-dir=$TASK_DIR") || !shellQuoteFreeGate.includes("--output=$TASK_DIR/quality/tests/final/current-snapshot.json")) {
+  if (!shellQuoteFreeGate.includes("produce-final-current-snapshot.mjs") || !shellQuoteFreeGate.includes("--task-dir=$TASK_DIR")
+      || !/--output=\$TASK_DIR\/quality\/tests\/final\/current-snapshot(?:-[A-Za-z0-9._-]+)?\.json/.test(shellQuoteFreeGate)) {
     errors.push("T013 gate_cmd does not bind the final snapshot producer and task-local output");
   }
   const oracle = block.match(/^-\s+\*\*oracle\*\*\s*[:：]\s*`([^`]+)`/mi)?.[1] ?? "";

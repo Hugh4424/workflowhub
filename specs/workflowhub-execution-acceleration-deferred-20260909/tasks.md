@@ -807,10 +807,10 @@ RED/GREEN/formal readback/review 事实齐全；`narrow_diff` 无生产路径。
 - **Knowledge**：失败回受影响 GREEN；不以全量重跑掩盖；quality fact 非 gate；FINAL 不新增 review/authority，也不改变既有 verify 权威。
 - **verification_role**：N/A — non-behavior change: final aggregate verification
 - **paired_task**：N/A — aggregate has no RED/GREEN pair
-- **gate_cmd**：`node tools/cli/produce-final-current-snapshot.mjs --task-id=workflowhub-execution-acceleration-deferred-20260909 --spec=specs/workflowhub-execution-acceleration-deferred-20260909/spec.md --plan=specs/workflowhub-execution-acceleration-deferred-20260909/plan.md --tasks=specs/workflowhub-execution-acceleration-deferred-20260909/tasks.md --task-dir="$TASK_DIR" --output="$TASK_DIR/quality/tests/final/current-snapshot.json"`
+- **gate_cmd**：`node tools/cli/produce-final-current-snapshot.mjs --task-id=workflowhub-execution-acceleration-deferred-20260909 --spec=specs/workflowhub-execution-acceleration-deferred-20260909/spec.md --plan=specs/workflowhub-execution-acceleration-deferred-20260909/plan.md --tasks=specs/workflowhub-execution-acceleration-deferred-20260909/tasks.md --task-dir="$TASK_DIR" --output="$TASK_DIR/quality/tests/final/current-snapshot-20260911-task-dir-fix.json"`
 - **expected_exit**：0
 - **oracle**：`ORACLE-FINAL {"pass":"producer contract test 与 acceptance-task gate 通过；canonical active AC set 与 assertions exact equality、无 missing/duplicate/extra；每 AC 恰一条且 evidence ref/hash authenticated；unknown|unavailable|incomplete|conflict 不得转 pass；五样本/profile/conservation 完整、current self-check 非 unexplained_overage 且 zero cross-phase producer、public/bare provenance 完整、全生产面 verify authority scan 逐条分类且无第二 writer、四域/close evidence 一致"}`
-- **evidence_path**：`quality/tests/final/current-snapshot.json`
+- **evidence_path**：`quality/tests/final/current-snapshot-20260911-task-dir-fix.json`
 - **STOP**：命令空跑/损坏、任一 AC 或 evidence 缺失、scan 有未分类落盘路径、越界、需要新决定或真实不可逆操作时停止。
 - **recovery**：按 oracle 路由回 T002/T005/T008/T011；保留失败 raw output；仅重跑受影响 targeted route，再运行一次新当前快照 FINAL。
 - **task risk**：aggregate 遗漏或把 unavailable 当 pass；`slice-advisory: reason="最终卡需读取四 seam targeted 结果及 S7 同一 acceptance consumer"; impact="长显式命令但仍限定受影响测试，不是全量回归"; owner="verify-code aggregate owner"; recheck="逐 AC assertions 与全部 evidence hash 认证后复查"`
@@ -820,7 +820,7 @@ RED/GREEN/formal readback/review 事实齐全；`narrow_diff` 无生产路径。
 - **coverage limits**：不做全量回归；不证明真实远端/权限；不覆盖 S5/S6/TIA/reuse；不把人类授权模拟成事实。
 - **acceptance_role**：acceptance
 - **ui_scope**：non_ui
-- **acceptance_data**：`[{"source":"current canonical spec plus fresh authenticated P1/P2/P3/P4 receipts","sample":"all active non-UI AC derived from canonical spec, including AC-GOV-001","scenario":"authenticate four targeted routes and emit exactly one assertion per active AC into current snapshot evidence","tier":"command","execution":{"command":"node","args":["tools/cli/produce-final-current-snapshot.mjs","--task-id=workflowhub-execution-acceleration-deferred-20260909","--spec=specs/workflowhub-execution-acceleration-deferred-20260909/spec.md","--plan=specs/workflowhub-execution-acceleration-deferred-20260909/plan.md","--tasks=specs/workflowhub-execution-acceleration-deferred-20260909/tasks.md","--task-dir=$TASK_DIR","--output=$TASK_DIR/quality/tests/final/current-snapshot.json"],"timeout_ms":900000}}]`
+- **acceptance_data**：`[{"source":"current canonical spec plus fresh authenticated P1/P2/P3/P4 receipts","sample":"all active non-UI AC derived from canonical spec, including AC-GOV-001","scenario":"authenticate four targeted routes and emit exactly one assertion per active AC into current snapshot evidence","tier":"command","execution":{"command":"node","args":["tools/cli/produce-final-current-snapshot.mjs","--task-id=workflowhub-execution-acceleration-deferred-20260909","--spec=specs/workflowhub-execution-acceleration-deferred-20260909/spec.md","--plan=specs/workflowhub-execution-acceleration-deferred-20260909/plan.md","--tasks=specs/workflowhub-execution-acceleration-deferred-20260909/tasks.md","--task-dir=$TASK_DIR","--output=$TASK_DIR/quality/tests/final/current-snapshot-20260911-task-dir-fix.json","--acceptance-output"],"timeout_ms":900000}}]`
 - **e2e_scope**：not_required
 
 ##### 执行状态填写区（唯一完成权威）

@@ -350,6 +350,22 @@ Target=three
     expect(malformed.facts.slice_advisory.diagnostics.join("\n")).toMatch(/marker/i);
   });
 
+  it("recognizes a valid marker embedded after task-risk prose", () => {
+    const embedded = sliceValidate({
+      tasks: wideSliceTasks.replace(
+        `- **task risk**：${sliceAdvisory}`,
+        `- **task risk**：性能环境漂移；\`${sliceAdvisory}\``,
+      ),
+    });
+    expect(embedded).toMatchObject({ ok: true, errors: [] });
+    expect(embedded.facts.slice_advisory).toMatchObject({
+      status: "explained_overage",
+      signals: ["SIG-FILES"],
+      marker_count: 1,
+      diagnostics: [],
+    });
+  });
+
   it("runs the current-plan self-check as a non-gating exit-0 readback", () => {
     const root = mkdtempSync(join(tmpdir(), "workflowhub-slice-self-check-"));
     try {
