@@ -55,6 +55,7 @@ skills/test-routing-advisor/__tests__/skill-contract.test.mjs	keep	retained cont
 skills/wh-review/__tests__/human-brief-behavioral.test.mjs	keep	retained contract quality predicate	contract-quality	-
 skills/wh-review/scripts/__tests__/ac-evidence-summary.test.mjs	keep	retained contract quality predicate	contract-quality	-
 skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs	keep	retained contract quality predicate	contract-quality	-
+skills/wh-review/scripts/__tests__/phase-review-subject.test.mjs	keep	retained contract quality predicate	contract-quality	-
 skills/wh-review/scripts/__tests__/review-controller.test.mjs	keep	retained contract quality predicate	contract-quality	-
 skills/wh-review/scripts/__tests__/review-runner.test.mjs	keep	retained contract quality predicate	contract-quality	-
 skills/wh-review/scripts/__tests__/review-source-materials.test.mjs	keep	retained contract quality predicate	contract-quality	-
@@ -77,7 +78,9 @@ tests/build-code-target.test.mjs	keep	retained contract quality predicate	contra
 tests/canonical-source.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/contract-freeze.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/contract/deletion-proof.test.mjs	keep	retained contract quality predicate	contract-quality	-
+tests/contract/final-coverage.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/contract/legacy-zero.test.mjs	keep	protected behavioral oracle	protected-oracle	-
+tests/contract/repository-governance.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/contract/repository-inventory.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/contract/runner-contract.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/contract/runtime-facade.test.mjs	keep	retained contract quality predicate	contract-quality	-
@@ -87,6 +90,7 @@ tests/design-stage-skill-order.red.test.mjs	keep	retained contract quality predi
 tests/e2e/five-stage-idempotent-resume.test.mjs	keep	protected behavioral oracle	protected-oracle	-
 tests/e2e/five-stage-material-revision.test.mjs	keep	protected behavioral oracle	protected-oracle	-
 tests/e2e/five-stage-normal.test.mjs	keep	protected behavioral oracle	protected-oracle	-
+tests/e2e/release-acceptance.test.mjs	keep	retained end-to-end behavior	five-stage-e2e	-
 tests/execution-record.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/facts-subschema.test.mjs	keep	retained contract quality predicate	contract-quality	-
 tests/final-cutover-guards.red.test.mjs	keep	retained contract quality predicate	contract-quality	-
@@ -99,6 +103,7 @@ tests/integration/derived-publication.test.mjs	keep	retained integration quality
 tests/integration/distribution-closure.test.mjs	keep	retained integration quality predicate	integration-quality	-
 tests/integration/material-revision.test.mjs	keep	retained integration quality predicate	integration-quality	-
 tests/integration/mutation-guards.test.mjs	keep	retained integration quality predicate	integration-quality	-
+tests/integration/phase-material-baseline.test.mjs	keep	retained integration quality predicate	integration-quality	-
 tests/integration/progression-without-permits.test.mjs	keep	retained integration quality predicate	integration-quality	-
 tests/integration/runner-clean-install.test.mjs	keep	retained integration quality predicate	integration-quality	-
 tests/interaction-quality-contract.test.mjs	keep	retained contract quality predicate	contract-quality	-

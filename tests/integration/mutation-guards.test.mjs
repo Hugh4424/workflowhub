@@ -88,7 +88,7 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
     try {
       cpSync(join(ROOT, "workflows"), join(packageRoot, "workflows"), { recursive: true });
       cpSync(join(ROOT, "skills"), join(packageRoot, "skills"), { recursive: true });
-      cpSync(join(ROOT, "schemas"), join(packageRoot, "schemas"), { recursive: true });
+      cpSync(join(ROOT, "runtime/schemas"), join(packageRoot, "runtime/schemas"), { recursive: true });
       const manifestPath = join(packageRoot, "skills/wh-review/skill-bundle.json");
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
       manifest.files = [...manifest.files, "tests/fixtures/polluted.mjs"];

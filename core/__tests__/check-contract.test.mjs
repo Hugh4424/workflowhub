@@ -15,7 +15,7 @@ import { describe, test, expect } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
-const checkerScript = resolve(repoRoot, "scripts", "check-contract.mjs");
+const checkerScript = resolve(repoRoot, "tools", "cli", "check-contract.mjs");
 const realContract = resolve(repoRoot, "contracts", "component-output.contract.json");
 
 /** Run check-contract.mjs with an optional --contract override path. */

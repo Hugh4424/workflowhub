@@ -22,7 +22,8 @@ import { validateExecutionRecord, SIX_KEYS, GAP } from "../../metrics/execution-
 import { validateKnowledgeCard } from "../../metrics/knowledge-card.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "..");
+// tools/cli/ -> repository root; metrics/contracts are top-level project paths.
+const repoRoot = resolve(here, "..", "..");
 
 function parseArgs() {
   const args = process.argv.slice(2);

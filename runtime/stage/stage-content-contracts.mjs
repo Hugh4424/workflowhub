@@ -20,6 +20,47 @@ export function validateTaskMaterialRevision(value) {
   return result(validateMaterialRevisionSchema(value) ? [] : schemaErrors(validateMaterialRevisionSchema));
 }
 
+// Material revisions written by the short-lived Phase 2 writer may contain
+// a top-level `requirements` binding.  Keep those bytes readable, but mark the
+// shape as historical so callers can explicitly repair it into the current
+// canonical form instead of silently rewriting history.
+export function validateTaskMaterialRevisionVersionAware(value) {
+  const current = validateTaskMaterialRevision(value);
+  const legacy = Object.prototype.hasOwnProperty.call(value ?? {}, "requirements");
+  if (current.ok) return Object.freeze({
+    ok: true,
+    legacy,
+    format: legacy ? "task-material-revision.v1-top-level-requirements" : "current",
+    errors: Object.freeze([]),
+  });
+
+  // A clean runner may carry the older schema, which rejects the historical
+  // top-level `requirements` extension before the reader can classify it.
+  // Validate the material-revision core after removing only that extension;
+  // the original bytes remain untouched and are still returned as evidence.
+  if (legacy && value && typeof value === "object" && !Array.isArray(value)) {
+    const normalized = { ...value };
+    delete normalized.requirements;
+    if (Array.isArray(normalized.changed_files)) {
+      normalized.changed_files = normalized.changed_files.filter((file) => file !== "requirements");
+    }
+    const historical = validateTaskMaterialRevision(normalized);
+    if (historical.ok) return Object.freeze({
+      ok: true,
+      legacy: true,
+      format: "task-material-revision.v1-top-level-requirements",
+      errors: Object.freeze([]),
+    });
+  }
+
+  return Object.freeze({
+    ok: false,
+    legacy: false,
+    format: "current",
+    errors: current.errors,
+  });
+}
+
 const REQUIRED_MAIN_SECTIONS = Object.freeze([
   "原始需求", "目标", "范围", "非目标", "决定", "三轮 talk", "调研", "grill",
   "审查处置", "最终确认", "拒绝方案", "风险", "未决项", "Supersedes", "文档结果", "Exit checks",

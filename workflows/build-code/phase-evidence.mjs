@@ -622,12 +622,12 @@ export function assertLiveWorkspaceMatchesImplementation(workspace, implementati
 } = {}) {
   if (snapshot.tree === implementation.value.snapshot_tree) return;
   const runtimeOnlyCommit = phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "runtime-context");
-  const taskPath = task?.identity?.taskId === undefined
+  const tasksDocumentPath = task?.identity?.taskId === undefined
     ? null
     : `specs/${task.identity.taskId}/tasks.md`;
   const phaseInTasksOnlyWindow = currentPhase?.phase_id === input?.phase_id
     && currentPhase?.status === "awaiting_review"
-    && taskPath !== null;
+    && tasksDocumentPath !== null;
   if (phaseInTasksOnlyWindow) {
     const requiredRefs = [input.implementation_receipt_ref, input.green_test_receipt_ref, input.review_result_ref];
     if (requiredRefs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
@@ -638,21 +638,21 @@ export function assertLiveWorkspaceMatchesImplementation(workspace, implementati
       phaseId: "tasks-completion-seam",
       baselineCommit: implementation.value.snapshot_commit,
       implementationCommit: phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "tasks-completion-seam"),
-      allowedFiles: [taskPath],
+      allowedFiles: [tasksDocumentPath],
     });
     const changed = new Set(scan.changed_files);
     const onlyTasksAndRuntime = scan.safe
-      && changed.has(taskPath)
+      && changed.has(tasksDocumentPath)
       && changed.size === 1;
     if (onlyTasksAndRuntime) {
       const planPath = `specs/${task.identity.taskId}/plan.md`;
-      const before = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${taskPath}`], {
+      const before = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${tasksDocumentPath}`], {
         cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
       });
       const plan = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${planPath}`], {
         cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
       });
-      const after = readFileSync(resolve(workspace.worktreeRoot, taskPath), "utf8");
+      const after = readFileSync(resolve(workspace.worktreeRoot, tasksDocumentPath), "utf8");
       const phaseTasks = resolvePhaseTaskIds({ plan, tasks: before, phaseId: input.phase_id });
       const requiredBindings = [
         input.implementation_receipt_ref,

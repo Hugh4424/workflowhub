@@ -9,7 +9,10 @@ import { findUndeclaredStaticDependencies } from "./skill-static-deps.mjs";
 function readYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function pushError(errors, message) { errors.push(message); }
 function schemaValidator(root, name) {
-  const schema = JSON.parse(fs.readFileSync(path.join(root, `schemas/${name}.schema.json`), "utf8"));
+  // The authoritative schema tree moved under runtime/ during the layout
+  // migration.  Resolve it from the same bundle path used by runner-release
+  // and fact-collector; never fall back to the now-empty legacy schemas/ dir.
+  const schema = JSON.parse(fs.readFileSync(path.join(root, `runtime/schemas/${name}.schema.json`), "utf8"));
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   ajv.addFormat("date", /^\d{4}-\d{2}-\d{2}$/);
   return ajv.compile(schema);
@@ -199,7 +202,12 @@ export function checkSkillClosure(packageRoot) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const root = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  // This module now lives two levels below the package root.  Keep the CLI
+  // default rooted at the installed/source package, otherwise it resolves
+  // `runtime/runtime/schemas` and cannot validate a clean Runner checkout.
+  const root = process.argv[2]
+    ? path.resolve(process.argv[2])
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const result = checkSkillClosure(root);
   if (!result.ok) {
     console.error(result.errors.map(error => `- ${error}`).join("\n"));

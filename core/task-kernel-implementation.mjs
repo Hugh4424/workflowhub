@@ -6,7 +6,7 @@ import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint,
 import { acceptanceModeFor, requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir, assertArtifactDir } from "./artifact-dir.mjs";
-import { validateTaskMaterialRevision } from "../runtime/stage/stage-content-contracts.mjs";
+import { validateTaskMaterialRevision, validateTaskMaterialRevisionVersionAware } from "../runtime/stage/stage-content-contracts.mjs";
 import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "../runtime/task/git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
@@ -1698,6 +1698,140 @@ export function buildTaskKernel(taskHandle, {
       revision_id: revision.revision_id, parent_ref: revision.previous_ref,
       changed_files: revision.changed_files, current: true, idempotent: false,
     });
+    });
+  };
+  const readMaterialRevisionForRepair = (artifactDir) => {
+    const pointerRaw = readOptionalRecord(task, "materials/current.json");
+    if (pointerRaw === undefined) return null;
+    const pointer = parseJson(pointerRaw, "material current pointer");
+    if (pointer.schema_version !== "task-material-current.v1"
+        || pointer.task_id !== task.identity.taskId
+        || !Number.isInteger(pointer.generation) || pointer.generation < 1
+        || !/^materials\/revisions\/[a-f0-9]{64}\.json$/.test(pointer.revision_ref ?? "")
+        || !HASH.test(pointer.revision_hash ?? "")
+        || hash(task.readRecord(pointer.revision_ref)) !== pointer.revision_hash) {
+      throw new Error("material current pointer is invalid or misbound");
+    }
+    const revisionRaw = task.readRecord(pointer.revision_ref);
+    const revision = parseJson(revisionRaw, "current material revision");
+    const validation = validateTaskMaterialRevisionVersionAware(revision);
+    if (!validation.ok || revision.task_id !== task.identity.taskId
+        || revision.revision_id !== pointer.revision_id
+        || revision.previous_ref !== (pointer.previous_ref ?? null)) {
+      throw new Error(`current material revision is invalid or misbound: ${validation.errors.join("; ")}`);
+    }
+    const seen = new Set([pointer.revision_ref]);
+    let ancestor = revision;
+    while (ancestor.previous_ref !== null) {
+      if (seen.has(ancestor.previous_ref)) throw new Error("material revision parent chain contains a cycle");
+      seen.add(ancestor.previous_ref);
+      const priorRaw = task.readRecord(ancestor.previous_ref);
+      const prior = parseJson(priorRaw, "previous material revision");
+      const priorValidation = validateTaskMaterialRevisionVersionAware(prior);
+      if (hash(priorRaw) !== ancestor.previous_hash
+          || !priorValidation.ok
+          || prior.task_id !== task.identity.taskId
+          || prior.revision_id !== ancestor.parent_revision) {
+        throw new Error("material revision parent does not match previous_ref");
+      }
+      ancestor = prior;
+    }
+    return Object.freeze({
+      pointerRaw, pointer, revisionRaw, revision,
+      validation,
+      ref: pointer.revision_ref,
+      hash: pointer.revision_hash,
+    });
+  };
+  const repairMaterialRevision = (input = {}) => {
+    plain(input, "material revision repair input");
+    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref"]), "material revision repair input");
+    const summary = nonemptyString(input.change_summary, "material revision repair change_summary");
+    if (!Array.isArray(input.source_refs) || input.source_refs.length === 0
+        || input.source_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
+      throw new TypeError("material revision repair source_refs must be canonical task record refs");
+    }
+    const artifactDir = artifacts === undefined
+      ? ArtifactDir.open((candidate ?? workspace).worktreeRoot, task)
+      : assertArtifactDir(artifacts);
+    return task.withRecordLock("locks/materials.publication.lock", () => {
+      const head = readMaterialRevisionForRepair(artifactDir);
+      if (head === null) throw new Error("MATERIAL_REPAIR_NOT_NEEDED: current material revision is missing");
+      if (!head.validation.legacy) {
+        return deepFreeze({
+          repaired: false,
+          idempotent: true,
+          revision_ref: head.ref,
+          revision_hash: head.hash,
+          revision_id: head.pointer.revision_id,
+          current: true,
+        });
+      }
+      if (input.expected_current_ref !== undefined && input.expected_current_ref !== head.ref) {
+        const conflict = new Error("MATERIAL_REPAIR_CONFLICT: expected current revision is stale");
+        conflict.code = "MATERIAL_REPAIR_CONFLICT";
+        throw conflict;
+      }
+      if (!head.revision.requirements) throw new Error("material revision repair requires legacy requirements binding");
+      const sourceRefs = [...new Set(input.source_refs)].map((ref) => ({ ref, hash: hash(task.readRecord(ref)) }));
+      const materials = Object.fromEntries(["decision-log.md", "spec.md", "plan.md", "tasks.md"]
+        .map((file) => [file, artifactDir.read(file)]));
+      const created = createUnifiedMaterialRevision({
+        taskId: task.identity.taskId,
+        materials,
+        requirements: head.revision.requirements,
+        previous: { ...head.revision, revision_ref: head.ref, revision_hash: head.hash },
+        changeSummary: summary,
+        sourceRefs,
+        includeRequirements: false,
+        preserveChangedFiles: head.revision.changed_files,
+      });
+      if (created.idempotent) throw new Error("material revision repair did not produce a canonical successor");
+      const canonicalValidation = validateTaskMaterialRevisionVersionAware(created.revision);
+      if (!canonicalValidation.ok || canonicalValidation.legacy) {
+        throw new Error(`canonical material revision is invalid: ${canonicalValidation.errors.join("; ")}`);
+      }
+      const revisionRaw = created.raw;
+      try { createKernelRecord(created.revision_ref, revisionRaw, { testHooks: materialRevisionTestHooks?.revision }); }
+      catch (error) {
+        if (error?.code !== "EEXIST" || task.readRecord(created.revision_ref) !== revisionRaw) throw error;
+      }
+      const pointer = {
+        schema_version: "task-material-current.v1",
+        task_id: task.identity.taskId,
+        generation: head.pointer.generation + 1,
+        revision_id: created.revision.revision_id,
+        revision_ref: created.revision_ref,
+        revision_hash: hash(revisionRaw),
+        previous_ref: head.ref,
+      };
+      const pointerRaw = `${JSON.stringify(pointer, null, 2)}\n`;
+      try {
+        replaceTaskCurrentPointer("materials/current.json", pointerRaw, {
+          expectedPriorRaw: head.pointerRaw,
+          validator: () => {},
+          testHooks: materialRevisionTestHooks?.current,
+        });
+      } catch (error) {
+        if (!/compare-and-swap source changed|MATERIAL_REVISION_CONFLICT/.test(error?.message ?? "")) throw error;
+        const currentRaw = task.readRecord("materials/current.json");
+        if (currentRaw !== pointerRaw) {
+          const conflict = new Error("MATERIAL_REPAIR_CONFLICT: current pointer changed; retry from the authenticated head");
+          conflict.code = "MATERIAL_REPAIR_CONFLICT";
+          throw conflict;
+        }
+      }
+      return deepFreeze({
+        repaired: true,
+        idempotent: false,
+        legacy_ref: head.ref,
+        legacy_hash: head.hash,
+        revision_ref: created.revision_ref,
+        revision_hash: hash(revisionRaw),
+        revision_id: created.revision.revision_id,
+        parent_ref: head.ref,
+        current: true,
+      });
     });
   };
   const currentVNextContext = () => {
@@ -3940,6 +4074,7 @@ export function buildTaskKernel(taskHandle, {
     latestHistoricalStageRun,
     publishRequirementsLedger,
     publishMaterialRevision,
+    repairMaterialRevision,
     writeStageStepEntry,
     writeStageStepExit,
     prepareMakeDecisionInteractionPublication,

@@ -33,7 +33,8 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "..");
+// tools/cli/ -> repository root after the CLI relocation.
+const repoRoot = resolve(here, "..", "..");
 
 // The scanner's own basename — excluded from scan to prevent false-flagging its
 // own pattern strings.

@@ -1,0 +1,28 @@
+{
+  "schema_version": "workflowhub-final-coverage.v1",
+  "snapshot_tree": "6a75ce97bcc274d1307858c71d6a8fdfbefa255a",
+  "scope": "phase-9-final",
+  "full_suite": {
+    "status": "passed",
+    "receipt_ref": "receipts/build-tests-phase-9-successor3.json",
+    "output_ref": "evidence/build-tests-phase-9-successor3.output",
+    "output_sha256": "af4e50422c7f48aa9a21037155cb6383aef8108f00c08a7879b886602527ba"
+  },
+  "items": [
+    {"acceptance_criterion_id":"AC-01","status":"covered","evidence_refs":[{"ref":"tests/e2e/five-stage-normal.test.mjs","sha256":"e661f151d0458ec488e95e6678c5b72dbcd14e15c43537c43b13cfad95f1e674"}]},
+    {"acceptance_criterion_id":"AC-02","status":"covered","evidence_refs":[{"ref":"tests/e2e/five-stage-material-revision.test.mjs","sha256":"4ae80bc2fa12c0f1b428510ea39e964b1ad6c4f959a3bbf65a88d2a6fbbb9077"}]},
+    {"acceptance_criterion_id":"AC-03","status":"covered","evidence_refs":[{"ref":"tests/e2e/five-stage-idempotent-resume.test.mjs","sha256":"fb5b7762442f1ec4615ecf10db5873b1b40c99c47ad6db93026d6ca67ea54fc2"}]},
+    {"acceptance_criterion_id":"AC-04","status":"covered","evidence_refs":[{"ref":"tests/integration/mutation-guards.test.mjs","sha256":"66e3692a632ad6f56ab4fd8e622b392e1e88987db78686538ef24a54a2a54e11"}]},
+    {"acceptance_criterion_id":"AC-05","status":"covered","evidence_refs":[{"ref":"tests/integration/distribution-closure.test.mjs","sha256":"5c8140a3d2130bcb117d9fb6892ef9afa4e6d60d07ba0a4e6a93cb0fa224a139"}]},
+    {"acceptance_criterion_id":"AC-06","status":"covered","evidence_refs":[{"ref":"docs/architecture/legacy-import-proof.json","sha256":"b7dd7aa44571becae4eb1207269a3e28b9b3461abfc8c76a5dff39d48bfa447e"}]},
+    {"acceptance_criterion_id":"AC-07","status":"covered","evidence_refs":[{"ref":"tests/integration/mutation-guards.test.mjs","sha256":"66e3692a632ad6f56ab4fd8e622b392e1e88987db78686538ef24a54a2a54e11"}]},
+    {"acceptance_criterion_id":"AC-08","status":"covered","evidence_refs":[{"ref":"docs/architecture/legacy-import-proof.json","sha256":"b7dd7aa44571becae4eb1207269a3e28b9b3461abfc8c76a5dff39d48bfa447e"}]},
+    {"acceptance_criterion_id":"AC-09","status":"covered","evidence_refs":[{"ref":"tests/integration/mutation-guards.test.mjs","sha256":"66e3692a632ad6f56ab4fd8e622b392e1e88987db78686538ef24a54a2a54e11"}]},
+    {"acceptance_criterion_id":"AC-10","status":"covered","evidence_refs":[{"ref":"tests/integration/runner-clean-install.test.mjs","sha256":"2ac8cacb87f2ac5ae9e8aa81336da14ac522bc09ef73c1128f92b28cc3ac4f4f"}]},
+    {"acceptance_criterion_id":"AC-11","status":"covered","evidence_refs":[{"ref":"tests/integration/runner-clean-install.test.mjs","sha256":"2ac8cacb87f2ac5ae9e8aa81336da14ac522bc09ef73c1128f92b28cc3ac4f4f"}]},
+    {"acceptance_criterion_id":"AC-12","status":"covered","evidence_refs":[{"ref":"evidence/phase-7/mutations-green.txt","sha256":"3ba8a50c833ca202a3eda93a6085b690ed59b3e5ea82e63aefa83037f2a6f872"}]},
+    {"acceptance_criterion_id":"AC-13","status":"covered","evidence_refs":[{"ref":"tests/contract/repository-inventory.test.mjs","sha256":"97e47320ce566632277f971a32ea685f3d104caf02b81109b9c4dbad9af49aef"}]},
+    {"acceptance_criterion_id":"AC-14","status":"covered","evidence_refs":[{"ref":"docs/architecture/complexity-baseline.json","sha256":"5e0f311db5d4ffbca5fabcf85ebe0cb727fd20539055cef38892389e6341361d"}]},
+    {"acceptance_criterion_id":"AC-15","status":"covered","evidence_refs":[{"ref":"tests/contract/repository-governance.test.mjs","sha256":"5d038e1c603412cd862536cea978cfd9176d0cb71982703e91aa8f8ef41c2f84"}]}
+  ]
+}

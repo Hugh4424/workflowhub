@@ -22,9 +22,10 @@ async function runnerBoundFixture() {
   execFileSync("git", ["clone", "-q", "--no-local", realpathSync(join(import.meta.dirname, "../../../..")), runner]);
   execFileSync("git", ["checkout", "-qb", "task/Demo/task"], { cwd: runner });
   cpSync(realpathSync(join(import.meta.dirname, "../../../..", "core")), join(runner, "core"), { recursive: true, force: true });
+  cpSync(realpathSync(join(import.meta.dirname, "../../../..", "runtime")), join(runner, "runtime"), { recursive: true, force: true });
   cpSync(realpathSync(join(import.meta.dirname, "../..")), join(runner, "skills", "wh-review"), { recursive: true, force: true });
   symlinkSync(realpathSync(join(import.meta.dirname, "../../../..", "node_modules")), join(runner, "node_modules"));
-  execFileSync("git", ["add", "core", "skills/wh-review"], { cwd: runner });
+  execFileSync("git", ["add", "core", "runtime", "skills/wh-review"], { cwd: runner });
   execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "runner"], { cwd: runner });
   const taskPath = join(root, "Projects", "Demo", "tasks", "task");
   const task = createTask({ storageRoot: root, taskPath, manifest: {

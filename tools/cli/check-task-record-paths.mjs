@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const rootIndex = args.indexOf("--root");
-const repoRoot = resolve(rootIndex >= 0 && args[rootIndex + 1] ? args[rootIndex + 1] : join(here, ".."));
+// The explicit --root path is used by fixture tests; the default is the
+// repository root, two levels above tools/cli/ after the CLI relocation.
+const repoRoot = resolve(rootIndex >= 0 && args[rootIndex + 1] ? args[rootIndex + 1] : join(here, "..", ".."));
 
 const STAGES = [
   "make-decision",
@@ -18,6 +20,10 @@ const STAGES = [
 ];
 
 const RUNTIME_SIDECARS_AND_HELPERS = [
+  // Production runtime moved out of core/; keep the static guard over the
+  // entire runtime tree so the migration cannot silently create an unscanned
+  // authority boundary.
+  "runtime",
   "core/journal-appender.mjs",
   "metrics/collector.mjs",
   "workflows/build-code",
@@ -249,7 +255,7 @@ function checkRuntimeContracts() {
 
 function checkUniqueTaskPathDerivation() {
   const failures = [];
-  const roots = ["core", "scripts", "workflows", "skills"];
+  const roots = ["core", "runtime", "scripts", "workflows", "skills"];
   const allowed = new Set(["runtime/task/task-identity.mjs", "scripts/validate-stage-replay.mjs"]);
   const literalTasksJoin = /\b(?:join|resolve)\s*\([^;\n]*(?:"tasks"|'tasks'|`tasks`)/g;
   for (const root of roots) {
@@ -277,7 +283,7 @@ function checkUniqueSpecsPathDerivation() {
     "workflows/build-code/phase-evidence.mjs",
     "skills/wh-review/scripts/integration-review-subject.mjs",
   ]);
-  for (const root of ["core", "scripts", "workflows", "skills"]) {
+  for (const root of ["core", "runtime", "scripts", "workflows", "skills"]) {
     for (const file of walk(resolve(repoRoot, root))) {
       const rel = relative(repoRoot, file).replaceAll("\\", "/");
       if (allowed.has(rel) || FIXTURE_ALLOWLIST.has(rel)) continue;
@@ -291,7 +297,7 @@ function checkUniqueSpecsPathDerivation() {
 function checkGlobalDirectWriters() {
   const failures = [];
   const directMutation = /\b(?:writeFileSync|appendFileSync|createWriteStream|renameSync|mkdirSync|rmSync|unlinkSync|openSync)\b/;
-  for (const root of ["core", "scripts", "workflows", "skills", "metrics"]) {
+  for (const root of ["core", "runtime", "scripts", "workflows", "skills", "metrics"]) {
     for (const file of walk(resolve(repoRoot, root))) {
       const rel = relative(repoRoot, file).replaceAll("\\", "/");
       if (FIXTURE_ALLOWLIST.has(rel)) continue;
@@ -312,7 +318,7 @@ function checkGlobalIdentityDiscovery() {
     [/\bWORKFLOWHUB_TASK_DIR\b/, "stage/component must not read the storage-root environment"],
     [/git\s+(?:config\s+--get\s+remote\.|remote\b)/i, "Git remote identity discovery"],
   ];
-  for (const root of ["core", "scripts", "workflows", "skills", "metrics"]) {
+  for (const root of ["core", "runtime", "scripts", "workflows", "skills", "metrics"]) {
     for (const file of walk(resolve(repoRoot, root))) {
       const rel = relative(repoRoot, file).replaceAll("\\", "/");
       if (FIXTURE_ALLOWLIST.has(rel) || GLOBAL_IDENTITY_DISCOVERY_ALLOWLIST.has(rel)) continue;

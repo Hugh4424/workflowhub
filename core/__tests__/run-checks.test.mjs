@@ -12,7 +12,7 @@ import { describe, test, expect } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
-const runChecks = resolve(repoRoot, "scripts", "run-checks.mjs");
+const runChecks = resolve(repoRoot, "tools", "cli", "run-checks.mjs");
 
 /** Helper: run a node script synchronously, collect stdout+stderr combined. */
 function run(args = [], opts = {}) {

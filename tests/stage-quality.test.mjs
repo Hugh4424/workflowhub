@@ -17,7 +17,7 @@ import { scanFiles } from "../tools/cli/check-stage-quality.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
-const scriptPath = join(repoRoot, "scripts", "check-stage-quality.mjs");
+const scriptPath = join(repoRoot, "tools", "cli", "check-stage-quality.mjs");
 const node = process.execPath;
 
 // ---------------------------------------------------------------------------

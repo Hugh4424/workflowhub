@@ -29,7 +29,9 @@ import { scanCoreFiles } from "./scan-core-files.mjs";
 import { runKernel } from "../../runtime/evidence/kernel.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "..");
+// tools/cli/ -> repository root. Keep checker fixtures and runtime snapshots
+// anchored to the project, not the tools directory after the CLI move.
+const repoRoot = resolve(here, "..", "..");
 
 // ---------------------------------------------------------------------------
 // Core diff utilities — compare working-tree content to a caller-provided
@@ -158,7 +160,7 @@ async function main() {
   // fixtures/config-ok/ configs are shape-only (no path field) — only used by structural tests.
   // ponytail: CLI demo hardwires dummy-ok; real usage supplies own configPath programmatically.
   const cliTmpDir = mkdtempSync(join(os.tmpdir(), "wfh-cli-demo-"));
-  const dummyOkPath = resolve(here, "..", "fixtures", "components", "dummy-ok.mjs");
+  const dummyOkPath = resolve(repoRoot, "fixtures", "components", "dummy-ok.mjs");
   const cliConfig = join(cliTmpDir, "cli-demo.yaml");
   writeFileSync(
     cliConfig,
