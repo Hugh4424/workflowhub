@@ -394,30 +394,43 @@ export function deriveContextProxyMetrics({ packet_events = [], full_reread_even
   });
 }
 
-/** Keep provider usage truthfully separate from semantic review status. */
+/** Observe the authenticated canonical attempt, not semantic result members. */
 export function validateReviewAttemptObservation({ attempt, proxy_metrics = null, expected_material_revision = null, expected_snapshot_tree = null } = {}) {
   const value = attempt && typeof attempt === "object" && !Array.isArray(attempt) ? attempt : {};
-  const providers = Array.isArray(value.provider_results)
-    ? value.provider_results
-    : Array.isArray(value.provider_attempts) ? value.provider_attempts : [];
+  const providers = Array.isArray(value.provider_attempts) ? value.provider_attempts : [];
+  // These are provider execution states. Request reuse does not create another
+  // provider execution, and must not extend the independent review-budget enum.
+  const providerStatuses = new Set(["completed", "failed", "cancelled"]);
   const errors = [];
-  const usage = providers.map((provider, index) => {
+  const observe = (field) => providers.map((provider, index) => {
     const name = typeof provider?.provider === "string" && provider.provider.trim() !== "" ? provider.provider : `provider-${index + 1}`;
-    if (!provider || typeof provider !== "object" || !REVIEW_ATTEMPT_STATUSES.has(provider.status)) {
+    if (!provider || typeof provider !== "object" || !providerStatuses.has(provider.status)) {
       errors.push(`provider_${index + 1}_status_invalid`);
       return { provider: name, status: "unavailable", reason: "provider_status_invalid" };
     }
-    if (provider.usage === null || provider.usage === undefined || (typeof provider.usage === "object" && !Array.isArray(provider.usage) && Object.keys(provider.usage).length === 0)) {
-      return { provider: name, status: "unavailable", reason: provider.status === "completed" ? "usage_missing" : "attempt_unavailable" };
+    const metric = provider.execution?.[field];
+    if (metric === null || metric === undefined) {
+      return { provider: name, status: "unavailable", reason: `${field}_missing` };
     }
-    if (typeof provider.usage !== "object" || Array.isArray(provider.usage)) {
-      errors.push(`${name}_usage_invalid`);
-      return { provider: name, status: "unavailable", reason: "usage_invalid" };
+    if (typeof metric !== "object" || Array.isArray(metric)) {
+      errors.push(`${name}_${field}_invalid`);
+      return { provider: name, status: "unavailable", reason: `${field}_invalid` };
     }
-    return { provider: name, status: "recorded", usage: Object.freeze({ ...provider.usage }) };
+    const values = Object.values(metric);
+    if (values.every((entry) => entry === null || entry === undefined)) {
+      return { provider: name, status: "unavailable", reason: `${field}_missing` };
+    }
+    if (field === "timing" && values.some((entry) => entry !== null && entry !== undefined
+        && (typeof entry !== "number" || !Number.isFinite(entry) || entry < 0))) {
+      errors.push(`${name}_timing_invalid`);
+      return { provider: name, status: "unavailable", reason: "timing_invalid" };
+    }
+    return { provider: name, status: "recorded", [field]: Object.freeze({ ...metric }) };
   });
+  const usage = observe("usage");
+  const timing = observe("timing");
   if (providers.length === 0) errors.push("provider_attempts_missing");
-  const usageUnavailable = usage.some((entry) => entry.status === "unavailable");
+  const observationUnavailable = [...usage, ...timing].some((entry) => entry.status === "unavailable");
   const proxy = proxy_metrics === null ? null : deriveContextProxyMetrics({
     ...proxy_metrics,
     expected_material_revision,
@@ -425,8 +438,9 @@ export function validateReviewAttemptObservation({ attempt, proxy_metrics = null
   });
   if (proxy?.status !== "recorded") errors.push(...(proxy?.errors ?? ["proxy_metrics_missing"]));
   return Object.freeze({
-    status: errors.length || usageUnavailable ? "incomplete" : "recorded",
+    status: errors.length || observationUnavailable ? "incomplete" : "recorded",
     usage: Object.freeze(usage),
+    timing: Object.freeze(timing),
     ...(proxy ? { proxy_metrics: proxy } : {}),
     errors: Object.freeze([...new Set(errors)]),
   });

@@ -17,6 +17,7 @@
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "authenticated_evidence_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "pair_id": { "type": "string", "minLength": 1 },
     "role": { "enum": ["red", "blue"] },
     "disputed": { "type": "boolean" },

@@ -55,7 +55,7 @@ function addSkillClosure(root, name, locators, visited) {
   }
 }
 
-function addStaticImportClosure(root, locators) {
+function addStaticImportClosure(root, locators, { requireDependencies = false } = {}) {
   const queue = [...locators];
   const imports = /(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
   while (queue.length) {
@@ -68,6 +68,9 @@ function addStaticImportClosure(root, locators) {
       const base = path.posix.normalize(path.posix.join(path.posix.dirname(locator), specifier));
       const candidates = path.posix.extname(base) ? [base] : [`${base}.mjs`, `${base}.js`, path.posix.join(base, "index.mjs")];
       const dependency = candidates.find((candidate) => fs.existsSync(path.join(root, candidate)));
+      if (!dependency && requireDependencies && base.startsWith("skills/")) {
+        throw new Error(`skill bundle import is missing: ${locator} -> ${specifier}`);
+      }
       if (!dependency || locators.has(dependency)) continue;
       if (!dependency.startsWith("skills/")) continue;
       if (FORBIDDEN.test(dependency)) throw new Error(`runtime source imports forbidden Skill Bundle content: ${locator} -> ${dependency}`);
@@ -84,6 +87,10 @@ function assertSourceClosure(root) {
 
 function collectSourceClosure(root) {
   assertSourceClosure(root);
+  return collectDeclaredClosure(root);
+}
+
+function collectDeclaredClosure(root, { release = false } = {}) {
   const locators = new Set([
     "runtime/schemas/skill-bundle.schema.json",
     "runtime/schemas/stage-skill-deps.schema.json",
@@ -92,14 +99,14 @@ function collectSourceClosure(root) {
   for (const stage of STAGES) {
     const base = `workflows/${stage}`;
     for (const name of ["SKILL.md", "skill-deps.yaml", "steps.json"]) {
-      if (fs.existsSync(path.join(root, base, name))) locators.add(`${base}/${name}`);
+      if (release || fs.existsSync(path.join(root, base, name))) locators.add(`${base}/${name}`);
     }
     const manifest = yaml.load(fs.readFileSync(path.join(root, base, "skill-deps.yaml"), "utf8"));
     for (const dependency of manifest.skills ?? []) {
       addSkillClosure(root, dependency.name, locators, visitedSkills);
     }
   }
-  addStaticImportClosure(root, locators);
+  addStaticImportClosure(root, locators, { requireDependencies: release });
   return locators;
 }
 
@@ -189,12 +196,19 @@ export function validateSkillBundleRelease({ releaseRoot } = {}) {
         || path.isAbsolute(entry.path) || entry.path.split(/[\\/]/).includes("..") || seen.has(entry.path)) {
       throw new Error("skill bundle file manifest is invalid");
     }
+    assertLocator(entry.path);
     seen.add(entry.path);
     const source = path.join(root, entry.path);
     if (!fs.existsSync(source) || !fs.lstatSync(source).isFile() || fs.lstatSync(source).isSymbolicLink()) {
       throw new Error(`skill bundle file is missing or unsafe: ${entry.path}`);
     }
     if (sha256(fs.readFileSync(source)) !== entry.sha256) throw new Error(`skill bundle hash mismatch: ${entry.path}`);
+  }
+  // Reconstruct from workflow and skill declarations, independently of the
+  // top-level inventory: removing an asset and its inventory entry must fail.
+  const required = collectDeclaredClosure(root, { release: true });
+  for (const locator of required) {
+    if (!seen.has(locator)) throw new Error(`skill bundle declared file is missing from manifest: ${locator}`);
   }
   return Object.freeze(manifest);
 }

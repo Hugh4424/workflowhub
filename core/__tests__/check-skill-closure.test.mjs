@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import yaml from "js-yaml";
 import { afterEach, expect, it } from "vitest";
 import { checkReleaseClosure, checkSkillClosure } from "../../runtime/evidence/check-skill-closure.mjs";
@@ -181,4 +182,44 @@ it("rejects release files without an authenticated content hash", () => {
     "skill release file sha256 is invalid: shared/SKILL.md",
     "runner release file sha256 is invalid: shared/SKILL.md",
   ]));
+});
+
+
+it.each([
+  ["spec-plan", "templates/plan-template.md"],
+  ["spec-tasks", "templates/tasks-template.md"],
+  ["wh-review", "scripts/review-provider-client.mjs"],
+])("P5 current %s bundle authenticates its changed %s bytes", (name, changedPath) => {
+  const bundleRef = `skills/${name}/skill-bundle.json`;
+  const entryRef = `skills/${name}/SKILL.md`;
+  // This is a positive current-source assertion. Stale source hashes must fail
+  // here rather than becoming an expected rejection that hides release drift.
+  const bundle = validateSkillBundle(REPOSITORY_ROOT, bundleRef, entryRef);
+  const declaration = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, bundleRef), "utf8"));
+  const entry = declaration.files.find((item) => item.path === changedPath);
+  expect(entry).toBeDefined();
+  const actualHash = createHash("sha256").update(fs.readFileSync(path.join(REPOSITORY_ROOT, `skills/${name}`, changedPath))).digest("hex");
+  expect(entry.sha256).toBe(actualHash);
+  const catalog = yaml.load(fs.readFileSync(path.join(REPOSITORY_ROOT, "skills/catalog.yaml"), "utf8"));
+  expect(catalog.skills.find((item) => item.name === name).local_bundle_hash).toBe(bundle.bundleHash);
+});
+
+it.each(["missing", "tampered"])("P5 isolated hashed skill rejects %s source after a valid baseline", (mutation) => {
+  const root = fixture();
+  const skillPath = path.join(root, "skills/demo/SKILL.md");
+  const manifestPath = path.join(root, "skills/demo/skill-bundle.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.files = [{ path: "SKILL.md", sha256: createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex") }];
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  const { bundleHash } = validateSkillBundle(root, "skills/demo/skill-bundle.json", "skills/demo/SKILL.md");
+  const catalogPath = path.join(root, "skills/catalog.yaml");
+  const catalog = yaml.load(fs.readFileSync(catalogPath, "utf8"));
+  catalog.skills[0].local_bundle_hash = bundleHash;
+  fs.writeFileSync(catalogPath, yaml.dump(catalog));
+  expect(checkSkillClosure(root)).toEqual({ ok: true, errors: [] });
+  if (mutation === "missing") fs.rmSync(skillPath);
+  else fs.appendFileSync(skillPath, "\nChanged after its hash was declared.\n");
+  const result = checkSkillClosure(root);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join("\n")).toMatch(/missing|sha256 mismatch/);
 });

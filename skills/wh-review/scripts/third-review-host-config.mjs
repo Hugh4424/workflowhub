@@ -566,10 +566,20 @@ function effectiveProfile(config, provider) {
   };
 }
 
+// Match 3rd-review v4 source normalization before attesting broker results.
+// Only omission defaults to the full profile key; invalid explicit values fail.
+function brokerSourceId(provider, configured) {
+  const source = configured.source_id === undefined ? provider : configured.source_id;
+  if (typeof source !== "string" || source.length === 0 || /[\u0000-\u001f]/.test(source)) {
+    throw new TypeError(`providers.${provider}.source_id must be a safe non-empty string`);
+  }
+  return source;
+}
+
 function brokerConfigId(provider, configured) {
   return createHash("sha256").update(JSON.stringify({
     id: provider,
-    source_id: configured.source_id ?? provider,
+    source_id: brokerSourceId(provider, configured),
     model: configured.model ?? null,
     effort: configured.effort ?? null,
     thinking: configured.thinking ?? null,
@@ -652,9 +662,7 @@ export function selectTrustedReviewProviderSelection(configuredPath, hostProvide
       requestedProfiles: dispatchProfiles,
       requestedProfileSpecs: tier.flatMap((provider) => configuredRoute?.profile_specs?.[provider] ? [configuredRoute.profile_specs[provider]] : []),
       provider_identities: Object.freeze(Object.fromEntries(dispatchProfiles.map((provider) => [provider, Object.freeze({
-        source_id: typeof config.providers[provider]?.source_id === "string" && config.providers[provider].source_id.trim() !== ""
-          ? config.providers[provider].source_id
-          : null,
+        source_id: brokerSourceId(provider, config.providers[provider]),
         config_id: brokerConfigId(provider, config.providers[provider]),
       })]))),
       sameSourceExcluded,

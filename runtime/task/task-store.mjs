@@ -1,4 +1,4 @@
-import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
 
@@ -33,6 +33,24 @@ function assertRoot(taskRoot, taskId) {
   if (typeof taskId === "string" && manifest.task_id !== taskId) throw new Error("task identity mismatch");
   if (typeof manifest.task_id !== "string" || manifest.task_id.trim() === "") throw new Error("task manifest task_id is required");
   return Object.freeze({ root, taskId: manifest.task_id, projectName: manifest.project_name });
+}
+
+/** Sole consumer: confirmation publication recovers an immutable record whose
+ * quality fact write was interrupted. Remove with that publication path. */
+export function listCanonicalConfirmationRefs(taskRoot, taskId) {
+  const { root } = assertRoot(taskRoot, taskId);
+  for (const relative of ["quality", "quality/confirmations"]) {
+    let stat;
+    try { stat = lstatSync(resolve(root, relative)); }
+    catch (error) { if (error?.code === "ENOENT") return []; throw error; }
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`${relative} must be a real directory`);
+  }
+  return readdirSync(resolve(root, "quality/confirmations")).filter((name) => /^[a-f0-9]{64}\.json$/.test(name)).sort().map((name) => {
+    const relative = `quality/confirmations/${name}`;
+    const stat = lstatSync(resolve(root, relative));
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${relative} must be a regular file`);
+    return relative;
+  });
 }
 
 function safeRecordPath(root, relativePath) {

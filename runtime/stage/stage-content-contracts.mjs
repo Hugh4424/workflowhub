@@ -79,7 +79,19 @@ function decisionFreezeModel(value) {
   const step11Section = value.match(/##\s*step 11[\s\S]*?(?=\n##\s|$)/i)?.[0] ?? "";
   const confirmationStatus = /(?:状态|status)\s*[:：]\s*\**accepted\b/i.test(confirmationSection) ? "accepted" : null;
   const step11Status = step11Section.match(/(?:状态|status)\s*[:：]\s*\**(accepted|pending|rejected)\b/i)?.[1]?.toLowerCase() ?? null;
+  const sectionScope = (section) => {
+    const encoded = section.match(/\bmaterial_scope\s*[=:：]\s*(\[[^\n]*?\])/i)?.[1];
+    let scope = /\bmaterial_scope\s*[=:：]/i.test(section) ? "invalid" : null;
+    if (encoded !== undefined) {
+      try { scope = JSON.parse(encoded); } catch { scope = encoded; }
+    }
+    return {
+      material_scope: scope,
+      material_scope_revision: section.match(/\bmaterial_scope_revision\s*[=:：]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    };
+  };
   const sectionBinding = (section, sectionStatus) => ({
+    ...sectionScope(section),
     status: sectionStatus,
     material_revision: section.match(/material_revision\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
     snapshot_tree: section.match(/snapshot_tree\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
@@ -95,6 +107,7 @@ function decisionFreezeModel(value) {
   });
   const unresolved = (active.match(/(?:方向级|direction)[^\n]*(?:未决|open|unresolved)/gi) ?? []);
   const binding = {
+    ...sectionScope(active),
     status,
     decision_id: active.match(/decision_id\s*[=:：]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
     material_revision: active.match(/material_revision\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
@@ -114,6 +127,8 @@ function freezeSource(value) {
   return {
     status: typeof value.status === "string" ? value.status.toLowerCase() : null,
     decision_id: value.decision_id ?? value.decisionId ?? null,
+    material_scope: value.material_scope ?? value.materialScope ?? null,
+    material_scope_revision: value.material_scope_revision ?? value.materialScopeRevision ?? null,
     material_revision: value.material_revision ?? value.materialRevision ?? null,
     snapshot_tree: value.snapshot_tree ?? value.snapshotTree ?? null,
   };
@@ -125,7 +140,7 @@ function freezeSource(value) {
  * command or second state machine. Callers decide how the fact affects stage
  * completion. Parsed decision logs or their Markdown text are accepted.
  */
-export function validateDecisionFreeze({ decisionLog, material_revision, snapshot_tree, currentMaterialRevision, currentSnapshotTree } = {}) {
+export function validateDecisionFreeze({ decisionLog, material_revision, snapshot_tree, currentMaterialRevision, currentSnapshotTree, currentDecisionScopeRevision } = {}) {
   const model = decisionFreezeModel(decisionLog);
   const current = {
     material_revision: currentMaterialRevision ?? material_revision ?? null,
@@ -147,12 +162,29 @@ export function validateDecisionFreeze({ decisionLog, material_revision, snapsho
   if (new Set(sources.map((source) => `${source.status}:${source.material_revision}:${source.snapshot_tree}`)).size > 1) {
     errors.push("freeze approval sources are inconsistent");
   }
-  for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
-    if (current.material_revision !== null && source.material_revision !== null && source.material_revision !== current.material_revision) {
-      errors.push(`${name} is not for the current material revision`);
+  const scoped = currentDecisionScopeRevision !== undefined
+    || sources.some((source) => source.material_scope !== null || source.material_scope_revision !== null);
+  if (scoped) {
+    if (!/^revision-[a-f0-9]{64}$/.test(currentDecisionScopeRevision ?? "")) {
+      errors.push("current decision scope revision is missing or invalid");
     }
-    if (current.snapshot_tree !== null && source.snapshot_tree !== null && source.snapshot_tree !== current.snapshot_tree) {
-      errors.push(`${name} is not for the current snapshot`);
+    for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+      if (!Array.isArray(source.material_scope) || source.material_scope.length !== 1 || source.material_scope[0] !== "decision-log.md") {
+        errors.push(`${name} must bind only the decision material scope`);
+      }
+      if (!/^revision-[a-f0-9]{64}$/.test(source.material_scope_revision ?? "")
+          || source.material_scope_revision !== currentDecisionScopeRevision) {
+        errors.push(`${name} is not for the current decision scope revision`);
+      }
+    }
+  } else {
+    for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+      if (current.material_revision !== null && source.material_revision !== null && source.material_revision !== current.material_revision) {
+        errors.push(`${name} is not for the current material revision`);
+      }
+      if (current.snapshot_tree !== null && source.snapshot_tree !== null && source.snapshot_tree !== current.snapshot_tree) {
+        errors.push(`${name} is not for the current snapshot`);
+      }
     }
   }
   const openDirection = Array.isArray(model.unresolved_direction_questions)
@@ -273,6 +305,14 @@ export function validateFallbackProtocol({ stage, finding = {}, route = {}, comp
     errors.push(`fallback owner must be ${rule.owner}`);
   }
   if (rule?.owner === "declared" && !FORMAL_STAGES.includes(ownerStage)) errors.push("material gap requires a formal owner stage");
+  if (classification === "material_gap") {
+    const target = finding.target_artifact ?? finding.evidence?.artifact_ref;
+    const material = typeof target === "string" ? target.split("/").at(-1) : null;
+    const materialOwner = { "decision-log.md": "make-decision", "spec.md": "build-spec", "plan.md": "build-plan", "tasks.md": "build-plan" }[material];
+    const targetDeclared = Object.hasOwn(finding, "target_artifact") || Object.hasOwn(finding.evidence ?? {}, "artifact_ref");
+    if (targetDeclared && !materialOwner) errors.push("material gap explicit target must identify a current authored material");
+    if (materialOwner && ownerStage !== materialOwner) errors.push(`material gap for ${material} requires owner ${materialOwner}`);
+  }
   if (rule && route.next_action !== rule.next_action) errors.push(`fallback next_action must be ${rule.next_action}`);
   if (route.rerun_scope !== "same_task_local") errors.push("fallback cannot request a full-stage rerun");
   if (route.continuation_allowed !== true) errors.push("fallback must preserve same-task continuation");
@@ -2030,6 +2070,7 @@ export function validateInteractionLifecycleContract(value) {
   }
 
   const [ask, wait, reply, resume] = events;
+  const withdrawn = reply?.status === "withdrawn";
   if (!nonEmptyString(ask?.card_ref) || !validHash(ask?.card_hash) || !validInteractionRound(ask?.round)) {
     errors.push("ask must bind a card ref, hash, and positive round");
   }
@@ -2053,7 +2094,7 @@ export function validateInteractionLifecycleContract(value) {
     const batch = validateInteractionQuestions(ask?.questions, interactionType, errors);
     const questionIds = batch.question_ids;
     const hasBatchReply = Array.isArray(reply?.answers) && reply.answers.length > 0;
-    if (!hasBatchReply || reply?.re_ranked !== true) {
+    if ((!hasBatchReply && !withdrawn) || reply?.re_ranked !== true) {
       errors.push(`${interactionType} reply must contain the user answer(s) and re-rank the remaining questions`);
     }
     const answeredIds = new Set();
@@ -2084,7 +2125,7 @@ export function validateInteractionLifecycleContract(value) {
         || Object.prototype.hasOwnProperty.call(reply ?? {}, "review_fact")) {
       errors.push("Grill must not produce a review fact");
     }
-    if (!Array.isArray(reply?.answers) || reply.answers.length === 0 || reply?.re_ranked !== true
+    if (!Array.isArray(reply?.answers) || (reply.answers.length === 0 && !withdrawn) || reply?.re_ranked !== true
         || !Array.isArray(reply?.remaining_frontier_ids)
         || reply.remaining_frontier_ids.some((id) => !frontierIds.includes(id))
         || new Set(reply.remaining_frontier_ids).size !== reply.remaining_frontier_ids.length
@@ -2095,6 +2136,10 @@ export function validateInteractionLifecycleContract(value) {
         || reply.answers.some((answer) => reply.remaining_frontier_ids.includes(questionIdentity(answer, "Grill")))) {
       errors.push("Grill reply must preserve the reply, partial answers, and re-rank remaining frontiers");
     }
+  }
+
+  if (withdrawn && (!Array.isArray(reply.answers) || reply.answers.length !== 0)) {
+    errors.push("withdrawn interaction must preserve unanswered questions without creating answers");
   }
 
   return Object.freeze({
@@ -2120,6 +2165,9 @@ export function validateInteractionLifecycleSequence(value) {
   }
   const seenRounds = new Set();
   const seenCards = new Set();
+  const answered = new Set();
+  const pending = new Set();
+  let withdrawn = false;
   let previousRound = 0;
   for (const [index, round] of rounds.entries()) {
     const lifecycle = round?.lifecycle ?? round;
@@ -2127,6 +2175,19 @@ export function validateInteractionLifecycleSequence(value) {
     if (expectedType !== null && interactionType !== expectedType) errors.push(`interaction round ${index + 1} has a different interaction type`);
     const result = validateInteractionLifecycleContract(lifecycle);
     if (!result.ok) errors.push(...result.errors.map((error) => `round ${index + 1}: ${error}`));
+    const [ask, , reply] = lifecycle?.events ?? [];
+    if (withdrawn) errors.push("interaction sequence cannot continue after user withdrawal");
+    for (const question of Array.isArray(ask?.questions) ? ask.questions : []) {
+      const id = questionIdentity(question, interactionType);
+      if (answered.has(id)) errors.push(`interaction question ${id} was already answered`);
+      pending.add(id);
+    }
+    for (const answer of Array.isArray(reply?.answers) ? reply.answers : []) {
+      const id = questionIdentity(answer, interactionType);
+      answered.add(id);
+      pending.delete(id);
+    }
+    withdrawn = reply?.status === "withdrawn";
     const roundNumber = lifecycle?.events?.[0]?.round;
     const cardRef = lifecycle?.events?.[0]?.card_ref;
     if (!validInteractionRound(roundNumber)) errors.push(`interaction round ${index + 1} must contain a positive round`);
@@ -2140,7 +2201,8 @@ export function validateInteractionLifecycleSequence(value) {
   return Object.freeze({
     ok: errors.length === 0,
     errors: Object.freeze(errors),
-    facts: Object.freeze({ interaction_type: expectedType ?? rounds[0]?.interaction_type ?? rounds[0]?.kind ?? null, rounds: rounds.length }),
+    facts: Object.freeze({ interaction_type: expectedType ?? rounds[0]?.interaction_type ?? rounds[0]?.kind ?? null, rounds: rounds.length,
+      remaining_question_ids: Object.freeze([...pending]), withdrawn }),
   });
 }
 
@@ -2185,13 +2247,19 @@ export function validateInteractionAggregateContract(value) {
   } else {
     const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "talk", rounds: talk.lifecycle_rounds });
     if (!lifecycle.ok) errors.push(...lifecycle.errors.map((error) => `Talk: ${error}`));
+    if (lifecycle.facts.withdrawn || lifecycle.facts.remaining_question_ids?.length) errors.push("completed Talk must not contain withdrawn or unanswered questions");
     if (lifecycle.facts.rounds !== talk.round_count) errors.push("interaction aggregate Talk round_count does not match lifecycle_rounds");
   }
   const grill = value.grill;
   if (!object(grill) || !["completed", "recorded"].includes(grill.status) || !explicitFact(grill.summary)) {
     errors.push("interaction aggregate grill must retain a completed summary");
   }
-  if (object(grill) && (Object.hasOwn(grill, "review_fact") || grill.produces_review_fact === true)) errors.push("interaction aggregate Grill summary must not become a review fact");
+  if (object(grill)) {
+    const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "grill", rounds: grill.lifecycle_rounds });
+    if (!lifecycle.ok) errors.push(...lifecycle.errors.map((error) => `Grill: ${error}`));
+    if (lifecycle.facts.withdrawn || lifecycle.facts.remaining_question_ids?.length) errors.push("completed Grill must not contain withdrawn or unanswered frontiers");
+    if (Object.hasOwn(grill, "review_fact") || grill.produces_review_fact === true) errors.push("interaction aggregate Grill summary must not become a review fact");
+  }
   const advice = value.advice ?? value.detail_advice;
   if (!object(advice) || !["completed", "recorded", "unavailable"].includes(advice.status)) {
     errors.push("interaction aggregate advice summary is required");
@@ -4707,6 +4775,7 @@ function validateClarifyOutcome(value, { stage = "build-spec", identity } = {}) 
   } else if (value.trigger === true) {
     const lifecycle = validateInteractionLifecycleSequence({ interaction_type: "spec-clarify", rounds: value.lifecycle_rounds });
     if (!lifecycle.ok) errors.push(...lifecycle.errors);
+    if (lifecycle.facts.withdrawn || lifecycle.facts.remaining_question_ids?.length) errors.push("completed Clarify must not contain withdrawn or unanswered questions");
   } else {
     errors.push("Clarify outcome must explicitly declare trigger=true or trigger=false");
   }
@@ -5957,7 +6026,7 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
     }
     for (const [index, scenario] of data.entries()) {
       if (!scenario || typeof scenario !== "object" || Array.isArray(scenario)
-          || Object.keys(scenario).some((key) => !new Set(["source", "sample", "scenario", "tier"]).has(key))) {
+          || Object.keys(scenario).some((key) => !new Set(["source", "sample", "scenario", "tier", "execution"]).has(key))) {
         errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}] has unsupported fields`);
         continue;
       }
@@ -5971,6 +6040,22 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
         errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}].tier is unsupported`);
         continue;
       }
+      if (scenario.execution !== undefined) {
+        const execution = scenario.execution;
+        const keys = tier === "command" ? ["command", "args", "timeout_ms"] : ["module_ref", "export_name", "input", "timeout_ms"];
+        const valid = execution && typeof execution === "object" && !Array.isArray(execution)
+          && tier !== "browser" && Object.keys(execution).every((key) => keys.includes(key))
+          && keys.every((key) => Object.hasOwn(execution, key))
+          && Number.isSafeInteger(execution.timeout_ms) && execution.timeout_ms > 0
+          && (tier === "command"
+            ? concrete(execution.command) && Array.isArray(execution.args) && execution.args.every((arg) => typeof arg === "string")
+            : concrete(execution.module_ref) && !execution.module_ref.startsWith("/")
+              && !execution.module_ref.split(/[\\/]/).includes("..") && concrete(execution.export_name));
+        if (!valid) {
+          errors.push(`${row.heading_id ?? "acceptance task"} acceptance_data[${index}].execution is invalid for ${tier}`);
+          continue;
+        }
+      }
       scenarios.push(Object.freeze({
         task_id: row.heading_id,
         acceptance_criterion_ids: Object.freeze(identifiers(row.fields.AC ?? "", ACCEPTANCE_CRITERION_ID)),
@@ -5982,6 +6067,7 @@ export function projectAcceptanceExecutionData(tasks, { decisionLog = null, spec
         sample: scenario.sample.trim(),
         scenario: scenario.scenario.trim(),
         tier,
+        ...(scenario.execution === undefined ? {} : { execution: Object.freeze(structuredClone(scenario.execution)) }),
       }));
     }
   }

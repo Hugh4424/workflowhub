@@ -34,7 +34,9 @@ continues without guessing.
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 `stage-reflection.v2` judgment JSON，再调用实际的公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用唯一的当前 `quality/evidence/stage-outcomes/build-plan/<sha256>.json`；`identity` 的 task、真实 worktree/branch、attempt、material_revision 与 snapshot_tree 必须匹配该认证原件。executor/run 从真实 outcome 派生。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。
+
+返回后把实际 `quality/stage-reflection/build-plan/<semantic-key>.json` 的 ref 与原件 bytes 的 sha256 交给既有 lesson/report consumer。semantic key 不等于原件 hash：同判断 A 复用首件 bytes/ref/time，判断或真实执行身份变化 B 写新件并保留 A；旧 fixed ref 只读。缺 executor/judgment 保持 `unavailable`。复盘失败保留原 stage error 和实际 `reflection_error`；既有 stage 事实继续有效。
 
 `validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`，技能不另行派生消费边。实际边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 同引用形成；stage outcome 或 output 不全时 `coverage_status=partial`、消费为 unknown，不能当零消费。只有完整扫描、近 30 天登记 output 的 `zero_consumption_proof`，以及人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才保留，否则变为 `needs_evidence`。如果 route 尚未实现，记录真实 unavailable/dependency，不发明私有命令。
 
@@ -93,7 +95,7 @@ review suggestion. Build-plan's business confirmation is required at handoff:
 do not invent the user's actual reply. Present the completed plan in plain
 language and obtain the user's actual reply before claiming that build-plan
 itself is accepted; the current session must then publish that reply as the
-existing `human-confirmation.v2` record under
+existing `human-confirmation.v3` record under
 `quality/confirmations/<sha256>.json`, then pass its ref to the official handler
 for validation before claiming that build-plan itself is accepted. This
 confirmation does not turn confirmation into a machine work permit. Missing
@@ -121,13 +123,15 @@ The map is conditional: non-UI phases keep the existing plan and record
 facts stay `unknown`/`unavailable` and become handoff risks. Build-plan designs
 the facts and does not execute frontend-testing (the `frontend-testing` skill);
 build-code owns execution
-and verify-code checks the real consumer. The map is a quality fact, not a
-gate, no gate is created, and no new stage, fifth material, or second authority
-is introduced.
-No new stage or no gate is introduced by the Component Quality Map.
+and verify-code checks the real consumer. The map records component facts,
+unknowns, and rework risks within the existing stage.
 
 The plan consumes the project-level Design.md and Experience.md identities and
-the `consumer-census.v1` produced upstream. Plan entries must say which source
+any explicitly supplied `consumer-census.v1` bound to its source snapshot.
+`buildConsumerCensus` validates supplied scanner facts; it does not scan the
+repository or guarantee an upstream census. Missing scanner facts remain
+`unknown`/`missing`, with their actual owner and evidence gap recorded; absence
+is not zero consumers. Plan entries must say which source
 owns each rule: Design.md for visual/component standards, Experience.md for
 page/interaction/test behavior. A plan may schedule an update to either source
 only when the confirmed change crosses that source's responsibility; reusing a
@@ -157,7 +161,7 @@ not new workflow stages and not gates.
    alternatives, dependencies, phases, rollback, test design, risks, deferred
    work, and the single source → FR → AC → task → oracle map.
 5. Write `tasks.md` as an ordered acyclic set of executable cards using the
-   current `plan-task.v3` card contract fields (`ID`,
+   current `plan-task.v4` card contract fields (`ID`,
    `Phase`, `goal`, `design_state`, `versioned_refs`, `source_refs / decision_refs`, `输入`, `依赖`, `并行`,
    `FR`, `AC`, `动作`, `精确文件`, `boundary`, `输出`, `Knowledge`,
    `verification_role`, `paired_task`, `gate_cmd`, `expected_exit`, `oracle`,
@@ -176,8 +180,16 @@ not new workflow stages and not gates.
 6. Cross-check all four materials for omissions, contradictions, orphan tasks,
    boundary widening, missing two-way traceability, and invalid commands.
 7. Trace every decision, FR, and AC into the plan/tasks before requesting one
-   independent findings review of the current plan/tasks. Preserve
-   actual provider/model/transport/provenance and findings. Dispose findings as
+   independent findings review of the current plan/tasks through the declared
+   `wh-review` adapter. Submit the real request through the existing `review`
+   entry, retain its canonical `attempt_ref` and actual `result_ref`, and pass
+   that explicit ref as `receipts.review` to the official build-plan handler.
+   It authenticates the attempt/result and provider outputs before producing
+   `facts.review`; a skill name or hand-written `executed=true` is not proof.
+   Preserve actual provider/model/transport/provenance and findings, including
+   partial results and unavailable attempts. Usage/timing come from the
+   authenticated attempt's `provider_attempts[].execution`, independently
+   unavailable when missing; a reused request adds no new provider execution. Dispose findings as
    `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`; repair valid
    findings in this same task.
 8. After findings disposition and the last authored plan/tasks revision, actually
@@ -225,7 +237,7 @@ testing will prove it, key risks/unknowns, review findings and dispositions, and
 what `build-code` should do next without guessing. The handoff is notification,
 not a machine work permit and not authorization to commit, push, merge, archive,
 or clean up. After the user's actual reply, the current session must publish
-the existing `human-confirmation.v2` record at
+the existing `human-confirmation.v3` record through `confirm --action=decision` at
 `quality/confirmations/<sha256>.json`; the official build-plan handler consumes
 that ref and includes `facts.human_confirmation` plus its evidence in the
 existing completion. It may also append that reply to the final aggregate

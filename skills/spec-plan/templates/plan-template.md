@@ -3,6 +3,17 @@
 - **Input**：`[填写：decision-log.md ref]`、`[填写：spec.md ref]`
 - **Template version**：`plan-task.v4`
 
+## 材料导航
+
+[填写：根据当前四材料的实际章节与锚点再生成本表；仅用于定位，正文仍由各自材料负责。M/S/B/P 表示主会话、子代理、后台执行和并行工作在何时读取，不产生第五份权威材料。]
+
+| 章节 / 材料锚点 | 职责与摘要 | M/S/B/P 读取时机 |
+| --- | --- | --- |
+| `decision-log.md#[填写：实际决策锚点]` | 已确认的方向、范围、理由与非目标 | [填写：读取角色与时机] |
+| `spec.md#[填写：实际 FR/AC 锚点]` | 产品行为、状态、验收 oracle 与失败边界 | [填写：读取角色与时机] |
+| `plan.md#[填写：实际工程方案锚点]` | 工程方案、接口、依赖、验证与恢复策略 | [填写：读取角色与时机] |
+| `tasks.md#[填写：实际 Phase/task 锚点]` | 可执行任务边界、命令及实际完成记录 | [填写：读取角色与时机] |
+
 ## Quick Read
 
 - **Goal**：[填写：完成后的可观察结果]
@@ -127,6 +138,10 @@ oracle identity；`gate_cmd` 只是测试命令，不是工作许可证。
 | --- | --- | --- | --- | --- |
 | [填写：FR/AC] | [填写：T-ID] | RED | `[填写：可执行命令]` / `[填写：非零]` | `[填写：ORACLE-ID、失败信号、task-relative 路径]` |
 | [填写：FR/AC] | [填写：T-ID] | GREEN | `[填写：同一命令]` / `0` | `[填写：同一 ORACLE-ID、成功/负例、task-relative 路径]` |
+
+规划涉及真实验收时，在现有接口契约和任务卡中绑定 tier、数据 source/sample/scenario、逐 AC oracle 与原始证据消费者。`command` 设计 argv/timeout；`service` 设计 worktree-relative module/export/input/timeout；精确 JSON 形状与逐 AC `entries[].assertions` 输出见 tasks-template 的 Delivery contract fields。build-plan 只设计，build-code 的认证 outcome 驱动真实执行；verify-code 认证当前 execution、普通独立 review 与用户 confirmation，三者缺一保持 missing/unavailable。
+
+Review 通过既有入口产生 canonical attempt/result，consumer 使用实际 ref/hash 认证；partial、provider/transport 失败及缺失 usage/timing 保留原事实。阶段反思使用 v2、唯一显式 outcome 与返回的 semantic ref/raw hash，A 复用首件、B 保留 A；原 stage error 与 reflection_error 分别披露。这些约束写进现有任务输出/证据/恢复栏，不增加执行状态权威。
 
 ## Rollback and Recovery
 

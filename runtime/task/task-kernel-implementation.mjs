@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 
 import factsContract from "../../contracts/facts-subschema.json" with { type: "json" };
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
+import { listCanonicalConfirmationRefs, withStoreLock } from "./task-store.mjs";
 import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
-import { captureExecutionSnapshot, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
@@ -16,6 +17,7 @@ import {
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
 import { validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
+import { authenticateCodeReviewRepairs } from "../evidence/freshness.mjs";
 export { createQualityFact } from "../evidence/quality-fact.mjs";
 export { deriveStageCompletion } from "../stage/completion-predicates.mjs";
 export { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
@@ -169,7 +171,7 @@ function throwResolvedReviewError(message, checkId, expected, actual, ErrorClass
   throw annotateResolvedReviewError(new ErrorClass(message), checkId, expected, actual);
 }
 
-function validateResolvedReviewAuthorization({ task, stage, input, authorization, currentContext }) {
+function validateResolvedReviewAuthorization({ task, stage, input, authorization, currentContext, workspaceRoot }) {
   if (input.review_status !== RESOLVED_REVIEW_STATUS) {
     if (authorization !== undefined && authorization !== null) {
       throwResolvedReviewError(
@@ -418,6 +420,14 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
       { actionable_finding_count: sourceIds.size, repaired_finding_count: repairedIds.size },
     );
   }
+  try {
+    if (authenticateCodeReviewRepairs({ review, result, taskId: task.identity.taskId,
+      snapshotTree: snapshot.tree, materialRevision: revision.revision_id, workspaceRoot, read: task.readRecord,
+    }) !== "resolved") throw new Error("review repair evidence does not cover every actionable finding");
+  } catch (error) {
+    throwResolvedReviewError(`resolved review authorization repair evidence is invalid: ${error.message}`,
+      "repair_evidence", "current source and passed affected checks", error.message);
+  }
 }
 
 function interactionAggregateIdentity(value) {
@@ -549,7 +559,9 @@ export function buildTaskKernel(taskHandle, {
   const createImmutable = (relativePath, raw) => {
     try { createRecord(relativePath, raw); }
     catch (error) {
-      if (error?.code !== "EEXIST" || task.readRecord(relativePath) !== raw) throw error;
+      if (error?.code !== "EEXIST" || (Buffer.isBuffer(raw)
+        ? !task.readRecordBytes(relativePath).equals(raw)
+        : task.readRecord(relativePath) !== raw)) throw error;
     }
     return { ref: relativePath, sha256: hash(raw) };
   };
@@ -673,8 +685,13 @@ export function buildTaskKernel(taskHandle, {
       return `vnext-${hash(`${task.identity.taskId}\0${stageName(stage)}`).slice(0, 32)}`;
     },
     publishCanonicalRecord(relativePath, raw) {
-      if (Buffer.isBuffer(raw)) raw = raw.toString("utf8");
-      if (typeof raw !== "string" || raw.length === 0) throw new TypeError("canonical record bytes are required");
+      const rawAttachment = /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-([a-f0-9]{64})\.bin$/.exec(relativePath ?? "");
+      if (rawAttachment) {
+        if (!Buffer.isBuffer(raw) || hash(raw) !== rawAttachment[1]) throw new TypeError("acceptance output ref must bind its original bytes");
+      } else {
+        if (Buffer.isBuffer(raw)) raw = raw.toString("utf8");
+        if (typeof raw !== "string" || raw.length === 0) throw new TypeError("canonical record bytes are required");
+      }
       ref(relativePath, "canonical record ref");
       if (task.manifest.record_model === "vnext-single-write" && !relativePath.startsWith("quality/")) {
         throw new Error(`vNext canonical records must use quality namespace: ${relativePath}`);
@@ -707,6 +724,7 @@ export function buildTaskKernel(taskHandle, {
         input,
         authorization: options.resolved_review,
         currentContext,
+        workspaceRoot: activeWorkspace()?.worktreeRoot,
       });
       const { revision, snapshot } = currentContext();
       const materialScope = STAGE_FACT_MATERIALS[name];
@@ -746,75 +764,112 @@ export function buildTaskKernel(taskHandle, {
       const subjectRef = input.subject_ref ?? null;
       if (subjectRef !== null && (typeof subjectRef !== "string" || subjectRef.trim() === "")) throw new TypeError("human confirmation subject_ref must be non-empty when supplied");
       const attemptRef = input.attempt_ref === undefined ? undefined : text(input.attempt_ref, "human confirmation attempt_ref");
-      const { revision, snapshot } = currentContext();
-      const value = {
-        schema_version: "human-confirmation.v3",
-        task_id: task.identity.taskId,
-        stage: name,
-        ...(attemptRef === undefined ? {} : { attempt_ref: attemptRef }),
-        decision: input.decision,
-        subject_ref: subjectRef,
-        material_revision: revision.revision_id,
-        snapshot_tree: snapshot.tree,
-        confirmed_at: now(),
-        reply_text: text(input.reply_text, "human confirmation reply_text"),
-        step_slug: text(input.step_slug, "human confirmation step_slug"),
-      };
-      const qualityStatus = input.decision === "accepted" ? "passed" : "failed";
-      // A close-plan confirmation authorizes an irreversible close operation;
-      // it is not the verify-code stage's human quality confirmation. Keep the
-      // canonical human-confirmation record unchanged, but give its quality
-      // fact a distinct internal subject so strict current-fact conflict
-      // detection cannot merge two different meanings. This is not a new
-      // stage, public command, or progression permit.
-      const qualitySubject = CLOSE_PLAN_REF.test(input.subject_ref ?? "")
-        ? "close_confirmation"
-        : "human_confirmation";
-      for (const qualityRef of task.listCanonicalQualityFactRefs()) {
-        try {
-          const qualityRaw = task.readRecord(qualityRef);
-          const quality = JSON.parse(qualityRaw);
-          const evidenceRef = quality.kind === "confirmation"
-            && quality.task_id === value.task_id
-            && quality.stage === value.stage
-            && quality.material_revision === value.material_revision
-            && quality.snapshot_tree === value.snapshot_tree
-            && quality.status === qualityStatus
-            && quality.subject === qualitySubject
-            ? quality.evidence?.[0]?.ref
-            : null;
-          if (!evidenceRef) continue;
-          const existing = JSON.parse(task.readRecord(evidenceRef));
-          if (JSON.stringify(existing) === JSON.stringify(value)) {
-            return { ref: evidenceRef, hash: hash(task.readRecord(evidenceRef)), value: existing, quality_fact_ref: qualityRef, quality_fact_hash: hash(qualityRaw), idempotent: true };
-          }
-        } catch {
-          // Ignore unrelated or historical malformed records; the new write remains fail-loud.
-        }
-      }
-      const raw = `${JSON.stringify(value, null, 2)}\n`;
-      const record = createImmutable(`quality/confirmations/${hash(raw)}.json`, raw);
-      const quality = publishQualityFact({
-        fact: createQualityFact({
-          taskId: task.identity.taskId,
+      const replyText = text(input.reply_text, "human confirmation reply_text");
+      const stepSlug = text(input.step_slug, "human confirmation step_slug");
+      // A single synchronous critical section covers lookup, record creation,
+      // and quality publication. Contention is explicit; retries reuse the winner.
+      return withStoreLock(task.taskPath, () => {
+        const { revision, snapshot } = currentContext();
+        const candidateValue = {
+          schema_version: "human-confirmation.v3",
+          task_id: task.identity.taskId,
           stage: name,
-          materialRevision: revision.revision_id,
-          materialScope: STAGE_FACT_MATERIALS[name],
-          materialScopeRevision: materialRevisionFromValues(STAGE_FACT_MATERIALS[name].map((file) => {
-            try { return [file, artifactDir().read(file)]; }
-            catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
-          })),
-          snapshotTree: snapshot.tree,
-          kind: "confirmation",
-          status: qualityStatus,
-          subject: qualitySubject,
-          evidence: [{ ref: record.ref, sha256: record.sha256, evidence_type: "human_confirmation" }],
-          recordedAt: value.confirmed_at,
-        }),
-        read: task.readRecord,
-        create: (recordRef, qualityRaw) => createRecord(recordRef, qualityRaw),
+          ...(attemptRef === undefined ? {} : { attempt_ref: attemptRef }),
+          decision: input.decision,
+          subject_ref: subjectRef,
+          material_revision: revision.revision_id,
+          snapshot_tree: snapshot.tree,
+          confirmed_at: now(),
+          reply_text: replyText,
+          step_slug: stepSlug,
+        };
+        validateHumanConfirmation(candidateValue, { taskId: task.identity.taskId, stage: name });
+        const normalizeReply = (reply) => reply.normalize("NFC").trim().replace(/\s+/gu, " ");
+        const semanticIdentity = (value) => JSON.stringify([
+          value.task_id, value.stage, value.subject_ref ?? null,
+          value.attempt_ref ?? null, value.step_slug,
+          normalizeReply(value.reply_text), value.decision,
+        ]);
+        const directionOnly = name === "make-decision" && (subjectRef === null
+          || subjectRef === `specs/${task.identity.taskId}/decision-log.md`);
+        const sameScope = (value) => directionOnly
+          ? isStageMaterialOnlySnapshotDelta(activeWorkspace().worktreeRoot, value.snapshot_tree, snapshot.tree, {
+            taskId: task.identity.taskId,
+            downstreamMaterials: ["spec.md", "plan.md", "tasks.md"],
+            allowNonMaterialChanges: true,
+          })
+          : value.material_revision === revision.revision_id && value.snapshot_tree === snapshot.tree;
+        let winner = null;
+        const historicalErrors = [];
+        const boundRefs = new Set();
+        for (const qualityRef of task.listCanonicalQualityFactRefs()) {
+          try {
+            const quality = JSON.parse(task.readRecord(qualityRef));
+            if (quality.kind === "confirmation" && quality.task_id === task.identity.taskId
+                && quality.stage === name && sameScope(quality)) {
+              for (const evidence of quality.evidence ?? []) boundRefs.add(evidence.ref);
+            }
+          } catch (error) {
+            historicalErrors.push({ ref: qualityRef, message: error.message });
+          }
+        }
+        for (const recordRef of listCanonicalConfirmationRefs(task.taskPath, task.identity.taskId)) {
+          let raw, existing;
+          let relevant = boundRefs.has(recordRef);
+          try {
+            raw = task.readRecord(recordRef);
+            existing = JSON.parse(raw);
+            relevant ||= existing.task_id === task.identity.taskId && existing.stage === name
+              && (existing.subject_ref ?? null) === subjectRef
+              && (existing.attempt_ref ?? null) === (attemptRef ?? null)
+              && existing.step_slug === stepSlug;
+            if (hash(raw) !== recordRef.slice("quality/confirmations/".length, -5)) {
+              throw new Error(`human confirmation hash does not bind its canonical bytes: ${recordRef}`);
+            }
+            validateHumanConfirmation(existing, {
+              taskId: task.identity.taskId, stage: existing.stage,
+              ...(existing.schema_version === "human-confirmation.v1" ? { subject: existing.attempt_ref } : {}),
+            });
+          } catch (error) {
+            if (relevant) throw error;
+            historicalErrors.push({ ref: recordRef, message: error.message });
+            continue;
+          }
+          if (existing.schema_version !== "human-confirmation.v3") continue;
+          if (semanticIdentity(existing) !== semanticIdentity(candidateValue) || !sameScope(existing)) continue;
+          if (winner === null || existing.confirmed_at < winner.value.confirmed_at
+              || (existing.confirmed_at === winner.value.confirmed_at && recordRef < winner.ref)) {
+            winner = { ref: recordRef, sha256: hash(raw), value: existing };
+          }
+        }
+        const value = winner?.value ?? candidateValue;
+        const raw = `${JSON.stringify(value, null, 2)}\n`;
+        const record = winner ?? createImmutable(`quality/confirmations/${hash(raw)}.json`, raw);
+        // A close confirmation retains its operation-specific meaning and full
+        // material/snapshot binding; it cannot substitute for stage approval.
+        const qualitySubject = CLOSE_PLAN_REF.test(subjectRef ?? "") ? "close_confirmation" : "human_confirmation";
+        const quality = publishQualityFact({
+          fact: createQualityFact({
+            taskId: task.identity.taskId,
+            stage: name,
+            materialRevision: value.material_revision,
+            materialScope: STAGE_FACT_MATERIALS[name],
+            materialScopeRevision: materialRevisionFromValues(STAGE_FACT_MATERIALS[name].map((file) => {
+              try { return [file, artifactDir().read(file)]; }
+              catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
+            })),
+            snapshotTree: value.snapshot_tree,
+            kind: "confirmation",
+            status: value.decision === "accepted" ? "passed" : "failed",
+            subject: qualitySubject,
+            evidence: [{ ref: record.ref, sha256: record.sha256, evidence_type: "human_confirmation" }],
+            recordedAt: value.confirmed_at,
+          }),
+          read: task.readRecord,
+          create: (recordRef, qualityRaw) => createRecord(recordRef, qualityRaw),
+        });
+        return { ref: record.ref, hash: record.sha256, value, quality_fact_ref: quality.ref, quality_fact_hash: quality.sha256, ...(winner ? { idempotent: true } : {}), ...(historicalErrors.length ? { historical_record_errors: historicalErrors } : {}) };
       });
-      return { ref: record.ref, hash: record.sha256, value, quality_fact_ref: quality.ref, quality_fact_hash: quality.sha256 };
     },
     publishIrreversibleAuthorization(input = {}) {
       object(input, "irreversible authorization input");

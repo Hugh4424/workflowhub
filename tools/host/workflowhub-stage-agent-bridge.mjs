@@ -21,6 +21,7 @@ import {
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
+import { authenticateCodeReviewRepairs } from "../../runtime/evidence/freshness.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 
@@ -143,6 +144,19 @@ function rejectStaleVerifyCodeReview({ context, stage, session }) {
   let result;
   try { result = JSON.parse(raw); }
   catch { reject("session code_review quality review record is not JSON"); }
+  const attemptRef = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/.test(review.quality_review_ref);
+  if (attemptRef && result?.version === "wh-review-attempt.v1") {
+    const mismatches = [
+      review.result?.status !== "unavailable" ? "session code_review result is not unavailable" : null,
+      result.task_id !== context.task.identity.taskId ? "quality review task mismatch" : null,
+      result.stage !== stage ? "quality review stage mismatch" : null,
+      result.snapshot_tree !== currentSnapshotTree ? "quality review snapshot_tree mismatch" : null,
+      result.material_revision !== currentMaterialRevision ? "quality review material_revision mismatch" : null,
+      result.terminal_status !== "unavailable" ? "quality review terminal status is not unavailable" : null,
+    ].filter(Boolean);
+    if (mismatches.length) reject(mismatches.join(", "));
+    return;
+  }
   if (result?.version !== "wh-review-result.v1"
       || result?.task_id !== context.task.identity.taskId
       || result?.stage !== stage
@@ -151,7 +165,15 @@ function rejectStaleVerifyCodeReview({ context, stage, session }) {
       || result?.review_scope !== null) {
     reject("session code_review quality review identity does not match the current task and stage");
   }
-  if (result?.snapshot_tree !== review.snapshot_tree) {
+  let resolution;
+  try {
+    resolution = authenticateCodeReviewRepairs({ review: result, result: review.result,
+      taskId: context.task.identity.taskId, snapshotTree: currentSnapshotTree, materialRevision: currentMaterialRevision,
+      workspaceRoot: context.candidateWorkspace?.worktreeRoot ?? context.workspace?.worktreeRoot,
+      read: context.task.readRecord,
+    });
+  } catch (error) { reject(error.message); }
+  if (result?.snapshot_tree !== review.snapshot_tree && resolution !== "resolved") {
     reject("session code_review quality review snapshot_tree does not match the session review");
   }
   if (result?.material_revision !== currentMaterialRevision) {
@@ -179,7 +201,8 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
     host: requiredText(session.host, "session.host"),
     sourceId: requiredText(session.source_id, "session.source_id"),
     sourceFamily: requiredText(session.source_family, "session.source_family"),
-    sessionId: agentRunId,
+    agentRunId,
+    ...(Object.hasOwn(session, "session_id") ? { sessionId: requiredText(session.session_id, "session.session_id") } : {}),
     sourceRef: requiredText(session.source_ref, "session.source_ref"),
     now: () => clock,
     requirementAuthentication,

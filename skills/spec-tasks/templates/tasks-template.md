@@ -3,6 +3,17 @@
 - **Input**：`[填写：decision-log.md ref]`、`[填写：spec.md ref]`、`[填写：plan.md ref]`
 - **Template version**：`plan-task.v4`
 
+## 材料导航
+
+[填写：根据当前四材料的实际章节与锚点再生成本表；仅用于定位，正文仍由各自材料负责。M/S/B/P 表示主会话、子代理、后台执行和并行工作在何时读取，不产生第五份权威材料。]
+
+| 章节 / 材料锚点 | 职责与摘要 | M/S/B/P 读取时机 |
+| --- | --- | --- |
+| `decision-log.md#[填写：实际决策锚点]` | 已确认的方向、范围、理由与非目标 | [填写：读取角色与时机] |
+| `spec.md#[填写：实际 FR/AC 锚点]` | 产品行为、状态、验收 oracle 与失败边界 | [填写：读取角色与时机] |
+| `plan.md#[填写：实际工程方案锚点]` | 工程方案、接口、依赖、验证与恢复策略 | [填写：读取角色与时机] |
+| `tasks.md#[填写：实际 Phase/task 锚点]` | 可执行任务边界、命令及实际完成记录 | [填写：读取角色与时机] |
+
 ## Phase P1 — [填写：阶段名]
 
 ### Goal
@@ -63,6 +74,17 @@
 ```md
 - **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"user_declaration"}`
 ```
+
+`command` / `service` 场景按真实消费者补齐 `execution`；以下只是形状示例，落卡时换成当前任务的真实文件、输入、timeout 和 AC，不把示例写成已执行事实：
+
+```json
+[
+  {"source":"current task fixture","sample":"selected sample","scenario":"command result","tier":"command","execution":{"command":"node","args":["tests/accept-command.mjs"],"timeout_ms":5000}},
+  {"source":"current task fixture","sample":"selected sample","scenario":"service result","tier":"service","execution":{"module_ref":"tests/accept-service.mjs","export_name":"accept","input":{"sample":"selected sample"},"timeout_ms":5000}}
+]
+```
+
+command 在认证 worktree 以 argv 执行；service 从该 worktree 加载模块并调用 export。每个执行输出 UTF-8 JSON，覆盖卡内全部 AC 且每个 AC 恰好一次：`{"entries":[{"acceptance_criterion_id":"AC-001","assertions":[{"id":"result","expected":7,"actual":7}]}]}`。断言 expected/actual 必须是实际可比较 JSON；runtime 自己派生结论，不采信自报 passed。规划注明原 stdout/stderr、逐 AC evidence、aggregate ref/hash 与清理责任；缺 execution、无效 JSON、超时、取消、断言失败均保留原输出和实际失败。browser 使用原有浏览器证据契约，不填写这两类 execution 对象。
 
 其中 `basis` 也可为 `three_inputs`；该 D 段必须被本任务 spec 引用，且不得用 D6/D7 全局政策代替。UI 计划必须另有一张
 `ui_scope=ui` 且 `acceptance_role=implementation` 的实现卡；四个场景字段均不得省略或写占位值。
@@ -225,6 +247,8 @@
 ```text
 T001 (RED) → T002 (GREEN) → T003 (FINAL)
 ```
+
+完成区的 `executed_commands`、`evidence_refs`、`review_fact` 和 `执行事实` 只填真实调用及消费者结果：普通 review 的 canonical attempt/result ref/hash、实际 provider execution usage/timing；阶段反思 v2 的唯一显式 outcome 与返回 semantic ref/raw sha256；需要用户确认时使用实际 `human-confirmation.v3` ref。重复请求复用原件，不增加 executed/技能名证明；同 A 保留首次 bytes/time，B 新件保留 A。缺失、partial、unavailable 及原 stage error/reflection_error 分别写清，规划文本不冒充执行、验收或发布。
 
 ## Final Boundary Check
 

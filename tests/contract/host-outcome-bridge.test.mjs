@@ -122,6 +122,7 @@ describe("explicit host outcome bridge contract", () => {
       task_path: state.task.taskPath,
       attempt_id: "attempt-host-outcome-verify-code",
       agent_run_id: "agent-host-outcome-verify-code",
+      unavailable: { ...valid.unavailable, source_id: "fixture-cli/fixture-source", source_family: "fixture-cli" },
     });
     const outcome = JSON.parse(state.task.readRecord(result.outcome_ref));
     expect(outcome).toMatchObject({
@@ -144,6 +145,17 @@ describe("explicit host outcome bridge contract", () => {
       task_path: state.task.taskPath,
       agent_run_id: "agent-host-outcome-missing-producer",
     })).rejects.toMatchObject({ code: "BRIDGE_STAGE_AGENT_RESULT_MISSING" });
+  });
+
+  it("P3 T007 rejects inconsistent source identity before recording an unavailable execution", async () => {
+    const state = fixture("p3-invalid-source-family");
+    const valid = readFixture("valid-unavailable.json");
+    await expect(workflowHubBridgeMain({
+      ...valid, task_id: state.task.identity.taskId, task_path: state.task.taskPath,
+      attempt_id: "attempt-A", agent_run_id: "agent-B",
+      unavailable: { ...valid.unavailable, source_id: "codex/host", source_family: "other" },
+    })).rejects.toThrow(/source.*(?:family|identity)|source_family/i);
+    expect(state.task.listCanonicalStageOutcomeRefs(valid.stage)).toEqual([]);
   });
 
   it("rejects a bridge task id that does not match task_path", async () => {

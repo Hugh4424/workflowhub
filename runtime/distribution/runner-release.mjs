@@ -48,7 +48,8 @@ function addStaticDependencies(root, locators) {
       const base = path.posix.normalize(path.posix.join(path.posix.dirname(locator), specifier));
       const candidates = path.posix.extname(base) ? [base] : [`${base}.mjs`, `${base}.js`, path.posix.join(base, "index.mjs")];
       const dependency = candidates.find((candidate) => fs.existsSync(path.join(root, candidate)));
-      if (!dependency || locators.has(dependency)) continue;
+      if (!dependency) throw new Error(`runner dependency is missing: ${locator} -> ${specifier}`);
+      if (locators.has(dependency)) continue;
       if (/(?:^|\/)(?:node_modules|__tests__|tests)(?:\/|$)|\.test\.[^/]+$/.test(dependency)) {
         throw new Error(`runner source imports forbidden test content: ${locator} -> ${dependency}`);
       }
@@ -72,20 +73,15 @@ const RUNNER_ENTRYPOINTS = Object.freeze([
   "skills/wh-review/scripts/wh-review-cli.mjs",
 ]);
 
-export async function buildRunnerRelease({
-  packageRoot,
-  outputDir,
-  runnerContractMajor = 1,
-  runnerContractMinor = 0,
-} = {}) {
-  const root = fs.realpathSync(packageRoot);
-  await fs.promises.mkdir(outputDir, { recursive: true });
-  const destination = fs.realpathSync(outputDir);
+function collectRunnerReleaseFiles(root) {
   const locators = new Set([
     "AGENTS.md",
     "CONSTITUTION.md",
     "package.json",
     "package-lock.json",
+    // installRunnerRelease reads this schema after npm ci. Its declaration
+    // must be present even if both file and manifest entry were removed.
+    "runtime/schemas/runner-release.schema.json",
     ...RUNNER_ENTRYPOINTS,
     // Phase 8 moved the authoritative schema tree under runtime/.  Keep the
     // release self-contained: installed Runner validation must not reach back
@@ -100,6 +96,19 @@ export async function buildRunnerRelease({
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
   ]);
   addStaticDependencies(root, locators);
+  return locators;
+}
+
+export async function buildRunnerRelease({
+  packageRoot,
+  outputDir,
+  runnerContractMajor = 1,
+  runnerContractMinor = 0,
+} = {}) {
+  const root = fs.realpathSync(packageRoot);
+  await fs.promises.mkdir(outputDir, { recursive: true });
+  const destination = fs.realpathSync(outputDir);
+  const locators = collectRunnerReleaseFiles(root);
   const files = await Promise.all([...locators].sort().map((locator) => copy(root, destination, locator)));
   const packageVersion = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
   const release = {
@@ -139,12 +148,18 @@ export function validateRunnerRelease({ releaseRoot, skillBundleManifest } = {})
     }
     if (sha256(fs.readFileSync(source)) !== entry.sha256) throw new Error(`runner release hash mismatch: ${entry.path}`);
   }
+  // Reconstruct the same entrypoint/data/import closure in the release. A
+  // file sitting on disk but omitted from the hash-bound file set is not verified
+  // input, and missing imports must fail here before npm or runtime dispatch.
+  for (const locator of collectRunnerReleaseFiles(root)) {
+    if (!seen.has(locator)) throw new Error(`runner release required file is undeclared: ${locator}`);
+  }
   if (!skillBundleManifest) throw new Error("skill bundle contract is required for runner installation");
   assertRunnerCompatibility(skillBundleManifest, manifest);
   return Object.freeze(manifest);
 }
 
-export function installRunnerRelease({ releaseRoot, skillBundleRoot, run = spawnSync } = {}) {
+export function installRunnerRelease({ releaseRoot, skillBundleRoot, env, run = spawnSync } = {}) {
   const root = fs.realpathSync(releaseRoot);
   const bundleRoot = fs.realpathSync(skillBundleRoot);
   const skillBundleManifest = validateSkillBundleRelease({ releaseRoot: bundleRoot });
@@ -162,6 +177,7 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, run = spawn
     cwd: root,
     encoding: "utf8",
     shell: false,
+    ...(env === undefined ? {} : { env }),
   });
   if (result.error || result.status !== 0) {
     throw new Error(`runner clean install failed: ${result.error?.message ?? result.stderr ?? `exit ${result.status}`}`);
@@ -172,7 +188,7 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, run = spawn
     "const schema=JSON.parse(fs.readFileSync('runtime/schemas/runner-release.schema.json','utf8'));",
     "const value=JSON.parse(fs.readFileSync('runner-release.json','utf8'));",
     "if(!new Ajv2020({strict:false}).compile(schema)(value)) process.exit(1);",
-  ].join("")], { cwd: root, encoding: "utf8", shell: false });
+  ].join("")], { cwd: root, encoding: "utf8", shell: false, ...(env === undefined ? {} : { env }) });
   if (schemaCheck.error || schemaCheck.status !== 0) throw new Error("installed runner release failed schema validation");
   fs.writeFileSync(path.join(root, ".gitignore"), "node_modules/\n", { flag: "wx" });
   const gitCommands = [
@@ -182,7 +198,7 @@ export function installRunnerRelease({ releaseRoot, skillBundleRoot, run = spawn
       "commit", "-qm", "installed workflowhub runner"],
   ];
   for (const arguments_ of gitCommands) {
-    const git = run("git", arguments_, { cwd: root, encoding: "utf8", shell: false });
+    const git = run("git", arguments_, { cwd: root, encoding: "utf8", shell: false, ...(env === undefined ? {} : { env }) });
     if (git.error || git.status !== 0) {
       throw new Error(`runner Git identity setup failed: ${git.error?.message ?? git.stderr ?? `exit ${git.status}`}`);
     }

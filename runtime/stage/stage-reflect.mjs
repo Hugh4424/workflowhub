@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   lstatSync,
@@ -21,6 +22,7 @@ import {
 } from "../../tools/cli/append-lesson-observation.mjs";
 import { isDateTime, validateReflectionValue } from "../../tools/cli/validate-stage-reflection.mjs";
 import { acquireProjectLock, assertProjectLockCurrent } from "../evidence/workflow-evolution.mjs";
+import { validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 
 export { isDateTime };
 
@@ -87,6 +89,12 @@ function assertObject(value, label) {
 
 function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function semanticJson(value) {
+  if (Array.isArray(value)) return `[${value.map(semanticJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${semanticJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
 }
 
 function assertTimestamp(value, label) {
@@ -275,24 +283,53 @@ function restoreLesson(path, prior) {
 function withoutLessons(value) {
   const clone = structuredClone(value);
   clone.lessons_added = [];
+  delete clone.generated_at;
   return clone;
 }
 
-function sameJudgment(existingRaw, validated) {
+function sameJudgment(existingRaw, original, parts) {
   try {
-    const normalize = (value) => {
-      const comparable = withoutLessons(value);
-      // A durable degraded record is the retryable outcome of a lesson
-      // commit failure. Its machine-generated status must not turn a retry of
-      // the same judgment into a false byte-conflict.
-      if (comparable.status === "degraded" && comparable.error === null) comparable.status = "ok";
-      return comparable;
-    };
-    return canonicalJson(normalize(JSON.parse(existingRaw)))
-      === canonicalJson(normalize(validated));
-  } catch {
-    return false;
-  }
+    const existing = withoutLessons(JSON.parse(existingRaw));
+    const candidate = withoutLessons(original);
+    for (const value of [existing, candidate]) {
+      if (value.status === "degraded" && value.error === null) value.status = "ok";
+    }
+    // Stored validation may only have conservatively weakened these fields.
+    // Compare against the original judgment, never today's changing evidence.
+    if (existing.judgments.length !== candidate.judgments.length || existing.interventions.length !== candidate.interventions.length) return false;
+    for (let index = 0; index < existing.judgments.length; index += 1) {
+      const stored = existing.judgments[index], input = candidate.judgments[index];
+      if (stored.confidence === "medium" && input.confidence === "high") stored.confidence = "high";
+      if (stored.classification === "needs_evidence" && input.classification === "remove_candidate") stored.classification = "remove_candidate";
+    }
+    for (let index = 0; index < existing.interventions.length; index += 1) {
+      const stored = existing.interventions[index], input = candidate.interventions[index];
+      if (stored.confirmation_ref !== input.confirmation_ref) return false;
+      if (stored.step_slug !== input.step_slug || (stored.reply_text !== null && stored.reply_text !== input.reply_text)) {
+        // The original validator replaces these fields with the immutable
+        // confirmation's values. Authenticate that exact source, independent
+        // of today's validation window, before recognizing the same judgment.
+        const match = /^quality\/confirmations\/([a-f0-9]{64})\.json$/.exec(input.confirmation_ref);
+        if (!match) return false;
+        const raw = parts.task.readRecord(input.confirmation_ref);
+        if (hash(raw) !== match[1]) return false;
+        const confirmation = JSON.parse(raw);
+        validateHumanConfirmation(confirmation, { taskId: parts.taskId, stage: parts.stage,
+          subject: confirmation.schema_version === "human-confirmation.v1" ? confirmation.attempt_ref : undefined });
+        if (stored.step_slug !== input.step_slug) {
+          if (stored.step_slug !== confirmation.step_slug) return false;
+          stored.step_slug = input.step_slug;
+        }
+        if (stored.reply_text !== null && stored.reply_text !== input.reply_text) {
+          if (confirmation.schema_version !== "human-confirmation.v3" || stored.reply_text !== confirmation.reply_text) return false;
+          stored.reply_text = input.reply_text;
+        }
+      }
+      if (stored.reply_text === null) stored.reply_text = input.reply_text;
+      if (stored.confidence === "medium" && input.confidence === "high") stored.confidence = "high";
+    }
+    return semanticJson(existing) === semanticJson(candidate);
+  } catch { return false; }
 }
 
 function reflectionSeverity(value) {
@@ -316,11 +353,11 @@ function lessonEntryIdFromRef(ref, stage) {
 }
 
 function stableLessonRef(parts, validated) {
-  const identity = canonicalJson({
+  const identity = semanticJson({
     task_id: parts.taskId,
     stage: parts.stage,
     stage_status: validated.stage_status,
-    generated_at: validated.generated_at,
+    source_key: parts.reflectionKey,
     judgments: validated.judgments,
     interventions: validated.interventions,
   });
@@ -354,6 +391,7 @@ function lessonRefPresent(parts, ref) {
 }
 
 function acquireLessonLock(parts) {
+  if (parts.publicationLock) return { ...parts.publicationLock, release() {} };
   const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
   let last;
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -489,7 +527,7 @@ function publishReflectionFailure(parts, {
     stage: parts.stage,
     operation: "reflect",
     failure_kind: failureKind,
-    reflection_ref: stageReflectionRef(parts.stage),
+    reflection_ref: parts.reflectionRef ?? stageReflectionRef(parts.stage),
     reflection_sha256: reflectionSha256,
     lesson_ref: lessonRef,
     observed_at: now,
@@ -541,6 +579,7 @@ export async function runStageReflection(context, {
   availabilityState,
   reasonCode,
   testHooks = null,
+  stageOutcome = null,
 } = {}) {
   const parts = contextParts(context);
   const observedAt = assertTimestamp(now, "now");
@@ -570,8 +609,44 @@ export async function runStageReflection(context, {
   // This is deliberately before appendLessonObservation: malformed or stale
   // session output must leave no lesson, fixed record, or availability fact.
   assertInputIdentity(candidate, parts);
-  const fixedRef = stageReflectionRef(parts.stage);
+  if (candidate.schema_version !== "stage-reflection.v2") fail("new reflection requires stage-reflection.v2", "STAGE_REFLECTION_INPUT_INVALID");
+  const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${parts.stage}/[a-f0-9]{64}\\.json$`);
+  const outcomeRefs = [...new Set((candidate.judgments ?? []).flatMap((item) => item.evidence_refs ?? []).filter((ref) => typeof ref === "string" && outcomePattern.test(ref)))];
+  if (outcomeRefs.length !== 1) {
+    const unavailable = await runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+    return Object.freeze({ ...unavailable, error: "reflection requires exactly one explicit authenticated executor outcome" });
+  }
+  // Resolve only the explicit judgment source. Dynamic import avoids a static
+  // runner/writer dependency cycle while reusing the complete authenticator.
+  const { authenticateStageOutcomeForProjection } = await import("./stage-runner.mjs");
+  let source;
+  try { source = authenticateStageOutcomeForProjection(context, parts.stage, outcomeRefs[0]); }
+  catch (error) {
+    const unavailable = await runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+    return Object.freeze({ ...unavailable, error: error.message });
+  }
+  if (!source || !source.value?.run_id || !source.value?.producer?.agent_run_id) {
+    return runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+  }
+  if (stageOutcome && (stageOutcome.ref !== source.ref || stageOutcome.sha256 !== source.sha256)) fail("reflection stage outcome source mismatch", "STAGE_REFLECTION_INPUT_INVALID");
+  const identity = candidate.identity;
+  const workspace = context.candidateWorkspace ?? context.workspace;
+  if (!identity || identity.task_id !== parts.taskId || identity.attempt !== source.value.attempt_id
+      || identity.snapshot_tree !== source.value.snapshot_tree || identity.material_revision !== source.value.material_revision
+      || identity.worktree !== workspace?.worktreeRoot || identity.branch !== (workspace?.branch ?? execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim())) {
+    fail("reflection identity does not match authenticated outcome and workspace", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const semantic = withoutLessons(candidate);
+  if (semantic.status === "degraded" && semantic.error === null) semantic.status = "ok";
+  parts.reflectionKey = hash(semanticJson({ stage: parts.stage, run_id: source.value.run_id, executor: source.value.producer,
+    source: { ref: source.ref, sha256: source.sha256 }, judgment: semantic }));
+  const fixedRef = `quality/stage-reflection/${parts.stage}/${parts.reflectionKey}.json`;
+  parts.reflectionRef = fixedRef;
   const sourceRaw = canonicalJson(candidate);
+  const publicationLock = acquireLessonLock(parts);
+  parts.publicationLock = publicationLock;
+  try {
+  const existingRaw = readExisting(parts.task, fixedRef);
   const validation = validateReflectionValue({
     storageRoot: parts.root,
     taskRoot: parts.task.taskPath,
@@ -580,13 +655,13 @@ export async function runStageReflection(context, {
     stage: parts.stage,
     reflectionRef: fixedRef,
     now: observedAt,
-    input: candidate,
-    raw: sourceRaw,
+    input: existingRaw === null ? candidate : JSON.parse(existingRaw),
+    raw: existingRaw ?? sourceRaw,
   });
-  const validated = validation.reflection;
-  const existingRaw = readExisting(parts.task, fixedRef);
+  // A recorded judgment keeps its first validation and all original bytes.
+  const validated = existingRaw === null ? validation.reflection : JSON.parse(existingRaw);
   if (existingRaw !== null) {
-    if (existingRaw === sourceRaw || sameJudgment(existingRaw, validated)) {
+    if (existingRaw === sourceRaw || sameJudgment(existingRaw, candidate, parts)) {
       const existing = JSON.parse(existingRaw);
       const existingLessons = Array.isArray(existing.lessons_added) ? existing.lessons_added : [];
       if (existing.status !== "failed") {
@@ -606,7 +681,7 @@ export async function runStageReflection(context, {
                 idempotent: true,
               },
               lesson: { status: "already_merged" },
-              validation: { ...validation, reflection: existing },
+              validation: { ...validation, reflection: existing, input_sha256: hash(existingRaw) },
               reflection: existing,
             });
           }
@@ -631,7 +706,7 @@ export async function runStageReflection(context, {
               idempotent: true,
             },
             lesson: recovery.lesson,
-            validation: { ...validation, reflection: existing },
+            validation: { ...validation, reflection: existing, input_sha256: hash(existingRaw) },
             reflection: existing,
           });
         } catch (error) {
@@ -667,7 +742,7 @@ export async function runStageReflection(context, {
               idempotent: true,
             },
             lesson: { status: "failed", error: error.message },
-            validation: { ...validation, reflection: existing },
+            validation: { ...validation, reflection: existing, input_sha256: hash(existingRaw) },
             reflection: existing,
             failure,
           });
@@ -684,7 +759,7 @@ export async function runStageReflection(context, {
           idempotent: true,
         },
         lesson: { status: "already_merged" },
-        validation: { ...validation, reflection: existing },
+        validation: { ...validation, reflection: existing, input_sha256: hash(existingRaw) },
         reflection: existing,
       });
     }
@@ -786,6 +861,9 @@ export async function runStageReflection(context, {
   } finally {
     lessonLock?.release();
     if (staged) rmSync(staged.root, { recursive: true, force: true });
+  }
+  } finally {
+    publicationLock.release();
   }
 }
 

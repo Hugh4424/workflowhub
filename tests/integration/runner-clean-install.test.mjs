@@ -16,6 +16,44 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const temps = [];
 afterEach(() => temps.splice(0).forEach((entry) => fs.rmSync(entry, { recursive: true, force: true })));
 
+function isolatedEnvironment(isolated) {
+  const env = { PATH: process.env.PATH, LANG: "C.UTF-8", NODE_PATH: "", GIT_CONFIG_NOSYSTEM: "1" };
+  for (const [key, relative] of Object.entries({
+    HOME: "home", CODEX_HOME: "codex", XDG_CONFIG_HOME: "config",
+    WORKFLOWHUB_TASK_DIR: "storage", npm_config_cache: "npm-cache",
+  })) {
+    env[key] = path.join(isolated, relative);
+    fs.mkdirSync(env[key], { recursive: true });
+  }
+  for (const [key, relative] of Object.entries({ npm_config_userconfig: "npm-userconfig", npm_config_globalconfig: "npm-globalconfig", GIT_CONFIG_GLOBAL: "gitconfig" })) {
+    env[key] = path.join(isolated, relative);
+    fs.writeFileSync(env[key], "");
+  }
+  for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"]) delete env[key];
+  const hostConfig = path.join(env.HOME, ".config/workflowhub/config.json");
+  const sink = path.join(isolated, "lessons.jsonl");
+  fs.mkdirSync(path.dirname(hostConfig), { recursive: true });
+  fs.writeFileSync(hostConfig, JSON.stringify({ lesson_sink: sink }));
+  fs.writeFileSync(sink, "fixture sink must stay unchanged\n");
+  return { env, hostConfig, sink };
+}
+
+async function installPreflightFixture() {
+  const isolated = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-install-preflight-")));
+  temps.push(isolated);
+  const releaseRoot = path.join(isolated, "runner");
+  const skillBundleRoot = path.join(isolated, "bundle");
+  fs.mkdirSync(releaseRoot);
+  fs.mkdirSync(skillBundleRoot);
+  await buildRunnerRelease({ packageRoot: ROOT, outputDir: releaseRoot });
+  // Use the real five-stage declared closure so install preflight is reached
+  // through a valid bundle; each negative case mutates exactly one input later.
+  await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: skillBundleRoot });
+  const locator = "skills/spec-plan/templates/plan-template.md";
+  const bytes = fs.readFileSync(path.join(skillBundleRoot, locator), "utf8");
+  return { releaseRoot, skillBundleRoot, locator, bytes, ...isolatedEnvironment(isolated) };
+}
+
 function runCli(executable, arguments_, options) {
   const result = spawnSync(process.execPath, [executable, ...arguments_], {
     ...options,
@@ -95,10 +133,10 @@ describe("runner release", () => {
     fs.mkdirSync(path.join(isolated, "skill-bundle"), { recursive: true });
     const outputDir = fs.realpathSync(path.join(isolated, "runner-release"));
     const bundleDir = fs.realpathSync(path.join(isolated, "skill-bundle"));
-    const home = path.join(isolated, "home");
-    const storage = path.join(isolated, "storage");
+    const { env, hostConfig, sink } = isolatedEnvironment(isolated);
+    const storage = env.WORKFLOWHUB_TASK_DIR;
     const target = path.join(isolated, "target");
-    for (const directory of [home, storage, target]) fs.mkdirSync(directory, { recursive: true });
+    for (const directory of [storage, target]) fs.mkdirSync(directory, { recursive: true });
     execFileSync("git", ["init", "-q", "-b", "main"], { cwd: target });
     execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com",
       "commit", "--allow-empty", "-qm", "baseline"], { cwd: target });
@@ -115,16 +153,14 @@ describe("runner release", () => {
     expect(release.files.some(({ path: locator }) => locator === "runtime/review/schemas/attempt.schema.json")).toBe(true);
     expect(release.files.some(({ path: locator }) => locator === "skills/wh-review/scripts/wh-review-cli.mjs")).toBe(true);
     fs.rmSync(path.join(outputDir, "node_modules"), { recursive: true, force: true });
-    const installed = installRunnerRelease({ releaseRoot: outputDir, skillBundleRoot: bundleDir });
+    const installed = installRunnerRelease({ releaseRoot: outputDir, skillBundleRoot: bundleDir, env,
+      run: (command, args, options) => {
+        expect(Object.keys(env).every(key => options.env?.[key] === env[key]), "installer must pass the isolated environment").toBe(true);
+        return spawnSync(command, args, options);
+      },
+    });
     expect(installed.status).toBe(0);
     expect(fs.existsSync(path.join(outputDir, "node_modules/ajv"))).toBe(true);
-    const env = {
-      ...process.env,
-      HOME: home,
-      WORKFLOWHUB_TASK_DIR: storage,
-      NODE_PATH: "",
-    };
-    for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"]) delete env[key];
     const bootstrap = runCli(path.join(outputDir, "tools/cli/task-bootstrap.mjs"), [
       "--project=Demo", "--task=clean-release", `--target-repo=${target}`,
     ], { cwd: outputDir, env });
@@ -163,11 +199,51 @@ describe("runner release", () => {
     }
     expect(execFileSync("git", ["status", "--porcelain"], { cwd: outputDir, encoding: "utf8" })).toBe("");
     expect(JSON.stringify(release)).not.toContain("node_modules/");
+    expect(fs.readFileSync(sink, "utf8")).toBe("fixture sink must stay unchanged\n");
+    expect(JSON.parse(fs.readFileSync(hostConfig, "utf8"))).toEqual({ lesson_sink: sink });
     for (const locator of ["runner-release.json", "skill-bundle.json"]) {
       const source = locator === "runner-release.json" ? outputDir : bundleDir;
       expect(fs.readFileSync(path.join(source, locator), "utf8")).not.toContain(ROOT);
     }
   }, 60_000);
+
+  test("accepts valid release contracts before invoking the injected installer", async () => {
+    const fixture = await installPreflightFixture();
+    const calls = [];
+    const result = installRunnerRelease({ ...fixture, run(command, args, options) {
+      calls.push({ command, args, cwd: options.cwd, env: options.env });
+      return { status: 0, stdout: "", stderr: "" };
+    } });
+    expect(result.status).toBe(0);
+    expect(calls.map(call => call.command)).toEqual(["npm", "node", "git", "git", "git"]);
+    expect(calls[0].args).toEqual(["ci", "--ignore-scripts", "--omit=dev"]);
+    expect(calls.every(call => call.cwd === fixture.releaseRoot)).toBe(true);
+    // The install entrypoint must carry the caller's isolated environment to
+    // every npm/node/git child; injecting run must not silently inherit host paths.
+    expect(calls.every(call => Object.keys(fixture.env).every(key => call.env?.[key] === fixture.env[key])),
+      "npm/node/git must receive the explicit isolated environment").toBe(true);
+    expect(fs.readFileSync(path.join(fixture.releaseRoot, fixture.locator), "utf8")).toBe(fixture.bytes);
+  });
+
+  test.each(["runner-manifest", "bundle-manifest", "runner-tamper", "bundle-tamper", "missing-bundle-file"])(
+    "rejects %s at install preflight without invoking npm or copying bundle bytes", async defect => {
+      const fixture = await installPreflightFixture();
+      if (defect === "runner-manifest") fs.rmSync(path.join(fixture.releaseRoot, "runner-release.json"));
+      if (defect === "bundle-manifest") fs.rmSync(path.join(fixture.skillBundleRoot, "skill-bundle.json"));
+      if (defect === "runner-tamper") fs.appendFileSync(path.join(fixture.releaseRoot, "runtime/interface/runtime-facade.mjs"), "\n// tampered\n");
+      if (defect === "bundle-tamper") fs.appendFileSync(path.join(fixture.skillBundleRoot, fixture.locator), "tampered\n");
+      if (defect === "missing-bundle-file") fs.rmSync(path.join(fixture.skillBundleRoot, fixture.locator));
+      const calls = [];
+      expect(() => installRunnerRelease({ ...fixture, run(...args) {
+        calls.push(args);
+        return { status: 0, stdout: "", stderr: "" };
+      } })).toThrow(/manifest is missing|hash mismatch|missing or unsafe/);
+      expect(calls).toEqual([]);
+      expect(fs.existsSync(path.join(fixture.releaseRoot, fixture.locator))).toBe(false);
+      expect(fs.existsSync(path.join(fixture.releaseRoot, "node_modules"))).toBe(false);
+      expect(fs.readFileSync(fixture.sink, "utf8")).toBe("fixture sink must stay unchanged\n");
+    },
+  );
 
   test("rejects tampered files and incompatible contracts before npm install", async () => {
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-runner-tamper-"));

@@ -50,6 +50,46 @@ describe("simple material-only review", () => {
     expect(() => rehydrateProviderInput(Buffer.from("{}"), attachmentRoot)).toThrow(/invalid/);
   });
 
+  it("binds authenticated supplemental evidence without changing the base material identity", () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-supplemental-")));
+    roots.push(attachmentRoot);
+    const base = { stage: "build-code", materials: { implementation: "current bytes" } };
+    const packetA = createSimpleReviewPacket({
+      ...base,
+      authenticated_evidence: { schema_version: "m401-trace.v1", material_id: "a".repeat(64), actual_result: "pass" },
+    });
+    const packetB = createSimpleReviewPacket({
+      ...base,
+      authenticated_evidence: { schema_version: "m401-trace.v1", material_id: "b".repeat(64), actual_result: "pass" },
+    });
+    expect(packetA.material_id).toBe(createSimpleReviewPacket(base).material_id);
+    expect(packetB.material_id).toBe(packetA.material_id);
+    expect(packetA.authenticated_evidence_sha256).not.toBe(packetB.authenticated_evidence_sha256);
+
+    const bytes = serializeProviderInput({
+      packet: packetA,
+      hostProvider: "codex",
+      providers: ["other/model"],
+      reviewMode: "single_round",
+    });
+    const restored = rehydrateProviderInput(bytes, attachmentRoot);
+    try {
+      expect(restored.materials.materialId).toBe(packetA.material_id);
+      const evidencePath = join(restored.materials.bundleRoot, "authenticated-evidence.json");
+      expect(readFileSync(evidencePath, "utf8")).toContain('"actual_result":"pass"');
+      const manifest = JSON.parse(readFileSync(join(restored.materials.bundleRoot, "manifest.json"), "utf8"));
+      expect(manifest.files.map(({ path }) => path)).toEqual([
+        "review-instructions.md",
+        "materials/01-implementation.md",
+        "authenticated-evidence.json",
+      ]);
+      const evidenceEntry = manifest.files.find(({ path }) => path === "authenticated-evidence.json");
+      expect(evidenceEntry.sha256).toBe(createHash("sha256").update(readFileSync(evidencePath)).digest("hex"));
+    } finally {
+      restored.materials.dispose();
+    }
+  });
+
   it("computes material_id from sorted semantic entries and excludes transport entries", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-matid-contract-")));
     roots.push(attachmentRoot);
@@ -83,6 +123,53 @@ describe("simple material-only review", () => {
     await expect(runSimpleReview({ stage: "build-code", host_provider: "codex", materials: {} }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
     })).rejects.toThrow("materials are required");
+  });
+
+  it("uses one material identity for a bounded verify-code diff", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-bounded-identity-")));
+    roots.push(attachmentRoot);
+    const input = {
+      stage: "verify-code",
+      host_provider: "codex",
+      materials: {
+        "implementation-diff.patch": [
+          "diff --git a/runtime/review-seam.mjs b/runtime/review-seam.mjs",
+          "--- a/runtime/review-seam.mjs",
+          "+++ b/runtime/review-seam.mjs",
+          "@@ -1,1 +1,1 @@",
+          "+" + "implementation ".repeat(10000),
+          "diff --git a/tests/review-seam.test.mjs b/tests/review-seam.test.mjs",
+          "--- a/tests/review-seam.test.mjs",
+          "+++ b/tests/review-seam.test.mjs",
+          "@@ -1,1 +1,1 @@",
+          "+" + "test ".repeat(3000),
+        ].join("\n"),
+      },
+    };
+    let providerMaterialId = null;
+    const result = await runSimpleReview(input, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: {
+        async runGroup(request) {
+          providerMaterialId = request.materials.materialId;
+          return { runtimeId: "runtime-bounded-identity", outcome: "completed", material_id: providerMaterialId, providers: [{
+            provider: "other/model", status: "completed", identity: { provider: "other/model" }, error: null,
+            output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+          }] };
+        },
+      },
+    });
+    expect(result.status).toBe("available");
+    expect(providerMaterialId).toBe(createSimpleReviewPacket(input).material_id);
+    expect(result.material_id).toBe(providerMaterialId);
+    const packet = createSimpleReviewPacket(input);
+    const restored = rehydrateProviderInput(serializeProviderInput({
+      packet, hostProvider: "codex", providers: ["other/model"], reviewMode: "single_round", prompt: "review",
+    }), attachmentRoot);
+    expect(restored.materials.materialId).toBe(packet.material_id);
+    restored.materials.dispose();
   });
 
   it.each(["direction", "detail"])("dispatches one red/blue pair for make-decision %s", async (reviewTrack) => {
@@ -499,6 +586,28 @@ describe("simple material-only review", () => {
     expect(result).not.toMatchObject({ error: { code: "REVIEW_PROVIDER_UNAVAILABLE" } });
   });
 
+  it.each([
+    ["prompt too long", "PROVIDER_HEALTH_FAILED", "API status 400: prompt too long; input token limit exceeded", "REVIEW_INPUT_TOO_LARGE"],
+    ["response wait timeout", "PROCESS_EXIT_NONZERO", "Error: timeout waiting for response", "REVIEW_EXECUTION_TIMEOUT"],
+  ])("preserves concrete provider transport categories (%s)", async (_label, sourceCode, message, publicCode) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-classification-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"] }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-classification", outcome: "unavailable", providers: [{
+          provider: "model-a", status: "failed", identity: { provider: "model-a" },
+          error: { code: sourceCode, message }, timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: publicCode, cause_code: sourceCode } });
+  });
+
   it("RESULT_PROMPT contains a parseable sample finding", async () => {
     const source = readFileSync(new URL("../simple-review-runner.mjs", import.meta.url), "utf8");
     const match = source.match(/Example of a complete finding:\\n(\{[\s\S]*\})\\nExample of an empty result/);
@@ -575,6 +684,30 @@ describe("simple material-only review", () => {
     expect(member).toMatchObject({ status: "failed", identity_degraded: true });
     expect(member.error.code).toBe("PROVIDER_IDENTITY_INVALID");
     expect(member.error.message).toContain("broker member identity was degraded");
+  });
+
+  it("records an unavailable route when the broker omits a bindable provider identity", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-missing-provider-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      client: { async runGroup() {
+        return { runtimeId: "runtime-missing-provider", outcome: "unavailable", providers: [{
+          status: "failed", identity: null, error: { code: "PROCESS_EXIT_NONZERO", message: "provider exited" },
+        }] };
+      } },
+    });
+    expect(result).toMatchObject({
+      status: "unavailable",
+      runtime_id: "runtime-missing-provider",
+      provider_results: [],
+      provider_selection: { providers: ["model-a"] },
+      error: { code: "PROVIDER_RESULT_INVALID" },
+    });
   });
 
 });

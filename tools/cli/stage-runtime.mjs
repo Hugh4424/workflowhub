@@ -197,6 +197,11 @@ export function normalizeAcceptanceEvidencePublication(input, snapshotTree) {
   });
 }
 
+function readQualityEvidence(task) {
+  return (ref) => /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-[a-f0-9]{64}\.bin$/.test(ref)
+    ? task.readRecordBytes(ref) : task.readRecord(ref);
+}
+
 function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot, materialRevision, materials, read, workspaceRoot, taskId }) {
   const acceptanceEvidence = (fact.evidence ?? []).find((entry) => entry?.evidence_type === "acceptance_evidence" && typeof entry?.ref === "string" && typeof entry?.sha256 === "string");
   if (acceptanceEvidence && currentSnapshot?.tree && materialRevision) {
@@ -204,7 +209,8 @@ function evaluateFreshnessWithReuse({ fact, factRaw, factSha256, currentSnapshot
       const raw = read(acceptanceEvidence.ref);
       const parsed = validateAcceptanceEvidence(JSON.parse(raw));
       if (
-        parsed.freshness?.status === "current"
+        !(parsed.refs ?? []).some((entry) => /^quality\/evidence\/stage-quality\//.test(entry.ref))
+        && parsed.freshness?.status === "current"
         && parsed.freshness.snapshot_tree === currentSnapshot.tree
         && parsed.freshness.material_revision === materialRevision
         && parsed.freshness.evidence_freshness.every((entry) => entry.status === "current" && entry.sha256 === acceptanceEvidence.sha256)
@@ -241,7 +247,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
   ]));
   const stageOutcomeStatuses = deriveStageOutcomeStatuses({
     task_id: context.identity.taskId,
-    read: context.task.readRecord,
+    read: readQualityEvidence(context.task),
     stage_outcome_refs: stageOutcomeRefs,
     snapshot_tree: currentSnapshot.tree,
     material_revision: materialRevision,
@@ -251,7 +257,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
   });
   return deriveCurrentProductRelease({
     task_id: context.identity.taskId,
-    read: context.task.readRecord,
+    read: readQualityEvidence(context.task),
     refs: context.task.listCanonicalQualityFactRefs(),
     snapshot_tree: currentSnapshot?.tree,
     material_revision: materialRevision,
@@ -550,7 +556,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
             currentSnapshot: current,
             materialRevision,
             materials,
-            read: context.task.readRecord,
+            read: readQualityEvidence(context.task),
             workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
             taskId: context.task.identity.taskId,
           })
@@ -560,7 +566,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     const stageOutcomeStatuses = current
       ? deriveStageOutcomeStatuses({
           task_id: context.identity.taskId,
-          read: context.task.readRecord,
+          read: readQualityEvidence(context.task),
           stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, context.task.listCanonicalStageOutcomeRefs(stage)])),
           snapshot_tree: current.tree,
           material_revision: materialRevision,

@@ -116,18 +116,30 @@ function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
   if (supplied?.snapshot_tree !== undefined && supplied.snapshot_tree !== snapshot.tree) {
     bindingErrors.push("decision freeze input snapshot_tree does not match the current workspace snapshot");
   }
-  const checked = validateDecisionFreeze({
-    decisionLog,
-    currentMaterialRevision: worker.currentMaterialRevision,
-    currentSnapshotTree: snapshot.tree,
-  });
+  const current = { currentMaterialRevision: worker.currentMaterialRevision, currentSnapshotTree: snapshot.tree };
+  let checked = validateDecisionFreeze({ decisionLog, ...current });
+  const hasExplicitSources = supplied && ["confirmation_ref", "quality_fact_ref", "stage_outcome_ref"].some((key) => Object.hasOwn(supplied, key));
+  if (hasExplicitSources) {
+    try {
+      if (typeof worker.readDecisionFreezeSources !== "function") throw new Error("authenticated decision freeze source reader is unavailable");
+      const sources = worker.readDecisionFreezeSources(supplied);
+      // The existing parser still owns decision id, packet coverage and open
+      // direction questions. Only its approval claims are replaced by the
+      // authenticated canonical sources; text cannot approve itself.
+      const model = {
+        approval_binding: { ...sources.approval_binding, decision_id: checked.decision_id },
+        final_confirmation: sources.final_confirmation,
+        step_11: sources.step_11,
+        freeze_packet: { coverage: checked.coverage },
+        unresolved_direction_questions: checked.errors.includes("direction-level questions remain unresolved") ? ["unresolved"] : [],
+      };
+      checked = validateDecisionFreeze({ decisionLog: model, ...current, currentDecisionScopeRevision: sources.currentDecisionScopeRevision });
+    } catch (error) {
+      bindingErrors.push(`decision freeze sources unavailable: ${error.message}`);
+    }
+  }
   if (bindingErrors.length === 0) return checked;
-  return Object.freeze({
-    ...checked,
-    ok: false,
-    status: "paused",
-    errors: Object.freeze([...checked.errors, ...bindingErrors]),
-  });
+  return Object.freeze({ ...checked, ok: false, status: "paused", errors: Object.freeze([...checked.errors, ...bindingErrors]) });
 }
 
 function materialIncomplete(message) {
@@ -152,7 +164,7 @@ const NAMESPACE = Object.freeze({
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", clarify: "spec-clarify", ui_qa: "browser-qa" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review", "quality_review"]);
 const COMPLETION_COPY = Object.freeze({
@@ -170,7 +182,7 @@ const RECEIPT_KEYS = Object.freeze({
   // quality_review is the dsh-code-review result bound by the stage outcome;
   // review is the existing wh-review advisory receipt and never feeds the
   // canonical completion subject.
-  "verify-code": new Set(["quality_review", "review", "stage_outcomes"]),
+  "verify-code": new Set(["quality_review", "review", "confirmation", "stage_outcomes"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
@@ -1348,6 +1360,7 @@ export async function acceptanceExecutionFacts(worker, snapshotTree) {
   }
   const unavailable = (scenario, reason) => Object.freeze({
     ...scenario,
+    task_id: worker.identity.taskId,
     status: "unavailable",
     reason,
     evidence_refs: Object.freeze([]),
@@ -1378,10 +1391,11 @@ export async function acceptanceExecutionFacts(worker, snapshotTree) {
       return Object.freeze({ ref: ref.ref, sha256: ref.sha256 });
     });
     if (result.status === "executed" && evidenceRefs.length === 0) throw new Error(`${scenario.tier} executed acceptance requires canonical evidence`);
-    if (result.status !== "executed" && evidenceRefs.length !== 0) throw new Error(`${scenario.tier} non-executed acceptance must not claim evidence`);
+    if (result.status !== "executed" && scenario.tier === "browser" && evidenceRefs.length !== 0) throw new Error(`${scenario.tier} non-executed acceptance must not claim evidence`);
     if (result.status === "executed" && scenario.tier === "browser" && result.executor !== "controlled-browser-qa") throw new Error("browser acceptance execution must use controlled-browser-qa");
     items.push(Object.freeze({
       ...scenario,
+      task_id: worker.identity.taskId,
       status: result.status,
       ...(typeof result.executor === "string" && result.executor.trim() !== "" ? { executor: result.executor } : {}),
       ...(typeof result.reason === "string" && result.reason.trim() !== "" ? { reason: result.reason } : {}),
@@ -1455,14 +1469,24 @@ export function e2eAcceptanceFacts(worker) {
 function acceptanceCoverageForExecution(worker, invocation, snapshotTree, execution) {
   if (!execution.requires_execution) return acceptanceCoverageFacts(worker, invocation, snapshotTree);
   const acceptedCriterionIds = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
-  return acceptanceCoverageFacts(worker, {
-    ...invocation,
-    acceptance_coverage: {
-      snapshot_tree: snapshotTree,
-      accepted_criterion_ids: acceptedCriterionIds,
-      items: acceptedCriterionIds.map((acceptance_criterion_id) => ({ acceptance_criterion_id, status: "unknown", evidence_refs: [] })),
-    },
-  }, snapshotTree);
+  const leaves = (execution.items ?? []).filter((item) => item.tier !== "browser").flatMap((item) => item.evidence_refs ?? []).map((reference) => {
+    const record = worker.readReceipt(reference.ref);
+    if (record.sha256 !== reference.sha256 || record.value.schema_version !== "stage-quality-evidence.v1"
+        || record.value.task_id !== worker.identity.taskId || record.value.stage !== "build-code"
+        || record.value.snapshot_tree !== snapshotTree || record.value.material_revision !== worker.currentMaterialRevision) throw new Error("runtime acceptance evidence binding mismatch");
+    return { reference, value: record.value };
+  });
+  return {
+    snapshot_tree: snapshotTree, accepted_criterion_ids: acceptedCriterionIds,
+    items: acceptedCriterionIds.map((acceptance_criterion_id) => {
+      const current = leaves.filter(({ value }) => value.subject === acceptance_criterion_id);
+      const allRequiredScenarios = (execution.items ?? []).filter((item) => item.acceptance_criterion_ids?.includes(acceptance_criterion_id));
+      const passed = current.length > 0 && allRequiredScenarios.length > 0 && allRequiredScenarios.every((item) => item.status === "executed")
+        && current.every(({ value }) => value.status === "passed");
+      return { acceptance_criterion_id, status: passed ? "covered" : current.length ? "missing" : "unknown",
+        evidence_refs: current.map(({ reference }) => reference) };
+    }),
+  };
 }
 function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
   const reviewRef = invocation.receipts?.review;
@@ -1771,12 +1795,17 @@ function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
   }
   return policy.minimum_heterologous;
 }
-function verifyReviewChain(worker, result, expectedTrack, producerStage = worker.stage) {
+function verifyReviewChain(worker, result, expectedTrack, producerStage = worker.stage, resultRef = null) {
   const attemptRecord = object(worker.readReceipt(result.attempt_ref), "review attempt record");
   const attempt = object(attemptRecord.value, "review attempt");
   validateSchema("attempt", attempt);
   const attemptId = result.attempt_ref.match(REVIEW_ATTEMPT_REF)?.[1];
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt_ref identity mismatch");
+  if (result.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("review attempt path identity mismatch");
+  if (typeof resultRef === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(resultRef)
+      && resultRef !== `quality/reviews/results/${producerStage}-simple-${attempt.attempt_id}.json`) throw new Error("ordinary review result/attempt path identity mismatch");
+  if (!SHA256.test(attemptRecord.sha256 ?? "")) throw new Error("review attempt hash must be sha256");
+
   for (const key of ["task_id", "stage", "review_track", "snapshot_tree", "material_id", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree"]) {
     if (attempt[key] !== result[key]) throw new Error(`review attempt/result ${key} mismatch`);
   }
@@ -1810,6 +1839,7 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   } catch (error) {
     throw new Error(`review result canonical authentication failed: ${error.message}`);
   }
+  return { attempt, ref: result.attempt_ref, sha256: attemptRecord.sha256 };
 }
 function verifyUnavailableReview(worker, item, expectedTrack, producerStage = worker.stage) {
   const attempt = item.value;
@@ -2225,6 +2255,8 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     return {
       facts: {
         status: "unavailable", attempt_ref: item.ref, attempt_hash: item.evidence.sha256,
+        usage_observation: validateReviewAttemptObservation({ attempt: item.value, proxy_metrics: item.value.context_proxy_metrics ?? null,
+          expected_material_revision: worker.currentMaterialRevision, expected_snapshot_tree: item.value.snapshot_tree ?? null }),
         snapshot_tree: item.value.snapshot_tree, material_id: item.value.material_id,
         error: { code, message }, ...(expectedTrack === undefined ? {} : { review_track: expectedTrack }), ...scopeFacts(scope),
       },
@@ -2236,7 +2268,7 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
       missing_items: [`review unavailable: ${code}: ${message}`],
     };
   }
-  verifyReviewChain(worker, item.value, expectedTrack, producerStage);
+  const authenticatedReview = verifyReviewChain(worker, item.value, expectedTrack, producerStage, item.ref);
   const scope = reviewScope(item.value);
   const riskAcceptanceName = expectedTrack !== undefined
     ? `${expectedTrack}_risk_acceptance`
@@ -2254,14 +2286,12 @@ function reviewFacts(worker, invocation, name = "review", expectedTrack, produce
     producerStage,
     invocation,
   );
-  const usageObservation = Array.isArray(item.value.provider_results) || Array.isArray(item.value.provider_attempts)
-    ? validateReviewAttemptObservation({
-      attempt: item.value,
-      proxy_metrics: item.value.context_proxy_metrics ?? null,
-      expected_material_revision: worker.currentMaterialRevision,
-      expected_snapshot_tree: item.value.snapshot_tree ?? null,
-    })
-    : null;
+  const usageObservation = validateReviewAttemptObservation({
+    attempt: authenticatedReview.attempt,
+    proxy_metrics: item.value.context_proxy_metrics ?? null,
+    expected_material_revision: worker.currentMaterialRevision,
+    expected_snapshot_tree: authenticatedReview.attempt.snapshot_tree ?? null,
+  });
   const budgetObservation = invocation.review_budget
     ? validateReviewBudget({
       material_revision: worker.currentMaterialRevision,
@@ -3592,7 +3622,9 @@ HANDLERS.set("build-code", async (worker, input) => {
     const current = currentMaterialContent(worker, "tasks.md");
     const snapshot = captureWorkerSnapshot(worker);
     const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
-    const acceptanceCoverage = input.acceptance_coverage === undefined
+    const acceptanceCoverage = acceptanceExecution.requires_execution
+      ? acceptanceCoverageForExecution(worker, input, snapshot?.tree ?? null, acceptanceExecution)
+      : input.acceptance_coverage === undefined
       ? (() => {
         const ids = activeAcceptanceCriterionIds(worker.readArtifact("spec.md"));
         return {

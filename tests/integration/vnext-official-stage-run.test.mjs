@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -9,18 +9,22 @@ import yaml from "js-yaml";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { authenticateCurrentBuildCodeStageOutcome, publishOfficialStageOutcome, runOfficialStage, runStage, verifyOfficialEvidence } from "../../runtime/stage/stage-runner.mjs";
+import { authenticateCurrentBuildCodeStageOutcome, authenticateStageOutcomeForProjection, publishOfficialStageOutcome, runOfficialStage, runStage, verifyOfficialEvidence } from "../../runtime/stage/stage-runner.mjs";
 import {
   publishStageAgentOutcome,
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { main as workflowHubBridgeMain, publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
-import { createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { createCanonicalReceiptWriter, createCanonicalReviewWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { ReviewProviderClient } from "../../skills/wh-review/scripts/review-provider-client.mjs";
 import { publishStageReviewFact } from "../../skills/wh-review/scripts/wh-review-cli.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
-import { sha256 } from "../../runtime/evidence/freshness.mjs";
+import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { qualityFactDigest } from "../../runtime/evidence/quality-fact.mjs";
+import { deriveStageCompletion, deriveStageOutcomeStatuses, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveStatusGroups } from "../../tools/cli/stage-runtime.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { completeCanonicalStageMaterials, createRequirementAuthenticationFixture, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
@@ -196,6 +200,232 @@ function stageOutcome(state, stage, { workspace = null, artifacts = null, attemp
   });
 }
 
+// The real bridge/recorder owns these records. Test events model explicit host
+// observations; they do not claim a real user transcript or provider verdict.
+function p3SessionRequest(state, stage, { attemptId = "attempt-A", agentRunId = "agent-B", sessionId = "session-C", includeSession = true, status = "completed", confirmationRef = null } = {}) {
+  const execution = stageAgentExecution(stage);
+  if (stage === "build-code") {
+    const subject = { subject_kind: "step", subject_id: execution.steps[0].step_slug };
+    const actual = "fixture command behavior matched";
+    execution.steps[0].evidence = [{ kind: "host-command", command: "fixture-command", expected_exit: 0, actual_exit: 0, exit_code: 0, oracle: "ORACLE-FIXTURE", actual_outcome: actual }];
+    execution.spec_analyze.implementation_material = "fixture implementation for the current authenticated identity";
+    execution.spec_analyze.implementation_evidence_subject = subject;
+    execution.spec_analyze.evidence_subjects = Object.fromEntries(["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace"].map((name) => [name, subject]));
+    execution.spec_analyze.packet.expected_ac_ids = ["AC-001"];
+    execution.spec_analyze.packet.acceptance_coverage = [{
+      acceptance_criterion_id: "AC-001", status: "covered", task_id: state.task.identity.taskId, producer_stage: stage,
+      source_ids: ["R-FIXTURE-1"], decision_ids: ["D-FIXTURE-1"], fr_ids: ["FR-FIX-001"], task_ids: ["T001"],
+      file_symbol: "tests/fixture.mjs#behavior",
+      implementation_anchor: { id: "fixture-implementation", path: "tests/fixture.mjs", start_line: 1, end_line: 2, role: "implementation" },
+      verification_anchor: { id: "fixture-verification", path: "tests/fixture.test.mjs", start_line: 1, end_line: 2, role: "verification" },
+      gate: { command: "fixture-command", expected_exit: 0, oracle: "ORACLE-FIXTURE" },
+      scenario: "exercise deterministic fixture", actual_outcome: actual, coverage_limits: "fixture observations only; no live provider or user transcript",
+      evidence_refs: [{ ref: "tests" }],
+      test_result: { evidence_ref: "tests", command: "fixture-command", expected_exit: 0, actual_exit: 0, oracle: "ORACLE-FIXTURE", actual_outcome: actual },
+      review_ref: { ref: "ac-trace" }, stage_end_ref: { ref: "ac-trace" },
+    }];
+  }
+  let time = 1000;
+  const events = [...execution.steps.map((entry) => ["step", entry.step_slug, entry]), ...execution.skills.map((entry) => ["skill", entry.skill_id, entry])]
+    .map(([kind, id, entry]) => {
+      const started = time;
+      time += 10;
+      return {
+        ...entry,
+        task_id: state.task.identity.taskId, stage, subject_kind: kind, subject_id: id,
+        started_at_ms: started, ended_at_ms: time,
+        ...(confirmationRef && id === "approve-decision" ? {
+          evidence: [...entry.evidence, { source_ref: confirmationRef, observation: "fixture public confirmation was recorded before this approval step" }],
+        } : {}),
+      };
+    });
+  return {
+    project_name: state.task.identity.projectName, task_id: state.task.identity.taskId,
+    task_path: state.task.taskPath, stage, attempt_id: attemptId, agent_run_id: agentRunId,
+    session: {
+      host: "codex-desktop", source_id: "codex/p3-host", source_family: "codex", source_ref: "codex-task:p3-original-source",
+      ...(includeSession ? { session_id: sessionId } : {}),
+      task_id: state.task.identity.taskId, status, events,
+      ...(stage === "verify-code" ? { code_review: execution.code_review } : { spec_analyze: execution.spec_analyze }),
+    },
+  };
+}
+
+function p3PublishSession(state, stage, options = {}) {
+  const request = p3SessionRequest(state, stage, options);
+  const outcome = publishCurrentWorkflowHubSession({
+    context: p3Context(state, stage), input: request, stage, attemptId: request.attempt_id,
+    requirementAuthentication: createRequirementAuthenticationFixture({
+      taskId: state.task.identity.taskId, runId: state.kernel.deriveStageWorkflowRunId(stage),
+      sessionId: request.session.session_id ?? "fixture-requirement-source", stage,
+    }),
+  });
+  return { request, outcome };
+}
+
+function p3Context(state, stage) {
+  const workspace = openCurrentTaskWorkspace(state.task);
+  return { ...contextFor(stage, state), workspace, artifacts: ArtifactDir.open(workspace.worktreeRoot, state.task) };
+}
+
+function p3RehashOutcome(state, outcome, mutate) {
+  const value = structuredClone(outcome.value);
+  mutate(value);
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const ref = `quality/evidence/stage-outcomes/${value.stage}/${sha256(raw)}.json`;
+  state.kernel.publishCanonicalRecord(ref, raw);
+  return { ref, sha256: sha256(raw), value };
+}
+
+describe("resolved code review through the real bridge and status consumers", () => {
+  function repairCase({ disposition = "fixed", change = true } = {}) {
+    const state = fixture("resolved-review-chain");
+    appendNonUiApplicability(ArtifactDir.open(state.candidate.worktreeRoot, state.task));
+    const sourcePath = join(state.candidate.worktreeRoot, "fixture");
+    writeFileSync(sourcePath, "module.exports = 0;\n");
+    const review = writeFormalReviewFixture({
+      task: state.task, stage: "verify-code", verdict: "fail",
+      snapshotTree: state.kernel.currentVNextSnapshot().tree,
+      materialRevision: state.kernel.currentVNextMaterialRevision(),
+    });
+    const reviewRaw = state.task.readRecord(review.resultRef);
+    const reviewed = JSON.parse(reviewRaw);
+    if (change) writeFileSync(sourcePath, "module.exports = 1;\n");
+    const context = p3Context(state, "verify-code");
+    const check = createCanonicalReceiptWriter({
+      task: state.task, workspace: context.workspace, stage: "verify-code", component: "verify-code-test-capture",
+    }).captureTests({
+      command: `node -e "require('node:assert/strict').equal(require('./fixture'), ${change ? 1 : 0})"`,
+      receiptRef: "quality/tests/review-repair.json", outputRef: "quality/tests/output/review-repair.output",
+    });
+    const request = p3SessionRequest(state, "verify-code");
+    request.session.code_review = {
+      stage: "verify-code", snapshot_tree: state.kernel.currentVNextSnapshot().tree,
+      material_revision: state.kernel.currentVNextMaterialRevision(),
+      quality_review_ref: review.resultRef, quality_review_hash: sha256(reviewRaw),
+      result: {
+        status: "findings", findings: reviewed.findings, summary: "Current source and the affected check support this disposition",
+        repairs: [{ finding_id: reviewed.findings[0].id, status: disposition,
+          reason: disposition === "fixed" ? "The fixture now returns the required value" : "The asserted requirement does not apply; the current behavior is intentional",
+          source_refs: [{ path: "fixture", sha256: sha256(readFileSync(sourcePath)) }],
+          check_refs: [{ ref: check.receipt_ref, sha256: check.receipt_hash }],
+        }],
+      },
+    };
+    const publish = () => publishCurrentWorkflowHubSession({ context, input: request, stage: "verify-code", attemptId: request.attempt_id });
+    return { state, context, request, publish, review, reviewRaw, check };
+  }
+
+  it.each(["fixed", "rejected_invalid"])("authenticates %s with current source and real checks without another broker round", async (disposition) => {
+    const value = repairCase({ disposition, change: disposition === "fixed" });
+    const broker = vi.spyOn(ReviewProviderClient.prototype, "runGroup").mockImplementation(() => { throw new Error("resolved repair must not dispatch another review"); });
+    try {
+      const outcome = value.publish();
+      const result = await runOfficialStage("verify-code", value.context, { attempt_id: value.request.attempt_id, receipts: { stage_outcomes: outcome.ref } }, undefined, { requireStageOutcome: true });
+      expect(result).toMatchObject({ stage_outcome_status: "completed", quality_status: "passed" });
+      expect(result.quality_fact_refs.map((ref) => JSON.parse(value.state.task.readRecord(ref))))
+        .toContainEqual(expect.objectContaining({ subject: "code_review", status: "recorded", review_status: "resolved" }));
+      const observations = result.quality_fact_refs.map((ref) => {
+        const raw = value.state.task.readRecord(ref), fact = JSON.parse(raw);
+        const freshness = evaluateFactFreshness({ ...fact, ref, sha256: sha256(raw) }, {
+          snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision,
+          material_scope_revisions: { "verify-code": outcome.value.material_scope_revision },
+        }, { read: value.state.task.readRecord, workspaceRoot: value.context.workspace.worktreeRoot });
+        return { fact: { ref, value: fact }, authenticated: freshness.authenticated, freshness, review_status: freshness.review_status };
+      });
+      const statuses = deriveStageOutcomeStatuses({
+        task_id: value.state.task.identity.taskId, read: value.state.task.readRecord,
+        stage_outcome_refs: { "verify-code": [outcome.ref] }, snapshot_tree: outcome.value.snapshot_tree,
+        material_revision: outcome.value.material_revision, snapshot_root: value.context.workspace.worktreeRoot,
+        authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection(value.context, stage, ref),
+      });
+      expect(deriveStageCompletion("verify-code", observations, { requireStageOutcome: true, stageOutcomeStatus: statuses["verify-code"] })).toMatchObject({ status: "completed", missing: [] });
+      expect(value.state.task.readRecord(value.review.resultRef)).toBe(value.reviewRaw);
+      expect(broker).not.toHaveBeenCalled();
+      writeFileSync(join(value.state.task.taskPath, value.check.output_ref), "tampered affected-check output");
+      expect(() => authenticateStageOutcomeForProjection(value.context, "verify-code", outcome.ref)).toThrow(/repair.*output.*hash/i);
+    } finally { broker.mockRestore(); }
+  });
+
+  it.each([
+    ["missing checks", (value) => { value.request.session.code_review.result.repairs[0].check_refs = []; }],
+    ["wrong check hash", (value) => { value.request.session.code_review.result.repairs[0].check_refs[0].sha256 = "0".repeat(64); }],
+    ["wrong source hash", (value) => { value.request.session.code_review.result.repairs[0].source_refs[0].sha256 = "0".repeat(64); }],
+    ["missing rejection reason", (value) => { value.request.session.code_review.result.repairs[0].reason = ""; }],
+    ["wrong material", (value) => { value.request.session.code_review.material_revision = `revision-${"0".repeat(64)}`; }],
+  ])("rejects %s before the bridge writes a stage outcome", (label, mutate) => {
+    const value = repairCase({ disposition: "rejected_invalid", change: false });
+    mutate(value);
+    expect(value.publish).toThrow(/repair|check|source|reason|material/i);
+    expect(value.state.task.listCanonicalStageOutcomeRefs("verify-code")).toEqual([]);
+  });
+
+  it("does not accept a fixed label when none of its referenced source changed", () => {
+    const value = repairCase({ change: false });
+    expect(value.publish).toThrow(/repair|change/i);
+    expect(value.state.task.listCanonicalStageOutcomeRefs("verify-code")).toEqual([]);
+  });
+
+  it("rejects failed, foreign and stale check receipts even when their supplied hash is correct", () => {
+    const value = repairCase({ disposition: "rejected_invalid", change: false });
+    const receipt = JSON.parse(value.state.task.readRecord(value.check.receipt_ref));
+    for (const [field, replacement] of [["exit_code", 1], ["task_id", "another-task"], ["snapshot_tree", "a".repeat(40)]]) {
+      const raw = JSON.stringify({ ...receipt, [field]: replacement });
+      const ref = `quality/tests/review-repair-${field}.json`;
+      value.state.kernel.publishCanonicalRecord(ref, raw);
+      value.request.session.code_review.result.repairs[0].check_refs = [{ ref, sha256: sha256(raw) }];
+      expect(value.publish).toThrow(/receipt|check|provenance/i);
+    }
+    expect(value.state.task.listCanonicalStageOutcomeRefs("verify-code")).toEqual([]);
+  });
+
+  it("revalidates repair evidence at the runtime and fact writer when a caller bypasses the bridge", async () => {
+    const value = repairCase();
+    const outcome = value.publish();
+    const tampered = p3RehashOutcome(value.state, outcome, (record) => {
+      record.code_review.result.repairs[0].check_refs[0].sha256 = "0".repeat(64);
+    });
+    const result = await runOfficialStage("verify-code", value.context, { attempt_id: value.request.attempt_id, receipts: { stage_outcomes: tampered.ref } });
+    expect(result).toMatchObject({ stage_outcome_status: "unavailable", quality_status: "incomplete" });
+    expect(() => value.state.kernel.publishVNextQualityFact("verify-code", {
+      kind: "review", status: "recorded", subject: "code_review", review_status: "resolved",
+      evidence: [{ ref: value.review.resultRef, sha256: sha256(value.reviewRaw), evidence_type: "review_result" }],
+    }, { resolved_review: { stage_outcome_ref: tampered.ref, stage_outcome_hash: tampered.sha256 } })).toThrow(/repair.*check.*hash/i);
+  });
+
+  it("does not let a resolved disposition hide a damaged original provider result", () => {
+    const value = repairCase();
+    writeFileSync(join(value.state.task.taskPath, value.review.outputRef), "{}");
+    expect(value.publish).toThrow(/review|provider|provenance/i);
+    expect(value.state.task.listCanonicalStageOutcomeRefs("verify-code")).toEqual([]);
+  });
+});
+
+function p3ApprovedDecision(state) {
+  const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+  for (const [name, bytes] of Object.entries(completeCanonicalStageMaterials())) artifacts.writeAtomic(name, bytes);
+  artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n### M6\n- decision_id: D-FIXTURE-1\n- freeze packet covers 用户流程、数据状态、成败边界、非目标。\n`);
+  const confirmation = state.kernel.publishHumanConfirmation("make-decision", {
+    decision: "accepted", subject_ref: artifacts.reference("decision-log.md"),
+    reply_text: "fixture user approves the current decision scope", step_slug: "approve-decision",
+  });
+  const { outcome } = p3PublishSession(state, "make-decision", {
+    attemptId: "approved-attempt-A", agentRunId: "approved-agent-B", sessionId: "approved-session-C", confirmationRef: confirmation.ref,
+  });
+  const approvedFact = JSON.parse(state.task.readRecord(confirmation.quality_fact_ref));
+  expect(approvedFact.material_scope).toEqual(["decision-log.md"]);
+  expect(confirmation.quality_fact_ref).toBe(`quality/facts/${qualityFactDigest(approvedFact)}.json`);
+  expect(approvedFact.evidence[0]).toMatchObject({ ref: confirmation.ref, sha256: confirmation.hash });
+  return {
+    artifacts, confirmation, outcome, approvedFact,
+    input: { confirmation_ref: confirmation.ref, quality_fact_ref: confirmation.quality_fact_ref, stage_outcome_ref: outcome.ref },
+  };
+}
+
+function p3FreezeWarnings(result) {
+  return [...(result.quality_warnings ?? []), ...(result.missing_items ?? [])].filter((item) => /decision freeze/i.test(item));
+}
+
 function uiSourceBindingCase(taskId) {
   const state = fixture(taskId);
   const workspace = openCurrentTaskWorkspace(state.task);
@@ -316,6 +546,181 @@ async function runUiSourceBindingCase(testCase, contractFacts) {
   });
 }
 
+describe("P3 T007 real bridge identity and decision approval consumers", () => {
+  it.each(["", "   ", null, 17])("rejects an explicitly invalid session id %j on an otherwise valid bridge execution", (sessionId) => {
+    const state = fixture("p3-invalid-session-id");
+    const request = p3SessionRequest(state, "build-code", { sessionId });
+    expect(() => publishCurrentWorkflowHubSession({ context: p3Context(state, "build-code"), input: request, stage: "build-code", attemptId: request.attempt_id })).toThrow(/session(?:\.session_id|Id|_id)/i);
+    expect(state.task.listCanonicalStageOutcomeRefs("build-code")).toEqual([]);
+  });
+  it.each([
+    ["separate A/B/C", true, "agent-B", "session-C"],
+    ["omitted session", false, "agent-B", undefined],
+    ["aligned identity baseline", true, "attempt-A", "attempt-A"],
+  ])("preserves %s through real bridge, canonical facts and status", async (label, includeSession, agentRunId, sessionId) => {
+    const state = fixture(`p3-identity-${label.replaceAll(/[^a-zA-Z0-9]+/g, "-")}`);
+    const context = p3Context(state, "build-code");
+    const { outcome } = p3PublishSession(state, "build-code", { includeSession, agentRunId, sessionId });
+    expect(outcome.value).toMatchObject({ attempt_id: "attempt-A", producer: { agent_run_id: agentRunId } });
+    if (includeSession) expect(outcome.value.producer.session_id).toBe(sessionId);
+    else expect(outcome.value.producer).not.toHaveProperty("session_id");
+    const actor = authenticateCurrentBuildCodeStageOutcome(context);
+    expect(actor).toMatchObject({ ref: outcome.ref, sha256: outcome.sha256, actor: { source_kind: "workflowhub-session", source_id: "codex/p3-host", run_id: agentRunId } });
+    const official = await runOfficialStage("build-code", context, { attempt_id: "attempt-A", receipts: { stage_outcomes: outcome.ref } });
+    expect(official).toMatchObject({ stage_outcome_ref: outcome.ref, stage_outcome_status: "completed", quality_status: "incomplete" });
+    expect(official.quality_fact_refs.length).toBeGreaterThan(0);
+    const artifacts = ArtifactDir.open(state.candidate.worktreeRoot, state.task);
+    const current = { snapshot_tree: state.kernel.currentVNextSnapshot().tree, material_revision: state.kernel.currentVNextMaterialRevision(), material_scope_revisions: stageMaterialScopeRevisions(Object.fromEntries(MATERIALS.map((name) => [name, artifacts.read(name)]))) };
+    const observations = official.quality_fact_refs.map((ref) => {
+      const raw = state.task.readRecord(ref);
+      const value = JSON.parse(raw);
+      const freshness = evaluateFactFreshness({ ...value, ref, sha256: sha256(raw) }, current, { read: state.task.readRecord, workspaceRoot: state.candidate.worktreeRoot, taskId: state.task.identity.taskId });
+      return { fact: { ref, value }, freshness, authenticated: freshness.authenticated };
+    });
+    expect(observations.some(({ authenticated }) => authenticated)).toBe(true);
+    const completion = deriveStageCompletion("build-code", observations, { requireStageOutcome: true, stageOutcomeStatus: official.stage_outcome_status });
+    expect(completion.status).toBe(official.completion.status);
+    expect(completion.missing).toContain("risk_tests_fresh");
+    const groups = deriveStatusGroups({ stage: "build-code", quality: completion, observations });
+    expect(groups.actionable_now).toContain("risk_tests_fresh");
+    const outcomes = deriveStageOutcomeStatuses({ task_id: state.task.identity.taskId, read: state.task.readRecord, stage_outcome_refs: { "build-code": [outcome.ref] }, ...current, snapshot_root: state.candidate.worktreeRoot,
+      authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection(context, stage, ref) });
+    expect(outcomes["build-code"]).toBe("completed");
+  });
+
+  it("retains the authenticated real actor when execution is incomplete instead of requiring completed quality first", async () => {
+    const state = fixture("p3-incomplete-actor");
+    const context = p3Context(state, "build-code");
+    const { outcome } = p3PublishSession(state, "build-code", { status: "incomplete" });
+    const actor = authenticateCurrentBuildCodeStageOutcome(context);
+    expect(actor).toMatchObject({ ref: outcome.ref, value: { status: "incomplete" }, actor: { run_id: "agent-B" } });
+    const official = await runOfficialStage("build-code", context, { attempt_id: "attempt-A", receipts: { stage_outcomes: outcome.ref } });
+    expect(official).toMatchObject({ stage_outcome_status: "incomplete", status: "in_progress", quality_status: "incomplete" });
+    expect(official.quality_fact_refs.length).toBeGreaterThan(0);
+  });
+
+  it.each(["source repair", "same material completion"])("P3 T008 actor lifecycle: selects the explicit new execution after %s", async (change) => {
+    const state = fixture(`p3-actor-lifecycle-${change.replaceAll(" ", "-")}`);
+    const context = p3Context(state, "build-code");
+    const { outcome: previous } = p3PublishSession(state, "build-code", {
+      attemptId: "previous-attempt", agentRunId: "previous-attempt", sessionId: "previous-session", status: "incomplete",
+    });
+    const previousRaw = state.task.readRecord(previous.ref);
+    expect(authenticateStageOutcomeForProjection(context, "build-code", previous.ref)).toMatchObject({ value: { status: "incomplete" } });
+    if (change === "source repair") {
+      writeFileSync(join(state.candidate.worktreeRoot, "README.md"), "base\nactual fixture source repair after the incomplete attempt\n");
+    }
+    const { outcome: repaired } = p3PublishSession(state, "build-code", {
+      attemptId: "repaired-attempt", agentRunId: "repaired-attempt", sessionId: "repaired-session", status: "completed",
+    });
+    expect(authenticateStageOutcomeForProjection(context, "build-code", repaired.ref)).toMatchObject({ ref: repaired.ref, sha256: repaired.sha256, value: { status: "completed" } });
+    expect(repaired.value.material_revision).toBe(previous.value.material_revision);
+    if (change === "source repair") expect(repaired.value.snapshot_tree).not.toBe(previous.value.snapshot_tree);
+    else expect(repaired.value.snapshot_tree).toBe(previous.value.snapshot_tree);
+
+    const binding = { outcomeRef: repaired.ref, outcomeHash: repaired.sha256 };
+    const actor = authenticateCurrentBuildCodeStageOutcome(context, binding);
+    expect(actor).toMatchObject({ ref: repaired.ref, sha256: repaired.sha256, actor: { run_id: "repaired-attempt" } });
+    // Supplied bindings are never silently dropped in favour of scanning.
+    for (const invalid of [
+      { outcomeRef: repaired.ref },
+      { outcomeHash: repaired.sha256 },
+      { outcomeRef: repaired.ref, outcomeHash: "0".repeat(64) },
+      { outcomeRef: "quality/evidence/stage-outcomes/build-code/missing.json", outcomeHash: repaired.sha256 },
+    ]) {
+      expect(() => authenticateCurrentBuildCodeStageOutcome(context, invalid)).toThrow(/ref|hash|binding|paired|together|canonical/i);
+    }
+    const official = await runOfficialStage("build-code", context, { attempt_id: "repaired-attempt", receipts: { stage_outcomes: repaired.ref } });
+    expect(official).toMatchObject({ stage_outcome_ref: repaired.ref, stage_outcome_status: "completed", quality_status: "incomplete" });
+    expect(official.quality_fact_refs.length).toBeGreaterThan(0);
+    expect(official.completion).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["risk_tests_fresh"]) });
+    expect(state.task.readRecord(previous.ref)).toBe(previousRaw);
+  });
+
+  it.each([
+    ["agent", (value) => { value.producer.agent_run_id = "forged-agent"; }],
+    ["source", (value) => { value.producer.source_id = "other/source"; value.producer.source_family = "other"; }],
+    ["source ref", (value) => { value.producer.source_ref = "codex-task:forged-source"; }],
+    ["attempt", (value) => { value.attempt_id = "forged-attempt"; }],
+  ])("rejects a self-consistently rehashed %s forgery against the original bridge proofs", (_name, mutate) => {
+    const state = fixture(`p3-forged-${_name.replaceAll(" ", "-")}`);
+    const { outcome } = p3PublishSession(state, "build-code");
+    const forged = p3RehashOutcome(state, outcome, mutate);
+    expect(sha256(state.task.readRecord(forged.ref))).toBe(forged.sha256);
+    expect(forged.value.step_outcomes).toEqual(outcome.value.step_outcomes);
+    expect(forged.value.skill_outcomes).toEqual(outcome.value.skill_outcomes);
+    expect(() => authenticateStageOutcomeForProjection(p3Context(state, "build-code"), "build-code", forged.ref)).toThrow(/producer|identity|binding|attempt/i);
+  });
+
+  it.each(["ref", "hash"])("rejects a rehashed outcome with a wrong nested proof %s", (field) => {
+    const state = fixture(`p3-proof-${field}`);
+    const { outcome } = p3PublishSession(state, "build-code");
+    const forged = p3RehashOutcome(state, outcome, (value) => {
+      if (field === "ref") value.step_outcomes[0].evidence_refs[0] = value.step_outcomes[1].evidence_refs[0];
+      else value.step_outcomes[0].evidence_refs[0].sha256 = "0".repeat(64);
+    });
+    expect(sha256(state.task.readRecord(forged.ref))).toBe(forged.sha256);
+    expect(() => authenticateStageOutcomeForProjection(p3Context(state, "build-code"), "build-code", forged.ref)).toThrow(/binding|hash/i);
+  });
+
+  it.each(["build-spec", "build-plan"])("consumes the approved fact scope and real approval step after downstream material edits in %s", async (stage) => {
+    const state = fixture(`p3-freeze-downstream-${stage}`);
+    const approved = p3ApprovedDecision(state);
+    for (const file of ["spec.md", "plan.md", "tasks.md"]) approved.artifacts.writeAtomic(file, `${approved.artifacts.read(file)}\nDownstream documentation clarified.\n`);
+    expect(state.kernel.currentVNextMaterialRevision()).not.toBe(approved.approvedFact.material_revision);
+    expect(materialRevisionFromValues([["decision-log.md", approved.artifacts.read("decision-log.md")]])).toBe(approved.approvedFact.material_scope_revision);
+    const result = await runOfficialStage(stage, p3Context(state, stage), { decision_freeze: approved.input });
+    expect(p3FreezeWarnings(result)).toEqual([]);
+    expect(result.quality_fact_refs.length).toBeGreaterThan(0);
+    expect(JSON.parse(state.task.readRecord(approved.confirmation.quality_fact_ref))).toEqual(approved.approvedFact);
+  });
+
+  it("keeps changed decision bytes stale even when the caller supplies the old approved scope", async () => {
+    const state = fixture("p3-freeze-direction-change");
+    const approved = p3ApprovedDecision(state);
+    approved.artifacts.writeAtomic("decision-log.md", `${approved.artifacts.read("decision-log.md")}\nDirection changed: add a new public control plane.\n`);
+    const result = await runOfficialStage("build-spec", p3Context(state, "build-spec"), { decision_freeze: { ...approved.input, material_scope_revision: approved.approvedFact.material_scope_revision } });
+    expect(p3FreezeWarnings(result).length).toBeGreaterThan(0);
+    expect(result.quality_status).toBe("incomplete");
+    expect(JSON.parse(state.task.readRecord(approved.confirmation.quality_fact_ref))).toEqual(approved.approvedFact);
+  });
+
+  it.each(["confirmation", "quality_fact", "stage_outcome"])("does not let a missing %s source become an accepted freeze", async (source) => {
+    const state = fixture(`p3-freeze-missing-${source}`);
+    const approved = p3ApprovedDecision(state);
+    delete approved.input[`${source}_ref`];
+    const result = await runOfficialStage("build-spec", p3Context(state, "build-spec"), { decision_freeze: approved.input });
+    expect(p3FreezeWarnings(result).length).toBeGreaterThan(0);
+    expect(result.quality_status).toBe("incomplete");
+  });
+
+  it.each(["missing step", "uncompleted step", "different confirmation", "wrong fact scope"])("rejects authenticated-looking mixed approval sources: %s", async (mutation) => {
+    const state = fixture(`p3-freeze-mixed-${mutation.replaceAll(" ", "-")}`);
+    const approved = p3ApprovedDecision(state);
+    if (mutation === "wrong fact scope") {
+      const fact = { ...approved.approvedFact, material_scope: ["spec.md"] };
+      const digest = qualityFactDigest(fact);
+      fact.fact_id = `quality-${digest}`;
+      const ref = `quality/facts/${digest}.json`;
+      state.kernel.publishCanonicalRecord(ref, `${JSON.stringify(fact, null, 2)}\n`);
+      approved.input.quality_fact_ref = ref;
+    } else if (mutation === "different confirmation") {
+      const other = state.kernel.publishHumanConfirmation("make-decision", { decision: "accepted", subject_ref: approved.artifacts.reference("decision-log.md"), reply_text: "different fixture reply, never linked by original step", step_slug: "approve-decision" });
+      approved.input.confirmation_ref = other.ref;
+      approved.input.quality_fact_ref = other.quality_fact_ref;
+    } else {
+      const changed = p3RehashOutcome(state, approved.outcome, (value) => {
+        if (mutation === "missing step") value.step_outcomes = value.step_outcomes.filter((row) => row.step_slug !== "approve-decision");
+        else value.step_outcomes.find((row) => row.step_slug === "approve-decision").status = "incomplete";
+      });
+      approved.input.stage_outcome_ref = changed.ref;
+    }
+    const result = await runOfficialStage("build-spec", p3Context(state, "build-spec"), { decision_freeze: approved.input });
+    expect(p3FreezeWarnings(result).length).toBeGreaterThan(0);
+    expect(result.quality_status).toBe("incomplete");
+  });
+});
+
 describe("vNext official stage completion", () => {
   it("authenticates exactly one current completed build-code outcome for wh-review", () => {
     const state = fixture("current-build-code-review-subject");
@@ -351,7 +756,6 @@ describe("vNext official stage completion", () => {
     ["host", { host: "" }, /producer\.host must be non-empty/],
     ["source family", { source_family: "other" }, /producer source identity mismatch/],
     ["missing agent run id", { agent_run_id: "" }, /producer\.agent_run_id must be non-empty/],
-    ["unbound agent run id", { agent_run_id: "other-run" }, /producer agent run identity mismatch/],
   ])("rejects a build-code outcome with a malformed producer %s", (_label, mutation, expected) => {
     const state = fixture(`current-build-code-invalid-producer-${_label.replaceAll(" ", "-")}`);
     const context = contextFor("build-code", state);

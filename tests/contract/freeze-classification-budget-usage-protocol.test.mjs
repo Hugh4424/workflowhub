@@ -359,7 +359,7 @@ describe("Phase 3 budget and usage observation contracts", () => {
       attempt: {
         material_revision: "rev-1",
         status: "executed",
-        provider_results: [{ provider: "fixture", status: "completed", usage: null }],
+        provider_attempts: [{ provider: "fixture", status: "completed", execution: { usage: null, timing: { started_at_ms: null, completed_at_ms: null, duration_ms: null } } }],
       },
       proxy_metrics: { full_reread_count: 1, subagent_input_bytes: 10, review_material_bytes: 20 },
     });
@@ -455,5 +455,37 @@ describe("Phase 4 unified fallback protocol [P4]", () => {
     const result = await officialStageHandler("build-spec")(fixture.worker, fixture.input);
     expect(result.facts.fallback_protocol).toMatchObject({ status: "incomplete", ok: true });
     expect(result.missing_items.join("; ")).toMatch(/fallback protocol remains incomplete/i);
+  });
+});
+
+
+describe("T001 explicit current-material ownership", () => {
+  it.each([
+    ["decision-log.md", "make-decision"],
+    ["spec.md", "build-spec"],
+    ["plan.md", "build-plan"],
+    ["tasks.md", "build-plan"],
+  ])("routes a declared %s gap only to %s", (target_artifact, owner_stage) => {
+    const input = {
+      stage: "build-code",
+      finding: { classification: "material_gap", target_artifact },
+      route: { classification: "material_gap", owner_stage, next_action: "repair_material_owner", rerun_scope: "same_task_local", continuation_allowed: true },
+      completion: { status: "incomplete" },
+    };
+    expect(validateFallbackProtocol(input).ok).toBe(true);
+    input.route.owner_stage = "build-code";
+    expect(validateFallbackProtocol(input).ok,
+      "T001: an explicit authored material gap cannot be reassigned to the executor").toBe(false);
+  });
+});
+
+
+describe("P1 review explicit material ownership", () => {
+  it.each(["unknown.md", "", 42])("rejects an explicit unrecognized target %s instead of assigning it to the executor", (target_artifact) => {
+    expect(validateFallbackProtocol({
+      stage: "build-code", finding: { classification: "material_gap", target_artifact },
+      route: { classification: "material_gap", owner_stage: "build-code", next_action: "repair_material_owner", rerun_scope: "same_task_local", continuation_allowed: true },
+      completion: { status: "incomplete" },
+    }).ok).toBe(false);
   });
 });

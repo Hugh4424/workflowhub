@@ -307,6 +307,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     ? validateStageSpecAnalyzeProfile({ stage, packet: analyzerPacket, strict_material_contracts: true, identity })
     : null;
   if (analyzerResult && !analyzerResult.ok && status === "completed") throw new Error(`stage outcome fixture analyzer packet is invalid: ${analyzerResult.errors.join("; ")}`);
+  const resolvedProducer = producer ?? { kind: "stage-agent", host: "fixture-host", source_id: "fixture/executor", source_family: "fixture", agent_run_id: attemptId };
   const makeEvidence = ({ subjectKind, subjectId, outcomeStatus, resultSummary }) => {
     const proofRaw = `${JSON.stringify({
       schema_version: "workflowhub-stage-outcome-evidence.v1",
@@ -319,6 +320,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
       outcome_status: outcomeStatus,
       result_summary: resultSummary,
       attempt_id: attemptId,
+      producer_identity: resolvedProducer,
     }, null, 2)}\n`;
     const proofHash = sha256(proofRaw);
     const proofRef = `quality/evidence/stage-outcome-proofs/${proofHash}.json`;
@@ -350,7 +352,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
   const value = {
     schema_version: "workflowhub-stage-outcomes.v1", task_id: task.identity.taskId, stage, attempt_id: attemptId, status,
     ...(resolvedWorkflowRunId === null ? {} : { run_id: resolvedWorkflowRunId }),
-    producer: producer ?? { kind: "stage-agent", host: "fixture-host", source_id: "fixture/executor", source_family: "fixture", agent_run_id: attemptId },
+    producer: resolvedProducer,
     snapshot_tree: snapshot.tree, material_revision: revision,
     material_hashes: Object.fromEntries(values.map(([file, content]) => [file, content === null ? null : sha256(content)])),
     material_scope: [...materialScope],

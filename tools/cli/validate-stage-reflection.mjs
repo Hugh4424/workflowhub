@@ -168,7 +168,7 @@ function parseArgs(argv) {
   if (!isAbsolute(values.root)) fail("--root must be an absolute storage root");
   if (!SEGMENT.test(values.proj) || !SEGMENT.test(values["task-id"])) fail("--proj and --task-id must be one safe path segment");
   if (!STAGES.has(values.stage)) fail(`unsupported stage: ${values.stage}`);
-  if (!isStageReflectionRef(values["reflection-ref"]) || !values["reflection-ref"].endsWith(`/${values.stage}.json`)) {
+  if (!isStageReflectionRef(values["reflection-ref"]) || !(values["reflection-ref"] === `quality/stage-reflection/${values.stage}.json` || values["reflection-ref"].startsWith(`quality/stage-reflection/${values.stage}/`))) {
     fail("--reflection-ref must be quality/stage-reflection/<stage>.json for --stage");
   }
   if (values.now !== undefined && !Number.isFinite(Date.parse(values.now))) fail("--now must be an ISO-compatible timestamp");

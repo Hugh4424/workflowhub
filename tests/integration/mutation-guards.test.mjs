@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
+import crypto from "node:crypto";
 import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
@@ -77,10 +78,12 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
 
   it("rejects an unauthenticated human confirmation", () => {
     expect(fixture("confirmation-authorization").expected).toBe("reject");
-    const facts = observations("verify-code").map((entry) => entry.fact.value.subject === "human_confirmation"
+    const baseline = observations("build-plan");
+    expect(deriveStageCompletion("build-plan", baseline).status).toBe("completed");
+    const facts = baseline.map((entry) => entry.fact.value.subject === "human_confirmation"
       ? { ...entry, authenticated: false }
       : entry);
-    expect(deriveStageCompletion("verify-code", facts).missing).toContain("human_confirmation");
+    expect(deriveStageCompletion("build-plan", facts).missing).toEqual(["human_confirmation"]);
   });
 
   it("rejects test pollution before publishing the Skill Bundle", async () => {
@@ -93,6 +96,22 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
       }
       cpSync(join(ROOT, "skills/reuse-registry.md"), join(packageRoot, "skills/reuse-registry.md"));
       cpSync(join(ROOT, "THIRD_PARTY_NOTICES.md"), join(packageRoot, "THIRD_PARTY_NOTICES.md"));
+      // Normalize only copied metadata for the three already changed skills;
+      // production closure remains independently checked against ROOT.
+      for (const name of ["spec-plan", "spec-tasks", "wh-review"]) {
+        const file = join(packageRoot, "skills", name, "skill-bundle.json");
+        const value = JSON.parse(readFileSync(file, "utf8"));
+        for (const entry of value.files) {
+          if (typeof entry === "object") entry.sha256 = crypto.createHash("sha256")
+            .update(readFileSync(join(packageRoot, "skills", name, entry.path))).digest("hex");
+        }
+        writeFileSync(file, JSON.stringify(value));
+        const { bundleHash } = validateSkillBundle(packageRoot, `skills/${name}/skill-bundle.json`, `skills/${name}/SKILL.md`);
+        const catalogFile = join(packageRoot, "skills/catalog.yaml");
+        writeFileSync(catalogFile, readFileSync(catalogFile, "utf8").replace(
+          new RegExp(`(  - name: ${name}[\\s\\S]*?local_bundle_hash: )\\S+`), `$1${bundleHash}`,
+        ));
+      }
       const manifestPath = join(packageRoot, "skills/wh-review/skill-bundle.json");
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
       manifest.files = [...manifest.files, "tests/fixtures/polluted.mjs"];
@@ -110,6 +129,8 @@ describe("five mutation guards reject stale, incomplete, polluted facts", () => 
       writeFileSync(catalogPath, updatedCatalog);
       await expect(buildSkillBundleRelease({ packageRoot, outputDir }))
         .rejects.toThrow(/forbidden path/);
+      expect(existsSync(join(outputDir, "skill-bundle.json"))).toBe(false);
+      expect(readdirSync(outputDir)).toEqual([]);
     } finally {
       rmSync(packageRoot, { recursive: true, force: true });
       rmSync(outputDir, { recursive: true, force: true });

@@ -14,6 +14,13 @@ function observations(stage) {
 }
 
 describe("five-stage completion predicates derive only from quality facts", () => {
+  it("P3 T007 keeps quality gaps while authenticated execution completion remains a separate fact", () => {
+    const current = observations("build-code");
+    current.find((entry) => entry.fact.value.subject === "risk_tests_fresh").fact.value.status = "missing";
+    const completion = deriveStageCompletion("build-code", current, { requireStageOutcome: true, stageOutcomeStatus: "completed" });
+    expect(completion).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["risk_tests_fresh"]) });
+    expect(deriveStageProgress("build-code", current, { "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks" })).toMatchObject({ work_status: "ready" });
+  });
   it("keeps every authoring stage incomplete until its current stage-end analyzer fact is present", () => {
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code"]) {
       const facts = observations(stage).filter((entry) => entry.fact.value.subject !== "stage_end_spec_analyze");

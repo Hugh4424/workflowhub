@@ -78,3 +78,36 @@ describe("repo skills manifest", () => {
     expect(outputText).toContain("skills[2].id");
   });
 });
+
+
+describe("P5 real repository catalog consumer", () => {
+  it("checks the actual repository manifest without writing catalog or manifest bytes", () => {
+    const realCatalog = path.join(root, "skills/catalog.yaml");
+    const realManifest = path.join(root, "repo-skills.manifest.json");
+    const before = [realCatalog, realManifest].map((file) => fs.readFileSync(file));
+    const result = spawnSync(process.execPath, [generator, "--catalog", realCatalog, "--output", realManifest, "--check"], { encoding: "utf8" });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    [realCatalog, realManifest].forEach((file, index) => expect(fs.readFileSync(file)).toEqual(before[index]));
+    const manifest = JSON.parse(before[1]);
+    for (const id of ["spec-plan", "spec-tasks", "wh-review"]) {
+      const entry = manifest.skills.find((skill) => skill.id === id);
+      expect(entry).toBeDefined();
+      expect(Object.keys(entry).sort()).toEqual(["id", "path", "version", "origin_path", "origin_framework", "local_changes", "owner_stage", "metrics_enabled"].sort());
+      expect(fs.statSync(path.join(root, entry.path)).isFile()).toBe(true);
+    }
+  });
+
+  it("rejects a real-catalog owner mutation in an isolated manifest", () => {
+    const output = temporaryManifestPath();
+    const args = [generator, "--catalog", path.join(root, "skills/catalog.yaml"), "--output", output];
+    expect(spawnSync(process.execPath, args, { encoding: "utf8" }).status).toBe(0);
+    const manifest = JSON.parse(fs.readFileSync(output, "utf8"));
+    const index = manifest.skills.findIndex((entry) => entry.id === "wh-review");
+    expect(index).toBeGreaterThanOrEqual(0);
+    manifest.skills[index].owner_stage = ["invented-stage"];
+    fs.writeFileSync(output, `${JSON.stringify(manifest)}\n`);
+    const result = spawnSync(process.execPath, [...args, "--check"], { encoding: "utf8" });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain(`skills[${index}].owner_stage`);
+  });
+});

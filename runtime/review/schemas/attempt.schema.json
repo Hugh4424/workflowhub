@@ -47,6 +47,7 @@
     },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "authenticated_evidence_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "pair_id": { "type": "string", "minLength": 1 },
     "role": { "enum": ["red", "blue"] },
     "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
@@ -65,7 +66,7 @@
         "reviewed_execution": {
           "type": "object", "required": ["ref", "sha256", "actor"],
           "properties": {
-            "ref": { "type": "string", "pattern": "^quality/evidence/stage-outcomes/build-code/[a-f0-9]{64}\\.json$" },
+            "ref": { "type": "string", "pattern": "^quality/evidence/(?:stage-outcomes/build-code/[a-f0-9]{64}|stage-quality/build-code/acceptance_execution-[a-f0-9]{64})\\.json$" },
             "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
             "actor": {
               "type": "object", "required": ["source_kind", "source_id", "run_id"],
