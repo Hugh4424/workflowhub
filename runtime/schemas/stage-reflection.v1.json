@@ -24,7 +24,7 @@
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "stage_status": { "enum": ["completed", "failed"] },
     "generated_at": { "type": "string", "format": "date-time" },
-    "status": { "enum": ["ok", "degraded", "failed"] },
+    "status": { "enum": ["ok", "degraded", "failed", "unavailable", "not_scheduled"] },
     "error": {
       "anyOf": [
         { "type": "null" },
@@ -38,7 +38,8 @@
     },
     "judgments": { "type": "array", "items": { "$ref": "#/$defs/judgment" } },
     "interventions": { "type": "array", "items": { "$ref": "#/$defs/intervention" } },
-    "lessons_added": { "type": "array", "items": { "anyOf": [{ "$ref": "#/$defs/safe_ref" }, { "$ref": "#/$defs/lesson_ref" }] } }
+    "lessons_added": { "type": "array", "items": { "anyOf": [{ "$ref": "#/$defs/safe_ref" }, { "$ref": "#/$defs/lesson_ref" }] } },
+    "availability_fact": { "$ref": "#/$defs/availability_fact" }
   },
   "allOf": [
     {
@@ -48,6 +49,17 @@
     {
       "if": { "properties": { "status": { "enum": ["ok", "degraded"] } }, "required": ["status"] },
       "then": { "properties": { "error": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["unavailable", "not_scheduled"] } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "error": { "type": "null" },
+          "judgments": { "maxItems": 0 },
+          "interventions": { "maxItems": 0 },
+          "lessons_added": { "maxItems": 0 }
+        }
+      }
     }
   ],
   "$defs": {
@@ -60,6 +72,30 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^lessons/(?:make-decision|build-spec|build-plan|build-code|verify-code)\\.jsonl#[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "availability_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "state", "reason_code", "observed_at", "task_identity"],
+      "properties": {
+        "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+        "state": { "enum": ["unavailable", "not_scheduled"] },
+        "reason_code": { "enum": ["executor_absent", "preflight_failed", "identity_failed", "startup_failed", "interrupted", "not_started"] },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "task_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["task_id", "worktree", "branch"],
+          "properties": {
+            "task_id": { "type": "string", "minLength": 1 },
+            "worktree": { "type": "string", "minLength": 1 },
+            "branch": { "type": "string", "minLength": 1 },
+            "attempt": { "type": ["string", "null"] },
+            "snapshot_tree": { "type": ["string", "null"] },
+            "material_revision": { "type": ["string", "null"] }
+          }
+        }
+      }
     },
     "judgment": {
       "type": "object",

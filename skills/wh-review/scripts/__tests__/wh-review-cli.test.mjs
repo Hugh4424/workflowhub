@@ -739,6 +739,9 @@ describe("wh-review production CLI", () => {
       providers: { kimi: { enabled: true, source_id: "fixture-kimi-source" } },
       attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
     }));
+    const brokerConfigId = createHash("sha256").update(JSON.stringify({
+      id: "kimi", source_id: "fixture-kimi-source", model: null, effort: null, thinking: null, deadline_ms: null,
+    }), "utf8").digest("hex");
     const counter = join(root, "broker-count"); writeFileSync(counter, "0");
     const broker = join(root, "fake-broker.mjs");
     writeFileSync(broker, `import { readFileSync, writeFileSync } from "node:fs";
@@ -758,7 +761,7 @@ process.stdout.write(JSON.stringify({
   providers: [{
     attempts: [{ attempt_id: "fixture-attempt-" + count, completed_at_ms: 2, duration_ms: 1, error, kind: "initial", provider_retry_count: 0, session_id: null, started_at_ms: 1, status: "failed" }],
     continuable: false, deadline_ms: null, error,
-    identity: { adapter: "kimi", config_id: "fixture-config", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
+    identity: { adapter: "kimi", config_id: "${brokerConfigId}", model: null, provider: "kimi", source_id: "fixture-kimi-source" },
     material: {
       contract_hash: request.contract_hash ?? "fixture-contract-hash",
       contract_id: request.contract_id ?? "fixture-contract",

@@ -1143,7 +1143,7 @@ describe("vNext official stage completion", () => {
       stage_outcome_hash: null,
       stage_outcome_status: "unavailable",
       stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
-      stage_reflection: { status: "failed", step_status: "failed", persisted: true },
+      stage_reflection: { status: "unavailable", step_status: "unavailable", persisted: false, availability: { state: "unavailable", reason_code: "executor_absent" } },
     });
   });
   it("records a supplied invalid optional outcome without hiding the diagnostic", async () => {
@@ -1553,7 +1553,11 @@ describe("vNext official stage completion", () => {
     expect(outcome.value.spec_analyze.result.status).toBe("material_incomplete");
     const result = await runOfficialStage("build-code", contextFor("build-code", state), { receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "build-code", stage_outcome_status: "unavailable", quality_status: "incomplete" });
-    expect(JSON.parse(state.task.readRecord("quality/stage-reflection/build-code.json"))).toMatchObject({ stage_status: "failed" });
+    expect(() => state.task.readRecord("quality/stage-reflection/build-code.json")).toThrow(/ENOENT|no such file/i);
+    const availabilityRef = result.stage_reflection?.availability_ref;
+    expect(availabilityRef).toMatch(/^quality\/evidence\/stage-reflection-availability\/[a-f0-9]{64}\.json$/);
+    const availability = JSON.parse(state.task.readRecord(availabilityRef));
+    expect(availability).toMatchObject({ state: "unavailable", reason_code: "executor_absent" });
   });
   it("guards the official stage run against monitoring fact and projection side effects", () => {
     const state = fixture("vnext-stage-run-no-monitoring-side-effect");

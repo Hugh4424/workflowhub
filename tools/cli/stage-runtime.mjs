@@ -15,6 +15,7 @@ import {
   prepareMakeDecisionWorkspace,
 } from "../../runtime/stage/stage-context.mjs";
 import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
+import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
 import {
   validateAcceptanceEvidence,
   publishEvidence,
@@ -556,7 +557,7 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "confirm", "authorize-operation"]).has(command)) {
+  if (!new Set(["doctor", "status", "artifact", "review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect", "confirm", "authorize-operation"]).has(command)) {
     throw new TypeError("usage: stage-runtime.mjs <doctor|status|run|review|verify|confirm|authorize> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
@@ -623,6 +624,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     throw new TypeError("capture-evidence requires --stage=build-code --input=<evidence-capture.json>");
   }
   if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
+  if (command === "reflect" && (!values.stage || !values.input)) throw new TypeError("reflect requires --stage=<stage> --input=<judgment.json>");
   if (command === "authorize-operation") {
     if (!new Set(["commit", "push", "merge", "archive", "cleanup"]).has(values.operation)) throw new TypeError("authorize-operation requires --operation=commit|push|merge|archive|cleanup");
     if (typeof values["subject-ref"] !== "string" || values["subject-ref"].trim() === "") throw new TypeError("authorize-operation requires --subject-ref=<quality/confirmations/<sha256>.json>");
@@ -637,7 +639,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     readOnly: command === "status",
   });
   if (identity.source === "explicit") bindExplicitWorkflowHubIdentity(context, cwd);
-  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run"]).has(command)
+  const input = new Set(["review-risk-pause", "review-record", "capture-tests", "capture-evidence", "run", "reflect"]).has(command)
       && values.input !== undefined
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
@@ -793,6 +795,19 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     });
     return { status: "recorded", ...refs };
   }
+  if (command === "reflect") {
+    const allowed = new Set(["stage", "project", "task", "input", "now"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) {
+      throw new TypeError("reflect accepts only --stage, --project, --task, --input, and optional --now");
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new TypeError("reflect input must be a judgment object");
+    }
+    return runStageReflection(context, {
+      input,
+      ...(values.now === undefined ? {} : { now: values.now }),
+    });
+  }
   if (command === "run") {
     if (input !== undefined && (typeof input !== "object" || Array.isArray(input))) {
       throw new TypeError("run input must be an object when supplied");
@@ -848,7 +863,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
       actions: {
         doctor: ["workspace"],
         status: ["begin", "repair"],
-        run: ["execute", "draft"],
+        run: ["execute", "draft", "reflect"],
         review: ["risk"],
         verify: ["execute"],
         confirm: ["decision"],
@@ -866,6 +881,7 @@ export async function stageRuntimeCliMain(argv = process.argv.slice(2), {
     "status:begin": "status",
     "status:repair": "status",
     "run:execute": "run",
+    "run:reflect": "reflect",
     "run:draft": "artifact",
     "review:risk": "review-risk-pause",
     "review:record": "review-record",

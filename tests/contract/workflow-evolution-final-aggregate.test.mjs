@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
-const taskRoot = resolve(root, "specs/workflowhub-m16-evolution-20260831");
+const taskRoot = resolve(root, "specs/archive/workflowhub-m16-evolution-20260831");
 const reviewChain = resolve(root, "tests/fixtures/workflow-evolution/run-final-review-chain.mjs");
 const reviewValidator = resolve(root, "tests/fixtures/workflow-evolution/validate-final-review-chain.mjs");
 const aggregateRunner = resolve(root, "tests/fixtures/workflow-evolution/run-final-aggregate.sh");

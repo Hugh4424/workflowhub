@@ -345,7 +345,8 @@ function unavailableReason(providers) {
 export async function runSimpleReview(input, dependencies = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
   if (typeof input.stage !== "string" || input.stage.trim() === "") throw new TypeError("stage is required");
-  if (typeof (input.host_provider ?? input.hostProvider) !== "string") throw new TypeError("host_provider is required");
+  const hostProvider = input.host_provider ?? input.hostProvider;
+  if (typeof hostProvider !== "string" || hostProvider.trim() === "") throw new TypeError("host_provider is required");
   if (!input.materials || typeof input.materials !== "object" || Array.isArray(input.materials) || Object.keys(input.materials).length === 0) throw new TypeError("materials are required");
 
   const reviewTrack = input.review_track ?? input.reviewTrack ?? null;

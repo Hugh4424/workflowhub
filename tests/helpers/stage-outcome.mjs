@@ -299,6 +299,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     const resultSummary = `resolved ${name}`;
     return {
       skill_id: name, status, trigger: true, executed: name === "spec-analyze" || name === "dsh-code-review" || status === "completed", version: "fixture-1.0.0",
+      input_refs: [],
       result_summary: resultSummary,
       evidence_refs: makeEvidence({ subjectKind: "skill", subjectId: name, outcomeStatus: status, resultSummary }),
       ...(status === "completed" ? {} : { reason: "fixture stage outcome is incomplete for the unavailable review" }),

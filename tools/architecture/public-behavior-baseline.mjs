@@ -116,6 +116,11 @@ function prepareIsolatedCase(root, behavior, variant = "default") {
     HOME: home,
     WORKFLOWHUB_TASK_DIR: storage,
     WORKFLOWHUB_PROJECT_KEY: "Baseline",
+    // Each baseline case owns and deletes its temporary task root.  Do not
+    // inherit the parent Codex session identity or the first case would bind
+    // the live session to a path that the case cleanup removes.
+    CODEX_SESSION_ID: "",
+    CODEX_THREAD_ID: "",
   };
   const bootstrap = execFileSync(process.execPath, [
     "tools/cli/task-bootstrap.mjs",

@@ -1,0 +1,13 @@
+{
+  "schema_version": "stage-reflection.v1",
+  "record_kind": "judgment",
+  "task_id": "task-gate",
+  "stage": "build-code",
+  "stage_status": "completed",
+  "generated_at": "2026-08-30T00:00:00.000Z",
+  "status": "ok",
+  "error": null,
+  "judgments": [],
+  "interventions": [],
+  "lessons_added": []
+}

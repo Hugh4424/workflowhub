@@ -21,6 +21,12 @@ skill 使用同一命令记录实际版本、触发和执行结果。verify-code
 阶段的 `record-spec-analyze`/`spec-analyze`；阶段末发布当前代码审查 outcome，并单独保留真实
 确认事实。
 
+## 阶段末复盘（必须执行）
+
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 judgment JSON，再调用实际的公共入口 `run --action=reflect`。JSON 必须包含六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，分别回答帮助、改进、阻塞、人工介入原因、应简化和现在可简化之处。每个区块条目带真实 `evidence_refs` 与 `confidence`；没有观察到写 `none_observed`，无法判断写 `unknown` + `unknown_reason`，不适用写 `not_applicable` + 原因，不能静默空缺。
+
+`validate-stage-reflection.mjs` 在验证时内部调用 `deriveConsumptionEdges`，不由技能单独调用消费边工具。只有较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 含同一引用才形成边；stage outcome/output 不完整时 `coverage_status=partial`、消费保持 unknown、`zero_consumption_proof` 不可用。完整扫描和近 30 天零 consumer 证明还必须配合人工 rejected 或同一步骤两次介入，才能保留 `remove_candidate`；否则降为 `needs_evidence`。route 尚未实现时如实记录 unavailable/dependency，不发明替代命令。
+
 ## 职责
 
 verify-code 只审查代码，不做材料审计、AC 覆盖审计或证据树审计。
