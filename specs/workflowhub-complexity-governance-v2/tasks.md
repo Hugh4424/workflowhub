@@ -2514,9 +2514,9 @@
 - **Knowledge**：accepted spec、verified code anchors 与前序 evidence
 - **verification_role**：N/A — non-behavior change: 最终人工确认
 - **paired_task**：N/A — non-behavior change
-- **gate_cmd**：`node tools/architecture/inventory.mjs --check && node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`
+- **gate_cmd**：`node tools/architecture/inventory.mjs --check --require-zero=task-only-governance && node tools/architecture/verify-final-coverage.mjs --spec=specs/workflowhub-complexity-governance-v2/spec.md --require-ac=AC-01..AC-15 --bind-current-tree`
 - **expected_exit**：0
-- **oracle**：ORACLE-FINAL-CONFIRM：用户看到并确认实际删除/KEEP/diff；不推断 Git 权限
+- **oracle**：ORACLE-FINAL-CONFIRM：永久 inventory 与 final coverage 证明最终事实；用户确认另行写入本 Task 的交互证据。用户看到并确认实际删除/KEEP/diff；不推断 Git 权限
 - **evidence_path**：`evidence/phase-9/final-user-confirmation.json`
 - **STOP**：用户未确认最终实际删除结果时 STOP，不得宣称交付。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate

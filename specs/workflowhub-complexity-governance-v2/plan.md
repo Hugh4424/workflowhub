@@ -139,24 +139,28 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 ### Module responsibilities
 
 #### Material revision
+
 - **Responsibility**：四材料与 requirements/coverage 的单一当前 revision。
 - **Consumes**：TaskHandle identity、当前材料 bytes/hash。
 - **Produces**：parent-bound immutable revision。
 - **Must not decide**：测试、review 或正式完成。
 
 #### Quality facts
+
 - **Responsibility**：追加测试、AC、review、confirmation、authorization。
 - **Consumes**：当前材料/tree 身份。
 - **Produces**：不可变事实及 freshness 结果。
 - **Must not decide**：材料能否继续编辑。
 
 #### Publication
+
 - **Responsibility**：按五阶段完成谓词原子发布当前结果。
 - **Consumes**：当前 revision/tree 与新鲜质量事实。
 - **Produces**：complete/incomplete/fail-loud 结果。
 - **Must not decide**：不可逆 Git 操作权限。
 
 #### Distribution
+
 - **Responsibility**：Skill Bundle 和 Runner Release。
 - **Consumes**：五 workflow、skill deps、runner contract。
 - **Produces**：洁净 Bundle、可安装 Runner。
@@ -781,7 +785,7 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 | A-004 | core/stage-completion-facts.mjs:buildStageCompletion | completion derivation | simplify | 不让 fact 作工作许可 |
 | A-005 | core/review-result-consumer.mjs | review fact consumer | reuse | 不改写 verdict |
 | A-006 | core/check-skill-closure.mjs | source closure | extend for release closure | 不冒充 clean install |
-| A-007 | scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs | current CLI E2E | extract real seam | 不复用 node_modules symlink 作 clean install |
+| A-007 | `scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs` | current CLI E2E | extract real seam | 不复用 node_modules symlink 作 clean install |
 
 ### Reuse → Extend → New
 

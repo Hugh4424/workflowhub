@@ -211,6 +211,7 @@ WorkflowHub 已有 make-decision、build-spec、build-plan、build-code、verify
   - **依据**：PFACT-03
   - **场景**：SCN-003、SCN-004
   - **验收**：AC-03、AC-04
+
 ### 五阶段最小完成谓词
 
 以下是不可缩减的正式完成条件；缺项时可以继续修复，但该阶段保持 incomplete：
