@@ -298,6 +298,11 @@ The specification must not create a second authority, status projection, or
 process summary. Quality facts may be referenced by path and source, but a
 review or test result never changes product scope automatically.
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。调研、规格草稿实施、适用的测试与独立审查/红队派子代理；修复回原实施子代理。澄清问答与适用的 UI 设计确认由主会话执行；纯材料任务的运行时测试不适用，写明理由。
+子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
+
 ## Work sequence
 
 1. Read `decision-log.md` and current `spec.md`; build a source/decision index.

@@ -470,12 +470,12 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
     let dispatches = 0;
     const runRound = async (input) => { dispatches += 1; return availableReviewResult(input); };
     const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
-    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation_summary: "before" } };
 
     const first = await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound, resolveRouteIdentity });
     const changed = await recordSimpleReviewRequest({
       task, kernel,
-      request: { ...firstRequest, materials: { implementation: "after" } },
+      request: { ...firstRequest, materials: { implementation_summary: "after" } },
       runRound,
       resolveRouteIdentity,
     });
@@ -489,7 +489,7 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
 
     const retryRequest = {
       ...firstRequest,
-      materials: { implementation: "after" },
+      materials: { implementation_summary: "after" },
       retry: { requested: true, basis: "material_changed", reason: "review input changed" },
     };
     const retried = await recordSimpleReviewRequest({ task, kernel, request: retryRequest, runRound, resolveRouteIdentity });
@@ -514,14 +514,14 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
     let dispatches = 0;
     const runRound = async (input) => { dispatches += 1; return availableReviewResult(input); };
     const resolveRouteIdentity = () => ({ route_identity: "a".repeat(64) });
-    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation: "before" } };
+    const firstRequest = { stage: "build-code", host_provider: "codex/luna", materials: { implementation_summary: "before" } };
     await recordSimpleReviewRequest({ task, kernel, request: firstRequest, runRound, resolveRouteIdentity });
 
     const denied = await recordSimpleReviewRequest({
       task, kernel,
       request: {
         ...firstRequest,
-        materials: { implementation: "after" },
+        materials: { implementation_summary: "after" },
         changed: true,
         budget: { remaining: 99 },
         retry: { requested: true, reason: "please try again" },
@@ -533,7 +533,7 @@ describe("Phase 3 canonical review reuse and explicit retry contracts", () => {
       task, kernel,
       request: {
         ...firstRequest,
-        materials: { implementation: "third" },
+        materials: { implementation_summary: "third" },
         retry: { requested: true, basis: "narrow_diff", reason: "only a narrow diff changed" },
       },
       runRound,

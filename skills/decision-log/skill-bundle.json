@@ -2,13 +2,7 @@
   "schema_version": 1,
   "skill": "decision-log",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "3daa24c26b0316a27bda759787de05e4cd92bf95518b2818478430078efd1c27"
-    },
-    {
-      "path": "templates/decision-log-template.md",
-      "sha256": "f1b4fd3dbc74a1f6afe784d44d23ea4eb5592a9363fa1417a1613c39ca9ad6ad"
-    }
+    "SKILL.md",
+    "templates/decision-log-template.md"
   ]
 }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import vm from "node:vm";
@@ -11,6 +11,7 @@ import { validateHumanConfirmation } from "../../runtime/evidence/canonical-evid
 import { runStageEndReflection } from "../../runtime/stage/stage-runner.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const repoRoot = resolve(join(import.meta.dirname, "../.."));
@@ -41,7 +42,7 @@ function writeJson(path, value) {
   return raw;
 }
 
-function runnerFixture(taskId) {
+function runnerFixture(taskId, { postDecisionOnly = false, stage = "build-spec" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-reflection-e2e-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -64,11 +65,12 @@ function runnerFixture(taskId) {
       issue_ids: [],
       inputs: {},
       record_model: "vnext-single-write",
+      ...(postDecisionOnly ? { activation_cohort: "post" } : {}),
     },
   });
   const candidateWorkspace = prepareTaskWorkspace(task);
   const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
-  for (const [material, content] of Object.entries(canonicalStageMaterials())) {
+  for (const [material, content] of Object.entries(postDecisionOnly ? { "decision-log.md": "# Decision\n\n## 任务身份\n\n- **任务类型**：普通任务\n" } : canonicalStageMaterials())) {
     artifacts.writeAtomic(material, content);
   }
   const kernel = createTaskKernel(task, {
@@ -77,11 +79,11 @@ function runnerFixture(taskId) {
     now: () => "2026-08-30T12:00:00.000Z",
   });
   const context = {
-    stage: "build-spec",
+    stage,
     task,
     kernel,
     identity: task.identity,
-    workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"),
+    workflowRunId: kernel.deriveStageWorkflowRunId(stage),
     manifest: task.manifest,
     candidateWorkspace,
     artifacts,
@@ -91,7 +93,7 @@ function runnerFixture(taskId) {
 }
 
 function reflectionValue(taskId, stageStatus, { stageOutcome, currentBinding, ...overrides } = {}) {
-  if (!stageOutcome) {
+  if (!stageOutcome && !currentBinding) {
     return {
       schema_version: "stage-reflection.v1",
       record_kind: "judgment",
@@ -107,7 +109,7 @@ function reflectionValue(taskId, stageStatus, { stageOutcome, currentBinding, ..
       ...overrides,
     };
   }
-  const outputHash = hash(JSON.stringify({ taskId, stageStatus, attempt: stageOutcome.value.attempt_id }));
+  const outputHash = hash(JSON.stringify({ taskId, stageStatus, attempt: stageOutcome?.value?.attempt_id ?? currentBinding.attempt }));
   return {
     schema_version: "stage-reflection.v2",
     record_kind: "judgment",
@@ -123,7 +125,7 @@ function reflectionValue(taskId, stageStatus, { stageOutcome, currentBinding, ..
       classification: "simplify",
       severity: "low",
       reason: "构造性阶段反射已绑定当前 stage outcome。",
-      evidence_refs: [stageOutcome.ref],
+      evidence_refs: stageOutcome ? [stageOutcome.ref] : [],
       confidence: "medium",
       next_review_trigger: "下一次同类阶段完成时",
     }],
@@ -131,8 +133,8 @@ function reflectionValue(taskId, stageStatus, { stageOutcome, currentBinding, ..
     lessons_added: [],
     identity: { ...currentBinding },
     executor: {
-      source_id: "constructed-reflection-executor",
-      attempt_id: stageOutcome.value.attempt_id,
+      source_id: stageOutcome ? "constructed-reflection-executor" : "workflowhub-current-session",
+      attempt_id: stageOutcome?.value?.attempt_id ?? currentBinding.attempt,
       started_at: "2026-08-30T11:59:00.000Z",
       completed_at: "2026-08-30T12:00:00.000Z",
       output_hash: outputHash,
@@ -470,4 +472,74 @@ describe("stage-reflection constructed end-to-end contract", () => {
     expect(readFileSync(join(repoRoot, "CONTEXT.md"), "utf8")).toContain("判断层（judgment）vs 事实层（fact）");
     expect(readFileSync(join(repoRoot, "specs/archive/workflowhub-stage-reflection-20260830/tasks.md"), "utf8")).toContain("m15-retirement");
   });
+});
+
+
+// Constructed public CLI execution, not production Task/session reflection evidence.
+describe("CARD-03 P6 post decision-only make-decision public reflection (ORACLE-FIX-001)", () => {
+  function executePublicReflection(fixture, stage) {
+    const attempt = `constructed-${stage}-current-session`;
+    const currentBinding = { task_id: fixture.task.identity.taskId, worktree: fixture.candidateWorkspace.worktreeRoot,
+      branch: fixture.candidateWorkspace.branch ?? git(fixture.candidateWorkspace.worktreeRoot, ["symbolic-ref", "--short", "HEAD"]),
+      attempt, snapshot_tree: fixture.kernel.currentVNextSnapshot().tree,
+      material_revision: fixture.kernel.currentVNextMaterialRevision() };
+    const judgment = reflectionValue(fixture.task.identity.taskId, "completed", { currentBinding, stage,
+      judgments: [{ subject_id: "constructed-public-decision-only", subject_kind: "step", classification: "simplify",
+        severity: "low", reason: "隔离夹具实际检验 decision-only public reflection，非生产反思结论。",
+        evidence_refs: [], confidence: "medium", next_review_trigger: "next constructed public-route check" }],
+      source_completeness: { compaction: false, truncation: false, visible_scope: "isolated constructed decision-only fixture", unknown_reasons: [] } });
+    const input = join(fixture.root, `${stage}-public-reflect.json`);
+    writeJson(input, judgment);
+    const home = join(fixture.root, "isolated-public-cli-home");
+    mkdirSync(home, { recursive: true });
+    // Child-only authority isolation: never mutate the official capture's HOME/epoch.
+    const childEnv = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: fixture.root };
+    delete childEnv.WORKFLOWHUB_CUTOVER_EPOCH;
+    const result = spawnSync(process.execPath, [join(repoRoot, "tools/cli/stage-runtime.mjs"), "run", "--action=reflect",
+      `--stage=${stage}`, "--project=ReflectionE2E", `--task=${fixture.task.identity.taskId}`, `--task-path=${fixture.task.taskPath}`, `--input=${input}`],
+      { cwd: fixture.candidateWorkspace.worktreeRoot, encoding: "utf8", timeout: 30000,
+        env: childEnv });
+    return { result, value: result.stdout.trim() ? JSON.parse(result.stdout) : null, inputJudgment: judgment };
+  }
+
+  it("exits zero and writes an authentic stage row through executed public reflect with decision-log only", () => {
+    const fixture = runnerFixture("constructed-post-decision-only", { postDecisionOnly: true, stage: "make-decision" });
+    const { result, value, inputJudgment } = executePublicReflection(fixture, "make-decision");
+    const factsPath = join(fixture.task.taskPath, "facts.jsonl");
+    const facts = existsSync(factsPath) ? readTaskFacts(fixture.task.taskPath) : [];
+    const diagnostic = JSON.stringify({ child_exit: result.status, stdout: result.stdout, stderr: result.stderr,
+      facts_path: factsPath, facts_present: existsSync(factsPath), facts }, null, 2);
+    expect(result.error, diagnostic).toBeUndefined();
+    expect(result.status, diagnostic).toBe(0);
+    expect(value, diagnostic).not.toHaveProperty("stage_row_error");
+    const stageRows = facts.filter((row) => row.record_kind === "stage" && row.stage === "make-decision");
+    expect(stageRows, diagnostic).toHaveLength(1);
+    const stage = stageRows[0];
+    expect(stage.source, diagnostic).toBe("stage-end:make-decision");
+    expect(stage.spec_analyze.value, diagnostic).toMatchObject({ ref: value.ref, sha256: value.sha256 });
+    const raw = fixture.task.readRecord(value.ref), reflection = JSON.parse(raw);
+    expect(hash(raw), diagnostic).toBe(value.sha256);
+    expect(reflection, diagnostic).toMatchObject({ schema_version: "stage-reflection.v2", task_id: fixture.task.identity.taskId, stage: "make-decision", status: "ok" });
+    expect(reflection.identity, diagnostic).toEqual(inputJudgment.identity);
+    expect(reflection.identity.worktree, diagnostic).toBe(fixture.candidateWorkspace.worktreeRoot);
+    expect(stage.snapshot_tree.value, diagnostic).toBe(reflection.identity.snapshot_tree);
+    expect(existsSync(fixture.artifacts.path("spec.md")), diagnostic).toBe(false);
+    expect(existsSync(fixture.artifacts.path("phases/index.md")), diagnostic).toBe(false);
+    expect(fixture.artifacts.read("decision-log.md"), diagnostic).toContain("# Decision");
+  }, 40000);
+
+  it("keeps later-stage missing-index failure visible instead of publishing a completed stage row", () => {
+    const fixture = runnerFixture("constructed-post-later-missing-index", { postDecisionOnly: true, stage: "build-code" });
+    const { result, value } = executePublicReflection(fixture, "build-code");
+    const factsPath = join(fixture.task.taskPath, "facts.jsonl");
+    const facts = existsSync(factsPath) ? readTaskFacts(fixture.task.taskPath) : [];
+    const diagnostic = JSON.stringify({ child_exit: result.status, stdout: result.stdout, stderr: result.stderr,
+      facts_path: factsPath, facts_present: existsSync(factsPath), facts }, null, 2);
+    expect(result.error, diagnostic).toBeUndefined();
+    expect(`${result.stderr} ${value?.stage_row_error ?? ""}`, diagnostic).toMatch(/current task material missing or unreadable: spec\.md; phases\/index\.md/);
+    expect(facts.filter((row) => row.record_kind === "stage" && row.stage === "build-code"), diagnostic).toEqual([]);
+    expect(existsSync(fixture.artifacts.path("spec.md")), diagnostic).toBe(false);
+    expect(existsSync(fixture.artifacts.path("phases/index.md")), diagnostic).toBe(false);
+  }, 40000);
+
 });

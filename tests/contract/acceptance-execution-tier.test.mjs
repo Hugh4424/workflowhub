@@ -18,6 +18,7 @@ import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../
 import { deriveAcceptanceExecutionAssertions } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
+import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 import { authenticateAcceptanceExecutionAggregate, authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { redactProviderHostPaths } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { authenticatedEvidenceDigest, reviewPacketMaterialId } from "../../runtime/review/review-packet-identity.mjs";
@@ -1960,6 +1961,163 @@ function p9Fresh(state, fact) {
   };
 }
 
+describe("normal verify-code independently authenticated E2E sources", () => {
+  it("automatically freezes actual current execution in the normal provider packet without a caller selector", async () => {
+    const state = p9Fixture({ tier: "service", independent: true });
+    const execution = await p9Execute(state);
+    const executionFact = p9Fact(state, execution, "acceptance_execution");
+    expect(executionFact.status).toBe("passed");
+    // Two authenticated envelopes name the same actual process aggregate.
+    // Distinct wrappers do not create two execution choices.
+    const copy = JSON.parse(state.task.readRecord(executionFact.evidence[0].ref));
+    copy.summary = { ...copy.summary, scenario: "same actual execution through a second authenticated envelope" };
+    const copyRaw = JSON.stringify(copy), copyHash = p9Hash(copyRaw);
+    const copyRef = `quality/evidence/acceptance/build-code/acceptance_execution-${copyHash}.json`;
+    state.context.kernel.publishCanonicalRecord(copyRef, copyRaw);
+    const copiedFact = createQualityFact({ taskId: executionFact.task_id, stage: executionFact.stage, materialRevision: executionFact.material_revision,
+      materialScope: executionFact.material_scope, materialScopeRevision: executionFact.material_scope_revision, snapshotTree: executionFact.snapshot_tree,
+      kind: executionFact.kind, status: executionFact.status, subject: executionFact.subject,
+      evidence: [{ ref: copyRef, sha256: copyHash, evidence_type: "acceptance_evidence" }] });
+    state.context.kernel.publishCanonicalRecord(copiedFact.ref, JSON.stringify(copiedFact.value));
+    const trace = p9ConfigureReview(state);
+    const review = await p9PublicReview(state, trace, null);
+    const original = state.task.readRecord(review.result_ref);
+    expect(JSON.parse(readFileSync(join(state.root, "ordinary-review-input.json"), "utf8")).request).not.toHaveProperty("reviewed_execution");
+    const selected = p9ExecutionInput(state, execution);
+    const record = JSON.parse(original);
+    expect(record.e2e_binding?.reviewed_execution).toMatchObject({ ref: selected.ref, sha256: selected.sha256 });
+    expect(state.task.readRecord(review.report_ref)).not.toContain("## Host execution source diagnostic");
+    expect(p9FrozenReviewRequest(state, record.e2e_binding.frozen_material).reviewed_execution).toMatchObject({ ref: selected.ref, sha256: selected.sha256 });
+    const packet = JSON.parse(trace.bundles[0].bytes["authenticated-evidence.json"]);
+    expect(packet.runtime_execution.raw).toBe(redactProviderHostPaths(state.task.readRecord(selected.ref)));
+    const aggregate = JSON.parse(state.task.readRecord(selected.ref));
+    for (const item of aggregate.subject_fact.execution_items) for (const reference of item.evidence_refs) {
+      expect(packet.runtime_execution_records).toContainEqual(expect.objectContaining({ ...reference, raw: redactProviderHostPaths(state.task.readRecord(reference.ref)) }));
+    }
+    expect(packet.runtime_execution_outputs.some((entry) => entry.text?.includes("service-response"))).toBe(true);
+    const recorded = await p9Verify(state, { quality_review: review.result_ref });
+    expect(p9Fact(state, recorded, "code_review").review_status).toBe("clean");
+    const evidence = readCurrentE2eAcceptanceEvidence({ ...state.context, stage: "verify-code" }, { quality_review: review.result_ref });
+    expect(evidence).toMatchObject({ required: true, execution: { status: "passed", ref: expect.stringMatching(/^quality\/evidence\/acceptance\/build-code\//) }, independent_review: { status: "recorded" }, user_confirmation: { status: "missing" } });
+    expect(p9Fact(state, recorded, "e2e_acceptance").status).not.toBe("passed");
+    const confirmation = await p9Confirm(state, review.result_ref);
+    const accepted = await p9Verify(state, { quality_review: review.result_ref, confirmation: confirmation.ref });
+    const fact = p9Fact(state, accepted, "e2e_acceptance");
+    expect(fact.status, JSON.stringify(accepted)).toBe("passed");
+    expect(p9Fresh(state, fact)).toMatchObject({ authenticated: true, status: "current" });
+    const afterConfirmation = readCurrentE2eAcceptanceEvidence({ ...state.context, stage: "verify-code" }, { quality_review: review.result_ref, confirmation: confirmation.ref });
+    expect(afterConfirmation.execution.status).toBe("passed");
+    expect(afterConfirmation.independent_review.status).toBe("recorded");
+    expect(trace.dispatches).toBe(1);
+    expect(state.task.readRecord(review.result_ref)).toBe(original);
+    const sources = state.task.listCanonicalQualityFactRefs().filter((ref) => JSON.parse(state.task.readRecord(ref)).subject === "acceptance_execution")
+      .map((ref) => ({ path: join(state.task.taskPath, ref), bytes: readFileSync(join(state.task.taskPath, ref)) }));
+    for (const delta of [{ evidence_sha256: "f".repeat(64) }, { task_id: "foreign-task" }, { material_revision: `revision-${"f".repeat(64)}` }, { snapshot_tree: "f".repeat(40) }]) {
+      try {
+        for (const { path, bytes } of sources) {
+          const value = JSON.parse(bytes);
+          writeFileSync(path, JSON.stringify(delta.evidence_sha256
+            ? { ...value, evidence: value.evidence.map((reference) => ({ ...reference, sha256: delta.evidence_sha256 })) }
+            : { ...value, ...delta }));
+        }
+        const rejected = readCurrentE2eAcceptanceEvidence({ ...state.context, stage: "verify-code" }, { quality_review: review.result_ref, confirmation: confirmation.ref });
+        expect(rejected.execution.status, JSON.stringify(delta)).toBe("missing");
+        expect(rejected.independent_review.status).toBe("missing");
+      } finally { for (const { path, bytes } of sources) writeFileSync(path, bytes); }
+    }
+  });
+
+  it("shows a real deferred execution without treating scenario success as full business acceptance", async () => {
+    const state = p9Fixture({ tier: "service", independent: true, futureStageAcIds: [p9Ids[1]] });
+    const service = join(state.candidate.worktreeRoot, "acceptance-service.mjs");
+    writeFileSync(service, readFileSync(service, "utf8").replace("acceptance_criterion_id:'AC-EXE-002',assertions:", "acceptance_criterion_id:'AC-EXE-002',outcome:'deferred',owner:'verify-code',reason:'requires independent semantic review and final authorization',assertions:"));
+    const execution = await p9Execute(state);
+    const actual = p9PerAc(state, execution);
+    expect(actual.records.some((leaf) => leaf.subject_fact.status === "deferred"), JSON.stringify(actual.aggregate)).toBe(true);
+    const evidence = readCurrentE2eAcceptanceEvidence({ ...state.context, stage: "verify-code" });
+    expect(evidence.execution).toMatchObject({ status: "missing", ref: expect.stringMatching(/^quality\/evidence\/acceptance\/build-code\//), executor_actor: { source_id: "workflowhub-current-session" }, reason: expect.stringContaining("does not pass every active acceptance criterion") });
+    expect(evidence.independent_review.status).toBe("missing");
+    expect(evidence.user_confirmation.status).toBe("missing");
+    const trace = p9ConfigureReview(state);
+    const review = await p9PublicReview(state, trace, null);
+    const record = JSON.parse(state.task.readRecord(review.result_ref));
+    expect(record.e2e_binding).toBeDefined();
+    const packet = JSON.parse(trace.bundles[0].bytes["authenticated-evidence.json"]);
+    expect(packet.runtime_execution_records.some((entry) => JSON.parse(entry.raw).subject_fact.status === "deferred")).toBe(true);
+    const confirmation = await p9Confirm(state, review.result_ref);
+    const verified = await p9Verify(state, { quality_review: review.result_ref, confirmation: confirmation.ref });
+    expect(p9Fact(state, verified, "e2e_acceptance").status).toBe("missing");
+    expect(trace.dispatches).toBe(1);
+  });
+
+  it.each(["absent", "stale", "foreign", "corrupt", "ambiguous"])("discloses implicit %s execution without blocking the normal code review", async (condition) => {
+    const state = p9Fixture({ tier: "service", independent: true });
+    const variant = join(state.marker, "actual-variant.json");
+    if (condition === "ambiguous") {
+      writeFileSync(variant, "{}");
+      const service = join(state.candidate.worktreeRoot, "acceptance-service.mjs");
+      writeFileSync(service, readFileSync(service, "utf8").replace("import { writeFileSync }", "import { writeFileSync, readFileSync }")
+        .replace("actual:observed", `actual:{...observed,...JSON.parse(readFileSync(${JSON.stringify(variant)},'utf8'))}`));
+    }
+    if (condition !== "absent") {
+      const first = await p9Execute(state);
+      const originalRefs = state.task.listCanonicalQualityFactRefs().filter((ref) => JSON.parse(state.task.readRecord(ref)).subject === "acceptance_execution");
+      if (condition === "stale") writeFileSync(join(state.candidate.worktreeRoot, "README.md"), "real source delta before the first normal review\n");
+      if (condition === "foreign" || condition === "corrupt") for (const ref of originalRefs) {
+        const value = JSON.parse(state.task.readRecord(ref));
+        if (condition === "foreign") value.task_id = "foreign-task";
+        else value.evidence[0].sha256 = "f".repeat(64);
+        writeFileSync(join(state.task.taskPath, ref), JSON.stringify(value));
+      }
+      if (condition === "ambiguous") {
+        const originals = originalRefs.map((ref) => ({ ref, bytes: state.task.readRecord(ref) }));
+        const firstProcess = JSON.parse(readFileSync(join(state.marker, "service.json"), "utf8"));
+        expect(JSON.parse(readFileSync(join(state.marker, "service-cleanup.json"), "utf8")).closed).toBe(true);
+        expect(() => process.kill(firstProcess.pid, 0)).toThrow(/ESRCH/);
+        await p9PortIsFree(firstProcess.port);
+        for (const { ref } of originals) rmSync(join(state.task.taskPath, ref));
+        writeFileSync(variant, JSON.stringify({ second_run: "actual response differs in a separate real process" }));
+        const second = await p9Execute(state);
+        const secondProcess = JSON.parse(readFileSync(join(state.marker, "service.json"), "utf8"));
+        expect(secondProcess.pid).not.toBe(firstProcess.pid);
+        expect(JSON.parse(readFileSync(join(state.marker, "service-cleanup.json"), "utf8")).closed).toBe(true);
+        expect(() => process.kill(secondProcess.pid, 0)).toThrow(/ESRCH/);
+        await p9PortIsFree(secondProcess.port);
+        for (const { ref, bytes } of originals) writeFileSync(join(state.task.taskPath, ref), bytes);
+        expect(p9ExecutionInput(state, second).ref).not.toBe(p9ExecutionInput(state, first).ref);
+      }
+    }
+    const trace = p9ConfigureReview(state);
+    const review = await p9PublicReview(state, trace, null, { authenticated_evidence: {
+      runtime_execution: { actor: { source_id: "caller-fake" }, raw: "caller-fake-execution" },
+      runtime_execution_records: [{ raw: "caller-fake-leaf" }], runtime_execution_outputs: [{ text: "caller-fake-output" }],
+    } });
+    expect(typeof review.result_ref, JSON.stringify(review)).toBe("string");
+    expect(trace.dispatches).toBe(1);
+    const record = JSON.parse(state.task.readRecord(review.result_ref));
+    expect(record).not.toHaveProperty("e2e_binding");
+    expect(trace.bundles[0].bytes).not.toHaveProperty("authenticated-evidence.json");
+    expect(JSON.stringify(trace.bundles[0].bytes)).toContain("implicit_execution_source");
+    expect(JSON.stringify(trace.bundles[0].bytes)).not.toContain("caller-fake");
+    const originalReport = state.task.readRecord(review.report_ref);
+    const saved = JSON.parse(originalReport.match(/## Public result and coverage\n\n```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
+    expect(saved.public_result).not.toHaveProperty("authenticated_evidence");
+    expect(JSON.parse(state.task.readRecord(review.attempt_ref))).not.toHaveProperty("authenticated_evidence_sha256");
+    const diagnostic = JSON.parse(originalReport.match(/## Host execution source diagnostic\n\n```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
+    expect(diagnostic).toContain("implicit_execution_source");
+    expect(diagnostic).not.toContain("Two JSON oracle assertions");
+    if (condition === "ambiguous") expect(diagnostic).toContain("ambiguous");
+    expect(Object.values(trace.bundles[0].bytes).some((bytes) => bytes.includes(redactProviderHostPaths(diagnostic)))).toBe(true);
+    const repeated = await p9PublicReview(state, trace, null);
+    expect(repeated).toMatchObject({ reused: true, result_ref: review.result_ref, attempt_ref: review.attempt_ref });
+    expect(state.task.readRecord(review.report_ref)).toBe(originalReport);
+    expect(trace.dispatches).toBe(1);
+    const confirmation = await p9Confirm(state, review.result_ref);
+    const verified = await p9Verify(state, { quality_review: review.result_ref, confirmation: confirmation.ref });
+    expect(p9Fact(state, verified, "e2e_acceptance").status).toBe("missing");
+  }, 60_000);
+});
+
 describe("P3 T009 ordinary public review consumes actual execution", () => {
   it("selects the confirmed E2E review without consuming the OCR or Phase review receipt", () => {
     const state = p9Fixture({ tier: "service", independent: true });
@@ -1984,6 +2142,8 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
 
   it("rejects an unauthenticated explicit execution before the ordinary provider dispatch", async () => {
     const state = p9Fixture({ tier: "service", independent: true });
+    const execution = await p9Execute(state);
+    expect(p9Fact(state, execution, "acceptance_execution").status).toBe("passed");
     const trace = p9ConfigureReview(state);
     const bogus = { ref: `quality/evidence/stage-quality/build-code/acceptance_execution-${"a".repeat(64)}.json`, sha256: "a".repeat(64), quality_fact_ref: `quality/facts/${"b".repeat(64)}.json` };
     let diagnostic;
@@ -2019,7 +2179,7 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(state.task.listCanonicalReviewResultRefs()).toHaveLength(0);
   });
 
-  it("ORACLE-AC003-CURRENT-EXECUTION-NO-LEGACY-RETRY: dispatches after an older verify-code snapshot", async () => {
+  it("ORACLE-AC003-CURRENT-EXECUTION-NO-LEGACY-RETRY: retains the one-shot review after source and material drift", async () => {
     const state = p9Fixture({ tier: "service", independent: true });
     const trace = p9ConfigureReview(state);
     const oldReview = await p9PublicReview(state, trace, null, { materials: {
@@ -2033,8 +2193,11 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(oldReview.result_ref).toMatch(/^quality\/reviews\/results\//);
     expect(JSON.parse(state.task.readRecord(oldReview.attempt_ref)).terminal_status).toBe("semantic");
 
+    const originalResult = state.task.readRecord(oldReview.result_ref);
+    const originalAttempt = state.task.readRecord(oldReview.attempt_ref);
     const servicePath = join(state.candidate.worktreeRoot, "acceptance-service.mjs");
     writeFileSync(servicePath, `${readFileSync(servicePath, "utf8")}\nexport const currentSnapshotMarker = true;\n`);
+    state.context.artifacts.writeAtomic("spec.md", `${state.context.artifacts.read("spec.md")}\n<!-- current fixture material revision -->\n`);
     const execution = await p9Execute(state);
     const input = p9ExecutionInput(state, execution);
     const beforeRounds = trace.rounds;
@@ -2042,18 +2205,18 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
 
     const currentReview = await p9PublicReview(state, trace, input);
     const currentAttempt = JSON.parse(state.task.readRecord(currentReview.attempt_ref));
-    expect(trace.rounds - beforeRounds, JSON.stringify({ currentReview, error: currentAttempt.error })).toBe(1);
-    expect(trace.dispatches - beforeDispatches).toBe(1);
-    expect(currentReview).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched" });
+    expect(trace.rounds - beforeRounds, JSON.stringify({ currentReview, error: currentAttempt.error })).toBe(0);
+    expect(trace.dispatches - beforeDispatches).toBe(0);
+    expect(currentReview).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", result_ref: oldReview.result_ref, attempt_ref: oldReview.attempt_ref });
     expect(currentReview).not.toHaveProperty("retry");
-    expect(typeof currentReview.result_ref, JSON.stringify({ currentReview, error: currentAttempt.error })).toBe("string");
-    expect(currentReview.result_ref).toMatch(/^quality\/reviews\/results\//);
-    expect(currentReview.attempt_ref).not.toBe(oldReview.attempt_ref);
-    expect(currentAttempt.terminal_status).toBe("semantic");
-    expect(currentAttempt.snapshot_tree).not.toBe(JSON.parse(state.task.readRecord(oldReview.attempt_ref)).snapshot_tree);
-    expect(JSON.parse(state.task.readRecord(currentReview.result_ref)).e2e_binding.reviewed_execution).toMatchObject({
-      ref: input.ref, sha256: input.sha256,
-    });
+    expect(state.task.readRecord(oldReview.result_ref)).toBe(originalResult);
+    expect(state.task.readRecord(oldReview.attempt_ref)).toBe(originalAttempt);
+    expect(currentAttempt.snapshot_tree).not.toBe(state.context.kernel.currentVNextSnapshot().tree);
+    expect(currentAttempt.material_revision).not.toBe(state.context.kernel.currentVNextMaterialRevision());
+    expect(JSON.parse(originalResult)).not.toHaveProperty("e2e_binding");
+    const currentEvidence = readCurrentE2eAcceptanceEvidence({ ...state.context, stage: "verify-code" }, { quality_review: currentReview.result_ref });
+    expect(currentEvidence.execution.status).toBe("passed");
+    expect(currentEvidence.independent_review).toMatchObject({ status: "missing", reason: expect.stringContaining("not current or has no execution binding") });
   });
 
   it("dispatches once, freezes the actual execution/oracle bundle and consumes post-review typed confirmation", async () => {
@@ -2139,6 +2302,7 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(frozen.provider_input_sha256).not.toBe(record.material_id);
     expect(record.e2e_binding).not.toHaveProperty("confirmation");
     const unconfirmed = await p9Verify(state, { quality_review: review.result_ref });
+    expect(readCurrentE2eAcceptanceEvidence({ ...state.context, stage: "verify-code" }, { quality_review: review.result_ref })).toMatchObject({ execution: { status: "passed" }, independent_review: { status: "recorded" }, user_confirmation: { status: "missing" } });
     expect(p9Fact(state, unconfirmed, "e2e_acceptance").status).not.toBe("passed");
     const confirmation = await p9Confirm(state, review.result_ref);
     expect(confirmation.value.subject_ref).toBe(review.result_ref);

@@ -1,7 +1,7 @@
 {
   "schema": "workflowhub-business-case-catalog.v1",
   "project": "workflowhub",
-  "revision": "2026-09-28.card04-finite-a1-a2-p9-rule-sync.16",
+  "revision": "2026-09-30.card03-stable-source-anchors.17",
   "owner": "CARD-04 build-code catalog maintainer",
   "consumers": [
     "P9",
@@ -20,13 +20,14 @@
       "status": "active",
       "owner": "CARD-04 P6/T009 material owner",
       "source": {
-        "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-        "revision": "sha256:dd6b46604c71bb6aaf9f3feea9cc4956c8d4a8b172f4b15075afb0b4d1f90970"
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "revision": "anchor:## 需求变更记录"
       },
       "rule": {
         "id": "CARD-04-RULING-P6-FULL-EXEC / FR-26",
-        "revision": "sha256:16966b349a1b2f7153a313aeccccc8888a13314fc2c2ca67a32382ac434c5bf1",
-        "statement": "The current decision-log original-source census must parse its U/V/R sections with a nonzero U/V denominator, no parser errors, and R-001..R-008 index entries."
+        "revision": "anchor:### T009",
+        "statement": "The current decision-log original-source census must parse its U/V/R sections with a nonzero U/V denominator, no parser errors, and R-001..R-008 index entries.",
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P6.md"
       },
       "scenarios": {
         "normal": {
@@ -57,8 +58,8 @@
       "risk": "A zero or inflated original-source denominator could make later coverage claims misleading; the focused parser test alone does not prove the official AC-26 diagnostic or phase conclusion. Independent business-effect evidence remains unknown because no separate before/after reader has been authenticated.",
       "environment": "Local Node v24.14.0 and Vitest 2.1.9; current decision-log bytes, no network service.",
       "change_triggers": [
-        "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-        "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md",
+        "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P6.md",
         "runtime/stage/stage-content-contracts.mjs"
       ],
       "implementation_interfaces": [
@@ -97,13 +98,13 @@
       "effect_observation": {
         "schema_version": "workflowhub-business-effect-observation.v1",
         "observation_status": "not_yet_observed",
-        "rule_revision": "sha256:16966b349a1b2f7153a313aeccccc8888a13314fc2c2ca67a32382ac434c5bf1",
+        "rule_revision": "anchor:### T009",
         "canonical_source": {
           "type": "current_task_acceptance_quality_fact_chain",
           "stage": "build-code",
           "subject": "AC-26",
-          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P6.md",
+          "material_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+          "rule_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P6.md",
           "quality_fact_schema": "quality-fact.v1",
           "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
           "acceptance_schema": "acceptance-evidence.v1",
@@ -139,13 +140,14 @@
       "status": "active",
       "owner": "CARD-04 P7/T015 evidence-value owner",
       "source": {
-        "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
-        "revision": "sha256:2bede1ef0f66683fc3b043e67a74d977c514fc81f326afe9ac97bc967a8792b6"
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+        "revision": "anchor:### T015"
       },
       "rule": {
         "id": "CARD-04-RULING-A1-TRUTH / FR-27",
-        "revision": "sha256:2bede1ef0f66683fc3b043e67a74d977c514fc81f326afe9ac97bc967a8792b6",
-        "statement": "Acceptance evidence admits the eight listed result values; missing, inconsistent, incomplete and unavailable remain incomplete in quality-store verification, while invalid values are rejected."
+        "revision": "anchor:### T015",
+        "statement": "Acceptance evidence admits the eight listed result values; missing, inconsistent, incomplete and unavailable remain incomplete in quality-store verification, while invalid values are rejected.",
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md"
       },
       "scenarios": {
         "normal": {
@@ -179,7 +181,7 @@
         "runtime/evidence/acceptance-evidence-validator.mjs",
         "runtime/evidence/freshness.mjs",
         "runtime/evidence/quality-store.mjs",
-        "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md"
+        "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md"
       ],
       "implementation_interfaces": [
         "runtime/evidence/acceptance-evidence-validator.mjs#validateAcceptanceEvidence",
@@ -244,13 +246,13 @@
       "effect_observation": {
         "schema_version": "workflowhub-business-effect-observation.v1",
         "observation_status": "not_yet_observed",
-        "rule_revision": "sha256:2bede1ef0f66683fc3b043e67a74d977c514fc81f326afe9ac97bc967a8792b6",
+        "rule_revision": "anchor:### T015",
         "canonical_source": {
           "type": "current_task_acceptance_quality_fact_chain",
           "stage": "build-code",
           "subject": "AC-27",
-          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
-          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "material_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "rule_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md",
           "quality_fact_schema": "quality-fact.v1",
           "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
           "acceptance_schema": "acceptance-evidence.v1",
@@ -289,13 +291,14 @@
       "status": "active",
       "owner": "CARD-04 P7/T015 regression maintainer",
       "source": {
-        "path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
-        "revision": "sha256:2bede1ef0f66683fc3b043e67a74d977c514fc81f326afe9ac97bc967a8792b6"
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+        "revision": "anchor:### T015"
       },
       "rule": {
         "id": "CARD-04-RULING-A1-TRUTH / FR-27",
-        "revision": "sha256:2bede1ef0f66683fc3b043e67a74d977c514fc81f326afe9ac97bc967a8792b6",
-        "statement": "P7/T015 requires the existing deferred acceptance semantics regression guard to remain green while the eight-value acceptance result whitelist and six-value nonterminal handling are introduced; quality-fact.v1.status remains unchanged."
+        "revision": "anchor:### T015",
+        "statement": "P7/T015 requires the existing deferred acceptance semantics regression guard to remain green while the eight-value acceptance result whitelist and six-value nonterminal handling are introduced; quality-fact.v1.status remains unchanged.",
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md"
       },
       "scenarios": {
         "normal": {
@@ -381,13 +384,13 @@
       "effect_observation": {
         "schema_version": "workflowhub-business-effect-observation.v1",
         "observation_status": "not_yet_observed",
-        "rule_revision": "sha256:2bede1ef0f66683fc3b043e67a74d977c514fc81f326afe9ac97bc967a8792b6",
+        "rule_revision": "anchor:### T015",
         "canonical_source": {
           "type": "current_task_acceptance_quality_fact_chain",
           "stage": "build-code",
           "subject": "AC-27",
-          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
-          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "material_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md",
+          "rule_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P7.md",
           "quality_fact_schema": "quality-fact.v1",
           "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
           "acceptance_schema": "acceptance-evidence.v1",
@@ -423,13 +426,14 @@
       "status": "active",
       "owner": "CARD-04 P9/T018 business rule owner",
       "source": {
-        "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-        "revision": "sha256:dd6b46604c71bb6aaf9f3feea9cc4956c8d4a8b172f4b15075afb0b4d1f90970"
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "revision": "anchor:## 需求变更记录"
       },
       "rule": {
         "id": "P9/T018 / FR-32",
-        "revision": "sha256:c507d0506d2aba77d75b6b0ccb13b769160ed690843e607e4ae820b187551376",
-        "statement": "Before a test receipt exists, read the authenticated Task bootstrap and current Git source snapshot; include committed clean, staged, dirty, relevant untracked, rename and delete paths, then compare the finite expected selection with the specified current run. The outer returned change_scope arrays are not yet bound to a canonical receipt."
+        "revision": "anchor:### T018",
+        "statement": "Before a test receipt exists, read the authenticated Task bootstrap and current Git source snapshot; include committed clean, staged, dirty, relevant untracked, rename and delete paths, then compare the finite expected selection with the specified current run. The outer returned change_scope arrays are not yet bound to a canonical receipt.",
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md"
       },
       "scenarios": {
         "normal": {
@@ -460,8 +464,8 @@
       "risk": "Only finite authenticated change-source and selection consistency can be checked today. The outer call's returned changed_paths/changes arrays lack same-run trusted persistence, and unmapped changes remain unknown; AC-32 is not proved.",
       "environment": "Authenticated CARD-04 Task worktree, local Git, Node v24.14.0 and Vitest 2.1.9; no network service.",
       "change_triggers": [
-        "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-        "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+        "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md",
         "workflows/build-code/change-scope.mjs",
         "workflows/build-code/capture.mjs",
         "workflows/build-code/targeted-capture.mjs",
@@ -506,13 +510,13 @@
       "effect_observation": {
         "schema_version": "workflowhub-business-effect-observation.v1",
         "observation_status": "not_yet_observed",
-        "rule_revision": "sha256:c507d0506d2aba77d75b6b0ccb13b769160ed690843e607e4ae820b187551376",
+        "rule_revision": "anchor:### T018",
         "canonical_source": {
           "type": "current_task_acceptance_quality_fact_chain",
           "stage": "build-code",
           "subject": "AC-32",
-          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+          "material_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+          "rule_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md",
           "quality_fact_schema": "quality-fact.v1",
           "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
           "acceptance_schema": "acceptance-evidence.v1",
@@ -548,13 +552,14 @@
       "status": "active",
       "owner": "CARD-04 P9/T019 business rule owner",
       "source": {
-        "path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-        "revision": "sha256:dd6b46604c71bb6aaf9f3feea9cc4956c8d4a8b172f4b15075afb0b4d1f90970"
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "revision": "anchor:## 需求变更记录"
       },
       "rule": {
         "id": "P9/T019 / FR-30",
-        "revision": "sha256:c507d0506d2aba77d75b6b0ccb13b769160ed690843e607e4ae820b187551376",
-        "statement": "For finite registered, selected and actually executed test targets, bind current file hashes and declared commands to the independent test registry, then compare every full runnable leaf and status against the raw runner report; unrun targets and all other project entry points remain unknown."
+        "revision": "anchor:### T019",
+        "statement": "For finite registered, selected and actually executed test targets, bind current file hashes and declared commands to the independent test registry, then compare every full runnable leaf and status against the raw runner report; unrun targets and all other project entry points remain unknown.",
+        "path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md"
       },
       "scenarios": {
         "normal": {
@@ -585,8 +590,8 @@
       "risk": "Finite registration does not discover all real test entry points. Registry/readback only proves a selected executed target; unrun files, uncharted business rules, and AC-30-wide coverage remain unknown.",
       "environment": "Authenticated CARD-04 Task worktree, repository Node v24.14.0/Vitest 2.1.9 CLI and raw JSON reporter; no network service.",
       "change_triggers": [
-        "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-        "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+        "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+        "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md",
         "docs/quality/test-asset-registry.json",
         "workflows/build-code/test-asset-inventory.mjs",
         "workflows/build-code/targeted-capture.mjs",
@@ -632,13 +637,13 @@
       "effect_observation": {
         "schema_version": "workflowhub-business-effect-observation.v1",
         "observation_status": "not_yet_observed",
-        "rule_revision": "sha256:c507d0506d2aba77d75b6b0ccb13b769160ed690843e607e4ae820b187551376",
+        "rule_revision": "anchor:### T019",
         "canonical_source": {
           "type": "current_task_acceptance_quality_fact_chain",
           "stage": "build-code",
           "subject": "AC-30",
-          "material_source_path": "specs/workflowhub-thin-core-card-04-20260919/decision-log.md",
-          "rule_source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+          "material_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/decision-log.md",
+          "rule_source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md",
           "quality_fact_schema": "quality-fact.v1",
           "quality_fact_ref_template": "quality/facts/{fact_digest}.json",
           "acceptance_schema": "acceptance-evidence.v1",
@@ -679,7 +684,7 @@
         "phase_id": "P9",
         "task_id": "T018",
         "test_target": "tests/contract/build-code-change-scope.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md",
         "consumer_path": "workflows/build-code/capture.mjs",
         "change_trigger": "workflows/build-code/capture.mjs",
         "ac_ids": [
@@ -697,7 +702,7 @@
         "phase_id": "P9",
         "task_id": "T019",
         "test_target": "tests/contract/build-code-test-inventory.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P9.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P9.md",
         "consumer_path": "workflows/build-code/capture.mjs",
         "change_trigger": "workflows/build-code/capture.mjs",
         "ac_ids": [
@@ -715,7 +720,7 @@
         "phase_id": "P10",
         "task_id": "T020",
         "test_target": "tests/contract/build-code-case-selection.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P10.md",
         "consumer_path": "workflows/build-code/case-selection.mjs",
         "change_trigger": "workflows/build-code/case-selection.mjs",
         "ac_ids": [
@@ -733,7 +738,7 @@
         "phase_id": "P10",
         "task_id": "T020",
         "test_target": "tests/contract/build-code-targeted-runner.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P10.md",
         "consumer_path": "workflows/build-code/targeted-runner.mjs",
         "change_trigger": "workflows/build-code/targeted-runner.mjs",
         "ac_ids": [
@@ -751,7 +756,7 @@
         "phase_id": "P10",
         "task_id": "T021",
         "test_target": "tests/contract/build-code-case-reconciliation.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P10.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P10.md",
         "consumer_path": "workflows/build-code/case-reconciliation.mjs",
         "change_trigger": "workflows/build-code/case-reconciliation.mjs",
         "ac_ids": [
@@ -769,7 +774,7 @@
         "phase_id": "P11",
         "task_id": "T022",
         "test_target": "tests/contract/post-business-browser-reconciliation.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P11.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P11.md",
         "consumer_path": "runtime/stage/stage-content-contracts.mjs",
         "change_trigger": "tests/contract/post-business-browser-reconciliation.test.mjs",
         "ac_ids": [
@@ -787,7 +792,7 @@
         "phase_id": "P12",
         "task_id": "T023",
         "test_target": "tests/contract/verify-code-business-handoff.test.mjs",
-        "source_path": "specs/workflowhub-thin-core-card-04-20260919/phases/P12.md",
+        "source_path": "specs/archive/workflowhub-thin-core-card-04-20260919/phases/P12.md",
         "consumer_path": "workflows/verify-code/SKILL.md",
         "change_trigger": "workflows/verify-code/SKILL.md",
         "ac_ids": [

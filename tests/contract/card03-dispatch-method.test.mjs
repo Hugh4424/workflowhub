@@ -57,6 +57,23 @@ describe("card-03 T001 dispatch method text (ORACLE-DISP-001)", () => {
     expect(code).toContain("workflows/build-plan/SKILL.md");
   });
 
+  it("repair dispatch carries readable original findings and preserves failures (T-012)", () => {
+    const section = dispatchSection(skill("build-code")) ?? "";
+    expect(section).toContain("必须附上审查/测试发现的原文");
+    expect(section).toContain("可读取的原件 ref");
+    expect(section).toContain("保留原始 finding/失败输出");
+  });
+
+  it("five-stage concurrency follows the task plan and replaces fixed 4/4/2 (T-015)", () => {
+    const agents = read("AGENTS.md");
+    expect(agents).toContain("五阶段共用并发区间为 2–5");
+    expect(agents).toContain("build-plan 的当前并行方案里逐任务确定");
+    const decision = skill("make-decision");
+    expect(decision).not.toContain("并行上限固定为：研究 4、debate 4、红蓝 2");
+    expect(decision).toContain("并发按 `AGENTS.md` 的五阶段共用纪律与本任务当前并行方案执行");
+    expect(decision).toContain("交互步骤与依赖链按顺序执行");
+  });
+
   it("build-code routes review/test repairs back to the original implementation subagent", () => {
     const section = dispatchSection(skill("build-code")) ?? "";
     expect(section).toContain("原实施子代理");

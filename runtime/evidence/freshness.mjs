@@ -6,7 +6,7 @@ import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
+import { currentPhaseWriteSetSnapshot as phaseSnapshot, phaseWriteSetChanges, CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalImplementationReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
@@ -24,6 +24,7 @@ import { authenticatedEvidenceDigest } from "../review/review-packet-identity.mj
 import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort, phaseFilesFromIndex } from "../task/material-workspace.mjs";
+
 
 export function ordinaryReviewMaterialRevision(materials, materialScope = null) {
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) throw new TypeError("ordinary review materials must be a map");
@@ -303,6 +304,7 @@ export function authenticateCodeReviewRepairs({ review, result, taskId, snapshot
       const receipt = JSON.parse(raw);
       if (!["build-code", "verify-code"].includes(receipt.stage)) throw new Error("review repair check stage is invalid");
       validateCanonicalTestReceipt(receipt, { taskId, stage: receipt.stage, snapshotTree,
+        ...(receipt.stage === "build-code" ? { currentSnapshot: phaseSnapshot(workspaceRoot, taskId, snapshotTree, receipt.phase_evidence?.phase_id, receipt.command) } : {}),
         expectedProducerComponent: `${receipt.stage}-test-capture`, requirePassed: true });
       if (receipt.material_revision !== undefined && receipt.material_revision !== materialRevision) throw new Error("review repair check material mismatch");
       if (sha256(read(receipt.output_ref)) !== receipt.output_hash) throw new Error("review repair check output hash mismatch");
@@ -699,7 +701,7 @@ function authenticateE2eAcceptanceStageQuality(value, fact, read, dependencies, 
   authenticateExecutionConfirmation(selected.confirmation.value, selected.confirmation.reference, selected.review.reference, fact, read, dependencies, `${key}:confirmation`);
 }
 
-function authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot = false }) {
+function authenticateNested(fact, evidence, raw, { read, dependencies, key, allowMaterialOnlySnapshot = false, workspaceRoot }) {
   let value;
   try { value = JSON.parse(raw); } catch {
     dependencies[key] = "stale";
@@ -765,6 +767,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
           taskId: fact.task_id,
           stage: receiptStage,
           snapshotTree: fact.snapshot_tree,
+          ...(receiptStage === "build-code" ? { currentSnapshot: phaseSnapshot(workspaceRoot, fact.task_id, fact.snapshot_tree, undefined, value.command) } : {}),
           expectedProducerComponent,
           requirePassed: false,
         });
@@ -985,11 +988,11 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
 /**
  * Authenticate a recorded quality fact and its immutable evidence chain.
  *
- * This reader deliberately has no current material or worktree input.  The
- * fact's material/snapshot fields remain part of its own proof binding, while
- * later material edits are not treated as an invalidation signal.
+ * The optional authenticated workspace resolves an existing Phase gate command
+ * for build-code test currentness. Original fact and receipt identities remain
+ * unchanged; missing scope and verify-code retain exact source-tree checks.
  */
-export function authenticateQualityFactRecord(fact, { read } = {}) {
+export function authenticateQualityFactRecord(fact, { read, workspaceRoot } = {}) {
   if (!fact || typeof fact !== "object" || Array.isArray(fact)
       || typeof fact.ref !== "string" || typeof fact.sha256 !== "string"
       || typeof read !== "function") {
@@ -1028,7 +1031,7 @@ export function authenticateQualityFactRecord(fact, { read } = {}) {
         // authenticateNested below records the integrity failure.
       }
     }
-    authenticateNested(parsed, evidence, raw, { read, dependencies, key });
+    authenticateNested(parsed, evidence, raw, { read, dependencies, key, workspaceRoot });
   }
   const values = Object.values(dependencies);
   const missing = values.includes("missing");
@@ -1080,12 +1083,22 @@ export function authenticateBuildCodeCompletion({ task: taskHandle, read, curren
       const latest = ranked.filter(({ time }) => time === Math.max(...ranked.map(({ time }) => time)));
       return latest.length === 1 ? latest[0].entry : null;
     };
+    const reviewEntry = select("phase_review");
+    const reviewFact = reviewEntry?.fact?.value ?? reviewEntry?.fact;
+    let phaseId;
+    if (reviewFact?.evidence?.length === 1) {
+      const source = JSON.parse(read(reviewFact.evidence[0].ref));
+      if (source.subject_kind === "phase" && source.review_scope === "phase") phaseId = source.phase_id;
+    }
+    const workspaceRoot = openCurrentTaskWorkspace(task).worktreeRoot;
+    const currentSnapshot = phaseId ? phaseSnapshot(workspaceRoot, taskId, snapshotTree, phaseId) : undefined;
     const authenticate = (entry, current = true) => {
       if (!entry?.fact?.ref) throw new Error("completion fact is missing");
       const raw = read(entry.fact.ref), fact = JSON.parse(raw);
       if (JSON.stringify(fact) !== JSON.stringify(entry.fact.value ?? entry.fact) || fact.task_id !== taskId
-          || fact.stage !== "build-code" || (current && (fact.material_revision !== currentMaterialRevision || fact.snapshot_tree !== snapshotTree))
-          || !authenticateQualityFactRecord({ ...fact, ref: entry.fact.ref, sha256: sha256(raw) }, { read }).authenticated) throw new Error("completion fact is unauthenticated");
+          || fact.stage !== "build-code" || (current && (fact.material_revision !== currentMaterialRevision
+            || (currentSnapshot ? phaseWriteSetChanges({ ...currentSnapshot, fromTree: fact.snapshot_tree, toTree: snapshotTree }).length > 0 : fact.snapshot_tree !== snapshotTree)))
+          || !authenticateQualityFactRecord({ ...fact, ref: entry.fact.ref, sha256: sha256(raw) }, { read, workspaceRoot }).authenticated) throw new Error("completion fact is unauthenticated");
       return fact;
     };
     try {
@@ -1894,10 +1907,11 @@ export function authenticateP5StageEndReport(taskHandle) {
     const implementation = JSON.parse(receiptRaw.implementation);
     const tests = JSON.parse(receiptRaw.tests);
     const review = JSON.parse(receiptRaw.review);
+    const currentSnapshot = phaseSnapshot(worktree, task.identity.taskId, snapshot.tree, "P5");
     validateCanonicalImplementationReceipt(implementation, { taskId: task.identity.taskId,
-      snapshotTree: snapshot.tree, read });
+      snapshotTree: snapshot.tree, currentSnapshot, read });
     validateCanonicalTestReceipt(tests, { taskId: task.identity.taskId, stage: "build-code",
-      snapshotTree: snapshot.tree, expectedProducerComponent: "build-code-test-capture", requirePassed: true });
+      snapshotTree: snapshot.tree, currentSnapshot, expectedProducerComponent: "build-code-test-capture", requirePassed: true });
     const testCommand = /^(?:npx |\.\/node_modules\/\.bin\/)vitest run runtime\/stage\/stage-end-report\.test\.mjs(?: --config vitest\.config\.mjs --poolOptions\.forks\.singleFork --no-fileParallelism)?$/;
     const output = read(tests.output_ref);
     p5Require(testCommand.test(tests.command) && isCompleteP5T007VitestOutput(output)
@@ -1931,7 +1945,8 @@ export function authenticateP5StageEndReport(taskHandle) {
     let phaseReviewFact = false;
     let phaseReviewCount = 0;
     const staleReviewWarning = "phase_review:stale-review-snapshot";
-    const staleReview = review.snapshot_tree !== snapshot.tree || review.material_revision !== materialRevision;
+    const staleReview = (currentSnapshot ? phaseWriteSetChanges({ ...currentSnapshot, fromTree: review.snapshot_tree, toTree: snapshot.tree }).length > 0
+      : review.snapshot_tree !== snapshot.tree) || review.material_revision !== materialRevision;
     p5Require((source.stage_result?.quality_warnings ?? []).filter((value) => value === staleReviewWarning).length
       === (staleReview ? 1 : 0), "P5 original review freshness is not disclosed accurately");
     p5Require((source.stage_result?.quality_warnings ?? []).filter((value) =>

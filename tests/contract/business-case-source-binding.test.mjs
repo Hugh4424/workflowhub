@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { businessCaseAnchorErrors } from "../../workflows/build-code/case-reconciliation.mjs";
 import { describe, expect, it } from "vitest";
 import { selectAffectedCases } from "../../workflows/build-code/case-selection.mjs";
 
@@ -310,5 +311,21 @@ describe("CARD-04 P8 case source binding", () => {
         ...entry.effect_observation, observation_status: "observed",
       } }, authority)).toContain("unproven effect was claimed observed");
     }
+  });
+});
+
+
+describe("CARD-03 catalog read failures retain their original cause", () => {
+  const entry = { source: { path: "source.md", revision: "anchor:## Source" },
+    rule: { path: "rule.md", revision: "anchor:## Rule" },
+    effect_observation: { rule_revision: "anchor:## Rule" } };
+  it.each(["EACCES", "UNSAFE_PATH"])("ORACLE-RT-001 propagates %s instead of relabeling it as a stale revision", (code) => {
+    const failure = Object.assign(new Error(`real source read failed: ${code}`), { code });
+    expect(() => businessCaseAnchorErrors(entry, () => { throw failure; })).toThrow(failure);
+  });
+  it("ORACLE-RT-001 keeps genuinely absent source bytes stale", () => {
+    expect(businessCaseAnchorErrors(entry, () => undefined)).toEqual(["stale source.revision", "stale rule.revision"]);
+    expect(businessCaseAnchorErrors(entry, () => { throw Object.assign(new Error("file missing"), { code: "ENOENT" }); }))
+      .toEqual(["stale source.revision", "stale rule.revision"]);
   });
 });

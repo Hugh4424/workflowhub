@@ -145,10 +145,20 @@ describe("T005 ORACLE-DISP-002 phase 模板声明工作包事实字段", () => {
   });
 
   it("progress_cursor 只是指向 facts.jsonl phase_progress 的指针，不另存进度值", () => {
-    const line = template().split("\n").find((text) => text.includes("progress_cursor"));
-    expect(line, "模板缺 progress_cursor 行").toBeDefined();
-    expect(line).toMatch(/facts\.jsonl/);
-    expect(line).toMatch(/phase_progress/);
+    const assertPointerOnly = (text) => {
+      const cursorLines = text.split("\n").filter((line) => line.includes("progress_cursor"));
+      expect(cursorLines, "模板只能声明一个 progress_cursor 指针").toHaveLength(1);
+      expect(cursorLines[0]).toMatch(/facts\.jsonl/);
+      expect(cursorLines[0]).toMatch(/phase_progress/);
+      // A state field would create a second progress owner beside task facts.
+      expect(text).not.toMatch(/^\s*-?\s*(?:\*\*)?`?(?:phase_progress|phase_status|task_status|status|进度|执行状态|阶段状态|任务状态)`?(?:\*\*)?\s*[:：]/m);
+    };
+    const text = template();
+    assertPointerOnly(text);
+    const pointerLine = text.split("\n").find((line) => line.includes("progress_cursor"));
+    expect(() => assertPointerOnly(`${text}\n${pointerLine}\n`)).toThrow();
+    expect(() => assertPointerOnly(`${text}\n- **phase_progress**：P2\n`)).toThrow();
+    expect(() => assertPointerOnly(`${text}\n- **status**：completed\n`)).toThrow();
   });
 
   it("markdownlint 对 phase 模板零错误（原 :12 MD028、:14 MD032）", () => {

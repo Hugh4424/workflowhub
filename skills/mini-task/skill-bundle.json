@@ -2,14 +2,8 @@
   "schema_version": 1,
   "skill": "mini-task",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "95ef499d710fee8c9aeed422a26502cd9dbede6b5af7932d041a634210941b4b"
-    },
-    {
-      "path": "scripts/mini-task-runner.mjs",
-      "sha256": "6cacab099c7d809d6dd797270219441a52d8e982bc1cf13e461dc49b08b9cc8a"
-    }
+    "SKILL.md",
+    "scripts/mini-task-runner.mjs"
   ],
   "sources": []
 }

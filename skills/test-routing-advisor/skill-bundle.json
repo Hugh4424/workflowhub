@@ -2,14 +2,8 @@
   "schema_version": 1,
   "skill": "test-routing-advisor",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "4fa9fb3411229484fb924d0d5fa718a00381916a359334682b0874029ee82531"
-    },
-    {
-      "path": "scripts/route.mjs",
-      "sha256": "96721bf5d38aea1edf0d7a9b607a23a52da25f19437f246a7c1529a361445523"
-    }
+    "SKILL.md",
+    "scripts/route.mjs"
   ],
   "sources": [
     {

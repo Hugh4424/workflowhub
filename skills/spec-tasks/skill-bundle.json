@@ -2,14 +2,8 @@
   "schema_version": 1,
   "skill": "spec-tasks",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "d7dbe4ca8997367257ab586b52118d054bce17bb7f79cbe091df7d6155e213cd"
-    },
-    {
-      "path": "templates/index-template.md",
-      "sha256": "82db7e06dbae4fc976305f29ac803be0053f4c761776e65ff953ec31e2251dbf"
-    }
+    "SKILL.md",
+    "templates/index-template.md"
   ],
   "sources": [
     {

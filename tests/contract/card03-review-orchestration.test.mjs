@@ -13,8 +13,9 @@ import { compactReviewDiff } from "../../runtime/review/review-input-bounds.mjs"
 import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 import { reviewPacketMaterialId } from "../../runtime/review/review-packet-identity.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { reviewInstructionsFor } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { prepareTaskBoundBuildCodeReviewBundle } from "../../tools/cli/stage-runtime.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const readRepo = (path) => readFileSync(resolve(repoRoot, path), "utf8");
@@ -24,7 +25,7 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
 });
 
-function fixture() {
+function fixture({ physicalPhase = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-card03-review-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -34,6 +35,7 @@ function fixture() {
   git(["config", "user.name", "WorkflowHub card03 test"]);
   git(["config", "user.email", "card03@workflowhub.local"]);
   writeFileSync(join(repo, "README.md"), "card03 review fixture\n", "utf8");
+  if (physicalPhase) writeFileSync(join(repo, "outside.md"), "outside baseline\n", "utf8");
   git(["add", "."]);
   git(["commit", "-qm", "fixture"]);
   const taskId = randomUUID();
@@ -49,6 +51,7 @@ function fixture() {
       issue_ids: [],
       inputs: {},
       record_model: "vnext-single-write",
+      ...(physicalPhase ? { activation_cohort: "post" } : {}),
     },
   });
   const workspace = prepareTaskWorkspace(task);
@@ -56,7 +59,11 @@ function fixture() {
   for (const [name, content] of Object.entries({
     "decision-log.md": "# Decision\n", "spec.md": "# Spec\n", "plan.md": "# Plan\n", "tasks.md": "# Tasks\n",
   })) artifacts.writeAtomic(name, content);
-  return { task, kernel: createTaskKernel(task, { candidateWorkspace: workspace, artifacts }) };
+  if (physicalPhase) {
+    artifacts.writeAtomic("phases/index.md", "# Phase index\n\n## Execution Index\n\n| phase | authority ref | semantic anchor | write set | dependency | consumer |\n| --- | --- | --- | --- | --- | --- |\n| `P1` | `phases/P1.md` | `phase-p1` | `README.md` | `none` | build-code |\n");
+    artifacts.writeAtomic("phases/P1.md", "# Phase P1\n\n- **Global spec**: `spec.md`\n- **Write set**: `README.md`\n- **Dependency**: none\n- **Consumer**: build-code\n- **gate_cmd**: `node check.mjs`\n- **oracle**: ORACLE-DRIFT-001\n- **evidence_path**: quality/tests/drift.json\n- **STOP**: owned bytes changed\n- **Done**: canonical source stays honest\n\n## L0 — Outcome\n\nKeep original reviewed bytes.\n\n## L1 — Contract\n\n- **FR / AC**: FR-001 / AC-001\n\n### T001 — Keep review scope\n\n## L2 — Reference\n");
+  }
+  return { task, workspace, artifacts, kernel: createTaskKernel(task, { candidateWorkspace: workspace, artifacts }) };
 }
 
 const route = () => ({ route_identity: "a".repeat(64) });
@@ -99,6 +106,114 @@ async function expectRejectedBeforeDispatch(request, reason) {
 }
 
 describe("ORACLE-REV-001 review request precheck, bad results and packet narrowing", () => {
+  it.each(["design", "implementation"])("dispatches mini-task %s through its registered semantic surface and still rejects unknown keys", async (mode) => {
+    const state = fixture();
+    const reviewKind = `mini_task.${mode}`;
+    const request = { stage: "build-code", review_kind: reviewKind, subject_kind: "phase", phase_id: "P1", review_scope: "phase",
+      materials: { raw_requirement: "Keep one small change.", decision_log: "# Decision", spec: "# Spec", plan: "# Plan", tasks: "# Tasks" },
+    };
+    let dispatches = 0;
+    const saved = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route,
+      runRound: async (input) => {
+        dispatches += 1;
+        return reviewResult(input, { review_kind: reviewKind, subject_kind: "phase", phase_id: "P1", review_scope: "phase" });
+      },
+    });
+    expect(dispatches).toBe(1);
+    expect(saved.result_ref).toBeTruthy();
+    expect(JSON.parse(state.task.readRecord(saved.attempt_ref))).toMatchObject({ review_kind: reviewKind, terminal_status: "semantic" });
+    await expectRejectedBeforeDispatch({ ...request, materials: { ...request.materials, unsupported_mini_field: "out of scope" } }, /unsupported_mini_field/);
+  });
+
+  it("records a normal verify-code request with complete AC text through the actual packet producer", async () => {
+    const state = fixture();
+    const acceptance = "AC-001: Preserve the current implementation and expose its failure path.\nAC-002: Reject unsupported request keys before dispatch.";
+    state.artifacts.writeAtomic("spec.md", `# Spec\n\n${acceptance}\n`);
+    writeFileSync(join(state.workspace.worktreeRoot, "README.md"), "current implementation for AC-001\n");
+    const attachmentRoot = join(state.workspace.worktreeRoot, "..", "review-packets");
+    mkdirSync(attachmentRoot);
+    const request = { stage: "verify-code", subject_kind: "worktree", materials: {
+      changed_files: "README.md", implementation_assessment: "Inspect the actual README consumer.",
+      test_context: "This test checks request and packet transport, not business acceptance.",
+      open_risks: "Business effects remain unverified.", acceptance_criteria: acceptance,
+    } };
+    let bundle;
+    let dispatches = 0;
+    const materialIdForRequest = (input) => {
+      bundle ??= prepareTaskBoundBuildCodeReviewBundle({ task: state.task, workspace: openCurrentTaskWorkspace(state.task) }, input,
+        { loadConfig: () => ({ attachmentRoot }) });
+      return bundle.materialId;
+    };
+    const record = () => recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request,
+      resolveRouteIdentity: route, materialIdForRequest, runRound: async (input) => {
+        dispatches += 1;
+        expect(readFileSync(join(bundle.bundleRoot, "requirements/acceptance_criteria.md"), "utf8")).toBe(acceptance);
+        expect(readFileSync(join(bundle.bundleRoot, "changes.diff"), "utf8")).toContain("current implementation for AC-001");
+        return reviewResult(input, { material_id: bundle.materialId });
+      },
+    });
+    try {
+      const first = await record();
+      expect(JSON.parse(state.task.readRecord(first.attempt_ref)).error).toBeNull();
+      expect(first).toMatchObject({ status: "recorded", dispatch_state: "dispatched", reused: false });
+      expect(first.result_ref).toBeTruthy();
+      const repeated = await record();
+      expect(repeated).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+      expect(dispatches).toBe(1);
+      expect(attemptCount(state.task)).toBe(1);
+    } finally { bundle?.dispose(); }
+    await expectRejectedBeforeDispatch({ ...request, materials: { ...request.materials, unsupported_criterion: "AC-003" } }, /unsupported_criterion/);
+  });
+
+it("keeps canonical phase review bound to T0 after out-of-scope code changes", async () => {
+  for (const mutationPoint of ["route", "dispatch"]) {
+    const state = fixture({ physicalPhase: true });
+    const before = state.kernel.currentVNextContext();
+    const request = { ...goodRequest, review_scope: "phase", subject_kind: "phase", phase_id: "P1" };
+    const mutate = () => writeFileSync(join(state.workspace.worktreeRoot, "outside.md"), "outside changed\n");
+    const saved = await recordSimpleReviewRequest({
+      task: state.task, kernel: state.kernel, request,
+      resolveRouteIdentity: async () => { if (mutationPoint === "route") mutate(); return route(); },
+      runRound: async (input) => { if (mutationPoint === "dispatch") mutate(); return reviewResult(input); },
+    });
+    const attempt = JSON.parse(state.task.readRecord(saved.attempt_ref));
+    expect(attempt.terminal_status).toBe("semantic");
+    expect(saved.result_ref).toBeTruthy();
+    expect(attempt.snapshot_tree).toBe(before.snapshot.tree);
+    expect(attempt.source.base_tree).toBe(before.snapshot.tree);
+    expect(attempt.source.target_commit).toBe(before.snapshot.head);
+    expect(attempt.material_revision).toBe(before.materialRevision);
+    expect(state.kernel.currentVNextContext().snapshot.tree).not.toBe(before.snapshot.tree);
+  }
+});
+it("rejects own-code or authoritative-material drift and keeps missing Phase conservative", async () => {
+  for (const mutation of ["owned", "material", "missingPhase", "nonPhase"]) {
+    const state = fixture({ physicalPhase: !["missingPhase", "nonPhase"].includes(mutation) });
+    const before = state.kernel.currentVNextContext();
+    const request = mutation === "nonPhase"
+      ? { stage: "build-plan", materials: { approved_spec: "spec.md" } }
+      : { ...goodRequest, review_scope: "phase", subject_kind: "phase", phase_id: "P1" };
+    const saved = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route,
+      runRound: async (input) => {
+        if (mutation === "material") state.artifacts.writeAtomic("spec.md", "# Spec changed\n");
+        else writeFileSync(join(state.workspace.worktreeRoot, mutation === "owned" ? "README.md" : "outside.md"), "changed\n");
+        return reviewResult(input);
+      },
+    });
+    const attempt = JSON.parse(state.task.readRecord(saved.attempt_ref));
+    expect(attempt.terminal_status).toBe("unavailable");
+    expect(attempt.error?.code).toBe("REVIEW_SOURCE_DRIFT");
+    expect(saved.result_ref ?? null).toBeNull();
+    expect(attempt.provider_attempts[0].status).toBe("completed");
+    expect(attempt.snapshot_tree).toBe(before.snapshot.tree);
+    if (mutation === "nonPhase") {
+      expect(attempt.stage).toBe("build-plan");
+      expect(state.kernel.currentVNextContext().materialRevision).toBe(before.materialRevision);
+      expect(state.kernel.currentVNextContext().snapshot.tree).not.toBe(before.snapshot.tree);
+    }
+  }
+});
+
   it("rejects a request that also carries a result before any attempt exists", async () => {
     await expectRejectedBeforeDispatch({ ...goodRequest, result: { findings: [] } }, /result/);
   });
@@ -170,6 +285,23 @@ describe("ORACLE-REV-001 review request precheck, bad results and packet narrowi
       ?? JSON.parse(attemptSchema.match(/"dispatch_state"\s*:\s*(\{[^}]*\})/)[1]).enum;
     expect(dispatchState).toEqual(["dispatched", "blocked_before_dispatch", "sent_unparsed", "reused"]);
     expect(attemptSchema).not.toMatch(/result_invalid/);
+  });
+
+  it("selects directory-owned changed paths without matching a sibling prefix", () => {
+    const section = (path) => `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`;
+    const diff = section("tests/review/owned.test.mjs") + section("tests/review-other/foreign.test.mjs");
+    const selected = compactReviewDiff(diff, { writeSet: ["tests/review/"] }).diff;
+    expect(selected).toContain("tests/review/owned.test.mjs");
+    expect(selected).not.toContain("tests/review-other/foreign.test.mjs");
+  });
+
+  it("selects renamed sections using decoded Git-quoted paths on either side", () => {
+    const renamed = 'diff --git "a/docs/old name.md" "b/docs/\\346\\226\\260 name.md"\n'
+      + 'similarity index 100%\nrename from docs/old name.md\nrename to "docs/\\346\\226\\260 name.md"\n';
+    const foreign = 'diff --git a/docs/foreign.md b/docs/foreign.md\n--- a/docs/foreign.md\n+++ b/docs/foreign.md\n';
+    expect(compactReviewDiff(renamed + foreign, { writeSet: ["docs/新 name.md"] }).diff).toBe(renamed);
+    expect(compactReviewDiff(renamed + foreign, { writeSet: ["docs/old name.md"] }).diff).toBe(renamed);
+    expect(compactReviewDiff(renamed + foreign).diff).toBe(renamed + foreign);
   });
 
   it("narrows the review packet to declared write set ∩ real diff without binding identity", () => {
@@ -259,6 +391,61 @@ describe("ORACLE-REV-002 partial coverage and same-triple reuse", () => {
     expect(readRepo("runtime/review/review-record-route.mjs")).not.toMatch(/allowHistoricalPartialCoverage/);
   });
 
+  async function assertPartialTerminalReuse({ minimum }) {
+    const state = fixture();
+    let dispatches = 0;
+    const runRound = async (input) => {
+      dispatches += 1;
+      const completed = reviewResult(input).provider_results[0];
+      return reviewResult(input, {
+        status: "available-with-failures",
+        outcome: "partial",
+        ...(minimum === undefined ? {} : { minimum_heterologous: minimum }),
+        provider_results: [completed, {
+          provider: "kimi/coding", status: "failed",
+          identity: { provider: "kimi/coding", adapter: "kimi", source_id: "kimi/coding", config_id: "fixture-config", model: "fixture-model" },
+          error: { code: "REVIEW_PROVIDER_FAILED", message: "Controlled terminal provider failure" },
+          timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
+          usage: null, evidence_anchor_valid: [],
+        }],
+      });
+    };
+    const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel,
+      request: goodRequest, resolveRouteIdentity: route, runRound });
+    const attempt = JSON.parse(state.task.readRecord(first.attempt_ref));
+    expect(attempt.provider_attempts.map((provider) => provider.status)).toEqual(["completed", "failed"]);
+    const completedOutput = attempt.provider_attempts[0].output_ref;
+    expect(completedOutput).toBeTruthy();
+    const originalRefs = [first.attempt_ref, first.report_ref, completedOutput,
+      ...(first.result_ref ? [first.result_ref] : [])];
+    const originalBytes = originalRefs.map((ref) => state.task.readRecord(ref));
+    if (minimum === undefined) {
+      expect(attempt.terminal_status).toBe("unavailable");
+      expect(attempt.error?.code).toBe("REVIEW_QUORUM_INCOMPLETE");
+      expect(first.result_ref ?? null).toBeNull();
+      expect(state.task.readRecord(first.report_ref)).toContain('"coverage": "incomplete"');
+    } else {
+      expect(attempt.terminal_status).toBe("semantic");
+      expect(first.result_ref).toBeTruthy();
+      expect(state.task.readRecord(first.report_ref)).toContain('"coverage": "satisfied"');
+    }
+    const repeated = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel,
+      request: goodRequest, resolveRouteIdentity: route, runRound });
+    expect(dispatches).toBe(1);
+    expect(attemptCount(state.task)).toBe(1);
+    expect(repeated).toMatchObject({ reused: true, dispatch_state: "reused", attempt_ref: first.attempt_ref });
+    expect(repeated.result_ref ?? null).toBe(first.result_ref ?? null);
+    originalRefs.forEach((ref, index) => expect(state.task.readRecord(ref)).toBe(originalBytes[index]));
+  }
+
+  it("reuses the terminal partial attempt without a declared minimum and preserves incomplete original provider facts", async () => {
+    await assertPartialTerminalReuse({});
+  });
+
+  it("reuses the complete minimum-one partial control without dispatching providers again", async () => {
+    await assertPartialTerminalReuse({ minimum: 1 });
+  });
+
   it("reuses an existing semantic result for the same review triple instead of dispatching", async () => {
     const state = fixture();
     let dispatches = 0;
@@ -315,4 +502,33 @@ describe("ORACLE-SKL-003 runner reviewer skills follow stage-skill-plan.json", (
   it("keeps the frozen build-plan plan entry unchanged", () => {
     expect(plan.stages["build-plan"].required_skills).toEqual(["review"]);
   });
+});
+
+
+describe("CARD-03 Git diff path prefix boundary", () => {
+  for (const [kind, path] of [["bare", "README.md"], ["quoted", "文档.md"]]) {
+    it(`rejects real Git no-prefix ${kind} paths while preserving the prefixed control`, () => {
+      const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-card03-prefix-")));
+      roots.push(repo);
+      const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      git(["init", "-q", "-b", "main"]);
+      git(["config", "user.name", "WorkflowHub prefix test"]);
+      git(["config", "user.email", "prefix@workflowhub.local"]);
+      git(["config", "core.quotePath", "true"]);
+      writeFileSync(join(repo, path), "before\n", "utf8");
+      git(["add", "--", path]);
+      git(["commit", "-qm", "prefix baseline"]);
+      writeFileSync(join(repo, path), "after\n", "utf8");
+      git(["config", "diff.noprefix", "true"]);
+      const noPrefix = git(["diff", "--", path]);
+      expect(noPrefix).toContain("diff --git ");
+      if (kind === "quoted") expect(noPrefix.split("\n", 1)[0]).toMatch(/^diff --git "/);
+      else expect(noPrefix.split("\n", 1)[0]).toBe(`diff --git ${path} ${path}`);
+      expect(() => compactReviewDiff(noPrefix, { writeSet: [path] })).toThrow(/invalid Git.*(path|header)/);
+      const prefixed = git(["-c", "diff.noprefix=false", "diff", "--", path]);
+      expect(prefixed).not.toBe(noPrefix);
+      expect(compactReviewDiff(prefixed, { writeSet: [path] }).diff).toBe(prefixed);
+      expect(compactReviewDiff(prefixed).diff).toBe(prefixed);
+    });
+  }
 });

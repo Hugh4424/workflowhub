@@ -2,13 +2,7 @@
   "schema_version": 1,
   "skill": "spec-prd",
   "files": [
-    {
-      "path": "SKILL.md",
-      "sha256": "f9a9ba2f9ca848f93ef4eb3b3a79c3c0ba46ae843a895a195e1a47fd656268d9"
-    },
-    {
-      "path": "templates/prd-template.md",
-      "sha256": "3c61af33262924520ab37724a4f11f38b27080175bf43e9101f0044f390b122b"
-    }
+    "SKILL.md",
+    "templates/prd-template.md"
   ]
 }

@@ -40,9 +40,10 @@ export function phaseFilesFromIndex(index) {
   return Object.freeze(refs);
 }
 
-export function materialFilesForCohort(activationCohort = "pre", materials = {}) {
+export function materialFilesForCohort(activationCohort = "pre", materials = {}, { stage } = {}) {
   if (activationCohort === "pre") return CURRENT_MATERIAL_FILES;
   if (activationCohort !== "post") throw new TypeError("activation cohort must be pre or post");
+  if (stage === "make-decision") return Object.freeze(["decision-log.md"]);
   if (materials?.["phases/index.md"] == null) {
     if (Object.keys(materials).some((file) => file.startsWith("phases/") && file !== "phases/index.md")) {
       throw new TypeError("post material map has Phase files without an index");

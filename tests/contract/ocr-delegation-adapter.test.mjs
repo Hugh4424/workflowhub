@@ -967,3 +967,179 @@ describe("OCR delegation adapter", () => {
     expect(calls).toBe(0);
   });
 });
+
+
+describe("OCR original provider bytes", () => {
+  function rawFixture(providers, body) {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-ocr-raw-"));
+    roots.push(root);
+    const executable = join(root, "fake-provider");
+    writeFileSync(executable, "#!/usr/bin/env node\n" + body, { mode: 0o700 });
+    const trustedContext = configuredContext(providers, executable);
+    for (const provider of providers) trustedContext.providerConfig.providers[provider].model = provider.split("/")[1];
+    const saved = new Map();
+    const rawOutputSink = (ref, bytes) => {
+      expect(Buffer.isBuffer(bytes)).toBe(true);
+      expect(ref).toBe(`quality/evidence/stage-quality/build-code/ocr-provider-output-${createHash("sha256").update(bytes).digest("hex")}.bin`);
+      saved.set(ref, Buffer.from(bytes));
+    };
+    return { root, trustedContext, saved, rawOutputSink };
+  }
+  function rawBytes(state, member, stream) {
+    const ref = member.raw_output_ref;
+    expect(ref).toMatchObject({ version: "broker-output-ref.v1", provider: member.provider, runtime_id: member.execution.runtime_id });
+    return state.saved.get(`quality/evidence/stage-quality/build-code/ocr-provider-output-${ref[stream + "_sha256"]}.bin`);
+  }
+
+  it("saves stdout/stderr before parse failure and keeps the later successful sibling", async () => {
+    // Broken final review JSON lives inside a valid Codex event envelope.
+    const invalid = JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: '{"findings":' } }) + "\n" + JSON.stringify({ type: "turn.completed" }) + "\n";
+    const valid = directProviderOutput("codex/good", []);
+    const state = rawFixture(["codex/bad", "codex/good"], `
+const model = process.argv[process.argv.indexOf("--model") + 1];
+if (model === "bad") {
+  process.stdout.write(${JSON.stringify(invalid)});
+  process.stderr.write(Buffer.from([0xff, 0x00, 0x61]));
+} else setTimeout(() => process.stdout.write(${JSON.stringify(valid)}), 120);
+`);
+    const terminal = [];
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      ...state, onProviderResult: ({ result, pending_providers }) => {
+        expect(rawBytes(state, result, "stdout")).toBeDefined();
+        terminal.push({ status: result.status, pending_providers });
+      },
+    });
+    expect(result.status).toBe("available-with-failures");
+    const [failed, completed] = result.provider_results;
+    expect(rawBytes(state, failed, "stdout")).toEqual(Buffer.from(invalid));
+    expect(rawBytes(state, failed, "stderr")).toEqual(Buffer.from([0xff, 0x00, 0x61]));
+    expect(failed).toMatchObject({ process_outcome: "ok", parse_outcome: "invalid", error: { code: "OUTPUT_INVALID" }, unavailable_diagnostics: { code: "OUTPUT_INVALID" } });
+    expect(failed.unavailable_diagnostics.message).toContain("parse_error=");
+    expect(failed.unavailable_diagnostics.message).toMatch(/JSON|Unexpected|Expected|position/);
+    expect(rawBytes(state, completed, "stdout")).toEqual(Buffer.from(valid));
+    expect(completed).toMatchObject({ status: "completed", parse_outcome: "ok" });
+    expect(terminal[0]).toEqual({ status: "failed", pending_providers: ["codex/good"] });
+  });
+
+  it("keeps non-UTF8 output from a nonzero exit without inventing a parse result", async () => {
+    const state = rawFixture(["codex/bad"], 'process.stdout.write(Buffer.from([0xff,0xfe,0x00])); process.stderr.write(Buffer.from([0x80,0x61])); process.exitCode=7;');
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, state);
+    const member = result.provider_results[0];
+    expect(rawBytes(state, member, "stdout")).toEqual(Buffer.from([0xff, 0xfe, 0x00]));
+    expect(rawBytes(state, member, "stderr")).toEqual(Buffer.from([0x80, 0x61]));
+    expect(member).toMatchObject({ status: "failed", process_outcome: "exit_nonzero", parse_outcome: null });
+    expect(member.unavailable_diagnostics.message).toContain("exit_code=7");
+  });
+
+  it("keeps captured bytes on explicit cancellation", async () => {
+    const state = rawFixture(["codex/cancel"], 'process.stdout.write(Buffer.from([0xff,0x00])); process.stderr.write("cancel stderr"); setInterval(()=>{},1000);');
+    const controller = new AbortController();
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket(), signal: controller.signal }, {
+      ...state, onProviderHealth: (health) => { if (health.stderr_bytes > 0) controller.abort(); },
+    });
+    const member = result.provider_results[0];
+    expect(rawBytes(state, member, "stdout")).toEqual(Buffer.from([0xff, 0x00]));
+    expect(rawBytes(state, member, "stderr")).toEqual(Buffer.from("cancel stderr"));
+    expect(member).toMatchObject({ status: "cancelled", parse_outcome: null });
+    expect(member.unavailable_diagnostics.message).toContain("cancelled=true");
+  });
+
+  it("saves the bounded output prefix and labels overflow rather than claiming complete bytes", async () => {
+    const state = rawFixture(["codex/overflow"], 'process.stdout.write(Buffer.alloc(17*1024*1024, 0xff));');
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, state);
+    const member = result.provider_results[0];
+    expect(rawBytes(state, member, "stdout").equals(Buffer.alloc(16*1024*1024, 0xff))).toBe(true);
+    expect(member).toMatchObject({ status: "failed", error: { code: "OCR_PROVIDER_OUTPUT_LIMIT" }, parse_outcome: null });
+    expect(member.unavailable_diagnostics.message).toContain("captured_output_limited=true");
+    expect(member.unavailable_diagnostics.message).toContain("stdout_bytes=");
+  });
+
+  it("fails the affected provider loudly when saving bytes fails and still retains its sibling", async () => {
+    const invalid = "bad provider output";
+    const valid = directProviderOutput("codex/good", []);
+    const state = rawFixture(["codex/bad", "codex/good"], `const model=process.argv[process.argv.indexOf("--model")+1]; process.stdout.write(model==="bad"?${JSON.stringify(invalid)}:${JSON.stringify(valid)}); if(model==="bad") process.exitCode=7;`);
+    const sink = state.rawOutputSink;
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      ...state, rawOutputSink: (ref, bytes) => {
+        if (bytes.toString() === invalid) throw new Error("fixture canonical write failed");
+        return sink(ref, bytes);
+      },
+    });
+    expect(result.status).toBe("available-with-failures");
+    expect(result.provider_results[0]).toMatchObject({ status: "failed", raw_output_ref: null, error: { code: "OCR_PROVIDER_OUTPUT_SAVE_FAILED" } });
+    expect(result.provider_results[0].unavailable_diagnostics.message).toContain("fixture canonical write failed");
+    expect(result.provider_results[0].unavailable_diagnostics.message).toContain("process_error=OCR_PROVIDER_EXIT_NONZERO");
+    expect(result.provider_results[1].status).toBe("completed");
+    expect(rawBytes(state, result.provider_results[1], "stdout")).toEqual(Buffer.from(valid));
+  });
+
+  it("retains parse failure after a successful process when saving its original bytes also fails", async () => {
+    const invalid = JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: '{"findings":' } }) + "\n" + JSON.stringify({ type: "turn.completed" }) + "\n";
+    const valid = directProviderOutput("codex/good", []);
+    const badStderr = Buffer.from([0xff, 0x00, 0x61]);
+    const state = rawFixture(["codex/bad", "codex/good"], `
+const model=process.argv[process.argv.indexOf("--model")+1];
+if(model==="bad") {
+  process.stdout.write(${JSON.stringify(invalid)});
+  process.stderr.write(Buffer.from([0xff,0x00,0x61]));
+} else setTimeout(()=>process.stdout.write(${JSON.stringify(valid)}),120);
+`);
+    const sink = state.rawOutputSink;
+    const observed = [];
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      ...state,
+      rawOutputSink: (ref, bytes) => {
+        if (bytes.equals(Buffer.from(invalid))) throw new Error("fixture canonical write failed");
+        return sink(ref, bytes);
+      },
+      onProviderResult: ({ result }) => observed.push(result),
+    });
+    const [bad, good] = result.provider_results;
+    expect(result.status).toBe("available-with-failures");
+    expect(bad).toMatchObject({ status: "failed", process_outcome: "ok", parse_outcome: "invalid", raw_output_ref: null,
+      error: { code: "OCR_PROVIDER_OUTPUT_SAVE_FAILED" }, unavailable_diagnostics: { code: "OCR_PROVIDER_OUTPUT_SAVE_FAILED" } });
+    expect(bad.unavailable_diagnostics.message).toContain("raw_output_save_error=stdout: fixture canonical write failed");
+    expect(bad.unavailable_diagnostics.message).toContain("parse_error_code=OUTPUT_INVALID");
+    expect(bad.unavailable_diagnostics.message).toContain("parse_error=");
+    expect(bad.unavailable_diagnostics.message).toMatch(/JSON|Unexpected|Expected|position/);
+    expect(bad.unavailable_diagnostics.message).toContain("exit_code=0");
+    expect(bad.unavailable_diagnostics.message).toContain("captured_output_limited=false");
+    expect(state.saved.has(`quality/evidence/stage-quality/build-code/ocr-provider-output-${createHash("sha256").update(invalid).digest("hex")}.bin`)).toBe(false);
+    expect(state.saved.get(`quality/evidence/stage-quality/build-code/ocr-provider-output-${createHash("sha256").update(badStderr).digest("hex")}.bin`)).toEqual(badStderr);
+    expect(good).toMatchObject({ status: "completed", process_outcome: "ok", parse_outcome: "ok" });
+    expect(rawBytes(state, good, "stdout")).toEqual(Buffer.from(valid));
+    expect(observed.find((member) => member.provider === "codex/bad").parse_outcome).toBe("invalid");
+    expect(observed.find((member) => member.provider === "codex/good").status).toBe("completed");
+  });
+
+  it("does not claim persisted output when the original byte sink is absent", async () => {
+    const state = rawFixture(["codex/good"], `process.stdout.write(${JSON.stringify(directProviderOutput("codex/good", []))});`);
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, { trustedContext: state.trustedContext });
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", raw_output_ref: null,
+      unavailable_diagnostics: { code: "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE" } });
+    expect(result.provider_results[0].unavailable_diagnostics.message).toContain("raw output sink is absent; output was not persisted");
+    expect(state.saved.size).toBe(0);
+  });
+
+  it("keeps supervisor spawn diagnostics outside the original provider stderr", async () => {
+    const state = rawFixture(["codex/missing"], "");
+    state.trustedContext.providerConfig.providers["codex/missing"].command = join(state.root, "missing-executable");
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, state);
+    const member = result.provider_results[0];
+    expect(member).toMatchObject({ status: "failed", process_outcome: "launch_failure", parse_outcome: null, error: { code: "OCR_PROVIDER_SPAWN_FAILED" } });
+    expect(rawBytes(state, member, "stdout")).toEqual(Buffer.alloc(0));
+    expect(rawBytes(state, member, "stderr")).toEqual(Buffer.alloc(0));
+    expect(member.unavailable_diagnostics.message).toContain("supervisor_diagnostics=ENOENT: OCR provider spawn failed");
+    expect(state.saved.size).toBe(1); // stdout and stderr are the same empty bytes
+  });
+
+  it("records absent raw bytes as unavailable instead of reconstructing them from text", async () => {
+    const result = await runConfiguredOcrHostReview({ request, packet: configuredPacket() }, {
+      trustedContext: configuredContext(["codex/good"], "/unused/provider"),
+      providerExecutor: async () => ({ status: "completed", output: directProviderOutput("codex/good", []) }),
+      rawOutputSink: () => { throw new Error("no original bytes should be fabricated"); },
+    });
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", raw_output_ref: null, unavailable_diagnostics: { code: "OCR_PROVIDER_RAW_OUTPUT_UNAVAILABLE" } });
+    expect(result.provider_results[0].unavailable_diagnostics.message).toContain("original provider bytes unavailable");
+  });
+});

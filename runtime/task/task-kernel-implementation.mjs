@@ -872,9 +872,9 @@ export function buildTaskKernel(taskHandle, {
       return `vnext-${hash(`${task.identity.taskId}\0${stageName(stage)}`).slice(0, 32)}`;
     },
     publishCanonicalRecord(relativePath, raw) {
-      const rawAttachment = /^quality\/evidence\/stage-quality\/build-code\/acceptance-(?:stdout|stderr)-([a-f0-9]{64})\.bin$/.exec(relativePath ?? "");
+      const rawAttachment = /^quality\/evidence\/stage-quality\/(?:build-code\/acceptance-(?:stdout|stderr)|(?:build-code|verify-code)\/ocr-provider-output)-([a-f0-9]{64})\.bin$/.exec(relativePath ?? "");
       if (rawAttachment) {
-        if (!Buffer.isBuffer(raw) || hash(raw) !== rawAttachment[1]) throw new TypeError("acceptance output ref must bind its original bytes");
+        if (!Buffer.isBuffer(raw) || hash(raw) !== rawAttachment[1]) throw new TypeError(`${relativePath.includes("/acceptance-") ? "acceptance" : "OCR provider"} output ref must bind its original bytes`);
       } else {
         if (Buffer.isBuffer(raw)) raw = raw.toString("utf8");
         if (typeof raw !== "string" || raw.length === 0) throw new TypeError("canonical record bytes are required");

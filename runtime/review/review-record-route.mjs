@@ -11,10 +11,11 @@ import { materialFilesForCohort } from "../task/material-workspace.mjs";
 import { runWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { freezeReviewMaterial, readFrozenReviewMaterial } from "../evidence/canonical-receipt-writer.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
-import { WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, validateStageOutcomeProducerIdentity, validateCanonicalQualityFact } from "../evidence/canonical-evidence-validators.mjs";
+import { WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, validateStageOutcomeProducerIdentity, validateCanonicalQualityFact, currentPhaseWriteSetSnapshot, phaseWriteSetChanges } from "../evidence/canonical-evidence-validators.mjs";
 import { authenticateAcceptanceExecutionAggregate } from "../evidence/freshness.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
+import stageMaterials from "./stage-materials.json" with { type: "json" };
 
 const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const MATERIAL_REVISION = /^revision-[a-f0-9]{64}$/;
@@ -24,6 +25,8 @@ const REVIEW_REPORT_REF = /^quality\/reviews\/reports\/[A-Za-z0-9][A-Za-z0-9._-]
 const REVIEW_PROVIDER_OUTPUT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/providers\/[A-Za-z0-9][A-Za-z0-9._-]*\.output\.json$/;
 const IN_PROCESS_REQUEST_LOCKS = new Map();
 const EXECUTION_CONTEXTS = new WeakSet();
+// Ephemeral host text ownership; only the existing report writer consumes it.
+const EXECUTION_DIAGNOSTICS = new WeakMap();
 const DEFAULT_REVIEW_ROUND_TIMEOUT_MS = 65_000;
 // A dispatch that accepted AbortSignal must settle (and, for the bundled
 // provider client, reap its process group) before this task can admit another
@@ -204,70 +207,121 @@ export function readAuthenticatedExecutionSource(task, selection, identity, mate
   return source;
 }
 
+function implicitExecutionReviewDisclosure(request, reason) {
+  const diagnostic = `implicit_execution_source: ${reason}; execution review coverage is unavailable`;
+  const originalContext = request.materials?.test_context;
+  const contextText = typeof originalContext === "string" || originalContext === undefined ? originalContext : canonicalJson(originalContext);
+  const { authenticated_evidence: _callerEvidence, ...unboundRequest } = request;
+  const preparedRequest = { ...unboundRequest,
+    materials: { ...(request.materials ?? {}), test_context: [contextText, diagnostic].filter((value) => value !== undefined).join("\n\n") },
+  };
+  EXECUTION_DIAGNOSTICS.set(preparedRequest, diagnostic);
+  return { request: preparedRequest, executionContext: null };
+}
+
+function discoverCurrentExecutionSource(task, identity, materials) {
+  const candidates = new Map();
+  let otherSource = false;
+  for (const qualityFactRef of task.listCanonicalQualityFactRefs()) {
+    const fact = JSON.parse(task.readRecord(qualityFactRef));
+    if (fact.subject !== "acceptance_execution" || fact.stage !== "build-code") continue;
+    if (fact.task_id !== task.identity.taskId || fact.snapshot_tree !== identity.tree
+        || fact.material_revision !== identity.materialRevision || fact.kind !== "acceptance_criterion" || fact.status !== "passed") {
+      otherSource = true;
+      continue;
+    }
+    if (fact.evidence?.length !== 1) throw new Error(`current execution has no unique wrapper: ${qualityFactRef}`);
+    const wrapper = JSON.parse(task.readRecord(fact.evidence[0].ref));
+    if (wrapper.refs?.length !== 1) throw new Error(`current execution has no unique aggregate: ${qualityFactRef}`);
+    const selection = { ref: wrapper.refs[0].ref, sha256: wrapper.refs[0].sha256, quality_fact_ref: qualityFactRef };
+    readAuthenticatedExecutionSource(task, selection, identity, materials);
+    candidates.set(`${selection.ref}\0${selection.sha256}`, selection);
+  }
+  if (candidates.size > 1) throw new Error("multiple authenticated current execution aggregates are ambiguous");
+  return { selection: candidates.size === 1 ? [...candidates.values()][0] : null,
+    reason: otherSource ? "no current passed execution source; existing execution is stale, foreign or incomplete" : "no current acceptance execution source" };
+}
+
 function prepareExecutionReviewRequest(task, request, identity, materialIdForRequest = null) {
-  if (request.reviewed_execution === undefined) return { request, executionContext: null };
-  if (request.stage !== "verify-code" || (request.review_kind ?? request.reviewKind ?? null) !== null) throw new Error("reviewed_execution is only supported by ordinary verify-code review");
+  const explicit = Object.hasOwn(request, "reviewed_execution");
+  const ordinaryVerify = request.stage === "verify-code" && (request.review_kind ?? request.reviewKind ?? null) === null
+    && (request.review_track ?? request.reviewTrack ?? null) === null && (request.review_scope ?? request.reviewScope ?? null) === null
+    && (request.subject_kind ?? request.subjectKind ?? "worktree") === "worktree" && (request.phase_id ?? request.phaseId ?? null) === null;
+  if (!explicit && !ordinaryVerify) return { request, executionContext: null };
+  if (!ordinaryVerify) throw new Error("reviewed_execution is only supported by ordinary verify-code review");
   const workspace = openCurrentTaskWorkspace(task);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
   const activationCohort = task.manifest?.activation_cohort ?? "pre";
   const phaseIndex = activationCohort === "post" ? artifacts.read("phases/index.md") : null;
   const materialNames = materialFilesForCohort(activationCohort, phaseIndex === null ? {} : { "phases/index.md": phaseIndex });
   const materials = Object.fromEntries(materialNames.map((name) => [name, name === "phases/index.md" ? phaseIndex : artifacts.read(name)]));
-  const execution = readExecutionSource(task, request.reviewed_execution, identity, materials);
-  const diff = runWorkspaceCommand(workspace, "git", ["diff", "--no-ext-diff", "--binary", identity.source.target_commit, identity.tree, "--"]);
-  if (diff.error || diff.status !== 0) throw new Error(`reviewed_execution implementation diff unavailable: ${diff.error?.message ?? diff.stderr}`);
-  const records = execution.aggregate.subject_fact.execution_items.flatMap((item) => item.evidence_refs).map((reference) => ({ ...reference, raw: task.readRecord(reference.ref) }));
-  // An acceptance command can be referenced by many AC rows.  The old
-  // projection expanded every row independently, so one stdout/stderr pair
-  // was copied once per AC and each UTF-8 stream was copied as both text and
-  // base64.  That made the provider packet grow linearly with references,
-  // rather than with actual evidence bytes, and eventually made otherwise
-  // healthy OCR providers hit their external deadline.  Keep the canonical
-  // record refs unchanged, but deliver each exact stream once.
-  const outputByIdentity = new Map();
-  for (const { raw } of records) {
-    const value = JSON.parse(raw);
-    if (!value.subject_fact?.execution) continue;
-    for (const stream of ["stdout", "stderr"]) {
-      const ref = value.subject_fact.execution[`${stream}_ref`];
-      const sha256 = value.subject_fact.execution[`${stream}_hash`];
-      const identity = `${ref}\u0000${sha256}`;
-      if (outputByIdentity.has(identity)) continue;
-      const bytes = task.readRecordBytes(ref);
-      let text;
-      try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { /* non-text bytes remain exact base64 */ }
-      outputByIdentity.set(identity, {
-        ref, sha256, bytes: bytes.length,
-        ...(text === undefined ? { content_base64: bytes.toString("base64") } : { text }),
-      });
+  const prepare = () => {
+    const execution = readExecutionSource(task, request.reviewed_execution, identity, materials);
+    const diff = runWorkspaceCommand(workspace, "git", ["diff", "--no-ext-diff", "--binary", identity.source.target_commit, identity.tree, "--"]);
+    if (diff.error || diff.status !== 0) throw new Error(`reviewed_execution implementation diff unavailable: ${diff.error?.message ?? diff.stderr}`);
+    const records = execution.aggregate.subject_fact.execution_items.flatMap((item) => item.evidence_refs).map((reference) => ({ ...reference, raw: task.readRecord(reference.ref) }));
+    // An acceptance command can be referenced by many AC rows.  The old
+    // projection expanded every row independently, so one stdout/stderr pair
+    // was copied once per AC and each UTF-8 stream was copied as both text and
+    // base64.  That made the provider packet grow linearly with references,
+    // rather than with actual evidence bytes, and eventually made otherwise
+    // healthy OCR providers hit their external deadline.  Keep the canonical
+    // record refs unchanged, but deliver each exact stream once.
+    const outputByIdentity = new Map();
+    for (const { raw } of records) {
+      const value = JSON.parse(raw);
+      if (!value.subject_fact?.execution) continue;
+      for (const stream of ["stdout", "stderr"]) {
+        const ref = value.subject_fact.execution[`${stream}_ref`];
+        const sha256 = value.subject_fact.execution[`${stream}_hash`];
+        const identity = `${ref}\u0000${sha256}`;
+        if (outputByIdentity.has(identity)) continue;
+        const bytes = task.readRecordBytes(ref);
+        let text;
+        try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { /* non-text bytes remain exact base64 */ }
+        outputByIdentity.set(identity, {
+          ref, sha256, bytes: bytes.length,
+          ...(text === undefined ? { content_base64: bytes.toString("base64") } : { text }),
+        });
+      }
     }
-  }
-  const outputs = [...outputByIdentity.values()];
-  const prepared = {
-    ...request,
-    authenticated_evidence: {
-      // The caller's ordinary materials are intentionally small and do not
-      // necessarily contain the authenticated current stage files or the
-      // implementation diff.  Keep those exact inputs in the authenticated
-      // projection once so the provider can review the real code/materials;
-      // only repeated execution records/streams are deduplicated below.
-      runtime_current_materials: materials,
-      runtime_implementation_diff: diff.stdout,
-      runtime_execution: { ...request.reviewed_execution, raw: execution.aggregateRaw, actor: execution.actor },
-      runtime_execution_records: records,
-      runtime_execution_outputs: outputs,
-    },
+    const outputs = [...outputByIdentity.values()];
+    const prepared = {
+      ...request,
+      authenticated_evidence: {
+        // The caller's ordinary materials are intentionally small and do not
+        // necessarily contain the authenticated current stage files or the
+        // implementation diff.  Keep those exact inputs in the authenticated
+        // projection once so the provider can review the real code/materials;
+        // only repeated execution records/streams are deduplicated below.
+        runtime_current_materials: materials,
+        runtime_implementation_diff: diff.stdout,
+        runtime_execution: { ...request.reviewed_execution, raw: execution.aggregateRaw, actor: execution.actor },
+        runtime_execution_records: records,
+        runtime_execution_outputs: outputs,
+      },
+    };
+    const frozenMaterial = freezeReviewMaterial({ task, bytes: JSON.stringify(prepared) });
+    const frozen = readFrozenReviewMaterial({ task, ...frozenMaterial });
+    if (frozen.status !== "recorded") throw new Error(`frozen review material is unavailable: ${frozen.diagnostic.reason}`);
+    const frozenRequest = JSON.parse(frozen.bytes.toString("utf8"));
+    const providerMaterialId = reviewRequestMaterialId(frozenRequest, materialIdForRequest);
+    const executionContext = Object.freeze({ frozen_material: frozenMaterial,
+      reviewed_execution: { ref: request.reviewed_execution.ref, sha256: request.reviewed_execution.sha256, actor: execution.actor },
+      provider_material_id: providerMaterialId });
+    EXECUTION_CONTEXTS.add(executionContext);
+    return { request: frozenRequest, executionContext };
   };
-  const frozenMaterial = freezeReviewMaterial({ task, bytes: JSON.stringify(prepared) });
-  const frozen = readFrozenReviewMaterial({ task, ...frozenMaterial });
-  if (frozen.status !== "recorded") throw new Error(`frozen review material is unavailable: ${frozen.diagnostic.reason}`);
-  const frozenRequest = JSON.parse(frozen.bytes.toString("utf8"));
-  const providerMaterialId = reviewRequestMaterialId(frozenRequest, materialIdForRequest);
-  const executionContext = Object.freeze({ frozen_material: frozenMaterial,
-    reviewed_execution: { ref: request.reviewed_execution.ref, sha256: request.reviewed_execution.sha256, actor: execution.actor },
-    provider_material_id: providerMaterialId });
-  EXECUTION_CONTEXTS.add(executionContext);
-  return { request: frozenRequest, executionContext };
+  if (explicit) return prepare();
+  try {
+    const discovered = discoverCurrentExecutionSource(task, identity, materials);
+    if (discovered.selection === null) return implicitExecutionReviewDisclosure(request, discovered.reason);
+    request = { ...request, reviewed_execution: discovered.selection };
+    return prepare();
+  } catch (error) {
+    const { reviewed_execution: _selection, ...unboundRequest } = request;
+    return implicitExecutionReviewDisclosure(unboundRequest, `current execution source could not be authenticated: ${error.message}`);
+  }
 }
 
 function executionBindingForResult(task, result, identity, context, { allowHistoricalPreDispatchMaterialFailure = false } = {}) {
@@ -736,6 +790,14 @@ function reviewReportRef(stage, resultId) {
   return `quality/reviews/reports/${stage}-simple-${resultId}.md`;
 }
 
+function readReviewExecutionDiagnostic(report) {
+  const section = report.match(/\n## Host execution source diagnostic\n\n```json\n([\s\S]*?)\n```\n$/);
+  if (section === null) return null;
+  const diagnostic = JSON.parse(section[1]);
+  if (typeof diagnostic !== "string") throw new Error("review execution diagnostic must preserve its original text");
+  return diagnostic;
+}
+
 function reviewReportBody({ attempt, result = null, requestKey = null }) {
   const status = attempt.terminal_status === "semantic" ? "available" : "unavailable";
   return [
@@ -790,8 +852,10 @@ function routeRepairClosureIdentity(closure) {
   return textHash(canonicalJson(stable));
 }
 
-function closureMatches(closure, identity, materialId, request) {
+function closureMatches(closure, identity, materialId, request, phaseScope = null) {
   if (!closure || closure.version !== "wh-review-closure.v1") return false;
+  const reviewedIdentity = { tree: closure.snapshot_tree, materialRevision: closure.material_revision, source: closure.source };
+  if (phaseScope && sameAuthenticatedReviewIdentity(reviewedIdentity, identity, phaseScope)) identity = reviewedIdentity;
   const expected = reviewClosure(request, identity, materialId, closure.request_key, closure.route_identity);
   return canonicalJson(closure) === canonicalJson(expected)
     && closure.snapshot_tree === identity.tree
@@ -927,10 +991,16 @@ async function resolveReviewRouteState({ request, executionContext, resolveRoute
   return Object.freeze({ routeIdentity: routeIdentity ?? null, routeError });
 }
 
-function sameAuthenticatedReviewIdentity(left, right) {
-  return left?.tree === right?.tree
+function sameAuthenticatedReviewIdentity(left, right, phaseScope = null) {
+  const exact = left?.tree === right?.tree
     && left?.materialRevision === right?.materialRevision
     && canonicalJson(left?.source ?? null) === canonicalJson(right?.source ?? null);
+  if (exact) return true;
+  // Material versions remain strict. Only authenticated physical Phase code
+  // scope can ignore unrelated code-tree/source projections.
+  if (!phaseScope || left?.materialRevision !== right?.materialRevision) return false;
+  return phaseWriteSetChanges({ root: phaseScope.root, writeSet: phaseScope.writeSet,
+    fromTree: left.tree, toTree: right.tree }).length === 0;
 }
 
 function buildPolicy(result) {
@@ -1223,6 +1293,7 @@ function matchesLegacyPartialPairShape(task, attempt, attemptRef, identity) {
     }, otherAttempt.request_key ?? null, {
       paired: true, legacyReviewContext: saved.budget_context ?? null,
       executionContext: saved.execution_context ?? null,
+      executionDiagnostic: readReviewExecutionDiagnostic(otherReport),
       allowHistoricalPreDispatchMaterialFailure: true,
       closureManifest: otherAttempt.closure_manifest ?? null,
     });
@@ -1274,6 +1345,7 @@ function readCanonicalReviewHistory(task, scope = null) {
     if ((attempt.phase_id ?? null) !== scope.phaseId) return "foreign";
     return "current";
   };
+  const damagedPairReports = new Set();
   const entries = refs.map((ref) => {
     let parsedAttempt = null;
     try {
@@ -1301,8 +1373,8 @@ function readCanonicalReviewHistory(task, scope = null) {
       && !Object.hasOwn(attempt, "result_ref");
     const prepared = prepareSimpleReviewRecord(task, saved.public_result, identity, attempt.request_key ?? null,
       { paired: Boolean(attempt.pair_id), legacyReviewContext: context, executionContext: saved.execution_context ?? null,
+        executionDiagnostic: readReviewExecutionDiagnostic(report),
         allowHistoricalPreDispatchMaterialFailure: true,
-        allowHistoricalPartialCoverage: attempt.terminal_status === "semantic",
         historicalUncoveredPartial,
         ...(attempt.review_policy ? { policyOverride: { policy: attempt.review_policy, policy_snapshot_hash: attempt.policy_snapshot_hash ?? policyHash(attempt.review_policy) } } : {}),
         closureManifest: attempt.closure_manifest ?? null });
@@ -1311,6 +1383,15 @@ function readCanonicalReviewHistory(task, scope = null) {
     for (const [recordRef, expected] of prepared.records) {
       const stored = task.readRecord(recordRef);
       if (matchesReviewRecord(stored, expected)) continue;
+      if (attempt.pair_id && recordRef === ref) {
+        const expectedAttempt = JSON.parse(expected);
+        const repairedLink = { ...attempt, material_id: expectedAttempt.material_id };
+        if (attempt.material_id !== expectedAttempt.material_id
+            && matchesReviewRecord(JSON.stringify(repairedLink), expected)) {
+          damagedPairReports.add(pairedReportRef(attempt.stage, task.identity.taskId, identity, attempt.pair_id, attempt.request_key ?? null));
+          return null;
+        }
+      }
       const legacy = matchesLegacyPartialPairShape(task, attempt, ref, identity)
         ? historicalSourceStrengthProjection(expected, recordRef) : null;
       if (legacy === null || !matchesReviewRecord(stored, legacy)) throw new Error("canonical review evidence is incomplete or changed");
@@ -1350,7 +1431,7 @@ function readCanonicalReviewHistory(task, scope = null) {
     if (!entry.attempt.pair_id) return true;
     const attempt = entry.attempt;
     const pairRef = pairedReportRef(attempt.stage, task.identity.taskId, entry.identity, attempt.pair_id, attempt.request_key ?? null);
-    if (seenPairs.has(pairRef)) return false;
+    if (damagedPairReports.has(pairRef) || seenPairs.has(pairRef)) return false;
     const report = task.readRecord(pairRef);
     const summary = JSON.parse(report.match(/```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
     if (!summary || summary.pair_id !== attempt.pair_id || summary.report_ref !== pairRef
@@ -1425,6 +1506,17 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     if (Object.hasOwn(request, field)) throw new TypeError(`review request identity field is host-owned: ${field}`);
   }
   if (typeof request.stage !== "string" || request.stage.trim() === "") throw new TypeError("review request stage is required");
+  const surface = request.review_kind === "mini_task.design" || request.review_kind === "mini_task.implementation"
+    ? `mini-task/${request.review_kind.split(".")[1]}`
+    : request.stage === "make-decision" ? `${request.stage}/${request.review_track}`
+      : request.stage === "build-code" ? `${request.stage}/${request.review_scope ?? "integration"}` : request.stage;
+  const semanticFields = stageMaterials.surfaces[surface]?.semantic_fields;
+  if (!Array.isArray(semanticFields)) throw new TypeError(`review stage has no semantic_fields: ${surface}`);
+  if (request.materials !== undefined) {
+    if (!request.materials || typeof request.materials !== "object" || Array.isArray(request.materials)) throw new TypeError("review materials must be an object");
+    const outside = Object.keys(request.materials).filter((key) => !semanticFields.includes(key));
+    if (outside.length) throw new TypeError(`review materials outside semantic_fields: ${outside.join(", ")}`);
+  }
   if (typeof runRound !== "function") throw new TypeError("runRound must be a function");
   if (onProviderResult !== null && typeof onProviderResult !== "function") {
     throw new TypeError("onProviderResult must be a function");
@@ -1435,6 +1527,19 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   signal = assertReviewAbortSignal(signal);
   if (["e2e_binding", "confirmation", "confirmation_ref", "user_confirmation"].some((key) => Object.hasOwn(request, key))) throw new TypeError("execution review binding and future confirmation are host-owned");
   const before = assertAuthenticatedReviewIdentity(taskHandle, kernel);
+  let phaseScope = null;
+  if (directOcrRequest && request.stage === "build-code" && request.review_scope === "phase"
+      && request.subject_kind === "phase" && /^P[1-9][0-9]*$/.test(request.phase_id ?? "")) {
+    const workspace = openCurrentTaskWorkspace(taskHandle);
+    try {
+      phaseScope = currentPhaseWriteSetSnapshot(workspace.worktreeRoot, taskHandle.identity.taskId, before.tree, request.phase_id) ?? null;
+    } catch {
+      // An unreadable/invalid physical Phase cannot authorize narrower code
+      // currentness; preserve the original full-identity comparison.
+      phaseScope = null;
+    }
+  }
+
   let executionContext = null;
   let executionPreparationFailure = null;
   try {
@@ -1479,12 +1584,13 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     }
     let requestKey = requestLockHash(request, materialId, "unavailable");
     let closure = reviewClosure(request, lockedIdentity, materialId, requestKey, null);
-    if (!sameAuthenticatedReviewIdentity(before, lockedIdentity)) {
+    if (!sameAuthenticatedReviewIdentity(before, lockedIdentity, phaseScope)) {
       return recordUnavailableRequest({
         task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
         error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed before the review lock was acquired" },
       });
     }
+    if (phaseScope) lockedIdentity = before;
     if (retryRequest.invalid) {
       return recordUnavailableRequest({
         task: taskHandle, kernel, request, identity: lockedIdentity, materialId, requestKey, closureManifest: closure, executionContext,
@@ -1517,8 +1623,8 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
       });
     }
-    if (!sameAuthenticatedReviewIdentity(lockedIdentity, preDispatchIdentity)) {
-      lockedIdentity = preDispatchIdentity;
+    if (!sameAuthenticatedReviewIdentity(lockedIdentity, preDispatchIdentity, phaseScope)) {
+      if (!phaseScope) lockedIdentity = preDispatchIdentity;
       requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
       closure = reviewClosure(request, lockedIdentity, materialId, requestKey, routeIdentity ?? null);
       return recordUnavailableRequest({
@@ -1526,7 +1632,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while resolving the trusted review route" },
       });
     }
-    lockedIdentity = preDispatchIdentity;
+    if (!phaseScope) lockedIdentity = preDispatchIdentity;
     requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
     closure = reviewClosure(request, lockedIdentity, materialId, requestKey, routeIdentity ?? null);
     let history;
@@ -1602,7 +1708,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           retry: retryResult,
         });
       }
-      if (!closureMatches(closure, current, materialId, request)) {
+      if (!closureMatches(closure, current, materialId, request, phaseScope)) {
         return recordUnavailableRequest({
           task: taskHandle, kernel, request, identity: current, materialId, requestKey,
           closureManifest: reviewClosure(request, current, materialId, requestKey, routeIdentity ?? null), executionContext,
@@ -1724,7 +1830,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       result = mergeRequestResultIdentity(request, result);
       result = normalizeCanonicalReviewResult(result, "review request result");
       const after = assertAuthenticatedReviewIdentity(taskHandle, kernel);
-      closureCurrent = closureMatches(closure, after, materialId, request);
+      closureCurrent = closureMatches(closure, after, materialId, request, phaseScope);
       if (!closureCurrent) {
         result = {
           ...result,
@@ -1745,14 +1851,22 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         error.code = "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH";
         throw error;
       }
-      recordIdentity = closureCurrent ? after : lockedIdentity;
+      recordIdentity = phaseScope ? lockedIdentity : closureCurrent ? after : lockedIdentity;
     } catch (error) {
       result = unavailableAfterDispatch({ request, result, materialId, error });
       closureCurrent = false;
       recordIdentity = lockedIdentity;
     }
-    const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey,
-      executionContext, closureManifest: closure, identityOverride: closureCurrent ? null : recordIdentity });
+    let refs;
+    try {
+      refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey, request,
+        executionContext, closureManifest: closure, identityOverride: phaseScope || !closureCurrent ? recordIdentity : null });
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+      result = unavailableAfterDispatch({ request, result, materialId, error });
+      refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey, request,
+        executionContext, closureManifest: closure, identityOverride: recordIdentity });
+    }
     return {
       status: "recorded",
       reused: false,
@@ -1788,8 +1902,8 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   paired = false,
   legacyReviewContext = null,
   executionContext = null,
+  executionDiagnostic = null,
   allowHistoricalPreDispatchMaterialFailure = false,
-  allowHistoricalPartialCoverage = false,
   historicalUncoveredPartial = false,
   policyOverride = null,
   closureManifest = null,
@@ -1895,7 +2009,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   // current snapshot changed; a live result may not silently do so.
   const hasDeclaredQuorum = Number.isSafeInteger(result.minimum_heterologous) && result.minimum_heterologous >= 1;
   const covered = !historicalUncoveredPartial && result.status !== "unavailable"
-    && (result.outcome === "completed" || (result.outcome === "partial" && (hasDeclaredQuorum || allowHistoricalPartialCoverage)))
+    && (result.outcome === "completed" || (result.outcome === "partial" && hasDeclaredQuorum))
     && !hasRunningProvider
     && aggregation.status === "available"
     && allIdentified;
@@ -1970,7 +2084,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   const refs = { attempt_ref: attemptRef, result_ref: published ? resultRef : null, report_ref: reportRef };
   records.push([attemptRef, JSON.stringify(attempt)]);
   if (canonical) records.push([resultRef, JSON.stringify(canonical)]);
-  records.push([reportRef, reviewReportBody({ attempt, result: canonical, requestKey }) + "\n## Public result and coverage\n\n```json\n" + JSON.stringify({ semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete", public_result: result, ...(context ? { budget_context: context } : {}), ...(executionContext ? { execution_context: executionContext } : {}) }, null, 2) + "\n```\n"]);
+  records.push([reportRef, reviewReportBody({ attempt, result: canonical, requestKey }) + "\n## Public result and coverage\n\n```json\n" + JSON.stringify({ semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete", public_result: result, ...(context ? { budget_context: context } : {}), ...(executionContext ? { execution_context: executionContext } : {}) }, null, 2) + "\n```\n" + (executionDiagnostic === null ? "" : "\n## Host execution source diagnostic\n\n```json\n" + JSON.stringify(executionDiagnostic, null, 2) + "\n```\n")]);
   return { records, refs, semantic_status: semanticStatus, coverage: covered ? "satisfied" : "incomplete" };
 }
 
@@ -2191,7 +2305,7 @@ export function importCanonicalReviewResult({ task, kernel, result, provenance }
   }
 }
 
-export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, executionContext = null, closureManifest = null, identityOverride = null, expectedIdentity = null }) {
+export function recordSimpleReviewResult({ task, result, kernel, request = null, requestKey = null, executionContext = null, closureManifest = null, identityOverride = null, expectedIdentity = null }) {
   result = normalizeCanonicalReviewResult(result, "review result");
   const handle = assertTaskHandle(task);
   if (executionContext !== null && !EXECUTION_CONTEXTS.has(executionContext)) throw new TypeError("execution binding requires the same authenticated public request");
@@ -2216,7 +2330,7 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
   if (!result || !["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status is invalid");
   if (["source", "base_tree", "candidate_tree", "snapshot_tree", "material_revision"].some((key) => Object.hasOwn(result, key))) throw new TypeError("review result identity fields must come from the authenticated current context");
   if (!result?.role_results) {
-    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { executionContext, closureManifest });
+    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { executionContext, closureManifest, executionDiagnostic: executionContext === null ? EXECUTION_DIAGNOSTICS.get(request) ?? null : null });
     for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw, kernel);
     return prepared.refs;
   }

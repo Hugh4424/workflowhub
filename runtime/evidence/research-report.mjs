@@ -19,7 +19,6 @@ const isObject = (value) => value && typeof value === "object" && !Array.isArray
 function assertIdentity(report, expected = {}) {
   if (expected.taskId !== undefined && report.task_id !== expected.taskId) throw new Error("research report task identity mismatch");
   if (expected.stage !== undefined && report.stage !== expected.stage) throw new Error("research report stage identity mismatch");
-  if (expected.snapshotTree !== undefined && report.snapshot_tree !== expected.snapshotTree) throw new Error("research report snapshot identity mismatch");
   if (expected.materialScopeRevision !== undefined && report.material_scope_revision !== expected.materialScopeRevision) throw new Error("research report material identity mismatch");
 }
 

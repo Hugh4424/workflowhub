@@ -22,9 +22,9 @@ index 1234567..abcdefg 100644
   });
 
   it('case 2: diff containing git push → safe, no irreversible_git classification (rules deleted)', () => {
-    const diffText = `diff --git a/scripts/deploy.mjs b/scripts/deploy.mjs
---- a/scripts/deploy.mjs
-+++ b/scripts/deploy.mjs
+    const diffText = `diff --git a/scripts/publish.mjs b/scripts/publish.mjs
+--- a/scripts/publish.mjs
++++ b/scripts/publish.mjs
 @@ -1,2 +1,3 @@
  // deploy script
 +exec('git push origin main');

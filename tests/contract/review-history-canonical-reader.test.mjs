@@ -375,11 +375,11 @@ function advanceSnapshot(artifacts) {
 }
 
 function makeDecisionRequest() {
-  return { stage: "make-decision", host_provider: "codex", review_track: "detail", materials: { decision: "current decision" } };
+  return { stage: "make-decision", host_provider: "codex", review_track: "detail", materials: { approved_direction: "current decision" } };
 }
 
 function buildPlanRequest() {
-  return { stage: "build-plan", host_provider: "codex/luna", materials: { plan: "current plan" } };
+  return { stage: "build-plan", host_provider: "codex/luna", materials: { draft_plan: "current plan" } };
 }
 
 async function settle(promise) {

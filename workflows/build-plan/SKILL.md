@@ -193,6 +193,12 @@ log, a parallel review output, or a process summary. `simplicity-guard` and
 `plan-eng-review` are ordinary advisory lenses in the declared review contract,
 not new workflow stages and not gates.
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。调研、实现设计与 Phase 草稿实施、RED 测试和独立审查/红队派子代理；修复回原实施子代理。范围裁决、用户交互及计划确认由主会话执行，纯材料任务不虚构运行时测试。
+子代理先落盘重产物，再回传引用。只回摘要与 ref，不回正文或长日志。按子问题增量落盘并回传，不攒到最后。
+G-1 产出侧：并行方案登记的接口必须变更时触发 G-1，注明受影响工作包并指向 `workflows/build-code/SKILL.md` 的收场侧。
+
 ## Work sequence
 
 1. Read the current decision and every already-present material. For a
@@ -210,13 +216,13 @@ not new workflow stages and not gates.
    interfaces/data flow, exact global NEW/MODIFY/DO NOT TOUCH boundary,
    alternatives, dependencies, rollback, risks, testing strategy, and the
    single source → FR → AC → Phase/task → oracle map.
-5. Write one independent `phases/P<n>.md` per Phase. Each file has L0/L1/L2,
-   a stable pointer to the spec global goal, its own exact write set and
-   dependency, RED/GREEN tasks, test tier/skill/scenario/fixture, `gate_cmd`,
-   expected exits, oracle, evidence path, coverage limit, STOP, done evidence,
-   and rollback. Render `phases/index.md` as a pure pointer table: authority
-   path, semantic anchor, write set, dependency, consumer. The final aggregate
-   is an ordinary Phase task, not a new public stage.
+5. Write one independent `phases/P<n>.md` per Phase with L0/L1/L2.
+   Use `skills/spec-plan/templates/phase-template.md` as the field authority;
+   refer to that template rather than duplicating its field enumeration here.
+   Keep the stable pointer to the spec global goal in each Phase file.
+   Render `phases/index.md` as a pure pointer table containing
+   authority path, semantic anchor, write set, dependency, consumer.
+   The final aggregate is an ordinary Phase task, not a new public stage.
    Within this existing `spec-plan` step, build-plan writes each applicable
    behavior test in the authenticated worktree before implementation and runs
    its Task's exact `gate_cmd`. Capture the real command, exit, raw output/ref,

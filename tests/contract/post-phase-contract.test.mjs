@@ -77,7 +77,7 @@ const phase = (id, dependency, file, fr, ac) => thinPhase(id, dependency, file, 
 - **Action**：Implement the observable result and preserve the negative path.
 - **Inputs**：A valid input and one failing input with deterministic fixture.
 - **Outputs / failure**：Visible result on success; explicit failure when empty or invalid.
-- **Dependency**：\`${dependency}\`.
+- **Dependency**：${dependency}
 - **Boundary / DO NOT TOUCH**：Only \`${file}\`; do not edit the adjacent module.
 - **Test tier / skill**：feature / backend-testing.
 - **Scenario / fixture or service**：Valid result and hidden-output negative case; use local fixture and remove it after test.
@@ -129,7 +129,7 @@ describe("post-cohort independent Phase authority", () => {
   });
 
   it("rejects a task card whose prerequisite does not exist", () => {
-    const drifted = { ...phases, "phases/P2.md": phases["phases/P2.md"].replace("**Dependency**：`P1`.", "**Dependency**：`T999`.") };
+    const drifted = { ...phases, "phases/P2.md": phases["phases/P2.md"].replace("**Dependency**：P1", "**Dependency**：T999") };
     const result = validatePostPhaseContract({ spec, index, phases: drifted });
     expect(result.ok).toBe(false);
     expect(result.errors.join("; ")).toMatch(/T002.*dependency.*T999/i);

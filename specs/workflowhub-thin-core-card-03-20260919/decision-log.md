@@ -916,3 +916,236 @@ step 11 透镜对 20 条 R 需求给出 20 条「partial 不能宣称已完整�
 - 推迟项：build-plan 阶段本身的启动与本卡依赖落盘的 acceptance 判据（T-013；**2026-09-28 注**：T-013 的「不实际改 workflows/skills」半已被用户「现在全落」部分推翻，落盘事实见 12.3/12.5）；未决项：三条未提问的待裁决事实（见 `## 补充登记` 第五节）。
 - step 9 正式审查发现的处置（2026-09-28；pair 927723e5，红 3 蓝 5）：①红1／蓝3「草案引用未提交材料段」→ 材料组装缺口、非草案错误；重发材料时把 `## 补充登记` §2/§3 与 T-016–T-025 答复段内联进审查材料（本计划第 2 步）。②红2「交付边界与已批准方向冲突」→ 由 T-018 条的分层口径消解（声明层已落／runtime 层推迟）。③红3「方向未规定 reconstruct→reveal→challenge 流程」→ 驳回：该流程是 wh-review 审查 broker 的协议要求（`skills/wh-review/contracts/make-decision.md:56`、`provider-protocol.md:78-80`），不是 direction 材料的内容要求。④蓝1「T-018 与已落文件清单矛盾」→ 同一分层口径消解；判据句已补落。⑤蓝2「范围说不改 workflows 与已改清单矛盾」→ `## 范围` 节已补 2026-09-28 部分推翻注。⑥蓝4「build-prd 未更新」→ 经 `## 阶段集合校正`（:86-88）映射：卡面 build-prd＝仓内 build-spec；T-003「方法章节照样改到位」已由 `workflows/build-spec/SKILL.md` 改动满足（12.5 落点表 :22/:30/:90/:96-98/:54-66）；`workflows/build-prd/SKILL.md` 是 portable workflow、非五个正式阶段之一，本卡不动。⑦蓝5（minor）「占位符引用」→ 部分接受：`<host-path-redacted>` 是送审管道的路径脱敏产物（本卡文件内 0 命中）；「父代理转述」一条（arXiv:2609.25396）已在 SD-11 矩阵逐字登记未直读，维持登记。
 
+
+
+## 需求变更记录
+
+本附录只补已批准材料的来源格式。旧正文、R 编号、T 决策、批准内容全部原字节保留；不是新需求决定、human confirm、accepted risk 或第二进度权威。下列原话均为 document-recorded 用户引文；native host message／音频原件、原始选择事件与真实说话时点均 unavailable。原文中的解释、处置与选项登记不转成用户逐字答复。
+
+### U-001 — 母材料 document-recorded 原话，origin ID 保留
+
+来源：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`，原文件 sha256 `4e0ad9c11b5659bf4ef5e8aa83d4df11b73bf61124af862ee67141e16d346d01`，context 行 46–58、bytes [5221,8054)，context sha256 `086151fc2a0e8b63adbb2596ee7440bdc29c18cacec9dbc07160b7eb4a5361f4`。R-017 cites only point 4; other points do not create CARD03 scope。不是本卡新答复。
+
+> 我的思路：
+> 1：spec优化，build-spec和build-plan合并成一个build-plan阶段，在这个阶段产出一个spec文档和多个phase文档，spec文档需要包含更标准的需求文档、验收流程、测试标准、架构方案等，相当于spec文档是把decision-log进行完整的实现所进行的翻译，需要结构更清晰、内容更清楚、验收更明确，避免出现所有phase做完了，但是一次真实测试验收都没做过，一直在用脚本验收，功能实现的完全不合理。
+> 2：plan去除，不在需要plan和tasks文档，而是每一个phase一个实现文档，里面要写清楚背景、方案、流程、影响范围、测试标准、验收流程等等。要避免现在task文档的问题，也要有更清晰的实现指引。一个phase一个文档也能避免agent上下文爆炸；
+> 3：TDD流程优化，现在的tdd完成是token和时间浪费机，对任务实现帮助非常少。需要更专业更有用的TDD流程，不要再写出完全没意义的red了，需要基于每一个task写真实的red，后续这个red也能基于实现完成的代码变成green。要让TDD的每一个token花的有意义；
+> 4：build-code提速：每一个task的实现、审查、测试、修复应该是一个独立的子代理，避免上下文互相影响。主会话收集回复、派发任务、进行归纳和验收。同时，多个子代理、多个task、多个phase还可以设计并行规则，避免全部子代理都只能串行浪费时间！
+> 5：审查效果提升，不再用wh-review里面的审查提示词和3rd-review进行build-code或verify-code审查了，而是改成类似“https://github.com/alibaba/open-code-review”的开源代码审查工具进行，保证代码审查质量更高，并且不在因为审查浪费这么长时间。
+> 6：简化流程，不要浪费任何机制统计token、时间等，我需要workflowhub是一个简单好用的框架，不是一个复杂的流程制造机；
+> 7：弱化所有流程中的严格验收！我已经花了十几个task优化阻塞问题，现在workflowhub还是充满了阻塞，根本不能用，烦死了。
+> 8：简化workflowhub：workflowhub现在被一大堆对象、测试文件搞得非常臃肿，最开始设计的宪法完全没生效。有一点问题，agent就搞一大堆严格验收、新对象、新标准、新流程，让这能workflowhub非常难以维护，宪法里的最坏事件在当前workflowhub完美体现了。我需要彻底优化整个workflowhub，不要搞这么多流程、质量、文件！改成薄核心+多技能的项目规划！
+> 请你基于这些思路和你的调研建议，看看合不合理，如何优化？我希望这一次方案实现后，再也不要来来回回的优化workflowhub了！太烦人了
+
+### U-010 — 母材料 document-recorded 原话，origin ID 保留
+
+来源：`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`，原文件 sha256 `4e0ad9c11b5659bf4ef5e8aa83d4df11b73bf61124af862ee67141e16d346d01`，context 行 111–119、bytes [13846,14897)，context sha256 `d8c0fca82787d02fabf7f9b26ecf77ff83b033a1d3cd4ed5833ce8c873972a2e`。R-019 cites only point 1; AI coverage conclusion excluded。不是本卡新答复。
+
+> 1：workflowhub任务执行时，大量的质量、流程阻塞，我希望彻底移除。workflowhub是一个薄核心的开发技能集，不应该有任何阻塞；
+> 2：workflowhub任务执行时，大量哈希、sha、快照、身份、材料、回执校验不对的问题，导致任务无法推进，也需要进行处理。workflowhub不需要这些过度工程化的东西来保证交付质量。每个阶段的推进、审查、测试的推进都不需要这些东西来保证质量。
+> 3：build-plan流程修改后，build-plan的审查也需要对应的修改，一次审查同时覆盖spec和phase文件。包含spec审查和原来的plan审查质量核心。
+> 如果这些问题没有包含在prd内，需要回到make-decision看看如何把这两个需求也放在prd里一起彻底解决。
+
+当前本卡四条原话见下列逐字声明层 V-101 至 V-104；不另造 U 父条目、不拆成虚构子需求。母第九条原件明确为“全文要点”，其逐字原话 unavailable，全文上下文在出处附录保留，不计入 U/V census。
+
+## 原始需求索引
+
+R 是需求追踪索引，不是 original-source ID。只有 R-017、R-019 有直接原件 U 引用；其余保 approved PRD／决定／全文要点来源，不凭语义补 U/V 边，source_refs 空／unknown。当前本卡 local V 原话无可证明的逐 R 映射，保持独立原话，不补伪边。第三列原 T 编号从原处置逐字提取，不改名为 D；全量原处置与 originref 在后列保留，原正文仍决定历史效力（包括 §二十范围回收）。
+
+| R-ID | 来源（可证明 U/V 或原 approved 来源） | 原 T 决策编号 | 原始 originref（逐字） | 原 R 处置（逐字历史） |
+| --- | --- | --- | --- | --- |
+| R-001 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:299；derived trace，source_refs 空／unknown | T-003 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:299` | covered（按 T-003=A 落 OI-001：落点＝各阶段 `SKILL.md` 方法章节 + 计划期产物；实跑载体推迟到 CARD-04 合并后的 build-plan／build-code） |
+| R-002 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:300；derived trace，source_refs 空／unknown | T-012 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:300` | covered（按 T-012=A 落 OI-002：判据＝回到同一子代理会话，且派发须附审查／测试发现原文） |
+| R-003 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:301；derived trace，source_refs 空／unknown | T-009、T-020 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:301` | covered（按 T-009=A 与 T-020=A 落 OI-003：事后人工判读一次 + 阶段豁免表与可指认阈值） |
+| R-004 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:302；derived trace，source_refs 空／unknown | T-011、T-008、T-015、T-016、T-019、T-021、T-022 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:302` | covered（按 T-011=A、T-008=A、T-015=A、T-016=A、T-019=B、T-021=A、T-022=A 落 OI-004：事实记录形态 + 逐条覆盖率矩阵 + 三条可观察形态 + 合并责任与广播进 acceptance） |
+| R-005 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:303；derived trace，source_refs 空／unknown | T-002、T-014 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:303` | covered（按 T-002=A、T-014=A 落 OI-005：AC-14 取演练 + 两个技能各写各的角色并交叉引用；技能文本落地推迟） |
+| R-006 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:305；derived trace，source_refs 空／unknown | T-002、T-017 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:305` | deferred（按 T-002=A、T-017=A 落 OI-007：真实载体在 CARD-04 合并后的 build-plan／build-code，本卡内以冻结候选／演练／不适用理由代替，裁决见 OI-007） |
+| R-007 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:306；derived trace，source_refs 空／unknown | T-009、T-020 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:306` | covered（按 T-009=A、T-020=A 落 OI-003：本卡内以事后人工判读 + 阶段豁免表与阈值核对） |
+| R-008 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:307；derived trace，source_refs 空／unknown | T-016、T-021、T-022 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:307` | covered（按 T-016=A、T-021=A、T-022=A 落 OI-004：逐条覆盖率矩阵、声明不实发现路径、合并责任；真实核对载体推迟到 CARD-04 合并后的 build-code） |
+| R-009 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:308；derived trace，source_refs 空／unknown | T-002、T-014 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:308` | covered（按 T-002=A、T-014=A 落 OI-005：本卡内以演练记录满足） |
+| R-010 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:309；derived trace，source_refs 空／unknown | T-003 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:309` | covered（按 T-003=A 落 OI-006：build-prd 记明确不适用理由；五阶段 `SKILL.md` 的方法章节改动推迟） |
+| R-011 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:295；derived trace，source_refs 空／unknown | T-003、T-007、T-012、T-014 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:295`、`prd.md:297` | covered（按 T-003=A、T-007=A、T-012=A、T-014=A 落 OI-001 与 OI-004） |
+| R-012 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:310；derived trace，source_refs 空／unknown | T-002、T-017 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:310`、`prd.md:311-315` | deferred（按 T-002=A、T-017=A 落 OI-007：多工作包实跑 oracle 与派发／回收证据的真实载体在 CARD-04 合并后的 build-plan／build-code，本卡内以冻结候选与演练核对代替，裁决见 OI-007） |
+| R-013 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:70；derived trace，source_refs 空／unknown | T-011、T-016 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:70`（节标题 `:69`、来源锚点 `:71`；已逐字复核） | covered（按 T-011=A 落 OI-004 以事实记录形态；T-016=A 另降为并列条款之一并加逐条覆盖率矩阵） |
+| R-014 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:94；derived trace，source_refs 空／unknown | T-005、T-010、T-024 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:94`（节标题 `:93`、来源锚点 `:95`；已逐字复核） | covered（按 T-005=B、T-010=A、T-024=A 落 OI-004 与 OI-010：只记录、不得成为新门禁） |
+| R-015 | specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:417-437；derived trace，source_refs 空／unknown | T-010、T-024 | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:417-437`（`status: confirmed`；已逐字复核） | covered（按 T-010=A、T-024=A 落 OI-004 与 OI-010：声明制降级为事实记录、只能记录不得成为新门禁，机制修补口径＝只留该 phase 声明的写集） |
+| R-016 | specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:212-233；derived trace，source_refs 空／unknown | T-003、T-007、T-012 | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:212-233`（`status: confirmed`；已逐字复核。**`:195-216` 不是本记录**：OI-001 记录为 `:190-211`，`:195-216` 是跨 OI-001 尾与 OI-002 头的错误切片，不作锚点） | covered（按 T-003=A、T-007=A、T-012=A 落 OI-001、OI-002、OI-003：按工作类型派发 + 连续上下文 + 主会话边界） |
+| R-017 | U-001 | T-007 | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:52`（U-001 节 `:46-57`，八点正文 `:49-56`；已逐字复核） | covered（落 OI-001 与 OI-003：五阶段统一派发 + 主会话边界；派发纪律与子代理产出契约的落点另见 OI-011，与 T-007=A 一致） |
+| R-018 | specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:105；derived trace，source_refs 空／unknown；全文要点，native verbatim unavailable | T-003 | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:105`（U-009 节 `:103-109`；已逐字复核） | covered（按 T-003=A 落 OI-001：五阶段统一派发，build-prd 记不适用理由） |
+| R-019 | U-010 | T-010 | `specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md:113`（U-010 节 `:111-118`；已逐字复核） | covered（按 T-010=A 落 OI-010：删除跨 phase 全量快照绑定） |
+| R-020 | specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:109；derived trace，source_refs 空／unknown | T-013 | `specs/workflowhub-thin-core-rebuild-planning-20260919/prd.md:109`（卡片清单行）、`prd.md:144`（R-004 行）、`prd.md:150`（R-010 行）、`prd.md:155`（R-015 行）（追踪表 `:137-160`；已逐字复核） | covered（按 T-013 落 `## 范围` 与 `## 非目标`；**无对应问题卡**，理由：本行是卡片清单与追踪表的映射登记，不是一条可独立发问的需求；同表 CARD-06 删除执行与 CARD-10 集成验收不是本卡目标，与 CARD-04 按 OI-008 时间错开） |
+
+## 逐字声明层（verbatim）
+
+V-101 至 V-104 是本卡 local IDs，不冒用母 origin ID。每行逐字保留原文 Markdown、标点与大小写。V-103 的 80／470 是同一 T-036 问题文档重复，只有一个 sourceunit；primary 引文取 80 原 bytes，470 带加粗的记载作为同事件另一 context 原 bytes 保留。alias_of、decomposed_by 仅由现 consumer 自动得出，本 writer 不填。
+
+| V-ID | 说出者 | 场景／原出处 | 逐字原文 |
+| --- | --- | --- | --- |
+| V-101 | 用户 | document-recorded；decision-log.md:396；file sha256 096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710；quote bytes [149462,149680)；quote sha256 611dc817b861936f64c246de222b99e6cb727364042508cc27dfa28f0cc97a72；完整 context 见下节；native message/selection unavailable | 我需要仔细调研原来的plan和tasks模板，看看现在的模板还有什么差距，应该如何修改。我希望最终的phase文件可以很方便的让执行者对照着干活，产出高质量的代码！ |
+| V-102 | 用户 | document-recorded；decision-log.md:447；file sha256 096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710；quote bytes [162169,162350)；quote sha256 a591dd4fd448730244afb71ae9965ca738320c5d055a5c4725765353199ff692；完整 context 见下节；native message/selection unavailable | 有严重问题，当前 card-03 任务主要就是优化 build-code 的效率和执行，怎么可能不改 build-code 的 skill 文件！之前的决策有严重问题和歧义！ |
+| V-103 | 用户 | document-recorded；decision-log.md:80；file sha256 096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710；quote bytes [60828,60934)；quote sha256 38eb46601edb4b536d507a921d78a17971442bd232496a3699b502afc104d9e2；完整 context 见下节；native message/selection unavailable | 这个问题的前提条件有问题，不应该有任何逐文件-sha存在，这是核心的阻塞点！ |
+| V-104 | 用户 | document-recorded；decision-log.md:832；file sha256 096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710；quote bytes [251443,251619)；quote sha256 bcfa0764b4d7b709e522aa8bb14d550caf887d8e80c0133696ba9db6f6fa2e73；完整 context 见下节；native message/selection unavailable | 我希望不要把任何工作转给 CARD-05、CARD-06，card-05已经完成了，card-06现在的工作负担太大了，能当前任务完成就尽量在当前任务完成吧 |
+
+## 来源原件与完整上下文附录
+
+出处路径／hash／byte interval 均指追加前源文件，保留原始定位，不绑定新材料为旧 review／confirm。原件逐段与独立 readback 的 raw_utf8 完全同 bytes；下列 fenced code 仅是来源上下文，不把 AI 解释、处置或“全文要点”认证成原话。native human event、选择事件、真实 G-1／并发／主会话／修复生命周期、完整语义验收与独立审查质量均 unknown／unavailable。
+
+### 原 context 1 — V-101
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`；file sha256 `096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710`；行 386–400；bytes [148280,150974)；raw sha256 `364b0a067d6289dd24af65d5da478351ec7eb9d7b05e7aaf08cdfb07d3f939fa`。
+
+限制：396的「我需要…」为文档明确标逐字原话；397/398为记录者整理的当面答复处置，不是逐字用户句子。整个三问原生聊天/音频原件未在限定source里。
+
+```text
+### 五、未提问的待裁决事实（红队 F-7 的一部分；本卡不代答、不替用户决定）
+
+以下三条**没有**对应的真实用户答复，故本卡只如实登记、不代答，也不新增确认点：
+
+1. `skills/spec-plan/templates/phase-template.md` 要新增哪些字段：字段清单未定（T-008=A 只定了载体）。
+2. 冲突：card-04 审计骨架的 L0 元数据块使用 `status: not_started | in_progress | blocked | done`（`/tmp/wh-card03-session-analysis/card04-plan-quality.md:260`），与 OI-009 的 acceptance／counterexample（phase 文件只声明指针、不复制状态值）正面冲突；谁让路未裁决。
+3. 冲突：`phases/index.md` 新增 `status`／`progress_cursor` 两列的提议（`/tmp/wh-card03-session-analysis/card04-plan-quality.md:331`、`:386`）与 `skills/spec-tasks/SKILL.md:8`（index 明文禁止成为 progress ledger）、`/tmp/wh-card03-session-analysis/card03-baseline-gap.md:276`（B6「建议不改」）相反；谁让路未裁决。
+
+**2026-09-28 裁决（用户当面答复，三条全问清）**：
+
+1. 用户不认可现成的字段清单（也未选增删），给出新指令（逐字）：「我需要仔细调研原来的plan和tasks模板，看看现在的模板还有什么差距，应该如何修改。我希望最终的phase文件可以很方便的让执行者对照着干活，产出高质量的代码！」⇒ 转本卡新施工项：模板差距调研＋phase 模板再修改；调研结论与修改一并落 design.md 与模板文件，sha 链随之重算。
+2. **OI-009 胜**。card-04 审计骨架的 L0 `status` 块属报告级人读摘要、不是仓库机制；仓库 `phases/*.md` 一律只许指针、不抄状态值。**防抄送登记**：该骨架格式仅限分析报告使用；任何卡不得把 `status: not_started|in_progress|blocked|done` 块写进仓库 phase 文件，违者按 OI-009 counterexample 判不合规。
+3. **禁令维持**。`phases/index.md` 不加 `status`／`progress_cursor` 列；进度可见性由 `phase_progress` 事实承担（S10 已判现仓已具备）；改写 `skills/spec-tasks/SKILL.md:8` 的提议正式否决。
+
+**2026-09-29 结案（合并后复核）**：第 2、3 条的悬置事实**已由 card-04 归档形态结案**——`specs/archive/workflowhub-thin-core-card-04-20260919/phases/index.md:7` 的列头为 `phase | authority ref | semantic anchor | write set | dependency | consumer`（**无 `status`／`progress` 列**），`phases/P1.md:3` 的 `## L0` 段无 `status` 字段 ⇒ 与本卡「phase 文件不设进度账本、index 不加状态列」的立场一致，OI-009 的禁令由 card-04 的归档形态佐证，无需改判。
+```
+
+### 原 context 2 — V-103
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`；file sha256 `096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710`；行 79–80；bytes [59926,61487)；raw sha256 `ce92b7c92e402a78f450c124b0b5c09483c1397bd83b35762828c5a8b720b840`。
+
+限制：T036有完整问题/选项与未选项的逐字回答；结果「本卡零哈希/挂CARD06」是AI解释，后来832范围回收影响效力。T035 B是文档登记选择，原生选择事件未读取。
+
+```text
+| T-035 | 五个阶段技能在本卡的处置是「排队/不做」还是「错开实施」？ | A=保持「冻结候选/排队/推迟」／B=改判为「错开实施」（＝本卡交付，CARD-04 合并后落地） | B | 「三个阶段技能排队＝不做」的旧口径作废。逐字理由＝「当前 card-03 任务主要就是优化 build-code 的效率和执行，**怎么可能不改 build-code 的 SKILL 文件**！之前的决策有严重问题和歧义！」⇒ 五个阶段技能的方法章节全部计入本卡交付，处置＝`错开实施`；本卡 make-decision 阶段仍一行不写（T-013③ 不变） | 本轮用户消息（逐字原文） |
+| T-036 | `skills/catalog.yaml` 的 `local_version: 1.3.0` 是否要 bump？ | A=不 bump，只回写两个 sha256／B=顺手 bump 到 1.3.1 并登记／C=交给 build-plan 时点定 | **用户逐字回答（未选任何选项）：「这个问题的前提条件有问题，不应该有任何逐文件-sha存在，这是核心的阻塞点！」** | 前提被否 ⇒ 本卡**零哈希动作**：不写、不算、不回写任何哈希（`skills/spec-plan/skill-bundle.json` 的 `files[].sha256`、`skills/catalog.yaml` 的 `local_bundle_hash`、`repo-skills.manifest.json` 相关字段）。该链属 OI-013 删除面（母 `prd.md:178` 责任卡含 CARD-06；同文件 `:244` 的 FR-29 逐字点名「材料身份/哈希/sha 校验」）⇒ **整表挂 CARD-06**，本卡不替它删除。消费者地图（8 处）与「已知代价」写进设计书 `## §6.8`、施工表 §6.1 第 42 行 |
+```
+
+### 原 context 3 — V-102
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`；file sha256 `096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710`；行 441–458；bytes [161579,164024)；raw sha256 `26085ca58739a11e2db37279058f26adc68569c3c25c935d136732cb848c8f32`。
+
+限制：447引号为记录用户更正；449–458执行链/桌面复演是记录者自述，不能升级本次host G1真实pause/ack证明。
+
+```text
+- T-013=A 的字面冻结是「不改任何 `workflows/*/SKILL.md`」，而 `workflows/build-code/steps.json` 位于 `workflows/` 下但**不是** `SKILL.md`（且实测不在 CARD-04 在研写面内）⇒ 它是否属本轮冻结范围**待用户在 step 10 确认**；本卡不替用户决定，本轮也不改该文件。
+
+### 八、G-1 演练记录（T-002=A / AC-14）
+
+**性质**：本卡 make-decision 阶段内一次**真实发生**的接口变更收场，附一次桌面复演。全程无代码改动。
+
+**触发**：用户对本卡设计书的一处口径给出更正，逐字「有严重问题，当前 card-03 任务主要就是优化 build-code 的效率和执行，怎么可能不改 build-code 的 skill 文件！之前的决策有严重问题和歧义！」。此时设计书 §6.1 已按「三个阶段技能文件冻结不碰」冻结了接口假设，并有三个施工勘察子代理（M1 覆盖 `workflows/build-code/SKILL.md`、M2 覆盖 `workflows/build-plan/SKILL.md`、M3 覆盖 `workflows/verify-code/SKILL.md` 与 `workflows/make-decision/SKILL.md`）在并行执行。
+
+**①停并行**：收到更正后立即停止按旧接口假设派发新批次，作废 §6.1 的「冻结/排队」处置词表（该词表把「等 CARD-04」误当成「不改」）。
+
+**②主会话重排**：重新写下共同依据文件 `V4-BRIEF-2.md`（128 行：方法正文九条 + 硬规则 + 分片表），把「错开实施」定义为三值口径之一，并按新口径重派 M1–M4。
+
+**③作废批次登记**：作废的不是已完成的只读勘察本身（M1/M2/M3 的勘察结果仍然有效并被 V4-C 合并），作废的是**接口假设**——「三个阶段技能文件不改」这一条；由此作废的派发单元＝按旧假设起草的 §6.1 处置列与 §6.3 批次 G。
+
+**后续无静默不一致**：设计书 §6 被整节重写（V4-A），处置词表收敛为三值（本卡内做／错开实施／本卡不改），三个阶段技能进入「错开实施」；没有一条已完成工作被静默覆盖，也没有出现写集冲突。
+
+**桌面复演（同口径）**：若发生「接口蓝图已冻结、实施中发现接口必须改」，按母 `prd.md:303`（FR-15）执行：停并行 → 主会话重排 → 登记作废批次 → 继续；那批并行收益作废但不产生静默不一致。`docs/standard-workflow.md` 中 `G-1` grep 零命中，故本记录自包含行为描述。
+
+```
+
+### 原 context 4 — V-103
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`；file sha256 `096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710`；行 468–474；bytes [167406,169053)；raw sha256 `497ef179d2dd799daf13f7232ef4008b21daa5b405639c9cee65bbcd9f95b222`。
+
+限制：470与80指同一问题的逐字记载；470 Markdown加粗不同，逐字原文bytes分别保留，不擅折叠成新source。472之后技术消费者/处置为AI解释。
+
+```text
+### 十、`skills/**` 逐文件 sha 链（第七批答复 T-036 的落点）
+
+**用户裁决（2026-09-27 逐字）**：「这个问题的前提条件有问题，**不应该有任何逐文件-sha存在，这是核心的阻塞点！**」
+
+- **本卡零哈希动作**：不写、不重算、不回写任何哈希。设计书 `## §6.8` 给出实测的 **8 处消费者地图**：`runtime/adapters/local-skill-resolver.mjs:83`（`throw new Error(`bundle sha256 mismatch: ${locator}`)`）、`tests/contract/spec-stage-artifact-closure.test.mjs:110-119`、`tests/skill-provenance-strict.test.mjs:25`、`tests/integration/mutation-guards.test.mjs:106`、`runtime/evidence/check-skill-closure.mjs:421`／`:436`／`:651`／`:692`／`:742`、`package.json:8` 的 `check:skill-closure` 与 `runtime/distribution/skill-bundle-release.mjs:245`／`:291`、`runtime/schemas/skill-catalog.schema.json:17`／`:22`、`core/__tests__/check-skill-closure.test.mjs:66`／`:223`／`:228`。
+- **一条不可用的小路（实测排除）**：`files[]` 已支持纯字符串（无 `sha256` ⇒ 跳过逐文件校验），但 `skills/catalog.yaml` 的 `local_bundle_hash` 是 schema **必填**且契约断言仍比对 ⇒ 「只让 `spec-plan` 一个技能退链」跑不通，要么整链删除（CARD-06），要么整链回写。
+- **已知代价（如实登记，不构成门禁）**：q7_2／T-028 必须改 `skills/spec-plan/templates/phase-template.md`；改而不回写哈希后，上列 #2／#3／#4／#5／#8 与 `check:skill-closure` 会红或抛错，直到 CARD-06 落地。按 SD-17，这是本卡的**已知事实**，不作为推进或验收的门禁。
+```
+
+### 原 context 5 — V-104
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-card-03-20260919/decision-log.md`；file sha256 `096f42c5cb4d8ff354d909e3ad101e3d0db61fb50799cbec20b74aeaf37ec710`；行 830–844；bytes [251303,256144)；raw sha256 `a3d422c203c00802b5002db2f0a7cbd942740ae3dd61483420a39a2c9dfa84db`。
+
+限制：832明确用户逐字范围指示；836–842六条推荐选项均选是记录者报告实际答复，未有逐字选择原消息，不能宣称已认证新confirm或把解释当verbatim。
+
+```text
+### 二十、build-plan 开场：范围回收与六条路线裁决（2026-09-29）
+
+- **用户指示（build-plan 开场，逐字）**：「我希望不要把任何工作转给 CARD-05、CARD-06，card-05已经完成了，card-06现在的工作负担太大了，能当前任务完成就尽量在当前任务完成吧」。
+- **效力**：本条**推翻**本日志中所有「本卡不修、指向 CARD-05／CARD-06／后续卡／后续 runtime 修复项」的登记（含 §17.5 第 4、5 条，§17.2 第 5 条，§18.4，§十九「残余风险与后续」，`## 决定` T-018 条「runtime 代码层…不在本卡进行」与写面条「本卡不做」）。上述原文作为历史保留不改写；**以本节为准**。CARD-04 已合入 main（`40421a46`，2026-09-29）并经 `97092b30` 并入本分支，T-018/T-013「等 CARD-04 合并后」的时点已满足。
+- **不搬回的判据**：属 CARD-05 本职、已在其写集内完成（合入 `24a4a751`，2026-09-26）且此后本卡实测未再暴露缺陷的项，只有两项：审查工具选型与 OCR 委托（母 PRD `prd.md:296`）、3rd-review broker 健康轮询与取消（CARD-05 P4）。其余挂给 CARD-05 的条目均写于 09-28/29、在已含 CARD-05 的代码上实测，属其后残留 ⇒ 回本卡。
+- **六条路线裁决（用户 build-plan 开场一次答复，均选推荐项）**：
+  1. §十九 阶段行 provisional（`runtime/task/material-workspace.mjs:9`、`:13`）＝**按阶段区分要求的材料**：make-decision 只要求 `decision-log.md`，build-plan 及以后才要求 `spec.md`、`phases/index.md`；补回归测试。§十九铁律（不伪造材料）继续有效。
+  2. `runtime/review/schemas/ac-evidence-summary.schema.json:32-34` 5/6 值 vs 校验器 8 值＝**schema 补齐到校验器的 8 值**（校验器 `runtime/evidence/acceptance-evidence-validator.mjs:6` 与冻结测试不动），另加一条测试锁定两边一致。
+  3. `workflows/build-code/diff-scanner.mjs:20-29` `C2_IRREVERSIBLE_GIT_RULES`＝**删除这组无调用者的死规则**；危险动作继续按 M5 写在 build-code 范围说明（`workflows/build-code/SKILL.md:379-383`）。
+  4. 审查编排三候选（design.md:3374 `--async`/`--action=collect`、:3389 `result_invalid`、:3398 审查包只绑写集）＝**不新增 CLI 动词／schema 值／控制面**，用现有能力表达：异步用现有 `review` 入口后台运行；结果不合格记 `unavailable` 并附原因；审查包只收窄材料选择范围、不做同一性校验（守 card-04 B-02/B-06/B-08）。
+  5. skills/** 逐文件 sha 链（T-036）＝**只删逐文件 sha（`files[].sha256` 一类），保留一个聚合摘要**做完整性检查。
+  6. 废弃的 `skills/spec-plan/templates/plan-template.md` 等 plan/tasks 模板＝**删除并改掉引用它们的测试**；前提＝先核实没有仍在进行的 pre 口径任务依赖它们，若有则回问用户。
+- **G22 前提核实与处置（2026-09-29）**：核实发现唯一依赖旧模板、仍未关闭的 pre 口径任务是 `wh-review-adversarial-quality-cost-redesign`：`task.json` 的 inputs 列的是 plan.md/tasks.md，没有 activation_cohort，默认按 pre 处理（`runtime/evidence/canonical-receipt-writer.mjs:400`）；`facts.jsonl` 为空，`quality/verify.json` 为 `status=incomplete`、AC-01 failed；交付物已由 `9850b8ce`（2026-08-17）归档进 `specs/archive/`；原工作树和分支都已不在。用户裁决「先把它正式关掉再删模板」。正式关闭工具 `tools/cli/task-close.mjs` 必须打开原工作树（`:254`、`:88` → `runtime/task/workspace.mjs:493`），所以跑不了。用户随后选定「照先例改名归档，并写一份关闭说明」。已执行：Knowledge 任务目录改名为 `tasks/_noncanonical-archive-wh-review-adversarial-quality-cost-redesign-20260929/`（先例 `_noncanonical-archive-workflowhub-standard-stage-flow-hardening-20260820-20260821`），新增该目录下 `CLOSED.md`。没有补造 close 记录，原有质量事实（incomplete、AC-01 failed）照原样保留。至此 G22 删除卡的前提已满足。
+- **默认不做（仅登记理由，未另问）**：退役登记的机器读数、M5 机器拦截、§18.5 两条机器读数——都属新增控制面，违背 SD-17 与 card-04 B-08；`docs/architecture/repository-inventory.tsv` 被 `tests/contract/repository-inventory.test.mjs:31` 逐字节冻结，不动。
+- **写面变化**：本卡写面扩大到 `runtime/**`（含 `runtime/evidence/**`、`runtime/stage/stage-runner.mjs`、`runtime/task/material-workspace.mjs`、`runtime/review/**` 中上述对应文件）、`tools/cli/stage-runtime.mjs`、`workflows/build-code/diff-scanner.mjs`、`skills/**`（sha 链与模板）及对应 `tests/**`；逐 Phase 写集在 `phases/P<n>.md` 声明。
+```
+
+### 原 context 6 — U-001
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`；file sha256 `4e0ad9c11b5659bf4ef5e8aa83d4df11b73bf61124af862ee67141e16d346d01`；行 46–58；bytes [5221,8054)；raw sha256 `086151fc2a0e8b63adbb2596ee7440bdc29c18cacec9dbc07160b7eb4a5361f4`。
+
+限制：完整八点都保留，R017实际引用第4点:52。不得把其他七点变成本卡新scope或母答案代本卡答案。
+
+```text
+### U-001：用户八点思路（全文）
+
+我的思路：
+1：spec优化，build-spec和build-plan合并成一个build-plan阶段，在这个阶段产出一个spec文档和多个phase文档，spec文档需要包含更标准的需求文档、验收流程、测试标准、架构方案等，相当于spec文档是把decision-log进行完整的实现所进行的翻译，需要结构更清晰、内容更清楚、验收更明确，避免出现所有phase做完了，但是一次真实测试验收都没做过，一直在用脚本验收，功能实现的完全不合理。
+2：plan去除，不在需要plan和tasks文档，而是每一个phase一个实现文档，里面要写清楚背景、方案、流程、影响范围、测试标准、验收流程等等。要避免现在task文档的问题，也要有更清晰的实现指引。一个phase一个文档也能避免agent上下文爆炸；
+3：TDD流程优化，现在的tdd完成是token和时间浪费机，对任务实现帮助非常少。需要更专业更有用的TDD流程，不要再写出完全没意义的red了，需要基于每一个task写真实的red，后续这个red也能基于实现完成的代码变成green。要让TDD的每一个token花的有意义；
+4：build-code提速：每一个task的实现、审查、测试、修复应该是一个独立的子代理，避免上下文互相影响。主会话收集回复、派发任务、进行归纳和验收。同时，多个子代理、多个task、多个phase还可以设计并行规则，避免全部子代理都只能串行浪费时间！
+5：审查效果提升，不再用wh-review里面的审查提示词和3rd-review进行build-code或verify-code审查了，而是改成类似“https://github.com/alibaba/open-code-review”的开源代码审查工具进行，保证代码审查质量更高，并且不在因为审查浪费这么长时间。
+6：简化流程，不要浪费任何机制统计token、时间等，我需要workflowhub是一个简单好用的框架，不是一个复杂的流程制造机；
+7：弱化所有流程中的严格验收！我已经花了十几个task优化阻塞问题，现在workflowhub还是充满了阻塞，根本不能用，烦死了。
+8：简化workflowhub：workflowhub现在被一大堆对象、测试文件搞得非常臃肿，最开始设计的宪法完全没生效。有一点问题，agent就搞一大堆严格验收、新对象、新标准、新流程，让这能workflowhub非常难以维护，宪法里的最坏事件在当前workflowhub完美体现了。我需要彻底优化整个workflowhub，不要搞这么多流程、质量、文件！改成薄核心+多技能的项目规划！
+请你基于这些思路和你的调研建议，看看合不合理，如何优化？我希望这一次方案实现后，再也不要来来回回的优化workflowhub了！太烦人了
+
+```
+
+### 原 context 7 — 母第九条全文要点，非 verbatim census
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`；file sha256 `4e0ad9c11b5659bf4ef5e8aa83d4df11b73bf61124af862ee67141e16d346d01`；行 103–110；bytes [12708,13846)；raw sha256 `a3658f3c3ad505bf49fdb457e5cbfc3f99623f5527514e4486a1929ad8af57b0`。
+
+限制：标题明确全文要点，且正文有编辑加粗/名单；R018引用第1点:105。此源证实已记录需求含义，但原生usermessage逐字bytes未见，不能自动标独立verbatim。
+
+```text
+### U-009：最新三条要求（全文要点）
+
+1. **不止 build-code，所有阶段都要"派子代理 + 并行设计"**：`make-decision`、`build-prd`、`build-plan`、`verify-code` 都要用同一套工作方法——主会话不要一直干活，把工作尽量派给子代理；能并行的尽量并行；主会话只负责**派发、回收和交互类技能**；保证主会话上下文干净，**减少自动压缩次数**。
+2. **审查次数纠正（此前的收敛写窄了）**：审查不是"build-code 和 verify-code 各一次"，而是**每个 phase 一次 + 所有 phase 结束一次 + verify-code 一次**，与现在一致；只是把 `wh-review` 换成新的代码审查工具。
+3. **CPU/温度必须优化**：现在一旦开始 WorkflowHub 任务，电脑超过 80 度、风扇超过 5000 转。要求查出是哪个进程导致（是否 kernel）并尽可能优化。
+
+来源：本轮用户真实消息。第 2 条是对既有 OI-001/OI-005 收敛结论的**纠正**（此前把审查范围写成"只在两个阶段各一次"属收窄）；第 1 条扩大 OI-002 到全部阶段；第 3 条登记为 OI-011。
+
+```
+
+### 原 context 8 — U-010
+
+`/Users/Hugh/Hugh/Project/workflowhub-workflowhub-thin-core-card-03-20260919/specs/workflowhub-thin-core-rebuild-planning-20260919/decision-log.md`；file sha256 `4e0ad9c11b5659bf4ef5e8aa83d4df11b73bf61124af862ee67141e16d346d01`；行 111–119；bytes [13846,14897)；raw sha256 `d8c0fca82787d02fabf7f9b26ecf77ff83b033a1d3cd4ed5833ce8c873972a2e`。
+
+限制：原blockquoted四行完整保留，R019引用第1点:113；后118行覆盖核查是AI结论，非用户原话。
+
+```text
+### U-010：三条新需求（2026-09-19，用户真实消息全文）
+
+> 1：workflowhub任务执行时，大量的质量、流程阻塞，我希望彻底移除。workflowhub是一个薄核心的开发技能集，不应该有任何阻塞；
+> 2：workflowhub任务执行时，大量哈希、sha、快照、身份、材料、回执校验不对的问题，导致任务无法推进，也需要进行处理。workflowhub不需要这些过度工程化的东西来保证交付质量。每个阶段的推进、审查、测试的推进都不需要这些东西来保证质量。
+> 3：build-plan流程修改后，build-plan的审查也需要对应的修改，一次审查同时覆盖spec和phase文件。包含spec审查和原来的plan审查质量核心。
+> 如果这些问题没有包含在prd内，需要回到make-decision看看如何把这两个需求也放在prd里一起彻底解决。
+
+来源：本轮用户真实消息。覆盖核查结论：①半覆盖（FR-04/AC-04/SD-15 已有，但加固修订引入了新前置冲突）；②③未覆盖。
+
+```
+

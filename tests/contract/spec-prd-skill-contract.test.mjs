@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import yaml from 'js-yaml';
+import { validateSkillBundle } from '../../runtime/adapters/local-skill-resolver.mjs';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -270,17 +272,15 @@ describe('ORACLE-P2-SPEC-PRD', () => {
     const bundle = JSON.parse(artifact(bundlePath));
     expect(bundle.schema_version).toBe(1);
     expect(bundle.skill).toBe('spec-prd');
-    expect(bundle.files).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'SKILL.md' }),
-      expect.objectContaining({ path: 'templates/prd-template.md' })
-    ]));
+    expect(bundle.files).toEqual(expect.arrayContaining(['SKILL.md', 'templates/prd-template.md']));
     for (const entry of bundle.files) {
-      const file = resolve(repoRoot, 'skills/spec-prd', entry.path);
-      expect(existsSync(file), `bundle file is missing: ${entry.path}`).toBe(true);
-      expect(entry.sha256, `bundle hash missing: ${entry.path}`).toMatch(/^[a-f0-9]{64}$/);
-      const digest = createHash('sha256').update(readFileSync(file)).digest('hex');
-      expect(digest, `bundle hash mismatch: ${entry.path}`).toBe(entry.sha256);
+      expect(typeof entry).toBe('string');
+      const file = resolve(repoRoot, 'skills/spec-prd', entry);
+      expect(existsSync(file), `bundle file is missing: ${entry}`).toBe(true);
     }
+    const { bundleHash } = validateSkillBundle(repoRoot, 'skills/spec-prd/skill-bundle.json', 'skills/spec-prd/SKILL.md');
+    const catalog = yaml.load(readFileSync(resolve(repoRoot, 'skills/catalog.yaml'), 'utf8'));
+    expect(bundleHash).toBe(catalog.skills.find((item) => item.name === 'spec-prd').local_bundle_hash);
   });
 });
 

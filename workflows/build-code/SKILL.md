@@ -246,6 +246,11 @@ canonical review result。当前 `receipts.review` 仍须消费原 OCR 的
 不可用时须有该次失败调用及 `unverified` 披露。缺任何原件仍记 incomplete。
 这项 AC 判断不是新的推进 gate，也不改变正式 `phase_review` 质量事实。
 
+## 按工作类型派子代理
+
+规则唯一权威见 `AGENTS.md`。实施、测试与独立审查/红队按工作类型派子代理；调研仅在有真实未知问题时派发。测试或审查发现的修复回原实施子代理，在同一会话的连续上下文里完成，不另起执行者重读实现。修复派发时必须附上审查/测试发现的原文或可读取的原件 ref，保留原始 finding/失败输出。主会话处理范围裁决、派发回收和用户交互；纯文档任务的具体运行时测试不适用并记录理由。
+G-1 收场侧：登记接口必须变更时先停并行，由主会话重排工作包与接口边界，记录作废批次；产出约定见 `workflows/build-plan/SKILL.md`。
+
 ## Work loop
 
 1. Read current cohort materials and the physical Phase authority, then select
@@ -391,6 +396,8 @@ When status reports `work_status=ready` with `quality_status=in_progress|incompl
 ## Preflight self-check
 
 Before submission, optionally run `stage-runtime.mjs run --action=preflight --stage=build-code --input=<payload.json>` as a local payload-shape self-check (not a quality gate), and fix any reported protocol errors first.
+
+阶段收尾按 finding 严重度消费：blocking 与 major finding 在 Phase 关闭前逐条处置，记录修或不修、理由与 owner；minor 追加进 `findings-minor.md` 附录，在阶段末统一扫。原始发现全量保留，不限制审查者多报；执行者在收尾摘要逐条点名本轮发现的处置去向。
 
 ## Final aggregate
 

@@ -48,7 +48,7 @@ function fixture({ unsafeTarget = false, mutateSource = false, targetCount = 1, 
   mkdirSync(join(materialDir, "phases"), { recursive: true });
   const decision = "# Decision\n\n## 需求变更记录\n\n> Check product effect.\n";
   const spec = "# Spec\n\n- **FR-001**: Check product effect.\n- [ ] **AC-001**: One product test passes.\n";
-  const phase = "# Phase P1\n\nCheck one product test.\n";
+  const phase = "# Phase P1\n\n## Rule\n\nCheck one product test.\n";
   writeFileSync(join(materialDir, "decision-log.md"), decision);
   writeFileSync(join(materialDir, "spec.md"), spec);
   writeFileSync(join(materialDir, "phases", "P1.md"), phase);
@@ -87,12 +87,12 @@ function fixture({ unsafeTarget = false, mutateSource = false, targetCount = 1, 
   }, null, 2)}\n`);
   const sourcePath = `specs/${taskId}/decision-log.md`;
   const rulePath = `specs/${taskId}/phases/P1.md`;
-  const ruleRevision = `sha256:${hash(phase)}`;
+  const ruleRevision = "anchor:## Rule";
   writeFileSync(join(repo, "docs", "quality", "business-case-catalog.json"), `${JSON.stringify({
     schema: "workflowhub-business-case-catalog.v1", project: "Targeted", revision: "fixture.1",
     owner: "fixture business owner", cases: targets.map((target, index) => ({
       id: index === 0 ? "CASE-PRODUCT" : `CASE-PRODUCT-${index + 1}`, status: "active",
-      source: { path: sourcePath, revision: `sha256:${hash(decision)}` },
+      source: { path: sourcePath, revision: "anchor:## 需求变更记录" },
       rule: { id: "RULE-PRODUCT", path: rulePath, revision: ruleRevision,
         statement: "The product test exercises the effect." },
       change_triggers: ["product.mjs"], related_case_ids: [], ac_ids: ["AC-001"], phase_ids: ["P1"],
@@ -325,10 +325,8 @@ describe("P10 fixed targeted capture", () => {
     const catalog = JSON.parse(readFileSync(join(state.workspace.worktreeRoot,
       "docs/quality/business-case-catalog.json"), "utf8"));
     for (const item of catalog.cases) {
-      expect(item.source.revision).toBe(`sha256:${hash(readFileSync(join(state.workspace.worktreeRoot,
-        item.source.path)))}`);
-      expect(item.rule.revision).toBe(`sha256:${hash(readFileSync(join(state.workspace.worktreeRoot,
-        item.rule.path)))}`);
+      expect(item.source.revision).toBe("anchor:## 需求变更记录");
+      expect(item.rule.revision).toBe("anchor:## Rule");
       expect(item.effect_observation).toMatchObject({ observation_status: "not_yet_observed",
         rule_revision: item.rule.revision,
         canonical_source: { type: "current_task_acceptance_quality_fact_chain", stage: "build-code",

@@ -178,7 +178,6 @@ describe("portable build-prd workflow closure", () => {
     const currentFiles = [
       ...["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].flatMap((stage) =>
         ["SKILL.md", "steps.json", "skill-deps.yaml"].map((file) => `workflows/${stage}/${file}`)),
-      "skills/spec-plan/templates/plan-template.md", "skills/spec-tasks/templates/tasks-template.md",
     ];
     for (const locator of currentFiles) {
       const entry = release.files.find((file) => file.path === locator);
@@ -295,9 +294,7 @@ describe("portable build-prd workflow closure", () => {
     fs.cpSync(path.join(ROOT, "THIRD_PARTY_NOTICES.md"), path.join(packageRoot, "THIRD_PARTY_NOTICES.md"));
     const manifestPath = path.join(packageRoot, "skills/wh-review/skill-bundle.json");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    const entry = manifest.files.find((item) => (typeof item === "string" ? item : item.path) === "scripts/review-materials.mjs");
-    entry.sha256 = "0".repeat(64);
-    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    fs.appendFileSync(path.join(packageRoot, "skills/wh-review/scripts/review-materials.mjs"), "\n// changed after catalog declaration\n");
 
     await expect(buildSkillBundleRelease({ packageRoot, outputDir }))
       .rejects.toThrow(/skill closure/);
@@ -365,7 +362,7 @@ describe("portable build-prd workflow closure", () => {
     fs.writeFileSync(assetPath, "export const polluted = true;\n");
     const manifestPath = path.join(packageRoot, "skills/wh-review/skill-bundle.json");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    manifest.files.push({ path: asset, sha256: createHash("sha256").update(fs.readFileSync(assetPath)).digest("hex") });
+    manifest.files.push(asset);
     fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     const catalogPath = path.join(packageRoot, "skills/catalog.yaml");
     const catalog = fs.readFileSync(catalogPath, "utf8");
@@ -430,8 +427,9 @@ test("carries the canonical shared definitions owner through the runner import c
   for (const skillName of ["wh-review", "mini-task"]) {
     const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, `skills/${skillName}/skill-bundle.json`), "utf8"));
     for (const entry of bundle.files) {
-      expect(entry.path.includes(".."), `${skillName} bundle must not reach outside its own directory: ${entry.path}`).toBe(false);
-      expect(entry.path.startsWith("runtime/"), `${skillName} bundle must not declare runtime bytes: ${entry.path}`).toBe(false);
+      expect(typeof entry).toBe("string");
+      expect(entry.includes(".."), `${skillName} bundle must not reach outside its own directory: ${entry}`).toBe(false);
+      expect(entry.startsWith("runtime/"), `${skillName} bundle must not declare runtime bytes: ${entry}`).toBe(false);
     }
   }
 });

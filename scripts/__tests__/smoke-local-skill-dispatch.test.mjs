@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, expect, it } from "vitest";
+import { checkSkillClosure } from "../../runtime/evidence/check-skill-closure.mjs";
 import { smokeLocalSkillPackages } from "../../tools/cli/smoke-local-skill-dispatch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -18,16 +19,8 @@ function portableFixture() {
   for (const directory of ["skills", "workflows", "runtime/schemas"]) {
     fs.cpSync(path.join(ROOT, directory), path.join(root, directory), { recursive: true });
   }
-  // The source-repository test above owns stale distribution metadata. These
-  // copied fixtures bind current bytes before injecting one deliberate defect.
-  for (const name of ["spec-plan", "spec-tasks", "wh-review"]) {
-    const file = path.join(root, "skills", name, "skill-bundle.json");
-    const bundle = JSON.parse(fs.readFileSync(file, "utf8"));
-    for (const entry of bundle.files) {
-      if (typeof entry === "object") entry.sha256 = crypto.createHash("sha256")
-        .update(fs.readFileSync(path.join(root, "skills", name, entry.path))).digest("hex");
-    }
-    fs.writeFileSync(file, JSON.stringify(bundle));
+  for (const locator of ["config", "THIRD_PARTY_NOTICES.md", "skills/reuse-registry.md"]) {
+    fs.cpSync(path.join(ROOT, locator), path.join(root, locator), { recursive: true });
   }
   const env = { PATH: process.env.PATH, LANG: "C.UTF-8", NODE_PATH: "", GIT_CONFIG_NOSYSTEM: "1" };
   for (const [key, relative] of Object.entries({ HOME: "home", CODEX_HOME: "codex", XDG_CONFIG_HOME: "config", WORKFLOWHUB_TASK_DIR: "tasks" })) {
@@ -66,9 +59,9 @@ it("resolves copied portable bytes with isolated host paths and no host config d
   expect(fs.readdirSync(fixture.env.WORKFLOWHUB_TASK_DIR)).toEqual([]);
 });
 
-it.each(["missing-bundle", "tampered-template", "escaped-template"])("rejects %s before a package can be dispatched", defect => {
+it.each(["missing-bundle", "tampered-template", "escaped-template"])("detects %s through its owning validation seam", defect => {
   const fixture = portableFixture();
-  const template = path.join(fixture.root, "skills/spec-plan/templates/plan-template.md");
+  const template = path.join(fixture.root, "skills/spec-plan/templates/phase-template.md");
   if (defect === "missing-bundle") fs.rmSync(path.join(fixture.root, "skills/spec-plan/skill-bundle.json"));
   if (defect === "tampered-template") fs.appendFileSync(template, "\nchanged after declaration\n");
   if (defect === "escaped-template") {
@@ -78,9 +71,15 @@ it.each(["missing-bundle", "tampered-template", "escaped-template"])("rejects %s
     fs.symlinkSync(outside, template);
   }
   const result = smokeChild(fixture);
-  expect(result.status).not.toBe(0);
-  expect(result.stderr).toMatch(/bundle|sha256|symlink|regular file|outside|escap/i);
-  expect(result.stdout).toBe("");
+  if (defect === "tampered-template") {
+    expect(result.status, result.stderr).toBe(0);
+    expect(checkSkillClosure(fixture.root).errors.join("\n"))
+      .toMatch(/spec-plan: catalog local_bundle_hash does not match resolved bundle/);
+  } else {
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toMatch(/bundle|symlink|regular file|outside|escap/i);
+    expect(result.stdout).toBe("");
+  }
   expect(fs.readFileSync(fixture.sink, "utf8")).toBe("untouched-sink\n");
   expect(fs.readdirSync(fixture.env.WORKFLOWHUB_TASK_DIR)).toEqual([]);
 });

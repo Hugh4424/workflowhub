@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -140,15 +140,15 @@ function directProviderOutput(provider, findings) {
 }
 
 const surfaces = [
-  ["build-code/phase", { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1" }, true],
-  ["build-code/integration", { stage: "build-code", review_scope: "integration", subject_kind: "worktree", phase_id: null }, true],
-  ["verify-code", { stage: "verify-code" }, true],
-  ["make-decision/direction", { stage: "make-decision", review_track: "direction" }, false],
-  ["make-decision/detail", { stage: "make-decision", review_track: "detail" }, false],
-  ["build-spec", { stage: "build-spec" }, false],
-  ["build-plan", { stage: "build-plan" }, false],
-  ["mini-task/design", { stage: "build-code", review_kind: "mini_task.design", review_scope: "phase", subject_kind: "phase", phase_id: "P1" }, false],
-  ["mini-task/implementation", { stage: "build-code", review_kind: "mini_task.implementation", review_scope: "phase", subject_kind: "phase", phase_id: "P1" }, false],
+  ["build-code/phase", { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P1" }, true, "approved_spec"],
+  ["build-code/integration", { stage: "build-code", review_scope: "integration", subject_kind: "worktree", phase_id: null }, true, "implementation_summary"],
+  ["verify-code", { stage: "verify-code" }, true, "implementation_assessment"],
+  ["make-decision/direction", { stage: "make-decision", review_track: "direction" }, false, "raw_requirement"],
+  ["make-decision/detail", { stage: "make-decision", review_track: "detail" }, false, "raw_requirement"],
+  ["build-spec", { stage: "build-spec" }, false, "draft_spec"],
+  ["build-plan", { stage: "build-plan" }, false, "approved_spec"],
+  ["mini-task/design", { stage: "build-code", review_kind: "mini_task.design", review_scope: "phase", subject_kind: "phase", phase_id: "P1" }, false, "raw_requirement"],
+  ["mini-task/implementation", { stage: "build-code", review_kind: "mini_task.implementation", review_scope: "phase", subject_kind: "phase", phase_id: "P1" }, false, "raw_requirement"],
 ];
 
 describe("OCR delegation public review route", () => {
@@ -716,19 +716,19 @@ describe("OCR delegation public review route", () => {
     }
   });
 
-  const candidates = surfaces.flatMap(([surface, identity, codeSurface]) => [
+  const candidates = surfaces.flatMap(([surface, identity, codeSurface, materialKey]) => [
     ...(identity.stage === "build-code" && identity.review_kind === undefined
       ? []
-      : [[`${surface} production`, identity, false, codeSurface]]),
-    [`${surface} isolated candidate`, identity, true, codeSurface],
+      : [[`${surface} production`, identity, false, codeSurface, materialKey]]),
+    [`${surface} isolated candidate`, identity, true, codeSurface, materialKey],
   ]);
 
-  it.each(candidates)("ORACLE-P3-CANDIDATE: %s chooses its permitted runner", async (_surface, identity, candidateExperiment, useOcr) => {
+  it.each(candidates)("ORACLE-P3-CANDIDATE: %s chooses its permitted runner", async (_surface, identity, candidateExperiment, useOcr, materialKey) => {
     const { root, home, task, workspace } = fixture();
     const inputPath = join(root, "review-input.json");
     writeFileSync(inputPath, JSON.stringify({ request: {
       ...identity, ...(candidateExperiment ? { candidate_experiment: true } : {}),
-      host_provider: "codex/luna", materials: { implementation: "ocr-route-fixture" },
+      host_provider: "codex/luna", materials: { [materialKey]: "ocr-route-fixture" },
     } }));
     const calls = { ocr: 0, existing: 0 };
     let observedCandidateFlag = null;
@@ -751,6 +751,33 @@ describe("OCR delegation public review route", () => {
       });
       expect(observedCandidateFlag).toBe(candidateExperiment);
       expect(calls).toEqual(useOcr ? { ocr: 1, existing: 0 } : { ocr: 0, existing: 1 });
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+      if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
+    }
+  });
+
+  it.each(surfaces)("ORACLE-P3-MATERIAL: %s rejects the undeclared implementation key before either runner or an attempt", async (_surface, identity) => {
+    const { root, home, task, workspace } = fixture();
+    const inputPath = join(root, "invalid-material-key.json");
+    writeFileSync(inputPath, JSON.stringify({ request: { ...identity, materials: { implementation: "ocr-route-fixture" } } }));
+    const calls = { ocr: 0, existing: 0 };
+    const previousHome = process.env.HOME;
+    const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
+    process.env.HOME = home;
+    process.env.WORKFLOWHUB_TASK_DIR = root;
+    try {
+      await expect(stageRuntimeCliMain([
+        "review", "--action=record", `--stage=${identity.stage}`, "--project=workflowhub",
+        `--task=${task.identity.taskId}`, `--input=${inputPath}`,
+      ], { cwd: workspace.worktreeRoot, services: {
+        resolveRouteIdentity: () => ({ route_identity: "a".repeat(64) }),
+        materialIdForRequest: () => materialId,
+        runOcrDelegationRound: async () => { calls.ocr += 1; },
+        runReviewRound: async () => { calls.existing += 1; },
+      } })).rejects.toThrow(/review materials outside semantic_fields: implementation/);
+      expect(calls).toEqual({ ocr: 0, existing: 0 });
+      expect(task.listCanonicalReviewAttemptRefs()).toEqual([]);
     } finally {
       if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
       if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
@@ -780,6 +807,80 @@ describe("OCR delegation public review route", () => {
       expect(calls).toEqual({ ocr: 0, existing: 0 });
     } finally {
       if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+      if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
+    }
+  });
+});
+
+
+describe("OCR original provider bytes public recorder", () => {
+  it("injects the canonical byte sink and preserves parse diagnostics in the recorded attempt", async () => {
+    const { root, home, task, workspace } = fixture();
+    mkdirSync(join(workspace.worktreeRoot, "src"), { recursive: true });
+    writeFileSync(join(workspace.worktreeRoot, "src", "raw-review.mjs"), "export const current = true;\n");
+    const bin = join(root, "bin");
+    const host = join(home, ".config", "workflowhub");
+    mkdirSync(bin);
+    mkdirSync(host, { recursive: true });
+    // A fake packet selector only: this test never invokes real OCR or a provider.
+    writeFileSync(join(bin, "ocr"), `#!/usr/bin/env node
+const args=process.argv.slice(2);
+if (args[0]==="--version") console.log("fake-ocr-byte-test");
+else if (args[1]==="preview") console.log(JSON.stringify({reviewable_files:[{path:"diff/changes.md"}]}));
+else if (args[1]==="rule") console.log(JSON.stringify({rules:[{path:"diff/changes.md",rule:"Inspect raw byte recorder seam."}]}));
+else process.exitCode=9;
+`, { mode: 0o700 });
+    const config = join(root, "providers.json");
+    const providers = ["codex/good", "antigravity/bad"];
+    writeFileSync(config, JSON.stringify({ tiers: [providers], attachment_roots: [{ root, sources: [".wh-review-packets"] }], providers: Object.fromEntries(providers.map((provider) => [provider, { enabled: true, model: "fixture-model" }])) }));
+    writeFileSync(join(host, "config.json"), JSON.stringify({
+      task_dir: root,
+      third_review: { command: ["/unused/3rd-review"], config, attachment_root: root },
+      wh_review: { version: 2, stages: { "verify-code": { initial: providers, mode: "single_round" } } },
+    }));
+    const inputPath = join(root, "raw-review-request.json");
+    writeFileSync(inputPath, JSON.stringify({ request: { stage: "verify-code", subject_kind: "worktree", candidate_experiment: true,
+      materials: { changed_files: "src/raw-review.mjs", implementation_assessment: "Byte recorder fixture.", test_context: "Focused raw byte seam.",
+        open_risks: "Real provider execution is outside this test.", acceptance_criteria: "AC-REVIEW-004: preserve full AC beside the real diff." },
+    } }));
+    const stdout = { "codex/good": Buffer.from(directProviderOutput("codex/good", [])), "antigravity/bad": Buffer.from('{"findings":') };
+    const stderr = Buffer.from([0xff, 0x00, 0x61]);
+    const previousHome = process.env.HOME;
+    const previousPath = process.env.PATH;
+    const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
+    process.env.HOME = home;
+    process.env.PATH = `${bin}:${previousPath}`;
+    process.env.WORKFLOWHUB_TASK_DIR = root;
+    try {
+      const recorded = await stageRuntimeCliMain(["review", "--action=record", "--stage=verify-code", "--project=workflowhub",
+        `--task=${task.identity.taskId}`, `--input=${inputPath}`], {
+        cwd: workspace.worktreeRoot, services: {
+          reviewBundleDependencies: { loadConfig: () => ({ attachmentRoot: root }) },
+          onOcrProviderHealth: () => {},
+          ocrProviderExecutor: async ({ provider }) => ({ status: "completed", output: stdout[provider].toString("utf8"),
+            raw_output: { stdout: stdout[provider], stderr, exit_code: 0, cancelled: false, captured_output_limited: false } }),
+        },
+      });
+      expect(recorded.status).toBe("recorded");
+      const attempt = JSON.parse(task.readRecord(recorded.attempt_ref));
+      expect(attempt.provider_attempts, JSON.stringify({ error: attempt.error, status: attempt.terminal_status })).toHaveLength(2);
+      for (const member of attempt.provider_attempts) {
+        expect(member.raw_output_ref).toMatchObject({ version: "broker-output-ref.v1", provider: member.provider, runtime_id: member.runtime_id });
+        for (const stream of ["stdout", "stderr"]) {
+          const bytes = stream === "stdout" ? stdout[member.provider] : stderr;
+          const digest = createHash("sha256").update(bytes).digest("hex");
+          expect(member.raw_output_ref[stream + "_sha256"]).toBe(digest);
+          expect(task.readRecordBytes(`quality/evidence/stage-quality/verify-code/ocr-provider-output-${digest}.bin`)).toEqual(bytes);
+        }
+      }
+      expect(attempt.provider_attempts[0]).toMatchObject({ status: "completed", process_outcome: "ok", parse_outcome: "ok" });
+      expect(attempt.provider_attempts[1]).toMatchObject({ status: "failed", process_outcome: "ok", parse_outcome: "invalid", unavailable_diagnostics: { code: "OUTPUT_INVALID" } });
+      expect(attempt.provider_attempts[1].unavailable_diagnostics.message).toContain("parse_error=");
+      const rawFiles = readdirSync(task.recordPath("quality/evidence/stage-quality/verify-code")).filter((name) => name.startsWith("ocr-provider-output-"));
+      expect(rawFiles).toHaveLength(3); // same stderr bytes shared by both providers
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;
+      if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath;
       if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir;
     }
   });

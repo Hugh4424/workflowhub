@@ -2,42 +2,15 @@
   "schema_version": 1,
   "skill": "debate",
   "files": [
-    {
-      "path": "LICENSE",
-      "sha256": "a2d31d50352630fff4bb4fd61efe6e4764d8ea3833b6ba4bd041af79833e0ccc"
-    },
-    {
-      "path": "SKILL.md",
-      "sha256": "32e92f62d1a36cbeb39af527ea81668f4bfc8845bda476b9d4cceaf5e2b2784a"
-    },
-    {
-      "path": "examples/sample-input.md",
-      "sha256": "8b2196f52eacc48d71e023ad8a186bf3bdc2f383308062300b90c259ba6e13ed"
-    },
-    {
-      "path": "examples/sample-verdict.md",
-      "sha256": "388de02edb89385b646e350dbc1bcc94bb6abcded4b6cda4f0dd749f50ec7971"
-    },
-    {
-      "path": "pk-rules.ts",
-      "sha256": "6eef29d3cb390659cfc85b01c24ab6d0dfb4a9efb01f404148db5ec59e7bc6bf"
-    },
-    {
-      "path": "references/anti-bias-guardrails.md",
-      "sha256": "0d51105d4f649046b11576ea89f59bd77daa60f538b9e63cdc1b8c6284e2492e"
-    },
-    {
-      "path": "references/arbitration-protocol.md",
-      "sha256": "ab52918c8ccd63e8778db0677bc6485f4f8a5c5120cad8c5ef60f20fa4719477"
-    },
-    {
-      "path": "references/output-template.md",
-      "sha256": "4ff6ee5c1902a08ba65f55dd1f16c676cbc73df0e2bad985cdb87ce89e32e2b1"
-    },
-    {
-      "path": "references/role-spawn-templates.md",
-      "sha256": "334c11f3fe6f1f78ced8e1a6701a8d0678ebd1dfd9c5f51fa636f5634f3b5b75"
-    }
+    "LICENSE",
+    "SKILL.md",
+    "examples/sample-input.md",
+    "examples/sample-verdict.md",
+    "pk-rules.ts",
+    "references/anti-bias-guardrails.md",
+    "references/arbitration-protocol.md",
+    "references/output-template.md",
+    "references/role-spawn-templates.md"
   ],
   "sources": [
     {

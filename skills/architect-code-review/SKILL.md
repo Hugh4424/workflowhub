@@ -13,7 +13,8 @@ description: Optional standalone code review of a WorkflowHub implementation dif
 - `dsh-prose-standard`：检查改动的注释、错误文本、提示词和说明是否完整、准确、放置合理；
 - `dsh-trim-cot-leakage`：删除设计过程、PR 编排和审查过程泄漏到产品文本中的叙述。
 
-四项 lens 合并为一次独立调用。本技能保留供人工显式调用和历史结果解读。正常流程由
+四项 lens 合并为一次独立调用。本技能用于显式诊断、历史结果解读及 verify-code 的
+AC-REVIEW-011 替代审查。正常流程由
 build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测试与逐 AC 判断；verify-code
 对最终 worktree 发起一次 OCR 独立审查。
 
@@ -24,7 +25,11 @@ build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测
 终末 OCR 审查由 `receipts.quality_review` 消费。历史 integration 结果只读保留。本技能
 只检查代码、真实消费者、相关接口、测试和实现风险；上游材料仅作背景。
 
-独立调用时，缺少任务审查 receipt、AC evidence 或 provider 结果不妨碍阅读和报告代码问题，但本技能输出不能替代这些正式质量事实。push、merge 和发布仍是独立操作。
+独立诊断时，缺少任务审查 receipt、AC evidence 或 provider 结果不妨碍阅读和报告代码问题，
+诊断输出只作诊断事实。verify-code 本次终末 OCR unavailable 且零成功路时，按
+`workflows/verify-code/SKILL.md` 的 AC-REVIEW-011 恰好调用一次本技能，读取当前最终 diff、
+完整 AC、逐项验收原件、可读 OCR packet 和原始失败原因。明确取消或已有成功 OCR 路时
+保留该 OCR 事实。push、merge 和发布仍是独立操作。
 
 ## 审查顺序
 
@@ -53,15 +58,19 @@ build-code 对每个 Phase 发起一次 OCR 审查，随后完成最终聚合测
 
 ## 结果边界
 
-把本技能的 JSON 结果交给显式调用者用于独立诊断或历史对照。当前 build-code Phase
-与 verify-code 只消费各自 OCR 路径返回的 canonical `result_ref` 或 unavailable
-`attempt_ref`。本技能不生成正式 `code_review` 或 review receipt，也不触发另一次正式审查。
+把本技能的 JSON 结果交给调用者。本技能本身不写正式 `code_review` 或 review receipt。
+显式诊断与历史对照保留其原范围；AC-REVIEW-011 的替代输出由当前会话经既有
+`recordDshCodeReviewResult` 写入 canonical attempt/result，再由 `receipts.quality_review`
+消费符合当前 task/stage/snapshot/material 与 OCR unavailable 条件的 `result_ref`。
+provider 保持 `dsh-code-review`，原 OCR attempt 原样保留；原始 invocation、执行者、
+output、exit、findings、覆盖、错误及 hash 按 verify-code 合同保存。
 
 ## 处置
 
 主 Agent 负责修复和处置，每条 finding 只能是 `fixed`、`rejected_invalid`、`accepted_risk` 或 `needs_human`；原始 finding 必须保留，不把审查失败改写为空 findings，也不要求第二次 review 来证明材料完整。
 
-普通 verify-code 的 OCR 审查与定向复验遵守该 workflow 的一次审查合同；可选的 Architect 诊断不触发额外正式审查轮次。
+普通 verify-code 的 OCR 审查与定向复验遵守该 workflow 的一次审查合同；AC-REVIEW-011
+仅在该次终末 OCR unavailable 且零成功路时执行一次替代，不追加 OCR 轮次。
 
 ## 其他 Harness skill 的边界
 

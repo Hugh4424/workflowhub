@@ -70,6 +70,7 @@ import {
   runOcrDelegationRound,
 } from "../../runtime/review/ocr-delegation-adapter.mjs";
 export { runConfiguredOcrHostReview };
+import { compactReviewDiff } from "../../runtime/review/review-input-bounds.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor, validateVerifyAcceptanceSummary } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -597,6 +598,39 @@ function projectOcrCodeReviewBundle(built, attachmentRoot, request) {
   }
 }
 
+function phaseReviewSourceProjection(context, request, source, attachmentRoot) {
+  if (request.stage !== "build-code" || request.review_scope !== "phase"
+      || context.manifest?.activation_cohort !== "post") return source;
+  const index = context.artifacts.read("phases/index.md");
+  const phases = Object.fromEntries(phaseFilesFromIndex(index).map((ref) => [ref, context.artifacts.read(ref)]));
+  const parsed = validatePostPhaseContract({ spec: context.artifacts.read("spec.md"), index, phases });
+  const phase = parsed.facts?.phase_rows?.find((row) => row.id === request.phase_id);
+  if (!phase?.write_set?.length) throw new Error("MATERIAL_INCOMPLETE: current Phase write set is unavailable");
+  const archiveRoot = join(attachmentRoot, "canonical-phase-diffs");
+  mkdirSync(archiveRoot, { recursive: true });
+  const originalArchive = join(archiveRoot, `${source.diffSha256}.diff`);
+  if (!existsSync(originalArchive)) source.copyDiffTo(originalArchive);
+  if (statSync(originalArchive).size !== source.diffBytes || sha256(readFileSync(originalArchive)) !== source.diffSha256) {
+    throw new Error("MATERIAL_INCOMPLETE: original source diff archive differs from captured bytes");
+  }
+  const selected = compactReviewDiff(readFileSync(source.diffPath, "utf8"), { writeSet: phase.write_set }).diff;
+  const diffPath = join(dirname(source.diffPath), `phase-${request.phase_id}.diff`);
+  writeFileSync(diffPath, selected, { flag: "wx", mode: 0o600 });
+  const owned = (path) => typeof path === "string" && phase.write_set.some((entry) => {
+    const prefix = entry.replace(/\/$/, "");
+    return path === prefix || path.startsWith(`${prefix}/`);
+  });
+  return Object.freeze({
+    ...source,
+    diffPath, diffBytes: Buffer.byteLength(selected, "utf8"), diffSha256: sha256(selected),
+    changedFiles: Object.freeze(source.changedFiles.filter((entry) => owned(entry.path) || owned(entry.old_path))),
+    copyDiffTo(destination) {
+      copyFileSync(diffPath, destination, fsConstants.COPYFILE_EXCL);
+      return Object.freeze({ bytes: statSync(destination).size, sha256: sha256(readFileSync(destination)) });
+    },
+  });
+}
+
 /** Build the provider-visible build-code packet from the authenticated task workspace. */
 export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   loadConfig = loadTrustedThirdReviewConfig,
@@ -614,10 +648,11 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
   const source = captureSource({ workspace: context.workspace, reviewDataRoot: trusted.attachmentRoot,
     includeDiff: true, taskId: context.task.identity.taskId });
   try {
+    const selectedSource = phaseReviewSourceProjection(context, request, source, trusted.attachmentRoot);
     const built = buildMaterials({
       reviewDataRoot: trusted.attachmentRoot,
       attachmentRoot: trusted.attachmentRoot,
-      source,
+      source: selectedSource,
       task: context.task,
       taskId: context.task.identity.taskId,
       stage: request.stage,
@@ -716,6 +751,7 @@ function collectCurrentQualityFactObservations({ context, stage = null, currentS
           || value.material_revision !== materialRevision)) continue;
     const authentication = authenticateQualityFactRecord({ ...value, ref, sha256: sha256(raw) }, {
       read: readQualityEvidence(context.task),
+      workspaceRoot: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot,
     });
     const reviewSource = codeReviewSource(context.task, value);
     observations.push({
@@ -1919,6 +1955,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
             trustedContext: ocrHostContext,
             sourceBundle: prepareBundle(request),
             snapshotRoot: context.workspace.worktreeRoot,
+            rawOutputSink: (ref, bytes) => context.kernel.publishCanonicalRecord(ref, bytes),
             ...(services.ocrManagedClient ? { managedClient: services.ocrManagedClient } : {}),
             ...(typeof services.ocrProviderExecutor === "function" ? { providerExecutor: services.ocrProviderExecutor } : {}),
             onProviderHealth,
@@ -2003,7 +2040,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     const allowedRunFields = new Set([
       "receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts",
-      "fallback_protocol", "review_budget", "user_reply", "stage_reflection",
+      "fallback_protocol", "user_reply", "stage_reflection",
       ...(values.stage === "build-code" ? ["phase_progress"] : []),
       ...(values.stage === "make-decision" ? ["research_report"] : []),
       ...(values.stage === "build-spec" || values.stage === "build-plan" ? ["decision_freeze"] : []),

@@ -616,8 +616,7 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
 function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifest, skills }) {
   const input = object(execution.code_review, "execution.code_review");
   const reviewStep = manifest.steps.find((step) => step.step_slug === "finalize-code-review");
-  const reviewSkill = skills.skills?.find((skill) => skill.name === "architect-code-review");
-  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare architect-code-review and finalize-code-review");
+  if (!reviewStep) throw new Error("verify-code manifests must declare finalize-code-review");
   const result = object(input.result, "execution.code_review.result");
   const allowed = new Set(["status", "findings", "summary", "focus", "repairs"]);
   const unknown = Object.keys(result).filter((key) => !allowed.has(key));
@@ -640,7 +639,7 @@ function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifes
     snapshot_tree: snapshot.tree,
     material_revision: materials.revision,
     step_slug: reviewStep.step_slug,
-    skill_id: reviewSkill.name,
+    skill_id: "ocr-delegation",
     ...(qualityReviewRef === undefined ? {} : { quality_review_ref: qualityReviewRef, quality_review_hash: qualityReviewHash }),
     result: structuredClone(result),
   };
@@ -711,7 +710,7 @@ function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId,
         snapshot_tree: snapshotTree,
         material_revision: materialRevision,
         step_slug: "finalize-code-review",
-        skill_id: "architect-code-review",
+        skill_id: "ocr-delegation",
         result: { status: "unavailable", findings: [], summary: `Stage Agent 未提供代码审查结果：${safeReason}` },
       },
     };

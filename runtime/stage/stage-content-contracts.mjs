@@ -6143,8 +6143,19 @@ export function deriveDecisionLogOriginalSourceCensus(markdown) {
       return locatedUnit(entry, "verbatim_v", start, end < 0 ? markdown.length : end);
     }),
   ];
-  const rows = [...index.matchAll(/^\| (R-\d{3}) \| ([^|]+) \| (D-\d{3}) \|/gm)]
-    .map(([, id, source, decision]) => ({ id, summary: source.trim(), source: source.trim(), decision }));
+  const rows = [...index.matchAll(/^\| (R-\d{3}) \| ([^|]+) \| ([^|]+) \|/gm)]
+    .flatMap(([, id, source, decisionCell]) => {
+      const decision = decisionCell.trim();
+      // Index decisions remain the original string trace. Token readability
+      // never authenticates a choice or creates an original U/V source edge.
+      const tokens = decision.match(/[DT]-\d{3}/g) ?? [];
+      if (!/^[DT]-\d{3}(?:\s*[、,，;；/]\s*[DT]-\d{3})*$/.test(decision)
+          || tokens.length > 100) {
+        errors.push(`R index row decision is invalid: ${id} -> ${decision}`);
+        return [];
+      }
+      return [{ id, summary: source.trim(), source: source.trim(), decision }];
+    });
   if (uSections.length === 0 && vRows.length === 0) errors.push("decision-log.md has no verbatim U/V source statements");
   if (rows.length === 0) errors.push("decision-log.md has no R requirement index rows");
   const quotedUIds = new Set(uSections.map(({ id }) => id));
@@ -6196,9 +6207,11 @@ export function deriveDecisionLogOriginalSourceCensus(markdown) {
     }
   }
   const seen = new Set();
-  for (const row of rows) {
-    if (seen.has(row.id)) errors.push(`duplicate R requirement index row: ${row.id}`);
-    seen.add(row.id);
+  // Preserve duplicate identity diagnostics even when an invalid decision
+  // cell prevents that row from entering the normalized index.
+  for (const [, id] of index.matchAll(/^\| (R-\d{3}) \|/gm)) {
+    if (seen.has(id)) errors.push(`duplicate R requirement index row: ${id}`);
+    seen.add(id);
   }
   const decomposedParents = new Set(atoms.map(({ id }) => id.slice(0, 5)));
   const coverageUnits = sourceUnits.filter((unit) =>
@@ -6585,17 +6598,31 @@ function validateBuildCodeAcceptanceChain({ packet, evidenceByRef, identity } = 
     if (!nonEmptyString(row.file_symbol)) errors.push(`${label}.file_symbol is required`);
     const implementationAnchor = row.implementation_anchor;
     const verificationAnchor = row.verification_anchor;
-    if (!semanticAnchor(implementationAnchor, "implementation")) errors.push(`${label}.implementation_anchor is invalid`);
-    if (!semanticAnchor(verificationAnchor, "verification")) errors.push(`${label}.verification_anchor is invalid`);
-    if (implementationAnchor?.path === verificationAnchor?.path && implementationAnchor?.start_line === verificationAnchor?.start_line) errors.push(`${label} implementation and verification must be independently anchored`);
+    const implementationAnchorValid = semanticAnchor(implementationAnchor, "implementation");
+    const verificationAnchorValid = semanticAnchor(verificationAnchor, "verification");
+    if (!implementationAnchorValid) errors.push(`${label}.implementation_anchor is invalid`);
+    if (!verificationAnchorValid) errors.push(`${label}.verification_anchor is invalid`);
+    if (implementationAnchorValid && verificationAnchorValid
+        && implementationAnchor.path === verificationAnchor.path
+        && implementationAnchor.start_line === verificationAnchor.start_line) {
+      errors.push(`${label} implementation and verification must be independently anchored`);
+    }
+    // A post AC can have several independently executed scopes: no single gate
+    // may be invented for it. Any claimed projection still requires all fields
+    // and its bound raw test result; null/empty/partial claims are not omission.
+    const post = packet.activation_cohort === "post" || identity?.activation_cohort === "post";
+    const validateGate = !post || ["gate", "gate_command", "expected_exit", "oracle", "test_result"]
+      .some((field) => Object.hasOwn(row, field));
     const gate = row.gate ?? {};
-    if (!nonEmptyString(gate.command ?? row.gate_command)) errors.push(`${label}.gate.command is required`);
-    if (!Number.isInteger(gate.expected_exit ?? row.expected_exit)) errors.push(`${label}.gate.expected_exit is required`);
-    if (!nonEmptyString(gate.oracle ?? row.oracle)) errors.push(`${label}.gate.oracle is required`);
+    if (validateGate) {
+      if (!nonEmptyString(gate.command ?? row.gate_command)) errors.push(`${label}.gate.command is required`);
+      if (!Number.isInteger(gate.expected_exit ?? row.expected_exit)) errors.push(`${label}.gate.expected_exit is required`);
+      if (!nonEmptyString(gate.oracle ?? row.oracle)) errors.push(`${label}.gate.oracle is required`);
+    }
     for (const field of ["scenario", "actual_outcome", "coverage_limits"]) if (!nonEmptyString(row[field])) errors.push(`${label}.${field} is required`);
     if (!Array.isArray(row.evidence_refs) || row.evidence_refs.length === 0) errors.push(`${label}.evidence_refs is required`);
     else for (const [refIndex, entry] of row.evidence_refs.entries()) validateEvidenceEntry(entry, evidenceByRef, identity, `${label}.evidence_refs[${refIndex}]`, errors);
-    validateBuildCodeTestResult(row, evidenceByRef, identity, label, errors);
+    if (validateGate) validateBuildCodeTestResult(row, evidenceByRef, identity, label, errors);
     validateEvidenceEntry(row.review_ref, evidenceByRef, identity, `${label}.review_ref`, errors);
     validateEvidenceEntry(row.stage_end_ref, evidenceByRef, identity, `${label}.stage_end_ref`, errors);
   }
