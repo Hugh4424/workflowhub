@@ -923,7 +923,7 @@ specs/review-flow-reset/tasks.md	keep	no approved deletion or move proof in Phas
 specs/workflowhub-complexity-governance-v2/decision-log.md	keep	no approved deletion or move proof in Phase 0	18759aed7c71b83fa2ef1a88d3156d0f97c73f3f5886b933946f0543ea9c1a88
 specs/workflowhub-complexity-governance-v2/plan.md	keep	no approved deletion or move proof in Phase 0	b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac
 specs/workflowhub-complexity-governance-v2/spec.md	keep	no approved deletion or move proof in Phase 0	45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04
-specs/workflowhub-complexity-governance-v2/tasks.md	keep	no approved deletion or move proof in Phase 0	9f8d7b793355f38f92113d90e028586e485ffe96a8250c13a5e2ef4a8f58d34a
+specs/workflowhub-complexity-governance-v2/tasks.md	keep	no approved deletion or move proof in Phase 0	48de84bc682c7e052ed7de2872abd5442bbe7280cef285f45fa8f94b8677c967
 tests/audit-aggregator.test.mjs	keep	no approved deletion or move proof in Phase 0	34e7994788fb6f1616e7d01dacd232ee9293664d48d0882feeb8550b728f3653
 tests/audit-p2.test.mjs	keep	no approved deletion or move proof in Phase 0	aa830a264bb19dd9f3e38cc1b12633affc1ecb9dc85bd5f26403d8a8bc02c573
 tests/baseline.test.mjs	keep	no approved deletion or move proof in Phase 0	99c63b5247db98a26898aaac6cb299706147a125238208ef9649f62c65913056
@@ -936,6 +936,7 @@ tests/build-code-target.test.mjs	keep	no approved deletion or move proof in Phas
 tests/canonical-source.test.mjs	keep	no approved deletion or move proof in Phase 0	24c5671aa508a884500789ab65fa7b14be91f474a96a2b56e117ce9237b2059b
 tests/contract-freeze.test.mjs	keep	no approved deletion or move proof in Phase 0	d68229f9438f29b6b32d656621db8bdeff08199545bdf46476e41b499805e271
 tests/contract/deletion-proof.test.mjs	keep	no approved deletion or move proof in Phase 0	2c4d6d084afdab3490c5956e35d3880923642ffc701779fe20e6190afbad230f
+tests/contract/legacy-zero.test.mjs	keep	no approved deletion or move proof in Phase 0	a45d8501b3a564c270edd476db69c3f019da80be8d252aaed24ecba0cfca1db5
 tests/contract/repository-inventory.test.mjs	keep	no approved deletion or move proof in Phase 0	97e47320ce566632277f971a32ea685f3d104caf02b81109b9c4dbad9af49aef
 tests/contract/runner-contract.test.mjs	keep	no approved deletion or move proof in Phase 0	85f6da94c1f606713abb5d9c0ca39472f88a5f207c6e0205db2120593e938db1
 tests/contract/runtime-facade.test.mjs	keep	no approved deletion or move proof in Phase 0	7c598ddd3d809ee6d5a58d645e1f49b94bb447b62101a553e8757f8d217cdb9f
