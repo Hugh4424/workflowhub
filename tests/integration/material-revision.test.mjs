@@ -113,6 +113,26 @@ describe("single material revision", () => {
     expect(JSON.parse(task.readRecord(second.revision_ref)).requirements.coverage.ref).toBe("requirements/coverage-b.json");
   });
 
+  it("rejects an idempotent retry whose expected current reference is stale", () => {
+    const { task, artifacts } = productionFixture();
+    installRequirements(task, 1, "a");
+    const kernel = createTaskKernel(task, { artifacts });
+    const first = kernel.publishMaterialRevision({
+      change_summary: "initial",
+      source_refs: ["task.json"],
+    });
+    expect(() => kernel.publishMaterialRevision({
+      change_summary: "initial",
+      source_refs: ["task.json"],
+      expected_current_ref: `materials/revisions/${"f".repeat(64)}.json`,
+    })).toThrow(/MATERIAL_REVISION_CONFLICT/);
+    expect(kernel.publishMaterialRevision({
+      change_summary: "initial",
+      source_refs: ["task.json"],
+      expected_current_ref: first.revision_ref,
+    })).toMatchObject({ idempotent: true, revision_ref: first.revision_ref });
+  });
+
   for (const kind of ["test", "review", "acceptance_criterion", "confirmation"]) {
     it(`reports current/stale/missing for ${kind} facts`, () => {
       const tree = "b".repeat(40);

@@ -3,17 +3,17 @@
   "source": {
     "git_head": "1d9a93fe2f10e02b959ba7c9b9aa11d4366932f3",
     "tracked_files": 1001,
-    "delivery_files": 1037,
-    "source_files": 302
+    "delivery_files": 1056,
+    "source_files": 308
   },
   "measurements": {
     "formal_test_files": {
-      "actual": 145,
+      "actual": 150,
       "definition": "*.test.* and */__tests__/*"
     },
     "test_support_lines": {
-      "actual": 135,
-      "files": 14,
+      "actual": 490,
+      "files": 15,
       "definition": "non-test files under tests, fixtures, or helpers"
     },
     "persistent_object_families": {
@@ -144,17 +144,17 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 32298,
+      "actual": 32724,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 22298,
+      "delta_from_target": 22724,
       "within_limit": false
     },
     "production_lines": {
-      "actual": 38435,
+      "actual": 38615,
       "target": 12000,
       "limit": 15000,
-      "delta_from_target": 26435,
+      "delta_from_target": 26615,
       "within_limit": false
     },
     "public_runner_behaviors": {
@@ -179,10 +179,10 @@
       "within_limit": false
     },
     "largest_core_file_lines": {
-      "actual": 4899,
+      "actual": 4956,
       "target": 800,
       "limit": 1000,
-      "delta_from_target": 4099,
+      "delta_from_target": 4156,
       "within_limit": false
     },
     "focused_test_seconds": {
@@ -202,7 +202,7 @@
   },
   "hard_gates": {
     "dedicated_recovery_state": {
-      "actual": 507,
+      "actual": 514,
       "required_final": 0,
       "phase_0_status": "observed_for_planned_removal"
     },
@@ -220,7 +220,7 @@
   "hotspots": [
     {
       "path": "core/task-kernel-implementation.mjs",
-      "lines": 4899
+      "lines": 4956
     },
     {
       "path": "core/__tests__/task-kernel-publish.test.mjs",

@@ -1026,21 +1026,21 @@
 - **gate_cmd**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`
 - **expected_exit**：0
 - **oracle**：ORACLE-DELETE-CONFIRM：12 项 proof 完整且各自有用户选择；未确认为 KEEP
-- **evidence_path**：`evidence/phase-5/delete-confirmation.json`
+- **evidence_path**：`evidence/phase-5/deletion-consumer-audit.json`
 - **STOP**：用户未逐项确认或任一 proof 缺字段时 STOP/KEEP。
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：确认不能推断 Git 提交或推送授权。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T022 — 先证明 DEL-01 Grill replacement 旧入口仍可达
 
@@ -1071,14 +1071,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T023 — 垂直删除 DEL-01 Grill replacement
 
@@ -1109,14 +1109,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T024 — 先证明 DEL-02 Phase trace lineage 旧入口仍可达
 
@@ -1147,14 +1147,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T025 — 垂直删除 DEL-02 Phase trace lineage
 
@@ -1185,14 +1185,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T026 — 先证明 DEL-03 专用 invalidation 旧入口仍可达
 
@@ -1223,14 +1223,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T027 — 垂直删除 DEL-03 专用 invalidation
 
@@ -1261,14 +1261,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T028 — 先证明 DEL-04 continuation 旧入口仍可达
 
@@ -1299,14 +1299,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T029 — 垂直删除 DEL-04 continuation
 
@@ -1337,14 +1337,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T030 — 先证明 DEL-05 rebind 旧入口仍可达
 
@@ -1375,14 +1375,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T031 — 垂直删除 DEL-05 rebind
 
@@ -1413,14 +1413,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T032 — 先证明 DEL-06 reopen 旧入口仍可达
 
@@ -1451,14 +1451,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T033 — 垂直删除 DEL-06 reopen
 
@@ -1489,14 +1489,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T034 — 先证明 DEL-07 stage recovery 与 recover-spec 旧入口仍可达
 
@@ -1527,14 +1527,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T035 — 垂直删除 DEL-07 stage recovery 与 recover-spec
 
@@ -1565,14 +1565,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T036 — 先证明 DEL-08 recovery/reset workspace CAS 旧入口仍可达
 
@@ -1603,14 +1603,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T037 — 垂直删除 DEL-08 recovery/reset workspace CAS
 
@@ -1641,14 +1641,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T038 — 先证明 DEL-09 重复 invocation/completion projection 旧入口仍可达
 
@@ -1679,14 +1679,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T039 — 垂直删除 DEL-09 重复 invocation/completion projection
 
@@ -1717,14 +1717,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T040 — 先证明 DEL-10 stage-transition journal 旧入口仍可达
 
@@ -1755,14 +1755,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T041 — 垂直删除 DEL-10 stage-transition journal
 
@@ -1793,14 +1793,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T042 — 先证明 DEL-11 shadow current/head/checkpoint 旧入口仍可达
 
@@ -1831,14 +1831,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T043 — 垂直删除 DEL-11 shadow current/head/checkpoint
 
@@ -1869,14 +1869,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T044 — 先证明 DEL-12 旧 dispatch/config/index/spike 旧入口仍可达
 
@@ -1907,14 +1907,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T045 — 垂直删除 DEL-12 旧 dispatch/config/index/spike
 
@@ -1945,14 +1945,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 #### T046 — 复算全部删除归零项和跨切片回归
 
@@ -1976,21 +1976,21 @@
 - **gate_cmd**：`./node_modules/.bin/vitest run tests/integration/deletion-slices-summary.test.mjs && node tools/architecture/inventory.mjs --check && node tools/architecture/complexity-report.mjs --check-hard-gates`
 - **expected_exit**：0
 - **oracle**：ORACLE-DELETE-SUMMARY：确认删除项旧引用=0；硬归零项=0；KEEP 项仍可用
-- **evidence_path**：`evidence/phase-5/deletion-summary.json`
+- **evidence_path**：`evidence/phase-5/deletion-consumer-audit.json`
 - **STOP**：oracle 失败原因不是目标行为、需要弱化质量门、越出 Phase.Files 或出现新架构选择时 STOP
 - **recovery**：当前 Phase owner 恢复本 Task 独立 diff 并重跑同一 gate
 - **task risk**：局部绿掩盖跨切片断裂。
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
+- **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
+- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
+- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **completed_at**：`2026-07-31`
 
 ### Verify
 

@@ -1059,7 +1059,7 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 
 ### Goal
 
-先展示并确认逐项清单；随后 12 个切片各自 RED/GREEN，每项都有独立 diff、证据和恢复边界。
+先展示并确认逐项清单；随后按每项 proof 结果分支执行。完整 proof、替代路径、负测、故障注入、Multica 兼容、旧任务影响与回滚证据齐全时才进入对应 RED/GREEN 删除；任一证明缺失或仍有消费者时，该项明确 KEEP，跳过删除切片并记录消费者审计、保留理由和回归证据。KEEP 不是失败，也不允许为了满足删除数量硬删。
 
 ### Files
 
@@ -1068,6 +1068,8 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 - **DO NOT TOUCH**：`CONSTITUTION.md`、`core/runtime-facade.mjs`、`core/publication.mjs`
 
 ### Tasks
+
+- **KEEP 分支合同**：T021 先冻结逐项决定；T022–T045 仅在对应卡为 `DELETE` 时执行 RED/GREEN 删除。卡为 `KEEP` 时，使用统一 `deletion-proof --all --require-user-confirmation`、消费者审计、跨切片汇总和全局 inventory/complexity 检查完成该卡，不执行原始删除 gate，不伪造 RED/DELETE 证据。
 
 - T021 — 冻结逐项删除清单并取得用户确认
 - T022 — 先证明 DEL-01 Grill replacement 旧入口仍可达

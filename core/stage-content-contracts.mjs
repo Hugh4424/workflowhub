@@ -945,13 +945,23 @@ export function validateTasksOnlyCompletionSeam({
     errors.push("tasks-only seam cannot add, remove, or reorder Task identities");
   }
   const zones = new Map();
+  // `versioned_refs` is derived from the live plan/spec anchors. A legitimate
+  // refresh is allowed only for the tasks explicitly in this completion seam;
+  // unrelated task bindings remain visible so tampering cannot be masked.
+  const derivedTaskIds = new Set(allowedTaskIds ?? (taskId ? [taskId] : []));
+  const maskDerivedTaskMetadata = (document) => document.replace(
+    /(^####\s+(T\d+)\b[^\n]*\n)([\s\S]*?)(?=^#{1,4}\s+|(?![\s\S]))/gm,
+    (block, heading, id, body) => derivedTaskIds.has(id)
+      ? `${heading}${body.replace(/^- \*\*versioned_refs\*\*：.*$/m, "- **versioned_refs**：<derived-from-live-plan>\n")}`
+      : block,
+  );
   const mask = (document, parsed, side) => {
     for (const task of parsed) {
       const zone = completionZone(task);
       if (zone === null) errors.push(`${task.heading_id} ${side} is missing the unique completion status area`);
       else zones.set(`${side}:${task.heading_id}`, zone);
     }
-    return document.replace(
+    return maskDerivedTaskMetadata(document).replace(
       /(^####\s+(T\d+)\b[^\n]*\n)([\s\S]*?)(?=^#{1,4}\s+|(?![\s\S]))/gm,
       (block, heading, id, body) => {
         const marker = body.search(/^#####\s+执行状态填写区（唯一完成权威）\s*$/m);

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -148,12 +148,48 @@ export function validateDeletionPlan(plan, options) {
 }
 
 function main() {
-  if (!process.argv.includes("--check")) {
-    console.error("usage: node tools/architecture/deletion-proof.mjs --check");
+  const confirmKeep = process.argv.includes("--confirm-keep");
+  const checkAll = process.argv.includes("--all");
+  const requireConfirmation = process.argv.includes("--require-user-confirmation");
+  if (!process.argv.includes("--check") && !confirmKeep && !(checkAll && requireConfirmation)) {
+    console.error("usage: node tools/architecture/deletion-proof.mjs --check | --confirm-keep | --all --require-user-confirmation");
     process.exitCode = 2;
     return;
   }
   const plan = JSON.parse(readFileSync(PLAN_PATH, "utf8"));
+  if (confirmKeep) {
+    const currentTree = process.env.WORKFLOWHUB_PROOF_SNAPSHOT_TREE ?? defaultTree(ROOT);
+    const decisionRoot = resolve(ROOT, "evidence/phase-5/keep-decisions");
+    mkdirSync(decisionRoot, { recursive: true });
+    for (const card of plan.candidates) {
+      if (card.agentDecision?.status === "recorded_keep") {
+        card.missingProof = evaluateDeletionProof(card, { currentTree }).missing;
+        continue;
+      }
+      const ref = `evidence/phase-5/keep-decisions/${card.id}.json`;
+      const evidence = {
+        schema_version: "proof-evidence.v1",
+        snapshot_tree: currentTree,
+        kind: "agent-keep-decision",
+        subject_paths: card.candidatePaths,
+        decision: "KEEP",
+        actor: "workflowhub-agent",
+        authorization_source: "explicit user instruction in the active task",
+        basis: "The active task authorizes autonomous safety decisions. This record is an agent decision for KEEP only; it is not a human confirmation and cannot authorize deletion.",
+      };
+      const raw = `${JSON.stringify(evidence, null, 2)}\n`;
+      const path = resolve(ROOT, ref);
+      writeFileSync(path, raw, { encoding: "utf8", flag: "wx" });
+      card.agentDecision = {
+        status: "recorded_keep",
+        evidence: { ref, sha256: createHash("sha256").update(raw).digest("hex"), snapshot_tree: currentTree },
+      };
+      card.missingProof = evaluateDeletionProof(card, { currentTree }).missing;
+    }
+    writeFileSync(PLAN_PATH, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+    console.log(`recorded ${plan.candidates.length} autonomous KEEP decisions at ${currentTree}`);
+    return;
+  }
   const errors = validateDeletionPlan(plan);
   if (errors.length) {
     for (const error of errors) console.error(error);
@@ -162,6 +198,17 @@ function main() {
   }
   const keep = plan.candidates.filter(({ decision }) => decision === "KEEP").length;
   const remove = plan.candidates.length - keep;
+  if (checkAll && requireConfirmation) {
+    const unconfirmed = plan.candidates.filter((card) =>
+      card.decision === "DELETE" && card.userConfirmation?.status !== "confirmed");
+    if (unconfirmed.length) {
+      for (const card of unconfirmed) console.error(`${card.id} user confirmation is missing`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`deletion confirmation gate ok: ${keep} KEEP, ${remove} DELETE; no deletion occurs in Phase 5 gate`);
+    return;
+  }
   console.log(`deletion proof ok: ${keep} KEEP, ${remove} DELETE; no deletion occurs in Phase 0`);
 }
 

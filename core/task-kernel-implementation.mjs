@@ -1590,6 +1590,11 @@ export function buildTaskKernel(taskHandle, {
         coverage: { ref: requirementsPointer.coverage_ref, hash: requirementsPointer.coverage_hash },
       };
     }
+    // Serialize the authenticated-head read, stale-input decision, immutable
+    // revision write, and current-pointer CAS. Without one cross-process
+    // lock, two writers can both validate the same old head and publish
+    // different revisions successfully.
+    return task.withRecordLock("locks/materials.publication.lock", () => {
     const pointerRef = "materials/current.json";
     const priorPointerRaw = readOptionalRecord(task, pointerRef);
     let priorPointer = null;
@@ -1610,12 +1615,6 @@ export function buildTaskKernel(taskHandle, {
         throw new Error(`material current revision is invalid: ${validation.errors.join("; ")}`);
       }
     }
-    if (input.expected_current_ref !== undefined
-        && input.expected_current_ref !== (priorPointer?.revision_ref ?? null)) {
-      const conflict = new Error("MATERIAL_REVISION_CONFLICT: expected current revision is stale");
-      conflict.code = "MATERIAL_REVISION_CONFLICT";
-      throw conflict;
-    }
     const created = createUnifiedMaterialRevision({
       taskId: task.identity.taskId,
       materials,
@@ -1628,6 +1627,29 @@ export function buildTaskKernel(taskHandle, {
       changeSummary: summary,
       sourceRefs,
     });
+    const currentRef = priorPointer?.revision_ref ?? null;
+    if (input.expected_current_ref !== undefined && input.expected_current_ref !== currentRef) {
+      // The builder above is pure, so no record can be orphaned by this
+      // check. A retry may legitimately observe a newer idempotent revision
+      // published from the requested head; arbitrary stale refs still fail.
+      let ancestor = priorRevision;
+      let expectedIsAncestor = false;
+      while (ancestor?.previous_ref) {
+        if (ancestor.previous_ref === input.expected_current_ref) {
+          expectedIsAncestor = true;
+          break;
+        }
+        ancestor = parseJson(task.readRecord(ancestor.previous_ref), "material revision");
+      }
+      const sameInput = created.idempotent
+        && priorRevision?.change_summary === summary
+        && JSON.stringify(priorRevision.source_refs ?? []) === JSON.stringify(sourceRefs);
+      if (!sameInput || !expectedIsAncestor) {
+        const conflict = new Error("MATERIAL_REVISION_CONFLICT: expected current revision is stale");
+        conflict.code = "MATERIAL_REVISION_CONFLICT";
+        throw conflict;
+      }
+    }
     if (created.idempotent) {
       return deepFreeze({
         revision_ref: priorPointer.revision_ref, revision_hash: priorPointer.revision_hash,
@@ -1635,7 +1657,6 @@ export function buildTaskKernel(taskHandle, {
       });
     }
     const revision = created.revision;
-    const revisionDigest = revision.revision_id.slice("revision-".length);
     const validation = validateTaskMaterialRevision(revision);
     if (!validation.ok) throw new Error(`material revision is invalid: ${validation.errors.join("; ")}`);
     const revisionRef = created.revision_ref;
@@ -1676,6 +1697,7 @@ export function buildTaskKernel(taskHandle, {
       revision_ref: revisionRef, revision_hash: hash(revisionRaw),
       revision_id: revision.revision_id, parent_ref: revision.previous_ref,
       changed_files: revision.changed_files, current: true, idempotent: false,
+    });
     });
   };
   const currentVNextContext = () => {

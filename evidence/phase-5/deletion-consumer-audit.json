@@ -1,0 +1,21 @@
+{
+  "schema_version": "workflowhub-deletion-consumer-audit.v1",
+  "snapshot_tree": "3c3eca86af0f2c2441505f146794757ac251e8ee",
+  "status": "complete",
+  "policy": "A candidate is DELETE only after complete replacement and negative-proof evidence. Active consumers or any missing proof keep it.",
+  "candidates": [
+    {"id":"DEL-01","decision":"KEEP","consumer_refs":["workflows/make-decision/SKILL.md","workflows/make-decision/skill-deps.yaml","core/stage-content-contracts.mjs","tests/moat-skills-phase1.test.mjs"],"reason":"live Grill skill and content contract remain required"},
+    {"id":"DEL-02","decision":"KEEP","consumer_refs":["core/task-kernel-implementation.mjs","core/stage-handlers.mjs","workflows/build-code/phase-evidence.mjs","skills/wh-review/scripts/phase-review-subject.mjs"],"reason":"review disposition and authenticated review flow remain live"},
+    {"id":"DEL-03","decision":"KEEP","consumer_refs":["scripts/stage-runtime.mjs","core/task-kernel-implementation.mjs","scripts/task-recovery.mjs","tests/final-cutover-guards.red.test.mjs"],"reason":"invalidation is still the fail-closed status path"},
+    {"id":"DEL-04","decision":"KEEP","consumer_refs":["scripts/stage-runtime.mjs","core/task-kernel-implementation.mjs","core/stage-context.mjs","tests/stage-content-continuation.test.mjs"],"reason":"continuation remains the same-task material revision path"},
+    {"id":"DEL-05","decision":"KEEP","consumer_refs":["scripts/stage-runtime.mjs","core/task-kernel-implementation.mjs","core/task-handle.mjs","core/__tests__/task-target-repo-migration.test.mjs"],"reason":"rebind remains an identity and workspace safety boundary"},
+    {"id":"DEL-06","decision":"KEEP","consumer_refs":["scripts/stage-runtime.mjs","core/task-kernel-implementation.mjs","core/stage-runner.mjs","workflows/build-code/SKILL.md"],"reason":"reopen remains the authenticated verify-failure recovery path"},
+    {"id":"DEL-07","decision":"KEEP","consumer_refs":["scripts/stage-runtime.mjs","core/stage-handlers.mjs","core/build-spec-receipt-recovery.mjs","scripts/task-recovery.mjs"],"reason":"stage and spec receipt recovery are live runtime paths"},
+    {"id":"DEL-08","decision":"KEEP","consumer_refs":["core/task-recovery.mjs","core/workspace.mjs","scripts/runtime-cutover.mjs","core/task-close.mjs"],"reason":"workspace CAS and recovery protect task identity and cleanup"},
+    {"id":"DEL-09","decision":"KEEP","consumer_refs":["core/stage-skill-invocation.mjs","core/stage-completion-facts.mjs","core/stage-content-evidence.mjs","core/canonical-receipt-writer.mjs"],"reason":"invocation, completion, and evidence remain quality authority"},
+    {"id":"DEL-10","decision":"KEEP","consumer_refs":["core/journal-appender.mjs","core/journal-schema.mjs","core/chain-topology.mjs","core/fact-indexes.mjs","tests/five-stage-audit-e2e.test.mjs"],"reason":"journal and topology feed receipts and audit facts"},
+    {"id":"DEL-11","decision":"KEEP","consumer_refs":["core/git-checkpoint.mjs","core/task-handle.mjs","core/stage-runner.mjs","core/task-kernel-implementation.mjs"],"reason":"checkpoint, handle, and runner are lifecycle foundations"},
+    {"id":"DEL-12","decision":"KEEP","consumer_refs":["core/kernel.mjs","core/dispatch-component.mjs","core/resolve-component.mjs","core/task-index.mjs","tests/spike-intake-design.test.mjs","scripts/check-task-record-paths.mjs"],"reason":"dispatch/config/index and archived spike paths still have live consumers or guards"}
+  ],
+  "result": "No candidate passed the DELETE predicate; no source, test, schema, skill, or workflow file was removed."
+}
