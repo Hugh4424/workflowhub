@@ -1,0 +1,245 @@
+{
+  "schema_version": "workflowhub-complexity-report.v1",
+  "source": {
+    "git_head": "1d9a93fe2f10e02b959ba7c9b9aa11d4366932f3",
+    "tracked_files": 1001,
+    "delivery_files": 1013,
+    "source_files": 283
+  },
+  "measurements": {
+    "formal_test_files": {
+      "actual": 137,
+      "definition": "*.test.* and */__tests__/*"
+    },
+    "test_support_lines": {
+      "actual": 135,
+      "files": 14,
+      "definition": "non-test files under tests, fixtures, or helpers"
+    },
+    "persistent_object_families": {
+      "source": "core/task-handle.mjs",
+      "source_sha256": "4ef50768891fb08e073434b21dce9d39e48f5465f4ab7ae3897f8891e4a36a6b",
+      "names": [
+        "confirmations",
+        "evidence",
+        "identity",
+        "journal",
+        "materials",
+        "phase-result",
+        "receipts",
+        "requirements",
+        "results",
+        "reviews",
+        "runs",
+        "task"
+      ]
+    },
+    "bundle_content_audit": {
+      "manifests": 31,
+      "violations": [
+        {
+          "manifest": "skills/debate/skill-bundle.json",
+          "path": "__tests__/skill-contract.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/diagnosing-bugs/skill-bundle.json",
+          "path": "__tests__/skill-contract.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/isolated-browser-qa/skill-bundle.json",
+          "path": "__tests__/skill-contract.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/review-response/skill-bundle.json",
+          "path": "__tests__/skill-contract.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/test-routing-advisor/skill-bundle.json",
+          "path": "__tests__/skill-contract.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "__tests__/human-brief-behavioral.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/review-runner.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/review-controller.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/review-source-materials.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/ac-evidence-summary.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/simple-contracts.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/simple-e2e-faults.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/simple-reliability.red.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/schema-validator.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/third-review-host-config.test.mjs",
+          "reason": "forbidden delivery content"
+        },
+        {
+          "manifest": "skills/wh-review/skill-bundle.json",
+          "path": "scripts/__tests__/wh-review-cli.test.mjs",
+          "reason": "forbidden delivery content"
+        }
+      ]
+    }
+  },
+  "runtime_boundary": {
+    "node": {
+      "actual": "v24.14.0",
+      "requirement": ">=24.14.0 <25",
+      "compatible": true,
+      "source": "process.version"
+    },
+    "npm": {
+      "actual": "11.9.0",
+      "requirement": ">=11.9.0 <12",
+      "compatible": true,
+      "source": "npm --version"
+    }
+  },
+  "distribution_boundary": {
+    "node_modules_tracked_files": 0,
+    "node_modules_gitignored": true,
+    "package_lock_sha256": "a5f68ba082be1440ac350f583638515a91f8f56dcf54bbcd497cbcc9f844cd0b",
+    "clean_install_source": "package.json + package-lock.json"
+  },
+  "budgets": {
+    "formal_test_lines": {
+      "actual": 35061,
+      "target": 10000,
+      "limit": 12000,
+      "delta_from_target": 25061,
+      "within_limit": false
+    },
+    "production_lines": {
+      "actual": 36911,
+      "target": 12000,
+      "limit": 15000,
+      "delta_from_target": 24911,
+      "within_limit": false
+    },
+    "public_runner_behaviors": {
+      "actual": 33,
+      "target": 7,
+      "limit": 8,
+      "delta_from_target": 26,
+      "within_limit": false
+    },
+    "schemas": {
+      "actual": 44,
+      "target": 8,
+      "limit": 10,
+      "delta_from_target": 36,
+      "within_limit": false
+    },
+    "persistent_object_families": {
+      "actual": 12,
+      "target": 4,
+      "limit": 5,
+      "delta_from_target": 8,
+      "within_limit": false
+    },
+    "largest_core_file_lines": {
+      "actual": 4813,
+      "target": 800,
+      "limit": 1000,
+      "delta_from_target": 4013,
+      "within_limit": false
+    },
+    "focused_test_seconds": {
+      "actual": null,
+      "target": 10,
+      "limit": 15,
+      "delta_from_target": null,
+      "within_limit": null
+    },
+    "full_test_seconds": {
+      "actual": null,
+      "target": 90,
+      "limit": 120,
+      "delta_from_target": null,
+      "within_limit": null
+    }
+  },
+  "hard_gates": {
+    "dedicated_recovery_state": {
+      "actual": 500,
+      "required_final": 0,
+      "phase_0_status": "observed_for_planned_removal"
+    },
+    "dual_write_markers": {
+      "actual": 3,
+      "required_final": 0,
+      "phase_0_status": "observed_for_planned_removal"
+    },
+    "bundle_forbidden_content": {
+      "actual": 16,
+      "required_final": 0,
+      "phase_0_status": "observed_for_planned_removal"
+    }
+  },
+  "hotspots": [
+    {
+      "path": "core/task-kernel-implementation.mjs",
+      "lines": 4813
+    },
+    {
+      "path": "core/__tests__/task-kernel-publish.test.mjs",
+      "lines": 2588
+    },
+    {
+      "path": "tests/stage-content-evidence.test.mjs",
+      "lines": 1749
+    },
+    {
+      "path": "scripts/task-recovery.mjs",
+      "lines": 1742
+    },
+    {
+      "path": "core/task-handle.mjs",
+      "lines": 1719
+    }
+  ],
+  "follow_up": [
+    "replace legacy recovery and progression mechanisms only after deletion proofs pass",
+    "measure focused and full test duration in the final clean-install environment",
+    "do not delete quality assertions to meet line-count targets"
+  ]
+}
