@@ -410,6 +410,8 @@ content hashes；task identity、revision ID、changed files 与全部 content/s
 均由 task-global writer 读取当前 ArtifactDir 后生成，caller 只提交 summary 和 source refs。
 旧 revision 与 accepted 字节只读。
 revision 缺失只披露，不触发 repair cycle、reset、rebind、checkpoint、自动审查或开发阻断。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。
 
 ## 同任务透明恢复
 

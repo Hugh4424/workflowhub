@@ -94,7 +94,19 @@ export function verifyGitCheckpointPlan({ workspace, artifacts, task, plan, base
   return safePlan;
 }
 
+// Checkpoints are read-only historical facts. Verification is integrity-only:
+// git ref -> commit -> tree -> blob must match the recorded checkpoint. Live
+// working-tree artifacts are deliberately NOT compared here: materials may be
+// revised after acceptance, and drift is handled by material revisions plus
+// freshness evaluation of quality facts at formal publication (fail-closed),
+// not by turning historical reads into work permits. The `artifacts` parameter
+// is still accepted for caller compatibility, but is intentionally ignored:
+// all production callers must use `verifyGitCheckpointPlan` when they need a
+// live-material check before publishing a new checkpoint.
 export function verifyGitCheckpoint({ repoRoot, checkpoint, projectName, taskId, stage, artifacts } = {}) {
+  // Keep the legacy argument in the public shape without allowing it to
+  // silently reintroduce the old historical-permit behavior.
+  void artifacts;
   const names = expectedNames(stage);
   const expectedPrefix = `refs/workflowhub/checkpoints/${projectName}/${taskId}/${stage}/plan-`;
   if (typeof checkpoint?.ref !== "string" || !checkpoint.ref.startsWith(expectedPrefix) || !/^refs\/workflowhub\/checkpoints\/[^/]+\/[^/]+\/(?:build-spec|build-plan)\/plan-[a-f0-9]{64}$/.test(checkpoint.ref)) throw new Error(`checkpoint ref mismatch: expected plan-bound ref under ${expectedPrefix}`);
@@ -111,10 +123,6 @@ export function verifyGitCheckpoint({ repoRoot, checkpoint, projectName, taskId,
     if (record.blob_oid !== blob) throw new Error(`checkpoint blob_oid mismatch: ${path}`);
     const content = git(repoRoot, ["show", `${commit}:${path}`], { encoding: null });
     if (record.content_hash !== sha256(content)) throw new Error(`checkpoint content_hash mismatch: ${path}`);
-    if (artifacts) {
-      const live = Buffer.from(artifacts.read(names[expectedPaths.indexOf(path)]));
-      if (!live.equals(content)) throw new Error(`live artifact differs from checkpoint: ${path}`);
-    }
   }
   return checkpoint;
 }

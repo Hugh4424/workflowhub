@@ -1067,6 +1067,41 @@ describe("aggregation and runner", () => {
     expect(() => verifyFinal({ resultRef: result.resultRef, task, attachmentRoot })).toThrow(/PHASE_RESULT_NOT_FINAL/);
   });
 
+  it("does not reuse a semantic Phase result across snapshot trees", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-phase-snapshot-reuse-");
+    const calls = [];
+    const providerClient = {
+      run: async () => {
+        calls.push(true);
+        return { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } };
+      },
+    };
+    const base = {
+      task,
+      attachmentRoot,
+      taskId: "task",
+      stage: "build-code",
+      phaseId: "phase-1",
+      materials: {},
+      hostProvider: "codex",
+      providers: ["kimi"],
+      providerClient,
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }),
+    };
+    const first = await runReviewFixture({
+      ...base,
+      capturePhaseSource: () => ({ ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) }),
+    });
+    const second = await runReviewFixture({
+      ...base,
+      capturePhaseSource: () => ({ ...source, baseTree: "6".repeat(40), snapshotTree: "8".repeat(40) }),
+    });
+    expect(calls).toHaveLength(2);
+    expect(second.reused).not.toBe(true);
+    expect(second.snapshotTree).toBe("8".repeat(40));
+    expect(second.resultRef).not.toBe(first.resultRef);
+  });
+
   it("never calls a provider when source capture reports mutation", async () => {
     const { attachmentRoot, task } = fixture("simple-review-source-mutated-"); const calls = [];
     await expect(runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient: { run: async (request) => { calls.push(request); } }, captureSource: () => { throw new Error("SOURCE_CHANGED_DURING_CAPTURE"); } })).rejects.toThrow(/SOURCE_CHANGED_DURING_CAPTURE/);

@@ -110,6 +110,29 @@ export async function buildSkillBundleRelease({
   }
   addStaticImportClosure(root, locators);
   const files = await Promise.all([...locators].sort().map((locator) => copy(root, destination, locator)));
+  // Source skill manifests may list test-only assets used by the Hub checkout.
+  // A clean Skill Bundle deliberately excludes those assets, so publish a
+  // self-consistent manifest whose closure matches the files actually copied.
+  // Otherwise an installed runner can fail before a conditional skill is
+  // invoked merely because its manifest points at an omitted test fixture.
+  for (const entry of files.filter(({ path: locator }) => locator.endsWith("/skill-bundle.json"))) {
+    const target = path.join(destination, entry.path);
+    const manifest = JSON.parse(fs.readFileSync(target, "utf8"));
+    const original = Array.isArray(manifest.files) ? manifest.files : [];
+    manifest.files = original.filter((asset) => {
+      const relative = typeof asset === "string" ? asset : asset?.path;
+      if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).includes("..")) return false;
+      const locator = path.posix.join(path.posix.dirname(entry.path), relative);
+      return locators.has(locator);
+    }).map((asset) => {
+      if (typeof asset === "string") return asset;
+      const locator = path.posix.join(path.posix.dirname(entry.path), asset.path);
+      return { ...asset, sha256: sha256(fs.readFileSync(path.join(destination, locator))) };
+    });
+    const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+    await fs.promises.writeFile(target, bytes);
+    entry.sha256 = sha256(bytes);
+  }
   const contract = createSkillBundleContract({ major: runnerContractMajor, minMinor: runnerContractMinMinor });
   const release = {
     schema_version: 1,

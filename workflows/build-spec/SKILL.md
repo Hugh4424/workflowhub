@@ -373,3 +373,5 @@ ArtifactDir 计算 revision ID、changed files、content/source hashes，caller 
 记录保留 parent、summary 和 source refs。旧 revision/accepted
 只读可追溯。该记录不是 repair cycle、reset、rebind、checkpoint 或 review 许可证，
 缺记录如实披露但不阻断继续完善规格。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。

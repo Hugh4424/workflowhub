@@ -324,6 +324,15 @@ describe("delivery close verifier", () => {
       .toThrow(/accepted verify-code snapshot/i);
   });
 
+  it("refuses close when accepted verify facts are stale after material revision", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    writeFileSync(join(f.worktree, "specs", "close-task", "spec.md"), "revised after verify\n");
+
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) }))
+      .toThrow(/fresh verify-code facts|stale/i);
+  });
+
   it("migrates an authenticated task target from its worktree to the checked-out main repository before close preparation", async () => {
     const api = await import("../core/task-close.mjs");
     const f = fixture({ targetRepo: "worktree" });

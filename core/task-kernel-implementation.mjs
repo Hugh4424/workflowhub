@@ -3678,6 +3678,13 @@ export function buildTaskKernel(taskHandle, {
       const active = activeStageRun(fact.stage);
       if (fact.workflow_run_id !== active.run.workflow_run_id) throw new Error("stage skill invocation run identity mismatch");
       const ref = stageSkillInvocationRef(fact);
+      // A host failure is a truthful, immutable observation, but it must not
+      // permanently consume the logical invocation identity.  A later retry
+      // with the same input may succeed after the provider recovers.  Keep the
+      // original unavailable fact and publish the successful retry at a
+      // deterministic sibling ref; readers resolve the sibling as the current
+      // state without rewriting history.
+      const recoveryRef = `${ref}.recovery.json`;
       const raw = serializeStageSkillInvocation(fact);
       try {
         createKernelRecord(ref, raw);
@@ -3688,6 +3695,20 @@ export function buildTaskKernel(taskHandle, {
         const existing = parseJson(existingRaw, "stage skill invocation");
         const semantic = ({ created_at, ...value }) => value;
         if (JSON.stringify(semantic(existing)) !== JSON.stringify(semantic(fact))) {
+          if (existing.status === "unavailable" && fact.status === "executed") {
+            try {
+              createKernelRecord(recoveryRef, raw);
+              return deepFreeze({ ref: recoveryRef, hash: hash(raw), fact, recovered: true, previous_ref: ref });
+            } catch (recoveryError) {
+              if (recoveryError?.code !== "EEXIST") throw recoveryError;
+              const recoveryRaw = task.readRecord(recoveryRef);
+              const recovered = parseJson(recoveryRaw, "stage skill invocation recovery");
+              if (JSON.stringify(semantic(recovered)) !== JSON.stringify(semantic(fact))) {
+                throw new Error("stage skill invocation recovery identity already binds a different fact");
+              }
+              return deepFreeze({ ref: recoveryRef, hash: hash(recoveryRaw), fact: recovered, recovered: true, idempotent: true, previous_ref: ref });
+            }
+          }
           throw new Error("stage skill invocation identity already binds a different fact");
         }
         return deepFreeze({ ref, hash: hash(existingRaw), fact: existing, idempotent: true });
@@ -3703,7 +3724,16 @@ export function buildTaskKernel(taskHandle, {
         invocation_key: invocationKey,
       });
       try {
-        return deepFreeze({ ref, fact: parseJson(task.readRecord(ref), "stage skill invocation") });
+        const base = parseJson(task.readRecord(ref), "stage skill invocation");
+        if (base.status === "unavailable") {
+          try {
+            const recoveryRaw = task.readRecord(`${ref}.recovery.json`);
+            return deepFreeze({ ref: `${ref}.recovery.json`, fact: parseJson(recoveryRaw, "stage skill invocation recovery"), previous_ref: ref });
+          } catch (recoveryError) {
+            if (recoveryError?.code !== "ENOENT") throw recoveryError;
+          }
+        }
+        return deepFreeze({ ref, fact: base });
       } catch (error) {
         if (error?.code === "ENOENT") return null;
         throw error;
@@ -4843,7 +4873,12 @@ export function buildTaskKernel(taskHandle, {
       if (options?.liveCheckpoint !== undefined) {
         throw new Error("liveCheckpoint is an internal build-spec continuation capability");
       }
-      return readAcceptedLocal(stage, options);
+      // Public accepted reads expose historical facts only.  A caller may
+      // continue ordinary work after revising live materials; freshness and
+      // formal publication decide whether that work is complete.  Live
+      // checkpoint comparison remains an explicit private capability for
+      // acceptance/continuation writers.
+      return readAcceptedLocal(stage, { ...options, liveCheckpoint: false });
     },
     readAcceptedAudit(stage, options = {}) {
       if (Object.prototype.hasOwnProperty.call(options, "liveCheckpoint")) {

@@ -79,8 +79,9 @@ export async function buildRunnerRelease({
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
     ...filesUnder(root, "metrics", (locator) => /\.(?:mjs|json)$/.test(locator)),
     ...filesUnder(root, "workflows", (locator) => locator.endsWith(".mjs")),
-    ...filesUnder(root, "skills/wh-review", (locator) =>
-      !/(?:^|\/)__tests__(?:\/|$)|\.test\.[^/]+$/.test(locator)),
+  ...filesUnder(root, "skills/wh-review", (locator) =>
+      !/(?:^|\/)__tests__(?:\/|$)|\.test\.[^/]+$/.test(locator)
+      && !locator.endsWith("/skill-bundle.json")),
   ]);
   addStaticDependencies(root, locators);
   const files = await Promise.all([...locators].sort().map((locator) => copy(root, destination, locator)));

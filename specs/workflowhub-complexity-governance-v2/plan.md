@@ -1023,7 +1023,7 @@ Phase 0 先生成每文件 inventory 和 proof。Phase 1–4 建立并切换新�
 ### Files
 
 - **NEW**：`tests/e2e/five-stage-normal.test.mjs`、`tests/e2e/five-stage-material-revision.test.mjs`、`tests/e2e/five-stage-idempotent-resume.test.mjs`、`tests/helpers/read-only-runner-fixture.mjs`、`tests/integration/progression-without-permits.test.mjs`
-- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/stage-context.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`
+- **MODIFY**：`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`、`core/stage-context.mjs`、`core/stage-handlers.mjs`、`core/stage-acceptance-policy.mjs`、`core/git-checkpoint.mjs`、`core/task-close.mjs`、`core/task-kernel-implementation.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-close.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`core/task-handle.mjs`、`docs/architecture/legacy-import-proof.json`
 
 ### Tasks

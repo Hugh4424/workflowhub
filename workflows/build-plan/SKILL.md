@@ -268,3 +268,5 @@ replace build-plan's normal confirmation or any structural gate.
 和 source refs；writer 从认证 ArtifactDir 注入 task identity/revision ID，并计算
 changed files、content/source hashes。旧版本只读；
 不要求 repair cycle/reset/rebind/checkpoint，不自动重审，也不把 revision lineage 变成开发 gate。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。

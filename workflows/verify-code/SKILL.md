@@ -430,3 +430,5 @@ evidence, acceptance evidence, or close authorization.
 files、summary、source refs、content hashes；identity/revision ID/hashes 均由
 task-global writer 从认证 ArtifactDir 生成，caller 不得自报。旧 revision/accepted 只读，不触发
 repair cycle/reset/rebind/checkpoint 或自动 review。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。

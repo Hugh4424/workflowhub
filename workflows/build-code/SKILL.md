@@ -448,3 +448,5 @@ uncovered ACs.
 parent、changed files、summary、source refs、content hashes；task-global writer 从
 认证 ArtifactDir 注入 identity/revision ID 并复算 hashes，caller 不得自报；
 不得据此创建 repair cycle/reset/rebind/checkpoint gate 或自动 review。
+材料修订后历史 accepted 与 checkpoint 仍只读可读；stale 质量事实仅使正式
+verify/close incomplete，不阻断普通工作，也不需要任何许可证。
