@@ -644,14 +644,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：RED 证明新任务单写、旧 writer 不可达；该 RED 测试随 T016 同 Phase 归零删除，执行事实由 Phase 3 正式收据绑定。
+- **executed_commands**：`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-current-tree && node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`（Phase 3 gate，exit 0）；`npm test`（全量回归，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/730ec45dfd54a62029b3b8285b9ffe27de7349ea0b6dfcb73efaa165a90e41e8.json","sha256":"647286b2af6198b0a5d9e269ab4faa72eb0993658b475528148da2da3acda191"},{"ref":"receipts/build-tests-phase-3-v2.json","sha256":"718cf5a7508cf3bd86b74a37bf89a7589a85bf40210b3f09c5b0b9ac903dc0a6"},{"ref":"receipts/build-tests-phase-3-regression-v2.json","sha256":"a7ded8d94f7fbd199db7b377183f5515b141e0b43a4e5f7e13fb6b8bfbd62ddd"},{"ref":"reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json","sha256":"3fc1776048296a858b432a2c1bf7c4193d395bcdca0cf98fd7bcbc8c58987049"}]`
+- **covered_ac**：AC-02、AC-03、AC-08
+- **review_fact**：`reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json`
+- **completed_at**：2026-07-31T04:33:03Z
 
 #### T014 — 原子切换新任务 writer
 
@@ -682,14 +682,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新任务 writer 原子切换为单写 vNext；并发/故障注入测试与全量回归在当前 tree 通过；迁移证明无生产写权限。
+- **executed_commands**：`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-current-tree && node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`（Phase 3 gate，exit 0）；`npm test`（全量回归，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/730ec45dfd54a62029b3b8285b9ffe27de7349ea0b6dfcb73efaa165a90e41e8.json","sha256":"647286b2af6198b0a5d9e269ab4faa72eb0993658b475528148da2da3acda191"},{"ref":"receipts/build-tests-phase-3-v2.json","sha256":"718cf5a7508cf3bd86b74a37bf89a7589a85bf40210b3f09c5b0b9ac903dc0a6"},{"ref":"receipts/build-tests-phase-3-regression-v2.json","sha256":"a7ded8d94f7fbd199db7b377183f5515b141e0b43a4e5f7e13fb6b8bfbd62ddd"},{"ref":"reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json","sha256":"3fc1776048296a858b432a2c1bf7c4193d395bcdca0cf98fd7bcbc8c58987049"}]`
+- **covered_ac**：AC-02、AC-03、AC-08
+- **review_fact**：`reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json`
+- **completed_at**：2026-07-31T04:33:03Z
 
 #### T015 — 审计真实旧任务并用冻结 fixture 证明一次性迁移完整性
 
@@ -720,14 +720,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：生成 106 项真实旧任务只读 inventory（内容脱敏、身份哈希）；临时 importer/schema/fixture 与 RED 版 verifier 落地；逐项处置经用户确认（import=51、archive=15、reject=40）。
+- **executed_commands**：`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-current-tree && node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`（Phase 3 gate，exit 0）；`npm test`（全量回归，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/730ec45dfd54a62029b3b8285b9ffe27de7349ea0b6dfcb73efaa165a90e41e8.json","sha256":"647286b2af6198b0a5d9e269ab4faa72eb0993658b475528148da2da3acda191"},{"ref":"receipts/build-tests-phase-3-v2.json","sha256":"718cf5a7508cf3bd86b74a37bf89a7589a85bf40210b3f09c5b0b9ac903dc0a6"},{"ref":"receipts/build-tests-phase-3-regression-v2.json","sha256":"a7ded8d94f7fbd199db7b377183f5515b141e0b43a4e5f7e13fb6b8bfbd62ddd"},{"ref":"reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json","sha256":"3fc1776048296a858b432a2c1bf7c4193d395bcdca0cf98fd7bcbc8c58987049"}]`
+- **covered_ac**：AC-08、AC-13
+- **review_fact**：`reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json`
+- **completed_at**：2026-07-31T04:33:03Z
 
 #### T016 — 完成真实旧任务处置证明并立即删除全部 legacy 脚手架
 
@@ -758,14 +758,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：固化不可变 legacy-import-proof（106 项用户确认处置，源聚合不变）；同 Phase 删除 legacy reader/importer/schema/fixture 与公开入口，inventory `--require-zero=legacy-runtime`=0；带 `--require-cases` 请求在最终 tree fail-loud（旧 writer 不可用，证据 `evidence/phase-3/legacy-cases-unavailable.txt`）。披露：一次性 importer 的删除前 fixture 用例执行证据未留存且代码不在 git 历史，无法重放；最终 AC-08 验收在 verify-code 携带本披露。
+- **executed_commands**：`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-current-tree && node tools/architecture/inventory.mjs --check --require-zero=legacy-runtime`（Phase 3 gate，exit 0）；`npm test`（全量回归，exit 0）；`node tools/architecture/verify-migration-proof.mjs --phase-gate --require-real-task-inventory --require-cases=supported,idempotent,missing-identity,hash-conflict,current-conflict,unknown-source --require-current-tree`（exit 1，旧 writer 不可用证明）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/730ec45dfd54a62029b3b8285b9ffe27de7349ea0b6dfcb73efaa165a90e41e8.json","sha256":"647286b2af6198b0a5d9e269ab4faa72eb0993658b475528148da2da3acda191"},{"ref":"receipts/build-tests-phase-3-v2.json","sha256":"718cf5a7508cf3bd86b74a37bf89a7589a85bf40210b3f09c5b0b9ac903dc0a6"},{"ref":"receipts/build-tests-phase-3-regression-v2.json","sha256":"a7ded8d94f7fbd199db7b377183f5515b141e0b43a4e5f7e13fb6b8bfbd62ddd"},{"ref":"reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json","sha256":"3fc1776048296a858b432a2c1bf7c4193d395bcdca0cf98fd7bcbc8c58987049"}]`
+- **covered_ac**：AC-08、AC-13
+- **review_fact**：`reviews/results/build-code-default-2096af554f9c5c00968fed34e05230d6924d21b3-3133f510-fd75-4024-9bc1-1211b544550c.json`
+- **completed_at**：2026-07-31T04:33:03Z
 
 ### Verify
 
