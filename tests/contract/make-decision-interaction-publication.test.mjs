@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -212,6 +212,15 @@ describe("P2 formal wiring contract", () => {
     expect(published.ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
     expect(published.value.schema_version).toBe("workflowhub-interaction-aggregate.v1");
     expect(state.task.readRecord(published.ref)).toContain("workflowhub-interaction-aggregate.v1");
+  });
+
+  it("keeps findings dialogue on spec-clarify without widening make-decision closure", () => {
+    const closure = readFileSync(join(process.cwd(), "runtime/evidence/check-skill-closure.mjs"), "utf8");
+    const buildSpec = readFileSync(join(process.cwd(), "workflows/build-spec/SKILL.md"), "utf8");
+    expect(closure).toMatch(/Findings disposition dialogue reuses spec-clarify/i);
+    expect(closure).toMatch(/Talk and Grill remain make-decision-only/i);
+    expect(buildSpec).toMatch(/findings 处置对话=复用 spec-clarify/);
+    expect(buildSpec).toMatch(/grill 独占/);
   });
 
   it("does not let the generic quality writer mint a resolved code review", () => {

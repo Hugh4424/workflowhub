@@ -67,6 +67,20 @@ afterEach(() => {
 });
 
 describe("current review material and capture contracts", () => {
+  it("RED: gives paired make-decision roles distinct prompts and adds the build-spec acceptance lens", () => {
+    const red = reviewInstructionsFor("make-decision", "direction", false, null, null, "full", "red");
+    const blue = reviewInstructionsFor("make-decision", "direction", false, null, null, "full", "blue");
+    expect(red).not.toBe(blue);
+    expect(red).toContain("red");
+    expect(blue).toContain("blue");
+    expect(blue).toMatch(/反例|对抗|隐藏前提/);
+    const buildSpec = reviewInstructionsFor("build-spec");
+    expect(buildSpec).not.toContain("role=red");
+    expect(buildSpec).not.toContain("role=blue");
+    expect(buildSpec).toContain("AC 可判断性与验收盲区");
+    for (const lens of ["横向第三路", "隐藏前提", "防虚假共识", "纵向否定"]) expect(buildSpec).toContain(lens);
+  });
+
   it("reports all missing verify-code materials in one preflight", () => {
     const { root, task } = taskFixture();
     expect(() => buildReviewMaterials({

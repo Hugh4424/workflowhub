@@ -8,6 +8,7 @@ import { aggregateProviderResults, classificationSummary, classifyAttempt, rende
 import { actionableSeriousFindings, findReusableReviewResult, reviewCycleDecision, verifyFinalSubject } from "../review-runner.mjs";
 import { createSimpleReviewPacket, dispatchFrozenProviderInput, runSimpleReview, serializeProviderInput } from "../simple-review-runner.mjs";
 import { createTask } from "../../../../runtime/task/task-handle.mjs";
+import { aggregateCanonicalProviderResults } from "../../../../runtime/review/canonical-review-result.mjs";
 
 const empty = JSON.stringify({ findings: [] });
 const materialId = "a".repeat(64);
@@ -163,6 +164,28 @@ describe("current wh-review helpers", () => {
     const direct = { provider: "kimi/coding", review: { findings: [finding] }, final: { status: "completed" }, calls: [], evidenceAnchors: [true] };
     const invalid = { provider: "opencode/v4flash", review: { findings: [finding] }, final: { status: "completed" }, calls: [], evidenceAnchors: [false] };
     expect(aggregateProviderResults([direct, invalid], 1).adjudication.clusters[0]).toMatchObject({ disposition: "actionable" });
+  });
+
+  it("retains provider-by-role provenance while distinguishing consensus from a silent role", () => {
+    const finding = {
+      severity: "major", path: "src/app.mjs", line: 1, issue: "shared failure", recommendation: "fix it",
+      root_cause: "missing guard", evidence_kind: "direct", evidence: "src/app.mjs:1",
+    };
+    const result = aggregateCanonicalProviderResults([
+      { provider: "kimi", role: "red", review: { findings: [finding] } },
+      { provider: "kimi", role: "blue", review: { findings: [finding] } },
+      { provider: "claude", role: "red", review: { findings: [finding] } },
+      { provider: "claude", role: "blue", review: { findings: [] } },
+    ], 2);
+    expect(result.status).toBe("available");
+    expect(result.adjudication.clusters[0]).toMatchObject({
+      providers: ["claude", "kimi"],
+      roles: ["blue", "red"],
+      provider_roles: { claude: ["red"], kimi: ["blue", "red"] },
+      finding_count: 3,
+      consensus: true,
+      disputed: true,
+    });
   });
 
   it("does not treat an unmet reviewer quorum as a semantic pass", () => {

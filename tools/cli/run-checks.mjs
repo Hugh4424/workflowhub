@@ -8,6 +8,7 @@
  *   - check-metrics-schema (M4 FR-CI-001/002)
  *   - check-stage-quality  (M5 FR-GATE-001/002)
  *   - check-task-record-paths (FR-TASKDIR-001)
+ *   - check-decision-log-chain (FR-DLOG-003, advisory and non-blocking)
  *
  * Modes:
  *   node tools/cli/run-checks.mjs            — aggregate mode (default)
@@ -116,6 +117,13 @@ function runAggregate() {
   const taskRecordPathsCode = runChecker("check-task-record-paths", []);
   if (taskRecordPathsCode !== 0) {
     failures.push({ name: "check-task-record-paths", code: taskRecordPathsCode });
+  }
+
+  // 7. check-decision-log-chain (FR-DLOG-003 — advisory only; never a gate)
+  console.log("[run-checks] running check-decision-log-chain (non-blocking) ...");
+  const decisionLogChainCode = runChecker("check-decision-log-chain", []);
+  if (decisionLogChainCode !== 0) {
+    console.error(`[run-checks] check-decision-log-chain advisory failed (exit ${decisionLogChainCode}); not added to failures`);
   }
 
   if (failures.length === 0) {

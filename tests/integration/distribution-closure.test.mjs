@@ -47,6 +47,9 @@ describe("skill bundle release", () => {
       skillRelease: release,
       runnerRelease: { release: "workflowhub-runner", files: [{ path: "runner-release.json", sha256: "0".repeat(64) }] },
     })).toEqual({ ok: true, errors: [] });
+    const closureSource = fs.readFileSync(path.join(ROOT, "runtime/evidence/check-skill-closure.mjs"), "utf8");
+    expect(closureSource).toMatch(/Findings disposition dialogue reuses spec-clarify/i);
+    expect(closureSource).toMatch(/Talk and Grill remain make-decision-only/i);
   });
 
   test("rejects source closure drift before publishing a release", async () => {

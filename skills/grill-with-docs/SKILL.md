@@ -17,10 +17,22 @@ dependent questions stay out of the batch and are re-ranked after the reply.
 同一张卡可以包含多个互相独立的问题；不要把独立问题退化成逐个单题发送。每题仍只问一个
 决策轴，有依赖的问题必须等真实回答后再拆到下一批。
 
+### 问答工具 IO 契约
+
+结构化问答工具的每题输入固定为 `question_id`、`axis`、`options`（最多 3 个，逐项写明
+含义、直接后果和主要风险）与 `recommended`。输出固定包含 `answers`（`option_id` 或
+`free_text`）以及宿主认证的 `reply_ref`、`reply_hash`。宿主没有该工具时，使用同内容的
+大白话文本卡，并如实登记工具降级事实；不得伪造工具调用或回复凭证。
+
+本段定义的是宿主工具的外部 IO。下方生命周期回放沿用现有 stage validator 的内部兼容
+字段 `recommended_option` 与 `number`；适配层必须把外部的 `recommended`、`option_id` 和
+`free_text` 映射到内部事件后再校验，不能把内部编号当成用户回复凭证。
+
 每题使用和 Talk、Clarify 相同的大白话问题卡：`question_id`、一个 `axis`、
 `independent: true`、2～3 个带 `meaning`、`consequence`、`risk` 的选项、
-`recommended_option` 和 `recommendation_reason`。用户可以只回答其中一部分，未回答项
-必须保留并重新排序，直接回答选项编号；Grill 仍然只记录方向挑战，不产生 review 结论。
+`recommended` 和 `recommendation_reason`。每个选项用 `option_id` 唯一标识；用户可以只回答
+其中一部分，未回答项必须保留并重新排序，直接回答选项 ID；Grill 仍然只记录方向挑战，
+不产生 review 结论。
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 

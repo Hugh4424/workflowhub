@@ -16,6 +16,12 @@
 - 技能应可独立调用、可搬运，不绑死单一宿主环境。
 - 质量裁决由独立来源独立上下文产出，禁止自审自判。
 
+### 测试硬规则（本任务后续执行）
+
+- 只跑受影响针对性测试；禁止全量回归：禁止无范围地跑全量 `vitest`、`npm test` 或 `test:safe`。
+- 例外只有用户或 CI 守卫明确要求；例外命令必须在执行证据中写清原因和范围。
+- 依据：[docs/standard-workflow.md](docs/standard-workflow.md) L310；本条是执行纪律，不是新的 stage、gate 或质量结论。
+
 ## 入口文件
 
 - 项目说明：[README.md](README.md)
@@ -40,6 +46,11 @@
 - provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
 - 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。
 - 外部 Stage Agent 只能通过现有 bridge 提交显式 `project_name/task_id/task_path/stage/attempt_id/agent_run_id` 与 `session` 或 `unavailable`；不读取旧 session/env、不扫描 transcript、不提交质量 receipt。
+
+### 本任务新增控制面登记
+
+- 结构化问答工具卡：owner=各交互 stage 主会话；consumer=stage outcome 交互校验；删除条件=结构化问答机制被经过审查的替代机制取代。
+- accepted_risk confirm 语义扩展：owner=build-spec 及相关 stage；consumer=处置校验与认证 receipt 绑定检查；删除条件=风险接收机制被经过审查的替代机制取代。
 
 ## vNext 永久实施边界
 

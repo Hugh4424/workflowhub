@@ -1,11 +1,21 @@
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { ArtifactDir } from "../core/artifact-dir.mjs";
+import { createTask, createTaskKernel } from "../runtime/task/task-handle.mjs";
+import { prepareTaskWorkspace } from "../runtime/task/workspace.mjs";
+import { stageRuntimeMain } from "../tools/cli/stage-runtime.mjs";
 
 import {
   buildRiskAcceptance,
   canonicalReviewFindings,
   deriveSeriousReviewPause,
+  validateReportableFindingDispositions,
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
 } from "../runtime/review/stage-review-disposition.mjs";
@@ -17,6 +27,91 @@ const checklist = read("constitution-checklist.md");
 
 const REVIEW_HASH = "a".repeat(64);
 const SNAPSHOT_TREE = "b".repeat(40);
+const temporaryRoots = [];
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function git(cwd, args) {
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+}
+
+function publicRiskFixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-public-risk-")));
+  temporaryRoots.push(root);
+  const repo = join(root, "repo");
+  const storage = join(root, "storage");
+  const home = join(root, "home");
+  mkdirSync(repo);
+  mkdirSync(storage);
+  mkdirSync(home);
+  git(repo, ["init", "-q", "-b", "main"]);
+  git(repo, ["config", "user.name", "WorkflowHub risk acceptance test"]);
+  git(repo, ["config", "user.email", "risk-acceptance@workflowhub.local"]);
+  writeFileSync(join(repo, "README.md"), "risk acceptance fixture\n");
+  git(repo, ["add", "."]);
+  git(repo, ["commit", "-qm", "fixture"]);
+  const taskId = "public-risk-acceptance";
+  const task = createTask({
+    storageRoot: storage,
+    manifest: {
+      schema_version: "1.0.0",
+      project_name: "workflowhub",
+      task_id: taskId,
+      created_at: "2026-09-05T00:00:00.000Z",
+      target_repo_root: repo,
+      issue_ids: [],
+      inputs: {},
+      record_model: "vnext-single-write",
+    },
+  });
+  const candidate = prepareTaskWorkspace(task);
+  const artifacts = ArtifactDir.open(candidate.worktreeRoot, task);
+  for (const file of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
+    artifacts.writeAtomic(file, `# ${file}\n`);
+  }
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate, artifacts });
+  const snapshot = kernel.currentVNextSnapshot();
+  const reviewRef = "quality/reviews/results/public-risk-review.json";
+  const review = {
+    task_id: taskId,
+    stage: "build-code",
+    snapshot_tree: snapshot.tree,
+    findings: [{
+      id: "F-123456789abc",
+      severity: "major",
+      path: "runtime/demo.mjs",
+      line: 1,
+      issue: "fixture serious issue",
+      root_cause: "fixture root cause",
+      recommendation: "repair it",
+      disposition: "actionable",
+      evidence_status: "direct",
+      providers: ["fixture"],
+    }],
+  };
+  kernel.publishCanonicalRecord(reviewRef, `${JSON.stringify(review)}\n`);
+  return { root, repo, storage, home, task, kernel, reviewRef };
+}
+
+async function withPublicRuntime(state, operation) {
+  const keys = ["HOME", "XDG_CONFIG_HOME", "WORKFLOWHUB_TASK_DIR", "CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH", "CODEX_CLI_VERSION"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  process.env.HOME = state.home;
+  process.env.WORKFLOWHUB_TASK_DIR = state.storage;
+  delete process.env.XDG_CONFIG_HOME;
+  for (const key of keys.slice(3)) delete process.env[key];
+  try {
+    return await operation();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+afterEach(() => {
+  while (temporaryRoots.length) rmSync(temporaryRoots.pop(), { recursive: true, force: true });
+});
 
 function pausedReview() {
   return deriveSeriousReviewPause({
@@ -74,6 +169,37 @@ function acceptance(pause, findingId = pause.findings[0].finding_id) {
     replyHash: "c".repeat(64),
     acceptedAt: "2026-08-02T00:00:00.000Z",
   });
+}
+
+function reportableFinding(id = "F-123456789abc") {
+  return {
+    findings: [{
+      id,
+      severity: "major",
+      path: "runtime/demo.mjs",
+      issue: "fixture finding",
+      root_cause: "fixture root cause",
+      recommendation: "repair it",
+      disposition: "actionable",
+      evidence_status: "direct",
+    }],
+  };
+}
+
+function findingDisposition(overrides = {}) {
+  return {
+    finding_id: "F-123456789abc",
+    original_fact: "fixture finding",
+    source: "user_reply",
+    consequence: "fixture consequence",
+    status: "user_decided",
+    next_action: "retain the user decision in the current task",
+    evidence_ref: "host-message://risk-reply-1",
+    owner: "main-agent",
+    consumer: "stage completion",
+    retain_or_delete: "retain in current task quality facts",
+    ...overrides,
+  };
 }
 
 function section(document, id, nextId) {
@@ -153,6 +279,22 @@ describe("current quality boundary", () => {
     })).toMatchObject({ status: "continue", findings: [] });
   });
 
+  it("fails closed when the explicit findings field is malformed", () => {
+    expect(() => canonicalReviewFindings({ findings: null })).toThrow(/findings must be an array/i);
+    expect(() => deriveSeriousReviewPause({
+      taskId: "demo",
+      stage: "build-code",
+      reviewRef: "quality/reviews/results/demo.json",
+      reviewHash: REVIEW_HASH,
+      result: {
+        task_id: "demo",
+        stage: "build-code",
+        snapshot_tree: SNAPSHOT_TREE,
+        findings: null,
+      },
+    })).toThrow(/findings must be an array/i);
+  });
+
   it("keeps the 22-clause constitution and its checklist synchronized", () => {
     expect(constitution).toMatch(/Version:\s*1\.7\.0\b/);
     expect([...constitution.matchAll(/^### (F\d+|Q\d+|S\d+) /gm)]).toHaveLength(22);
@@ -188,6 +330,125 @@ describe("current quality boundary", () => {
 });
 
 describe("risk acceptance behavior", () => {
+  it("routes accepted risk through the existing confirm public behavior", async () => {
+    const state = publicRiskFixture();
+    await withPublicRuntime(state, async () => {
+      const pause = await stageRuntimeMain([
+        "review-risk-pause",
+        "--stage=build-code",
+        "--project=workflowhub",
+        `--task=${state.task.identity.taskId}`,
+        `--input=${join(state.root, "pause-input.json")}`,
+      ].map((arg) => {
+        if (arg.endsWith("pause-input.json")) {
+          writeFileSync(arg.slice("--input=".length), JSON.stringify({ review_result_ref: state.reviewRef }));
+        }
+        return arg;
+      }), { cwd: state.repo });
+      const finding = pause.findings[0];
+      const replyRaw = `${JSON.stringify({
+        source: "user",
+        finding_id: finding.finding_id,
+        selected_option: "accept-risk",
+        reply: "我确认承担该风险并继续当前快照。",
+      })}\n`;
+      const replyHash = sha256(replyRaw);
+      const replyRef = `quality/evidence/risk-replies/${replyHash}.json`;
+      state.kernel.publishCanonicalRecord(replyRef, replyRaw);
+      const inputPath = join(state.root, "risk-confirm-input.json");
+      writeFileSync(inputPath, JSON.stringify({
+        review_result_ref: state.reviewRef,
+        finding_id: finding.finding_id,
+        card_ref: finding.card_ref,
+        card_hash: finding.card_hash,
+        selected_option: "accept-risk",
+        reply_ref: replyRef,
+        reply_hash: replyHash,
+      }));
+
+      const result = await stageRuntimeMain([
+        "confirm",
+        "--action=decision",
+        "--stage=build-code",
+        "--project=workflowhub",
+        `--task=${state.task.identity.taskId}`,
+        `--input=${inputPath}`,
+      ], { cwd: state.repo });
+
+      expect(result.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
+      expect(JSON.parse(state.task.readRecord(result.risk_acceptance_ref))).toMatchObject({
+        task_id: state.task.identity.taskId,
+        finding_id: finding.finding_id,
+        selected_option: "accept-risk",
+        reply_ref: replyRef,
+        reply_hash: replyHash,
+      });
+    });
+  });
+
+  it("writes a needs_human reply back as user_decided with user reply evidence", () => {
+    const result = validateReportableFindingDispositions({
+      result: reportableFinding(),
+      dispositions: [findingDisposition({ status: "needs_human", source: "review", evidence_ref: "quality/reviews/results/review.json" })],
+      userReply: {
+        finding_id: "F-123456789abc",
+        reply_ref: "host-message://risk-reply-1",
+        reply_hash: "d".repeat(64),
+      },
+    });
+    expect(result).toMatchObject({
+      facts: {
+        status: "recorded",
+        items: [{
+          finding_id: "F-123456789abc",
+          status: "user_decided",
+          source: "user_reply",
+          evidence_ref: "host-message://risk-reply-1",
+        }],
+      },
+      reply_bindings: [{
+        finding_id: "F-123456789abc",
+        reply_ref: "host-message://risk-reply-1",
+        reply_hash: "d".repeat(64),
+      }],
+      missing_items: [],
+    });
+  });
+
+  it("rejects a user reply that does not start from needs_human", () => {
+    expect(() => validateReportableFindingDispositions({
+      result: reportableFinding(),
+      dispositions: [findingDisposition()],
+      userReply: {
+        finding_id: "F-123456789abc",
+        reply_ref: "host-message://risk-reply-1",
+        reply_hash: "d".repeat(64),
+      },
+    })).toThrow(/requires needs_human disposition/i);
+  });
+
+  it("rejects a direct user_decided disposition without a bound user reply", () => {
+    expect(() => validateReportableFindingDispositions({
+      result: reportableFinding(),
+      dispositions: [findingDisposition()],
+    })).toThrow(/requires a bound user reply/i);
+  });
+
+  it("keeps accepted_risk without an authenticated receipt incomplete", () => {
+    const result = validateReportableFindingDispositions({
+      result: reportableFinding(),
+      dispositions: [findingDisposition({
+        source: "review",
+        status: "accepted_risk",
+        evidence_ref: "quality/reviews/results/public-risk-review.json",
+      })],
+    });
+    expect(result.facts.status).toBe("incomplete");
+    expect(result.missing_items).toEqual([
+      "accepted_risk requires an authenticated user risk receipt for: F-123456789abc",
+    ]);
+  });
+
   it("rejects a non-risk option", () => {
     const pause = pausedReview();
     const finding = pause.findings[0];

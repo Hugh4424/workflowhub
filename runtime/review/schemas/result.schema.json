@@ -17,6 +17,9 @@
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "pair_id": { "type": "string", "minLength": 1 },
+    "role": { "enum": ["red", "blue"] },
+    "disputed": { "type": "boolean" },
     "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
     "e2e_binding": { "$ref": "attempt.schema.json#/properties/e2e_binding" },
     "review_policy": { "$ref": "attempt.schema.json#/properties/review_policy" },
@@ -88,7 +91,7 @@
       "type": "object", "required": ["provider", "severity", "path", "issue", "recommendation"],
       "properties": {
         "provider": { "type": "string", "minLength": 1 }, "id": { "type": "string", "pattern": "^F-[a-f0-9]{12}$" }, "severity": { "enum": ["blocking", "major", "minor"] }, "path": { "type": "string", "minLength": 1 }, "line": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] }, "issue": { "type": "string", "minLength": 1 }, "recommendation": { "type": "string", "minLength": 1 },
-        "root_cause": { "type": "string", "minLength": 1 }, "providers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "adapter_count": { "type": "integer", "minimum": 1 }, "finding_count": { "type": "integer", "minimum": 1 }, "disposition": { "enum": ["actionable", "nonblocking_minor", "needs_corroboration", "invalid_evidence"] }, "evidence_status": { "enum": ["direct", "corroborated_inference", "minor", "single_inference", "invalid_anchor"] }, "provider_findings": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/providerFinding" } }
+        "root_cause": { "type": "string", "minLength": 1 }, "providers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "roles": { "type": "array", "items": { "enum": ["red", "blue"] } }, "provider_roles": { "type": "object", "additionalProperties": { "type": "array", "items": { "enum": ["red", "blue"] } } }, "consensus": { "type": "boolean" }, "disputed": { "type": "boolean" }, "adapter_count": { "type": "integer", "minimum": 1 }, "finding_count": { "type": "integer", "minimum": 1 }, "disposition": { "enum": ["actionable", "nonblocking_minor", "needs_corroboration", "invalid_evidence"] }, "evidence_status": { "enum": ["direct", "corroborated_inference", "minor", "single_inference", "invalid_anchor"] }, "provider_findings": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/providerFinding" } }
       },
       "additionalProperties": false
     },
@@ -96,7 +99,7 @@
       "type": "object",
       "required": ["provider", "adapter", "severity", "evidence_kind", "evidence_anchor_valid"],
       "properties": {
-        "provider": { "type": "string", "minLength": 1 }, "adapter": { "type": "string", "minLength": 1 }, "severity": { "enum": ["blocking", "major", "minor"] }, "evidence_kind": { "enum": ["direct", "inferred", "machine", "unspecified"] }, "evidence_anchor_valid": { "type": "boolean" }
+        "provider": { "type": "string", "minLength": 1 }, "adapter": { "type": "string", "minLength": 1 }, "role": { "enum": ["red", "blue"] }, "severity": { "enum": ["blocking", "major", "minor"] }, "evidence_kind": { "enum": ["direct", "inferred", "machine", "unspecified"] }, "evidence_anchor_valid": { "type": "boolean" }
       },
       "additionalProperties": false
     },
@@ -104,7 +107,7 @@
       "type": "object",
       "required": ["id", "severity", "path", "issue", "root_cause", "recommendation", "providers", "adapter_count", "finding_count", "disposition", "evidence_status", "provider_findings"],
       "properties": {
-        "id": { "type": "string", "pattern": "^F-[a-f0-9]{12}$" }, "severity": { "enum": ["blocking", "major", "minor"] }, "path": { "type": "string", "minLength": 1 }, "line": { "type": "integer", "minimum": 1 }, "issue": { "type": "string", "minLength": 1 }, "root_cause": { "type": "string", "minLength": 1 }, "recommendation": { "type": "string", "minLength": 1 }, "providers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "adapter_count": { "type": "integer", "minimum": 1 }, "finding_count": { "type": "integer", "minimum": 1 }, "disposition": { "enum": ["actionable", "nonblocking_minor", "needs_corroboration", "invalid_evidence"] }, "evidence_status": { "enum": ["direct", "corroborated_inference", "minor", "single_inference", "invalid_anchor"] }, "provider_findings": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/providerFinding" } }
+        "id": { "type": "string", "pattern": "^F-[a-f0-9]{12}$" }, "severity": { "enum": ["blocking", "major", "minor"] }, "path": { "type": "string", "minLength": 1 }, "line": { "type": "integer", "minimum": 1 }, "issue": { "type": "string", "minLength": 1 }, "root_cause": { "type": "string", "minLength": 1 }, "recommendation": { "type": "string", "minLength": 1 }, "providers": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "roles": { "type": "array", "items": { "enum": ["red", "blue"] } }, "provider_roles": { "type": "object", "additionalProperties": { "type": "array", "items": { "enum": ["red", "blue"] } } }, "consensus": { "type": "boolean" }, "disputed": { "type": "boolean" }, "adapter_count": { "type": "integer", "minimum": 1 }, "finding_count": { "type": "integer", "minimum": 1 }, "disposition": { "enum": ["actionable", "nonblocking_minor", "needs_corroboration", "invalid_evidence"] }, "evidence_status": { "enum": ["direct", "corroborated_inference", "minor", "single_inference", "invalid_anchor"] }, "provider_findings": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/providerFinding" } }
       },
       "additionalProperties": false
     }

@@ -27,6 +27,19 @@ description: 通用对话式收敛技能。把已有调研摆给人看，按"对
 若输入缺失，不直接提问，先进入输入充分性护栏并说明缺什么。本技能只负责 Talk；
 Clarify 由 build-spec 的 `spec-clarify` 独占，不能在这里补一套。
 
+### 问答工具 IO 契约
+
+宿主有结构化问答工具时，每个问题输入必须包含 `question_id`、`axis`、`options` 和
+`recommended`；`options` 最多 3 个，每个选项用大白话写清含义、直接后果和主要风险。
+工具输出必须包含 `answers`，其中答案只能是选项 `option_id` 或用户的 `free_text`，并由
+宿主认证 `reply_ref` 与 `reply_hash`。宿主没有问答工具时，改发同内容的文本卡，并如实
+记录工具降级事实；不得伪造工具调用、答案或回复凭证。
+
+本段定义的是宿主工具的外部 IO。下方 `ask → wait → reply → resume` 回放示例使用现有
+stage validator 的内部兼容字段 `recommended_option` 与 `number`；适配层必须把外部的
+`recommended`、`option_id` 和 `free_text` 映射到该内部事件后再校验，不能把两套字段混发
+给宿主或把内部编号当成用户回复凭证。
+
 ## 执行协议
 
 ### 1. 建立本轮候选队列
@@ -92,9 +105,9 @@ question_id: scope-boundary
 axis: 范围边界
 independent: true
 options:
-  - { number: 1, label: 保守, meaning: "先少做一点", consequence: "范围更小", risk: "收益延后" }
-  - { number: 2, label: 推荐, meaning: "直接解决当前问题", consequence: "一次解决", risk: "改动面更大" }
-recommended_option: 2
+  - { option_id: conservative, label: 保守, meaning: "先少做一点", consequence: "范围更小", risk: "收益延后" }
+  - { option_id: recommended, label: 推荐, meaning: "直接解决当前问题", consequence: "一次解决", risk: "改动面更大" }
+recommended: recommended
 recommendation_reason: "当前事实最支持这个选项"
 ```
 

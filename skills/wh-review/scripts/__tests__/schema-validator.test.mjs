@@ -37,6 +37,47 @@ describe("schema-validator", () => {
     expectSchemaError("attempt", attempt, "/leaked");
   });
 
+  it("accepts optional review pair metadata and rejects an invalid role", () => {
+    const attempt = {
+      version: "wh-review-attempt.v1",
+      attempt_id: "attempt-pair-1",
+      task_id: "task-1",
+      stage: "build-code",
+      review_track: null,
+      subject_kind: "worktree", phase_id: null, base_tree: oid, candidate_tree: oid,
+      source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
+      snapshot_tree: oid,
+      material_id: hash,
+      pair_id: "pair-1",
+      role: "red",
+      provider_attempts: [],
+      terminal_status: "semantic",
+      error: null,
+    };
+    expect(validateSchema("attempt", attempt)).toEqual(attempt);
+    expectSchemaError("attempt", { ...attempt, role: "green" }, "/role");
+
+    const result = {
+      version: "wh-review-result.v1",
+      task_id: "task-1",
+      stage: "build-code",
+      review_track: null,
+      subject_kind: "worktree", phase_id: null, base_tree: oid, candidate_tree: oid,
+      source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
+      snapshot_tree: oid,
+      material_id: hash,
+      pair_id: "pair-1",
+      role: "blue",
+      disputed: true,
+      attempt_ref: "reviews/attempts/attempt-pair-1.json",
+      provider_results: [{ provider: "opencode", output: { findings: [] } }],
+      findings: [],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+    };
+    expect(validateSchema("result", result)).toEqual(result);
+    expectSchemaError("result", { ...result, role: "green" }, "/role");
+  });
+
   it("rejects a retired semantic result verdict", () => {
     const result = {
       version: "wh-review-result.v1",

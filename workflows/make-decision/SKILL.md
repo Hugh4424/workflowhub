@@ -140,7 +140,15 @@ decision and questions to the user.
    replaced by a final aggregate claim or a second log.
 3. The Talk flow uses steps 3, 4, 5, and 7: Talk round 1, proportionate
    research input, Talk round 2, then Talk round 3 after direction advice.
-   Research is an input to Talk, not a review.
+   Research is an input to Talk, not a review. When a question can materially
+   change direction, make-decision uses the `skills/deep-research/SKILL.md`
+   R0-R5 contract: generate gaps from the requirement framework, retrieve and
+   read primary text, deep-read in bounded parallel contexts, triangulate,
+   write content-addressed `research-report.v1`, and run independent review.
+   R0 gaps come from the requirement-framework skeleton rather than invented
+   agent questions. Skipping research requires recording why the answer cannot
+   change direction and which current facts support the skip. Research is
+   advice/input for Talk; it does not approve a direction or create a gate.
    Research runs only when its answer could materially change direction;
    otherwise record why it was skipped. Do not invent user answers.
    Ask only questions whose answers could change direction. Talk must cover both
@@ -158,7 +166,16 @@ decision and questions to the user.
    - Talk round 2 uses the same real lifecycle for the remaining independent
      scope, non-goal, and risk questions after research.
    - Talk round 3 uses the same real lifecycle for only the remaining
-     direction-advice questions.
+     direction-advice questions. Its input must explicitly include the
+     red/blue direction-review finding dispute list and any unresolved items
+     from the debate decision; do not compress either source into a generic
+     summary.
+   - A conditional Talk round 4 may run only after the detail-advice review
+     when a remaining dispute is direction-level or changes acceptance. If no
+     such dispute exists, do not start Talk round 4: the main agent repairs
+     implementation-level findings directly and registers the disposition.
+     When Talk round 4 runs, it uses the same ask -> wait -> user reply ->
+     resume -> re-rank lifecycle and binds the reply to the affected finding.
    Each round must publish its own `ask`, pause at `wait`, accept only the
    matching real user `reply`, and then `resume` and re-rank before the next
    owning step. A previous round's decision-log text, aggregate, or default
@@ -170,7 +187,8 @@ decision and questions to the user.
    finding; this track records one semantic advice result and does not start a
    second provider request after finding repair or material edits. An unavailable review is never `pass` and never becomes an empty findings claim; it may be retried only after its missing route/material is repaired.
 5. After direction advice, resume Talk round 3 (step 7) so the user can address
-   blind-review findings, contradictions, key assumptions, and remaining risks.
+   the explicit red/blue finding dispute list, debate unresolved items,
+   contradictions, key assumptions, and remaining risks.
    Only after that, run `grill-with-docs` (step 8). Grill is
    interactive thinking, never review. It may present one batch only when the
    questions are independent frontier questions; dependent questions are split
@@ -238,7 +256,10 @@ repair the decision and its facts.
 }
 ```
 
-Serialize the aggregate once, hash those exact bytes with SHA-256, and write it
+`round_count` is the actual number of completed Talk rounds: it is `3` when
+the conditional Talk round 4 is not triggered and `4` when a direction-level
+or acceptance-impacting dispute requires it. Serialize the aggregate once,
+hash those exact bytes with SHA-256, and write it
 directly to `quality/evidence/interactions/<sha256>.json`. The path hash must
 match the stored bytes. Bind only the current task, `make-decision` stage,
 current material context, and user-confirmed decision. `lifecycle_rounds` 只保留
@@ -255,9 +276,46 @@ Retire this fact only when the named current consumers are removed or replaced
 by a separately reviewed constitutional change; do not add a replacement state
 object.
 
+## Execution model (M/S/B/P)
+
+这是执行方式说明，不是新的 stage、public command、runtime gate 或质量通过条件。
+口径唯一来自 decision-log 的“Step×Executor 矩阵”和“上下文守恒规则”。
+
+| step | executor | handoff |
+| --- | --- | --- |
+| 1 load-context | M+S | S 读原始需求和仓库，回传摘要与覆盖矩阵草案；M 校验定稿 |
+| 2 triage-scope | M+S | S 回传范围、不确定性和非目标草案；M 定稿 |
+| 3 talk-r1 | M | M 独占问题卡与真实用户回复 |
+| 4 research-inputs | S 为主 | M 定 gap；S 检索/深读/落盘，回传 report hash、摘要和复核 finding |
+| 5 talk-r2 | M | M 独占研究后的范围、非目标和风险问答 |
+| 6 direction-advice | B+S | B 后台执行红/蓝审查；S 只归纳主题和争议，不做质量裁决；全文≤2页落盘，主会话摘要≤500字 |
+| 6b debate-direction | S 并行+M | 四角色 S 产裁决书 ref 和歧义清单；M 只登记与呈用户 |
+| 7 talk-r3 | M | M 独占方向争议问答 |
+| 8 grill-with-docs | M | M 独占 Grill 问答；S 只提供候选问题池 |
+| 9 write-decision-draft | S+M | S 产草稿；M 修正链字段、模块、覆盖和宪法边界 |
+| 10 detail-advice | B+S | B 后台执行红/蓝审查；S 归纳并保留原始 ref |
+| 10b debate-detail | S 并行+M | 四角色 S 产细节裁决书；M 按分级规则登记 |
+| 第4轮 talk（detail findings） | M | 仅在方向级或影响验收的争议触发；M 独占问题卡与真实用户回复 |
+| 11 approve-decision | B+M | B 组装 interaction aggregate；M 签发用户确认 |
+| 12 stage-end-spec-analyze | S+B | S/B 产语义 gap；M 处置，改变决策时重新确认 |
+| 13 publish-decision | M | M 发布决策与阶段末披露 |
+| 14 stage-reflection | M | M 产 judgment JSON；S 只提供统计事实 |
+
+### Context conservation rules
+
+1. 全量 research-report、审查原始结果、debate 产物和草稿全文都落到 task_dir 的质量证据区或 worktree artifact；主会话只保留 `ref + sha256 + 结构化摘要（≤500 字）`。
+2. S 回传必须是结论条目、证据 ref、置信度；研究/草稿/汇总类不超过 500 字，复核类按 `severity|位置|问题|建议` 一行一条，不回传长日志。
+3. 并行上限固定为：研究 4、debate 4、红蓝 2；交互步骤与依赖链按顺序执行，不为并行而并行。
+4. 问题卡与用户回复只登记在 decision-log T 表；交互由 M 发出，不能由 S/B 代答。
+5. 候选由 S 生成、M 选择；方向级或影响验收的争议交用户，实施级争议交独立 debate/复核，M 只登记。
+6. M 每步只依赖上一步的决策摘要和材料 ref；S 可按任务需要读取已落盘的完整材料，但不能把旧步骤全文重新塞回 M。
+
+这些规则只约束上下文和执行方式，不改变已有阶段契约、事实状态或推进边界。
+
 ## Completion and fact writing
 
-Do not claim this stage complete until Talk is resolved, necessary research ran
+Do not claim this stage complete until Talk is resolved, any conditional Talk
+round 4 trigger is evaluated and handled, necessary research ran
 or has a truthful outcome, Grill ran, `decision-log.md` is current,
 independent review findings and transport facts are recorded, every finding has a
 disposition, the user explicitly confirmed the decision, and the content-addressed

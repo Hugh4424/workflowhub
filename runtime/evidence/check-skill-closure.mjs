@@ -8,6 +8,8 @@ import { findUndeclaredStaticDependencies } from "./skill-static-deps.mjs";
 
 const MAKE_DECISION_ONLY_SKILLS = new Set(["talk-with-zhipeng", "grill-with-docs"]);
 
+// Findings disposition dialogue reuses spec-clarify in build-spec; Talk and Grill remain make-decision-only. This closure rule is the single enforcement point and does not create a second skill or public behavior.
+
 // Keep YAML date scalars as strings while retaining YAML merge-key support for
 // the catalog's project anchors. The default schema resolves merges but turns
 // timestamps into Date objects, so normalize only those scalar values before

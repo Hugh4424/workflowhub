@@ -15,7 +15,7 @@ skills:
   - name: stage-reflection
     path: skills/stage-reflection/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 50737f6a2d9defe8110b040e71fdeffe372c3e50a932fe23b2838cdecd8f8a0e
+    local_bundle_hash: d5b88f1f5ac8638a201f4010ca6fa3c45c5785469a8ebb12494749e256f58370
     m16_contract: consumer-scan-proof.v1
     last_reviewed_at: "2026-07-14"
     status: native
@@ -45,7 +45,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: abc4e8b9680aeec2000298178b135aaf02bcc088b2de121b8ed0e29f225903d4
+    local_bundle_hash: 673a3eeaf00aa3f418d5311941e624e610305bea47069b591fc9da6fb0619c53
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -56,10 +56,24 @@ skills:
     local_changes: workflowhub 原生实现；interaction aggregate 的唯一当前 consumer 是 make-decision detail-review/quality-fact contract，owner 是 make-decision，测试是 tests/stage-interaction-contract.test.mjs；consumer 被移除或替换且无其他引用时可删除该事实，不新增独立 runtime
     dependency_closure: [skills/decision-log]
     update_policy: 随 stage 合同变更审查
+  - name: deep-research
+    path: skills/deep-research/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: dffd2fb2b64f945b7915cdc2344c4dd0c1f9e8fbbbe934b4229c9eb37d90b3c5
+    last_reviewed_at: "2026-09-06"
+    status: native
+    metrics_enabled: true
+    purpose: 为 make-decision 提供可复核的深度调研输入
+    design_idea: R0-R5 有界调研、原文证据、三角测量、content-addressed 报告与独立复核
+    used_by_stages: [make-decision]
+    upstream: []
+    local_changes: workflowhub 原生技能；make-decision 唯一 consumer/owner；研究报告只以 path+hash 进入 Talk，不复制正文；无工具时保留不合格事实，不新增 gate
+    dependency_closure: [skills/deep-research]
+    update_policy: 随 make-decision 调研契约、research-report.v1 与工具路由变更审查
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: b0d29f16c9c519bd795d42320ca75d972f4707dca42deee91a6cf159c927436a
+    local_bundle_hash: d57ce5c448669f1ad595c9b228fc2870d099f6765458f45256ce73b44bf3d67a
     last_reviewed_at: "2026-07-14"
     status: adapted
     metrics_enabled: true
@@ -104,7 +118,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9783d36400aa089a644ec6c5c1b21a0f736ccbc51c09887ab8bcf45bf98c2465
+    local_bundle_hash: bcc0824b7a876fcd041a9150572eb7dea19a60d1fab895c487263754977f9e7a
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -118,7 +132,7 @@ skills:
   - name: spec-research
     path: skills/spec-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 1623561aca7b2f8288140187ff357310bd80a7011ee5f2d6d34737c37bcc78a5
+    local_bundle_hash: 6c4c9896ac28de68b35a0e54f4555690d6c5d28ea141d4ea9d8658ab9cf1a157
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -147,7 +161,7 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.1.0
-    local_bundle_hash: 3f3d95f7b55808a2fcdf3514bc6f1fb55006044af2548bc8a6169e1945d7784d
+    local_bundle_hash: 4120df40383e1929e283993fcd9d475e3343849532a5d19b8789120e73e2a188
     last_reviewed_at: "2026-08-31"
     status: adapted
     metrics_enabled: true
@@ -305,7 +319,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 4.1.0
-    local_bundle_hash: c6d7801f99afa4df3130205048aefa3d156928fdc1fa92c26dac82bcc5aea364
+    local_bundle_hash: 4b499ceb7d804ca8eed6a1c1a554dcc6ded2fa4fca401d6e16ce9b22a9851d87
     last_reviewed_at: "2026-07-14"
     status: native
     metrics_enabled: true
@@ -426,16 +440,16 @@ skills:
   - name: debate
     path: skills/debate/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 35627c10094c38c9e57913347de93f7f656601a43c8367f48baf9bf365af5c5d
+    local_bundle_hash: 9e6d5290a7ebe2d2b164dcc6323d0e21167c18fa26a265be375caf63b70b0b0d
     last_reviewed_at: "2026-07-14"
     status: adopted
     metrics_enabled: false
     purpose: 对方向级分歧执行可选对抗审查
-    design_idea: 双方对等陈述，judge 不参与倡议，最多两轮
+    design_idea: 四队独立上下文对等陈述，judge 不参与倡议，最多两轮
     standalone: true
     used_by_stages: []
     upstream: [{ <<: *debate, path: "SKILL.md", skill_url: "https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md" }]
-    local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描
+    local_changes: 保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描；测试文件不纳入可分发 bundle；local_bundle_hash 使用 resolver canonical file-closure hash，inventory 最后一列记录 manifest 文件自身 sha256
     dependency_closure: []
     update_policy: 比较固定 commit；只同步协议和规则，不依赖全局安装
   - name: diagnosing-bugs

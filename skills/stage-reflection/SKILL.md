@@ -42,9 +42,15 @@ grade、质量 verdict、release/acceptance 结论，也不阻断 stage、repair
   "unknown_reason": "仅 state=unknown 时必填",
   "items": [
     {
+      "subject_id": "P5",
+      "subject_kind": "skill",
+      "classification": "needs_evidence",
+      "severity": "medium",
+      "reason": "一条可复核的判断及其边界",
       "summary": "一条可复核的简短判断",
       "evidence_refs": ["quality/evidence/<真实文件>.json"],
-      "confidence": "high | medium | low"
+      "confidence": "high | medium | low",
+      "next_review_trigger": "出现新的当前事实时复核"
     }
   ]
 }
@@ -56,6 +62,13 @@ grade、质量 verdict、release/acceptance 结论，也不阻断 stage、repair
 - `intervention_reasons`：用户为什么纠正、补充、停止或重定向；
 - `what_to_simplify`：哪些步骤、技能或交接可以更简单；
 - `simplifiable_now`：不需新决定、现在即可安全简化的事项。
+
+### 调研深度维度（事实，不是 gate）
+
+当本 stage 使用了调研时，六个区块可附带以下事实维度：一手来源率、收敛率、
+OPEN 数、工具使用记录。它们只描述过程和输入质量，不是 pass 判据，不新增 gate，
+缺失也不阻断 stage；无法适用时明确记为 `not_applicable`，不知道时保留
+`unknown` 及原因。该维度只记录当前 stage 已观察到的事实，不从分数推导质量结论。
 
 `state=none_observed` 表示已经检查过且没有观察到该类事实，不等于没读到输入；
 `state=unknown` 必须带非空 `unknown_reason`，说明缺了什么以及为什么不能判断。

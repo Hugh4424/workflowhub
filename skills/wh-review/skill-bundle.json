@@ -23,11 +23,11 @@
     },
     {
       "path": "contracts/build-spec.md",
-      "sha256": "c316ec03ebb9c7f974ba01f2fdf737fa55016fca2838b029d8765c5a2c449b62"
+      "sha256": "ac2fc328d5de9f4cd17638b2eb7d2892901dbf55e6dcde29025ea19c90edc63e"
     },
     {
       "path": "contracts/make-decision.md",
-      "sha256": "ac430ec1b1667920b603afef050ba3d8cb65c2b8951ecda9a39d6046cab3f703"
+      "sha256": "e3221d6d49b4a7b03bac80671d854758954c5f15a464d7d70959eb9479a1c583"
     },
     {
       "path": "contracts/mini-task-design.md",
@@ -71,7 +71,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "2ccbae73df3dba3c412dc1b4d0272c3aa7efe2e1b9087de086e7ffdbe83cf001"
+      "sha256": "00c01d6687f013c2a077acaefbce2cc57690a2a32a2a9639215fefd70bd676e5"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -83,7 +83,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "ae82ce43cdd62d3a0a75326fba8c4816b16f713f2ee3de8024152459dd82110e"
+      "sha256": "17ce35470636fdb1b800bfe1c09fff3d5c49bd3d16d940c838c8e6fcf66fc489"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -115,7 +115,7 @@
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "b843eabfd3311546a859e34f15f1e4c8a3be0077476d75906bdb2bec6bb140da"
+      "sha256": "3ef5fbb50cd0940d7ec68f07cab82f05be66b6a1337d63bc05e6cee6ee12063d"
     },
     {
       "path": "stage-skill-plan.json",

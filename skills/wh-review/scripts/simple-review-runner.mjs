@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
@@ -42,6 +42,11 @@ function redactHostPaths(value) {
 const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "materials/02-approved_spec.md",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the bundle-relative path shown in the manifest.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
 
 const RESULT_PROMPT = `Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\n\n${RESULT_SAMPLE}`;
+
+function promptForPair(pair) {
+  if (!pair) return RESULT_PROMPT;
+  return `${RESULT_PROMPT}\nPaired review role: ${pair.role}. Keep this request independent and preserve pair_id=${pair.pair_id}; do not infer or merge the other role's advice.`;
+}
 
 const FOCUS = Object.freeze({
   "make-decision/direction": "Challenge whether the proposed direction solves the stated problem with the smallest useful scope. Check assumptions, constraints, failure consequences, and rejected alternatives.",
@@ -201,7 +206,11 @@ function materialIdForInput(input) {
   });
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
-  return hash(Buffer.from(JSON.stringify(entries), "utf8"));
+  const canonicalEntries = entries
+    .filter((entry) => !["manifest.json", "canonical-evidence.json"].includes(entry.path))
+    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
+    .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
+  return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));
 }
 
 export function createSimpleReviewPacket(input) {
@@ -278,18 +287,24 @@ export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, clien
   } finally { restored.materials.dispose(); }
 }
 
-function unavailableResult(input, error) {
+function pairFields(pair) {
+  return pair ? { pair_id: pair.pair_id, role: pair.role } : {};
+}
+
+function unavailableResult(input, error, pair = null, extra = {}) {
   return {
     status: "unavailable",
     stage: input.stage,
     review_track: input.review_track ?? input.reviewTrack ?? null,
     review_kind: input.review_kind ?? input.reviewKind ?? null,
     material_id: materialIdForInput(input),
+    ...pairFields(pair),
     runtime_id: null,
     outcome: "unavailable",
     minimum_heterologous: 1,
     provider_results: [],
     findings: [],
+    ...extra,
     error,
   };
 }
@@ -308,11 +323,12 @@ function evidenceAnchorValidity(bundleRoot, findings) {
   });
 }
 
-function publicProviderResult(item, evidenceAnchors = undefined) {
+function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
   return {
     provider: item.provider,
     status: item.status,
     identity: item.identity,
+    ...pairFields(pair),
     session_id: item.session_id ?? null,
     // Provider adapters are untrusted transport boundaries. Keep the
     // provider's machine-readable code, but never expose raw adapter errors or
@@ -354,7 +370,7 @@ function unavailableReason(providers) {
     : { code: "REVIEW_NO_SEMANTIC_RESULT", message: "no provider produced a semantic review result" };
 }
 
-export async function runSimpleReview(input, dependencies = {}) {
+async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
   if (typeof input.stage !== "string" || input.stage.trim() === "") throw new TypeError("stage is required");
   const hostProvider = input.host_provider ?? input.hostProvider;
@@ -372,13 +388,13 @@ export async function runSimpleReview(input, dependencies = {}) {
     trusted = loadConfig({ requestedStage: input.stage, requestedTrack: reviewTrack, requestedReviewKind: reviewKind });
     route = resolveRoute(trusted.whReview, input.stage, reviewTrack, reviewKind);
   } catch (error) {
-    return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: String(error?.message ?? error) });
+    return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: String(error?.message ?? error) }, pair);
   }
-  if (!route) return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" });
+  if (!route) return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" }, pair);
   const selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
   let providerSelection;
   try { providerSelection = providerSelectionShape(selection); }
-  catch (error) { return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: error.message }); }
+  catch (error) { return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: error.message }, pair); }
   const selectedProviders = providerSelection.providers;
   const selectedIdentities = providerSelection.provider_identities ?? null;
   const selectedSet = new Set(selectedProviders);
@@ -391,12 +407,18 @@ export async function runSimpleReview(input, dependencies = {}) {
         hostProvider: input.host_provider ?? input.hostProvider,
         providers: selectedProviders,
         materials: bundle,
-        prompt: RESULT_PROMPT,
+        prompt: promptForPair(pair),
         reviewMode: route.mode,
         strictProtocol: false,
+        ...pairFields(pair),
       });
     } catch (error) {
-      return unavailableResult(input, normalizeProviderError(error));
+      return unavailableResult(input, normalizeProviderError(error), pair, {
+        provider_selection: {
+          providers: [...selectedProviders],
+          provider_identities: selectedIdentities,
+        },
+      });
     }
     const findings = [];
     const semanticProviders = new Set();
@@ -426,7 +448,7 @@ export async function runSimpleReview(input, dependencies = {}) {
         // code (e.g. PUBLIC_RESULT_INVALID when the provider output exposed a
         // private host path) and only annotate that the member identity was
         // degraded; do not hide the real cause behind PROVIDER_IDENTITY_INVALID.
-        const degraded = publicProviderResult(item);
+        const degraded = publicProviderResult(item, undefined, pair);
         return {
           ...degraded,
           status: "failed",
@@ -444,19 +466,19 @@ export async function runSimpleReview(input, dependencies = {}) {
           const evidenceAnchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings);
           if (!evidenceAnchors.every(Boolean)) {
             return {
-              ...publicProviderResult(item, evidenceAnchors),
+              ...publicProviderResult(item, evidenceAnchors, pair),
               status: "failed",
               error: { code: "EVIDENCE_ANCHOR_INVALID", message: "provider finding evidence does not anchor to submitted material" },
             };
           }
           semanticProviders.add(item.provider);
           for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
-          return publicProviderResult(item, evidenceAnchors);
+          return publicProviderResult(item, evidenceAnchors, pair);
         } catch {
-          return { ...publicProviderResult(item), status: "failed", error: { code: "OUTPUT_INVALID", message: "provider output is not valid findings JSON" } };
+          return { ...publicProviderResult(item, undefined, pair), status: "failed", error: { code: "OUTPUT_INVALID", message: "provider output is not valid findings JSON" } };
         }
       }
-      return publicProviderResult(item);
+      return publicProviderResult(item, undefined, pair);
     });
     // A broker may finish a partial group without emitting a member for every
     // selected provider. Make that omission an explicit failed provider fact;
@@ -470,17 +492,19 @@ export async function runSimpleReview(input, dependencies = {}) {
         status: "failed",
         identity: { provider, ...(expectedIdentity && typeof expectedIdentity === "object" ? expectedIdentity : {}) },
         error: { code: "PROVIDER_RESULT_MISSING", message: "trusted review route omitted a selected provider result" },
-      }));
+      }, undefined, pair));
     }
     const minimum = Number.isSafeInteger(route.minimum_heterologous) && route.minimum_heterologous >= 1
       ? route.minimum_heterologous : 1;
     const available = semanticProviders.size >= minimum;
+    const observedMaterialId = group?.material_id ?? group?.materialId ?? bundle.materialId;
     return {
       status: available ? "available" : "unavailable",
       stage: input.stage,
       review_track: reviewTrack,
       review_kind: reviewKind,
-      material_id: bundle.materialId,
+      material_id: observedMaterialId,
+      ...pairFields(pair),
       runtime_id: group.runtimeId,
       outcome: group.outcome,
       minimum_heterologous: minimum,
@@ -495,4 +519,93 @@ export async function runSimpleReview(input, dependencies = {}) {
   } finally {
     bundle.dispose();
   }
+}
+
+function isPairedMakeDecisionInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  const track = input.review_track ?? input.reviewTrack ?? null;
+  const reviewKind = input.review_kind ?? input.reviewKind ?? null;
+  return input.stage === "make-decision"
+    && ["direction", "detail"].includes(track)
+    && reviewKind === null
+    && input.pair_id === undefined && input.pairId === undefined
+    && input.role === undefined;
+}
+
+function pairResultIncomplete(result, materialId) {
+  return result.status !== "available"
+    || result.outcome !== "completed"
+    || result.material_id !== materialId
+    || result.provider_results.some((provider) => provider.status !== "completed");
+}
+
+function uniquePairFindings(roleResults) {
+  const findings = new Map();
+  for (const result of roleResults) {
+    for (const finding of result.findings) {
+      const key = `${finding.path}\u0000${finding.line ?? ""}\u0000${finding.issue}`;
+      const existing = findings.get(key);
+      if (existing) {
+        existing.roles = [...new Set([...(existing.roles ?? [existing.role]), result.role])].sort();
+        existing.providers = [...new Set([...(existing.providers ?? [existing.provider]), finding.provider])].sort();
+      } else {
+        findings.set(key, {
+          ...finding, pair_id: result.pair_id, role: result.role, roles: [result.role], providers: [finding.provider],
+        });
+      }
+    }
+  }
+  return [...findings.values()];
+}
+
+function combinePairedResults(input, pairId, roleResults) {
+  const byRole = Object.fromEntries(roleResults.map((result) => [result.role, result]));
+  const red = byRole.red;
+  const blue = byRole.blue;
+  const materialIds = Object.fromEntries(roleResults.map((result) => [result.role, result.material_id]));
+  const materialValues = roleResults.map((result) => result.material_id).filter((value) => typeof value === "string");
+  const materialConsistent = materialValues.length === 2 && new Set(materialValues).size === 1;
+  const expectedMaterialId = materialConsistent ? materialValues[0] : null;
+  const incomplete = Object.fromEntries(roleResults.map((result) => [result.role, pairResultIncomplete(result, expectedMaterialId)]));
+  const anyAvailable = roleResults.some((result) => result.status === "available");
+  const anyIncomplete = Object.values(incomplete).some(Boolean);
+  const allIncomplete = roleResults.every((result) => incomplete[result.role]);
+  const status = !anyAvailable ? "unavailable" : (anyIncomplete || !materialConsistent ? "available-with-failures" : "available");
+  const materialStatus = materialConsistent ? "consistent" : "partial";
+  return {
+    status,
+    stage: input.stage,
+    review_track: input.review_track ?? input.reviewTrack ?? null,
+    review_kind: null,
+    pair_id: pairId,
+    material_id: expectedMaterialId,
+    material_ids: materialIds,
+    material_consistency: materialStatus,
+    pair_status: status === "available" ? "complete" : "partial",
+    runtime_id: null,
+    outcome: status === "available" ? "completed" : "partial",
+    minimum_heterologous: Math.min(...roleResults.map((result) => result.minimum_heterologous)),
+    provider_selection: red.provider_selection ?? blue.provider_selection ?? null,
+    provider_results: roleResults.flatMap((result) => result.provider_results),
+    findings: uniquePairFindings(roleResults),
+    role_results: { red, blue },
+    ...(incomplete.red ? { red_incomplete: true } : {}),
+    ...(incomplete.blue ? { blue_incomplete: true } : {}),
+    ...(materialConsistent ? {} : { error: { code: "PAIR_MATERIAL_MISMATCH", message: "red and blue review material_id values do not match" } }),
+    ...(allIncomplete && materialConsistent ? { error: red.error ?? blue.error ?? { code: "REVIEW_NO_SEMANTIC_RESULT", message: "neither paired review produced a semantic result" } } : {}),
+  };
+}
+
+export async function runSimpleReview(input, dependencies = {}) {
+  if (!isPairedMakeDecisionInput(input)) {
+    const pair = input?.pair_id && input?.role ? { pair_id: input.pair_id, role: input.role } : null;
+    return runSimpleReviewSingle(input, dependencies, pair);
+  }
+  const pairId = dependencies.pairId ?? dependencies.pair_id ?? randomUUID();
+  const roleResults = await Promise.all(["red", "blue"].map((role) => runSimpleReviewSingle(
+    input,
+    dependencies,
+    { pair_id: pairId, role },
+  )));
+  return combinePairedResults(input, pairId, roleResults);
 }

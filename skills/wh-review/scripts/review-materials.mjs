@@ -955,28 +955,33 @@ function problemOrderFor(stage, track, reviewScope, reviewKind) {
   return stageMaterials.surfaces?.[surface]?.problem_order ?? [];
 }
 
-function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directionMode = "full") {
+function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directionMode = "full", role = null) {
   const order = problemOrderFor(stage, track, reviewScope, reviewKind);
   const ordered = order.length ? ` Review in this order: ${order.join(" -> ")}.` : "";
+  const roleFocus = stage === "make-decision" && ["direction", "detail"].includes(track) && ["red", "blue"].includes(role)
+    ? role === "red"
+      ? " role=red：独立审查当前材料，先找会改变方向或范围的直接缺口，不依赖另一角色结论。"
+      : " role=blue：对抗性审查当前材料，主动寻找隐藏前提、反例、失败后果和更小替代路径，不把 red 结果当作结论。"
+    : "";
   if (reviewKind === "mini_task.design") return `Focus on whether the mini-task four materials freeze one small, safe, complete design, its risks, dependencies, boundaries, tests, rollback, and delivery; do not invent product scope.${ordered}`;
   if (reviewKind === "mini_task.implementation") return `Focus on whether the mini-task implementation matches the frozen four materials, current diff/snapshot, tests, AC trace, real user result, coverage limits, and remaining risks.${ordered}`;
   if (stage === "make-decision" && track === "direction" && directionMode === "reconstruct") {
-    return `First request: independently reconstruct the problem, user flow, hard constraints, non-goals, failure consequences, and the smallest reversible boundary from only the raw requirement and objective facts. Do not look for or infer a current choice.${ordered}`;
+    return `First request: independently reconstruct the problem, user flow, hard constraints, non-goals, failure consequences, and the smallest reversible boundary from only the raw requirement and objective facts. Do not look for or infer a current choice.${roleFocus}${ordered}`;
   }
   if (stage === "make-decision" && track === "direction" && directionMode === "combined") {
-    return `One public request: execute the broker-owned direction-review.v1 flow in order reconstruct -> reveal -> challenge. The reconstruct step may see only the raw requirement and objective facts; reveal the current choice only after the internal reconstruction is recorded; challenge the revealed choice and report one final findings object. Do not create a second public request.${ordered}`;
+    return `One public request: execute the broker-owned direction-review.v1 flow in order reconstruct -> reveal -> challenge. The reconstruct step may see only the raw requirement and objective facts; reveal the current choice only after the internal reconstruction is recorded; challenge the revealed choice and report one final findings object. Do not create a second public request.${roleFocus}${ordered}`;
   }
   if (stage === "make-decision" && track === "direction" && directionMode === "challenge") {
-    return `Second request: use the blind reconstruction, then inspect the revealed current choice, alternatives, rationale, and assumptions. Attack the choice, failure modes, and smaller reversible alternatives; report only delivery-threatening findings.${ordered}`;
+    return `Second request: use the blind reconstruction, then inspect the revealed current choice, alternatives, rationale, and assumptions. Attack the choice, failure modes, and smaller reversible alternatives; report only delivery-threatening findings.${roleFocus}${ordered}`;
   }
   if (stage === "make-decision" && track === "direction") {
-    return `Focus on whether the raw requirement, user flow, boundaries, risks, and direction are complete. Do not propose or judge an implementation solution.${ordered}`;
+    return `Focus on whether the raw requirement, user flow, boundaries, risks, and direction are complete. Do not propose or judge an implementation solution.${roleFocus}${ordered}`;
   }
   if (stage === "make-decision" && track === "detail") {
-    return `Focus on whether the approved direction is turned into a complete flow, page scope, data states, success/failure boundaries, non-goals, and deferred handoff. Do not invent a new direction.${ordered}`;
+    return `Focus on whether the approved direction is turned into a complete flow, page scope, data states, success/failure boundaries, non-goals, and deferred handoff. Do not invent a new direction.${roleFocus}${ordered}`;
   }
   if (stage === "build-spec") {
-    return `Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, and objective acceptance. Do not re-decide product direction or plan implementation work.${ordered}`;
+    return `Focus on traceability from the approved decision to user behavior, states, boundaries, interfaces, objective acceptance, and AC 可判断性与验收盲区. Explicitly check 横向第三路、隐藏前提、防虚假共识、纵向否定. Do not re-decide product direction or plan implementation work.${ordered}`;
   }
   if (stage === "build-plan") {
     return `Focus on whether the plan and tasks execute the approved spec in dependency order, with real test or evidence oracles and no missing requirement. Do not add requirements or treat review as permission to proceed.${ordered}`;
@@ -993,7 +998,8 @@ function stageReviewFocus(stage, track, reviewScope, reviewKind = null, directio
   return "Focus on the supplied stage subject, its contract, and its evidence; report advice only.";
 }
 
-export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full") {
+export function reviewInstructionsFor(stage, track = null, uiScope = false, reviewScope = null, reviewKind = null, directionMode = "full", role = null) {
+  if (role !== null && !["red", "blue"].includes(role)) throw new Error(`MATERIAL_INCOMPLETE: invalid review role ${role}`);
   const rule = ruleFor(reviewKind ?? stage, track, reviewKind ? null : reviewScope);
   const plan = stagePlanFor(stage, track, reviewKind);
   if (!plan) throw new Error(`MATERIAL_INCOMPLETE: no review skill plan for ${stage}/${track ?? "default"}`);
@@ -1007,7 +1013,7 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : "Judge the supplied stage artifact against its requirements, contract, and evidence.";
   const skillInstruction = selectedSkills.length ? `Read these manifest-declared reviewer skills before reviewing: ${selectedSkills.map((name) => `skills/${name}/SKILL.md`).join(", ")}.` : "No reviewer skills are declared for this stage.";
   const reviewInstruction = "This is a full review of the supplied current stage subject.";
-  const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind, directionMode);
+  const stageFocus = stageReviewFocus(stage, track, reviewScope, reviewKind, directionMode, role);
   const verifyBound = reviewKind
     ? "This is one dedicated mini-task review. Do not substitute a standard stage review, demand a provider verdict, or repeat an unchanged review."
     : stage === "verify-code"
@@ -1033,8 +1039,11 @@ export function reviewInstructionsFor(stage, track = null, uiScope = false, revi
     : stage === "make-decision" && track === "direction" && directionMode === "combined"
     ? "Read the direction-review.v1 flow and all declared fields, but rely on the broker-enforced reveal boundary: the reconstruct step must not read current_selection before reveal."
     : "Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority.";
+  const roleBoundary = stage === "make-decision" && ["direction", "detail"].includes(track) && role
+    ? ` This is the paired ${role} role; preserve pair_id and role provenance, and report only this role's independent advice.`
+    : "";
   const findingBudget = "按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。";
-  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
+  return `Review stage ${scope}. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and ${skillInstruction} The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. ${subjectReading} Use context/ only for map-selected dependencies. ${stageFocus} ${verifyBound} ${roleBoundary} ${adviceBoundary} ${buildCodeBoundary} ${miniImplementationBoundary} ${findingBudget} Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths.\n`;
 }
 
 export function minimumReviewersFor(stage, track = null, reviewScope = null) { return ruleFor(stage, track, reviewScope).minimum_reviewers; }
@@ -1874,7 +1883,7 @@ function writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree = nu
   write(bundleRoot, "evidence/test-summary.json", Buffer.from(`${JSON.stringify(summary, null, 2)}\n`, "utf8"));
 }
 
-export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, reviewKind = null, uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full" } = {}) {
+export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, task, taskId, stage, phaseId = null, reviewTrack = null, reviewScope = null, reviewKind = null, uiScope = false, materials = {}, strictV2Maps = false, directionMode = "full", role = null } = {}) {
   if (!(reviewDataRoot && attachmentRoot && source && taskId)) throw new TypeError("reviewDataRoot, attachmentRoot, source, and taskId are required");
   const effectiveScope = reviewKind === null && stage === "build-code" ? (reviewScope ?? "phase") : null;
   const rule = ruleFor(reviewKind ?? stage, reviewTrack, effectiveScope);
@@ -1907,7 +1916,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const diffIndex = usesDiffBundle ? diffIndexFor(source) : null;
   const changeMap = usesDiffBundle ? changeMapFor({ source, phaseId, diffIndex }) : null;
   validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap);
-  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind, directionMode);
+  const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, effectiveScope, reviewKind, directionMode, role);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
   if (stage === "verify-code") {
     // verify-code reviews code. AC and evidence completeness are owned by the
