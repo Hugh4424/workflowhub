@@ -14,6 +14,7 @@ import {
   recordTaskBoundE2eReviewUnavailable,
 } from "../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import { resolveReviewRouteIdentity } from "../../runtime/review/review-route-identity.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 // Only the fixture dependency is simulated; production defaults still resolve host configuration.
@@ -457,7 +458,7 @@ describe("review flow task record", () => {
   // The same five-dimensional review identity reads back the prior result after
   // the reviewed material bytes change; the current-status consumer handles
   // material-specific authority separately.
-  it("reuses a recorded review after the reviewed material bytes change", async () => {
+  it("refuses to reuse a recorded review once the reviewed material bytes change", async () => {
     const { task, kernel } = makeTask();
     let dispatches = 0;
     const runRound = async (input) => {
@@ -476,8 +477,11 @@ describe("review flow task record", () => {
       runRound,
     });
 
-    expect(dispatches, "material changes do not create a second canonical review").toBe(1);
-    expect(changed).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
+    // Reading an attempt back as the current review requires that the reviewed input
+    // did not move on, even when the four task materials keep the same revision. A
+    // result recorded for different bytes must never be returned as the current review.
+    expect(changed).not.toMatchObject({ reused: true });
+    expect(changed.attempt_ref).not.toBe(first.attempt_ref);
   });
 
   it("five-dimensional identity and review_result_ref readback", async () => {
@@ -879,6 +883,47 @@ describe("T005 paired canonical role consumption", () => {
     const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
     expect(JSON.parse(task.readRecord(recorded.result_ref)).findings).toHaveLength(1);
     expect(JSON.parse(task.readRecord(recorded.attempt_ref)).provider_attempts[1].error.code).toBe("PROCESS_DEAD");
+  });
+
+  it("keeps semantic output when a failed provider has no identity", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(),
+      status: "available-with-failures",
+      outcome: "partial",
+      provider_results: [
+        ...baseResult().provider_results,
+        {
+          provider: "opencode/pax3.8",
+          status: "failed",
+          error: { code: "PROVIDER_NO_TERMINAL_RESULT", message: "provider session ended without a terminal result" },
+          timing: { started_at_ms: 3, completed_at_ms: 4, duration_ms: 1 },
+          usage: null,
+        },
+      ],
+    };
+    const recorded = recordSimpleReviewResult({ task, kernel, result });
+    expect(recorded.result_ref).not.toBeNull();
+
+    const attempt = JSON.parse(task.readRecord(recorded.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.terminal_status).toBe("semantic");
+    expect(attempt.provider_attempts).toHaveLength(2);
+    expect(attempt.provider_attempts[1]).toMatchObject({
+      provider: "opencode/pax3.8",
+      status: "failed",
+      error: { code: "PROVIDER_NO_TERMINAL_RESULT" },
+    });
+    expect(attempt.provider_attempts[1]).not.toHaveProperty("identity");
+
+    const canonical = JSON.parse(task.readRecord(recorded.result_ref));
+    validateSchema("result", canonical);
+    expect(canonical.provider_results.map((item) => item.provider)).toEqual(["codex/luna"]);
+    expect(canonical.findings).toHaveLength(1);
+
+    const report = task.readRecord(recorded.report_ref);
+    expect(report).toContain("# WorkflowHub review record");
+    expect(report).toContain("PROVIDER_NO_TERMINAL_RESULT");
   });
 });
 
@@ -1496,6 +1541,25 @@ describe("T006 reviewed reuse and historical budget integrity", () => {
     expect(next).toMatchObject({ reused: true, attempt_ref: first.attempt_ref, result_ref: first.result_ref });
     expect(task.readRecord(first.attempt_ref)).toBe(original);
   });
+  it("keeps historical budget integrity when an earlier writer predates the result_ref binding", async () => {
+    const { task, kernel, artifacts } = makeTask();
+    const runner = countedRunner();
+    const request = input();
+    const first = await recordSimpleReviewRequest({ task, kernel, request, runRound: runner.runRound });
+    // An earlier writer published the same authenticated binding without the
+    // optional result_ref pointer. Budget reconstruction must still verify that
+    // immutable history instead of failing closed on the added pointer alone.
+    for (const ref of [first.attempt_ref, first.result_ref]) {
+      const value = JSON.parse(task.readRecord(ref));
+      delete value.result_ref;
+      task.writeRecordAtomic(ref, JSON.stringify(value));
+    }
+    artifacts.writeAtomic("tasks.md", "# Task bookkeeping after a recorded review\n");
+    const next = await recordSimpleReviewRequest({ task, kernel, request, runRound: runner.runRound });
+    expect(next.error?.code).not.toBe("REVIEW_RETRY_BUDGET_UNKNOWN");
+    expect(next).toMatchObject({ status: "recorded", reused: true, attempt_ref: first.attempt_ref });
+    expect(runner.calls).toBe(1);
+  });
   it.each([false, true])("validates old writer unavailable reports before phase review (tamper=%s)", async (tamper) => {
     const { task, kernel } = makeTask();
     const prior = recordSimpleReviewResult({ task, kernel, result: { ...baseResult(), status: "unavailable", provider_results: [], findings: [],
@@ -1607,5 +1671,159 @@ describe("T006 degraded failed provider provenance", () => {
       expect(attempt.provider_attempts[1].error.code).toBe("PROVIDER_HEALTH_FAILED");
       expect(refs.role_results[role].result_ref).toBeNull();
     }
+  });
+});
+
+describe("trusted review route selection shape", () => {
+  const routeInput = { stage: "build-code", review_scope: "phase", host_provider: "codex" };
+  const routeDependencies = (selection) => ({
+    loadConfig: () => ({ whReview: {}, config: {} }),
+    resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+    selectProviders: () => selection,
+  });
+
+  it("accepts a selection whose identity map matches the providers exactly", () => {
+    const resolved = resolveReviewRouteIdentity(routeInput, routeDependencies({
+      providers: ["other/model"],
+      provider_identities: { "other/model": { source_id: "trusted-source", config_id: "trusted-config" } },
+    }));
+    expect(resolved.provider_selection).toEqual({
+      providers: ["other/model"],
+      provider_identities: { "other/model": { source_id: "trusted-source", config_id: "trusted-config" } },
+    });
+    expect(resolved.route_identity).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("accepts a selection without an identity map", () => {
+    const resolved = resolveReviewRouteIdentity(routeInput, routeDependencies({ providers: ["other/model"] }));
+    expect(resolved.provider_selection).toEqual({ providers: ["other/model"] });
+  });
+
+  it.each([
+    ["null identity", { providers: ["other/model"], provider_identities: { "other/model": null } }],
+    ["scalar identity", { providers: ["other/model"], provider_identities: { "other/model": "trusted-source" } }],
+    ["missing key", { providers: ["other/model", "third/model"], provider_identities: {
+      "other/model": { source_id: "trusted-source", config_id: "trusted-config" },
+    } }],
+    ["extra key", { providers: ["other/model"], provider_identities: {
+      "other/model": { source_id: "trusted-source", config_id: "trusted-config" },
+      "third/model": { source_id: "trusted-source", config_id: "trusted-config" },
+    } }],
+    ["missing field", { providers: ["other/model"], provider_identities: { "other/model": { source_id: "trusted-source" } } }],
+    ["unknown field", { providers: ["other/model"], provider_identities: { "other/model": {
+      source_id: "trusted-source", config_id: "trusted-config", model: "smuggled",
+    } } }],
+    ["empty source id", { providers: ["other/model"], provider_identities: { "other/model": { source_id: "  ", config_id: "trusted-config" } } }],
+    ["empty config id", { providers: ["other/model"], provider_identities: { "other/model": { source_id: "trusted-source", config_id: "" } } }],
+  ])("rejects a %s in the trusted selection", (_label, selection) => {
+    expect(() => resolveReviewRouteIdentity(routeInput, routeDependencies(selection)))
+      .toThrow(/PROVIDER_SELECTION_INVALID/);
+  });
+
+  it("derives a different route identity when the trusted selection changes", () => {
+    const first = resolveReviewRouteIdentity(routeInput, routeDependencies({
+      providers: ["other/model"], provider_identities: { "other/model": { source_id: "source-a", config_id: "config-a" } },
+    }));
+    const second = resolveReviewRouteIdentity(routeInput, routeDependencies({
+      providers: ["other/model"], provider_identities: { "other/model": { source_id: "source-b", config_id: "config-a" } },
+    }));
+    expect(first.route_identity).not.toBe(second.route_identity);
+  });
+
+  it("fails closed with a typed code when the default resolver has no route dependencies", () => {
+    expect(() => resolveReviewRouteIdentity(routeInput)).toThrow(/REVIEW_ROUTE_DEPENDENCIES_REQUIRED|route dependencies are required/);
+  });
+});
+
+describe("runtime route dependency default path", () => {
+  it("blocks the default-route request with a typed code and never dispatches", async () => {
+    const { task, kernel } = makeTask();
+    let rounds = 0;
+    const refs = await recordRuntimeRequest({
+      task,
+      kernel,
+      request: { stage: "build-code", host_provider: "codex", materials: { implementation: "default route bytes" } },
+      runRound: async () => { rounds += 1; return { ...baseResult(), material_id: "a".repeat(64) }; },
+    });
+
+    expect(rounds).toBe(0);
+    // The blocked request is still recorded as an immutable quality fact; the
+    // typed route-dependency failure is the recorded diagnostic, not a throw.
+    expect(refs).toMatchObject({
+      status: "recorded",
+      dispatch_state: "blocked_before_dispatch",
+      result_ref: null,
+      error: { code: "REVIEW_ROUTE_DEPENDENCIES_REQUIRED" },
+    });
+  });
+
+  it("resolves the default route when the trusted dependencies are threaded through", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", host_provider: "codex", materials: { implementation: "threaded route bytes" } };
+    const materialId = createSimpleReviewPacket(request).material_id;
+    let rounds = 0;
+    const refs = await recordRuntimeRequest({
+      task,
+      kernel,
+      request,
+      routeDependencies: {
+        loadConfig: () => ({ whReview: {}, config: {} }),
+        resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+        selectProviders: () => ({
+          providers: ["other/model"],
+          provider_identities: { "other/model": { source_id: "trusted-source", config_id: "trusted-config" } },
+        }),
+      },
+      runRound: async () => {
+        rounds += 1;
+        return {
+          ...baseResult(),
+          material_id: materialId,
+          provider_results: [{
+            provider: "other/model",
+            status: "completed",
+            identity: { provider: "other/model", adapter: "other", source_id: "trusted-source", config_id: "trusted-config" },
+            error: null,
+            timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 },
+            usage: null,
+            evidence_anchor_valid: [],
+          }],
+          findings: [],
+        };
+      },
+    });
+
+    expect(rounds).toBe(1);
+    expect(refs.error?.code).not.toBe("REVIEW_ROUTE_DEPENDENCIES_REQUIRED");
+  });
+});
+
+describe("authenticated evidence canonicalization", () => {
+  it("records path-bearing authenticated evidence through one canonical byte form", async () => {
+    const { task, kernel } = makeTask();
+    const request = {
+      stage: "build-code",
+      host_provider: "codex/luna",
+      materials: { implementation: "evidence bytes" },
+      authenticated_evidence: { ref: "quality/evidence.json", note: "read /Users/Hugh/private/secret.md first" },
+    };
+    const packet = createSimpleReviewPacket(request);
+    const runRound = async () => ({
+      ...baseResult(),
+      material_id: packet.material_id,
+      authenticated_evidence: packet.authenticated_evidence,
+      authenticated_evidence_sha256: packet.authenticated_evidence_sha256,
+    });
+
+    const refs = await recordSimpleReviewRequest({ task, kernel, request, runRound });
+    expect(refs.result_ref).toBeTruthy();
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    const result = JSON.parse(task.readRecord(refs.result_ref));
+    expect(attempt.authenticated_evidence_sha256).toBe(packet.authenticated_evidence_sha256);
+    expect(result.authenticated_evidence_sha256).toBe(packet.authenticated_evidence_sha256);
+    // The stored public facts carry the redacted projection, never the raw
+    // host path that was authenticated.
+    expect(task.readRecord(refs.report_ref)).not.toContain("/Users/Hugh/private/secret.md");
   });
 });

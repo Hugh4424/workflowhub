@@ -2,6 +2,15 @@
 
 - **Template version**：plan-task.v4
 
+## Plan amendment · 2026-09-14 · T45 自动 CI 决策修订
+
+- **用户决定**：本任务彻底取消自动 CI。`.github/workflows/ci.yml` 不再保留，也不再作为 build-code、verify-code 或 close 的完成条件；不新增 replacement workflow、manual dispatch 或其他自动触发器。
+- **保留范围**：`package.json` 的显式测试分组与 `test:exclusive` 仍作为本地可选入口，供受影响文件的 targeted union 或人工选择的分组使用；不把 `npm test` 或完整分组并集重新变成无范围本地门禁。
+- **T45 新判据**：只要求实际 `changed_files` 对应的 targeted union exit 0、三守卫不劣化、账本与完成计数自洽，并确认自动 CI 配置已删除。`ci_run_ref`、CI head SHA、CI conclusion、CI group success 均为 `not_applicable`；禁止用非空 marker 伪造它们。
+- **原因**：本仓库是可搬运技能框架，没有部署产物；原 CI 是 1 个 check 加 11 个重复安装依赖的测试任务，近期失败来自文档契约的词面耦合，不是运行时部署风险。继续等待 provider 只会把非必要的外部状态引入 build-code 收口。
+- **历史事实**：T16/T17 既有 CI 分组实现与其执行记录保留，不回写为未发生；本修订只改变后续收口判据，并要求 build-code 删除旧 workflow、把分组契约改为只验证本地入口与并集映射。
+- **材料状态**：当前 `spec.md` 的 FR-GOV-011 / AC-GOV-011 与 `decision-log.md` 的 D-010 仍含修订前的 CI 逐组调用文字。本次只按用户明确指令修订 build-plan 的 plan/tasks；不宣称未改的上游材料已同步，也不允许这些旧文字重新制造 T45 CI 阻塞。
+
 ## 材料导航
 
 | 章节 | 一句话 | 建议时机 |
@@ -23,8 +32,8 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 ## Quick Read
 
-- **做什么**：把 build-spec 已关闭、当前字节不再补需求的 spec（37 FR / 32 AC）落成五批可执行计划：Phase 1 开工门禁（任务Ⅱ 合并祖先校验 + 守卫基线重测）→ Phase 2 四条现场阻塞修复（stage 行写侧 scope 指纹、旧审查记录内容绑定、spec-analyze 显式 skip 事实、direction_change 复用 fixed 终态）→ Phase 3 C7 治理同步（宪法 1.9.0 四件同步、CONTEXT 两处、npm test 显式分组 + CI、hash 清单与治理文字净减、父材料 X1–X14 更正与 82 lint 清零、窄 ignores、close 多文件计划收敛、对照表登记）→ Phase 4 C8 双证验收（静态净减法逐项 + M1–M5 对照 + M4 numstat + 链路验收 + unknown 清单 + 逐条阻塞账 + 异源复核双轨）→ Phase 5 执行纪律核对与守卫基线复核 + 最终聚合验证。
-- **批次纪律**：每批评判不过即停在该批；本地只跑本批实际 changed-files 对应的 targeted union，完整分组并集只留给既有 CI；同文件串行见 Dependencies；T0 门禁不过则 build-code 整体停在 Phase 1（G1：只记事实不改文件）。
+- **做什么**：把 build-spec 已关闭、当前字节不再补需求的 spec（37 FR / 32 AC）落成五批可执行计划：Phase 1 开工门禁（任务Ⅱ 合并祖先校验 + 守卫基线重测）→ Phase 2 四条现场阻塞修复（stage 行写侧 scope 指纹、旧审查记录内容绑定、spec-analyze 显式 skip 事实、direction_change 复用 fixed 终态）→ Phase 3 C7 治理同步（宪法 1.9.0 四件同步、CONTEXT 两处、npm test 显式本地分组、hash 清单与治理文字净减、父材料 X1–X14 更正与 82 lint 清零、窄 ignores、close 多文件计划收敛、对照表登记）→ Phase 4 C8 双证验收（静态净减法逐项 + M1–M5 对照 + M4 numstat + 链路验收 + unknown 清单 + 逐条阻塞账 + 异源复核双轨）→ Phase 5 执行纪律核对、自动 CI 删除确认与本地最终聚合验证。
+- **批次纪律**：每批评判不过即停在该批；本地只跑本批实际 changed-files 对应的 targeted union，不等待自动 CI 或完整分组并集；同文件串行见 Dependencies；T0 门禁不过则 build-code 整体停在 Phase 1（G1：只记事实不改文件）。
 - **Non-goals**：不新增第五份材料 / public command / 持久化对象 / 状态机 / 检查器 / schema / gate；不改历史证据字节（受害任务历史行只登记不迁移）；不建兼容桥 / 双写 / 回填历史；不修宿主 / broker / 3rd-review 仓内能力；不重跑真实任务采基线；零延期（来源：decision-log §3.3 / §3.4、spec §10 明确不做、D-014、T-015、R4-Q4 边界）。
 - **怎么用这份计划**：每个任务的 gate_cmd / expected_exit / oracle / evidence_path 是 build-code 的取证口径；STOP 列是批内停止条件；Rollback and Recovery 的 Engineering Risk Handoff 是不可逆动作移交清单；三个登记区（对照表 / hash 清单 / C8 账本）由 build-code 主会话按协议回填实测值。
 
@@ -38,7 +47,7 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 - **批次顺序（T-011 / D-004）**：四条修复先于 C7；C7 对照表以修复后代码事实为准；执行纪律核对在 C8 之后（spec §13 批次顺序）。
 - **同文件串行**：四条修复共用 runtime/stage/stage-content-contracts.mjs（缺陷 3、4）与各自站点；CONSTITUTION.md 在 T12/T13（改写）与 T19/T20（hash 文字）之间串行；plan.md 登记区回填（T28/T29）在全部治理改动之后。
 - **守卫基线动态口径**：T0 在开工树重测三守卫 + 父材料 lint，写入任务 store `t0-current-baseline.json`；后续 gate 只读该 artifact 的变量，不硬编码 610/0/2/82（build-plan 时点实测值仅作参照：markdownlint 610 / 198 文件、path-guard PASS 0 FAIL、verify-structure exit 1 两条、父材料 82）。
-- **测试纪律（AGENTS.md / docs/standard-workflow.md L274/L282-283）**：只跑受影响针对性测试；禁止本地无范围全量 `vitest` / `npm test` / `test:safe`；T45 只跑实际 changed-files 对应的 targeted union，完整分组并集由 `.github/workflows/ci.yml` 的既有 CI 守卫负责。
+- **测试纪律（AGENTS.md / docs/standard-workflow.md L274/L282-283）**：只跑受影响针对性测试；禁止本地无范围全量 `vitest` / `npm test` / `test:safe`；T45 只跑实际 changed-files 对应的 targeted union，自动 CI 不存在且不承担任何测试门禁。
 - **执行纪律（D-015 / OI-23 / FR-EXE-001）**：重读量动作点（全仓 grep、跑测试、采证据、hash 扫描、阻塞账组装）派子代理执行，主会话只收「路径 + exit_code + 清单」摘要；执行记录含 actor / command / exit_code / 摘要四要素，供 AC-EXE-001 抽查。
 - **登记区回填例外**：plan.md 的三个登记区（对照表 / hash 清单协议结果 / C8 账本引用）与 tasks.md 的每卡完成区是 build-code 的合法回填面（spec AC-GOV-004 证据字段明写「对照表（落 plan.md）」；tasks.md 完成区为 plan-task 契约内置）；除此之外 build-code 不改四材料。
 - **历史字节边界（R4-Q4 / 四条新增非目标②）**：test / review / provenance / 已完成任务的证据与记录只读；父材料 `specs/workflowhub-mechanism-simplification-20260910/decision-log.md` 不在此约束内（允许 X1–X14 更正与 lint 修复）；受害任务（PaperBuilder）历史坏行只登记、不迁移、不改字节。
@@ -56,13 +65,13 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 > 行号锚点已于任务Ⅱ 合入后（HEAD `aa9ef654`）逐点复核刷新；四处缺陷机制与修复意图均未变，仅位置迁移。执行卡以文件 + 函数名为准，行号仅供速查。
 
-- 缺陷 1（stage 行写侧指纹，FR-FIX-001）：`runtime/stage/stage-runner.mjs:1178-1180`（withStageRow 内 `materialScopeRevision = handoffFacts === null ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialRevision() : handoffFacts.materialScopeRevision`）与 `:1286-1288`（withHandoff 同款回退）；修复目标 = 两处回退改用 `ctx.kernel.currentVNextMaterialScopeRevision(stage)`（kernel 方法 `runtime/task/task-kernel-implementation.mjs:709`，stage-runner :956/:3090 已包装暴露）。读侧期望：`runtime/stage/completion-predicates.mjs:26-35`（STAGE_FACT_MATERIALS scope）+ `deriveExecutionOutcomes` :616（行 digest 比较逻辑已随失效链移除重构进 outcome 派生，按函数名定位）。行校验冻结面：`runtime/task/task-store.mjs:220-226`（STAGE_ROW_KEYS 16 键）、`:306`（exactKeys）、`:305`（validateStageRow）。
+- 缺陷 1（stage 行写侧指纹，FR-FIX-001）：`runtime/stage/stage-runner.mjs:1178-1180`（withStageRow 内 `materialScopeRevision = handoffFacts === null ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialRevision() : handoffFacts.materialScopeRevision`）与 `:1286-1288`（withHandoff 同款回退）；修复目标 = 两处回退改用 `ctx.kernel.currentVNextMaterialScopeRevision(stage)`（kernel 方法 `runtime/task/task-kernel-implementation.mjs:709`，stage-runner :956/:3090 已包装暴露）。读侧边界：C5 已删除 stage-row provenance 的 freshness/currentness 比较、拒绝与自动重跑链；`selectCurrentStageRow` 只按 `record_kind/stage/task_id` 选择，行中的 `material_digest`/`snapshot_tree` 是保留的历史条件字段。`deriveExecutionOutcomes` 可对落后 provenance 做只读 `provenance.status=stale` 披露，但不得因此拒绝或失效已有行；`deriveStageOutcomeStatuses` 保持行状态可读。行校验冻结面：`runtime/task/task-store.mjs:220-226`（STAGE_ROW_KEYS 16 键）、`:306`（exactKeys）、`:305`（validateStageRow）。
 - 缺陷 2（旧审查记录内容绑定，FR-FIX-002）：`runtime/stage/stage-handlers.mjs:1983-1984`（verifyReviewChain 内严格文件名规则：`-simple-` 结果文件名必须等于 attempt_id），verifyReviewChain 定义 :1976、调用点 :2442；`runtime/evidence/freshness.mjs:69-70`（同族规则，行号未变）。复用模型：`runtime/review/review-record-route.mjs:1485+`（importCanonicalReviewResult 的 hash + 互链身份模型）；生成侧 stableReviewId :1185-1191、命名形态 :1260-1261；对照形态 `recordTaskBoundE2eReviewResult` :1637/:1665（`verify-code-e2e-<randomUUID>.json` 非 attempt 绑定命名）。OPEN-001 owner = build-code 主会话（子代理执行复算）；trigger = T6 GREEN；handoff/output = T7 `t7-legacy-review-recalc.md`；close/STOP = 权威任务根逐对复算完成，无法复算则登记 unknown 与原因并保持质量 incomplete。
 - 缺陷 3（spec-analyze 显式 skip，FR-FIX-003）：`runtime/stage/stage-content-contracts.mjs:5953` 块（make-decision 门槛，收块无 else）与 `:5981-5983`（build-spec 门槛，同型无 else）；返回结构 `:5995-6010`（ok/status/stage/errors/findings/summary/facts）；`stageAnalyzeSummary` :5343-5372；`hasMarkdownHeadings` :3511-3513。生产消费者 `runtime/stage/stage-runner.mjs:561`（spec_analyze.result 逐字段 sameJson 严格相等）。**实测修正**：`tests/contract/five-stage-spec-analyze-wiring.test.mjs` 不存在 heading-less 用例（:175-183 是 summary 六键断言）——静默路径零测试覆盖，附录 B 登记-1 的落点 = 新增用例断言显式 skip 事实。
 - 缺陷 4（direction_change 复用 fixed，FR-FIX-004）：`runtime/stage/stage-content-contracts.mjs:450-453`（validateFindingRouting 内 direction_change 只收 user_decided/accepted_risk 的唯一拒绝点）；分类 `classifyFinding` :425-428（DIRECTION_DIMENSIONS :251-256）；路由表 FALLBACK_ROUTE_RULES :472-490；处置已有 `gap.material_revision` 输入在 `runtime/stage/stage-handlers.mjs:2274` 进入 deriveGapId，但 validateFindingRouting 调用 `:2270` 尚未拿 current revision，四个 handler 调用 `findingDispositions` 在 :3431/:3590/:3757/:3903 也未传 worker.currentMaterialRevision；处置白名单与通用校验 `runtime/review/stage-review-disposition.mjs:8`、`:77-146` 只读复用、不改 schema。
 - close 收敛面（FR-GOV-013）：`core/task-close.mjs` 六处落盘点 = createOrVerify :1356、plan.json 落盘 :1401（close 确认绑定 :2258；post-cleanup archive plan 校验 :2063-2072、delivery close plan :2110-2112）、执行循环 steps 记录 = executeClosePlan :3228 内 recordCloseAction 落点 :3347/:3354/:3363/:3381；`recordCloseActionRow` :1618（五动作落 close_action）；LEGACY_DELIVERY_STEPS / UNARCHIVED_PLANNING_STEPS / POST_CLEANUP_ARCHIVE_STEPS :47-65；读取面 `tools/cli/task-close.mjs`（isPostCleanupArchivePlanRecord :56、closePlanHash 校验 :100/:197/:335）。保留：确认凭证与 plan hash 校验。
 - 治理文档锚点：CONSTITUTION.md F3 :28（定义句含「hash、」）、F6 :51（正例含「合同内容校验值」）、F11 :82-90、Version :3 与 :190、修订记录 :191-208、映射段 :206 区域；constitution-checklist.md sha256 = `7d028c2919d2ef7749489d4a716be273a0dd986e7ea795a6b052c25a8d5dc12f`（build-plan 时点，条目 22 + 末尾非条款区「close 三义判据」先例）；CONTEXT.md :21（概念别名行）、:87 / :411 / :414（三处 runtime 路径措辞）；verify-structure.mjs :14（EXPECTED_ARTICLES=22）、:15（DENYLIST 含 runtime）、:16（FIVE_STAGES 含 test-acceptance）、:26-36（条目数 + 编号集合校验）、:63-64（checklist 以 `## close 三义判据` 切分后数 22 条）；docs/audit-contracts.md :5（`core/audit-aggregator.mjs` 死对象）、:24（`runtime/evidence/audit-summary-carrier.mjs` 死对象）；docs/standard-workflow.md :16-21（spec-analyze 归属声明）。
-- 测试脚本与 CI：`package.json` scripts :6-15（`test` = `test:safe && test:exclusive`，无范围全量）；`.github/workflows/ci.yml`（末尾 `npm test` 单调用）；`.markdownlint-cli2.jsonc`（ignores 既有窄条目先例：specs/archive、specs/m9-verify-code 等）。
+- 测试脚本与自动 CI 删除面：`package.json` scripts :6-15（显式分组与 `test:exclusive` 保留）；`.github/workflows/ci.yml` 为待删除的旧自动触发器；`.markdownlint-cli2.jsonc`（ignores 既有窄条目先例：specs/archive、specs/m9-verify-code 等）。
 - 测试面现状：`find tests core/__tests__ skills -name "*.test.mjs"` = 263 文件（任务Ⅱ 合入后实测；`tests/contract` 122、tests 根 49、`tests/integration` 27、`core/__tests__` 24、skills 25、`tests/e2e` 7、`tests/close` 4、`tests/review` 3、`tests/left-shift` 1、`tests/acceptance` 1）；PFACT-17 的 258 为 vitest collect 口径，分组并集证明以开工树 `vitest collect` 实测为准。
 - 上游材料：51 条 X 登记表在 `specs/workflowhub-mechanism-simplification-20260910/prd.md`（分段 X1–X19 :4235-4253 / X20–X25 :825-830 / X26–X29 :4254-4257 / X30–X36 :1326-1332 / X40–X47 :3378-3385 / X50–X56 :3909-3915，合计 51 ✓）；X1–X14 更正清单在 prd.md :4235-4248；拒绝方案表 15 条在母材料 decision-log「## 拒绝方案」:1708-1728；C1 具名删除清单（12 叶子 + 白名单）在 `specs/archive/workflowhub-mechanism-simplification-t1-20260911/spec.md` :74-92；C0 口径表 M1–M5 在同文件 :154-166、M5 分表 :180-186、冻结命令 :192-198。
 
@@ -83,11 +92,11 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 - 宪法改写按 spec 附录 A 冻结草案逐字落地：F3 删「hash、」、F6 正例删「和合同内容校验值」、F11 追加「控制面净减法 + 默认不新增 hash」硬规则、治理节新增负向条款（15 条拒绝方案逐条可追溯）+ 八类分类学（每类防护 + owner）+ 守卫三要件（登记字段 / 违反后果 / 范围自适性含自指）、版本 1.8.0 → 1.9.0 四件同步（版本号 / 修订记录 / 旧→新映射 / checklist 条目数 = 22），并同批更新 `tests/stage-risk-acceptance.test.mjs:300` 的版本 pin（1.8.0 → 1.9.0；该 pin 由任务Ⅱ 设到 1.8.0，宪法 bump 后必须同步，否则 Phase 5 守卫基线复核红）。checklist 新增对照项进**非条款区**（与既有「close 三义判据」同形态，verify-structure.mjs:63-64 以该节切分后数 22 条，不占条目数）。
 - CONTEXT.md 两处修正（附录 A-8）：第五阶段别名补「验收（test-acceptance）」；三处 runtime 路径措辞改写为「阶段运行目录下的某模块」式描述（守卫 denylist 词边界触发，守卫脚本零改动——AC-GOV-007 要求守卫字节不变）。
-- npm test 显式分组（D-010）：`test` 改为具名分组序列（按目录族分组：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root）；每组 `vitest run <具名范围>`；`test:safe` / `test:exclusive` 语义保留（exclusive 两文件仍单跑）；CI 逐组调用（`.github/workflows/ci.yml` 末尾 `npm test` 改为逐组）；分组映射 + 并集覆盖证明落 `tests/contract/test-entry-grouping.test.mjs`（逐组 collect 计数并集 = 原范围全集）。
+- npm test 显式分组（D-010 的本地部分）：`test` 保持具名分组序列（按目录族分组：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root）；每组 `vitest run <具名范围>`；`test:safe` / `test:exclusive` 语义保留（exclusive 两文件仍单跑）；删除自动 CI workflow；分组映射 + 并集覆盖证明落 `tests/contract/test-entry-grouping.test.mjs`，不再断言 workflow 逐组调用。
 - hash 用法清单（R-019 / FR-GOV-018）：唯一权威扫描口径 = `git ls-files` 取 tracked 全集（扩展名 mjs / js / cjs / json / jsonc / yaml / yml / md，含 .github 下全部），逐条 grep 匹配 sha256 / SHA256 / hash / digest 四模式；每条五要素（路径行号 / 类别：身份绑定·完整性校验·过程化产物 / 处置 / 理由 / 绑定对象）；本任务删治理文字侧表述与过程化产物类，身份与完整性类只登记；与任务Ⅱ 删失效链重叠的条目以任务Ⅱ 结果为准、不重复删；本任务不新增任何 hash 字段或校验。**落点决策见 DEC-06**：扫描后把五要素清单正文回填到 plan.md 的「hash 清单结果登记区」，task store 同时保留 JSON 与 raw log 供复算；验收时按同口径复算并对账（删除类条目必须消失、登记类必须保留、零新增）。扫描发现的每一个 `过程化产物` 条目必须在 T18 当场映射到 T19/T20 已有文件边界；落在边界外则停止并按同任务 plan repair 处理，不得继续声称 C7 完成。
 - 父材料更正（FR-GOV-008/009/014）：X1–X14 逐条更正（prd.md:4235-4248 清单）+ 82 条 lint 清零（MD032×34 / MD022×30 / MD036×12 / MD052×2 / MD024×2 / MD040×1 / MD001×1）+ 批次计数单口径（全文只有「10 个具名批次」）+ decision_hash 两口径并列写清 + 聚合文件名以实际落盘为准 + D-025③「prd.md 不是第五份材料」措辞。只改父材料 decision-log.md 一个文件；受保护路径（quality/**、specs/archive/**、历史 task store）开工时冻结基线 hash、收口比对零变化。
 - 窄 ignores（D-006）：`.markdownlint-cli2.jsonc` 只新增具名窄条目 `specs/workflowhub-ui-frontend-capability-20260904`（另一任务历史材料，约 410 条 / 20 文件），附理由 + owner（归属 ui-frontend 任务），沿用 `specs/archive` 先例形态；不新增 `.planning/`、`task_plan.md`、`findings.md`、`progress.md` 仓库级忽略，宿主工作文件不借本任务扩大治理例外。其余逐条修：docs/research 两文件 21 条、docs/adr 三文件 3 条、父材料 82 条（T21/T22）。本任务四材料 lint 在 build-plan 阶段已清零（实测 0 条）。
-- 对照表（FR-GOV-004，落 plan.md 对照表登记区）：固定清单逐项「文档表述 ↔ 代码事实」——CONSTITUTION、checklist、AGENTS、CLAUDE、README、CONTEXT、audit-contracts、package.json、两份 architecture json、六个 ADR（0017 freshness / 0019 canonical ownership / 0020 close transcription / 0011 review generation / 0009 same-snapshot recovery / 0025 review-dispatch-preflight）、lint 配置、CI 配置 + 本任务改动文件；move-map 373 与控制面 7 全 retain 重核；ADR 重复编号组（0002×2 / 0009×2 / 0025×3 / 0027×2）逐组处置（DEC-09）；X51 按 7 条重判。无「仍矛盾」行才收。
+- 对照表（FR-GOV-004，落 plan.md 对照表登记区）：固定清单逐项「文档表述 ↔ 代码事实」——CONSTITUTION、checklist、AGENTS、CLAUDE、README、CONTEXT、audit-contracts、package.json、两份 architecture json、六个 ADR（0017 freshness / 0019 canonical ownership / 0020 close transcription / 0011 review generation / 0009 same-snapshot recovery / 0025 review-dispatch-preflight）、lint 配置、自动 CI 删除状态 + 本任务改动文件；move-map 373 与控制面 7 全 retain 重核；ADR 重复编号组（0002×2 / 0009×2 / 0025×3 / 0027×2）逐组处置（DEC-09）；X51 按 7 条重判。无「仍矛盾」行才收。
 - close 收敛（FR-GOV-013）：`core/task-close.mjs` 六处落盘点收敛为一次性展示（多文件计划对象不再逐文件持久化为生产行为；改为一次性展示与既有记录路径），`tools/cli/task-close.mjs` 读取面对齐；确认凭证与 plan hash 校验（tools/cli/task-close.mjs :100）保留；五动作结果仍落 `recordCloseActionRow` close_action（core/task-close.mjs :1618）；无半删状态。
 - 任务Ⅱ 后事实（FR-GOV-019/020）：check-extensibility 表述与 AGENTS/CLAUDE 保留清单按任务Ⅱ 合入后的代码事实改写（放在 Phase 3，T0 门禁保证任务Ⅱ 已合入）。
 
@@ -99,7 +108,7 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 - M4 整条整改线（FR-ACC-003）：任务Ⅰ / Ⅱ / Ⅲ 三个合并提交 `git diff --numstat` 合计为负（SHA 用实测值）。
 - 逐条阻塞账（FR-ACC-011，本任务头号验收目标）：51 条 X 逐条（现象 → 根因 → 修复 → 验证命令 → 证据，分段计数核对 19+6+4+7+8+7=51）+ 现场四条同构记录 + 八类分类学逐类「防护 / owner / 本任务落点」；落 `blocker-ledger.json`（任务 store），plan.md 登记区持引用与计数断言。
 - unknown 清单（FR-ACC-006）：token 维度、M1 / M2、验收自指等不可证伪项逐项登记，不带通过措辞。
-- 净增减账（FR-ACC-007/016-GOV）：逐文件改前 / 改后行数实测与净值，正值写理由；CI / 测试矩阵适配新增计入账内。
+- 净增减账（FR-ACC-007/016-GOV）：逐文件改前 / 改后行数实测与净值，正值写理由；测试分组适配与自动 CI 删除计入账内。
 
 ### simplicity-guard 取舍（删除 / 收窄 / 复用）
 
@@ -111,16 +120,581 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 ### plan-eng-review 自检结论
 
-- 依赖链：T0 → 全部；Phase 2 内部 缺陷1 → 缺陷3 → 缺陷4（stage-content-contracts 同文件串行：T8/T9 → T10/T11），缺陷 2 独立文件面（stage-handlers / freshness）；T4 依赖 T2（修复后重跑）；Phase 3 内部 T12/13（宪法）→ T19/20（hash 文字），T14/15（CONTEXT）→ T19/20 候选面，T16/17（npm/CI）独立，T18 扫描先把每个可删站点映射到 T19/T20 已声明 owner/file，无法映射即 STOP，T21/22（父材料）独立，T23/24（lint 收口）依赖 T21/22 与 T12-T20，T25/26（close）独立，T27/28（对照表 + 文档族）依赖 T12-T26（对照最终事实），T29（净增减账）依赖 T12-T28；Phase 4 依赖 Phase 3 全部，T38 扫描后逐项分流（已修复→证据；范围内未修复→回现有 owner；范围外→unknown/incomplete），只有无未处置范围内 blocker 才进 T39；Phase 5 依赖 Phase 4。
+- 依赖链：T0 → 全部；Phase 2 内部 缺陷1 → 缺陷3 → 缺陷4（stage-content-contracts 同文件串行：T8/T9 → T10/T11），缺陷 2 独立文件面（stage-handlers / freshness）；T4 依赖 T2（修复后重跑）；Phase 3 内部 T12/13（宪法）→ T19/20（hash 文字），T14/15（CONTEXT）→ T19/20 候选面，T16/17（npm 本地分组）独立，T18 扫描先把每个可删站点映射到 T19/T20 已声明 owner/file，无法映射即 STOP，T21/22（父材料）独立，T23/24（lint 收口）依赖 T21/22 与 T12-T20，T25/26（close）独立，T27/28（对照表 + 文档族）依赖 T12-T26（对照最终事实），T29（净增减账）依赖 T12-T28；T45 先落实自动 CI 删除，再做本地聚合；Phase 4 依赖 Phase 3 全部，T38 扫描后逐项分流（已修复→证据；范围内未修复→回现有 owner；范围外→unknown/incomplete），只有无未处置范围内 blocker 才进 T39；Phase 5 依赖 Phase 4。
 - 失败路径：每卡 STOP 字段写明；T0 门禁失败 = 全任务停（G1）；批内 gate 红 = 停在该批（Quick Read 批次纪律）；review 预算耗尽 = 停并如实登记。
 - 回滚：批级 revert（每批提交边界独立）；文档批回滚 = git revert 单文件；Runtime 修复回滚 = revert 该对卡；ignores 回滚 = 删条目（红回归属预期内）。
 - 验证：RED/GREEN 成对 + oracle 五要素 + 证据路径落盘；验收型对（Phase 4）的 RED 证明判据可失败。
 
 ## File Boundary
 
-### MODIFY
+### FILE DELETIONS
 
+- `.github/workflows/ci.yml`
+
+### MODIFY
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **MODIFY** `runtime/evidence/freshness.mjs`
+- **MODIFY** `runtime/stage/stage-content-contracts.mjs`
+- **MODIFY** `runtime/stage/stage-handlers.mjs`
+- **MODIFY** `runtime/stage/stage-runner.mjs`
+- **MODIFY** `tests/contract/five-stage-spec-analyze-wiring.test.mjs`
+- **MODIFY** `tests/contract/freeze-classification-budget-usage-protocol.test.mjs`
+- **MODIFY** `runtime/review/canonical-review-result.mjs`
+- **MODIFY** `runtime/review/review-packet-identity.mjs`
+- **MODIFY** `runtime/review/review-route-identity.mjs`
+- **MODIFY** `skills/catalog.yaml`
+- **MODIFY** `skills/wh-review/scripts/review-input-bounds.mjs`
+- **MODIFY** `skills/wh-review/scripts/simple-review-runner.mjs`
+- **MODIFY** `skills/wh-review/skill-bundle.json`
+- **MODIFY** `tests/contract/stage-completion.test.mjs`
+- **MODIFY** `tests/contract/status-derivation.test.mjs`
+- **MODIFY** `tests/contract/verify-architect-acceptance.test.mjs`
+- **MODIFY** `tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY** `tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY** `tests/stage-plan-task-contract-v3.test.mjs`
+- **MODIFY** `tests/contract/review-input-bounds-portability.test.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **MODIFY** `tests/integration/stage-row-scope-digest.test.mjs`
+- **MODIFY** `tests/review/review-result-content-binding.test.mjs`
+- **MODIFY** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
+- **MODIFY** `tests/integration/stage-row-publication.test.mjs`
+- **MODIFY** `tests/review/review-record-route.test.mjs`
+- **MODIFY** `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **MODIFY** `.markdownlint-cli2.jsonc`
+- **MODIFY** `AGENTS.md`
+- **MODIFY** `CLAUDE.md`
+- **MODIFY** `CONSTITUTION.md`
+- **MODIFY** `constitution-checklist.md`
+- **MODIFY** `CONTEXT.md`
+- **MODIFY** `README.md`
+- **MODIFY** `core/task-close.mjs`
+- **MODIFY** `docs/adr/0002-requirement-lineage-and-step-audit.md`
+- **MODIFY** `docs/adr/0002-v4-review-exception-state-matrix.md`
+- **MODIFY** `docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`
+- **MODIFY** `docs/adr/0009-stage-content-authority.md`
+- **MODIFY** `docs/adr/0011-authenticated-review-flow-generations.md`
+- **MODIFY** `docs/adr/0017-stage-quality-fact-freshness-scope.md`
+- **MODIFY** `docs/adr/0019-canonical-quality-ownership-and-compatibility.md`
+- **MODIFY** `docs/adr/0020-close-five-actions-quality-transcription.md`
+- **MODIFY** `docs/adr/0025-convergence-outline-and-close-loop.md`
+- **MODIFY** `docs/adr/0025-planning-branch-and-maintainable-prd.md`
+- **MODIFY** `docs/adr/0025-review-dispatch-preflight-boundaries.md`
+- **MODIFY** `docs/adr/0026-equivalent-stage-outcome-attempts.md`
+- **MODIFY** `docs/adr/0027-planning-task-question-boundary.md`
+- **MODIFY** `docs/adr/0027-test-feedback-runtime-profile.md`
+- **MODIFY** `docs/adr/0028-plan-slicing-and-review-budget.md`
+- **MODIFY** `docs/adr/0029-current-ac-and-close-state.md`
+- **MODIFY** `docs/architecture/control-plane-inventory.json`
+- **MODIFY** `docs/architecture/move-map.json`
+- **MODIFY** `docs/audit-contracts.md`
+- **MODIFY** `docs/research/ai-cli-host-skill-distribution.md`
+- **MODIFY** `docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md`
+- **MODIFY** `package.json`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-20260910/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`
+- **MODIFY** `tests/close/close-contract.test.mjs`
+- **MODIFY** `tests/stage-risk-acceptance.test.mjs`
+- **MODIFY** `tools/cli/task-close.mjs`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **MODIFY** `tests/acceptance/build-prd-current.mjs`
+- **MODIFY** `tests/integration/governance-diagnostics-non-gate.test.mjs`
+- **MODIFY** `tools/architecture/retention-audit.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
 - **MODIFY** `.github/workflows/ci.yml`
+- **MODIFY** `tests/contract/test-entry-grouping.test.mjs`
+- **MODIFY** `tests/host-independence.test.mjs`
+- **MODIFY** `vitest.config.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+
+### NEW
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **NEW** `tests/integration/stage-row-scope-digest.test.mjs`
+- **NEW** `tests/review/review-result-content-binding.test.mjs`
+
+
+
+
+### DELETEm9-verify-code 等）。
+- 测试面现状：`find tests core/__tests__ skills -name "*.test.mjs"` = 263 文件（任务Ⅱ 合入后实测；`tests/contract` 122、tests 根 49、`tests/integration` 27、`core/__tests__` 24、skills 25、`tests/e2e` 7、`tests/close` 4、`tests/review` 3、`tests/left-shift` 1、`tests/acceptance` 1）；PFACT-17 的 258 为 vitest collect 口径，分组并集证明以开工树 `vitest collect` 实测为准。
+- 上游材料：51 条 X 登记表在 `specs/workflowhub-mechanism-simplification-20260910/prd.md`（分段 X1–X19 :4235-4253 / X20–X25 :825-830 / X26–X29 :4254-4257 / X30–X36 :1326-1332 / X40–X47 :3378-3385 / X50–X56 :3909-3915，合计 51 ✓）；X1–X14 更正清单在 prd.md :4235-4248；拒绝方案表 15 条在母材料 decision-log「## 拒绝方案」:1708-1728；C1 具名删除清单（12 叶子 + 白名单）在 `specs/archive/workflowhub-mechanism-simplification-t1-20260911/spec.md` :74-92；C0 口径表 M1–M5 在同文件 :154-166、M5 分表 :180-186、冻结命令 :192-198。
+
+## Solution Design
+
+### 总体结构
+
+五批串行：Phase 1 门禁与基线 → Phase 2 四条修复（行为改动，RED/GREEN 成对）→ Phase 3 C7 治理同步（文档族 + npm 分组 + close 收敛 + 清单/对照表）→ Phase 4 C8 双证验收（validator RED/GREEN：语义错样本先红、全行复算后绿）→ Phase 5 执行纪律审计与守卫复核 + 最终聚合卡。批次内部 RED 先于 GREEN；同文件改动串行；每批落 `pN-batch-boundary.json` 供越界检查。
+
+### 四条修复的设计约束（spec §4 拒绝路径全部遵守）
+
+- 缺陷 1：只改写侧两处回退（stage-runner.mjs:1178-1180、:1286-1288），改用该 stage 的 scope revision；不加字段、不迁移字节、不建兼容桥；行字段表 16 键不动。新增窄回归测试 `tests/integration/stage-row-scope-digest.test.mjs` 覆盖 make-decision 与 build-spec 两条行指纹路径（该路径现零覆盖）。历史坏行分轨：受害任务（PaperBuilder）行如实登记为不可恢复（T3）；本任务自身 make-decision / build-spec 行按 decision-log §13.5 作现场标本——修复后重跑两阶段 stage end 必须可读回（T4），且最后一次材料记账在最后一次 run 之前。
+- 缺陷 2：复用 `importCanonicalReviewResult` 的 hash + 互链身份模型替换两处严格文件名规则（stage-handlers.mjs:1983-1984、freshness.mjs:69-70）：改为内容绑定校验（attempt/result/report 三 ref 的 sha256 与身份字段互链），不再要求结果文件名 uuid 等于 attempt_id；新增 `tests/review/review-result-content-binding.test.mjs` 断言非旧命名形态（如 `verify-code-e2e-<uuid>.json`）被接受、篡改仍被拒。历史实例逐对复算（OPEN-001，T7）。
+- 缺陷 3：在两个门槛块（:5953、:5981）补 else 分支，把「材料缺失 / 材料非正文」落为显式 skip 事实进 facts（区分「没跑」与「跑过」），不动返回键集之外的形状；`stage-runner.mjs:561` 的逐字段相等校验天然兼容（同一次运行两侧同代码）。five-stage-spec-analyze-wiring.test.mjs 新增 heading-less 用例断言 skip 事实（语义更严，非放宽）。
+- 缺陷 4：路由主改点仍是 :450-452——direction_change 允许 fixed 终态（复用既有 fixed，不新增状态字面量、不建第二路由）；同时把已有 disposition `gap.material_revision` 作为绑定载体：`findingDispositions` 接收 worker.currentMaterialRevision，fixed 时要求 gap.material_revision 与当前值一致，再把当前值传给 validateFindingRouting，旧 revision 重放判 incomplete。这样不改冻结 stage row 16 键、不向 disposition schema 加字段，只接通既有 gap revision。改动文件 = stage-content-contracts.mjs + stage-handlers.mjs；stage-review-disposition.mjs 只读复用。既有 direction_change 用例的「判不通过」期望更新为「current revision 判通过、old revision 判不通过」（附录 B 登记-2，随代码同批提交并点名）；accepted_risk 路径与 stage-risk-acceptance 测试作回归保护。
+
+### C7 治理同步的设计
+
+- 宪法改写按 spec 附录 A 冻结草案逐字落地：F3 删「hash、」、F6 正例删「和合同内容校验值」、F11 追加「控制面净减法 + 默认不新增 hash」硬规则、治理节新增负向条款（15 条拒绝方案逐条可追溯）+ 八类分类学（每类防护 + owner）+ 守卫三要件（登记字段 / 违反后果 / 范围自适性含自指）、版本 1.8.0 → 1.9.0 四件同步（版本号 / 修订记录 / 旧→新映射 / checklist 条目数 = 22），并同批更新 `tests/stage-risk-acceptance.test.mjs:300` 的版本 pin（1.8.0 → 1.9.0；该 pin 由任务Ⅱ 设到 1.8.0，宪法 bump 后必须同步，否则 Phase 5 守卫基线复核红）。checklist 新增对照项进**非条款区**（与既有「close 三义判据」同形态，verify-structure.mjs:63-64 以该节切分后数 22 条，不占条目数）。
+- CONTEXT.md 两处修正（附录 A-8）：第五阶段别名补「验收（test-acceptance）」；三处 runtime 路径措辞改写为「阶段运行目录下的某模块」式描述（守卫 denylist 词边界触发，守卫脚本零改动——AC-GOV-007 要求守卫字节不变）。
+- npm test 显式分组（D-010 的本地部分）：`test` 保持具名分组序列（按目录族分组：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root）；每组 `vitest run <具名范围>`；`test:safe` / `test:exclusive` 语义保留（exclusive 两文件仍单跑）；删除自动 CI workflow；分组映射 + 并集覆盖证明落 `tests/contract/test-entry-grouping.test.mjs`，不再断言 workflow 逐组调用。
+- hash 用法清单（R-019 / FR-GOV-018）：唯一权威扫描口径 = `git ls-files` 取 tracked 全集（扩展名 mjs / js / cjs / json / jsonc / yaml / yml / md，含 .github 下全部），逐条 grep 匹配 sha256 / SHA256 / hash / digest 四模式；每条五要素（路径行号 / 类别：身份绑定·完整性校验·过程化产物 / 处置 / 理由 / 绑定对象）；本任务删治理文字侧表述与过程化产物类，身份与完整性类只登记；与任务Ⅱ 删失效链重叠的条目以任务Ⅱ 结果为准、不重复删；本任务不新增任何 hash 字段或校验。**落点决策见 DEC-06**：扫描后把五要素清单正文回填到 plan.md 的「hash 清单结果登记区」，task store 同时保留 JSON 与 raw log 供复算；验收时按同口径复算并对账（删除类条目必须消失、登记类必须保留、零新增）。扫描发现的每一个 `过程化产物` 条目必须在 T18 当场映射到 T19/T20 已有文件边界；落在边界外则停止并按同任务 plan repair 处理，不得继续声称 C7 完成。
+- 父材料更正（FR-GOV-008/009/014）：X1–X14 逐条更正（prd.md:4235-4248 清单）+ 82 条 lint 清零（MD032×34 / MD022×30 / MD036×12 / MD052×2 / MD024×2 / MD040×1 / MD001×1）+ 批次计数单口径（全文只有「10 个具名批次」）+ decision_hash 两口径并列写清 + 聚合文件名以实际落盘为准 + D-025③「prd.md 不是第五份材料」措辞。只改父材料 decision-log.md 一个文件；受保护路径（quality/**、specs/archive/**、历史 task store）开工时冻结基线 hash、收口比对零变化。
+- 窄 ignores（D-006）：`.markdownlint-cli2.jsonc` 只新增具名窄条目 `specs/workflowhub-ui-frontend-capability-20260904`（另一任务历史材料，约 410 条 / 20 文件），附理由 + owner（归属 ui-frontend 任务），沿用 `specs/archive` 先例形态；不新增 `.planning/`、`task_plan.md`、`findings.md`、`progress.md` 仓库级忽略，宿主工作文件不借本任务扩大治理例外。其余逐条修：docs/research 两文件 21 条、docs/adr 三文件 3 条、父材料 82 条（T21/T22）。本任务四材料 lint 在 build-plan 阶段已清零（实测 0 条）。
+- 对照表（FR-GOV-004，落 plan.md 对照表登记区）：固定清单逐项「文档表述 ↔ 代码事实」——CONSTITUTION、checklist、AGENTS、CLAUDE、README、CONTEXT、audit-contracts、package.json、两份 architecture json、六个 ADR（0017 freshness / 0019 canonical ownership / 0020 close transcription / 0011 review generation / 0009 same-snapshot recovery / 0025 review-dispatch-preflight）、lint 配置、自动 CI 删除状态 + 本任务改动文件；move-map 373 与控制面 7 全 retain 重核；ADR 重复编号组（0002×2 / 0009×2 / 0025×3 / 0027×2）逐组处置（DEC-09）；X51 按 7 条重判。无「仍矛盾」行才收。
+- close 收敛（FR-GOV-013）：`core/task-close.mjs` 六处落盘点收敛为一次性展示（多文件计划对象不再逐文件持久化为生产行为；改为一次性展示与既有记录路径），`tools/cli/task-close.mjs` 读取面对齐；确认凭证与 plan hash 校验（tools/cli/task-close.mjs :100）保留；五动作结果仍落 `recordCloseActionRow` close_action（core/task-close.mjs :1618）；无半删状态。
+- 任务Ⅱ 后事实（FR-GOV-019/020）：check-extensibility 表述与 AGENTS/CLAUDE 保留清单按任务Ⅱ 合入后的代码事实改写（放在 Phase 3，T0 门禁保证任务Ⅱ 已合入）。
+
+### C8 双证验收的设计
+
+- 双证 = 静态净减法逐项账 + 链路验收（本任务材料：写完 → status 立即可读 → 重放不新增行），加异源复核双轨（真实 wh-review 异源审查 + 独立子代理复核，分开记录）。AC-ACC-003 的任务Ⅲ真实 merge SHA 只能在用户授权 close 后产生；Phase 4 不允许用占位符或 merge-tree 冒充，close 前该 AC/T35 如实保持 incomplete，最终 merge 后再按同一 `git diff --numstat <sha>^ <sha>` 口径回填。
+- 静态净减法（FR-ACC-001）：C1 最终具名删除清单 12 叶子逐项「不存在 + 无 consumer 证据」，白名单对象（stage-outcome-proofs 整类目录、workflow-evolution.mjs、协议错误白名单模块）逐项完好。
+- M1–M5 对照（FR-ACC-002/004/009）：按 C0 冻结口径逐项判定，不平均、不合并；M1 / M2 记 `unknown` 并给出处（C0 已判不能算）；M3a / M3b / M5 按冻结命令实测；历史结论逐项对照。
+- M4 整条整改线（FR-ACC-003）：任务Ⅰ / Ⅱ / Ⅲ 三个合并提交 `git diff --numstat` 合计为负（SHA 用实测值）。
+- 逐条阻塞账（FR-ACC-011，本任务头号验收目标）：51 条 X 逐条（现象 → 根因 → 修复 → 验证命令 → 证据，分段计数核对 19+6+4+7+8+7=51）+ 现场四条同构记录 + 八类分类学逐类「防护 / owner / 本任务落点」；落 `blocker-ledger.json`（任务 store），plan.md 登记区持引用与计数断言。
+- unknown 清单（FR-ACC-006）：token 维度、M1 / M2、验收自指等不可证伪项逐项登记，不带通过措辞。
+- 净增减账（FR-ACC-007/016-GOV）：逐文件改前 / 改后行数实测与净值，正值写理由；测试分组适配与自动 CI 删除计入账内。
+
+### simplicity-guard 取舍（删除 / 收窄 / 复用）
+
+- **复用**：缺陷 2 复用既有 importCanonicalReviewResult 内容绑定模型（不新造身份机制）；清单 / 账本 / 基线复用任务 store `quality/tests/` 证据区（t2 先例，不新增文件类型）；守卫三脚本（verify-structure / check-task-record-paths / markdownlint 配置）零改动或仅窄 ignores；close 五动作落账复用既有 recordCloseActionRow。
+- **收窄**：close 多文件计划对象收敛为一次性展示（本任务唯一代码侧收敛面）；npm test 从隐式全集收窄为显式分组（语义不扩）。
+- **删除**：治理文字侧 hash 表述（宪法 F3 / F6 及清单点名处）与过程化产物类 hash 站点（以清单为准，重叠部分归任务Ⅱ）；不涉及删除整文件。
+- **不新增**：检查器 / schema / gate / 计数器 / 状态机 / public command / 持久化对象 / 第五份材料（F11 硬规则自检：本计划新增物 = 三个测试文件与任务 store 证据文件，均非控制面）。
+- **删除证明**：不涉及删除整文件；站点级删除的证明 = hash 清单复算对账（删除类条目在复算输出中消失）+ close 收敛的测试断言。
+
+### plan-eng-review 自检结论
+
+- 依赖链：T0 → 全部；Phase 2 内部 缺陷1 → 缺陷3 → 缺陷4（stage-content-contracts 同文件串行：T8/T9 → T10/T11），缺陷 2 独立文件面（stage-handlers / freshness）；T4 依赖 T2（修复后重跑）；Phase 3 内部 T12/13（宪法）→ T19/20（hash 文字），T14/15（CONTEXT）→ T19/20 候选面，T16/17（npm 本地分组）独立，T18 扫描先把每个可删站点映射到 T19/T20 已声明 owner/file，无法映射即 STOP，T21/22（父材料）独立，T23/24（lint 收口）依赖 T21/22 与 T12-T20，T25/26（close）独立，T27/28（对照表 + 文档族）依赖 T12-T26（对照最终事实），T29（净增减账）依赖 T12-T28；T45 先落实自动 CI 删除，再做本地聚合；Phase 4 依赖 Phase 3 全部，T38 扫描后逐项分流（已修复→证据；范围内未修复→回现有 owner；范围外→unknown/incomplete），只有无未处置范围内 blocker 才进 T39；Phase 5 依赖 Phase 4。
+- 失败路径：每卡 STOP 字段写明；T0 门禁失败 = 全任务停（G1）；批内 gate 红 = 停在该批（Quick Read 批次纪律）；review 预算耗尽 = 停并如实登记。
+- 回滚：批级 revert（每批提交边界独立）；文档批回滚 = git revert 单文件；Runtime 修复回滚 = revert 该对卡；ignores 回滚 = 删条目（红回归属预期内）。
+- 验证：RED/GREEN 成对 + oracle 五要素 + 证据路径落盘；验收型对（Phase 4）的 RED 证明判据可失败。
+
+## File Boundary
+
+### FILE DELETIONS
+
+- `.github/workflows/ci.yml`
+
+### MODIFY
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **MODIFY** `runtime/evidence/freshness.mjs`
+- **MODIFY** `runtime/stage/stage-content-contracts.mjs`
+- **MODIFY** `runtime/stage/stage-handlers.mjs`
+- **MODIFY** `runtime/stage/stage-runner.mjs`
+- **MODIFY** `tests/contract/five-stage-spec-analyze-wiring.test.mjs`
+- **MODIFY** `tests/contract/freeze-classification-budget-usage-protocol.test.mjs`
+- **MODIFY** `runtime/review/canonical-review-result.mjs`
+- **MODIFY** `runtime/review/review-packet-identity.mjs`
+- **MODIFY** `runtime/review/review-route-identity.mjs`
+- **MODIFY** `skills/catalog.yaml`
+- **MODIFY** `skills/wh-review/scripts/review-input-bounds.mjs`
+- **MODIFY** `skills/wh-review/scripts/simple-review-runner.mjs`
+- **MODIFY** `skills/wh-review/skill-bundle.json`
+- **MODIFY** `tests/contract/stage-completion.test.mjs`
+- **MODIFY** `tests/contract/status-derivation.test.mjs`
+- **MODIFY** `tests/contract/verify-architect-acceptance.test.mjs`
+- **MODIFY** `tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY** `tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY** `tests/stage-plan-task-contract-v3.test.mjs`
+- **MODIFY** `tests/contract/review-input-bounds-portability.test.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **MODIFY** `tests/integration/stage-row-scope-digest.test.mjs`
+- **MODIFY** `tests/review/review-result-content-binding.test.mjs`
+- **MODIFY** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
+- **MODIFY** `tests/integration/stage-row-publication.test.mjs`
+- **MODIFY** `tests/review/review-record-route.test.mjs`
+- **MODIFY** `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **MODIFY** `.markdownlint-cli2.jsonc`
+- **MODIFY** `AGENTS.md`
+- **MODIFY** `CLAUDE.md`
+- **MODIFY** `CONSTITUTION.md`
+- **MODIFY** `constitution-checklist.md`
+- **MODIFY** `CONTEXT.md`
+- **MODIFY** `README.md`
+- **MODIFY** `core/task-close.mjs`
+- **MODIFY** `docs/adr/0002-requirement-lineage-and-step-audit.md`
+- **MODIFY** `docs/adr/0002-v4-review-exception-state-matrix.md`
+- **MODIFY** `docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`
+- **MODIFY** `docs/adr/0009-stage-content-authority.md`
+- **MODIFY** `docs/adr/0011-authenticated-review-flow-generations.md`
+- **MODIFY** `docs/adr/0017-stage-quality-fact-freshness-scope.md`
+- **MODIFY** `docs/adr/0019-canonical-quality-ownership-and-compatibility.md`
+- **MODIFY** `docs/adr/0020-close-five-actions-quality-transcription.md`
+- **MODIFY** `docs/adr/0025-convergence-outline-and-close-loop.md`
+- **MODIFY** `docs/adr/0025-planning-branch-and-maintainable-prd.md`
+- **MODIFY** `docs/adr/0025-review-dispatch-preflight-boundaries.md`
+- **MODIFY** `docs/adr/0026-equivalent-stage-outcome-attempts.md`
+- **MODIFY** `docs/adr/0027-planning-task-question-boundary.md`
+- **MODIFY** `docs/adr/0027-test-feedback-runtime-profile.md`
+- **MODIFY** `docs/adr/0028-plan-slicing-and-review-budget.md`
+- **MODIFY** `docs/adr/0029-current-ac-and-close-state.md`
+- **MODIFY** `docs/architecture/control-plane-inventory.json`
+- **MODIFY** `docs/architecture/move-map.json`
+- **MODIFY** `docs/audit-contracts.md`
+- **MODIFY** `docs/research/ai-cli-host-skill-distribution.md`
+- **MODIFY** `docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md`
+- **MODIFY** `package.json`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-20260910/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`
+- **MODIFY** `tests/close/close-contract.test.mjs`
+- **MODIFY** `tests/stage-risk-acceptance.test.mjs`
+- **MODIFY** `tools/cli/task-close.mjs`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
+- **MODIFY** `.github/workflows/ci.yml`
+- **MODIFY** `tests/contract/test-entry-grouping.test.mjs`
+- **MODIFY** `tests/host-independence.test.mjs`
+- **MODIFY** `vitest.config.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+
+### NEW
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **NEW** `tests/integration/stage-row-scope-digest.test.mjs`
+- **NEW** `tests/review/review-result-content-binding.test.mjs`
+
+
+
+### DELETE.yml` 为待删除的旧自动触发器；`.markdownlint-cli2.jsonc`（ignores 既有窄条目先例：specs/archive、specs/m9-verify-code 等）。
+- 测试面现状：`find tests core/__tests__ skills -name "*.test.mjs"` = 263 文件（任务Ⅱ 合入后实测；`tests/contract` 122、tests 根 49、`tests/integration` 27、`core/__tests__` 24、skills 25、`tests/e2e` 7、`tests/close` 4、`tests/review` 3、`tests/left-shift` 1、`tests/acceptance` 1）；PFACT-17 的 258 为 vitest collect 口径，分组并集证明以开工树 `vitest collect` 实测为准。
+- 上游材料：51 条 X 登记表在 `specs/workflowhub-mechanism-simplification-20260910/prd.md`（分段 X1–X19 :4235-4253 / X20–X25 :825-830 / X26–X29 :4254-4257 / X30–X36 :1326-1332 / X40–X47 :3378-3385 / X50–X56 :3909-3915，合计 51 ✓）；X1–X14 更正清单在 prd.md :4235-4248；拒绝方案表 15 条在母材料 decision-log「## 拒绝方案」:1708-1728；C1 具名删除清单（12 叶子 + 白名单）在 `specs/archive/workflowhub-mechanism-simplification-t1-20260911/spec.md` :74-92；C0 口径表 M1–M5 在同文件 :154-166、M5 分表 :180-186、冻结命令 :192-198。
+
+## Solution Design
+
+### 总体结构
+
+五批串行：Phase 1 门禁与基线 → Phase 2 四条修复（行为改动，RED/GREEN 成对）→ Phase 3 C7 治理同步（文档族 + npm 分组 + close 收敛 + 清单/对照表）→ Phase 4 C8 双证验收（validator RED/GREEN：语义错样本先红、全行复算后绿）→ Phase 5 执行纪律审计与守卫复核 + 最终聚合卡。批次内部 RED 先于 GREEN；同文件改动串行；每批落 `pN-batch-boundary.json` 供越界检查。
+
+### 四条修复的设计约束（spec §4 拒绝路径全部遵守）
+
+- 缺陷 1：只改写侧两处回退（stage-runner.mjs:1178-1180、:1286-1288），改用该 stage 的 scope revision；不加字段、不迁移字节、不建兼容桥；行字段表 16 键不动。新增窄回归测试 `tests/integration/stage-row-scope-digest.test.mjs` 覆盖 make-decision 与 build-spec 两条行指纹路径（该路径现零覆盖）。历史坏行分轨：受害任务（PaperBuilder）行如实登记为不可恢复（T3）；本任务自身 make-decision / build-spec 行按 decision-log §13.5 作现场标本——修复后重跑两阶段 stage end 必须可读回（T4），且最后一次材料记账在最后一次 run 之前。
+- 缺陷 2：复用 `importCanonicalReviewResult` 的 hash + 互链身份模型替换两处严格文件名规则（stage-handlers.mjs:1983-1984、freshness.mjs:69-70）：改为内容绑定校验（attempt/result/report 三 ref 的 sha256 与身份字段互链），不再要求结果文件名 uuid 等于 attempt_id；新增 `tests/review/review-result-content-binding.test.mjs` 断言非旧命名形态（如 `verify-code-e2e-<uuid>.json`）被接受、篡改仍被拒。历史实例逐对复算（OPEN-001，T7）。
+- 缺陷 3：在两个门槛块（:5953、:5981）补 else 分支，把「材料缺失 / 材料非正文」落为显式 skip 事实进 facts（区分「没跑」与「跑过」），不动返回键集之外的形状；`stage-runner.mjs:561` 的逐字段相等校验天然兼容（同一次运行两侧同代码）。five-stage-spec-analyze-wiring.test.mjs 新增 heading-less 用例断言 skip 事实（语义更严，非放宽）。
+- 缺陷 4：路由主改点仍是 :450-452——direction_change 允许 fixed 终态（复用既有 fixed，不新增状态字面量、不建第二路由）；同时把已有 disposition `gap.material_revision` 作为绑定载体：`findingDispositions` 接收 worker.currentMaterialRevision，fixed 时要求 gap.material_revision 与当前值一致，再把当前值传给 validateFindingRouting，旧 revision 重放判 incomplete。这样不改冻结 stage row 16 键、不向 disposition schema 加字段，只接通既有 gap revision。改动文件 = stage-content-contracts.mjs + stage-handlers.mjs；stage-review-disposition.mjs 只读复用。既有 direction_change 用例的「判不通过」期望更新为「current revision 判通过、old revision 判不通过」（附录 B 登记-2，随代码同批提交并点名）；accepted_risk 路径与 stage-risk-acceptance 测试作回归保护。
+
+### C7 治理同步的设计
+
+- 宪法改写按 spec 附录 A 冻结草案逐字落地：F3 删「hash、」、F6 正例删「和合同内容校验值」、F11 追加「控制面净减法 + 默认不新增 hash」硬规则、治理节新增负向条款（15 条拒绝方案逐条可追溯）+ 八类分类学（每类防护 + owner）+ 守卫三要件（登记字段 / 违反后果 / 范围自适性含自指）、版本 1.8.0 → 1.9.0 四件同步（版本号 / 修订记录 / 旧→新映射 / checklist 条目数 = 22），并同批更新 `tests/stage-risk-acceptance.test.mjs:300` 的版本 pin（1.8.0 → 1.9.0；该 pin 由任务Ⅱ 设到 1.8.0，宪法 bump 后必须同步，否则 Phase 5 守卫基线复核红）。checklist 新增对照项进**非条款区**（与既有「close 三义判据」同形态，verify-structure.mjs:63-64 以该节切分后数 22 条，不占条目数）。
+- CONTEXT.md 两处修正（附录 A-8）：第五阶段别名补「验收（test-acceptance）」；三处 runtime 路径措辞改写为「阶段运行目录下的某模块」式描述（守卫 denylist 词边界触发，守卫脚本零改动——AC-GOV-007 要求守卫字节不变）。
+- npm test 显式分组（D-010 的本地部分）：`test` 保持具名分组序列（按目录族分组：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root）；每组 `vitest run <具名范围>`；`test:safe` / `test:exclusive` 语义保留（exclusive 两文件仍单跑）；删除自动 CI workflow；分组映射 + 并集覆盖证明落 `tests/contract/test-entry-grouping.test.mjs`，不再断言 workflow 逐组调用。
+- hash 用法清单（R-019 / FR-GOV-018）：唯一权威扫描口径 = `git ls-files` 取 tracked 全集（扩展名 mjs / js / cjs / json / jsonc / yaml / yml / md，含 .github 下全部），逐条 grep 匹配 sha256 / SHA256 / hash / digest 四模式；每条五要素（路径行号 / 类别：身份绑定·完整性校验·过程化产物 / 处置 / 理由 / 绑定对象）；本任务删治理文字侧表述与过程化产物类，身份与完整性类只登记；与任务Ⅱ 删失效链重叠的条目以任务Ⅱ 结果为准、不重复删；本任务不新增任何 hash 字段或校验。**落点决策见 DEC-06**：扫描后把五要素清单正文回填到 plan.md 的「hash 清单结果登记区」，task store 同时保留 JSON 与 raw log 供复算；验收时按同口径复算并对账（删除类条目必须消失、登记类必须保留、零新增）。扫描发现的每一个 `过程化产物` 条目必须在 T18 当场映射到 T19/T20 已有文件边界；落在边界外则停止并按同任务 plan repair 处理，不得继续声称 C7 完成。
+- 父材料更正（FR-GOV-008/009/014）：X1–X14 逐条更正（prd.md:4235-4248 清单）+ 82 条 lint 清零（MD032×34 / MD022×30 / MD036×12 / MD052×2 / MD024×2 / MD040×1 / MD001×1）+ 批次计数单口径（全文只有「10 个具名批次」）+ decision_hash 两口径并列写清 + 聚合文件名以实际落盘为准 + D-025③「prd.md 不是第五份材料」措辞。只改父材料 decision-log.md 一个文件；受保护路径（quality/**、specs/archive/**、历史 task store）开工时冻结基线 hash、收口比对零变化。
+- 窄 ignores（D-006）：`.markdownlint-cli2.jsonc` 只新增具名窄条目 `specs/workflowhub-ui-frontend-capability-20260904`（另一任务历史材料，约 410 条 / 20 文件），附理由 + owner（归属 ui-frontend 任务），沿用 `specs/archive` 先例形态；不新增 `.planning/`、`task_plan.md`、`findings.md`、`progress.md` 仓库级忽略，宿主工作文件不借本任务扩大治理例外。其余逐条修：docs/research 两文件 21 条、docs/adr 三文件 3 条、父材料 82 条（T21/T22）。本任务四材料 lint 在 build-plan 阶段已清零（实测 0 条）。
+- 对照表（FR-GOV-004，落 plan.md 对照表登记区）：固定清单逐项「文档表述 ↔ 代码事实」——CONSTITUTION、checklist、AGENTS、CLAUDE、README、CONTEXT、audit-contracts、package.json、两份 architecture json、六个 ADR（0017 freshness / 0019 canonical ownership / 0020 close transcription / 0011 review generation / 0009 same-snapshot recovery / 0025 review-dispatch-preflight）、lint 配置、自动 CI 删除状态 + 本任务改动文件；move-map 373 与控制面 7 全 retain 重核；ADR 重复编号组（0002×2 / 0009×2 / 0025×3 / 0027×2）逐组处置（DEC-09）；X51 按 7 条重判。无「仍矛盾」行才收。
+- close 收敛（FR-GOV-013）：`core/task-close.mjs` 六处落盘点收敛为一次性展示（多文件计划对象不再逐文件持久化为生产行为；改为一次性展示与既有记录路径），`tools/cli/task-close.mjs` 读取面对齐；确认凭证与 plan hash 校验（tools/cli/task-close.mjs :100）保留；五动作结果仍落 `recordCloseActionRow` close_action（core/task-close.mjs :1618）；无半删状态。
+- 任务Ⅱ 后事实（FR-GOV-019/020）：check-extensibility 表述与 AGENTS/CLAUDE 保留清单按任务Ⅱ 合入后的代码事实改写（放在 Phase 3，T0 门禁保证任务Ⅱ 已合入）。
+
+### C8 双证验收的设计
+
+- 双证 = 静态净减法逐项账 + 链路验收（本任务材料：写完 → status 立即可读 → 重放不新增行），加异源复核双轨（真实 wh-review 异源审查 + 独立子代理复核，分开记录）。AC-ACC-003 的任务Ⅲ真实 merge SHA 只能在用户授权 close 后产生；Phase 4 不允许用占位符或 merge-tree 冒充，close 前该 AC/T35 如实保持 incomplete，最终 merge 后再按同一 `git diff --numstat <sha>^ <sha>` 口径回填。
+- 静态净减法（FR-ACC-001）：C1 最终具名删除清单 12 叶子逐项「不存在 + 无 consumer 证据」，白名单对象（stage-outcome-proofs 整类目录、workflow-evolution.mjs、协议错误白名单模块）逐项完好。
+- M1–M5 对照（FR-ACC-002/004/009）：按 C0 冻结口径逐项判定，不平均、不合并；M1 / M2 记 `unknown` 并给出处（C0 已判不能算）；M3a / M3b / M5 按冻结命令实测；历史结论逐项对照。
+- M4 整条整改线（FR-ACC-003）：任务Ⅰ / Ⅱ / Ⅲ 三个合并提交 `git diff --numstat` 合计为负（SHA 用实测值）。
+- 逐条阻塞账（FR-ACC-011，本任务头号验收目标）：51 条 X 逐条（现象 → 根因 → 修复 → 验证命令 → 证据，分段计数核对 19+6+4+7+8+7=51）+ 现场四条同构记录 + 八类分类学逐类「防护 / owner / 本任务落点」；落 `blocker-ledger.json`（任务 store），plan.md 登记区持引用与计数断言。
+- unknown 清单（FR-ACC-006）：token 维度、M1 / M2、验收自指等不可证伪项逐项登记，不带通过措辞。
+- 净增减账（FR-ACC-007/016-GOV）：逐文件改前 / 改后行数实测与净值，正值写理由；测试分组适配与自动 CI 删除计入账内。
+
+### simplicity-guard 取舍（删除 / 收窄 / 复用）
+
+- **复用**：缺陷 2 复用既有 importCanonicalReviewResult 内容绑定模型（不新造身份机制）；清单 / 账本 / 基线复用任务 store `quality/tests/` 证据区（t2 先例，不新增文件类型）；守卫三脚本（verify-structure / check-task-record-paths / markdownlint 配置）零改动或仅窄 ignores；close 五动作落账复用既有 recordCloseActionRow。
+- **收窄**：close 多文件计划对象收敛为一次性展示（本任务唯一代码侧收敛面）；npm test 从隐式全集收窄为显式分组（语义不扩）。
+- **删除**：治理文字侧 hash 表述（宪法 F3 / F6 及清单点名处）与过程化产物类 hash 站点（以清单为准，重叠部分归任务Ⅱ）；不涉及删除整文件。
+- **不新增**：检查器 / schema / gate / 计数器 / 状态机 / public command / 持久化对象 / 第五份材料（F11 硬规则自检：本计划新增物 = 三个测试文件与任务 store 证据文件，均非控制面）。
+- **删除证明**：不涉及删除整文件；站点级删除的证明 = hash 清单复算对账（删除类条目在复算输出中消失）+ close 收敛的测试断言。
+
+### plan-eng-review 自检结论
+
+- 依赖链：T0 → 全部；Phase 2 内部 缺陷1 → 缺陷3 → 缺陷4（stage-content-contracts 同文件串行：T8/T9 → T10/T11），缺陷 2 独立文件面（stage-handlers / freshness）；T4 依赖 T2（修复后重跑）；Phase 3 内部 T12/13（宪法）→ T19/20（hash 文字），T14/15（CONTEXT）→ T19/20 候选面，T16/17（npm 本地分组）独立，T18 扫描先把每个可删站点映射到 T19/T20 已声明 owner/file，无法映射即 STOP，T21/22（父材料）独立，T23/24（lint 收口）依赖 T21/22 与 T12-T20，T25/26（close）独立，T27/28（对照表 + 文档族）依赖 T12-T26（对照最终事实），T29（净增减账）依赖 T12-T28；T45 先落实自动 CI 删除，再做本地聚合；Phase 4 依赖 Phase 3 全部，T38 扫描后逐项分流（已修复→证据；范围内未修复→回现有 owner；范围外→unknown/incomplete），只有无未处置范围内 blocker 才进 T39；Phase 5 依赖 Phase 4。
+- 失败路径：每卡 STOP 字段写明；T0 门禁失败 = 全任务停（G1）；批内 gate 红 = 停在该批（Quick Read 批次纪律）；review 预算耗尽 = 停并如实登记。
+- 回滚：批级 revert（每批提交边界独立）；文档批回滚 = git revert 单文件；Runtime 修复回滚 = revert 该对卡；ignores 回滚 = 删条目（红回归属预期内）。
+- 验证：RED/GREEN 成对 + oracle 五要素 + 证据路径落盘；验收型对（Phase 4）的 RED 证明判据可失败。
+
+## File Boundary
+
+### FILE DELETIONS
+
+- `.github/workflows/ci.yml`
+
+### MODIFY
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **MODIFY** `runtime/evidence/freshness.mjs`
+- **MODIFY** `runtime/stage/stage-content-contracts.mjs`
+- **MODIFY** `runtime/stage/stage-handlers.mjs`
+- **MODIFY** `runtime/stage/stage-runner.mjs`
+- **MODIFY** `tests/contract/five-stage-spec-analyze-wiring.test.mjs`
+- **MODIFY** `tests/contract/freeze-classification-budget-usage-protocol.test.mjs`
+- **MODIFY** `runtime/review/canonical-review-result.mjs`
+- **MODIFY** `runtime/review/review-packet-identity.mjs`
+- **MODIFY** `runtime/review/review-route-identity.mjs`
+- **MODIFY** `skills/catalog.yaml`
+- **MODIFY** `skills/wh-review/scripts/review-input-bounds.mjs`
+- **MODIFY** `skills/wh-review/scripts/simple-review-runner.mjs`
+- **MODIFY** `skills/wh-review/skill-bundle.json`
+- **MODIFY** `tests/contract/stage-completion.test.mjs`
+- **MODIFY** `tests/contract/status-derivation.test.mjs`
+- **MODIFY** `tests/contract/verify-architect-acceptance.test.mjs`
+- **MODIFY** `tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY** `tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY** `tests/stage-plan-task-contract-v3.test.mjs`
+- **MODIFY** `tests/contract/review-input-bounds-portability.test.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **MODIFY** `tests/integration/stage-row-scope-digest.test.mjs`
+- **MODIFY** `tests/review/review-result-content-binding.test.mjs`
+- **MODIFY** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
+- **MODIFY** `tests/integration/stage-row-publication.test.mjs`
+- **MODIFY** `tests/review/review-record-route.test.mjs`
+- **MODIFY** `.markdownlint-cli2.jsonc`
+- **MODIFY** `AGENTS.md`
+- **MODIFY** `CLAUDE.md`
+- **MODIFY** `CONSTITUTION.md`
+- **MODIFY** `constitution-checklist.md`
+- **MODIFY** `CONTEXT.md`
+- **MODIFY** `README.md`
+- **MODIFY** `core/task-close.mjs`
+- **MODIFY** `docs/adr/0002-requirement-lineage-and-step-audit.md`
+- **MODIFY** `docs/adr/0002-v4-review-exception-state-matrix.md`
+- **MODIFY** `docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`
+- **MODIFY** `docs/adr/0009-stage-content-authority.md`
+- **MODIFY** `docs/adr/0011-authenticated-review-flow-generations.md`
+- **MODIFY** `docs/adr/0017-stage-quality-fact-freshness-scope.md`
+- **MODIFY** `docs/adr/0019-canonical-quality-ownership-and-compatibility.md`
+- **MODIFY** `docs/adr/0020-close-five-actions-quality-transcription.md`
+- **MODIFY** `docs/adr/0025-convergence-outline-and-close-loop.md`
+- **MODIFY** `docs/adr/0025-planning-branch-and-maintainable-prd.md`
+- **MODIFY** `docs/adr/0025-review-dispatch-preflight-boundaries.md`
+- **MODIFY** `docs/adr/0026-equivalent-stage-outcome-attempts.md`
+- **MODIFY** `docs/adr/0027-planning-task-question-boundary.md`
+- **MODIFY** `docs/adr/0027-test-feedback-runtime-profile.md`
+- **MODIFY** `docs/adr/0028-plan-slicing-and-review-budget.md`
+- **MODIFY** `docs/adr/0029-current-ac-and-close-state.md`
+- **MODIFY** `docs/architecture/control-plane-inventory.json`
+- **MODIFY** `docs/architecture/move-map.json`
+- **MODIFY** `docs/audit-contracts.md`
+- **MODIFY** `docs/research/ai-cli-host-skill-distribution.md`
+- **MODIFY** `docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md`
+- **MODIFY** `package.json`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-20260910/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`
+- **MODIFY** `tests/close/close-contract.test.mjs`
+- **MODIFY** `tests/stage-risk-acceptance.test.mjs`
+- **MODIFY** `tools/cli/task-close.mjs`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
+- **MODIFY** `.github/workflows/ci.yml`
+- **MODIFY** `tests/contract/test-entry-grouping.test.mjs`
+- **MODIFY** `tests/host-independence.test.mjs`
+- **MODIFY** `vitest.config.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+
+### NEW
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **NEW** `tests/integration/stage-row-scope-digest.test.mjs`
+- **NEW** `tests/review/review-result-content-binding.test.mjs`
+
+
+### DELETElose.mjs` 六处落盘点 = createOrVerify :1356、plan.json 落盘 :1401（close 确认绑定 :2258；post-cleanup archive plan 校验 :2063-2072、delivery close plan :2110-2112）、执行循环 steps 记录 = executeClosePlan :3228 内 recordCloseAction 落点 :3347/:3354/:3363/:3381；`recordCloseActionRow` :1618（五动作落 close_action）；LEGACY_DELIVERY_STEPS / UNARCHIVED_PLANNING_STEPS / POST_CLEANUP_ARCHIVE_STEPS :47-65；读取面 `tools/cli/task-close.mjs`（isPostCleanupArchivePlanRecord :56、closePlanHash 校验 :100/:197/:335）。保留：确认凭证与 plan hash 校验。
+- 治理文档锚点：CONSTITUTION.md F3 :28（定义句含「hash、」）、F6 :51（正例含「合同内容校验值」）、F11 :82-90、Version :3 与 :190、修订记录 :191-208、映射段 :206 区域；constitution-checklist.md sha256 = `7d028c2919d2ef7749489d4a716be273a0dd986e7ea795a6b052c25a8d5dc12f`（build-plan 时点，条目 22 + 末尾非条款区「close 三义判据」先例）；CONTEXT.md :21（概念别名行）、:87 / :411 / :414（三处 runtime 路径措辞）；verify-structure.mjs :14（EXPECTED_ARTICLES=22）、:15（DENYLIST 含 runtime）、:16（FIVE_STAGES 含 test-acceptance）、:26-36（条目数 + 编号集合校验）、:63-64（checklist 以 `## close 三义判据` 切分后数 22 条）；docs/audit-contracts.md :5（`core/audit-aggregator.mjs` 死对象）、:24（`runtime/evidence/audit-summary-carrier.mjs` 死对象）；docs/standard-workflow.md :16-21（spec-analyze 归属声明）。
+- 测试脚本与自动 CI 删除面：`package.json` scripts :6-15（显式分组与 `test:exclusive` 保留）；`.github/workflows/ci.yml` 为待删除的旧自动触发器；`.markdownlint-cli2.jsonc`（ignores 既有窄条目先例：specs/archive、specs/m9-verify-code 等）。
+- 测试面现状：`find tests core/__tests__ skills -name "*.test.mjs"` = 263 文件（任务Ⅱ 合入后实测；`tests/contract` 122、tests 根 49、`tests/integration` 27、`core/__tests__` 24、skills 25、`tests/e2e` 7、`tests/close` 4、`tests/review` 3、`tests/left-shift` 1、`tests/acceptance` 1）；PFACT-17 的 258 为 vitest collect 口径，分组并集证明以开工树 `vitest collect` 实测为准。
+- 上游材料：51 条 X 登记表在 `specs/workflowhub-mechanism-simplification-20260910/prd.md`（分段 X1–X19 :4235-4253 / X20–X25 :825-830 / X26–X29 :4254-4257 / X30–X36 :1326-1332 / X40–X47 :3378-3385 / X50–X56 :3909-3915，合计 51 ✓）；X1–X14 更正清单在 prd.md :4235-4248；拒绝方案表 15 条在母材料 decision-log「## 拒绝方案」:1708-1728；C1 具名删除清单（12 叶子 + 白名单）在 `specs/archive/workflowhub-mechanism-simplification-t1-20260911/spec.md` :74-92；C0 口径表 M1–M5 在同文件 :154-166、M5 分表 :180-186、冻结命令 :192-198。
+
+## Solution Design
+
+### 总体结构
+
+五批串行：Phase 1 门禁与基线 → Phase 2 四条修复（行为改动，RED/GREEN 成对）→ Phase 3 C7 治理同步（文档族 + npm 分组 + close 收敛 + 清单/对照表）→ Phase 4 C8 双证验收（validator RED/GREEN：语义错样本先红、全行复算后绿）→ Phase 5 执行纪律审计与守卫复核 + 最终聚合卡。批次内部 RED 先于 GREEN；同文件改动串行；每批落 `pN-batch-boundary.json` 供越界检查。
+
+### 四条修复的设计约束（spec §4 拒绝路径全部遵守）
+
+- 缺陷 1：只改写侧两处回退（stage-runner.mjs:1178-1180、:1286-1288），改用该 stage 的 scope revision；不加字段、不迁移字节、不建兼容桥；行字段表 16 键不动。新增窄回归测试 `tests/integration/stage-row-scope-digest.test.mjs` 覆盖 make-decision 与 build-spec 两条行指纹路径（该路径现零覆盖）。历史坏行分轨：受害任务（PaperBuilder）行如实登记为不可恢复（T3）；本任务自身 make-decision / build-spec 行按 decision-log §13.5 作现场标本——修复后重跑两阶段 stage end 必须可读回（T4），且最后一次材料记账在最后一次 run 之前。
+- 缺陷 2：复用 `importCanonicalReviewResult` 的 hash + 互链身份模型替换两处严格文件名规则（stage-handlers.mjs:1983-1984、freshness.mjs:69-70）：改为内容绑定校验（attempt/result/report 三 ref 的 sha256 与身份字段互链），不再要求结果文件名 uuid 等于 attempt_id；新增 `tests/review/review-result-content-binding.test.mjs` 断言非旧命名形态（如 `verify-code-e2e-<uuid>.json`）被接受、篡改仍被拒。历史实例逐对复算（OPEN-001，T7）。
+- 缺陷 3：在两个门槛块（:5953、:5981）补 else 分支，把「材料缺失 / 材料非正文」落为显式 skip 事实进 facts（区分「没跑」与「跑过」），不动返回键集之外的形状；`stage-runner.mjs:561` 的逐字段相等校验天然兼容（同一次运行两侧同代码）。five-stage-spec-analyze-wiring.test.mjs 新增 heading-less 用例断言 skip 事实（语义更严，非放宽）。
+- 缺陷 4：路由主改点仍是 :450-452——direction_change 允许 fixed 终态（复用既有 fixed，不新增状态字面量、不建第二路由）；同时把已有 disposition `gap.material_revision` 作为绑定载体：`findingDispositions` 接收 worker.currentMaterialRevision，fixed 时要求 gap.material_revision 与当前值一致，再把当前值传给 validateFindingRouting，旧 revision 重放判 incomplete。这样不改冻结 stage row 16 键、不向 disposition schema 加字段，只接通既有 gap revision。改动文件 = stage-content-contracts.mjs + stage-handlers.mjs；stage-review-disposition.mjs 只读复用。既有 direction_change 用例的「判不通过」期望更新为「current revision 判通过、old revision 判不通过」（附录 B 登记-2，随代码同批提交并点名）；accepted_risk 路径与 stage-risk-acceptance 测试作回归保护。
+
+### C7 治理同步的设计
+
+- 宪法改写按 spec 附录 A 冻结草案逐字落地：F3 删「hash、」、F6 正例删「和合同内容校验值」、F11 追加「控制面净减法 + 默认不新增 hash」硬规则、治理节新增负向条款（15 条拒绝方案逐条可追溯）+ 八类分类学（每类防护 + owner）+ 守卫三要件（登记字段 / 违反后果 / 范围自适性含自指）、版本 1.8.0 → 1.9.0 四件同步（版本号 / 修订记录 / 旧→新映射 / checklist 条目数 = 22），并同批更新 `tests/stage-risk-acceptance.test.mjs:300` 的版本 pin（1.8.0 → 1.9.0；该 pin 由任务Ⅱ 设到 1.8.0，宪法 bump 后必须同步，否则 Phase 5 守卫基线复核红）。checklist 新增对照项进**非条款区**（与既有「close 三义判据」同形态，verify-structure.mjs:63-64 以该节切分后数 22 条，不占条目数）。
+- CONTEXT.md 两处修正（附录 A-8）：第五阶段别名补「验收（test-acceptance）」；三处 runtime 路径措辞改写为「阶段运行目录下的某模块」式描述（守卫 denylist 词边界触发，守卫脚本零改动——AC-GOV-007 要求守卫字节不变）。
+- npm test 显式分组（D-010 的本地部分）：`test` 保持具名分组序列（按目录族分组：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root）；每组 `vitest run <具名范围>`；`test:safe` / `test:exclusive` 语义保留（exclusive 两文件仍单跑）；删除自动 CI workflow；分组映射 + 并集覆盖证明落 `tests/contract/test-entry-grouping.test.mjs`，不再断言 workflow 逐组调用。
+- hash 用法清单（R-019 / FR-GOV-018）：唯一权威扫描口径 = `git ls-files` 取 tracked 全集（扩展名 mjs / js / cjs / json / jsonc / yaml / yml / md，含 .github 下全部），逐条 grep 匹配 sha256 / SHA256 / hash / digest 四模式；每条五要素（路径行号 / 类别：身份绑定·完整性校验·过程化产物 / 处置 / 理由 / 绑定对象）；本任务删治理文字侧表述与过程化产物类，身份与完整性类只登记；与任务Ⅱ 删失效链重叠的条目以任务Ⅱ 结果为准、不重复删；本任务不新增任何 hash 字段或校验。**落点决策见 DEC-06**：扫描后把五要素清单正文回填到 plan.md 的「hash 清单结果登记区」，task store 同时保留 JSON 与 raw log 供复算；验收时按同口径复算并对账（删除类条目必须消失、登记类必须保留、零新增）。扫描发现的每一个 `过程化产物` 条目必须在 T18 当场映射到 T19/T20 已有文件边界；落在边界外则停止并按同任务 plan repair 处理，不得继续声称 C7 完成。
+- 父材料更正（FR-GOV-008/009/014）：X1–X14 逐条更正（prd.md:4235-4248 清单）+ 82 条 lint 清零（MD032×34 / MD022×30 / MD036×12 / MD052×2 / MD024×2 / MD040×1 / MD001×1）+ 批次计数单口径（全文只有「10 个具名批次」）+ decision_hash 两口径并列写清 + 聚合文件名以实际落盘为准 + D-025③「prd.md 不是第五份材料」措辞。只改父材料 decision-log.md 一个文件；受保护路径（quality/**、specs/archive/**、历史 task store）开工时冻结基线 hash、收口比对零变化。
+- 窄 ignores（D-006）：`.markdownlint-cli2.jsonc` 只新增具名窄条目 `specs/workflowhub-ui-frontend-capability-20260904`（另一任务历史材料，约 410 条 / 20 文件），附理由 + owner（归属 ui-frontend 任务），沿用 `specs/archive` 先例形态；不新增 `.planning/`、`task_plan.md`、`findings.md`、`progress.md` 仓库级忽略，宿主工作文件不借本任务扩大治理例外。其余逐条修：docs/research 两文件 21 条、docs/adr 三文件 3 条、父材料 82 条（T21/T22）。本任务四材料 lint 在 build-plan 阶段已清零（实测 0 条）。
+- 对照表（FR-GOV-004，落 plan.md 对照表登记区）：固定清单逐项「文档表述 ↔ 代码事实」——CONSTITUTION、checklist、AGENTS、CLAUDE、README、CONTEXT、audit-contracts、package.json、两份 architecture json、六个 ADR（0017 freshness / 0019 canonical ownership / 0020 close transcription / 0011 review generation / 0009 same-snapshot recovery / 0025 review-dispatch-preflight）、lint 配置、自动 CI 删除状态 + 本任务改动文件；move-map 373 与控制面 7 全 retain 重核；ADR 重复编号组（0002×2 / 0009×2 / 0025×3 / 0027×2）逐组处置（DEC-09）；X51 按 7 条重判。无「仍矛盾」行才收。
+- close 收敛（FR-GOV-013）：`core/task-close.mjs` 六处落盘点收敛为一次性展示（多文件计划对象不再逐文件持久化为生产行为；改为一次性展示与既有记录路径），`tools/cli/task-close.mjs` 读取面对齐；确认凭证与 plan hash 校验（tools/cli/task-close.mjs :100）保留；五动作结果仍落 `recordCloseActionRow` close_action（core/task-close.mjs :1618）；无半删状态。
+- 任务Ⅱ 后事实（FR-GOV-019/020）：check-extensibility 表述与 AGENTS/CLAUDE 保留清单按任务Ⅱ 合入后的代码事实改写（放在 Phase 3，T0 门禁保证任务Ⅱ 已合入）。
+
+### C8 双证验收的设计
+
+- 双证 = 静态净减法逐项账 + 链路验收（本任务材料：写完 → status 立即可读 → 重放不新增行），加异源复核双轨（真实 wh-review 异源审查 + 独立子代理复核，分开记录）。AC-ACC-003 的任务Ⅲ真实 merge SHA 只能在用户授权 close 后产生；Phase 4 不允许用占位符或 merge-tree 冒充，close 前该 AC/T35 如实保持 incomplete，最终 merge 后再按同一 `git diff --numstat <sha>^ <sha>` 口径回填。
+- 静态净减法（FR-ACC-001）：C1 最终具名删除清单 12 叶子逐项「不存在 + 无 consumer 证据」，白名单对象（stage-outcome-proofs 整类目录、workflow-evolution.mjs、协议错误白名单模块）逐项完好。
+- M1–M5 对照（FR-ACC-002/004/009）：按 C0 冻结口径逐项判定，不平均、不合并；M1 / M2 记 `unknown` 并给出处（C0 已判不能算）；M3a / M3b / M5 按冻结命令实测；历史结论逐项对照。
+- M4 整条整改线（FR-ACC-003）：任务Ⅰ / Ⅱ / Ⅲ 三个合并提交 `git diff --numstat` 合计为负（SHA 用实测值）。
+- 逐条阻塞账（FR-ACC-011，本任务头号验收目标）：51 条 X 逐条（现象 → 根因 → 修复 → 验证命令 → 证据，分段计数核对 19+6+4+7+8+7=51）+ 现场四条同构记录 + 八类分类学逐类「防护 / owner / 本任务落点」；落 `blocker-ledger.json`（任务 store），plan.md 登记区持引用与计数断言。
+- unknown 清单（FR-ACC-006）：token 维度、M1 / M2、验收自指等不可证伪项逐项登记，不带通过措辞。
+- 净增减账（FR-ACC-007/016-GOV）：逐文件改前 / 改后行数实测与净值，正值写理由；测试分组适配与自动 CI 删除计入账内。
+
+### simplicity-guard 取舍（删除 / 收窄 / 复用）
+
+- **复用**：缺陷 2 复用既有 importCanonicalReviewResult 内容绑定模型（不新造身份机制）；清单 / 账本 / 基线复用任务 store `quality/tests/` 证据区（t2 先例，不新增文件类型）；守卫三脚本（verify-structure / check-task-record-paths / markdownlint 配置）零改动或仅窄 ignores；close 五动作落账复用既有 recordCloseActionRow。
+- **收窄**：close 多文件计划对象收敛为一次性展示（本任务唯一代码侧收敛面）；npm test 从隐式全集收窄为显式分组（语义不扩）。
+- **删除**：治理文字侧 hash 表述（宪法 F3 / F6 及清单点名处）与过程化产物类 hash 站点（以清单为准，重叠部分归任务Ⅱ）；不涉及删除整文件。
+- **不新增**：检查器 / schema / gate / 计数器 / 状态机 / public command / 持久化对象 / 第五份材料（F11 硬规则自检：本计划新增物 = 三个测试文件与任务 store 证据文件，均非控制面）。
+- **删除证明**：不涉及删除整文件；站点级删除的证明 = hash 清单复算对账（删除类条目在复算输出中消失）+ close 收敛的测试断言。
+
+### plan-eng-review 自检结论
+
+- 依赖链：T0 → 全部；Phase 2 内部 缺陷1 → 缺陷3 → 缺陷4（stage-content-contracts 同文件串行：T8/T9 → T10/T11），缺陷 2 独立文件面（stage-handlers / freshness）；T4 依赖 T2（修复后重跑）；Phase 3 内部 T12/13（宪法）→ T19/20（hash 文字），T14/15（CONTEXT）→ T19/20 候选面，T16/17（npm 本地分组）独立，T18 扫描先把每个可删站点映射到 T19/T20 已声明 owner/file，无法映射即 STOP，T21/22（父材料）独立，T23/24（lint 收口）依赖 T21/22 与 T12-T20，T25/26（close）独立，T27/28（对照表 + 文档族）依赖 T12-T26（对照最终事实），T29（净增减账）依赖 T12-T28；T45 先落实自动 CI 删除，再做本地聚合；Phase 4 依赖 Phase 3 全部，T38 扫描后逐项分流（已修复→证据；范围内未修复→回现有 owner；范围外→unknown/incomplete），只有无未处置范围内 blocker 才进 T39；Phase 5 依赖 Phase 4。
+- 失败路径：每卡 STOP 字段写明；T0 门禁失败 = 全任务停（G1）；批内 gate 红 = 停在该批（Quick Read 批次纪律）；review 预算耗尽 = 停并如实登记。
+- 回滚：批级 revert（每批提交边界独立）；文档批回滚 = git revert 单文件；Runtime 修复回滚 = revert 该对卡；ignores 回滚 = 删条目（红回归属预期内）。
+- 验证：RED/GREEN 成对 + oracle 五要素 + 证据路径落盘；验收型对（Phase 4）的 RED 证明判据可失败。
+
+## File Boundary
+
+### FILE DELETIONS
+
+- `.github/workflows/ci.yml`
+
+### MODIFY
+- **MODIFY** `.github/workflows/ci.yml`（delete-only boundary; implementation action is DELETE; no replacement writer）
 - **MODIFY** `.markdownlint-cli2.jsonc`
 - **MODIFY** `AGENTS.md`
 - **MODIFY** `CLAUDE.md`
@@ -155,14 +729,42 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 - **MODIFY** `runtime/stage/stage-content-contracts.mjs`
 - **MODIFY** `runtime/stage/stage-handlers.mjs`
 - **MODIFY** `runtime/stage/stage-runner.mjs`
-- **MODIFY** `specs/workflowhub-mechanism-simplification-20260910/decision-log.md`
-- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`
 - **MODIFY** `tests/close/close-contract.test.mjs`
 - **MODIFY** `tests/contract/five-stage-spec-analyze-wiring.test.mjs`
 - **MODIFY** `tests/contract/freeze-classification-budget-usage-protocol.test.mjs`
-- **MODIFY** `tests/stage-risk-acceptance.test.mjs`（:300 版本 pin 1.8.0 → 1.9.0，随宪法四件同步；任务Ⅱ 后该 pin 由任务Ⅱ 更新至 1.8.0，本任务 bump 时必须同批改，否则守卫基线复核红）
+- **MODIFY** `tests/host-independence.test.mjs`
+- **MODIFY** `tests/stage-risk-acceptance.test.mjs`（:300 版本 pin 1.8.0 → 1.9.0，随宪法四件同步）
 - **MODIFY** `tools/cli/task-close.mjs`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-20260910/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
+- **MODIFY** `tests/integration/stage-row-scope-digest.test.mjs`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-link-acceptance.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m1-m5-ledger.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-m4-numstat.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-net-lines-final.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-a.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-review-track-b.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-static-deletion.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/c8-unknowns.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-batch-boundary.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p4-c8-handoff.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
+- **MODIFY** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
 
+- **MODIFY** `tests/contract/test-entry-grouping.test.mjs`
 ### NEW
 
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/blocker-ledger.json`
@@ -190,13 +792,12 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-current-baseline.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t0-preflight-check.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
-- **NEW** `tests/contract/test-entry-grouping.test.mjs`
 - **NEW** `tests/integration/stage-row-scope-digest.test.mjs`
 - **NEW** `tests/review/review-result-content-binding.test.mjs`
 
 ### DELETE
 
-- 不涉及删除整文件。站点级删除只有两类：治理文字侧 hash 表述（宪法 F3 / F6 及清单点名处）与过程化产物类 hash 站点（以 hash 清单为准，与任务Ⅱ 删失效链重叠的归任务Ⅱ）；删除证明 = hash 清单复算对账（删除类条目在复算输出中消失、登记类保留、零新增）+ close 收敛的测试断言。历史坏行与受害任务证据一律不删、不改字节（只登记）。
+- `.github/workflows/ci.yml`：T45 的真实整文件删除；同一路径在 `### FILE DELETIONS` 保留删除语义，并在 `### MODIFY` 以 delete-only boundary 兼容 validator，不产生替代 writer。其余站点级删除只有治理文字侧 hash 表述（宪法 F3 / F6 及清单点名处）与过程化产物类 hash 站点（以 hash 清单为准，与任务Ⅱ 删失效链重叠的归任务Ⅱ）；删除证明 = hash 清单复算对账（删除类条目在复算输出中消失、登记类保留、零新增）+ close 收敛的测试断言。历史坏行与受害任务证据一律不删、不改字节（只登记）。
 
 ### EVIDENCE
 
@@ -234,7 +835,7 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 ### DEC-05 npm test 分组形态
 
-- **Selected**：`test` = 具名分组序列（按目录族：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root），`test:safe` / `test:exclusive` 语义保留，CI 逐组调用。
+- **Selected**：`test` = 具名分组序列（按目录族：contract / integration / e2e / review / close / left-shift / acceptance / skills / core / root），`test:safe` / `test:exclusive` 语义保留；这些入口只供本地 targeted union 或人工选择使用，不保留自动 CI 调用。
 - **Alternatives rejected**：保留无范围全量加注释（D-010 已定改显式分组）；单组大清单（失去分组意义）。
 - **Why**：目录族分组与 vitest collect 口径对齐，并集覆盖可机器证明。
 - **Constitution impact**：F10 自动化按真实收益；不新增门禁。
@@ -246,6 +847,14 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 - **Why**：build-code 允许写本计划已声明的登记区；先在开工树扫描，再原位回填，兼顾四材料权威与证据可复算。
 - **Constitution impact**：F11 不新增控制面；S8 可搬运。
 - **边界处理**：T18 给每个过程化产物类条目分配 T19/T20 既有 owner/file；无法落入现有边界时停止并修本计划，不在执行中静默扩边界。
+
+### DEC-13 T45 自动 CI 删除修订
+
+- **Selected**：删除 `.github/workflows/ci.yml`；保留 `package.json` 的显式本地分组和 `test:exclusive`。T45 以实际 `changed_files` 的 targeted union、三守卫、账本和计数为唯一本地聚合判据，自动 CI 字段统一记录为 `not_applicable`。
+- **Alternatives rejected**：保留 push / pull_request workflow（继续引入 provider 状态和重复 `npm ci`）；把 workflow 改成手动 dispatch（仍保留不必要的自动控制面）；等待 CI 通过再收口（把非部署项目的外部服务可用性误当完成条件）。
+- **Why**：本仓库没有部署产物；当前自动 CI 的失败主要是文档契约词面耦合，且每个矩阵任务重复安装依赖。删除触发器能直接消除该阻塞来源，显式本地分组仍保留可复算的测试选择能力。
+- **Implementation boundary**：build-code 删除 workflow，把 `tests/contract/test-entry-grouping.test.mjs` 改为只验证 `package.json` 分组、exclusive 语义和 safe 并集，并修复 `tests/host-independence.test.mjs` 对已删除 workflow 目录的无条件读取；本修订不改历史 T16/T17 执行记录。
+- **Constitution impact**：F10 按真实收益删去维护成本高且不承担部署职责的自动化；不新增 gate、状态、schema 或持久化对象。
 
 ### DEC-07 登记区回填模式
 
@@ -293,10 +902,10 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 ### 总则
 
-- 测试路线（D-010 后）：每卡 gate = 受影响针对性测试的具名文件组（`./node_modules/.bin/vitest run <具名文件>`）；禁止本地无范围全量；T45 只跑实际 changed-files 对应的 targeted union，完整分组并集留给已有 CI。
+- 测试路线（D-010 后）：每卡 gate = 受影响针对性测试的具名文件组（`./node_modules/.bin/vitest run <具名文件>`）；禁止本地无范围全量；T45 只跑实际 changed-files 对应的 targeted union，完整分组并集不是本任务的完成条件。
 - RED/GREEN 纪律：行为改动先 RED（同命令在修复前失败）后 GREEN；验收型对（Phase 4）的 RED 不只查文件缺失，还要向同一 validator 注入语义错样本（错 SHA / 错计数 / unknown 漂白 / 白名单误删 / 命令非零 / 证据与 snapshot_tree 不匹配）；GREEN 对适用的全部行逐条复算，不以抽样代替语义验证；oracle 五要素（pass / reject.input / reject.expected_rejection / reject.observation + 身份）；证据全部落任务 store `quality/tests/`。
-- 测试分层（test-routing）：本任务非 UI（decision-log `## UI applicability` result = non_ui），执行 tier 都是 command；routing tier 预判为 Phase 1 = simple，Phase 2 = fullstack（卡内细分：缺陷 1/3/4 feature、缺陷 2 fullstack），Phase 3 = fullstack（卡内细分：治理/CONTEXT/inventory/lint/对照 simple 或 feature；npm+CI 与 close fullstack），Phase 4 = fullstack，Phase 5 = fullstack，FINAL = fullstack。fullstack 表示跨 runtime/store/CI/review 边界，不表示 UI；build-code 必须按实际 changed_files 重判并记录 pre-route / final-route / rationale / executor。
-- changed-files 边界：Phase 1 仅 task-store 两个 preflight artifact；Phase 2 为 runtime/stage + runtime/evidence + 对应 contract/integration/review 测试；Phase 3 为治理文档族、package/CI、close runtime/CLI 与各自证据；Phase 4 只写 C8 证据并只读归档/父 PRD；Phase 5 只写执行审计与 targeted 聚合证据。
+- 测试分层（test-routing）：本任务非 UI（decision-log `## UI applicability` result = non_ui），执行 tier 都是 command；routing tier 预判为 Phase 1 = simple，Phase 2 = fullstack（卡内细分：缺陷 1/3/4 feature、缺陷 2 fullstack），Phase 3 = fullstack（卡内细分：治理/CONTEXT/inventory/lint/对照 simple 或 feature；npm 分组与自动 CI 删除、close fullstack），Phase 4 = fullstack，Phase 5 = fullstack，FINAL = fullstack。fullstack 表示跨 runtime/store/review 边界，不表示 UI；build-code 必须按实际 changed_files 重判并记录 pre-route / final-route / rationale / executor。
+- changed-files 边界：Phase 1 仅 task-store 两个 preflight artifact；Phase 2 为 runtime/stage + runtime/evidence + 对应 contract/integration/review 测试；Phase 3 为治理文档族、package 与自动 CI 删除、close runtime/CLI 与各自证据；Phase 4 只写 C8 证据并只读归档/父 PRD；Phase 5 只写执行审计、自动 CI 删除确认与 targeted 聚合证据。
 - 覆盖边界声明：单元与契约层覆盖四个 runtime 写入文件中的五个修复站点与 close 收敛面；治理文档族由守卫脚本 + lint + 逐行源事实重算覆盖（非 vitest 对象）；C8 验收由语义负例 + 全行复算覆盖；不补全仓本地回归（非目标）。
 
 ### 逐阶段蓝图
@@ -310,14 +919,14 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 | Phase 2 缺陷 4 / feature | fixed 终态缺失或失绑 | direction_change + fixed 判通过且绑当前修订；旧修订重放拒绝 | ORA-FIX-004：路由接受 + 绑定校验 | vitest 具名 2 文件 | p2-fix-ledger.md | accepted_risk 路径不动（回归保护） |
 | Phase 3a 宪法 / simple | 四件不同步；条目数漂移 | F3 / F6 表述删除；F11 硬规则；负向条款 15 条；22 = 22 | ORA-GOV-001：全项断言脚本 | node -e 断言 + markdownlint 范围文件 | p3-c7-handoff.md | 不改守卫脚本字节 |
 | Phase 3a CONTEXT / simple | 守卫 FAIL 残留；误删真实术语 | 别名补齐 + 三处措辞改写后守卫 exit 0 | ORA-GOV-007：verify-structure exit 0 + 守卫 diff 为空 | node tools/cli/verify-structure.mjs | p3-c7-handoff.md | 只改 CONTEXT.md |
-| Phase 3b npm 分组 / fullstack | 分组漏文件；CI 语义劣化 | 逐组 collect 并集 = 原范围；exclusive 语义保留 | ORA-GOV-011：分组映射 + 覆盖证明 | vitest 具名 1 文件（test-entry-grouping） | p3-c7-handoff.md | 不跑各组全量（CI 职责） |
+| Phase 3b npm 分组 / fullstack | 分组漏文件；自动 CI 仍被当作门禁 | 逐组 collect 并集 = 原范围；exclusive 语义保留；不要求 workflow | ORA-GOV-011：本地分组映射 + 覆盖证明 | vitest 具名 1 文件（test-entry-grouping） | p3-c7-handoff.md | 不跑各组全量；不等待 provider |
 | Phase 3d hash 清单 / feature | 清单缺项；误删身份类 | 扫描 → 三类划分 → 删除 → 复算对账 | ORA-GOV-016：复算一致 + 零新增 | git ls-files + grep 复算脚本 | hash-inventory.json + hash-inventory-scan.log | 开工树扫描；重叠归任务Ⅱ |
 | Phase 3d 父材料 / simple | X 项漏改；lint 残留 | X1–X14 逐条更正 + 82 → 0 | ORA-GOV-008：lint 0 + 复核表 14/14 | markdownlint 单文件 + node -e 断言 | p3-c7-handoff.md | 只改父材料 decision-log.md |
 | Phase 3d lint 收口 / simple | 新增红；ignores 无理由 | ignores 五条带理由 owner；其余清零 | ORA-GOV-005：全仓 exit 0 + 配置断言 | markdownlint 全仓 + node -e | p3-c7-handoff.md | 例外命令写明理由范围 |
 | Phase 3c close 收敛 / fullstack | 凭证 / plan hash 校验被误删；半删 | 收敛后 close 测试绿 + 五动作落账保留 | ORA-GOV-013：收敛断言 + 回归 | vitest 具名 3 文件 | p3-c7-handoff.md | 只动六处落盘点 + 读取面 |
 | Phase 3d 对照表 / feature | 漏对象；文档事实与代码事实不一致 | 每行直接从源文件提取文档事实/代码事实，按期望关系重算；不可机器判的行标 unknown 并交独立复核 | ORA-GOV-004：逐行源事实 validator | node -e（源文件提取 + 关系断言 + 负例注入） | plan.md 登记区 + p3-c7-handoff.md | 不靠自填“一致”结论变绿；范围外漂移用不劣化兜底 |
 | Phase 4 C8 / fullstack | 账本缺行；unknown 漂白；复核伪造；任务Ⅲ merge SHA 尚未产生 | 静态逐项 / M1–M5 / M4 / 链路 / 阻塞账 / 双轨；每类语义错样本先红；全部适用行复算 | ORA-ACC-001/002/003/005/007/008：语义 validator + 全行复算 | node -e + git numstat + 重放脚本 + 双轨身份状态表 | c8-*.json/log/md + blocker-ledger.json | 不新开真任务；不采新基线；任一复核 unavailable => AC-ACC-008 incomplete；close 前无任务Ⅲ真实 merge SHA => AC-ACC-003 incomplete |
-| Phase 5 收尾 / fullstack | 执行记录缺四要素；守卫劣化 | 抽五条审计 + 基线比较 + changed-files targeted union | ORA-EXE-001 / ORA-GOV-005B / ORA-T45 | node -e + 三守卫 + changed-files targeted union | p5-*.md/json/log | 完整分组并集只由 CI 执行 |
+| Phase 5 收尾 / fullstack | 执行记录缺四要素；守卫劣化；自动 CI 残留 | 抽五条审计 + 基线比较 + 自动 CI 已删除 + changed-files targeted union | ORA-EXE-001 / ORA-GOV-005B / ORA-T45 | node -e + 三守卫 + changed-files targeted union | p5-*.md/json/log | 不等待自动 CI；完整分组并集不作为完成条件 |
 
 ## Rollback and Recovery
 
@@ -327,12 +936,12 @@ M = 必读；S = 选读；B = 回填时再读。本表是可再生导航，不�
 
 ### Engineering Risk Handoff
 
-- **Affected IDs**：AC-FIX-001（本任务行重跑读回）、AC-GOV-011（CI 变更）、AC-GOV-013（close 收敛）、AC-EXE-002（开工门禁）。
-- **Trigger**：任务Ⅱ 长期不合入 / T4 重跑 stage end 产生新事实绑定变化 / CI 分组语义误判 / close 收敛误删校验。
-- **Consequence**：任务停在 Phase 1（G1 已定）；行标本验收失败（AC-FIX-001 不成立）；CI 红；close 凭证链断。
-- **Mitigation or STOP**：T0 门禁 STOP 即全停；T4 失败则停在 Phase 2 并登记；CI 变更先本地逐组 collect 证明再落盘；close 收敛卡 STOP = 任一既有 close 测试红。
+- **Affected IDs**：AC-FIX-001（本任务行重跑读回）、AC-GOV-011（本地分组与自动 CI 删除）、AC-GOV-013（close 收敛）、AC-EXE-002（开工门禁）。
+- **Trigger**：任务Ⅱ 长期不合入 / T4 重跑 stage end 产生新事实绑定变化 / 自动 CI workflow 残留或测试契约仍依赖它 / close 收敛误删校验。
+- **Consequence**：任务停在 Phase 1（G1 已定）；行标本验收失败（AC-FIX-001 不成立）；自动 CI 不再是阻塞源；close 凭证链断。
+- **Mitigation or STOP**：T0 门禁 STOP 即全停；T4 失败则停在 Phase 2 并登记；T45 确认 workflow 缺失、分组契约不读 workflow 后再做本地 targeted union；close 收敛卡 STOP = 任一既有 close 测试红。
 - **Handling Stage**：build-code 各对应批；验收侧 verify-code。
-- **Verification**：T0 证据 JSON + 原始 `git status --porcelain=v1 --untracked-files=all` 输出 / T4 读回输出 / test-entry-grouping 覆盖证明 / close 测试与 close_action 行落点检查 / CI provider 返回的 run URL、final commit SHA、结论和分组逐项状态。CI 不可用或 run 未绑定最终 commit 时只记 incomplete，不用非空 marker 冒充。
+- **Verification**：T0 证据 JSON + 原始 `git status --porcelain=v1 --untracked-files=all` 输出 / T4 读回输出 / test-entry-grouping 本地分组覆盖证明 / 自动 CI 文件缺失断言 / close 测试与 close_action 行落点检查。`ci_run_ref` 等字段只记 `not_applicable`，不产生或等待 provider 结果。
 
 ## Implementation Order
 
@@ -387,6 +996,20 @@ T0（单卡，门禁 + 基线重测；见 tasks.md Phase 1）
 - **MODIFY** `runtime/stage/stage-runner.mjs`
 - **MODIFY** `tests/contract/five-stage-spec-analyze-wiring.test.mjs`
 - **MODIFY** `tests/contract/freeze-classification-budget-usage-protocol.test.mjs`
+- **MODIFY** `runtime/review/canonical-review-result.mjs`
+- **MODIFY** `runtime/review/review-packet-identity.mjs`
+- **MODIFY** `runtime/review/review-route-identity.mjs`
+- **MODIFY** `skills/catalog.yaml`
+- **MODIFY** `skills/wh-review/scripts/review-input-bounds.mjs`
+- **MODIFY** `skills/wh-review/scripts/simple-review-runner.mjs`
+- **MODIFY** `skills/wh-review/skill-bundle.json`
+- **MODIFY** `tests/contract/stage-completion.test.mjs`
+- **MODIFY** `tests/contract/status-derivation.test.mjs`
+- **MODIFY** `tests/contract/verify-architect-acceptance.test.mjs`
+- **MODIFY** `tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY** `tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY** `tests/stage-plan-task-contract-v3.test.mjs`
+- **NEW** `tests/contract/review-input-bounds-portability.test.mjs`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
@@ -395,10 +1018,11 @@ T0（单卡，门禁 + 基线重测；见 tasks.md Phase 1）
 - **READ-ONLY CONSUMER** `tests/contract/acceptance-execution-tier.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/execution-outcome.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/review-public-entrypoints.test.mjs`
-- **READ-ONLY CONSUMER** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
-- **READ-ONLY CONSUMER** `tests/integration/stage-row-publication.test.mjs`
-- **READ-ONLY CONSUMER** `tests/review/review-record-route.test.mjs`
+- **MODIFY** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
+- **MODIFY** `tests/integration/stage-row-publication.test.mjs`
+- **MODIFY** `tests/review/review-record-route.test.mjs`
 - **READ-ONLY CONSUMER** `tests/stage-risk-acceptance.test.mjs`
+- **MODIFY** `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
 
 ### Tasks
 
@@ -428,11 +1052,10 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 
 ### Goal
 
-宪法 1.9.0 四件同步 + CONTEXT 两处 + npm 显式分组与 CI + hash 清单与治理文字净减 + 父材料更正与 lint 收口 + close 收敛 + 对照表登记 + 净增减账，C7 批 AC 全过。
+宪法 1.9.0 四件同步 + CONTEXT 两处 + npm 显式本地分组 + hash 清单与治理文字净减 + 父材料更正与 lint 收口 + close 收敛 + 对照表登记 + 净增减账，C7 批内 T12-T29 AC 全过；AC-GOV-011 的自动 CI 删除部分由 T45 修订卡收口。
 
 ### Files
 
-- **MODIFY** `.github/workflows/ci.yml`
 - **MODIFY** `.markdownlint-cli2.jsonc`
 - **MODIFY** `AGENTS.md`
 - **MODIFY** `CLAUDE.md`
@@ -468,26 +1091,31 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **MODIFY** `tests/close/close-contract.test.mjs`
 - **MODIFY** `tests/stage-risk-acceptance.test.mjs`（:300 版本 pin 1.8.0 → 1.9.0，随宪法四件同步）
 - **MODIFY** `tools/cli/task-close.mjs`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
-- **NEW** `tests/contract/test-entry-grouping.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/close-authorization-diagnostics.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/close-sidecar-and-archive.test.mjs`
+- **MODIFY** `tests/acceptance/build-prd-current.mjs`
+- **MODIFY** `tests/integration/governance-diagnostics-non-gate.test.mjs`
+- **MODIFY** `tools/architecture/retention-audit.mjs`
 
 ### Tasks
 
-T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除对 / 父材料对 / lint 收口对 / close 对 / 对照表对 + T29 净增减账；见 tasks.md Phase 3）
+T12-T29（宪法对 / CONTEXT 对 / npm 本地分组对 / hash 清单扫描与删除对 / 父材料对 / lint 收口对 / close 对 / 对照表对 + T29 净增减账；自动 CI 删除由 T45 修订卡执行）
 
 ### Verify
 
-`ORA-GOV-001` 为 Phase 3 交接 oracle：宪法断言脚本全项过，并要求 ORA-GOV-007 verify-structure exit 0 且守卫字节不变 + ORA-GOV-011 分组并集覆盖证明绿 + ORA-GOV-016 hash 清单正文/副本复算对账零新增且删除项均有 owner + ORA-GOV-008 父材料 lint 0 且 X 复核 14/14 + ORA-GOV-005 全仓 lint exit 0 + ORA-GOV-013 close 测试绿且凭证 / plan hash 校验保留 + ORA-GOV-004 源事实对照表无「仍矛盾」行 + ORA-T29 净增减账逐文件实测。
+`ORA-GOV-001` 为 Phase 3 交接 oracle：宪法断言脚本全项过，并要求 ORA-GOV-007 verify-structure exit 0 且守卫字节不变 + ORA-GOV-011 本地分组并集覆盖证明绿 + ORA-GOV-016 hash 清单正文/副本复算对账零新增且删除项均有 owner + ORA-GOV-008 父材料 lint 0 且 X 复核 14/14 + ORA-GOV-005 全仓 lint exit 0 + ORA-GOV-013 close 测试绿且凭证 / plan hash 校验保留 + ORA-GOV-004 源事实对照表无「仍矛盾」行 + ORA-T29 净增减账逐文件实测；自动 CI 删除由后续 T45 确认。
 
 ### Knowledge
 
-宪法 → hash 文字（T12/13 → T19/20）串行；lint 收口（T23/24）在父材料与文档族之后；对照表（T27/28）在所有改动之后针对最终事实；plan.md 只许登记区回填。
+宪法 → hash 文字（T12/13 → T19/20）串行；lint 收口（T23/24）在父材料与文档族之后；对照表（T27/28）在所有改动之后针对最终事实；自动 CI 删除由 T45 确认；plan.md 只许登记区回填。
 
 ### STOP
 
@@ -495,7 +1123,7 @@ T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除�
 
 ### Done
 
-治理文档族与 runtime 收敛面全部落盘；hash-inventory.json 五要素齐备；plan.md 对照表登记区回填完成；net-lines.json 逐文件净值；全仓 markdownlint exit 0。
+治理文档族与 runtime 收敛面全部落盘；hash-inventory.json 五要素齐备；plan.md 对照表登记区回填完成；net-lines.json 逐文件净值；全仓 markdownlint exit 0；自动 CI 删除留给 T45 修订卡确认。
 
 ### Risks and rollback
 
@@ -551,10 +1179,14 @@ c8-*.json/log/md 与 blocker-ledger.json 全部落盘且语义 validator / 全�
 
 ### Goal
 
-执行纪律审计（重读量动作四要素抽查）+ 守卫基线复核（整改前后动态比较）+ 最终聚合验证卡（actual changed-files targeted union + 三守卫 + 账本齐全性终核；完整分组并集只由 CI 执行）。
+执行纪律审计（重读量动作四要素抽查）+ 守卫基线复核（整改前后动态比较）+ 自动 CI 删除确认 + 最终聚合验证卡（actual changed-files targeted union + 三守卫 + 账本齐全性终核；不等待完整分组并集）。
 
 ### Files
 
+- **MODIFY** `.github/workflows/ci.yml`（delete-only boundary; implementation action is DELETE; no replacement writer）
+- **MODIFY** `tests/contract/test-entry-grouping.test.mjs`
+- **MODIFY** `tests/host-independence.test.mjs`
+- **MODIFY** `vitest.config.mjs`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
@@ -567,11 +1199,11 @@ T42-T45（执行记录审计 + 守卫复核对 + 最终聚合验证卡；见 tas
 
 ### Verify
 
-`ORA-EXE-001` 为 Phase 5 交接 oracle：抽五条重读量记录四要素齐 + 主会话全仓扫描记录不存在，并要求 ORA-GOV-005B 三守卫整改后不劣化且范围内清零 + ORA-T45 的 actual changed-files targeted union exit 0、真实 CI run 绑定最终 SHA 且所有显式组 success + 完成计数（claimed vs authenticated）自洽。
+`ORA-EXE-001` 为 Phase 5 交接 oracle：抽五条重读量记录四要素齐 + 主会话全仓扫描记录不存在，并要求 ORA-GOV-005B 三守卫整改后不劣化且范围内清零 + ORA-T45 的 automatic CI 已删除、actual changed-files targeted union exit 0、账本与完成计数（claimed vs authenticated）自洽。
 
 ### Knowledge
 
-守卫比较只读 t0 artifact 变量；本地最终聚合只跑 actual changed-files targeted union，完整分组并集由 CI 守卫执行；证据同时记录 changed_files → targeted tests 映射与 CI run ref。
+守卫比较只读 t0 artifact 变量；本地最终聚合只跑 actual changed-files targeted union；证据同时记录 changed_files → targeted tests 映射、自动 CI 配置缺失和 `ci_run_ref=not_applicable`，不等待 provider。
 
 ### STOP
 
@@ -579,7 +1211,7 @@ T42-T45（执行记录审计 + 守卫复核对 + 最终聚合验证卡；见 tas
 
 ### Done
 
-p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-handoff-ledger.md 落盘；HANDOFF 项（若有）具名移交 close 阶段。
+p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-handoff-ledger.md 落盘；自动 CI 删除状态已确认；HANDOFF 项（若有）具名移交 verify-code 阶段，不执行 close。
 
 ### Risks and rollback
 
@@ -589,7 +1221,7 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 
 - 全局串行：Phase 1 → 2 → 3 → 4 → 5；T0 是所有任务的前置。
 - Phase 2 内：T1→T2、T3（依赖 T2 的登记上下文）、T4（依赖 T2）、T5→T6、T7（依赖 T6）、T8→T9→T10→T11（同文件串行）。
-- Phase 3 内保持一个 C7 规格批，但设置四个独立故障域并串行交接：P3a 治理/CONTEXT（T12-T15，simple）→ P3b npm+CI（T16-T17，fullstack）→ P3c close runtime/CLI（逻辑卡 T25-T26，fullstack；因 hash/父材料依赖仍按 T 号在 T24 后执行）→ P3d inventory/lint/对照（T18-T24、T27-T29，simple/feature）。每个故障域有独立 oracle / evidence / STOP；C7 批边界只在四域都绿后收口。CONSTITUTION/checklist/CONTEXT 在 T12-T20 间串行；lint 收口 T23/24 依赖 T12-T22；对照表 T27/28 依赖 T12-T26；T29 依赖 T12-T28。
+- Phase 3 内保持一个 C7 规格批，但设置四个独立故障域并串行交接：P3a 治理/CONTEXT（T12-T15，simple）→ P3b npm 本地分组（T16-T17，fullstack）→ P3c close runtime/CLI（逻辑卡 T25-T26，fullstack；因 hash/父材料依赖仍按 T 号在 T24 后执行）→ P3d inventory/lint/对照（T18-T24、T27-T29，simple/feature）。自动 CI 删除由 T45 修订卡完成并单独确认。每个故障域有独立 oracle / evidence / STOP；C7 批边界只在四域都绿后收口。CONSTITUTION/checklist/CONTEXT 在 T12-T20 间串行；lint 收口 T23/24 依赖 T12-T22；对照表 T27/28 依赖 T12-T26；T29 依赖 T12-T28。
 - Phase 4 内：T30→…→T41 全串行（账本互引）。
 - Phase 5 内：T42→T43→T44→T45。
 - 并行：无（全部串行，消除跨卡写冲突）。
@@ -610,7 +1242,7 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 | FR-GOV-008 | AC-GOV-008 | T21, T22 | ORA-GOV-008 |
 | FR-GOV-009 | AC-GOV-010 | T21, T22 | ORA-GOV-008 |
 | FR-GOV-010 | AC-GOV-004 | T27, T28 | ORA-GOV-004 |
-| FR-GOV-011 | AC-GOV-011 | T16, T17 | ORA-GOV-011 |
+| FR-GOV-011 | AC-GOV-011 | T16, T17, T45 | ORA-GOV-011（本地分组覆盖与自动 CI 删除） |
 | FR-GOV-012 | AC-GOV-004 | T27, T28 | ORA-GOV-004 |
 | FR-GOV-013 | AC-GOV-013 | T25, T26 | ORA-GOV-013 |
 | FR-GOV-014 | AC-GOV-008, AC-GOV-014 | T21, T22, T23, T24 | ORA-GOV-008 / ORA-GOV-005 |
@@ -650,6 +1282,7 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 | F-15247e028293 | fixed | T38 保留 validator 识别的旧 FR ID 以满足原 spec 文字存在性，同时唯一权威映射只用 37 个当前命名 FR；FR-GOV-009/014 的 AC 行按 spec 更正 |
 | F-2e944166e8e1 | fixed | DEC-12/T39 明示公共 review 入口、网络与凭据依赖、同 commit/tree 绑定；不可用保持 incomplete |
 | F-35eeea2a73f7 | fixed | T45 验证真实 CI URL、最终 head SHA、success 与逐组 success；不可用保持 incomplete |
+| F-T45-auto-ci-20260914 | superseded_by_user | 用户明确取消自动 CI；T45 改为确认 workflow 已删除、执行本地 targeted union，CI 字段为 not_applicable；保留 F-35eeea2a73f7 的历史事实，不再消费其 CI 绑定判据 |
 | F-48402b6ddf98 | fixed | Phase 2 统一为“四个 runtime 文件中的五个修复站点” |
 | F-6d6691c6e39c | rejected_invalid | spec 第 7 行是 build-spec 遗留标签；直接用户要求继续 build-plan 且禁止依赖 build-spec 补需求。build-plan 不越权改 spec、不伪造确认、不新增规格冻结 gate；风险继续披露 |
 | F-6d6f6ee27f33 | fixed | DEC-08 只保留一个无关 UI specs 目录窄 ignore，删除四个宿主工作文件 ignore |
@@ -696,7 +1329,8 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 | docs/adr/（15 文件） | 六方向同步（0017/0019/0020/0011/0009/0025）+ 重复编号组标注（0002×2/0009×2/0025×3/0027×2）+ 0026/0028 lint 各 1 条（0029 已随任务Ⅱ 重写归零，T23 复测确认） | FR-GOV-010；AC-GOV-004/005 | 对照表行 + lint 0 | 任务Ⅲ |
 | docs/architecture/ 两 json | move-map 373 与控制面 7 全 retain 重核；X51 按 7 条重判 | FR-GOV-012；AC-GOV-004 | 重核记录（p3-c7-handoff） | 任务Ⅲ |
 | docs/research/ 两文件 | lint 逐条修（21 条） | FR-GOV-005；AC-GOV-005 | lint 0 | 任务Ⅲ |
-| package.json / .github/workflows/ci.yml | test 显式分组 + CI 逐组 + exclusive 保留 | FR-GOV-011；AC-GOV-011 | test-entry-grouping 覆盖证明 | 任务Ⅲ |
+| package.json | test 显式本地分组 + exclusive 保留 | FR-GOV-011；AC-GOV-011 | test-entry-grouping 本地覆盖证明 | T16/T17 |
+| .github/workflows/ci.yml | 自动 CI 删除 | FR-GOV-011；AC-GOV-011 | workflow 缺失断言 + T45 聚合日志 | T45 修订卡 |
 | .markdownlint-cli2.jsonc | 仅一个无关 UI specs 目录的窄 ignore（理由 + owner）；不忽略宿主工作文件 | FR-GOV-015；AC-GOV-014 | 配置 diff + 断言 | 任务Ⅲ |
 | 父材料 decision-log.md | X1–X14 更正 + 82 lint 清零 + 批次单口径 + decision_hash 两口径 + D-025③ 措辞 + 聚合文件名 | FR-GOV-008/009/014；AC-GOV-008/009/010 | lint 0 + 复核表 14/14 | 任务Ⅲ |
 | core/task-close.mjs / tools/cli/task-close.mjs | 多文件计划对象收敛一次性展示；凭证与 plan hash 校验保留；五动作落账保留 | FR-GOV-013；AC-GOV-013 | close 测试 + close_action 行 | 任务Ⅲ |
@@ -707,7 +1341,7 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 
 - **Constitution binding**：`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"7d028c2919d2ef7749489d4a716be273a0dd986e7ea795a6b052c25a8d5dc12f","id":"CONSTITUTION","version":"1.8.0","clause_count":22}`
 - 条款快照（22 条全枚举）：F1、F2、F3、F4、F5、F6、F7、F8、F9、F10、F11、Q1、Q2、Q3、S1、S2、S3、S4、S5、S6、S7、S8。
-- 对照结论：本计划只细化四材料、不新增 public command / 持久化对象 / gate / 状态机（F1-F11 系，F11 自检见 Solution Design 的 simplicity-guard）；质量裁决由独立 wh-review 审查产出、本计划不自审自判（Q1-Q3 系）；记录事实不阻断推进、unknown 不伪造（S1-S8 系）；本地测试只跑受影响 targeted union，完整分组并集归既有 CI（S 系 + AGENTS.md）；推进与不可逆动作经人确认 = build-plan 发布前 confirm + close 授权归既有通道（F7 系）。逐条明细见 constitution-checklist.md，22 条款全部对照无违例。
+- 对照结论：本计划只细化四材料、不新增 public command / 持久化对象 / gate / 状态机（F1-F11 系，F11 自检见 Solution Design 的 simplicity-guard）；质量裁决由独立 wh-review 审查产出、本计划不自审自判（Q1-Q3 系）；记录事实不阻断推进、unknown 不伪造（S1-S8 系）；本地测试只跑受影响 targeted union，完整分组并集不作为本任务完成条件（S 系 + AGENTS.md）；推进与不可逆动作经人确认 = build-plan 发布前 confirm + close 授权归既有通道（F7 系）。逐条明细见 constitution-checklist.md，22 条款全部对照无违例。
 
 ## 对照表登记区（AC-GOV-004 / FR-GOV-004）
 
@@ -718,7 +1352,7 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 | 宪法 | 从 `CONSTITUTION.md` 读取版本、负向条款与分类学段落 | 从 `tests/stage-risk-acceptance.test.mjs` 读取版本 pin | 文档版本与测试 pin 相等 | 1.9.0 / 1.9.0 | pass | T13 green |
 | 宪法清单 | 从 `constitution-checklist.md` 读取主条款编号与非条款同步记录 | 从 `tools/cli/verify-structure.mjs` 读取条款数守卫 | 主条款数不增加且守卫通过 | 22 / 22 | pass | T15 green |
 | CONTEXT 术语 | 从 `CONTEXT.md` 读取第五阶段别名与路径措辞 | 从 `tools/cli/verify-structure.mjs` 读取 denylist 与 stage 术语断言 | 术语通过且守卫字节未改 | 通过 / 通过 | pass | T15 green |
-| agent 规则 | 从 `AGENTS.md` 与 `CLAUDE.md` 读取四材料、保留对象和测试纪律 | 从 `package.json` 与 `.github/workflows/ci.yml` 读取测试入口 | 文档纪律与实际入口不冲突 | 已同步 / 已分组 | pass | T17、T20 |
+| agent 规则 | 从 `AGENTS.md` 与 `CLAUDE.md` 读取四材料、保留对象和测试纪律 | 从 `package.json` 读取本地测试入口，并确认自动 CI 文件不存在 | 文档纪律与实际入口不冲突 | 待 T45 实测 | unknown | T45 |
 | README 边界 | 从 `README.md` 读取材料与目录说明 | 从 `tools/cli/verify-structure.mjs` 读取文档结构守卫 | 目录说明可达且守卫通过 | 可达 / 通过 | pass | T15 green |
 | audit 合同 | 从 `docs/audit-contracts.md` 读取死对象状态句 | 从 `docs/architecture/control-plane-inventory.json` 读取控制面登记 | 文档状态与登记事实一致 | 已修 / 已登记 | pass | T27 source read |
 | ADR freshness | 从 `docs/adr/0017-stage-quality-fact-freshness-scope.md` 读取失效链边界 | 从 `runtime/evidence/freshness.mjs` 读取当前 reader | 文档不要求已删除的 freshness 行为 | 对齐 | pass | T6 green |
@@ -730,7 +1364,7 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 | ADR question/test boundary | 从 `docs/adr/0027-planning-task-question-boundary.md` 与 `docs/adr/0027-test-feedback-runtime-profile.md` 读取交互和测试边界 | 从 `tests/contract/test-entry-grouping.test.mjs` 读取测试分组证明 | 边界与分组证明可回读 | 对齐 | pass | T17 green |
 | architecture inventory | 从 `docs/architecture/move-map.json` 与 `docs/architecture/control-plane-inventory.json` 读取登记对象 | 从 `tools/architecture/complexity-report.mjs` 读取生产范围定义 | 清单对象可由源文件复核 | 373 / 7 待 T27 重核 | unknown | p3-c7-handoff |
 | research docs | 从 `docs/research/ai-cli-host-skill-distribution.md` 与 `docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md` 读取研究事实 | 从 `.markdownlint-cli2.jsonc` 读取 Markdown 规则与窄例外 | 文档可 lint，历史 UI 目录不参与本任务 | 0 errors / 1 narrow ignore | pass | T24 green |
-| test entry | 从 `package.json` 读取具名 test scripts | 从 `.github/workflows/ci.yml` 与 `tests/contract/test-entry-grouping.test.mjs` 读取 CI 调用和全集覆盖证明 | safe 分组与 exclusive 保留 | 10 groups / 2 exclusive | pass | T17 green |
+| test entry | 从 `package.json` 读取具名 test scripts | 从 `tests/contract/test-entry-grouping.test.mjs` 读取本地分组调用与全集覆盖证明，并确认 `.github/workflows/ci.yml` 缺失 | safe 分组与 exclusive 保留；无自动 workflow | 待 T45 实测 | unknown | T45 |
 | parent decision-log | 从 `specs/workflowhub-mechanism-simplification-20260910/decision-log.md` 读取 X1–X14、批次与边界措辞 | 从 `./node_modules/.bin/markdownlint-cli2` 读取父材料 lint 结果 | 更正清单完整且父材料 lint 为零 | 14/14 / 0 | pass | T22 green |
 | close runtime/CLI | 从 `core/task-close.mjs` 与 `tools/cli/task-close.mjs` 读取一次性展示、凭证和 plan hash 约束 | 从 `tests/close/close-contract.test.mjs`、`tests/contract/close-authorization-diagnostics.test.mjs` 与 `tests/contract/close-sidecar-and-archive.test.mjs` 读取真实消费者断言 | close 行为与测试消费者一致 | 41/41 | pass | T26 green |
 | Phase 2 runtime fixes | 从 `specs/workflowhub-mechanism-simplification-t3-20260912/plan.md` 读取四条修复边界 | 从 `runtime/stage/stage-runner.mjs`、`runtime/evidence/freshness.mjs`、`runtime/stage/stage-content-contracts.mjs` 与 `runtime/stage/stage-handlers.mjs` 读取实现 | 四条修复均在声明文件内 | 对齐 | pass | T2、T6、T9、T11 |
@@ -12557,5 +13191,5 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 - 负例注入：每类 validator 至少拒绝一个语义错样本——错 SHA、错计数、unknown 漂白、白名单误删、命令非零、evidence / snapshot_tree 不匹配；这些 RED 与对应 GREEN 用同一 validator。
 - OPEN-002 handoff / 扫描后分流：owner = build-code 主会话；trigger = T37 链路验收完成后进入 T38；handoff/output = `blocker-ledger.json` + `c8-unknowns.md`；close/STOP = 63 行逐行标 `resolved_evidence` / `scope_unknown` / `in_scope_unresolved`，`in_scope_unresolved` 必须返回该行已登记的 Phase 2/3 owner 修复并重跑 T38，`scope_unknown` 保留 unknown 且 Phase 4 incomplete；不存在未处置范围内 blocker 才允许进入 T39，发现方向改变级新类则回用户裁定。
 - AC-ACC-008 状态表：仅轨 A / B 身份独立、底层模型不同且两者均有有效结论时为 pass；任一轨 partial / unavailable 则 AC-ACC-008 与 Phase 4 = incomplete，可在同 task 修复，但不得计入完成或聚合绿。
-- CI 绑定：T45 只接受 CI provider 的真实 run URL/id、该 run 的 head SHA = 最终提交、结论 success、所需显式组逐项 success；没有最终 commit 或 CI 不可用时 T45 保持 incomplete，不把 `ci_run_ref=` 非空字符串当通过。
+- T45 自动 CI 结论：`.github/workflows/ci.yml` 必须不存在；T45 只接受本地 targeted union、三守卫、账本和完成计数满足判据。`ci_run_ref`、`ci_head_sha`、`ci_conclusion`、`ci_groups_all_success` 统一记录 `not_applicable`，不产生或等待 provider 结果，也不把非空 marker 当通过。
 - 回填纪律：账本本体落任务 store；本节只持引用与计数，不复制账本行。

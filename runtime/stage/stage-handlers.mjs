@@ -1981,13 +1981,13 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt_ref identity mismatch");
   if (result.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("review attempt path identity mismatch");
   if (Object.hasOwn(result, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
-    const canonicalSimpleRef = `quality/reviews/results/${producerStage}-simple-${attempt.attempt_id}.json`;
-    const selectedSimpleRef = typeof resultRef === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(resultRef)
-      ? resultRef
-      : null;
-    if (result.result_ref !== attempt.result_ref
-        || (selectedSimpleRef !== null && (selectedSimpleRef !== canonicalSimpleRef || result.result_ref !== selectedSimpleRef))) {
-      throw new Error("ordinary review result/attempt path identity mismatch");
+    // Content binding, not path binding: the selected record and its producing
+    // attempt must interlink the same result_ref, but the path used to read the
+    // bytes is not part of the identity. A content-identical alias stays
+    // acceptable; a record whose own interlink disagrees with its attempt does
+    // not.
+    if (result.result_ref !== attempt.result_ref) {
+      throw new Error(`ordinary review result/attempt path identity mismatch: result_ref ${String(result.result_ref)} does not interlink attempt result_ref ${String(attempt.result_ref)} (selected ${String(resultRef)})`);
     }
   }
   if (!SHA256_HEX.test(attemptRecord.sha256 ?? "")) throw new Error("review attempt hash must be sha256");

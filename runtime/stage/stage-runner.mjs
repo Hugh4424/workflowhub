@@ -413,7 +413,7 @@ function materialBindingContent(file, content) {
     : content;
 }
 
-function analyzerQualityBinding(ctx, entry, label, snapshot) {
+function analyzerQualityBinding(ctx, entry, label, snapshot, { projection = false } = {}) {
   const value = outcomeObject(entry, label);
   const ref = outcomeText(value.ref, `${label}.ref`);
   const sha256 = outcomeHash(value.sha256, `${label}.sha256`);
@@ -425,16 +425,20 @@ function analyzerQualityBinding(ctx, entry, label, snapshot) {
   let evidence;
   try { evidence = JSON.parse(raw); }
   catch { throw outcomeError(`${label}.ref must contain structured evidence`); }
-  if (evidence?.snapshot_tree !== snapshot.tree) {
-    throw outcomeError(`${label}.ref is not bound to the current snapshot`);
+  // Projection mode authenticates the evidence against the outcome's own
+  // historical snapshot. It does not compare that snapshot with the current
+  // worktree, but it still rejects a binding whose referenced bytes claim a
+  // different provenance.
+  if (evidence?.snapshot_tree !== snapshot.tree || (value.snapshot_tree !== undefined && value.snapshot_tree !== evidence.snapshot_tree)) {
+    throw outcomeError(`${label}.ref is not bound to the authenticated snapshot`);
   }
-  return { ref, sha256, snapshot_tree: snapshot.tree };
+  return { ref, sha256, snapshot_tree: evidence.snapshot_tree };
 }
 
-function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, snapshot, stage) {
+function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, snapshot, stage, { projection = false } = {}) {
   const bindings = outcomeObject(analyzer.material_bindings, `${stage} spec_analyze.material_bindings`);
   const evidenceBindings = outcomeObject(analyzer.evidence_bindings, `${stage} spec_analyze.evidence_bindings`);
-  const actualMaterials = materialTextMap(materials);
+  const actualMaterials = projection ? {} : materialTextMap(materials);
   const sourceByMaterial = {
     original_requirement: "decision-log.md",
     decision_log: "decision-log.md",
@@ -448,8 +452,8 @@ function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, sna
       ? packet.evidence.find((entry) => entry?.ref === requiredRef)
       : null;
     const binding = outcomeObject(evidenceBindings[requiredRef], `${stage} spec_analyze.evidence_bindings.${requiredRef}`);
-    const verified = analyzerQualityBinding(ctx, binding, `${stage} spec_analyze.evidence_bindings.${requiredRef}`, snapshot);
-    if (!packetEvidence || packetEvidence.hash !== verified.sha256 || packetEvidence.snapshot_tree !== snapshot.tree) {
+    const verified = analyzerQualityBinding(ctx, binding, `${stage} spec_analyze.evidence_bindings.${requiredRef}`, snapshot, { projection });
+    if (!packetEvidence || packetEvidence.hash !== verified.sha256 || packetEvidence.snapshot_tree !== verified.snapshot_tree) {
       throw outcomeError(`${stage} spec_analyze evidence ${requiredRef} is not bound to the authenticated quality record`);
     }
     normalizedEvidence[requiredRef] = verified;
@@ -457,7 +461,7 @@ function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, sna
   for (const requiredMaterial of profile.required_materials) {
     const binding = outcomeObject(bindings[requiredMaterial], `${stage} spec_analyze.material_bindings.${requiredMaterial}`);
     if (requiredMaterial === "implementation") {
-      const verified = analyzerQualityBinding(ctx, binding, `${stage} spec_analyze.material_bindings.${requiredMaterial}`, snapshot);
+      const verified = analyzerQualityBinding(ctx, binding, `${stage} spec_analyze.material_bindings.${requiredMaterial}`, snapshot, { projection });
       if (binding.material_sha256 !== createHash("sha256").update(String(packet.materials?.[requiredMaterial] ?? "")).digest("hex")) {
         throw outcomeError(`${stage} spec_analyze implementation material binding does not match the packet`);
       }
@@ -468,13 +472,18 @@ function validateAnalyzerBindings(ctx, analyzer, packet, profile, materials, sna
       throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} must bind ${expectedSource}`);
     }
     const actual = actualMaterials[expectedSource];
-    if (typeof actual !== "string") throw outcomeError(`${stage} spec_analyze material ${expectedSource} is unavailable`);
-    const bindingContent = materialBindingContent(expectedSource, actual);
+    if (!projection && typeof actual !== "string") throw outcomeError(`${stage} spec_analyze material ${expectedSource} is unavailable`);
+    const bindingContent = projection
+      ? materialBindingContent(expectedSource, packet.materials?.[requiredMaterial])
+      : materialBindingContent(expectedSource, actual);
     const actualHash = createHash("sha256").update(bindingContent).digest("hex");
-    if (binding.sha256 !== actualHash || binding.snapshot_tree !== snapshot.tree) {
+    if (projection && (binding.sha256 !== actualHash || binding.snapshot_tree !== snapshot.tree)) {
+      throw outcomeError(`${stage} spec_analyze historical material ${requiredMaterial} binding is invalid`);
+    }
+    if (!projection && (binding.sha256 !== actualHash || binding.snapshot_tree !== snapshot.tree)) {
       throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} hash is not current`);
     }
-    if (materialBindingContent(expectedSource, packet.materials?.[requiredMaterial]) !== bindingContent) {
+    if (!projection && materialBindingContent(expectedSource, packet.materials?.[requiredMaterial]) !== bindingContent) {
       throw outcomeError(`${stage} spec_analyze material ${requiredMaterial} does not contain the current material bytes`);
     }
   }
@@ -516,7 +525,7 @@ function validateUnavailableAnalyzerShape(analyzer, profile, manifest, stage) {
   }
 }
 
-function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialRevision, materials, manifest, skillManifest) {
+function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialRevision, materials, manifest, skillManifest, { projection = false } = {}) {
   const analyzer = outcomeObject(record.spec_analyze, "stage outcome spec_analyze");
   if (analyzer.schema_version !== "workflowhub-spec-analyze-stage-outcome.v1") {
     throw outcomeError("stage outcome spec_analyze schema_version is invalid");
@@ -556,7 +565,7 @@ function validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, materialR
     throw outcomeError(`${stage} spec_analyze material/evidence bindings must be supplied together`);
   }
   if (hasMaterialBindings) {
-    validateAnalyzerBindings(ctx, analyzer, analyzer.packet, profileDefinition, materials, snapshot, stage);
+    validateAnalyzerBindings(ctx, analyzer, analyzer.packet, profileDefinition, materials, snapshot, stage, { projection });
   } else {
     if (record.status !== "unavailable" || analysis.status !== "material_incomplete") {
       throw outcomeError(`${stage} spec_analyze is missing authenticated material/evidence bindings`);
@@ -715,7 +724,7 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
   return Object.freeze({ review, resolution });
 }
 
-function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
+function authenticateStageOutcome(ctx, stage, input, expectedBinding = null, { projection = false } = {}) {
   const ref = input?.receipts?.stage_outcomes;
   if (typeof ref !== "string") throw outcomeError(`${stage} official run requires receipts.stage_outcomes from the current WorkflowHub session`);
   const match = STAGE_OUTCOME_REF.exec(ref);
@@ -743,7 +752,9 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   // authenticated the invocation that is being consumed.
   const snapshot = expectedBinding?.snapshot ?? { tree: record.snapshot_tree };
   if (record.snapshot_tree !== snapshot.tree) throw outcomeError("stage outcome snapshot binding mismatch");
-  const materials = currentMaterialBinding(ctx);
+  const materials = projection
+    ? { values: CURRENT_MATERIAL_FILES.map((file) => [file, null]) }
+    : currentMaterialBinding(ctx);
   const outcomeMaterialRevision = record.material_revision;
   const stepsRef = `workflows/${stage}/steps.json`;
   const skillsRef = `workflows/${stage}/skill-deps.yaml`;
@@ -768,7 +779,7 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
   const skillOutcomes = record.skill_outcomes.map((entry, index) => validateSkillOutcome(ctx, entry, skillManifest.skills[index], index, binding));
   const stageReview = stage === "verify-code"
     ? validateCodeReviewOutcome(ctx, record, stage, snapshot, outcomeMaterialRevision, manifest, skillManifest)
-    : validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, outcomeMaterialRevision, materials, manifest, skillManifest);
+    : validateStageSpecAnalyzeOutcome(ctx, record, stage, snapshot, outcomeMaterialRevision, materials, manifest, skillManifest, { projection });
   return Object.freeze({
     ref,
     sha256: actualHash,
@@ -820,16 +831,11 @@ export function authenticateStageOutcomeForProjection(context, stage, ref) {
       identity: context.identity ?? task.identity,
       stage,
       workflowRunId,
-    }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id });
+    }, stage, { receipts: { stage_outcomes: ref }, attempt_id: candidate.attempt_id }, null, { projection: true });
   } catch (error) {
-    // The material revision intentionally ignores the task execution-status
-    // block.  A prior outcome can therefore pass the current snapshot/revision
-    // projection while retaining the pre-writeback raw tasks.md hash.  It is
-    // historical for status/close/reflection consumers, not a current
-    // integrity failure; leave the canonical record untouched and let the
-    // read-only projector ignore it.
-    if (error?.code === "MATERIAL_INCOMPLETE"
-        && error?.message === "MATERIAL_INCOMPLETE: stage outcome material binding is stale") return null;
+    // A projection validates historical self-consistency but does not use current
+    // material bytes as a freshness gate. Any malformed or internally detached
+    // record still fails closed and remains unavailable to status/close.
     throw error;
   }
   if (authenticated.value.run_id !== workflowRunId) throw outcomeError(`${stage} stage outcome workflow run identity mismatch`);
@@ -1243,9 +1249,12 @@ export async function runStageEndReflection(context, {
         evidence: { value: evidence },
         layer_states: {
           // A stage end that did not complete must never be recorded as a
-          // completed implementation; the four handoff stages keep their own
-          // already-frozen layer facts.
-          implementation_completion: handoffFacts === null && stageStatus !== "completed" ? "incomplete" : "completed",
+          // completed implementation. A handoff stage is complete only when its
+          // canonical current handoff publication succeeded; an unavailable or
+          // stale handoff is an incomplete execution fact, not a delivered stage.
+          implementation_completion: handoffFacts === null
+            ? stageStatus !== "completed" ? "incomplete" : "completed"
+            : stageStatus === "completed" && handoff.status === "published" && handoff.current === true ? "completed" : "incomplete",
           stage_quality: "incomplete",
           delivery: "unavailable",
           task_closure: "unavailable",
@@ -1910,7 +1919,13 @@ function publishAcceptanceQualityFact(ctx, snapshot, {
 }
 
 function publishStageEndSpecAnalyzeFact(ctx, result, snapshot, recordedAt = null) {
-  if (!Object.prototype.hasOwnProperty.call(STAGE_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze")) return null;
+  // Published for gating and advisory membership alike: the subject is advisory
+  // everywhere because its only producer is the optional host Stage Agent
+  // outcome (see STAGE_ADVISORY_PREDICATES). Publishing it keeps a real host run
+  // disclosed instead of silently dropping the fact.
+  const gating = Object.prototype.hasOwnProperty.call(STAGE_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze");
+  const advisory = Object.prototype.hasOwnProperty.call(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}, "stage_end_spec_analyze");
+  if (!gating && !advisory) return null;
   const analyzerResult = result.spec_analyze?.result;
   const consistent = analyzerResult?.status === "consistent";
   const stageOutcomeEvidence = typeof result.stage_outcome_ref === "string"
@@ -2510,11 +2525,10 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   // the current WorkflowHub session repairs it in place instead of silently handing it down.
   const stageAnalyzeFact = publishStageEndSpecAnalyzeFact(ctx, result, snapshot, publicationTimestamp);
   if (stageAnalyzeFact) {
-    qualityFactRefs.push(stageAnalyzeFact.fact.ref);
+    qualityAdvisoryFactRefs.push(stageAnalyzeFact.fact.ref);
   }
   if (stageAnalyzeFact && analyzerResult?.status !== "consistent") {
-    allPassed = false;
-    qualityWarnings.push(`stage-end-spec-analyze:${analyzerResult?.status ?? "unavailable"}`);
+    qualityAdvisories.push(`stage-end-spec-analyze:${analyzerResult?.status ?? "unavailable"}`);
   }
   const predicateEntries = [
     ...Object.entries(STAGE_PREDICATES[ctx.stage])
@@ -2535,7 +2549,9 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     ...(ctx.stage === "verify-code" && result.facts?.completion_subjects?.e2e_acceptance
       ? [{ subject: "e2e_acceptance", kind: "acceptance_criterion", gating: true }]
       : []),
-    ...Object.entries(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {}).map(([subject, kind]) => ({ subject, kind, gating: false })),
+    ...Object.entries(STAGE_ADVISORY_PREDICATES[ctx.stage] ?? {})
+      .filter(([subject]) => subject !== "stage_end_spec_analyze")
+      .map(([subject, kind]) => ({ subject, kind, gating: false })),
   ];
   for (const { subject, kind, gating } of predicateEntries) {
       const candidate = evidenceCandidate(result, kind, subject, ctx.stage)
@@ -3448,12 +3464,17 @@ export function runOfficialStage(stage, context, invocation, publication, { requ
         const boundReviewRef = stageReview?.quality_review_ref;
         const boundReviewHash = stageReview?.quality_review_hash;
         const suppliedReviewRef = receipts.quality_review;
-        if (!stageOutcome.value && suppliedReviewRef !== undefined) {
-          throw new Error("verify-code quality_review requires a bound dsh-code-review stage outcome");
-        }
-        if (stageOutcome.value && !stageReview) {
-          throw new Error("verify-code quality_review is not bound to a dsh-code-review stage outcome");
-        }
+        // An absent or non-binding dsh-code-review outcome is an optional-host
+        // disclosure, not a run failure: skills/workflowhub-host-protocol/SKILL.md
+        // fixes that boundary ("没有外部 Stage Agent 时，标准 WorkflowHub 流程继续执行，并把
+        // outcome 记为 unavailable 诊断，不把它变成阶段门禁"; "没有外部宿主 outcome 时，正式 run
+        // 不因缺少宿主而拒绝当前工作"). The supplied review is still authenticated and
+        // evaluated against the current snapshot by reviewEvidenceStatus, so a
+        // fabricated or stale result cannot satisfy code_review. The absence stays
+        // visible through the stage_outcome diagnostic on the run result. A host
+        // outcome that claims completion without a bound ref/hash pair, or that
+        // binds a different review than the caller supplied, still fails loud
+        // because that is a real inconsistency rather than a missing host.
         if (stageOutcome.value?.value?.status === "completed"
             && (typeof boundReviewRef !== "string" || !boundReviewRef.trim()
             || typeof boundReviewHash !== "string" || !boundReviewHash.trim())) {

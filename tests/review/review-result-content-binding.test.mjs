@@ -6,12 +6,15 @@ import { officialStageHandler } from "../../runtime/stage/stage-handlers.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 
-function historicalSimpleResultFixture() {
+function historicalSimpleResultFixture({ resultResultRef = null, attemptResultRef = null, selectedResultRef = null } = {}) {
   const taskId = "review-content-binding-task";
   const tree = "a".repeat(40);
   const materialId = "b".repeat(64);
   const attemptId = "historical-review-attempt";
   const resultRef = `quality/reviews/results/historical-simple-${attemptId}.json`;
+  const boundResultRef = resultResultRef ?? resultRef;
+  const boundAttemptResultRef = attemptResultRef ?? resultRef;
+  const selectedRef = selectedResultRef ?? resultRef;
   const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
   const outputRef = `quality/reviews/attempts/${attemptId}/providers/fixture.output.json`;
   const provider = "fixture-provider";
@@ -41,6 +44,7 @@ function historicalSimpleResultFixture() {
     candidate_tree: tree,
     material_id: materialId,
     attempt_ref: attemptRef,
+    result_ref: boundResultRef,
     provider_results: [{ provider, output: providerReview }],
     findings: aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding })),
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },
@@ -54,6 +58,7 @@ function historicalSimpleResultFixture() {
     source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree },
     snapshot_tree: tree,
     material_id: materialId,
+    result_ref: boundAttemptResultRef,
     subject_kind: "worktree",
     phase_id: null,
     review_scope: null,
@@ -83,7 +88,7 @@ function historicalSimpleResultFixture() {
     evidence_anchor_valid: [true],
   };
   const records = new Map([
-    [resultRef, { value: result, sha256: hash(JSON.stringify(result)) }],
+    [selectedRef, { value: result, sha256: hash(JSON.stringify(result)) }],
     [attemptRef, { value: attempt, sha256: hash(JSON.stringify(attempt)) }],
     [outputRef, { value: output, sha256: hash(JSON.stringify(output)) }],
   ]);
@@ -101,7 +106,7 @@ function historicalSimpleResultFixture() {
   return {
     worker,
     input: {
-      receipts: { review: resultRef },
+      receipts: { review: selectedRef },
       finding_dispositions: [{
         finding_id: findingId,
         original_fact: "fixture finding",
@@ -128,5 +133,15 @@ describe("review result content binding", () => {
     const result = await officialStageHandler("build-spec")(fixture.worker, fixture.input);
     expect(result.facts.review.status).toBe("recorded");
     expect(result.facts.review.result_ref).toBe(fixture.input.receipts.review);
+  });
+
+  it("rejects when result, attempt, and selected review refs disagree", async () => {
+    const fixture = historicalSimpleResultFixture({
+      resultResultRef: "quality/reviews/results/result-ref.json",
+      attemptResultRef: "quality/reviews/results/attempt-ref.json",
+      selectedResultRef: "quality/reviews/results/selected-ref.json",
+    });
+    await expect(officialStageHandler("build-spec")(fixture.worker, fixture.input))
+      .rejects.toThrow(/ordinary review result\/attempt path identity mismatch/);
   });
 });

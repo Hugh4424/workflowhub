@@ -68,13 +68,13 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   validateSchema("attempt", attempt);
   if (review.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("ordinary execution review canonical ref does not match its producing attempt");
   if (Object.hasOwn(review, "result_ref") || Object.hasOwn(attempt, "result_ref")) {
-    const canonicalSimpleRef = `quality/reviews/results/verify-code-simple-${attempt.attempt_id}.json`;
-    const selectedSimpleRef = typeof reviewReference?.ref === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(reviewReference.ref)
-      ? reviewReference.ref
-      : null;
-    if (review.result_ref !== attempt.result_ref
-        || (selectedSimpleRef !== null && (selectedSimpleRef !== canonicalSimpleRef || review.result_ref !== selectedSimpleRef))) {
-      throw new Error("ordinary review result/attempt path identity mismatch");
+    // Content binding, not path binding: the result record and its producing
+    // attempt must interlink the same result_ref, but the path a caller used to
+    // read those bytes is not part of the identity. A content-identical alias
+    // (for example a verification-shaped copy) stays acceptable; a record whose
+    // own interlink disagrees with its attempt does not.
+    if (review.result_ref !== attempt.result_ref) {
+      throw new Error(`ordinary review result/attempt path identity mismatch: result_ref ${String(review.result_ref)} does not interlink attempt result_ref ${String(attempt.result_ref)} (selected ${String(reviewReference?.ref)})`);
     }
   }
   if (JSON.stringify(attempt.e2e_binding) !== JSON.stringify(binding) || attempt.terminal_status !== "semantic"

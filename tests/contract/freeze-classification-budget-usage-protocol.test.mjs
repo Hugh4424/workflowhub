@@ -536,24 +536,20 @@ describe("Phase 3 review round policy contracts", () => {
     expect(second.review_budget.counts).toMatchObject({ initial: 1 });
     expect(dispatches, "an identical public request reuses the recorded round instead of dispatching again").toBe(1);
 
-    // Material bytes are provenance, not a five-dimensional dedup dimension:
-    // the same authenticated material revision reuses the immutable result.
-    const reusedChangedMaterial = await recordSimpleReviewRequest({
+    // The reviewed input is a reuse precondition, not a five-dimensional dedup
+    // dimension: the same task-material revision is not sufficient once the bytes the
+    // reviewer actually saw have changed, so the request falls through to the round
+    // budget instead of being answered with the immutable old result.
+    const refusedChangedMaterial = await recordSimpleReviewRequest({
       task,
       kernel,
       request: { ...request, materials: { implementation: "different bytes at the same revision" } },
       runRound,
       resolveRouteIdentity,
     });
-    expect(reusedChangedMaterial).toMatchObject({
-      status: "recorded",
-      reused: true,
-      dispatch_state: "reused",
-      attempt_ref: first.attempt_ref,
-      result_ref: first.result_ref,
-    });
-    expect(reusedChangedMaterial.review_budget).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
-    expect(dispatches, "a changed-material reuse must not reach a second provider round").toBe(1);
+    expect(refusedChangedMaterial).not.toMatchObject({ reused: true, attempt_ref: first.attempt_ref });
+    expect(refusedChangedMaterial.review_budget).toMatchObject({ ok: false, reason: "budget_exceeded", route: "ask_user" });
+    expect(dispatches, "a changed-material request must not reach a second provider round").toBe(1);
   });
 });
 

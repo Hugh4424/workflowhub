@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-import { STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
+import { STAGE_ADVISORY_PREDICATES, STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
 import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
 
 const MATERIALS = {
@@ -41,11 +41,25 @@ function packet(overrides = {}) {
 }
 
 describe("authoring-stage spec-analyze profiles", () => {
-  it("makes the current stage-end analyzer an explicit quality subject for every authoring stage", () => {
+  // Anti-recurrence guard for a whole blocker class. `stage_end_spec_analyze` is
+  // derived only from the optional host Stage Agent outcome, and
+  // skills/workflowhub-host-protocol/SKILL.md fixes the boundary: without an
+  // external Stage Agent the standard flow continues, the outcome is recorded as
+  // an `unavailable` diagnostic, and it must not become a stage gate or change a
+  // quality predicate. Promoting this subject back into STAGE_PREDICATES made four
+  // of the five stages structurally impossible to finish in any session that is not
+  // the external host. It stays advisory: published and visible, never gating.
+  it("keeps every host-outcome-only subject advisory so a missing host can never gate a stage", () => {
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code"]) {
-      expect(STAGE_PREDICATES[stage].stage_end_spec_analyze, stage).toBe("acceptance_criterion");
+      expect(STAGE_PREDICATES[stage], stage).not.toHaveProperty("stage_end_spec_analyze");
+      expect(STAGE_ADVISORY_PREDICATES[stage].stage_end_spec_analyze, stage).toBe("acceptance_criterion");
     }
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("stage_end_spec_analyze");
+    // The advisory subject must still be published, otherwise a real host run would be
+    // silently dropped instead of disclosed.
+    const runner = readFileSync(new URL("../../runtime/stage/stage-runner.mjs", import.meta.url), "utf8");
+    const publisher = runner.slice(runner.indexOf("function publishStageEndSpecAnalyzeFact"));
+    expect(publisher.slice(0, 900)).toMatch(/STAGE_ADVISORY_PREDICATES/);
   });
 
   it("routes make-decision interaction receipts through the per-round lifecycle validator", async () => {

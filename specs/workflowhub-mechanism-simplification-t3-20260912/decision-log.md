@@ -1507,3 +1507,33 @@ grill_summary:
 **对 22 条 OI 的覆盖判断（审查者原话要点，已全部转为处置）**：① 过程性诉求（上下文纪律）无 OI 承载 → 新增 OI-23（B12）；② 无「约束筛查」维度 → 补 §4.5（B10）；③ 无「范围穷尽性」证明 → 转 Round 3（R5/B6）；④ OI-15 框定错误 → 已改类别（R3/R4/B4）；⑤ source 锚点不可解析 → 已改（B11）。
 
 **未决项（如实登记，不掩盖）**：四条阻塞是否穷尽（`unknown`，待 R3-Q3）；verify-structure 的处置路线（待 R3-Q1）；坏行恢复机制的用户确认（待 R3-Q2）；OI-23 的终态（待 R3-Q4）；`kimi/coding` 的 `RATE_LIMITED` 属 provider 侧限流（如实登记，不重派、不判通过）。
+
+### 7.4 当前 verify-code 复核与 C5 语义对账（2026-09-15）
+
+当前 verify-code 审查结果 `quality/reviews/results/verify-code-simple-918dfb33-1d3a-53b1-a90f-33fadfcb2d0b.json` 的两条「major」主张已由独立只读核查分别对账到任务Ⅱ 的已批准设计：
+
+| finding | 当前处置 | 对账依据与动作 |
+| --- | --- | --- |
+| `F-77edd4852429`：stage row 写入 material/snapshot 指纹但读侧不强制，建议恢复 stale 拒绝 | `rejected_invalid`（by design） | t2 `spec.md:175,601,636-641` 与父 PRD `:1996,2012` 明确删除 B 类 freshness/currentness 的比较、拒绝和自动重跑；D-009①（父 decision-log:1172-1179）批准「改材料后旧事实仍可读」。当前 `selectCurrentStageRow` 只按 `record_kind/stage/task_id` 选行；写口和认证口仍保留必要绑定。恢复 read-side stale gate 会直接使 C5 具名测试失败。 |
+| `F-5e7ddc68487a`：读侧 stage row 没有 material/snapshot freshness 守卫 | `rejected_invalid`（by design） | 同上；当前 `deriveExecutionOutcomes` 只作 `provenance.status=stale` 披露，状态不变。`tests/contract/freshness-removal-preservation.test.mjs` 4 tests 通过，`tests/integration/stage-outcome-record-row-redirect.test.mjs` 12 tests 通过；不恢复已删除的 `execution_record_row_snapshot_stale` / `execution_record_row_material_stale` 拒绝路径。 |
+
+本次对账同时修正当前 t3 材料中沿用 C5 之前语义的三处表述：
+
+1. `plan.md` Code Anchors 不再称读侧存在「行 digest 比较逻辑」；明确写成「C5 已删除读侧 freshness/currentness 比较和拒绝，保留字段只作历史 provenance，`deriveExecutionOutcomes` 可做非门禁披露」。
+2. `spec.md` SCN-003、错误态清单和 `AC-FIX-001` 改为区分「写侧 scope 指纹正确性」与「读侧 stale 不得拒绝既有行」；历史坏行的不可恢复是登记事实，不是 status 取值。
+3. 这两条 finding 的原始 provider 结果不删除、不覆盖；当前材料以 `rejected_invalid` 记录设计对账，避免下一次独立审查把已批准的 C5 删除面误报为 t3 defect。
+
+这次材料修正不是为了规避 review budget，也没有修改四份材料以外的代码语义；它使当前任务材料与已合入 t2 的 C5 行为一致。
+
+### 7.5 verify-code 复核 F-c57aff1d9c2c：handoff 失败执行事实修复（2026-09-15）
+
+新一轮 verify-code 复核（result `quality/reviews/results/verify-code-simple-428c2a89-9466-5b5e-a33f-8e0a303891cf.json`，当前材料修正后的快照）发现一条真实 major：`stage-handoff` 发布失败时，执行行的 `implementation_completion` 仍可能被写成 `completed`。这会造成执行域事实不一致：`evidence.value[].exit_code=1`、`execution_outcome.status=incomplete`，但 K2 行的实现完成层仍为 completed。
+
+处置与边界：
+
+- **已修复**：`runtime/stage/stage-runner.mjs` 的 `runStageEndReflection` 现在只有在 handoff `status=published` 且 `current=true` 时才写 `implementation_completion=completed`；handoff unavailable/stale/error 写 `incomplete`。
+- **未改变质量语义**：`completion.status`/`quality_status` 仍只由质量谓词计算；执行失败通过 `execution_outcome=incomplete` 和 `execution_record_row_records_failed_command` 诊断披露，不重新成为质量 gate。这遵守 `docs/standard-workflow.md` 四层独立和 `skills/workflowhub-host-protocol/SKILL.md:68-70`。
+- **回归测试**：`tests/integration/stage-row-publication.test.mjs` 新增「records a failed handoff as incomplete execution without changing the independent quality layer」；先在旧代码上 RED（执行投影缺少 `execution_record_row_records_failed_command`），修复后 GREEN（该用例通过）。已有 `tests/integration/stage-outcome-record-row-redirect.test.mjs` 的非零 handoff 命令投影用例继续通过。
+- **独立复核结果**：该 finding 已实际修复；下一次 verify-code 复核需在当前快照上重新验证，预算耗尽时保持 `ask_user`，不伪造 clean。
+
+本条不把失败交接改成正常跳过，也不把执行事实改写为质量通过；它修的是「写入层错误地标绿」这一真实 bug。

@@ -4161,8 +4161,17 @@ function identifiers(text, pattern) {
   return [...new Set(text.match(pattern) ?? [])];
 }
 
+function commandFieldValue(value) {
+  const text = String(value ?? "").trim();
+  // A task field may carry a code span followed by an explanatory sentence.
+  // Validate the executable command itself rather than requiring the entire
+  // prose field to be wrapped in one pair of backticks.
+  const codeSpan = text.match(/^`([^`\n]+)`/)?.[1];
+  return (codeSpan ?? text).trim();
+}
+
 function hasExecutableCommand(value) {
-  const command = value.trim().replace(/^`([\s\S]*)`$/, "$1");
+  const command = commandFieldValue(value);
   return /^(?:mkdir\b|npx\b|npm\b|pnpm\b|yarn\b|bun\b|node\b|python\b|pytest\b|go\b|cargo\b|make\b|bash\b|sh\b|git\b|\.\/)/.test(command);
 }
 

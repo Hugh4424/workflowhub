@@ -33,6 +33,40 @@ function completeBuildPrdMaterials() {
   };
 }
 
+// Shared by the static-preflight and neutral-identity suites. It simulates only
+// the host dependencies; production defaults still resolve the trusted route.
+function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"], mode: "single_round" }, selection = { providers: ["other/model"] }, broker = null, callLog = null } = {}) {
+  let brokerCalls = 0;
+  const dependencies = {
+    loadConfig: () => {
+      callLog?.push("loadConfig");
+      return {
+        whReview: {},
+        config: "/unused/config.json",
+        attachmentRoot,
+        command: ["unused"],
+        brokerProbe: { status: "unknown", reason: "probe intentionally unavailable" },
+      };
+    },
+    resolveRoute: () => {
+      callLog?.push("resolveRoute");
+      return route;
+    },
+    selectProviders: () => {
+      callLog?.push("selectProviders");
+      return selection;
+    },
+    client: {
+      async runGroup(request) {
+        callLog?.push("runGroup");
+        brokerCalls += 1;
+        return broker?.(request) ?? { runtimeId: "runtime-preflight", outcome: "unavailable", providers: [] };
+      },
+    },
+  };
+  return { dependencies, calls: () => brokerCalls };
+}
+
 describe("simple material-only review", () => {
   it("rehydrates and dispatches only the exact serialized provider input", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "frozen-wh-review-")));
@@ -942,38 +976,6 @@ describe("simple material-only review", () => {
 });
 
 describe("review flow static preflight", () => {
-  function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"], mode: "single_round" }, selection = { providers: ["other/model"] }, broker = null, callLog = null } = {}) {
-    let brokerCalls = 0;
-    const dependencies = {
-      loadConfig: () => {
-        callLog?.push("loadConfig");
-        return {
-          whReview: {},
-          config: "/unused/config.json",
-          attachmentRoot,
-          command: ["unused"],
-          brokerProbe: { status: "unknown", reason: "probe intentionally unavailable" },
-        };
-      },
-      resolveRoute: () => {
-        callLog?.push("resolveRoute");
-        return route;
-      },
-      selectProviders: () => {
-        callLog?.push("selectProviders");
-        return selection;
-      },
-      client: {
-        async runGroup(request) {
-          callLog?.push("runGroup");
-          brokerCalls += 1;
-          return broker?.(request) ?? { runtimeId: "runtime-preflight", outcome: "unavailable", providers: [] };
-        },
-      },
-    };
-    return { dependencies, calls: () => brokerCalls };
-  }
-
   it("blocks missing required caller material before bundle, lock, or broker and exposes only the diagnostic fields", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-missing-")));
     roots.push(attachmentRoot);
@@ -1160,5 +1162,263 @@ describe("review flow static preflight", () => {
     });
     expect(calls).toEqual([]);
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+});
+
+describe("neutral review instruction identity and trusted selection", () => {
+  it("keeps the runtime packet identity equal to the skill packet identity for every formal surface", async () => {
+    const { reviewPacketMaterialId } = await import("../../../../runtime/review/review-packet-identity.mjs");
+    const surfaces = [
+      { stage: "make-decision", review_track: "direction", materials: { decision: "direction bytes" } },
+      { stage: "make-decision", review_track: "detail", materials: { decision: "detail bytes" } },
+      { stage: "build-spec", materials: { spec: "build-spec bytes" } },
+      { stage: "build-plan", materials: { plan: "build-plan bytes" } },
+      { stage: "build-code", review_scope: "phase", materials: { implementation: "phase bytes" } },
+      { stage: "build-code", review_scope: "integration", materials: { implementation: "integration bytes" } },
+      { stage: "verify-code", materials: { implementation: "verify bytes" } },
+    ];
+    for (const input of surfaces) {
+      const label = `${input.stage}/${input.review_track ?? input.review_scope ?? ""}`;
+      expect(reviewPacketMaterialId(input), label).toBe(createSimpleReviewPacket(input).material_id);
+    }
+  });
+
+  it("distinguishes the two make-decision tracks and the two build-code scopes", async () => {
+    const { reviewPacketMaterialId } = await import("../../../../runtime/review/review-packet-identity.mjs");
+    const direction = reviewPacketMaterialId({ stage: "make-decision", review_track: "direction", materials: { decision: "same bytes" } });
+    const detail = reviewPacketMaterialId({ stage: "make-decision", review_track: "detail", materials: { decision: "same bytes" } });
+    const phase = reviewPacketMaterialId({ stage: "build-code", review_scope: "phase", materials: { implementation: "same bytes" } });
+    const integration = reviewPacketMaterialId({ stage: "build-code", review_scope: "integration", materials: { implementation: "same bytes" } });
+    expect(new Set([direction, detail, phase, integration]).size).toBe(4);
+  });
+
+  it("fails closed instead of inventing an instruction source for build_prd", async () => {
+    const { reviewPacketMaterialId } = await import("../../../../runtime/review/review-packet-identity.mjs");
+    expect(() => reviewPacketMaterialId({
+      stage: "build-prd", review_kind: "build_prd", materials: completeBuildPrdMaterials(),
+    })).toThrow(/instruction source is required for build_prd/);
+  });
+
+  it("rejects caller-supplied review_instructions before the broker and never writes a packet", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-caller-instructions-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot);
+    const materials = {
+      raw_requirement: "requirement",
+      approved_decision: "decision",
+      draft_spec: "spec",
+      review_instructions: "caller spoof",
+    };
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials,
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_results: [],
+      findings: [],
+      error: { code: "MATERIAL_FORBIDDEN", diagnostic: { field: "review_instructions", actual: "caller-supplied" } },
+    });
+    expect(calls()).toBe(0);
+    expect(() => createSimpleReviewPacket({ stage: "build-spec", materials })).toThrow(/MATERIAL_FORBIDDEN/);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("generates the instruction source itself and never exposes it as a packet material", () => {
+    const packet = createSimpleReviewPacket({
+      stage: "build-code",
+      materials: { implementation: "current implementation" },
+    });
+    expect(packet.materials.map(({ key }) => key)).not.toContain("review_instructions");
+    expect(packet.materials.map(({ key }) => key)).toEqual(["implementation"]);
+  });
+
+  it("rejects a binary material the host-path redaction boundary cannot inspect", () => {
+    expect(() => createSimpleReviewPacket({
+      stage: "build-code",
+      materials: { implementation: Buffer.from("/Users/Hugh/private/secret.md") },
+    })).toThrow(/MATERIAL_FORBIDDEN.*binary material/);
+  });
+
+  it("blocks a binary material before the provider and writes no packet", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-binary-material-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { implementation: Buffer.from("/Users/Hugh/private/secret.md") },
+    }, dependencies);
+
+    expect(result).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch" });
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("binds authenticated evidence with the same canonical bytes as the runtime recorder", async () => {
+    const { authenticatedEvidenceDigest } = await import("../../../../runtime/review/review-packet-identity.mjs");
+    const evidence = { ref: "quality/x.json", note: "see /Users/Hugh/private/secret.md" };
+    const packet = createSimpleReviewPacket({
+      stage: "build-code",
+      materials: { implementation: "current implementation" },
+      authenticated_evidence: evidence,
+    });
+
+    expect(packet.authenticated_evidence_sha256).toBe(authenticatedEvidenceDigest(evidence));
+    // The recorded projection is the redacted one; the digest must not be the
+    // raw-value hash, which is what made a path-bearing value unrecordable.
+    expect(JSON.stringify(packet.authenticated_evidence)).not.toContain("/Users/Hugh/private/secret.md");
+    expect(packet.authenticated_evidence_sha256).not.toBe(
+      createHash("sha256").update(`${JSON.stringify(evidence)}\n`).digest("hex"),
+    );
+  });
+
+  it("lets a host-supplied bundle keep its own validated review_instructions template", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-host-bundle-")));
+    roots.push(attachmentRoot);
+    let dispatches = 0;
+    const hostBundle = {
+      materialId: "d".repeat(64),
+      bundleRoot: join(attachmentRoot, "host-bundle"),
+      dispose() {},
+    };
+    const result = await runSimpleReview({
+      stage: "build-code",
+      review_scope: "phase",
+      host_provider: "codex",
+      materials: {
+        approved_spec: "spec",
+        acceptance_criteria: "AC",
+        test_evidence: "evidence",
+        review_instructions: "host validated fixed stage template",
+      },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      buildBundle: () => hostBundle,
+      client: { async runGroup() {
+        dispatches += 1;
+        return { runtimeId: "runtime-host-bundle", outcome: "completed", material_id: hostBundle.materialId, providers: [] };
+      } },
+    });
+
+    expect(dispatches).toBe(1);
+    expect(result.error?.code).not.toBe("MATERIAL_FORBIDDEN");
+  });
+
+  it.each([
+    ["null identity", { providers: ["other/model"], provider_identities: { "other/model": null } }],
+    ["scalar identity", { providers: ["other/model"], provider_identities: { "other/model": "trusted-source" } }],
+    ["extra identity key", { providers: ["other/model"], provider_identities: {
+      "other/model": { source_id: "trusted-source", config_id: "trusted-config" },
+      "extra/model": { source_id: "trusted-source", config_id: "trusted-config" },
+    } }],
+    ["missing identity key", { providers: ["other/model", "third/model"], provider_identities: {
+      "other/model": { source_id: "trusted-source", config_id: "trusted-config" },
+    } }],
+    ["empty source id", { providers: ["other/model"], provider_identities: { "other/model": { source_id: "   ", config_id: "trusted-config" } } }],
+    ["unknown identity field", { providers: ["other/model"], provider_identities: { "other/model": {
+      source_id: "trusted-source", config_id: "trusted-config", model: "smuggled",
+    } } }],
+  ])("rejects a %s trusted provider selection before dispatch", async (_label, selection) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-selection-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot, { selection });
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: { raw_requirement: "requirement", approved_decision: "decision", draft_spec: "spec" },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "ROUTE_UNAVAILABLE", diagnostic: { field: "provider_selection" } },
+    });
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("still accepts a provider selection without an identity map", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-selection-omitted-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot, {
+      broker: async () => ({ runtimeId: "runtime-omitted-identity", outcome: "unavailable", providers: [] }),
+    });
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: { raw_requirement: "requirement", approved_decision: "decision", draft_spec: "spec" },
+    }, dependencies);
+
+    expect(calls()).toBe(1);
+    expect(result.error?.code).not.toBe("ROUTE_UNAVAILABLE");
+  });
+});
+
+describe("direction review flow transport parity", () => {
+  const DIRECTION_FLOW = Object.freeze({
+    version: "direction-review.v1",
+    public_request_count: 1,
+    steps: [
+      { id: "reconstruct", visible: ["raw_requirement", "objective_facts"], hidden_until: "reveal" },
+      { id: "reveal", after: ["reconstruct"], visible: ["current_selection", "alternatives", "selection_rationale", "key_assumptions", "independent_reconstruction"] },
+      { id: "challenge", after: ["reveal"], visible: ["revealed_choice", "independent_reconstruction"], output: "findings" },
+    ],
+    output: { one_provider_result: true, one_logical_fact: true },
+  });
+
+  it("forwards the governed direction flow to the unmanaged provider transport", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-direction-flow-")));
+    roots.push(attachmentRoot);
+    const seen = [];
+    const result = await runSimpleReview({
+      stage: "make-decision",
+      review_track: "direction",
+      host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+      review_flow: DIRECTION_FLOW,
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: { async runGroup(request) {
+        seen.push(request.reviewFlow ?? null);
+        return { runtimeId: "runtime-direction-flow", outcome: "unavailable", providers: [] };
+      } },
+    });
+
+    expect(seen).toHaveLength(2);
+    expect(seen.every((flow) => flow?.version === "direction-review.v1")).toBe(true);
+    expect(seen.every((flow) => flow.steps.map((step) => step.id).join(">") === "reconstruct>reveal>challenge")).toBe(true);
+    expect(result.stage).toBe("make-decision");
+  });
+
+  it("uses one provider input envelope per role and never opens a second round", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-direction-single-round-")));
+    roots.push(attachmentRoot);
+    const materialIds = [];
+    await runSimpleReview({
+      stage: "make-decision",
+      review_track: "direction",
+      host_provider: "codex",
+      materials: { decision: "current decision bytes" },
+      review_flow: DIRECTION_FLOW,
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
+      selectProviders: () => ({ providers: ["other/model"] }),
+      client: { async runGroup(request) {
+        materialIds.push(request.materials.materialId);
+        return { runtimeId: "runtime-single-round", outcome: "unavailable", providers: [] };
+      } },
+    });
+
+    expect(materialIds).toHaveLength(2);
+    expect(new Set(materialIds).size).toBe(1);
   });
 });

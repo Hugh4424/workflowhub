@@ -161,16 +161,27 @@ describe("C6 status root causes and named references", () => {
     expect(deriveStatusRootCauses({ quality: completion })[0]).toMatchObject({ root_cause_id: "risk_tests_fresh" });
   });
 
-  it("requires the current stage outcome in addition to its quality facts", () => {
+  it("discloses an absent current stage outcome without turning it into a quality predicate", () => {
     const completedFacts = stageFacts("verify-code");
+    // ADR-0026: the outcome projection must not write into the quality predicates,
+    // must not generate `missing`, and must not gate stage quality completion. The
+    // absence stays visible through the explicit outcome disclosure instead.
     expect(deriveStageCompletion("verify-code", completedFacts, {
       requireStageOutcome: true,
       stageOutcomeStatus: "unavailable",
-    })).toMatchObject({ status: "in_progress", missing: ["stage_outcome"] });
+    })).toMatchObject({
+      status: "completed",
+      missing: [],
+      outcome_disclosure: { status: "unavailable" },
+    });
     expect(deriveStageCompletion("verify-code", completedFacts, {
       requireStageOutcome: true,
       stageOutcomeStatus: "completed",
-    })).toMatchObject({ status: "completed", missing: [] });
+    })).toMatchObject({
+      status: "completed",
+      missing: [],
+      outcome_disclosure: { status: "completed" },
+    });
   });
 
   it("reads a valid legacy stage-outcome envelope only when no frozen row is supplied", () => {
@@ -194,5 +205,38 @@ describe("C6 status root causes and named references", () => {
       authenticate: ({ value: candidate }) => candidate,
     });
     expect(statuses["make-decision"]).toBe("completed");
+  });
+
+  it("projects the frozen K2 review facts without adding a new row key", () => {
+    const review = "quality/reviews/results/" + "c".repeat(64) + ".json";
+    const statuses = deriveStageOutcomeStatuses({
+      task_id: "task",
+      read: () => { throw new Error("stage outcome bytes must not be read"); },
+      stage_outcome_refs: {},
+      snapshot_tree: "a".repeat(40),
+      material_revision: "revision-" + "b".repeat(64),
+      material_scope_revisions: {},
+      authenticate: () => null,
+      read_task_facts: () => [{
+        record_kind: "stage",
+        task_id: "task",
+        stage: "build-code",
+        source: "stage-end:build-code",
+        created_at: "2026-09-15T00:00:00.000Z",
+        material_digest: { value: "b".repeat(64) },
+        snapshot_tree: { value: "a".repeat(40) },
+        review_origin: "conducted",
+        review_result_ref: { value: review },
+        finding_dispositions: [{ finding_id: "F-1", status: "fixed" }],
+        layer_states: { implementation_completion: "completed" },
+      }],
+    });
+    expect(statuses["build-code"]).toBe("completed");
+    expect(statuses.record_reasons).toMatchObject({
+      "build-plan": expect.stringContaining("no build-plan stage row"),
+      "build-spec": expect.stringContaining("no build-spec stage row"),
+      "make-decision": expect.stringContaining("no make-decision stage row"),
+      "verify-code": expect.stringContaining("no verify-code stage row"),
+    });
   });
 });

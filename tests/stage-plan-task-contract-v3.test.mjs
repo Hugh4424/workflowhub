@@ -727,6 +727,14 @@ Target=three
     expect(missing.errors.join("\n")).toMatch(/Global Constraints/);
   });
 
+  it("accepts a backtick-wrapped executable gate with trailing explanation", () => {
+    const wrapped = tasks.replaceAll(
+      "- **gate_cmd**：`npx vitest run tests/demo.test.mjs`",
+      "- **gate_cmd**：`npx vitest run tests/demo.test.mjs` trailing explanation",
+    );
+    expect(validate({ tasks: wrapped })).toMatchObject({ ok: true, errors: [] });
+  });
+
   it("rejects plan/tasks Phase.Files drift and task boundary widening", () => {
     const drift = validate({ tasks: tasks.replace("core/authority.mjs", "core/other-protected.mjs") });
     expect(drift.errors.join("\n")).toMatch(/byte-for-byte/);

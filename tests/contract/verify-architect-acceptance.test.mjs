@@ -63,7 +63,11 @@ describe("verify-code bounded code review", () => {
     expect(skill).toMatch(/代码审查|code review/i);
     expect(skill).toMatch(/真实入口|real entry/i);
     expect(skill).toMatch(/不再开启(?:新的|第三轮)?\s*review|do not.*repeat.*review/i);
-    expect(skill).toMatch(/不要求.*证据|not.*evidence/i);
+    // The governed wording moved from "不要求…证据" to "不再要求用户重复…" plus
+    // "不要要求用户补交 verify-code 证据". Keep the frozen expectation in sync with the
+    // real requirement instead of loosening it: the stage must not demand evidence
+    // from the user, and the assertion stays bounded to one sentence.
+    expect(skill).toMatch(/不要?要求用户补交[^。]{0,20}证据/);
   });
 
   it("keeps DeepSeek quality lenses inside one code-review invocation", () => {

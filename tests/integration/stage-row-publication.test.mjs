@@ -10,7 +10,7 @@ import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { runStage, runStageEndReflection, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
 import { STAGE_HANDOFF_STAGES } from "../../runtime/stage/stage-handoff.mjs";
-import { stageMaterialScopeRevision } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveExecutionOutcomes, deriveStageOutcomeStatuses, stageMaterialScopeRevision } from "../../runtime/stage/completion-predicates.mjs";
 import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
@@ -194,6 +194,73 @@ describe("stage row publication", () => {
     });
     // The OPEN-* row of the same table is not a handoff item.
     expect(JSON.stringify(handoff.value)).not.toContain("OPEN-001");
+  });
+
+  it("records a failed handoff as incomplete execution without changing the independent quality layer", async () => {
+    const state = stageState("stage-row-failed-handoff");
+    // Removing a material owned by build-code makes the real handoff publication
+    // fail. The stage-end path must not leave its implementation layer green just
+    // because the quality facts are independently complete.
+    rmSync(join(state.candidateWorkspace.worktreeRoot, "specs", state.context.identity.taskId, "spec.md"), { force: true });
+
+    const result = await runStageEnd(state);
+    expect(result.stage_handoff).toMatchObject({ status: "unavailable", current: false });
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].evidence.value[0]).toMatchObject({ command: "stage-handoff:build-code", exit_code: 1 });
+    expect(rows[0].layer_states.implementation_completion).toBe("incomplete");
+
+    const currentSnapshot = state.source.value.snapshot_tree;
+    const projection = {
+      task_id: state.context.identity.taskId,
+      read: state.task.readRecord,
+      stage_outcome_refs: {},
+      snapshot_tree: currentSnapshot,
+      material_revision: state.source.value.material_revision,
+      material_scope_revisions: { "build-code": state.source.value.material_scope_revision },
+      snapshot_root: state.candidateWorkspace.worktreeRoot,
+      authenticate: ({ value }) => value,
+      read_task_facts: () => readTaskFacts(state.task.taskPath),
+    };
+    expect(deriveExecutionOutcomes(projection)["build-code"]).toMatchObject({
+      status: "incomplete",
+      diagnostic: { code: "execution_record_row_records_failed_command" },
+    });
+    expect(deriveStageOutcomeStatuses(projection)["build-code"]).toBe("incomplete");
+    // Quality predicates remain a separate domain; this fix must not turn the
+    // execution fact into a new quality gate.
+    expect(result.stage_row_error).toBeUndefined();
+  });
+
+  it("does not mark a published handoff as implementation-complete when the stage itself failed", async () => {
+    const state = stageState("stage-row-failed-stage-with-published-handoff");
+    const failedJudgment = { ...judgmentFor(state), stage_status: "failed" };
+
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "failed",
+      judgment: failedJudgment,
+      stageOutcome: state.source,
+      now: NOW,
+    });
+
+    // Handoff delivery can succeed while the stage execution itself failed;
+    // these are separate execution facts and the implementation layer must
+    // preserve the failed stage result.
+    expect(result.stage_handoff).toMatchObject({ status: "published", current: true });
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].layer_states.implementation_completion).toBe("incomplete");
+    expect(deriveStageOutcomeStatuses({
+      task_id: state.context.identity.taskId,
+      read: state.task.readRecord,
+      stage_outcome_refs: {},
+      snapshot_tree: state.source.value.snapshot_tree,
+      material_revision: state.source.value.material_revision,
+      material_scope_revisions: { "build-code": state.source.value.material_scope_revision },
+      snapshot_root: state.candidateWorkspace.worktreeRoot,
+      authenticate: ({ value }) => value,
+      read_task_facts: () => readTaskFacts(state.task.taskPath),
+    })["build-code"]).toBe("incomplete");
   });
 
   it("keeps the handoff field empty-with-reason when the current plan.md declares none", async () => {

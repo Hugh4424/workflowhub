@@ -6,6 +6,17 @@ function hash(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function plainRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function exactKeys(value, expected, label) {
+  if (!plainRecord(value) || Object.keys(value).sort().join("\\u0000") !== [...expected].sort().join("\\u0000")) {
+    throw new TypeError(`PROVIDER_SELECTION_INVALID: ${label} has unsupported fields`);
+  }
+}
+
 function providerSelectionShape(selection) {
   const providers = Array.isArray(selection) ? [...selection] : selection?.providers;
   if (!Array.isArray(providers) || providers.length === 0) {
@@ -19,22 +30,41 @@ function providerSelectionShape(selection) {
   }
   const identities = Array.isArray(selection) ? undefined : (selection?.provider_identities ?? selection?.providerIdentities);
   if (identities === undefined || identities === null) return { providers };
-  if (!identities || typeof identities !== "object" || Array.isArray(identities)) {
+  if (!plainRecord(identities)) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities are invalid");
+  }
+  const identityKeys = Object.keys(identities).sort();
+  if (identityKeys.join("\\u0000") !== [...providers].sort().join("\\u0000")) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities do not match providers");
   }
   return {
     providers,
-    provider_identities: Object.fromEntries(Object.entries(identities).map(([provider, identity]) => [
-      provider,
-      identity && typeof identity === "object" ? { ...identity } : identity,
-    ])),
+    provider_identities: Object.fromEntries(providers.map((provider) => {
+      const identity = identities[provider];
+      exactKeys(identity, ["source_id", "config_id"], `provider identity ${provider}`);
+      if (typeof identity.source_id !== "string" || identity.source_id.trim() === ""
+          || typeof identity.config_id !== "string" || identity.config_id.trim() === "") {
+        throw new TypeError(`PROVIDER_SELECTION_INVALID: provider identity ${provider} is invalid`);
+      }
+      return [provider, { source_id: identity.source_id, config_id: identity.config_id }];
+    })),
   };
 }
 
-/** Resolve a trusted broker route from injected host configuration functions. */
+/**
+ * Resolve a trusted broker route from injected host configuration functions.
+ *
+ * The production host config loader lives in the wh-review skill, so this
+ * runtime helper cannot supply a working default by itself. A caller that uses
+ * it as the default must thread the dependencies through; otherwise the
+ * request fails closed with an explicit typed code instead of an opaque
+ * message.
+ */
 export function resolveReviewRouteIdentity(input, { loadConfig, resolveRoute, selectProviders } = {}) {
   if (typeof loadConfig !== "function" || typeof resolveRoute !== "function" || typeof selectProviders !== "function") {
-    throw new Error("trusted review route dependencies are required");
+    const error = new Error("trusted review route dependencies are required: pass loadConfig, resolveRoute, and selectProviders");
+    error.code = "REVIEW_ROUTE_DEPENDENCIES_REQUIRED";
+    throw error;
   }
   const identity = reviewIdentityFromInput(input);
   const track = identity.reviewTrack;

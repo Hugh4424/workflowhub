@@ -5,12 +5,21 @@ import { reviewIdentityFromInput } from "./review-policy.mjs";
 
 const AUTHENTICATED_EVIDENCE_PATH = "authenticated-evidence.json";
 const LOCAL_HOST_PATH = /\/(?:Users|home|private|tmp|var|etc|opt|mnt|Volumes|root|usr|bin|sbin|dev|proc|sys|Library)\/[^\s"'`<>()[\]{}]+|[A-Za-z]:[\\/][^\s"'`<>()[\]{}]+/g;
-const FOCUS = Object.freeze({
+const REVIEW_FOCUS = Object.freeze({
+  "make-decision/direction": "Challenge whether the proposed direction solves the stated problem with the smallest useful scope. Check assumptions, constraints, failure consequences, and rejected alternatives.",
+  "make-decision/detail": "Check scope, complete user flow, pages, data states, success and failure boundaries, acceptance, non-goals, deferred work, risks, and unnecessary complexity.",
   "build-spec": "Check requirement coverage, user journey, states, failure recovery, testable acceptance, and scope.",
   "build-plan": "Check dependencies, implementation order, real consumers, verification, recovery, and unnecessary work.",
-  "build-code": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
+  "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
+  "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
   "verify-code": "Check only the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. Do not report T010 status, AC coverage, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
 });
+
+const PACKET_REVIEW_BOUNDARY = "This is heterologous advice only. Review only the submitted material; do not access Workspace, TaskHandle, Git, repository files, shell, network, or host paths.";
+const PACKET_FINDING_BOUNDARY = "Report only concrete findings that could change delivery. Merge duplicate root causes. Findings may be empty, but empty findings do not mean completion or approval.";
+const MAKE_DECISION_PACKET_BOUNDARY = "For make-decision, keep findings-only advice separate from stage completion: direction must preserve one reconstruct -> reveal -> challenge flow with current selection hidden until reveal; detail must not substitute for direction or invent OI answers.";
+const MAKE_DECISION_CONTRACT = "The provider protocol is findings-only: findings:[] is not checked_no_gap, completion, approval, or proof that every OI was covered. Do not invent checked_no_gap or a verdict.";
+const MAKE_DECISION_CONTRACT_INTRO = "Read and apply the governed make-decision review contract below; it is part of this review's instruction source.";
 
 function hash(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -38,7 +47,29 @@ function redactProviderHostPaths(value) {
 function materialBytes(value) {
   if (Buffer.isBuffer(value)) return value;
   if (typeof value === "string") return Buffer.from(value, "utf8");
-  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+  return Buffer.from(`${JSON.stringify(value)}\n`, "utf8");
+}
+
+/**
+ * One canonical authenticated-evidence byte form for the whole review path.
+ *
+ * The provider-visible projection is host-path redacted, and the recorded
+ * identity must be computed over exactly those bytes. The skill runner, the
+ * runtime packet identity, and the record route all use this single helper so a
+ * path-bearing evidence value can no longer hash differently on either side.
+ */
+export function authenticatedEvidenceBytes(value) {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value) || Buffer.isBuffer(value)) {
+    throw new TypeError("authenticated_evidence must be a non-empty JSON object");
+  }
+  return Buffer.from(`${stableJson(redactProviderHostPaths(value))}\n`, "utf8");
+}
+
+/** Canonical authenticated-evidence digest, or null when no evidence is bound. */
+export function authenticatedEvidenceDigest(value) {
+  const bytes = authenticatedEvidenceBytes(value);
+  return bytes === null ? null : hash(bytes);
 }
 
 function safeName(key, index, value) {
@@ -62,12 +93,22 @@ function defaultInstructionText(input) {
   if (identity.reviewKind === "build_prd") {
     throw new Error("review packet instruction source is required for build_prd");
   }
-  const name = surface(input);
+  const focus = identity.stage === "make-decision"
+    ? REVIEW_FOCUS[`make-decision/${identity.reviewTrack}`]
+    : identity.stage === "build-code"
+      ? REVIEW_FOCUS[`build-code/${identity.reviewScope ?? "phase"}`]
+      : REVIEW_FOCUS[identity.stage] ?? null;
+  if (!focus) throw new Error(`review instructions are unavailable for ${surface(input)}`);
   return [
-    `Review surface: ${name}.`,
-    FOCUS[name] ?? "Review the supplied current-stage material for concrete delivery risks.",
-    "This is heterologous advice only. Review only the submitted material; do not access Workspace, TaskHandle, Git, repository files, shell, network, or host paths.",
-    "Report only concrete findings that could change delivery. Merge duplicate root causes. Findings may be empty, but empty findings do not mean completion or approval.",
+    `Review surface: ${surface(input)}.`,
+    focus,
+    ...(identity.stage === "make-decision" ? [
+      MAKE_DECISION_CONTRACT_INTRO,
+      MAKE_DECISION_CONTRACT,
+      MAKE_DECISION_PACKET_BOUNDARY,
+    ] : []),
+    PACKET_REVIEW_BOUNDARY,
+    PACKET_FINDING_BOUNDARY,
   ].join("\n");
 }
 
@@ -94,10 +135,13 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
   }
   const instructionBytes = Buffer.from(`${redactProviderHostPaths(instruction)}\n`, "utf8");
   const entries = [{ path: "review-instructions.md", bytes: instructionBytes.length, sha256: hash(instructionBytes) }];
-  Object.entries(packetMaterials ?? {}).forEach(([key, value], index) => {
+  let materialIndex = 0;
+  Object.entries(packetMaterials ?? {}).forEach(([key, value]) => {
+    if (key === "review_instructions") return;
     const redacted = redactProviderHostPaths(value);
     const bytes = materialBytes(redacted);
-    entries.push({ path: safeName(key, index, redacted), bytes: bytes.length, sha256: hash(bytes) });
+    entries.push({ path: safeName(key, materialIndex, redacted), bytes: bytes.length, sha256: hash(bytes) });
+    materialIndex += 1;
   });
   if (input.authenticated_evidence !== undefined) {
     const bytes = Buffer.from(`${stableJson(redactProviderHostPaths(input.authenticated_evidence))}\n`, "utf8");

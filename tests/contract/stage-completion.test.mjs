@@ -113,13 +113,17 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(completion).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["risk_tests_fresh"]) });
     expect(deriveStageProgress("build-code", current, { "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks" })).toMatchObject({ work_status: "ready" });
   });
-  it("keeps every authoring stage incomplete until its current stage-end analyzer fact is present", () => {
+  it("keeps every authoring stage complete without the optional host-only stage-end analyzer fact", () => {
+    // skills/workflowhub-host-protocol/SKILL.md: the host Stage Agent outcome is
+    // optional, its absence is an `unavailable` diagnostic, and it must not become a
+    // stage gate or change a quality predicate. `stage_end_spec_analyze` is derived only
+    // from that outcome, so it is advisory: dropping it must not leave the stage
+    // incomplete, and its absence must not appear in `missing`.
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code"]) {
       const facts = observations(stage).filter((entry) => entry.fact.value.subject !== "stage_end_spec_analyze");
-      expect(deriveStageCompletion(stage, facts), stage).toMatchObject({
-        status: "in_progress",
-        missing: expect.arrayContaining(["stage_end_spec_analyze"]),
-      });
+      const completion = deriveStageCompletion(stage, facts);
+      expect(completion.missing, stage).not.toContain("stage_end_spec_analyze");
+      expect(STAGE_ADVISORY_PREDICATES[stage].stage_end_spec_analyze, stage).toBe("acceptance_criterion");
     }
   });
 

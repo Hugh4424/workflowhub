@@ -2,6 +2,14 @@
 
 - **Template version**：plan-task.v4
 
+## Plan amendment · 2026-09-14 · T45 自动 CI 决策修订
+
+- **用户决定**：彻底取消自动 CI。build-code 后续删除 `.github/workflows/ci.yml`，不保留 push / pull_request / workflow_dispatch workflow，也不等待 provider 结果。
+- **T45 新动作**：先删除旧 workflow，把 `tests/contract/test-entry-grouping.test.mjs` 改为只验证 `package.json` 的本地分组、`test:exclusive` 和 safe 并集，并修复 `tests/host-independence.test.mjs` 对删除后 workflow 目录的读取；再执行 actual `changed_files` targeted union、三守卫、账本与完成计数核对。
+- **T45 新证据**：`automatic_ci=disabled`、`ci_workflow=absent`、`ci_run_ref=not_applicable`、`ci_head_sha=not_applicable`、`ci_conclusion=not_applicable`、`ci_groups_all_success=not_applicable`。这些字段必须明确记录，不得用空值或非空 marker 混淆状态。
+- **历史保留**：T16/T17 已完成的 CI 分组实现和执行记录是历史事实，保留不回写；自动 CI 删除是本修订新增的 build-code 工作。T45 结束只移交 verify-code，不执行 close。
+- **材料状态**：`spec.md` 的 FR-GOV-011 / AC-GOV-011 与 `decision-log.md` 的 D-010 仍有修订前 CI 文字；本文件只记录用户对 build-plan 的明确修订，不把上游旧文字当作 T45 的 CI 门禁。
+
 ## Phase 1 · 开工门禁与守卫基线
 
 ### Goal
@@ -98,6 +106,20 @@ T0（单卡，门禁 + 基线重测；见 tasks.md Phase 1）
 - **MODIFY** `runtime/stage/stage-runner.mjs`
 - **MODIFY** `tests/contract/five-stage-spec-analyze-wiring.test.mjs`
 - **MODIFY** `tests/contract/freeze-classification-budget-usage-protocol.test.mjs`
+- **MODIFY** `runtime/review/canonical-review-result.mjs`
+- **MODIFY** `runtime/review/review-packet-identity.mjs`
+- **MODIFY** `runtime/review/review-route-identity.mjs`
+- **MODIFY** `skills/catalog.yaml`
+- **MODIFY** `skills/wh-review/scripts/review-input-bounds.mjs`
+- **MODIFY** `skills/wh-review/scripts/simple-review-runner.mjs`
+- **MODIFY** `skills/wh-review/skill-bundle.json`
+- **MODIFY** `tests/contract/stage-completion.test.mjs`
+- **MODIFY** `tests/contract/status-derivation.test.mjs`
+- **MODIFY** `tests/contract/verify-architect-acceptance.test.mjs`
+- **MODIFY** `tests/e2e/vnext-five-stage-current.test.mjs`
+- **MODIFY** `tests/integration/vnext-official-stage-run.test.mjs`
+- **MODIFY** `tests/stage-plan-task-contract-v3.test.mjs`
+- **NEW** `tests/contract/review-input-bounds-portability.test.mjs`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-batch-boundary.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p2-fix-ledger.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t7-legacy-review-recalc.md`
@@ -106,10 +128,11 @@ T0（单卡，门禁 + 基线重测；见 tasks.md Phase 1）
 - **READ-ONLY CONSUMER** `tests/contract/acceptance-execution-tier.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/execution-outcome.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/review-public-entrypoints.test.mjs`
-- **READ-ONLY CONSUMER** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
-- **READ-ONLY CONSUMER** `tests/integration/stage-row-publication.test.mjs`
-- **READ-ONLY CONSUMER** `tests/review/review-record-route.test.mjs`
+- **MODIFY** `tests/integration/stage-outcome-record-row-redirect.test.mjs`
+- **MODIFY** `tests/integration/stage-row-publication.test.mjs`
+- **MODIFY** `tests/review/review-record-route.test.mjs`
 - **READ-ONLY CONSUMER** `tests/stage-risk-acceptance.test.mjs`
+- **MODIFY** `skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
 
 ### Tasks
 
@@ -153,8 +176,8 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **FR**：FR-FIX-001
 - **AC**：AC-FIX-001
 - **动作**：RED：先落测试或断言，在生产/治理改动前用同一 gate 证明目标现状会失败
-- **精确文件**：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`
-- **boundary**：files：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`
+- **精确文件**：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`；`tests/contract/stage-completion.test.mjs`；`tests/contract/status-derivation.test.mjs`；`tests/e2e/vnext-five-stage-current.test.mjs`；`tests/integration/vnext-official-stage-run.test.mjs`
+- **boundary**：files：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`；`tests/contract/stage-completion.test.mjs`；`tests/contract/status-derivation.test.mjs`；`tests/e2e/vnext-five-stage-current.test.mjs`；`tests/integration/vnext-official-stage-run.test.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t1-red.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：RED
@@ -199,8 +222,8 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **FR**：FR-FIX-001
 - **AC**：AC-FIX-001
 - **动作**：GREEN：实施最小改动或产出可复算证据，用与 RED 完全相同的 gate 转绿
-- **精确文件**：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`
-- **boundary**：files：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`
+- **精确文件**：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`；`tests/contract/stage-completion.test.mjs`；`tests/contract/status-derivation.test.mjs`；`tests/e2e/vnext-five-stage-current.test.mjs`；`tests/integration/vnext-official-stage-run.test.mjs`
+- **boundary**：files：`runtime/stage/stage-runner.mjs`；`tests/integration/stage-row-scope-digest.test.mjs`；`tests/integration/stage-outcome-record-row-redirect.test.mjs`；`tests/integration/stage-row-publication.test.mjs`；`tests/contract/execution-outcome.test.mjs`；`tests/contract/stage-completion.test.mjs`；`tests/contract/status-derivation.test.mjs`；`tests/e2e/vnext-five-stage-current.test.mjs`；`tests/integration/vnext-official-stage-run.test.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t2-green.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：GREEN
@@ -331,8 +354,8 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **FR**：FR-FIX-002
 - **AC**：AC-FIX-002
 - **动作**：RED：先落测试或断言，在生产/治理改动前用同一 gate 证明目标现状会失败
-- **精确文件**：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`
-- **boundary**：files：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`
+- **精确文件**：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`；`runtime/review/canonical-review-result.mjs`；`runtime/review/review-packet-identity.mjs`；`runtime/review/review-route-identity.mjs`；`skills/catalog.yaml`；`skills/wh-review/scripts/review-input-bounds.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`skills/wh-review/skill-bundle.json`；`tests/contract/review-input-bounds-portability.test.mjs`；`tests/contract/verify-architect-acceptance.test.mjs`；`skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **boundary**：files：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`；`runtime/review/canonical-review-result.mjs`；`runtime/review/review-packet-identity.mjs`；`runtime/review/review-route-identity.mjs`；`skills/catalog.yaml`；`skills/wh-review/scripts/review-input-bounds.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`skills/wh-review/skill-bundle.json`；`tests/contract/review-input-bounds-portability.test.mjs`；`tests/contract/verify-architect-acceptance.test.mjs`；`skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t5-red.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：RED
@@ -377,8 +400,8 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **FR**：FR-FIX-002
 - **AC**：AC-FIX-002
 - **动作**：GREEN：实施最小改动或产出可复算证据，用与 RED 完全相同的 gate 转绿
-- **精确文件**：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`
-- **boundary**：files：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`
+- **精确文件**：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`；`runtime/review/canonical-review-result.mjs`；`runtime/review/review-packet-identity.mjs`；`runtime/review/review-route-identity.mjs`；`skills/catalog.yaml`；`skills/wh-review/scripts/review-input-bounds.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`skills/wh-review/skill-bundle.json`；`tests/contract/review-input-bounds-portability.test.mjs`；`tests/contract/verify-architect-acceptance.test.mjs`；`skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
+- **boundary**：files：`runtime/evidence/freshness.mjs`；`runtime/stage/stage-handlers.mjs`；`tests/review/review-result-content-binding.test.mjs`；`tests/review/review-record-route.test.mjs`；`tests/contract/review-public-entrypoints.test.mjs`；`tests/contract/acceptance-execution-tier.test.mjs`；`runtime/review/canonical-review-result.mjs`；`runtime/review/review-packet-identity.mjs`；`runtime/review/review-route-identity.mjs`；`skills/catalog.yaml`；`skills/wh-review/scripts/review-input-bounds.mjs`；`skills/wh-review/scripts/simple-review-runner.mjs`；`skills/wh-review/skill-bundle.json`；`tests/contract/review-input-bounds-portability.test.mjs`；`tests/contract/verify-architect-acceptance.test.mjs`；`skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t6-green.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：GREEN
@@ -466,8 +489,8 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **FR**：FR-FIX-003
 - **AC**：AC-FIX-003
 - **动作**：RED：先落测试或断言，在生产/治理改动前用同一 gate 证明目标现状会失败
-- **精确文件**：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`
-- **boundary**：files：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`
+- **精确文件**：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`；`tests/stage-plan-task-contract-v3.test.mjs`
+- **boundary**：files：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`；`tests/stage-plan-task-contract-v3.test.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t8-red.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：RED
@@ -512,8 +535,8 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **FR**：FR-FIX-003
 - **AC**：AC-FIX-003
 - **动作**：GREEN：实施最小改动或产出可复算证据，用与 RED 完全相同的 gate 转绿
-- **精确文件**：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`
-- **boundary**：files：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`
+- **精确文件**：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`；`tests/stage-plan-task-contract-v3.test.mjs`
+- **boundary**：files：`runtime/stage/stage-content-contracts.mjs`；`tests/contract/five-stage-spec-analyze-wiring.test.mjs`；`tests/stage-plan-task-contract-v3.test.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t9-green.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：GREEN
@@ -640,11 +663,10 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 
 ### Goal
 
-宪法 1.9.0 四件同步 + CONTEXT 两处 + npm 显式分组与 CI + hash 清单与治理文字净减 + 父材料更正与 lint 收口 + close 收敛 + 对照表登记 + 净增减账，C7 批 AC 全过。
+宪法 1.9.0 四件同步 + CONTEXT 两处 + npm 显式本地分组 + hash 清单与治理文字净减 + 父材料更正与 lint 收口 + close 收敛 + 对照表登记 + 净增减账，C7 批内 T12-T29 AC 全过；AC-GOV-011 的自动 CI 删除部分由 T45 修订卡收口。
 
 ### Files
 
-- **MODIFY** `.github/workflows/ci.yml`
 - **MODIFY** `.markdownlint-cli2.jsonc`
 - **MODIFY** `AGENTS.md`
 - **MODIFY** `CLAUDE.md`
@@ -680,18 +702,23 @@ T1-T11（四条修复各 RED/GREEN 对 + T3 历史行登记 + T4 标本读回 + 
 - **MODIFY** `tests/close/close-contract.test.mjs`
 - **MODIFY** `tests/stage-risk-acceptance.test.mjs`（:300 版本 pin 1.8.0 → 1.9.0，随宪法四件同步）
 - **MODIFY** `tools/cli/task-close.mjs`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`
+- **MODIFY** `specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory-scan.log`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/hash-inventory.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/net-lines.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`
-- **NEW** `tests/contract/test-entry-grouping.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/close-authorization-diagnostics.test.mjs`
 - **READ-ONLY CONSUMER** `tests/contract/close-sidecar-and-archive.test.mjs`
+- **MODIFY** `tests/acceptance/build-prd-current.mjs`
+- **MODIFY** `tests/integration/governance-diagnostics-non-gate.test.mjs`
+- **MODIFY** `tools/architecture/retention-audit.mjs`
 
 ### Tasks
 
-T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除对 / 父材料对 / lint 收口对 / close 对 / 对照表对 + T29 净增减账；见 tasks.md Phase 3）
+T12-T29（宪法对 / CONTEXT 对 / npm 本地分组对 / hash 清单扫描与删除对 / 父材料对 / lint 收口对 / close 对 / 对照表对 + T29 净增减账；自动 CI 删除由 T45 修订卡完成）
 
 ### Verify
 
@@ -915,8 +942,8 @@ T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除�
 - **FR**：FR-GOV-011
 - **AC**：AC-GOV-011
 - **动作**：RED：先落测试或断言，在生产/治理改动前用同一 gate 证明目标现状会失败
-- **精确文件**：`package.json`；`.github/workflows/ci.yml`；`tests/contract/test-entry-grouping.test.mjs`
-- **boundary**：files：`package.json`；`.github/workflows/ci.yml`；`tests/contract/test-entry-grouping.test.mjs`
+- **精确文件**：`package.json`
+- **boundary**：files：`package.json`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t16-red.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：RED
@@ -961,8 +988,8 @@ T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除�
 - **FR**：FR-GOV-011
 - **AC**：AC-GOV-011
 - **动作**：GREEN：实施最小改动或产出可复算证据，用与 RED 完全相同的 gate 转绿
-- **精确文件**：`package.json`；`.github/workflows/ci.yml`；`tests/contract/test-entry-grouping.test.mjs`
-- **boundary**：files：`package.json`；`.github/workflows/ci.yml`；`tests/contract/test-entry-grouping.test.mjs`
+- **精确文件**：`package.json`
+- **boundary**：files：`package.json`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t17-green.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：GREEN
@@ -1418,8 +1445,8 @@ T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除�
 - **FR**：FR-GOV-004, FR-GOV-010, FR-GOV-012, FR-GOV-017, FR-GOV-019, FR-GOV-020
 - **AC**：AC-GOV-004, AC-GOV-015
 - **动作**：RED：先落测试或断言，在生产/治理改动前用同一 gate 证明目标现状会失败
-- **精确文件**：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
-- **boundary**：files：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **精确文件**：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`；`specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`；`tests/acceptance/build-prd-current.mjs`；`tests/integration/governance-diagnostics-non-gate.test.mjs`；`tools/architecture/retention-audit.mjs`
+- **boundary**：files：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`；`specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`；`tests/acceptance/build-prd-current.mjs`；`tests/integration/governance-diagnostics-non-gate.test.mjs`；`tools/architecture/retention-audit.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t27-red.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：RED
@@ -1464,8 +1491,8 @@ T12-T29（宪法对 / CONTEXT 对 / npm 分组对 / hash 清单扫描与删除�
 - **FR**：FR-GOV-004, FR-GOV-010, FR-GOV-012, FR-GOV-017, FR-GOV-019, FR-GOV-020
 - **AC**：AC-GOV-004, AC-GOV-015
 - **动作**：GREEN：实施最小改动或产出可复算证据，用与 RED 完全相同的 gate 转绿
-- **精确文件**：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
-- **boundary**：files：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`
+- **精确文件**：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`；`specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`；`tests/acceptance/build-prd-current.mjs`；`tests/integration/governance-diagnostics-non-gate.test.mjs`；`tools/architecture/retention-audit.mjs`
+- **boundary**：files：`AGENTS.md`；`CLAUDE.md`；`README.md`；`docs/audit-contracts.md`；`docs/architecture/move-map.json`；`docs/architecture/control-plane-inventory.json`；`docs/adr/0002-requirement-lineage-and-step-audit.md`；`docs/adr/0002-v4-review-exception-state-matrix.md`；`docs/adr/0009-same-snapshot-phase0-recovery-requires-explicit-intent.md`；`docs/adr/0009-stage-content-authority.md`；`docs/adr/0011-authenticated-review-flow-generations.md`；`docs/adr/0017-stage-quality-fact-freshness-scope.md`；`docs/adr/0019-canonical-quality-ownership-and-compatibility.md`；`docs/adr/0020-close-five-actions-quality-transcription.md`；`docs/adr/0025-convergence-outline-and-close-loop.md`；`docs/adr/0025-planning-branch-and-maintainable-prd.md`；`docs/adr/0025-review-dispatch-preflight-boundaries.md`；`docs/adr/0027-planning-task-question-boundary.md`；`docs/adr/0027-test-feedback-runtime-profile.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/plan.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-c7-handoff.md`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p3-batch-boundary.json`；`specs/workflowhub-mechanism-simplification-t3-20260912/decision-log.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/spec.md`；`specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md`；`tests/acceptance/build-prd-current.mjs`；`tests/integration/governance-diagnostics-non-gate.test.mjs`；`tools/architecture/retention-audit.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/t28-green.log 对应的可复算结果与本卡完成区事实
 - **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：GREEN
@@ -2139,10 +2166,14 @@ c8-*.json/log/md 与 blocker-ledger.json 全部落盘且语义 validator / 全�
 
 ### Goal
 
-执行纪律审计（重读量动作四要素抽查）+ 守卫基线复核（整改前后动态比较）+ 最终聚合验证卡（actual changed-files targeted union + 三守卫 + 账本齐全性终核；完整分组并集只由 CI 执行）。
+执行纪律审计（重读量动作四要素抽查）+ 守卫基线复核（整改前后动态比较）+ 自动 CI 删除确认 + 最终聚合验证卡（actual changed-files targeted union + 三守卫 + 账本齐全性终核；不等待完整分组并集）。
 
 ### Files
 
+- **MODIFY** `.github/workflows/ci.yml`（delete-only boundary; implementation action is DELETE; no replacement writer）
+- **MODIFY** `tests/contract/test-entry-grouping.test.mjs`
+- **MODIFY** `tests/host-independence.test.mjs`
+- **MODIFY** `vitest.config.mjs`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-execution-audit.md`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`
 - **NEW** `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-guard-baseline.json`
@@ -2155,11 +2186,11 @@ T42-T45（执行记录审计 + 守卫复核对 + 最终聚合验证卡；见 tas
 
 ### Verify
 
-`ORA-EXE-001` 为 Phase 5 交接 oracle：抽五条重读量记录四要素齐 + 主会话全仓扫描记录不存在，并要求 ORA-GOV-005B 三守卫整改后不劣化且范围内清零 + ORA-T45 的 actual changed-files targeted union exit 0、真实 CI run 绑定最终 SHA 且所有显式组 success + 完成计数（claimed vs authenticated）自洽。
+`ORA-EXE-001` 为 Phase 5 交接 oracle：抽五条重读量记录四要素齐 + 主会话全仓扫描记录不存在，并要求 ORA-GOV-005B 三守卫整改后不劣化且范围内清零 + ORA-T45 的 automatic CI 已删除、actual changed-files targeted union exit 0、账本与完成计数（claimed vs authenticated）自洽。
 
 ### Knowledge
 
-守卫比较只读 t0 artifact 变量；本地最终聚合只跑 actual changed-files targeted union，完整分组并集由 CI 守卫执行；证据同时记录 changed_files → targeted tests 映射与 CI run ref。
+守卫比较只读 t0 artifact 变量；本地最终聚合只跑 actual changed-files targeted union；证据同时记录 changed_files → targeted tests 映射、自动 CI 配置缺失和 `ci_run_ref=not_applicable`，不等待 provider。
 
 ### STOP
 
@@ -2167,7 +2198,7 @@ T42-T45（执行记录审计 + 守卫复核对 + 最终聚合验证卡；见 tas
 
 ### Done
 
-p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-handoff-ledger.md 落盘；HANDOFF 项（若有）具名移交 close 阶段。
+p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-handoff-ledger.md 落盘；自动 CI 删除状态已确认；HANDOFF 项（若有）具名移交 verify-code 阶段，不执行 close。
 
 ### Risks and rollback
 
@@ -2316,53 +2347,55 @@ p5-execution-audit.md / p5-guard-baseline.json / p5-final-aggregate.log / p5-han
 
 - **ID**：T45
 - **Phase**：Phase 5 · 执行纪律核对与任务级收尾
-- **goal**：最终current-snapshot聚合：actual changed-files targeted union、三守卫、CI引用、账本齐全性与HANDOFF收口
-- **design_state**：本卡计划已定稿；不充当规格冻结凭证，执行事实由完成区回填
-- **versioned_refs**：spec.md@62e47d742bf6f689253b5b9f5eb51eb1ad4b9108d7e7e673e9752b31c759fec7;plan.md@35396d13d1943de3a6f35354aca9debd5cc9d89134a041ae78355e787537375d;decision-log.md@67f11ad5f7f1a9a7f37007fc5d008515db1c3f2fc27f04625c01c6e1b359bf9a
+- **goal**：最终current-snapshot聚合：删除自动 CI、actual changed-files targeted union、三守卫、账本齐全性与移交 verify-code
+- **design_state**：本卡按 2026-09-14 用户修订执行；不充当规格冻结凭证，执行事实由完成区回填
+- **versioned_refs**：spec.md@62e47d742bf6f689253b5b9f5eb51eb1ad4b9108d7e7e673e9752b31c759fec7;plan.md@5cbaae2c5b53898036a4f51f6fcdc1c9c93217aa99946ebab3bd14b682107894;decision-log.md@67f11ad5f7f1a9a7f37007fc5d008515db1c3f2fc27f04625c01c6e1b359bf9a
 - **source_refs / decision_refs**：R-001, R-007, D-001, D-004, D-014, D-015
 - **输入**：当前四材料 + 前序任务证据；以 plan.md 同 Phase 边界和 Code Anchors 为准
 - **依赖**：T44
 - **并行**：无（全部串行，避免共享文件与证据写冲突）
 - **FR**：FR-GOV-004, FR-GOV-011, FR-ACC-005, FR-ACC-008, FR-EXE-001
 - **AC**：AC-GOV-004, AC-GOV-011, AC-ACC-005, AC-ACC-008, AC-EXE-001
-- **动作**：从实际changed_files生成并记录targeted test union，仅本地运行该并集；重跑三守卫；在最终提交产生后触发现有CI并等待结果，验证真实run URL/id的head SHA等于最终commit、结论success、全部显式组逐项success；CI不可用则保持incomplete；核对全部证据存在、AC-ACC-008非incomplete与任务完成计数；输出原始日志和handoff账
-- **精确文件**：`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
-- **boundary**：files：`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
+- **动作**：删除 `.github/workflows/ci.yml`；移除 `tests/contract/test-entry-grouping.test.mjs` 对 workflow 逐组调用的依赖，只保留本地分组、exclusive 和 safe 并集证明；修复 `tests/host-independence.test.mjs` 对已删除 `.github/workflows` 目录的无条件读取；从实际 changed_files 生成并记录 changed-file → targeted-test 映射，仅本地运行该并集；重跑三守卫并与 T0 对账；核对 T45 证据齐全、AC-ACC-008 的继承状态与任务完成计数，不把该质量事实改写为通过；在日志中明确记录自动 CI 已禁用及所有 CI 字段 `not_applicable`；输出原始日志和移交 verify-code 的账
+- **精确文件**：`.github/workflows/ci.yml`（删除）；`tests/contract/test-entry-grouping.test.mjs`（移除 workflow 依赖）；`tests/host-independence.test.mjs`（允许删除后的空 workflow 目录）；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`；`vitest.config.mjs`
+- **boundary**：files：`.github/workflows/ci.yml`；`tests/contract/test-entry-grouping.test.mjs`；`tests/host-independence.test.mjs`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`；`vitest.config.mjs`
 - **输出**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log; $WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md 对应的可复算结果与本卡完成区事实
-- **Knowledge**：只跑本卡具名 gate；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
+- **Knowledge**：只跑本卡具名 gate；自动 CI 是 `not_applicable`，不访问 provider；质量事实按实际状态记录，不把 unavailable/incomplete 改写为通过
 - **verification_role**：N/A — 非行为变更：取证、登记或批次编排
 - **paired_task**：N/A — 非行为变更：行为验证由同批 GREEN 卡或后续验收卡承担
 - **test tier / test method**：fullstack / command 层current-snapshot targeted聚合（非UI）
 - **scenarios**：正例按 pass 判据；负例按 oracle.reject（RED）或同批 RED 证据；不做 UI/browser 场景
 - **fixtures_services**：仓库内现有 fixture + 本任务 task-store 证据文件；不访问网络、不新开真实任务
 - **coverage limits**：只覆盖本卡列出的文件、FR 与 AC；不外推全仓质量结论
-- **gate_cmd**：`bash -c 'test -s "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log" && test -s "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md" && grep -q "targeted_union_exit_code=0" "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log" && grep -Eq "ci_run_ref=https?://" "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log" && grep -Eq "ci_head_sha=[a-f0-9]{40}" "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log" && grep -q "ci_conclusion=success" "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log" && grep -q "ci_groups_all_success=true" "$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log"'`
+- **gate_cmd**：`bash -c 'test ! -e .github/workflows && node -e "const fs=require(\"fs\"),path=require(\"path\");const root=process.env.WORKFLOWHUB_TASK_DIR+\"/workflowhub-mechanism-simplification-t3-20260912/quality/tests\";const log=fs.readFileSync(path.join(root,\"p5-final-aggregate.log\"),\"utf8\");const begin=log.lastIndexOf(\"CURRENT_ATTEMPT_BEGIN\");const end=log.lastIndexOf(\"CURRENT_ATTEMPT_END\");if(begin<0||end<=begin)process.exit(1);const current=log.slice(begin,end);const field=(name)=>{const matches=[...current.matchAll(new RegExp(\"^\"+name+\"=(.*)$\",\"gm\"))];if(matches.length!==1)process.exit(1);return matches[0][1]};for(const [name,value] of [[\"automatic_ci\",\"disabled\"],[\"ci_workflow\",\"absent\"],[\"targeted_union_exit_code\",\"0\"],[\"ci_run_ref\",\"not_applicable\"],[\"ci_head_sha\",\"not_applicable\"],[\"ci_conclusion\",\"not_applicable\"],[\"ci_groups_all_success\",\"not_applicable\"],[\"workflow_files\",\"none\"],[\"workflow_triggers\",\"none\"],[\"ledger_status\",\"complete\"],[\"completion_count_status\",\"coherent\"]])if(field(name)!==value)process.exit(1);const claimed=Number(field(\"claimed_completed_tasks\")),authenticated=Number(field(\"authenticated_completed_tasks\"));if(!Number.isInteger(claimed)||claimed!==authenticated)process.exit(1);const guardRef=field(\"guard_baseline_ref\");const guard=JSON.parse(fs.readFileSync(path.join(root,guardRef),\"utf8\"));if(guard.snapshot_tree!==field(\"snapshot_tree\")||guard.material_revision!==field(\"material_revision\")||guard.comparison.status!==\"pass\"||guard.guards.markdownlint.exit_code!==0||guard.guards.record_paths.exit_code!==0||guard.guards.structure.exit_code!==0||guard.guards.diff_check.exit_code!==0)process.exit(1);const ledger=fs.readFileSync(path.join(root,\"p5-handoff-ledger.md\"),\"utf8\");for(const marker of [\"changed_file_to_targeted_tests:\",\"AC-GOV-004\",\"AC-GOV-011\",\"AC-ACC-005\",\"AC-ACC-008\",\"AC-EXE-001\",\"next_boundary: verify-code\"])if(!ledger.includes(marker))process.exit(1);if(fs.existsSync(\".github/workflows\")&&fs.readdirSync(\".github/workflows\").length)process.exit(1);'` 仅验证当前 T45 聚合段、同 snapshot 守卫、账本字段、完成计数和 live workflow 目录均符合判据，不读取旧历史段落。
 - **expected_exit**：0
-- **oracle**：`ORA-T45 {"pass":"登记或取证满足本卡明示结构与计数判据"}`
+- **oracle**：`ORA-T45 {"pass":"自动 CI 已删除，本地 targeted union、三守卫、账本和计数满足本卡判据"}`
 - **evidence_path**：$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log; $WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md
 - **STOP**：gate 实际退出码不等于 expected_exit，或证据无法按同一命令复算即停止本卡
 - **recovery**：按 plan.md Rollback and Recovery 回退本卡改动，保留失败事实后重做 RED/GREEN
-- **task risk**：高：本地禁止全量；必须记录changed_files到targeted tests映射并绑定最终commit的真实CI success，CI不可用则incomplete
+- **task risk**：中：本地禁止全量；必须记录 changed_files 到 targeted tests 映射并确认 workflow 缺失，provider 不再是风险变量
 
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**
 - **status**：incomplete
-- **actual_changes**：Ran the actual changed-files targeted union successfully and recorded the same-snapshot guard results, but no authorized final commit or CI run exists; the CI-bound final aggregate gate therefore remains incomplete.
-- **executed_commands**：bash -c exact ORA-T45 gate; exit 1 because CI fields are unavailable
-- **evidence_refs**：["quality/tests/p5-final-aggregate.log","quality/tests/p5-handoff-ledger.md"]
+- **actual_changes**：删除自动 workflow；移除分组契约对 workflow 内容的依赖；修复 workflow 目录删除后的 host-independence consumer；实际 changed-files targeted union 通过，三守卫相对 T0 不劣化，CI 字段按用户决定记录为 `not_applicable`。
+- **executed_commands**：targeted union（4 files / 13 tests）exit 0；修订后 ORA-T45 gate exit 0；`tasks.md` 定向 markdownlint、`check-task-record-paths`、`verify-structure`、`git diff --check` 均 exit 0；`plan.md` 有界 markdownlint 探针 exit 124，未推断 lint 结论
+- **evidence_refs**：["quality/tests/p5-final-aggregate.log","quality/tests/p5-handoff-ledger.md","quality/tests/p5-final-aggregate-current-dd54d925.log","quality/tests/p5-handoff-ledger-current-dd54d925.md","quality/tests/p5-guard-baseline-current-dd54d925.json"]
 - **covered_ac**：["AC-GOV-004","AC-GOV-011","AC-ACC-005","AC-ACC-008","AC-EXE-001"]
-- **review_fact**：Phase 4 Track A remains recorded_partial with findings F-2506c394f5f5 and F-5e7ddc68487a; Track B unavailable; no clean final review.
-- **completed_at**：2026-09-14T15:01:05+08:00
+- **review_fact**：Phase 4 Track A remains recorded_partial with findings F-2506c394f5f5 and F-5e7ddc68487a; Track B unavailable; no clean final review. Later verify-code review found F-c57aff1d9c2c (failed handoff incorrectly wrote implementation_completion=completed); fixed in runtime/stage/stage-runner.mjs with targeted RED/GREEN regression, and remains pending current-snapshot re-review.
+- **completed_at**：2026-09-14T21:48:00+08:00
+
+> **修订后处理**：上面的状态区已回填本次修订后的真实本地执行结果；旧 CI 字段缺失仅作为历史事实保留。当前 ORA-T45 本地 gate 已 exit 0，但 T45 仍因正式 stage-end quality facts、reflection 与继承的 Phase 4 incomplete facts 保持 `incomplete`，不把它们改写成通过。
 
 ## 4. Final current-snapshot aggregate strategy
 
 - **test tier / test method**: fullstack / command 层 current-snapshot targeted 聚合（非 UI）
-- **scenarios**: 从实际 changed_files 生成 targeted test union 并本地执行；三守卫；C7/C8 账本终核；完整分组并集只消费既有 CI run ref
-- **command**: `bash -c 'TARGETS=$(node -e "const fs=require(\"fs\");const p=process.env.WORKFLOWHUB_TASK_DIR+\"/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md\";const s=fs.readFileSync(p,\"utf8\");const m=s.match(/targeted_test_files:\s*([^\n]+)/);if(!m)process.exit(1);process.stdout.write(m[1])"); ./node_modules/.bin/vitest run $TARGETS --poolOptions.forks.singleFork --no-fileParallelism && ./node_modules/.bin/markdownlint-cli2 "**/*.md" && node tools/cli/check-task-record-paths.mjs && node tools/cli/verify-structure.mjs'`
+- **scenarios**: 删除自动 CI；从实际 changed_files 生成 targeted test union 并本地执行；三守卫；C7/C8 账本终核；CI 字段记录为 `not_applicable`
+- **command**: `./node_modules/.bin/vitest run tests/contract/test-entry-grouping.test.mjs tests/contract/verify-architect-acceptance.test.mjs tests/host-independence.test.mjs skills/wh-review/__tests__/human-brief-behavioral.test.mjs --poolOptions.forks.singleFork --no-fileParallelism && ./node_modules/.bin/markdownlint-cli2 specs/workflowhub-mechanism-simplification-t3-20260912/tasks.md && node tools/cli/check-task-record-paths.mjs && node tools/cli/verify-structure.mjs`
 - **expected exit**: 0
-- **oracle**: ORA-T45（actual changed-files targeted union 与三守卫同 snapshot 退出 0；CI run ref 已绑定；账本齐全；claimed / authenticated 完成计数自洽）
+- **oracle**: ORA-T45（自动 CI 已删除；actual changed-files targeted union 与三守卫同 snapshot 退出 0；账本齐全；claimed / authenticated 完成计数自洽）
 - **fixtures_services**: 仓库内 fixtures 与本任务 task-store 证据；network=off；db=off；外部 review 只消费已落盘事实
 - **evidence_path**: `$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-final-aggregate.log`；`$WORKFLOWHUB_TASK_DIR/workflowhub-mechanism-simplification-t3-20260912/quality/tests/p5-handoff-ledger.md`
-- **coverage limits**: 本地只覆盖实际 changed_files 对应 targeted union 与三守卫；完整 package 分组并集由已有 CI 守卫执行；不代表仓外宿主或真实任务基线
-- **STOP**: 任一 targeted 测试或守卫非零；CI run ref 缺失；AC-ACC-008 incomplete；任一账本缺失；完成计数不自洽
+- **coverage limits**: 本地只覆盖实际 changed_files 对应 targeted union 与三守卫；不补完整 package 分组并集；不代表仓外宿主或真实任务基线
+- **STOP**: workflow 未删除、分组契约仍依赖 workflow、删除后目录 consumer 未修复、任一 targeted 测试或守卫非零；任一账本缺失；完成计数不自洽。AC-ACC-008 的 inherited `incomplete` 只按事实交接，不是 T45 的 CI 替代门禁。

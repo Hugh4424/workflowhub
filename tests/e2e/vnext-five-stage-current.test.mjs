@@ -837,9 +837,19 @@ describe("current vNext five-stage runtime", () => {
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
     expect(result.status).toBe(0);
     const output = JSON.parse(result.stdout);
-    expect(output.quality_status).toBe("incomplete");
+    // This fixture intentionally leaves unrelated build-spec inputs unavailable;
+    // the non-consistent analyzer must still not add its own quality warning or
+    // completion gap. The stage quality result may remain incomplete for those
+    // other recorded warnings, while the stage result itself is completed.
+    expect(output.status).toBe("completed");
+    expect(output.completion.missing ?? []).not.toContain("stage_end_spec_analyze");
     expect(output.stage_outcome_summary.spec_analyze).toMatchObject({ status: "inconsistent" });
-    expect(output.quality_warnings).toContain("stage-end-spec-analyze:inconsistent");
+    expect(output.quality_warnings ?? []).not.toContain("stage-end-spec-analyze:inconsistent");
+    expect(output.quality_advisories).toContain("stage-end-spec-analyze:inconsistent");
+    const analyzerFactRef = (output.quality_advisory_fact_refs ?? []).find((factRef) =>
+      JSON.parse(state.task.readRecord(factRef)).subject === "stage_end_spec_analyze");
+    expect(analyzerFactRef).toBeDefined();
+    expect(output.quality_fact_refs ?? []).not.toContain(analyzerFactRef);
   });
 
   it("reports unavailable Stage Agent outcome cost that contains guessed numbers without blocking work", async () => {
