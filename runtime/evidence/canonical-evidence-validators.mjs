@@ -2,14 +2,17 @@ import { createHash } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
 import qualityFactSchema from "../schemas/quality-fact.v1.json" with { type: "json" };
 import { validateTestRuntimeProfile } from "../stage/stage-content-contracts.mjs";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
-const HASH = /^[a-f0-9]{64}$/;
+const HASH = SHA256_HEX;
 const OID = /^[a-f0-9]{40,64}$/;
 const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const FULL_TEST_COMMAND = "npm test";
 const IMPLEMENTATION_DIFF_REF = /^quality\/evidence\/implementation\/[a-f0-9]{64}\.diff$/;
-const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
+export const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
+export const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
+export const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
+export const CLOSE_PLAN_REF = /^operations\/close\/plans\/([a-f0-9]{64})\/plan\.json$/;
 const SAFE_PATH = /^(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+))(?:\/(?:(?:[A-Za-z0-9_][A-Za-z0-9._-]*|\.[A-Za-z0-9._-]+)))*$/;
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
 const qualityFactValidator = new Ajv2020({ allErrors: true, strict: false,

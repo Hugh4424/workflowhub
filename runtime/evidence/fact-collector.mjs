@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
 const READERS = new WeakSet();
 const REQUIREMENT_MESSAGE_CLASSES = new Set([
@@ -84,7 +85,7 @@ export function authenticateRegisteredRequirementMessages(source, { stage = null
     if (!Number.isSafeInteger(value.order) || value.order !== expectedOrder) lineErrors.push("message order is not contiguous");
     if (typeof value.content !== "string" || value.content.trim() === "") lineErrors.push("message content is required for hash verification");
     const actualHash = typeof value.content === "string" ? sha256(value.content) : null;
-    if (!/^[a-f0-9]{64}$/.test(value.content_hash ?? "") || value.content_hash !== actualHash) lineErrors.push("message content hash mismatch");
+    if (!SHA256_HEX.test(value.content_hash ?? "") || value.content_hash !== actualHash) lineErrors.push("message content hash mismatch");
     if (lineErrors.length) {
       errors.push(requirementMessageError("MESSAGE_AUTHENTICATION_FAILED", `line ${lineIndex + 1}: ${lineErrors.join(", ")}`));
       continue;

@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { validateAcceptanceEvidence } from "../evidence/canonical-receipt-writer.mjs";
-import { isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
-import { normalizeRuntimeOnlyPaths } from "../evidence/canonical-utils.mjs";
+import { STAGE_REFLECTION_REF, isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
+import { SHA256_HEX, normalizeRuntimeOnlyPaths } from "../evidence/canonical-utils.mjs";
 import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { aggregateCanonicalProviderResults } from "../review/canonical-review-result.mjs";
@@ -178,8 +178,6 @@ const NAMESPACE = Object.freeze({
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification", clarify: "spec-clarify", ui_qa: "browser-qa" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
-const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_NAMES = new Set(["review", "direction_review", "detail_review", "quality_review"]);
 const COMPLETION_COPY = Object.freeze({
   "make-decision": { objective: "把方向和取舍整理成可执行的最终决定", approach: "核对真实交互、文档拷问和正式审查后发布最终决定", effect: "下一阶段只需读取已接受的最终决定", next_owner: "build-spec" },
@@ -513,7 +511,7 @@ export function validateAcceptanceCoverageShape(value, {
       const validNamespace = currentOnly
         ? entry.ref.startsWith("quality/evidence/")
         : entry.ref.startsWith("evidence/") || entry.ref.startsWith("quality/evidence/");
-      if (!validNamespace || entry.ref.includes("..") || !SHA256.test(entry.sha256 ?? "")) {
+      if (!validNamespace || entry.ref.includes("..") || !SHA256_HEX.test(entry.sha256 ?? "")) {
         throw shapeDiagnosticError(`acceptance_coverage ${id} evidence reference is invalid`, `acceptance_coverage.items[${index}].evidence_refs[${refIndex}]`, "canonical evidence ref with sha256", entry);
       }
       return { ref: entry.ref, sha256: entry.sha256 };
@@ -652,7 +650,7 @@ function auditFacts(worker, invocation) {
   const value = object(record.value, "audit summary");
   if (value.schema_version !== "v1" || value.task_id !== worker.identity.taskId
       || value.stage_slug !== worker.stage || !new Set(["pass", "fail"]).has(value.verdict)
-      || !SHA256.test(value.summary_hash ?? "") || !Array.isArray(value.content_evidence_refs)
+      || !SHA256_HEX.test(value.summary_hash ?? "") || !Array.isArray(value.content_evidence_refs)
       ) {
     throw new Error("audit summary is not an authenticated summary for this stage");
   }
@@ -718,7 +716,7 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
   if (!Number.isInteger(item.value.exit_code)) throw new TypeError(`${name}.exit_code must be integer`);
   for (const key of ["command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash"]) text(item.value[key], `${name}.${key}`);
   if (item.value.command_hash !== hashText(item.value.command)) throw new Error(`${name}.command_hash does not match command`);
-  if (item.value.source_digest !== undefined && !SHA256.test(item.value.source_digest)) throw new Error(`${name}.source_digest must be sha256`);
+  if (item.value.source_digest !== undefined && !SHA256_HEX.test(item.value.source_digest)) throw new Error(`${name}.source_digest must be sha256`);
   if (!/^quality\/tests\/output\//.test(item.value.output_ref) || item.value.output_ref.includes("..")) throw new Error(`${name}.output_ref must use canonical test-output namespace`);
   if (item.value.runtime_profile !== undefined && (typeof item.value.runtime_profile !== "object" || Array.isArray(item.value.runtime_profile))) throw new TypeError(`${name}.runtime_profile must be an object`);
   if (item.value.runtime_profile_status !== undefined && !["ready", "unavailable", "incomplete"].includes(item.value.runtime_profile_status)) throw new Error(`${name}.runtime_profile_status is invalid`);
@@ -1046,7 +1044,7 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     invocationId = result.invocation_id ?? invocationId;
     payload = result.payload ?? result.browser_qa ?? result.evidence;
     if (result.evidence_ref !== undefined || result.evidence_hash !== undefined) {
-      if (typeof result.evidence_ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(result.evidence_ref) || !SHA256.test(result.evidence_hash ?? "")) throw new Error("controlled QA evidence_ref/evidence_hash binding is invalid");
+      if (typeof result.evidence_ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(result.evidence_ref) || !SHA256_HEX.test(result.evidence_hash ?? "")) throw new Error("controlled QA evidence_ref/evidence_hash binding is invalid");
       if (typeof worker.readEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
       const readBrowserEvidence = worker.readBrowserQaEvidence ?? worker.readEvidence;
       if (typeof readBrowserEvidence !== "function") throw new Error("controlled QA canonical evidence reader is unavailable");
@@ -1133,7 +1131,7 @@ async function controlledBrowserQaFacts(worker, invocation, derivedImpact = null
     const canonicalRef = payload.evidence_ref ?? payload.evidence?.ref;
     const canonicalHash = payload.evidence_hash ?? payload.evidence?.sha256 ?? payload.evidence?.hash;
     if (typeof canonicalRef !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(canonicalRef)
-        || !SHA256.test(canonicalHash ?? "")) {
+        || !SHA256_HEX.test(canonicalHash ?? "")) {
       const reason = "controlled browser QA pass is missing canonical evidence_ref/evidence_hash";
       return {
         facts: { status: "unknown", invocation_id: invocationId, ...binding, result: payload.result, reason },
@@ -1418,7 +1416,7 @@ export async function acceptanceExecutionFacts(worker, snapshotTree) {
     if (!Array.isArray(result.evidence_refs)) throw new TypeError(`${scenario.tier} acceptance executor evidence_refs must be an array`);
     const evidenceRefs = result.evidence_refs.map((entry, index) => {
       const ref = object(entry, `${scenario.tier} acceptance executor evidence_refs[${index}]`);
-      if (typeof ref.ref !== "string" || !ref.ref.startsWith("quality/evidence/") || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) {
+      if (typeof ref.ref !== "string" || !ref.ref.startsWith("quality/evidence/") || ref.ref.includes("..") || !SHA256_HEX.test(ref.sha256 ?? "")) {
         throw new Error(`${scenario.tier} acceptance executor evidence reference is invalid`);
       }
       return Object.freeze({ ref: ref.ref, sha256: ref.sha256 });
@@ -1466,7 +1464,7 @@ export function e2eAcceptanceFacts(worker) {
   const confirmation = object(source.user_confirmation, "E2E user confirmation evidence");
   const missing = [];
   const ref = (value, label, pattern) => {
-    if (typeof value?.ref !== "string" || !pattern.test(value.ref) || !SHA256.test(value.sha256 ?? "")) {
+    if (typeof value?.ref !== "string" || !pattern.test(value.ref) || !SHA256_HEX.test(value.sha256 ?? "")) {
       missing.push(`${label} canonical ref/hash is missing or invalid`);
       return null;
     }
@@ -1484,7 +1482,7 @@ export function e2eAcceptanceFacts(worker) {
   } else if (review.reviewer_actor.source_id.split("/")[0] === execution.executor_actor?.source_id?.split("/")[0]) {
     missing.push("independent reviewer source family equals the executor source family");
   }
-  if (!review.frozen_material || typeof review.frozen_material !== "object" || !/^quality\/evidence\/review-materials\/[a-f0-9]{64}\.json$/.test(review.frozen_material.ref ?? "") || !SHA256.test(review.frozen_material.sha256 ?? "")) missing.push("independent review frozen material ref is unavailable");
+  if (!review.frozen_material || typeof review.frozen_material !== "object" || !/^quality\/evidence\/review-materials\/[a-f0-9]{64}\.json$/.test(review.frozen_material.ref ?? "") || !SHA256_HEX.test(review.frozen_material.sha256 ?? "")) missing.push("independent review frozen material ref is unavailable");
   return Object.freeze({
     required: true,
     status: missing.length === 0 ? "passed" : "missing",
@@ -1685,7 +1683,7 @@ export function certifyBuildCodeQualityBasis({
   }
   const reviewRef = review?.result_ref ?? review?.attempt_ref;
   const reviewHash = review?.result_hash ?? review?.attempt_hash;
-  if (typeof reviewRef !== "string" || !SHA256.test(reviewHash ?? "")) {
+  if (typeof reviewRef !== "string" || !SHA256_HEX.test(reviewHash ?? "")) {
     qualityGaps.push("authenticated independent review fact is unavailable");
   }
   if (!Array.isArray(expectedAc) || !Array.isArray(coveredAc) || !sameStringSet(coveredAc, expectedAc)) {
@@ -1842,7 +1840,7 @@ function verifyReviewChain(worker, result, expectedTrack, producerStage = worker
   if (result.attempt_ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`) throw new Error("review attempt path identity mismatch");
   if (typeof resultRef === "string" && /^quality\/reviews\/results\/[^/]+-simple-/.test(resultRef)
       && resultRef !== `quality/reviews/results/${producerStage}-simple-${attempt.attempt_id}.json`) throw new Error("ordinary review result/attempt path identity mismatch");
-  if (!SHA256.test(attemptRecord.sha256 ?? "")) throw new Error("review attempt hash must be sha256");
+  if (!SHA256_HEX.test(attemptRecord.sha256 ?? "")) throw new Error("review attempt hash must be sha256");
 
   for (const key of ["task_id", "stage", "review_track", "snapshot_tree", "material_id", "subject_kind", "phase_id", "review_scope", "base_tree", "candidate_tree"]) {
     if (attempt[key] !== result[key]) throw new Error(`review attempt/result ${key} mismatch`);
@@ -1884,7 +1882,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   const attemptId = item.ref.match(REVIEW_ATTEMPT_REF)?.[1];
   if (!attemptId || attempt.attempt_id !== attemptId) throw new Error("review attempt_ref identity mismatch");
   if (attempt.terminal_status !== "unavailable" || !attempt.error) throw new Error("review attempt ref must describe an unavailable review");
-  if (!SHA256.test(item.evidence.sha256)) throw new Error("review unavailable attempt hash must be sha256");
+  if (!SHA256_HEX.test(item.evidence.sha256)) throw new Error("review unavailable attempt hash must be sha256");
   if (expectedTrack !== undefined && attempt.review_track !== expectedTrack) throw new Error(`review must use wh-review ${expectedTrack} track`);
   // A broker group can terminate before dispatching any provider. Preserve
   // that terminal transport fact as unavailable; do not accept an empty
@@ -1924,7 +1922,7 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
       if (providerFromRef !== expectedProviderFilePart) throw new Error(`review provider ${providerAttempt.provider} output ref identity mismatch`);
       const outputRecord = object(worker.readReceipt(providerAttempt.output_ref), `review provider ${providerAttempt.provider} output record`);
       output = object(outputRecord.value, `review provider ${providerAttempt.provider} output`);
-      if (!SHA256.test(outputRecord.sha256 ?? "")) throw new Error(`review provider ${providerAttempt.provider} output hash must be sha256`);
+      if (!SHA256_HEX.test(outputRecord.sha256 ?? "")) throw new Error(`review provider ${providerAttempt.provider} output hash must be sha256`);
       if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== worker.identity.taskId || output.stage !== producerStage || output.attempt_id !== attemptId || output.provider !== providerAttempt.provider || typeof output.content !== "string" || output.content_hash !== hashText(output.content)) {
         throw new Error(`review provider ${providerAttempt.provider} output provenance mismatch`);
       }
@@ -2231,7 +2229,7 @@ function requirementReplayFacts(worker, verification, currentTree) {
     if (value.status === "pass" && value.evidence_refs.length === 0) throw new Error(`requirement_replay ${value.source_id} pass requires evidence`);
     const evidenceRefs = value.evidence_refs.map((binding, bindingIndex) => {
       const ref = object(binding, `requirement_replay ${value.source_id}.evidence_refs[${bindingIndex}]`);
-      if (typeof ref.ref !== "string" || !/^(?:evidence|quality\/evidence|quality\/tests)\//.test(ref.ref) || ref.ref.includes("..") || !SHA256.test(ref.sha256 ?? "")) throw new Error(`requirement_replay ${value.source_id} evidence reference is invalid`);
+      if (typeof ref.ref !== "string" || !/^(?:evidence|quality\/evidence|quality\/tests)\//.test(ref.ref) || ref.ref.includes("..") || !SHA256_HEX.test(ref.sha256 ?? "")) throw new Error(`requirement_replay ${value.source_id} evidence reference is invalid`);
       const record = worker.readReceipt(ref.ref);
       if (record.sha256 !== ref.sha256) throw new Error(`requirement_replay ${value.source_id} evidence hash mismatch`);
       return { ref: ref.ref, sha256: ref.sha256 };
@@ -2554,7 +2552,7 @@ function authenticatedTaskEvidence(worker, { ref, hash, label, pattern }) {
   if (typeof ref !== "string" || !pattern.test(ref)) {
     errors.push(`${label} ref is outside its canonical task namespace`);
   }
-  if (!SHA256.test(hash ?? "")) errors.push(`${label} sha256 is required`);
+  if (!SHA256_HEX.test(hash ?? "")) errors.push(`${label} sha256 is required`);
   if (errors.length) return { errors, evidence: null, value: null };
   try {
     const evidence = worker.readEvidence(ref);
@@ -2581,7 +2579,7 @@ function rendererPublication(value, label, errors) {
       || publication.schema_version !== "workflowhub-evidence-publication.v1"
       || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
       || publication.source_path.startsWith("/") || publication.source_path.split(/[\\/]/).includes("..")
-      || !SHA256.test(publication.content_sha256 ?? "")
+      || !SHA256_HEX.test(publication.content_sha256 ?? "")
       || publication.content_encoding !== "base64"
       || typeof publication.content_base64 !== "string"
       || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
@@ -2649,7 +2647,7 @@ function authenticatedPublishedEvidenceText(value, label, errors) {
   ]);
   if (Object.keys(publication).some((key) => !allowed.has(key))
       || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
-      || !/^[a-f0-9]{64}$/.test(publication.content_sha256 ?? "")
+      || !SHA256_HEX.test(publication.content_sha256 ?? "")
       || publication.content_encoding !== "base64"
       || typeof publication.content_base64 !== "string"
       || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
@@ -2687,7 +2685,7 @@ function rendererSource(value, label, errors) {
 
 function authenticatedRendererWorkspaceSource(worker, ref, hash, label, errors) {
   rendererSource(ref, label, errors);
-  if (!SHA256.test(hash ?? "")) {
+  if (!SHA256_HEX.test(hash ?? "")) {
     errors.push(`frontend-prototype-render ${label} sha256 is required`);
     return;
   }
@@ -3100,7 +3098,7 @@ function buildSpecUiFacts(worker, invocation) {
     const displayedAtMs = timestamp(displayAt);
     const repliedAtMs = timestamp(replyAt);
     if (!nonEmpty(designArtifactRef)) errors.push("plan-design-review: human_approved requires the current design artifact ref");
-    if (!SHA256.test(designArtifactHash ?? "")) errors.push("plan-design-review: human_approved requires the current design artifact sha256");
+    if (!SHA256_HEX.test(designArtifactHash ?? "")) errors.push("plan-design-review: human_approved requires the current design artifact sha256");
     if (!externalDesign && designArtifactRef !== prototype.facts.preview_ref) {
       errors.push("plan-design-review: design artifact ref does not match the authenticated renderer preview");
     }
@@ -3108,7 +3106,7 @@ function buildSpecUiFacts(worker, invocation) {
       errors.push("plan-design-review: design artifact sha256 does not match the authenticated renderer preview");
     }
     if (!nonEmpty(replyRef)) errors.push("plan-design-review: human_approved requires the current user reply ref");
-    if (!SHA256.test(replyHash ?? "")) errors.push("plan-design-review: human_approved requires the current user reply sha256");
+    if (!SHA256_HEX.test(replyHash ?? "")) errors.push("plan-design-review: human_approved requires the current user reply sha256");
     if (replySource !== "user") errors.push("plan-design-review: human_approved reply source must be user");
     if (displayedAtMs === null || repliedAtMs === null || repliedAtMs <= displayedAtMs) {
       errors.push("plan-design-review: the current design display event must precede the user reply");
@@ -3121,7 +3119,7 @@ function buildSpecUiFacts(worker, invocation) {
     // `reply_source: user` is only a label. Bind the reply itself to a
     // canonical accepted confirmation so a caller cannot pass arbitrary text
     // and a self-declared hash as proof of the human decision.
-    if (nonEmpty(replyRef) && SHA256.test(replyHash ?? "")) {
+    if (nonEmpty(replyRef) && SHA256_HEX.test(replyHash ?? "")) {
       const authenticatedReply = authenticatedBuildSpecConfirmation(worker, {
         ref: replyRef,
         hash: replyHash,

@@ -8,9 +8,19 @@ import { auditRetention } from "../../tools/architecture/retention-audit.mjs";
 describe("governance diagnostics are non-gating", () => {
   it("keeps deletion proof as a diagnostic and never creates a business-stage permit", () => {
     const errors = validateDeletionDisposition({ root: process.cwd() });
-    // The checked-in move-map has a known frozen-hash drift. It is an
-    // architecture diagnostic, not a business-stage permit or blocker.
-    expect(errors).toEqual(["retention move_map content hash drift"]);
+    // Both entries are frozen-hash drifts and nothing else. They are
+    // architecture diagnostics, not a business-stage permit or blocker.
+    //  - "retention move_map content hash drift" already existed at HEAD.
+    //  - "retention deletion_plan content hash drift" was caused by this
+    //    change editing docs/architecture/deletion-plan.json.
+    // docs/architecture/retention-manifest.json is a published baseline and is
+    // deliberately left frozen here, so the drift stays visible instead of
+    // being re-pinned by the change it would be certifying. Any third
+    // diagnostic must fail this test.
+    expect(errors).toEqual([
+      "retention deletion_plan content hash drift",
+      "retention move_map content hash drift",
+    ]);
     expect(validateDeletionDisposition.toString()).not.toMatch(/accept|authorize|stage.*block|gate.*business/i);
   });
 

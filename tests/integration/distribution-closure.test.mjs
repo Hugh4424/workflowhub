@@ -10,6 +10,7 @@ import yaml from "js-yaml";
 
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
 import { buildSkillBundleRelease, validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { buildRunnerRelease, validateRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
 import {
   checkReleaseClosure,
   checkSkillClosure,
@@ -409,6 +410,31 @@ describe("portable build-prd workflow closure", () => {
   });
 });
 
+
+
+test("carries the canonical shared definitions owner through the runner import closure", async () => {
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-runner-canonical-utils-"));
+  const skillBundleRoot = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-runner-canonical-utils-skill-"));
+  temps.push(outputDir, skillBundleRoot);
+  const skillBundleManifest = await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: skillBundleRoot });
+  const manifest = await buildRunnerRelease({ packageRoot: ROOT, outputDir });
+  expect(validateRunnerRelease({ releaseRoot: outputDir, skillBundleManifest })).toEqual(manifest);
+  const released = new Set(manifest.files.map((entry) => entry.path));
+  const canonicalUtils = "runtime/evidence/canonical-utils.mjs";
+  // The shared SHA-256 grammar owner is carried by the static import closure of
+  // the runner, so consumers must not hand-add it as a cross-directory bundle file.
+  expect(released.has(canonicalUtils), `${canonicalUtils} must be inside the runner import closure`).toBe(true);
+  const bundlePath = path.join(outputDir, canonicalUtils);
+  expect(fs.existsSync(bundlePath)).toBe(true);
+  expect(fs.readFileSync(bundlePath, "utf8")).toContain("export const SHA256_HEX");
+  for (const skillName of ["wh-review", "mini-task"]) {
+    const bundle = JSON.parse(fs.readFileSync(path.join(ROOT, `skills/${skillName}/skill-bundle.json`), "utf8"));
+    for (const entry of bundle.files) {
+      expect(entry.path.includes(".."), `${skillName} bundle must not reach outside its own directory: ${entry.path}`).toBe(false);
+      expect(entry.path.startsWith("runtime/"), `${skillName} bundle must not declare runtime bytes: ${entry.path}`).toBe(false);
+    }
+  }
+});
 
 test.each(["missing", "tampered"])("P5 released workflow source rejects %s bytes after a valid baseline", async (mutation) => {
   const releaseRoot = fs.mkdtempSync(path.join(os.tmpdir(), "workflowhub-p5-release-source-"));

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { createCanonicalReceiptWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
@@ -17,7 +18,6 @@ import {
   prepareDeliveryClosePlan,
 } from "../../../core/task-close.mjs";
 
-const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/i;
 const SAFE_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const MINI_REVIEW_RESULT = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
@@ -114,7 +114,7 @@ function readAcceptedCloseConfirmation(task, plan, confirmationRef) {
       || confirmation.plan_hash !== planHash
       || confirmation.outcome !== "confirmed"
       || typeof confirmation.human_confirmation_ref !== "string"
-      || !HASH.test(confirmation.human_confirmation_hash ?? "")) {
+      || !SHA256_HEX.test(confirmation.human_confirmation_hash ?? "")) {
     throw new Error("A resume confirmation is invalid or not bound to this plan");
   }
   const humanRaw = task.readRecord(confirmation.human_confirmation_ref);
@@ -334,7 +334,7 @@ function canonicalReviewBinding(task, review, expectedKind, expectedSnapshot, la
   const ref = resultRef ?? attemptRef;
   const digest = value.sha256 ?? value.hash;
   const unavailableRef = typeof ref === "string" && /^quality\/evidence\/mini-task-review-unavailable\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref);
-  if (typeof ref !== "string" || (!MINI_REVIEW_RESULT.test(ref) && !MINI_REVIEW_ATTEMPT.test(ref) && !unavailableRef) || !HASH.test(digest ?? "")) {
+  if (typeof ref !== "string" || (!MINI_REVIEW_RESULT.test(ref) && !MINI_REVIEW_ATTEMPT.test(ref) && !unavailableRef) || !SHA256_HEX.test(digest ?? "")) {
     throw new TypeError(`${label} must bind a canonical wh-review result or attempt`);
   }
   const raw = task.readRecord(ref);
@@ -367,8 +367,8 @@ function resultBindingOrUnavailable({ task, kernel, runResult, reviewKind, snaps
   const attemptRef = value.attempt_ref ?? value.attemptRef;
   const ref = value.status === "available" ? resultRef : attemptRef;
   const suppliedDigest = ref === resultRef ? value.result_sha256 ?? value.resultHash : value.attempt_sha256 ?? value.attemptHash;
-  const digest = typeof suppliedDigest === "string" && HASH.test(suppliedDigest ?? "") ? suppliedDigest : (typeof ref === "string" ? hash(task.readRecord(ref)) : null);
-  if (typeof ref === "string" && HASH.test(digest ?? "")) {
+  const digest = typeof suppliedDigest === "string" && SHA256_HEX.test(suppliedDigest ?? "") ? suppliedDigest : (typeof ref === "string" ? hash(task.readRecord(ref)) : null);
+  if (typeof ref === "string" && SHA256_HEX.test(digest ?? "")) {
     const binding = canonicalReviewBinding(task, value.status === "available" ? { result_ref: ref, sha256: digest } : { attempt_ref: ref, sha256: digest }, reviewKind, snapshotTree, `${reviewKind} review`);
     return bindingInput(binding);
   }
@@ -400,7 +400,7 @@ function readUserResultFields(value) {
 function receiptBinding(value, label = "mini-task focused test") {
   const ref = value?.receipt_ref ?? value?.ref;
   const digest = value?.receipt_hash ?? value?.sha256;
-  if (typeof ref !== "string" || !ref.startsWith("quality/tests/") || !HASH.test(digest ?? "")) {
+  if (typeof ref !== "string" || !ref.startsWith("quality/tests/") || !SHA256_HEX.test(digest ?? "")) {
     throw new Error(`${label} binding is invalid`);
   }
   return { ref, sha256: digest };
@@ -487,7 +487,7 @@ function unavailableReviewRecord({ task, kernel, reviewKind, snapshotTree, reaso
 }
 
 function readBoundJson(task, binding, label) {
-  if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) throw new Error(`${label} evidence binding is invalid`);
+  if (!binding || typeof binding.ref !== "string" || !SHA256_HEX.test(binding.sha256 ?? "")) throw new Error(`${label} evidence binding is invalid`);
   const raw = task.readRecord(binding.ref);
   if (hash(raw) !== binding.sha256) throw new Error(`${label} evidence hash mismatch`);
   return JSON.parse(raw);

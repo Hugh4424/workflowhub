@@ -7,6 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const STAGE_INDEX = new Map(STAGES.map((value, index) => [value, index]));
@@ -158,7 +159,7 @@ function normalTarget(input) {
   if (authority === undefined || authoritySha256 === undefined) throw fail("stale_source", `target authority is unavailable: ${targetId}`);
   const authorityRef = String(authority);
   const authorityHash = authoritySha256;
-  if (!/^[a-f0-9]{64}$/.test(authorityHash)) throw fail("stale_source", `target authority hash is invalid: ${targetId}`);
+  if (!SHA256_HEX.test(authorityHash)) throw fail("stale_source", `target authority hash is invalid: ${targetId}`);
   return { project_id: projectId, target_kind: targetKind, target_id: targetId, target_version: ["stage", "surface"].includes(targetKind) ? null : String(targetVersion), authority_ref: authorityRef, authority_sha256: authorityHash };
 }
 
@@ -292,7 +293,7 @@ function validateTaxSource(item, identity, inventory, storageRoot) {
   const sourceRef = item.source_ref ?? item.sourceRef ?? sourceValue.source_ref ?? sourceValue.ref;
   if (sourceRef !== undefined && (typeof sourceRef !== "string" || sourceRef.trim() === "")) return "source_ref_invalid";
   const sourceHash = item.source_sha256 ?? item.sourceSha256 ?? sourceValue.source_sha256 ?? sourceValue.sha256 ?? sourceValue.hash;
-  if (sourceHash !== undefined && !/^[a-f0-9]{64}$/.test(sourceHash)) return "source_hash_invalid";
+  if (sourceHash !== undefined && !SHA256_HEX.test(sourceHash)) return "source_hash_invalid";
   const sourcePath = item.source_path ?? item.sourcePath ?? sourceValue.path;
   if (sourcePath !== undefined) {
     if (typeof sourcePath !== "string" || sourcePath.trim() === "") return "source_path_invalid";
@@ -511,7 +512,7 @@ function validManualRecoveryAuthority(recovery, current, currentRaw, project, bo
     && typeof (recovery.operator_identity ?? recovery.operator) === "string" && (recovery.operator_identity ?? recovery.operator).trim() !== ""
     && typeof recovery.issued_at === "string" && Number.isFinite(Date.parse(recovery.issued_at))
     && typeof recovery.confirmation_ref === "string" && recovery.confirmation_ref.trim() !== ""
-    && typeof recovery.confirmation_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.confirmation_sha256));
+    && typeof recovery.confirmation_sha256 === "string" && SHA256_HEX.test(recovery.confirmation_sha256));
 }
 function fsyncParent(path) {
   const fd = openSync(dirname(path), "r");
@@ -654,7 +655,7 @@ export function acquireProjectLock(input = {}) {
   if (recovery && !existsSync(existingPath)) {
     const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
       && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
-      && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
+      && typeof recovery.current_lock_sha256 === "string" && SHA256_HEX.test(recovery.current_lock_sha256)
       ? `${existingPath}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
     if (recoveryTombstone && existsSync(recoveryTombstone)) {
       return { status: "replayed_recovery", error: { code: "replayed_recovery", summary: "lock recovery nonce was already consumed" } };
@@ -664,7 +665,7 @@ export function acquireProjectLock(input = {}) {
   const path = existsSync(existingPath) ? existingPath : lockPath(storageRoot, project);
   const recoveryTombstone = recovery && typeof recovery === "object" && !Array.isArray(recovery)
     && typeof recovery.nonce === "string" && recovery.nonce.trim() !== ""
-    && typeof recovery.current_lock_sha256 === "string" && /^[a-f0-9]{64}$/.test(recovery.current_lock_sha256)
+    && typeof recovery.current_lock_sha256 === "string" && SHA256_HEX.test(recovery.current_lock_sha256)
     ? `${path}.tombstone-${recovery.nonce}-${recovery.current_lock_sha256}` : null;
   const bootId = input.bootId ?? input.boot_id ?? process.env.WORKFLOWHUB_BOOT_ID ?? "boot-local";
   const sessionEpoch = input.sessionEpoch ?? input.session_epoch ?? process.env.WORKFLOWHUB_SESSION_EPOCH ?? "session-local";
@@ -1240,7 +1241,7 @@ function observationsToRecords(inventory, now, snapshotId, generation, storageRo
     const confirmation = inventory.human_confirmation ?? inventory.humanConfirmation ?? entries[0].observation.human_confirmation ?? entries[0].observation.humanConfirmation ?? {};
     const confirmationRef = requiredString(confirmation.ref ?? confirmation.human_confirmation_ref ?? entries[0].observation.confirmation_ref, "human_confirmation_ref");
     const confirmationSha256 = requiredString(confirmation.sha256 ?? confirmation.human_confirmation_sha256 ?? entries[0].observation.confirmation_sha256, "human_confirmation_sha256");
-    if (!/^[a-f0-9]{64}$/.test(confirmationSha256)) throw fail("invalid_input", "human_confirmation_sha256 must be a lowercase SHA-256 identity");
+    if (!SHA256_HEX.test(confirmationSha256)) throw fail("invalid_input", "human_confirmation_sha256 must be a lowercase SHA-256 identity");
     const classifications = entries.map((entry) => entry.observation.classification).filter((value) => typeof value === "string" && value !== "");
     const classification = classifications[0] ?? "needs_evidence";
     const relatedTargets = normalizedIdentities(entries.flatMap((entry) => entry.observation.related_targets ?? entry.observation.relatedTargets ?? []));

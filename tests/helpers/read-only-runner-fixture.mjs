@@ -9,12 +9,29 @@ import { buildRunnerRelease, installRunnerRelease } from "../../runtime/distribu
 import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { createTask } from "../../runtime/task/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
 import { writeHumanConfirmation } from "./human-confirmation.mjs";
 
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
+
+/**
+ * The retired audit-summary carrier hashed the summary without its own
+ * `summary_hash`, over key-sorted compact JSON: no pretty-printing and no
+ * trailing newline. Reimplement that exact byte recipe here so the published
+ * audit record keeps its identity; the generic canonical serializer in
+ * runtime/evidence/canonical-utils.mjs uses a different form and would change
+ * the hash.
+ */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function hashAuditSummary(summary) {
+  const { summary_hash: _summaryHash, ...unsigned } = summary ?? {};
+  return hash(canonicalJson(unsigned));
+}
 
 function isolatedRunnerEnv(home, storage) {
   const env = { ...process.env, HOME: home, WORKFLOWHUB_TASK_DIR: storage, NODE_PATH: "" };

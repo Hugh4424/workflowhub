@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SHA256_HEX_CASE_INSENSITIVE } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const protocol = "workflowhub-result.v3";
 const reviewModes = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework", "legacy"]);
@@ -154,7 +155,7 @@ function validateV3String(value, label, { nullable = false, publicMetadata = fal
 }
 
 function validateV3Sha256(value, label) {
-  if (value !== null && (typeof value !== "string" || !/^[a-f0-9]{64}$/i.test(value))) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
+  if (value !== null && (typeof value !== "string" || !SHA256_HEX_CASE_INSENSITIVE.test(value))) throw failure("PROTOCOL_INCOMPATIBLE", `${label} is invalid`);
   return value;
 }
 

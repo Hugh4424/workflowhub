@@ -4,11 +4,11 @@ import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameS
 import { randomUUID } from "node:crypto";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { STAGE_REFLECTION_REF } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { acquireProjectLock, assertProjectLockCurrent } from "../../runtime/evidence/workflow-evolution.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const REF = /^quality\/stage-reflection\/(make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 const LESSON_REF = /^lessons\/(make-decision|build-spec|build-plan|build-code|verify-code)\.jsonl#[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function fail(message) {
@@ -36,7 +36,7 @@ function parseArgs(argv) {
   if (!isAbsolute(values.root)) fail("--root must be an absolute storage root");
   if (!SEGMENT.test(values.proj) || !SEGMENT.test(values["task-id"])) fail("--proj and --task-id must be one safe path segment");
   if (!STAGES.has(values.stage)) fail(`unsupported stage: ${values.stage}`);
-  if (!REF.test(values["reflection-ref"]) || !(values["reflection-ref"] === `quality/stage-reflection/${values.stage}.json` || values["reflection-ref"].startsWith(`quality/stage-reflection/${values.stage}/`))) {
+  if (!STAGE_REFLECTION_REF.test(values["reflection-ref"]) || !(values["reflection-ref"] === `quality/stage-reflection/${values.stage}.json` || values["reflection-ref"].startsWith(`quality/stage-reflection/${values.stage}/`))) {
     fail("--reflection-ref must be quality/stage-reflection/<stage>.json for --stage");
   }
   return values;
@@ -179,7 +179,7 @@ function acquireLessonMergeLock(storageRoot, project) {
 
 export function appendLessonObservation({ root, proj, stage, taskId, text, reflectionRef, now = new Date().toISOString(), entryId = randomUUID() }) {
   validateLessonIdentity({ proj, stage, taskId });
-  if (typeof reflectionRef !== "string" || !REF.test(reflectionRef) || !(reflectionRef === `quality/stage-reflection/${stage}.json` || reflectionRef.startsWith(`quality/stage-reflection/${stage}/`))) {
+  if (typeof reflectionRef !== "string" || !STAGE_REFLECTION_REF.test(reflectionRef) || !(reflectionRef === `quality/stage-reflection/${stage}.json` || reflectionRef.startsWith(`quality/stage-reflection/${stage}/`))) {
     fail("reflectionRef must be quality/stage-reflection/<stage>.json for stage");
   }
   if (typeof text !== "string" || text.trim() === "") fail("text must be non-empty");

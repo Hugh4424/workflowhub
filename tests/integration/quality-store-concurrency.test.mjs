@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFile, execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -45,9 +45,9 @@ describe("quality store EEXIST semantics", () => {
 
   it("rejects direct writes to the WorkflowHub vNext quality namespace regardless of storage path", () => {
     const root = taskRoot("workflowhub", "vnext-single-write");
-    const indexBefore = readFileSync(join(root, "index.json"), "utf8");
     expect(() => publishQualityFact(root, "tests", value())).toThrow(/stage-runtime|canonical.*writer|current quality/i);
-    expect(readFileSync(join(root, "index.json"), "utf8")).toBe(indexBefore);
+    // Current tasks publish no index object, so the refusal cannot have written one.
+    expect(existsSync(join(root, "index.json"))).toBe(false);
   });
 
   it("does not use a directory basename as writer authority", () => {

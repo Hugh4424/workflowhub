@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 export { CURRENT_MATERIAL_FILES as MATERIAL_FILES } from "../task/material-workspace.mjs";
 
 import Ajv2020 from "ajv/dist/2020.js";
@@ -10,7 +11,6 @@ import planTaskV2Schema from "../schemas/plan-task-contract.v2.json" with { type
 import makeDecisionSteps from "../../workflows/make-decision/steps.json" with { type: "json" };
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const HASH = /^[a-f0-9]{64}$/;
 // One AC grammar for every current-material parser. Keep the legacy compact
 // forms (AC1/AC-001) while accepting the namespaced form used by spec-content
 // v3 (AC-{DOMAIN}-{NNN}).
@@ -87,7 +87,7 @@ const CAPABILITY_PROOF_DECISIONS = new Set([
 ]);
 
 function isHash(value) {
-  return typeof value === "string" && HASH.test(value);
+  return typeof value === "string" && SHA256_HEX.test(value);
 }
 
 function validateCapabilityProof(value, errors, { requireProof, permissions = undefined }) {
@@ -811,8 +811,8 @@ function sourceIdentity(value, expectedKind, errors, label) {
   }
   if (value.document_kind !== expectedKind) errors.push(`${label}.document_kind must be ${expectedKind}`);
   if (!nonEmptyString(value.path) || !SAFE_DOCUMENT_PATH.test(value.path)) errors.push(`${label}.path must be a project-relative path`);
-  if (!HASH.test(value.content_sha256 ?? "")) errors.push(`${label}.content_sha256 must be a sha256 of the raw UTF-8 bytes`);
-  if (typeof value.content === "string" && HASH.test(value.content_sha256 ?? "") && sha256(value.content) !== value.content_sha256) {
+  if (!SHA256_HEX.test(value.content_sha256 ?? "")) errors.push(`${label}.content_sha256 must be a sha256 of the raw UTF-8 bytes`);
+  if (typeof value.content === "string" && SHA256_HEX.test(value.content_sha256 ?? "") && sha256(value.content) !== value.content_sha256) {
     errors.push(`${label}.content_sha256 does not match the supplied raw UTF-8 content`);
   }
   if (!nonEmptyString(value.revision) || UNKNOWN_LITERAL.test(String(value.revision))) errors.push(`${label}.revision must be a non-empty current revision`);
@@ -859,7 +859,7 @@ export function completeProjectSourceIdentity(value) {
   return Boolean(identity
     && PROJECT_STANDARD_DOCUMENT_KINDS.includes(identity.document_kind)
     && SAFE_DOCUMENT_PATH.test(identity.path ?? "")
-    && HASH.test(identity.content_sha256 ?? "")
+    && SHA256_HEX.test(identity.content_sha256 ?? "")
     && nonEmptyString(identity.revision)
     && nonEmptyString(identity.anchor_id)
     && !UNKNOWN_LITERAL.test(String(identity.revision))
@@ -2064,7 +2064,7 @@ export function validateBuildCodePhaseEvidence(value, { snapshotTree } = {}) {
   if (!Array.isArray(value.evidence) || value.evidence.length === 0) throw new TypeError("build-code phase evidence requires evidence");
   const evidence = value.evidence.map((entry, index) => {
     if (!object(entry) || Object.keys(entry).some((key) => !new Set(["ref", "sha256", "snapshot_tree"]).has(key))
-        || typeof entry.ref !== "string" || entry.ref.trim() === "" || !HASH.test(entry.sha256 ?? "")
+        || typeof entry.ref !== "string" || entry.ref.trim() === "" || !SHA256_HEX.test(entry.sha256 ?? "")
         || !GIT_OID.test(entry.snapshot_tree ?? value.snapshot_tree) || (entry.snapshot_tree ?? value.snapshot_tree) !== value.snapshot_tree) {
       throw new TypeError(`build-code phase evidence evidence[${index}] is invalid or stale`);
     }
@@ -2125,7 +2125,7 @@ export function validateInteractionQuestionProgress(value) {
     : currentTotal;
   const totalDelta = currentTotal - previousTotal;
   if (object(previous) && totalDelta !== 0) {
-    if (typeof value.reply_ref !== "string" || value.reply_ref.trim() === "" || !HASH.test(value.reply_hash ?? "")) {
+    if (typeof value.reply_ref !== "string" || value.reply_ref.trim() === "" || !SHA256_HEX.test(value.reply_hash ?? "")) {
       errors.push("a changed total requires a bound real reply ref/hash");
     }
     if (typeof value.total_change_reason !== "string" || value.total_change_reason.trim() === "") {
@@ -2162,7 +2162,7 @@ function nonEmptyString(value) {
 }
 
 function validHash(value) {
-  return HASH.test(value ?? "");
+  return SHA256_HEX.test(value ?? "");
 }
 
 function validInteractionRound(value) {
@@ -2425,15 +2425,15 @@ export function validateInteractionAggregateContract(value) {
   }
 
   const requirement = value.original_requirement;
-  if (!object(requirement) || !SAFE_REF.test(requirement.ref ?? "") || !HASH.test(requirement.hash ?? "")) {
+  if (!object(requirement) || !SAFE_REF.test(requirement.ref ?? "") || !SHA256_HEX.test(requirement.hash ?? "")) {
     errors.push("interaction aggregate original_requirement must bind a ref and hash");
   }
   const decision = value.decision ?? (value.decision_ref ? { ref: value.decision_ref, hash: value.decision_hash, revision: value.material_revision } : null);
-  if (!object(decision) || !SAFE_REF.test(decision.ref ?? "") || !HASH.test(decision.hash ?? "") || !/^revision-[a-f0-9]{64}$/.test(decision.revision ?? "")) {
+  if (!object(decision) || !SAFE_REF.test(decision.ref ?? "") || !SHA256_HEX.test(decision.hash ?? "") || !/^revision-[a-f0-9]{64}$/.test(decision.revision ?? "")) {
     errors.push("interaction aggregate decision must bind ref, hash, and material revision");
   }
   const confirmation = value.confirmation;
-  if (!object(confirmation) || !/^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(confirmation.ref ?? "") || !HASH.test(confirmation.hash ?? "") || confirmation.result !== "accepted") {
+  if (!object(confirmation) || !/^quality\/confirmations\/[a-f0-9]{64}\.json$/.test(confirmation.ref ?? "") || !SHA256_HEX.test(confirmation.hash ?? "") || confirmation.result !== "accepted") {
     errors.push("interaction aggregate confirmation must bind an accepted confirmation ref and hash");
   }
 
@@ -2483,7 +2483,7 @@ export function validateInteractionAggregateContract(value) {
     errors.push("interaction aggregate advice summary is required");
   } else if (advice.status === "unavailable") {
     if (!explicitFact(advice.reason)) errors.push("unavailable interaction advice requires a reason");
-  } else if (!SAFE_REF.test(advice.result_ref ?? "") || !HASH.test(advice.result_hash ?? "")) {
+  } else if (!SAFE_REF.test(advice.result_ref ?? "") || !SHA256_HEX.test(advice.result_hash ?? "")) {
     errors.push("interaction aggregate advice must bind result_ref and result_hash");
   }
   return result(errors, {
@@ -2638,7 +2638,7 @@ function validateMain(input, errors) {
   }
   if (typeof input.main.markdown !== "string" || input.main.markdown.trim() === "") errors.push("main markdown is required");
   if (typeof input.main.ref !== "string" || input.main.ref.trim() === "") errors.push("main ref is required");
-  if (!HASH.test(input.main.hash ?? "") || input.main.hash !== sha256(input.main.markdown ?? "")) errors.push("main decision log hash binding mismatch");
+  if (!SHA256_HEX.test(input.main.hash ?? "") || input.main.hash !== sha256(input.main.markdown ?? "")) errors.push("main decision log hash binding mismatch");
   for (const section of REQUIRED_MAIN_SECTIONS) {
     if (!new RegExp(`^##\\s+${section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "mi").test(input.main.markdown ?? "")) {
       errors.push(`main decision log section missing: ${section}`);
@@ -2677,7 +2677,7 @@ function completeDetailPacket(input, errors) {
   const packet = input.detail_review_packet;
   if (!object(packet) || !/^[a-f0-9]{40}$/.test(packet.candidate_tree ?? "")) errors.push("detail review candidate tree is required");
   if (!object(packet?.interaction_aggregate) || packet.interaction_aggregate.complete !== true
-      || !HASH.test(packet.interaction_aggregate.hash ?? "")) {
+      || !SHA256_HEX.test(packet.interaction_aggregate.hash ?? "")) {
     errors.push("detail review requires the complete interaction aggregate");
   }
   const decision = packet?.decision_log;
@@ -2710,7 +2710,7 @@ export function validateDecisionLogContract(input) {
     const seen = new Set();
     for (const item of coverage.items) {
       const key = item?.source_item_ref;
-      if (typeof key !== "string" || !HASH.test(item?.source_item_hash ?? "")) errors.push("coverage source ref/hash is invalid");
+      if (typeof key !== "string" || !SHA256_HEX.test(item?.source_item_hash ?? "")) errors.push("coverage source ref/hash is invalid");
       if (seen.has(key)) errors.push(`source ${key} is covered more than once; every source must map exactly once`);
       seen.add(key);
       if (!new Set(["covered", "accepted_omission"]).has(item?.coverage_status)) errors.push(`source ${key} has invalid coverage status`);
@@ -3438,7 +3438,7 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
     const outputClasses = typeof messageId === "string"
       ? requirementCoverageOutputs
         .filter((entry) => entry?.message_id === messageId
-          && (!/^[a-f0-9]{64}$/.test(messageHash ?? "") || entry?.message_hash === messageHash))
+          && (!SHA256_HEX.test(messageHash ?? "") || entry?.message_hash === messageHash))
         .map((entry) => entry?.message_class)
       : [];
     const messageClasses = [...new Set([directClass, ...outputClasses]
@@ -3455,7 +3455,7 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
       }
       if (typeof requirementMessage === "object" && requirementMessage !== null) {
         const { id, content_hash: contentHash } = requirementMessage;
-        const output = typeof id === "string" && /^[a-f0-9]{64}$/.test(contentHash ?? "")
+        const output = typeof id === "string" && SHA256_HEX.test(contentHash ?? "")
           ? requirementCoverageOutputs.find((entry) => entry?.message_id === id
             && entry?.message_hash === contentHash && entry?.message_class === messageClass)
           : null;
@@ -3559,7 +3559,7 @@ export function validateSpecClarifyAndDirectionFidelity(specMarkdown, decisionLo
 export function validateDecisionCorrectionAppendix(value) {
   const errors = [];
   if (!object(value)) return result(["decision correction appendix must be an object"]);
-  if (!HASH.test(value.source_decision_hash ?? "") || typeof value.source_decision_ref !== "string") errors.push("source decision ref/hash is invalid");
+  if (!SHA256_HEX.test(value.source_decision_hash ?? "") || typeof value.source_decision_ref !== "string") errors.push("source decision ref/hash is invalid");
   if (value.does_not_rewrite_upstream !== true) errors.push("does_not_rewrite_upstream must be true");
   const corrections = new Map((value.corrections ?? []).map((entry) => [entry?.id, entry?.text]));
   for (const [id, text] of Object.entries(DECISION_CORRECTIONS)) {
@@ -3575,7 +3575,7 @@ export function buildDecisionCoverageAudit({
   sourceItems = [],
   mappings = [],
 } = {}) {
-  if (typeof decisionLogRef !== "string" || !HASH.test(decisionLogHash ?? "")) {
+  if (typeof decisionLogRef !== "string" || !SHA256_HEX.test(decisionLogHash ?? "")) {
     throw new TypeError("decision log ref/hash is required");
   }
   if (!Array.isArray(sourceItems) || !Array.isArray(mappings)) throw new TypeError("sourceItems and mappings must be arrays");
@@ -3586,7 +3586,7 @@ export function buildDecisionCoverageAudit({
   }
   const seenSources = new Set();
   const items = sourceItems.map((source) => {
-    if (typeof source?.source_item_ref !== "string" || !HASH.test(source?.source_item_hash ?? "")) {
+    if (typeof source?.source_item_ref !== "string" || !SHA256_HEX.test(source?.source_item_hash ?? "")) {
       throw new TypeError("source item ref/hash is invalid");
     }
     if (seenSources.has(source.source_item_ref)) throw new Error(`duplicate decision source item: ${source.source_item_ref}`);
@@ -4528,7 +4528,7 @@ function taskCompletionFact(task, completionEvidence) {
   }
   for (const [index, entry] of (Array.isArray(evidenceRefs) ? evidenceRefs : []).entries()) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)
-        || !completionEvidenceRef(entry) || !HASH.test(entry.sha256 ?? "")) {
+        || !completionEvidenceRef(entry) || !SHA256_HEX.test(entry.sha256 ?? "")) {
       errors.push(`evidence_refs[${index}] must contain a supported ref, optional kind, and sha256`);
       continue;
     }
@@ -5398,7 +5398,7 @@ function semanticMeaningMatches(expected, actual) {
 
 function hasEvidenceBinding(entry) {
   return nonEmptyString(entry?.ref)
-    && HASH.test(entry?.hash ?? "")
+    && SHA256_HEX.test(entry?.hash ?? "")
     && GIT_OID.test(entry?.snapshot_tree ?? "");
 }
 
@@ -5594,7 +5594,7 @@ function validateFinalConfirmation(value, { stage = "make-decision", identity } 
   if (value.decision !== "accepted" && value.status !== "accepted") errors.push("final confirmation must be accepted");
   validateIdentityBinding(value, identity, "final confirmation", errors);
   if (!nonEmptyString(value.subject_ref) && !nonEmptyString(value.subject_id)) errors.push("final confirmation subject binding is required");
-  if (!HASH.test(value.material_hash ?? value.decision_hash ?? "") && !nonEmptyString(value.material_revision)) errors.push("final confirmation must bind the current material identity");
+  if (!SHA256_HEX.test(value.material_hash ?? value.decision_hash ?? "") && !nonEmptyString(value.material_revision)) errors.push("final confirmation must bind the current material identity");
   validateLifecycleEvents(value, "final confirmation", errors);
   return errors;
 }
@@ -6111,7 +6111,7 @@ export function validateTasksOnlyCompletionSeam({
     }
     const bindings = new Map(targetFact.evidence_refs.map((entry) => [entry.ref, entry.sha256]));
     for (const required of requiredBindings) {
-      if (!required || typeof required.ref !== "string" || !HASH.test(required.sha256 ?? "")
+      if (!required || typeof required.ref !== "string" || !SHA256_HEX.test(required.sha256 ?? "")
           || bindings.get(required.ref) !== required.sha256) {
         errors.push(`${changedId} completion evidence does not bind ${required?.ref ?? "required fact"}`);
       }
@@ -6172,7 +6172,7 @@ export function validatePlanTaskContract({
     const binding = parseConstitutionBinding(plan);
     if (!binding || binding.artifact_kind !== "constitution"
         || typeof binding.ref !== "string" || binding.ref.trim() === ""
-        || !HASH.test(binding.hash ?? "") || typeof binding.id !== "string"
+        || !SHA256_HEX.test(binding.hash ?? "") || typeof binding.id !== "string"
         || typeof binding.version !== "string" || !Number.isInteger(binding.clause_count)) {
       errors.push("Constitution Check requires a complete ref/hash/id/version/clause_count binding");
     } else {
@@ -6916,8 +6916,8 @@ export function buildPlanTaskContract({
   tasksRef,
   tasksHash,
 } = {}) {
-  if (typeof planRef !== "string" || !HASH.test(planHash ?? "")
-      || typeof tasksRef !== "string" || !HASH.test(tasksHash ?? "")) {
+  if (typeof planRef !== "string" || !SHA256_HEX.test(planHash ?? "")
+      || typeof tasksRef !== "string" || !SHA256_HEX.test(tasksHash ?? "")) {
     throw new TypeError("plan/tasks canonical ref/hash bindings are required");
   }
   if (sha256(plan ?? "") !== planHash || sha256(tasks ?? "") !== tasksHash) {
@@ -7018,7 +7018,7 @@ function parseReferenceList(value) {
 function validReference(value) {
   return object(value) && ["spec", "plan", "tasks", "evidence"].includes(value.artifact_kind)
     && typeof value.ref === "string" && value.ref.trim() !== ""
-    && HASH.test(value.hash ?? "") && typeof value.id === "string" && value.id.trim() !== "";
+    && SHA256_HEX.test(value.hash ?? "") && typeof value.id === "string" && value.id.trim() !== "";
 }
 
 function v2TaskRows(tasks, errors) {
@@ -7061,7 +7061,7 @@ export function validatePlanTaskContractV2({ spec, plan, tasks, specRef, specHas
     if (typeof value !== "string" || value.trim() === "") errors.push(`${name} content is required`);
   }
   for (const [name, ref, hash] of [["spec", specRef, specHash], ["plan", planRef, planHash], ["tasks", tasksRef, tasksHash]]) {
-    if (typeof ref !== "string" || ref.trim() === "" || !HASH.test(hash ?? "")) errors.push(`${name} artifact ref/hash is required`);
+    if (typeof ref !== "string" || ref.trim() === "" || !SHA256_HEX.test(hash ?? "")) errors.push(`${name} artifact ref/hash is required`);
     else if (sha256(({ spec, plan, tasks })[name] ?? "") !== hash) errors.push(`${name} content hash binding mismatch`);
   }
   if (SUPPORTED_PLAN_TASK_TEMPLATE_VERSIONS.has(templateVersion(plan ?? ""))

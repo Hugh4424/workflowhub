@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -24,7 +25,6 @@ const REPOSITORY_ROOT = new URL("../../", import.meta.url);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
-const SHA256 = /^[a-f0-9]{64}$/;
 const QUALITY_REVIEW_REF = /^quality\/reviews\/(?:results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json|attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json)$/;
 
 /**
@@ -67,7 +67,7 @@ export function validateWorkerSummary(value, { read } = {}) {
   if (typeof value.conclusion !== "string" || value.conclusion.trim() === "") return workerSummaryUnavailable("worker_summary_conclusion_missing");
   if (Array.from(value.conclusion).length > 500) return workerSummaryUnavailable("worker_summary_conclusion_too_long");
   if (typeof value.ref !== "string" || !WORKER_SUMMARY_REF.test(value.ref) || value.ref.includes("..")) return workerSummaryUnavailable("worker_summary_ref_invalid");
-  if (typeof value.sha256 !== "string" || !SHA256.test(value.sha256)) return workerSummaryUnavailable("worker_summary_hash_invalid");
+  if (typeof value.sha256 !== "string" || !SHA256_HEX.test(value.sha256)) return workerSummaryUnavailable("worker_summary_hash_invalid");
   if (typeof read !== "function") return workerSummaryUnavailable("worker_summary_reader_unavailable");
   let raw;
   try { raw = read(value.ref); } catch { return workerSummaryUnavailable("worker_summary_evidence_unavailable"); }
@@ -581,7 +581,7 @@ function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifes
     throw new TypeError("execution.code_review quality_review_ref/hash must be provided together");
   }
   if (qualityReviewRef !== undefined
-      && (!QUALITY_REVIEW_REF.test(qualityReviewRef) || !SHA256.test(qualityReviewHash))) {
+      && (!QUALITY_REVIEW_REF.test(qualityReviewRef) || !SHA256_HEX.test(qualityReviewHash))) {
     throw new TypeError("execution.code_review quality_review_ref/hash is invalid");
   }
   return {

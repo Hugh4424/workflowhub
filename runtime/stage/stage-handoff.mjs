@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF } from "../evidence/canonical-evidence-validators.mjs";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { resolve } from "node:path";
 import yaml from "js-yaml";
 
@@ -13,9 +15,6 @@ export const STAGE_HANDOFF_STAGES = Object.freeze([
 ]);
 
 const STAGES = new Set(STAGE_HANDOFF_STAGES);
-const SHA256 = /^[a-f0-9]{64}$/;
-const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(make-decision|build-spec|build-plan|build-code)\/([a-f0-9]{64})\.json$/;
 const SCHEMA = "workflowhub-stage-handoff.v1";
 const BANNER = "非权威 current handoff，只以四材料和正式质量原件为准";
 const SECTION_TITLES = Object.freeze([
@@ -164,7 +163,7 @@ function sourceRef(value, label = "source ref") {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object`);
   const ref = nonEmpty(value.ref, `${label}.ref`);
   const hash = nonEmpty(value.sha256 ?? value.hash, `${label}.sha256`);
-  if (!SHA256.test(hash)) fail(`${label}.sha256 must be a sha256`);
+  if (!SHA256_HEX.test(hash)) fail(`${label}.sha256 must be a sha256`);
   if (ref.includes("..") || ref.startsWith("/")) fail(`${label}.ref must be a safe relative ref`);
   return Object.freeze({ ref, sha256: hash });
 }
@@ -526,8 +525,8 @@ export function publishStageHandoff({
             || typeof executorAttempt !== "string" || executorAttempt.trim() === ""
             || !Number.isFinite(Date.parse(executorStarted)) || !Number.isFinite(Date.parse(executorCompleted))
             || Date.parse(executorCompleted) < Date.parse(executorStarted)
-            || !SHA256.test(executorOutputHash ?? "")
-            || !SHA256.test(executor?.output_hash ?? "")
+            || !SHA256_HEX.test(executorOutputHash ?? "")
+            || !SHA256_HEX.test(executor?.output_hash ?? "")
             || executor.output_hash !== executorOutputHash
             || reflection.executor?.attempt_id !== outcomeValue.attempt_id
             || outcomeRefs.length !== 1 || outcomeRefs[0] !== stageOutcome.ref) {

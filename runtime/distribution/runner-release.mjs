@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { assertRunnerCompatibility, createRunnerContract } from "../interface/runner-contract.mjs";
 import { validateSkillBundleRelease } from "./skill-bundle-release.mjs";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -136,7 +137,7 @@ export function validateRunnerRelease({ releaseRoot, skillBundleManifest } = {})
   createRunnerContract({ major: manifest.runner_contract_major, minor: manifest.runner_contract_minor });
   const seen = new Set();
   for (const entry of manifest.files) {
-    if (!entry || typeof entry.path !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")
+    if (!entry || typeof entry.path !== "string" || !SHA256_HEX.test(entry.sha256 ?? "")
         || Object.keys(entry).some((key) => !new Set(["path", "sha256"]).has(key))
         || path.isAbsolute(entry.path) || entry.path.split(/[\\/]/).includes("..") || seen.has(entry.path)) {
       throw new Error("runner release file manifest is invalid");

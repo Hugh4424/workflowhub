@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { createSimpleReviewPacket, resolveSimpleReviewRouteIdentity } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { assertTaskKernel } from "../task/task-capability.mjs";
 import { validateReviewBudget } from "../evidence/stage-content-evidence.mjs";
@@ -14,7 +15,6 @@ import { stageMaterialScopeRevision } from "../stage/completion-predicates.mjs";
 import { validateStageOutcomeProducerIdentity, validateCanonicalQualityFact } from "../evidence/canonical-evidence-validators.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
 
-const SHA256_HEX = /^[a-f0-9]{64}$/;
 const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 const MATERIAL_REVISION = /^revision-[a-f0-9]{64}$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;

@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 import { closeSync, constants, existsSync, fsyncSync, linkSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { readTaskIndex, replaceTaskIndex, withStoreLock } from "../task/task-store.mjs";
+import { withStoreLock } from "../task/task-store.mjs";
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
-const HASH = /^[a-f0-9]{64}$/;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const EVIDENCE_REF = /^(?:evidence|quality\/(?:evidence|tests))\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const KINDS = new Set(["reviews", "tests"]);
@@ -78,11 +78,11 @@ function assertQualityValue(root, kind, value) {
     throw new Error("current quality facts require the stage-runtime/TaskKernel canonical writer");
   }
   if (!KINDS.has(kind)) throw new TypeError("quality kind must be reviews or tests");
-  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.task_id !== "string" || typeof value.stage !== "string" || typeof value.status !== "string" || typeof value.source !== "string" || typeof value.schema_version !== "string" || !/^[a-f0-9]{64}$/.test(value.content_hash ?? "")) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.task_id !== "string" || typeof value.stage !== "string" || typeof value.status !== "string" || typeof value.source !== "string" || typeof value.schema_version !== "string" || !SHA256_HEX.test(value.content_hash ?? "")) {
     throw new TypeError("quality fact fields are invalid");
   }
-  const index = readTaskIndex(root);
-  if (index.task_id !== value.task_id) throw new Error("quality fact task identity mismatch");
+  const manifest = JSON.parse(readFileSync(resolve(root, "task.json"), "utf8"));
+  if (manifest.task_id !== value.task_id) throw new Error("quality fact task identity mismatch");
 }
 
 const VERIFY_LEAF_KEYS = new Set([
@@ -155,7 +155,7 @@ function semanticProofWarnings(criterion, all) {
 
 export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
   if (!Array.isArray(criteria) || criteria.length === 0) throw new TypeError("verify criteria must contain at least one leaf");
-  if (!HASH.test(sourceDigest ?? "")) throw new TypeError("verify source digest is required");
+  if (!SHA256_HEX.test(sourceDigest ?? "")) throw new TypeError("verify source digest is required");
   const seen = new Set();
   const suppliedStatuses = [];
   return criteria.map((criterion, index) => {
@@ -175,9 +175,9 @@ export function validateVerifyLeaves(criteria, { sourceDigest } = {}) {
         || !Array.isArray(criterion.exceptions) || criterion.exceptions.length === 0
         || criterion.exceptions.some((value) => typeof value !== "string" || value.trim() === "")
         || !criterion.acceptance_leaf || typeof criterion.acceptance_leaf.ref !== "string" || !/^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(criterion.acceptance_leaf.ref)
-        || !HASH.test(criterion.acceptance_leaf.sha256 ?? "")
+        || !SHA256_HEX.test(criterion.acceptance_leaf.sha256 ?? "")
         || !Array.isArray(criterion.nested_evidence) || criterion.nested_evidence.length === 0
-        || criterion.nested_evidence.some((entry) => !entry || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !HASH.test(entry.sha256 ?? ""))) {
+        || criterion.nested_evidence.some((entry) => !entry || typeof entry.ref !== "string" || !EVIDENCE_REF.test(entry.ref) || !SHA256_HEX.test(entry.sha256 ?? ""))) {
       throw new TypeError(`verify criterion ${index} is incomplete or duplicated`);
     }
     seen.add(criterion.acceptance_criterion_id);
@@ -219,19 +219,10 @@ export function publishQualityFact(taskRoot, kind, value, options = {}) {
     const logicalHash = sha256(canonical(value));
     const raw = `${JSON.stringify(value, null, 2)}\n`;
     const ref = `quality/${kind}/${logicalHash}.json`;
+    // The immutable quality record is the fact; current readers enumerate the
+    // quality directory, so no index projection is written any more.
     const created = atomicCreate(taskRoot, ref, raw, options);
-    const index = structuredClone(readTaskIndex(taskRoot));
-    const entry = {
-      ref, sha256: sha256(raw), schema: value.schema_version, task_id: value.task_id, stage: value.stage,
-      logical_ref: ref, content_hash: value.content_hash, version: "v1", related_task_id: value.task_id,
-      external_raw_ref: value.evidence_ref ?? null, external_governance_archive_ref: value.external_governance_archive_ref ?? null,
-    };
-    const entries = index.quality[kind].filter((item) => item.ref !== ref);
-    entries.push(entry);
-    entries.sort((left, right) => left.ref.localeCompare(right.ref));
-    index.quality[kind] = entries;
-    replaceTaskIndex(taskRoot, index);
-    return Object.freeze({ ref, sha256: entry.sha256, idempotent: created.idempotent, value });
+    return Object.freeze({ ref, sha256: sha256(raw), idempotent: created.idempotent, value });
   });
 }
 
@@ -245,13 +236,13 @@ export function publishVerifySummary(taskRoot, summary, options = {}) {
     throw new TypeError(`verify summary cannot override authenticated identity fields: ${identityOverrides.join(", ")}`);
   }
   return withStoreLock(resolve(taskRoot), () => {
-    const index = structuredClone(readTaskIndex(taskRoot));
     const taskRaw = readFileSync(resolve(taskRoot, "task.json"), "utf8");
+    const taskId = JSON.parse(taskRaw).task_id;
     const sourceDigest = summary.source_digest ?? null;
     const criteria = summary.criteria === undefined ? undefined : validateVerifyLeaves(summary.criteria, { sourceDigest });
     const value = {
       schema_version: "quality-verify.v1",
-      task_id: index.task_id,
+      task_id: taskId,
       stage: "verify-code",
       ac_id: "verify-summary",
       method: "quality-summary",
@@ -281,13 +272,6 @@ export function publishVerifySummary(taskRoot, summary, options = {}) {
       if (fd !== undefined) closeSync(fd);
       if (existsSync(temporary)) rmSync(temporary, { force: true });
     }
-    const verifyHash = sha256(raw);
-    index.quality.verify = {
-      ref: "quality/verify.json", sha256: verifyHash, schema: value.schema_version, task_id: index.task_id,
-      logical_ref: "quality/verify.json", content_hash: verifyHash, version: "v1", related_task_id: index.task_id,
-      external_raw_ref: value.evidence_ref ?? null, external_governance_archive_ref: value.external_governance_archive_ref ?? null,
-    };
-    replaceTaskIndex(taskRoot, index);
     return Object.freeze({ ref: "quality/verify.json", sha256: sha256(raw), value });
   });
 }

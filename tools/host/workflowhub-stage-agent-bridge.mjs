@@ -25,6 +25,7 @@ import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stag
 import { authenticateCodeReviewRepairs } from "../../runtime/evidence/freshness.mjs";
 import { verifyWorkerBrief } from "../../runtime/task/material-workspace.mjs";
 import { buildHostRequirementAuthentication } from "../../runtime/evidence/host-session-transcript.mjs";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const REQUIREMENT_SOURCE_KINDS = new Set(["host-session"]);
@@ -109,7 +110,7 @@ export function validateHostCoordinationEvents(events, {
   const currentMaterialRevision = typeof materialRevision === "string" && /^revision-[a-f0-9]{64}$/.test(materialRevision)
     ? materialRevision.slice("revision-".length)
     : materialRevision;
-  if (typeof currentMaterialRevision !== "string" || !/^[a-f0-9]{64}$/.test(currentMaterialRevision)
+  if (typeof currentMaterialRevision !== "string" || !SHA256_HEX.test(currentMaterialRevision)
       || typeof snapshotTree !== "string" || snapshotTree.trim() === "") {
     errors.push("COORDINATION_CURRENT_IDENTITY_UNAVAILABLE");
   }

@@ -1,10 +1,11 @@
 import { assertTaskHandle } from "../task/task-handle.mjs";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, isAbsolute, sep } from "node:path";
 import { captureWorkspaceSnapshot } from "../evidence/canonical-receipt-writer.mjs";
@@ -15,7 +16,7 @@ import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { isHumanConfirmationVersion, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof, deriveAcceptanceExecutionAssertions, validateAcceptanceExecutionEvidence } from "../evidence/canonical-evidence-validators.mjs";
+import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
@@ -23,7 +24,7 @@ import { isDateTime, normalizeStageReflectionAvailability, publishStageReflectio
 import { STAGE_HANDOFF_STAGES, publishStageHandoff, stageHandoffFailure } from "./stage-handoff.mjs";
 import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
 import { classifyProtocolError } from "./protocol-error-whitelist.mjs";
-import { appendTaskFact } from "../task/task-store.mjs";
+import { writeStageRow } from "../task/task-store.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
 import { runWorkspaceCommand, runCandidateWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult } from "../evidence/freshness.mjs";
@@ -43,12 +44,8 @@ const UPSTREAM_INPUT = Object.freeze({
   "verify-code": null,
 });
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/(make-decision|build-spec|build-plan|build-code|verify-code)\/([a-f0-9]{64})\.json$/;
-const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
-const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)(?:\/[a-f0-9]{64})?\.json$/;
 const OUTCOME_STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
 const STAGE_OUTCOME_STATUSES = new Set(["completed", "skipped", "incomplete", "unavailable", "failed"]);
-const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/([A-Za-z0-9][A-Za-z0-9._-]*)\/attempt\.json$/;
 const REVIEW_REPAIR_STATUSES = new Set(["fixed", "rejected_invalid"]);
@@ -57,7 +54,7 @@ const DEFAULT_REFLECTION_TIMEOUT_MS = 30_000;
 const ACCEPTANCE_TASK_DIR_TOKEN = /\$\{TASK_DIR\}|\$TASK_DIR(?![A-Za-z0-9_])/g;
 
 export function isStageReflectionRef(value) {
-  return typeof value === "string" && value.startsWith(STAGE_REFLECTION_NAMESPACE) && STAGE_REFLECTION_REF.test(value);
+  return typeof value === "string" && STAGE_REFLECTION_REF.test(value);
 }
 
 function outcomeError(message) {
@@ -77,7 +74,7 @@ function outcomeText(value, label) {
 }
 
 function outcomeHash(value, label) {
-  if (!SHA256.test(value ?? "")) throw outcomeError(`${label} must be a sha256`);
+  if (!SHA256_HEX.test(value ?? "")) throw outcomeError(`${label} must be a sha256`);
   return value;
 }
 
@@ -640,7 +637,7 @@ function validateCodeReviewOutcome(ctx, record, stage, snapshot, materialRevisio
     const attemptRef = REVIEW_ATTEMPT_REF.test(boundRef);
     const allowedRef = resultRef || (record.status !== "completed" && attemptRef);
     if (!allowedRef
-        || !SHA256.test(boundHash)) {
+        || !SHA256_HEX.test(boundHash)) {
       throw outcomeError("stage outcome code_review quality_review_ref/hash is invalid");
     }
     let raw;
@@ -948,6 +945,9 @@ function readOptionalStageOutcome(ctx, stage, input, expectedBinding = null) {
         status: "unavailable",
         reason: invalid ? "stage_outcome_invalid" : "stage_outcome_unavailable",
         error_code: typeof error?.code === "string" && error.code.trim() ? error.code : "STAGE_OUTCOME_UNAVAILABLE",
+        // A downgraded diagnostic is still a diagnostic: keep the real cause so
+        // the operator sees which binding failed instead of a bare code.
+        error_message: typeof error?.message === "string" && error.message.trim() ? error.message : null,
       },
     });
   }
@@ -1084,8 +1084,8 @@ function reflectionRecord(ctx, stage, stageStatus, generatedAt, value, error = n
     && typeof executorAttempt === "string" && executorAttempt.trim() !== ""
     && isDateTime(executorStarted) && isDateTime(executorCompleted)
     && Date.parse(executorCompleted) >= Date.parse(executorStarted)
-    && /^[a-f0-9]{64}$/.test(executorOutputHash ?? "")
-    && /^[a-f0-9]{64}$/.test(executor?.output_hash ?? "")
+    && SHA256_HEX.test(executorOutputHash ?? "")
+    && SHA256_HEX.test(executor?.output_hash ?? "")
     && executor.output_hash === executorOutputHash;
   if (record.schema_version !== "stage-reflection.v2"
       || record.record_kind !== "judgment"
@@ -1157,26 +1157,119 @@ export async function runStageEndReflection(context, {
   const observedAt = reflectionTimestamp(now);
   const generated = reflectionTimestamp(generatedAt ?? observedAt);
   const handoffStageOutcome = stageOutcome ?? failureStageOutcome;
+
+  /**
+   * Write this stage end's one row into the single execution record. The row is
+   * the execution-record carrier of every formal stage, so its write is not
+   * coupled to the handoff publication: the four handoff stages pass the
+   * handoff facts they already resolved, while a stage outside the handoff
+   * chain (verify-code) still owns its row and keeps the frozen
+   * empty-with-reason handoff encoding instead of borrowing another stage's
+   * facts. A row write failure is surfaced as `stage_row_error` and is never
+   * reported as a successful stage end.
+   */
+  const withStageRow = (reflectionResultValue, handoffFacts = null) => {
+    const handoff = handoffFacts === null ? null : handoffFacts.handoff;
+    const stageResult = (rowError = null) => Object.freeze({
+      ...reflectionResultValue,
+      ...(handoff === null ? {} : { stage_handoff: handoff }),
+      ...(rowError === null ? {} : { stage_row_error: rowError }),
+    });
+    try {
+      // A handoff stage's snapshot was already resolved by the handoff
+      // transaction; `null` keeps the previous re-resolution for both paths.
+      let snapshot = handoffFacts === null ? null : handoffFacts.snapshot;
+      if (snapshot === null) snapshot = ctx.kernel.currentVNextSnapshot();
+      // The handoff items come from the CURRENT task's own plan.md. A failed
+      // handoff publication is visible in the evidence list, and the row's
+      // `handoff` field stays empty-with-reason instead of carrying another
+      // task's facts. verify-code declares no handoff item at all, so it never
+      // parses the declaration and states why it hands nothing over.
+      const handoffItems = handoffFacts === null
+        ? { value: null, reason: `${stage} declares no handoff item and publishes no current stage handoff` }
+        : handoffDeclaration(handoffFacts.materials);
+      const materialScopeRevision = handoffFacts === null
+        ? handoffStageOutcome?.value?.material_scope_revision ?? ctx.kernel.currentVNextMaterialRevision()
+        : handoffFacts.materialScopeRevision;
+      const materialDigest = { value: materialScopeRevision === null ? null : materialScopeRevision.replace(/^revision-/, "") };
+      if (materialDigest.value === null) materialDigest.reason = "no current material scope revision was available at this stage end";
+      // The one evidence entry states the stage end that really ran: the four
+      // handoff stages record their handoff publication result, and a stage
+      // that publishes no handoff records its own stage-end result instead of
+      // claiming a handoff command that never ran.
+      const evidence = handoffFacts === null
+        ? [{
+          command: `stage-end:${stage}`,
+          exit_code: stageStatus === "completed" ? 0 : 1,
+          failure_signature: stageStatus === "completed" ? "stage_end_recorded" : `stage_end_${stageStatus}`,
+        }]
+        : [{
+          command: `stage-handoff:${stage}`,
+          exit_code: handoffFacts.handoff?.status === "unavailable" ? 1 : 0,
+          failure_signature: handoffFacts.handoff?.status ?? "unknown",
+        }];
+      const stageRow = mergeProtocolErrorTraceStageRow({
+        record_kind: "stage",
+        stage,
+        source: `stage-end:${stage}`,
+        created_at: observedAt,
+        material_digest: materialDigest,
+        snapshot_tree: { value: snapshot.tree ?? null, reason: "handoff snapshot captured from the current workspace" },
+        review_origin: "not_run",
+        review_result_ref: { value: null, reason: "the stage row records the stage-end facts; reviews are recorded separately" },
+        finding_dispositions: [],
+        spec_analyze: { value: null, reason: "spec analysis is recorded by its own stage-end profile" },
+        evidence: { value: evidence },
+        layer_states: {
+          // A stage end that did not complete must never be recorded as a
+          // completed implementation; the four handoff stages keep their own
+          // already-frozen layer facts.
+          implementation_completion: handoffFacts === null && stageStatus !== "completed" ? "incomplete" : "completed",
+          stage_quality: "incomplete",
+          delivery: "unavailable",
+          task_closure: "unavailable",
+        },
+        serious_issue_disposition: { value: null, reason: "no serious issue was recorded on this stage row" },
+        close_action: { value: null, reason: "stage rows never carry a close action" },
+        // The handoff items live on this same row; no extra object or row is
+        // created for them.
+        handoff: handoffItems,
+      }, currentStageRow(ctx.task.taskPath, ctx.identity.taskId, stage));
+      writeStageRow(ctx.task.taskPath, stageRow);
+    } catch (error) {
+      // A record write failure must not turn a published handoff or a finished
+      // stage end into a success claim; the error stays visible on the result.
+      return stageResult(error?.message ?? String(error));
+    }
+    return stageResult();
+  };
   const withHandoff = (reflectionResultValue) => {
-    if (!STAGE_HANDOFF_STAGES.includes(stage)) return Object.freeze({ ...reflectionResultValue });
+    if (!STAGE_HANDOFF_STAGES.includes(stage)) return withStageRow(reflectionResultValue);
+    // These two facts are resolved inside the handoff transaction but are also
+    // required by the stage row written below, so they are declared here: a
+    // `const` inside the try block cannot reach the row write.
+    let snapshot = null;
+    let materialScopeRevision = null;
+    let materials = null;
     let handoff;
     try {
-      const snapshot = ctx.kernel.currentVNextSnapshot();
-      const materials = ctx.artifacts && typeof ctx.artifacts.read === "function"
+      snapshot = ctx.kernel.currentVNextSnapshot();
+      materials = ctx.artifacts && typeof ctx.artifacts.read === "function"
         ? Object.fromEntries(CURRENT_MATERIAL_FILES.flatMap((name) => {
           try { return [[name, ctx.artifacts.read(name)]]; }
           catch (error) {
-            // A stage that ends before build-plan legitimately has no plan.md or
-            // tasks.md yet, and the handoff renderer already treats an absent
-            // material as unknown. Only that missing-future-material case is
-            // omitted from the handoff material set; permission, I/O and other
-            // failures stay directly diagnosable instead of disabling handoff.
-            if (error?.code === "ENOENT") return [];
+            // A stage that ends before build-plan legitimately has no later
+            // material yet, and the handoff renderer already treats an absent
+            // material as unknown. Only that explicit future-material set is
+            // omitted; a missing CURRENT material stays a loud failure, and
+            // permission, I/O and other failures stay directly diagnosable.
+            const futureMaterials = CURRENT_MATERIAL_FILES.filter((file) => !(STAGE_FACT_MATERIALS[stage] ?? CURRENT_MATERIAL_FILES).includes(file));
+            if (error?.code === "ENOENT" && futureMaterials.includes(name)) return [];
             throw error;
           }
         }))
         : null;
-      const materialScopeRevision = handoffStageOutcome?.value?.material_scope_revision
+      materialScopeRevision = handoffStageOutcome?.value?.material_scope_revision
         ?? ctx.kernel.currentVNextMaterialRevision();
       handoff = publishStageHandoff({
         task: ctx.task,
@@ -1205,7 +1298,9 @@ export async function runStageEndReflection(context, {
         reflectionStatus: reflectionResultValue.reflection_status ?? reflectionResultValue.status,
       });
     }
-    return Object.freeze({ ...reflectionResultValue, stage_handoff: handoff });
+    // The stage row is written only after the handoff publication outcome is
+    // known, so a failed publication is never recorded as delivered.
+    return withStageRow(reflectionResultValue, { handoff, snapshot, materialScopeRevision, materials });
   };
   if (availabilityState !== undefined || reasonCode !== undefined || (judgment === null && typeof execute !== "function")) {
     const availabilityInput = normalizeStageReflectionAvailability({ state: availabilityState, reasonCode });
@@ -1842,6 +1937,134 @@ function canonicalBrowserQaComparable(value) {
   return comparable;
 }
 
+/**
+ * Split one Markdown table row into its trimmed cells. A cell may contain
+ * escaped pipes and inline code, so the row is scanned instead of regex-split.
+ */
+function markdownTableCells(line) {
+  if (typeof line !== "string" || !line.trim().startsWith("|")) return null;
+  const cells = [];
+  let current = "";
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === "\\" && line[index + 1] === "|") {
+      current += "|";
+      index += 1;
+    } else if (character === "|") {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  cells.push(current.trim());
+  if (cells.length && cells[0] === "") cells.shift();
+  if (cells.length && cells[cells.length - 1] === "") cells.pop();
+  return cells;
+}
+
+const HANDOFF_DECLARATION_COLUMNS = Object.freeze(["未决/交接", "owner", "trigger", "handoff / consumer", "close / retain condition"]);
+const HANDOFF_ITEM_ID = /^HANDOFF-[A-Za-z0-9]+$/;
+
+/**
+ * Read the handoff declarations from the CURRENT task's own plan.md.
+ *
+ * The only accepted syntax is the declared handoff table: a header row whose
+ * five columns are exactly the frozen handoff columns, followed by rows whose
+ * first cell is a HANDOFF-* id. The same table legitimately also lists OPEN-*
+ * rows, which are not handoff items and are skipped rather than ending it; the
+ * table ends at the first row that stops looking like a five-column row. When
+ * the current materials declare no handoff item the field stays
+ * empty-with-reason instead of borrowing another task's facts, and a malformed
+ * handoff row fails loudly so the row write surfaces an error rather than
+ * publishing invented facts.
+ */
+function handoffDeclaration(materials) {
+  const plan = materials?.["plan.md"];
+  if (typeof plan !== "string") {
+    return { value: null, reason: "the current plan.md was not readable for this stage-end write" };
+  }
+  const lines = plan.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const header = markdownTableCells(lines[index]);
+    if (!header || header.length !== HANDOFF_DECLARATION_COLUMNS.length
+        || header.some((cell, position) => cell !== HANDOFF_DECLARATION_COLUMNS[position])) continue;
+    const items = [];
+    for (let row = index + 2; row < lines.length; row += 1) {
+      const cells = markdownTableCells(lines[row]);
+      if (!cells || cells.length !== HANDOFF_DECLARATION_COLUMNS.length) break;
+      if (!HANDOFF_ITEM_ID.test(cells[0])) continue;
+      const [id, owner, trigger, consumer, closeCondition] = cells;
+      const values = { id, owner, trigger, consumer, close_condition: closeCondition };
+      for (const [field, value] of Object.entries(values)) {
+        if (typeof value !== "string" || value.trim() === "") {
+          throw new Error(`plan.md handoff declaration ${id} requires a non-empty ${field}`);
+        }
+      }
+      items.push(values);
+    }
+    if (items.length === 0) continue;
+    return {
+      value: items,
+      reason: "handoff items declared by the current task plan.md; owners and consumers stay with the task that declared them",
+    };
+  }
+  return { value: null, reason: "the current task plan.md declares no handoff item" };
+}
+
+/**
+ * Read the current stage row this process is about to replace, so the later
+ * writer can inherit the earlier writer's facts. A missing file is an empty
+ * record set; a row whose record contract does not match this stage/task is
+ * never inherited, because merging unauthenticated bytes would publish them.
+ */
+function currentStageRow(taskRoot, taskId, stage) {
+  const factsPath = join(taskRoot, "facts.jsonl");
+  if (!existsSync(factsPath)) return null;
+  const raw = readFileSync(factsPath, "utf8");
+  if (raw.trimEnd() === "") return null;
+  for (const line of raw.trimEnd().split("\n")) {
+    if (line.trim() === "") continue;
+    let value;
+    try { value = JSON.parse(line); }
+    catch { throw new Error(`facts.jsonl is not valid JSONL: ${factsPath}`); }
+    if (value?.record_kind !== "stage" || value.stage !== stage) continue;
+    if (value.task_id !== taskId) throw new Error(`facts.jsonl stage row for ${stage} belongs to another task`);
+    return value;
+  }
+  return null;
+}
+
+/**
+ * Two producers share one stage row: the protocol-error trace and the
+ * stage-end record. The row is a single in-place key, so the later writer
+ * inherits the earlier writer's facts instead of destroying them. The trace
+ * owns the row's writer identity when it is present, and both producers'
+ * evidence entries survive in one list.
+ */
+function mergeProtocolErrorTraceStageRow(input, existing) {
+  const protocolTrace = existing
+    && typeof existing.source === "string"
+    && existing.source.startsWith("protocol_error:");
+  const evidence = [];
+  const seenEvidence = new Set();
+  if (protocolTrace && Array.isArray(existing.evidence?.value)) {
+    for (const entry of existing.evidence.value.filter(Boolean)) evidence.push({ ...entry });
+  }
+  for (const entry of input.evidence?.value ?? []) {
+    const key = canonicalJson(entry);
+    if (seenEvidence.has(key)) continue;
+    seenEvidence.add(key);
+    evidence.push(entry);
+  }
+  return {
+    ...input,
+    ...(protocolTrace ? { source: existing.source, created_at: existing.created_at ?? input.created_at } : {}),
+    evidence: { value: evidence },
+    handoff: protocolTrace ? existing.handoff : input.handoff,
+  };
+}
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -1857,7 +2080,7 @@ function appendProtocolErrorTrace(ctx, { classification, occurredAt, snapshot, m
   if (typeof occurredAt !== "string" || !Number.isFinite(Date.parse(occurredAt))) {
     throw new Error("protocol error trace occurred_at must be an ISO timestamp");
   }
-  if (!snapshot || !SHA256.test(snapshot.source_digest ?? "")) {
+  if (!snapshot || !SHA256_HEX.test(snapshot.source_digest ?? "")) {
     throw new Error("protocol error trace requires an authenticated source digest");
   }
   if (!materials || !Array.isArray(materials.values)) {
@@ -1874,19 +2097,33 @@ function appendProtocolErrorTrace(ctx, { classification, occurredAt, snapshot, m
     throw new Error("protocol error trace requires the current workflow run id");
   }
   const status = "repaired_in_place";
-  const tracePayload = { stage: ctx.stage, class_id: classification.class_id, occurred_at: occurredAt, status };
-  return appendTaskFact(ctx.task.taskPath, {
+  // A protocol-error trace is the current row of its own stage, so a repeated
+  // trace inherits that row instead of appending a second one. A stage-end row
+  // already on the same key keeps its own writer identity and facts.
+  const existing = currentStageRow(ctx.task.taskPath, ctx.identity.taskId, ctx.stage);
+  return writeStageRow(ctx.task.taskPath, mergeProtocolErrorTraceStageRow({
+    record_kind: "stage",
     task_id: ctx.identity.taskId,
     stage: ctx.stage,
-    material_digest: materialRevision.slice("revision-".length),
-    source_digest: snapshot.source_digest,
-    invocation_id: ctx.workflowRunId,
     source: `protocol_error:${classification.class_id}`,
-    status,
-    content_hash: createHash("sha256").update(canonicalJson(tracePayload), "utf8").digest("hex"),
     created_at: occurredAt,
-    output_ref: "facts.jsonl",
-  });
+    material_digest: { value: materialRevision.slice("revision-".length) },
+    snapshot_tree: { value: snapshot.tree ?? snapshot.snapshot_tree ?? null, reason: "snapshot tree recovered from the authenticated snapshot" },
+    review_origin: "not_run",
+    review_result_ref: { value: null, reason: "a protocol-error trace reports no review result" },
+    finding_dispositions: [],
+    spec_analyze: { value: null, reason: "a protocol-error trace runs no spec analysis" },
+    evidence: { value: [{ command: `protocol-error:${classification.class_id}`, exit_code: 0, failure_signature: status }] },
+    layer_states: {
+      implementation_completion: "completed",
+      stage_quality: "incomplete",
+      delivery: "unavailable",
+      task_closure: "unavailable",
+    },
+    serious_issue_disposition: { value: null, reason: "a protocol-error trace is a repair record, not a serious-issue disposition" },
+    close_action: { value: null, reason: "stage rows never carry a close action" },
+    handoff: { value: null, reason: "a protocol-error trace hands nothing over" },
+  }, existing));
 }
 
 function dataIdentityMatchesAcceptanceScenario(dataIdentity, acceptanceScenario) {
@@ -1898,7 +2135,7 @@ function browserQaAttachment(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)
       || typeof value.ref !== "string"
       || !/^quality\/evidence\/browser-qa\/[a-f0-9]{64}\.json$/.test(value.ref)
-      || !SHA256.test(value.hash ?? "")) {
+      || !SHA256_HEX.test(value.hash ?? "")) {
     throw new Error(`${label} must bind one task-owned browser-qa publication record`);
   }
   return value;
@@ -1915,7 +2152,7 @@ function verifyBrowserQaAttachment(task, reference, label) {
       || Object.keys(publication).some((key) => !allowed.has(key))
       || publication.schema_version !== "workflowhub-evidence-publication.v1"
       || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
-      || !SHA256.test(publication.content_sha256 ?? "")
+      || !SHA256_HEX.test(publication.content_sha256 ?? "")
       || publication.content_encoding !== "base64"
       || typeof publication.content_base64 !== "string"
       || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
@@ -1943,7 +2180,7 @@ function verifyBrowserAcceptanceAttachments(ctx, candidate) {
   screenshots.forEach((reference, index) => verifyBrowserQaAttachment(ctx.task, reference, `browser acceptance screenshot ${index + 1}`));
   const outputRef = candidate?.test?.output_ref;
   const outputHash = candidate?.test?.output_hash;
-  if (typeof outputRef !== "string" || !/^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(outputRef) || !SHA256.test(outputHash ?? "")) {
+  if (typeof outputRef !== "string" || !/^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(outputRef) || !SHA256_HEX.test(outputHash ?? "")) {
     throw new Error("browser acceptance test output reference is invalid");
   }
   const output = ctx.task.readRecord(outputRef);
@@ -2120,7 +2357,7 @@ async function privateAcceptanceScenario(ctx, publication, scenario, attemptId =
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("controlled QA adapter payload is missing");
     const ref = result.evidence_ref;
     const sha256 = result.evidence_hash;
-    if (typeof ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref) || !SHA256.test(sha256 ?? "")) throw new Error("controlled QA canonical evidence ref/hash is invalid");
+    if (typeof ref !== "string" || !/^quality\/evidence\/browser-qa\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(ref) || !SHA256_HEX.test(sha256 ?? "")) throw new Error("controlled QA canonical evidence ref/hash is invalid");
     if (payload.evidence_ref !== ref || payload.evidence_hash !== sha256) throw new Error("controlled QA payload does not bind its canonical evidence ref/hash");
     const raw = ctx.task.readRecord(ref);
     if (createHash("sha256").update(raw).digest("hex") !== sha256) throw new Error("controlled QA canonical evidence hash mismatch");
@@ -2866,7 +3103,7 @@ function verifyEvidenceReference(ctx, entry, label = "evidence") {
   if (typeof entry.ref !== "string" || (currentOnly ? !entry.ref.startsWith("quality/") : !entry.ref.startsWith("evidence/") && !entry.ref.startsWith("quality/"))) {
     throw new Error(`${label} is outside a canonical namespace`);
   }
-  if (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new TypeError(`${label} sha256 is required`);
+  if (!SHA256_HEX.test(entry.sha256 ?? "")) throw new TypeError(`${label} sha256 is required`);
   const raw = ctx.task.readRecord(entry.ref);
   const actual = createHash("sha256").update(raw).digest("hex");
   if (actual !== entry.sha256) throw new Error(`${label} hash mismatch: ${entry.ref}`);
@@ -2893,11 +3130,11 @@ export function verifyOfficialEvidence(ctx, result) {
   if (hasAnyTestBinding) {
     if (typeof tests.receipt_ref !== "string"
         || !/^quality\/tests\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.json$/.test(tests.receipt_ref)
-        || !/^[a-f0-9]{64}$/.test(tests.receipt_hash ?? "")) {
+        || !SHA256_HEX.test(tests.receipt_hash ?? "")) {
       throw new Error("test receipt_ref/receipt_hash binding is invalid");
     }
     if (typeof tests.output_ref !== "string"
-        || !/^[a-f0-9]{64}$/.test(tests.output_hash ?? "")) {
+        || !SHA256_HEX.test(tests.output_hash ?? "")) {
       throw new Error("test output_ref/output_hash binding is invalid");
     }
     const receiptRaw = ctx.task.readRecord(tests.receipt_ref);
@@ -2970,7 +3207,7 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
       || intent.kind !== "review"
       || !["recorded", "unavailable"].includes(intent.status)
       || !["code_review", "independent_review"].includes(intent.subject)
-      || !/^[a-f0-9]{64}$/.test(intent.material_id ?? "")
+      || !SHA256_HEX.test(intent.material_id ?? "")
       || !/^revision-[a-f0-9]{64}$/.test(intent.material_revision ?? "")
       || !Array.isArray(intent.evidence)
       || intent.evidence.length !== 1) {
@@ -2978,7 +3215,7 @@ function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
   }
   const evidence = intent.evidence[0];
   if (!evidence || typeof evidence.ref !== "string" || !/^quality\/reviews\/(?:results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json|attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json)$/.test(evidence.ref)
-      || !/^[a-f0-9]{64}$/.test(evidence.sha256 ?? "")
+      || !SHA256_HEX.test(evidence.sha256 ?? "")
       || evidence.evidence_type !== "review_result") {
     throw new Error("review fact intent evidence is invalid");
   }

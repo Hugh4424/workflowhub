@@ -46,8 +46,8 @@
       "destination": "runtime/evidence/canonical-utils.mjs",
       "status": "move",
       "sha256_before": "811029fe642247ddf48028bf850d2720b33795236126f2ab1577940608be783b",
-      "bytes": 1000,
-      "sha256_after": "811029fe642247ddf48028bf850d2720b33795236126f2ab1577940608be783b",
+      "bytes": 1248,
+      "sha256_after": "7246490117ad11c4cf21a32c97d656cd7dafb5a8e1fccf222d5948fb0ce49c89",
       "content_change": "import/path-only"
     },
     {
@@ -73,8 +73,8 @@
       "destination": "runtime/evidence/fact-collector.mjs",
       "status": "move",
       "sha256_before": "be09bb5f4fccbc1593f62fec4f73b911ce9f2595a9fd72802a4af75a17fd9aef",
-      "bytes": 44956,
-      "sha256_after": "10b8424afaae355275f2c1e9abbec50d4ae1d0a94d00c3c5c353d14283d828a3",
+      "bytes": 5385,
+      "sha256_after": "0eb21345360f6a9085a3f017241b2505469c7dddf8e6fd776e3c9d7ea1e17139",
       "content_change": "import/path-only"
     },
     {
@@ -82,8 +82,8 @@
       "destination": "runtime/task/git-worktree-snapshot.mjs",
       "status": "move",
       "sha256_before": "a7583fe02c7985339776bdc85847451fb180c386f06113771605c602ad92665a",
-      "bytes": 3317,
-      "sha256_after": "08bc1e9f982ef93e90e4a6aacbb61981bc033ac2e9c6820d19b546031a4a5f7a",
+      "bytes": 29575,
+      "sha256_after": "7b89300f18df44b7d220f70754360b6dda2cee094140acefb52413b9319e5dab",
       "content_change": "import/path-only"
     },
     {
@@ -361,9 +361,9 @@
       "destination": "runtime/stage/stage-content-contracts.mjs",
       "status": "move",
       "sha256_before": "5075b07e15b095fa2b904db2c1622f7d5b3580e56fe08547edd99b1545962ca5",
-      "bytes": 78035,
-      "sha256_after": "e545626b1007d4a6520a78b3b2a24a092c906616cdacde5a1db12baa847a267f",
-      "bytes_after": 301581,
+      "bytes": 379079,
+      "sha256_after": "5fa3ddc23bda1226bdc0d4b1760a9afe0440835e7685ea7f70d2817f074c2680",
+      "bytes_after": 379079,
       "content_change": "main baseline already contains the current runtime contract implementation; this task validates the final path and does not create a second schema module"
     },
     {
@@ -371,8 +371,8 @@
       "destination": "runtime/review/stage-review-disposition.mjs",
       "status": "move",
       "sha256_before": "84bf9ea2b833e380b41caf23c5fecf741280f2627b531b908e2a6b89d5bdc6bd",
-      "bytes": 8178,
-      "sha256_after": "84bf9ea2b833e380b41caf23c5fecf741280f2627b531b908e2a6b89d5bdc6bd",
+      "bytes": 15097,
+      "sha256_after": "33730dacf6b92bf20d3e8b6f2619e2e4f363e65d6c6772aa49ea1fb59b85940a",
       "content_change": "import/path-only"
     },
     {
@@ -398,8 +398,8 @@
       "destination": "runtime/evidence/storage-root.mjs",
       "status": "move",
       "sha256_before": "6019d5d8385b6d8f4c044a4b3d4f262bc2c8be242afee17d515f7ae20e85e089",
-      "bytes": 2343,
-      "sha256_after": "6019d5d8385b6d8f4c044a4b3d4f262bc2c8be242afee17d515f7ae20e85e089",
+      "bytes": 3182,
+      "sha256_after": "49290075774b6c4ed2070345fc196250c30fe138057df656cd12924225a0865b",
       "content_change": "import/path-only"
     },
     {
@@ -452,8 +452,8 @@
       "destination": "runtime/evidence/write-boundary-preflight.mjs",
       "status": "move",
       "sha256_before": "23e1785cd1b6e15214622ff8a359e87e84a3e0a2dad9679b54c2a7df9ba0f982",
-      "bytes": 7798,
-      "sha256_after": "8acb1e7c7780ecaf981f39f0cee66650eea378f95aa2ccbd1ab5e27274df1da2",
+      "bytes": 9866,
+      "sha256_after": "c1cdea48e57951ab36ce088f3a15cdb632e2c06ec7e157bf58699850b30b9c45",
       "content_change": "import/path-only"
     },
     {
@@ -618,8 +618,8 @@
       "destination": "tools/cli/check-task-record-paths.mjs",
       "status": "move",
       "sha256_before": "1daff9f4fb5000962decfcaa6d9b0621281ff6d83f78f61ce25749eed7f872cd",
-      "bytes": 16066,
-      "sha256_after": "b5e23d24e85c94bd0cb6a5e25c5c0814d42358c17228af214c3fc9d4f79d010e",
+      "bytes": 17703,
+      "sha256_after": "bb95469fff88e5e7852269be8685086447c197ad063f8d9c153e0ba6007c730a",
       "content_change": "import/path-only plus explicit stage-reflection lesson-writer capability classification"
     },
     {
@@ -727,8 +727,8 @@
       "destination": "tools/cli/smoke-local-skill-dispatch.mjs",
       "status": "move",
       "sha256_before": "b559e48daa28e86b3187a73060c7220712cfbf60ef3e8da031ed1535c311aeb1",
-      "bytes": 6043,
-      "sha256_after": "7994e3441974ba79922e07e1f41b0640d0a8d21c221fb541b727ad66872d45ff",
+      "bytes": 2708,
+      "sha256_after": "9ac55b4fe607f13ab1fbfef138a5473f8e13f20436edacaaa9aaef9e8a2dd132",
       "content_change": "import/path-only"
     },
     {
@@ -808,8 +808,8 @@
       "destination": "runtime/distribution/skill-bundle-release.mjs",
       "status": "move",
       "sha256_before": "2900313adcae5ef89bf73032c84cf361583f007be7ed461437dc42f0b79a8cf4",
-      "bytes": 8706,
-      "sha256_after": "260053a23f69dd7eb2c9bcf9d690127ca8cf15e40973f37de0f88d251029678c",
+      "bytes": 21937,
+      "sha256_after": "c81acd2677fd96d17056438c41518ce4bc21f0dd749dc0f18cb7162a3a2400e5",
       "content_change": "import/path-only"
     },
     {
@@ -817,8 +817,8 @@
       "destination": "runtime/distribution/runner-release.mjs",
       "status": "move",
       "sha256_before": "3b6dab8208914dc7d293ea27488ad1831527dda3fe7668c80b9d1d3fa834f8bd",
-      "bytes": 9098,
-      "sha256_after": "3c101cbe438727314917d37079782eb4130c393bdf80844937d9a8038047327a",
+      "bytes": 10852,
+      "sha256_after": "d4be0baf36cecbc88c581263f5c4180a8dc26370fee7c33d96ea96bb85f22e6d",
       "content_change": "import/path-only"
     },
     {
@@ -835,8 +835,8 @@
       "destination": "runtime/evidence/quality-fact.mjs",
       "status": "move",
       "sha256_before": "9f84f18902597eb1f32216c0c1fc52b9828c91ece69e5f9e325e99568d68a344",
-      "bytes": 3343,
-      "sha256_after": "9f84f18902597eb1f32216c0c1fc52b9828c91ece69e5f9e325e99568d68a344",
+      "bytes": 5831,
+      "sha256_after": "4acc9a4b0cc1421f4b031c421ce03045c3e9f2a211d5b211764c7e1fd05a9e4a",
       "content_change": "import/path-only"
     },
     {
@@ -844,8 +844,8 @@
       "destination": "runtime/evidence/freshness.mjs",
       "status": "move",
       "sha256_before": "333e063465e3f5edf32a796b6c0d73fc2b28e174029c75baa63040a7673d3101",
-      "bytes": 6468,
-      "sha256_after": "9ec166f05443e5109723f7d7ee6ad4642d0c62e99d13c19ee69457c8afa7e180",
+      "bytes": 52229,
+      "sha256_after": "6ccfedcb78565254f8c6c97415a9f8cfb98ebd2c8d875844458d17e7ce1c4646",
       "content_change": "import/path-only"
     },
     {
@@ -853,8 +853,8 @@
       "destination": "runtime/stage/completion-predicates.mjs",
       "status": "move",
       "sha256_before": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
-      "bytes": 3330,
-      "sha256_after": "8a204eec524610468d922ecb64881a49e6d997e144fc8b30c8c09eddc88c91ca",
+      "bytes": 67087,
+      "sha256_after": "0b267cc19829f599aa649bec14fc2b78a64c05669b6f95e3c0fecd162e39fcfb",
       "content_change": "import/path plus execution outcome semantic signature"
     },
     {
@@ -1202,8 +1202,8 @@
       "destination": "runtime/evidence/canonical-evidence-validators.mjs",
       "status": "moved-R007",
       "sha256_before": "3e937a7aae9667bdc5eff2e9e76c8f847a0a8aa182f6a2be26c796e9493ed887",
-      "sha256_after": "3e937a7aae9667bdc5eff2e9e76c8f847a0a8aa182f6a2be26c796e9493ed887",
-      "bytes": 2069,
+      "sha256_after": "9119459b6e579850fb392f2026e081334452e8072453ffb088d390ae5ab1c6d2",
+      "bytes": 29952,
       "content_change": "path-only move"
     },
     {
@@ -1211,8 +1211,8 @@
       "destination": "runtime/evidence/canonical-receipt-writer.mjs",
       "status": "moved-R007",
       "sha256_before": "5012f3a45ce60baa6b3c30d9a9cadbe2fea1ed7287a7dd0dd3ad3acba44d83cb",
-      "sha256_after": "5a2d43aad17f3f0698ab9317a1678bc5dce9daa4f4b6a9b0c7f37a8f19c8ee7e",
-      "bytes": 52300,
+      "sha256_after": "4a83e51db6165e6aec3952541582cb91e86fd210d6d2ee4c227838c49f6dd52e",
+      "bytes": 52297,
       "content_change": "import/path-only"
     },
     {
@@ -1338,7 +1338,7 @@
       "destination": "runtime/evidence/stage-completion-facts.mjs",
       "status": "moved-T012",
       "sha256_before": "6e58902e01e0f7198db67e52351e8702b4215940886056ba0f243e7bbb9c6d0c",
-      "sha256_after": "74e64bbb73baf5f9bc59631be870ce58fb06cdcda4b6f65bd46fb07d87c0a947",
+      "sha256_after": "82c3208029112f7b195197153164eec132c1d418efefb7ce9e73a1947d5492e5",
       "content_change": "path-only move"
     },
     {
@@ -1346,7 +1346,7 @@
       "destination": "runtime/evidence/stage-content-evidence.mjs",
       "status": "moved-T012",
       "sha256_before": "d1aedc00be973fce5feccf317ae1efd3041a3e2c5ac20e752064da07d47898d8",
-      "sha256_after": "ff8c59cfa14237495bb8d6a6a75eb91c5634d759a5065961dff521a20e9ba6ce",
+      "sha256_after": "fde092c7e9d6a38d7331a8621dd53dc6eb27e62a4877b314f27dc6988ece0301",
       "content_change": "path-only move"
     },
     {
@@ -1354,7 +1354,7 @@
       "destination": "runtime/stage/stage-context.mjs",
       "status": "moved-T012",
       "sha256_before": "32f4a45de1445be43ec8c1c8184afcb03f9fe8f579a4618c647e9dcfb4dbba83",
-      "sha256_after": "6302d379c49f6e3c75872717b49094c168d1aa194ab83e57f962e91c33b6dab5",
+      "sha256_after": "a93ef876b6b2c075ae6cfa7afae032b9bd0bbd74e2fb823ffea660845c9a1a65",
       "content_change": "path-only move"
     },
     {
@@ -1362,7 +1362,7 @@
       "destination": "runtime/stage/stage-handlers.mjs",
       "status": "moved-T012",
       "sha256_before": "a828ccbbd72409cf0c914bdf0186afe2e969766ae162a8e552aeefe85f8ce33a",
-      "sha256_after": "c9defe5fc63d2f17265241b20b0978fac6d180381d23b3b3bce5f871e8a8dc7d",
+      "sha256_after": "0f354c0f5db69e9f5bfc51cc1ba94ef09aeaee88b4b9abb52860c91de7adb0bc",
       "content_change": "path move plus scoped research material binding"
     },
     {
@@ -1370,7 +1370,7 @@
       "destination": "runtime/stage/stage-runner.mjs",
       "status": "moved-T012",
       "sha256_before": "c11f82565b0997498897d1d2681fff1fe371785062abd14ffa302ba6349d92df",
-      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499",
+      "sha256_after": "ab21411219fcac7e17ce16ed5e9a616e7cfacaf0d66e030e9d6773ac13b27569",
       "content_change": "path move plus reflection provenance and failure persistence"
     },
     {
@@ -1406,7 +1406,7 @@
       "destination": "runtime/task/task-kernel-implementation.mjs",
       "status": "moved-T012",
       "sha256_before": "ee3aaba2b97690fc8f6a440138e48b10830d9edfe22d21bc115d4f75bc25c211",
-      "sha256_after": "5a33faffb024f3269391c9c5abb9ba29dd809452634f12251bf521abae33585c",
+      "sha256_after": "9f2592056e70661cb384847da3beb390f9c33e31a506c2cf6adefe6138bd8576",
       "content_change": "path move plus scoped research revision helper"
     },
     {
@@ -1464,7 +1464,7 @@
       "destination": "tools/cli/task-close.mjs",
       "status": "moved-T012",
       "sha256_before": "1db55fa4884298094e11e0f58fc351f63a82b0a85f957b122972c7a8b0c75ad8",
-      "sha256_after": "fb9900b9fab9cab204bc1085f5a9cdfec963f99584f06c80a89b03f15aad84ed8",
+      "sha256_after": "dc16509b9b690ff796f1e511fd5fd137a235c425075dc7330d4cdd92d48c6cdf",
       "content_change": "path-only move"
     },
     {
@@ -1508,7 +1508,7 @@
       "destination": "runtime/review/integration-review-subject.mjs",
       "status": "move",
       "sha256_before": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
-      "sha256_after": "44b31b1b61abead84e04a476f5f34841e660803f34b255ae8fd6befc78ac8c57",
+      "sha256_after": "ea25c75fd07e235a8781e22d4114a4b5b11e780ce1609091e8e9b806c1574352",
       "content_change": "moved runtime logic; skill compatibility shim re-exports destination"
     },
     {
@@ -2154,8 +2154,8 @@
       "delete_condition": "revert when risk close is restored",
       "content_change": "removed --risk-close, --risk-reason, --deferred-items, --risk-accepted options and risk close branches",
       "sha256_before": null,
-      "bytes": 7345,
-      "sha256_after": "7a9d9fe7992faa4d6003f0d6f09e7c891d4da7235833a6992f9a8373eef1fd9a"
+      "bytes": 16750,
+      "sha256_after": "dc16509b9b690ff796f1e511fd5fd137a235c425075dc7330d4cdd92d48c6cdf"
     },
     {
       "source": "tests/integration/manual-delivery-close.test.mjs",
@@ -2176,8 +2176,8 @@
       "owner": "task-close core",
       "consumer": "T4/T5/T6",
       "content_change": "removed risk close branches; finalized completeDeliveryClosePlan physical-only check",
-      "bytes": 111036,
-      "sha256_after": "3656651568be5cd9db3604565c98b3a2bd60c8e90545b6de783cb0c4aac85433"
+      "bytes": 189161,
+      "sha256_after": "e9b655fee32b80f33496904ec65fa59e5ce40d3e7be3c9d6e1bd38950ef925fc"
     },
     {
       "source": "runtime/stage/stage-runner.mjs",
@@ -2186,8 +2186,8 @@
       "owner": "stage-runner",
       "consumer": "T7 FR-LEFT-001/004",
       "content_change": "added assertWriteBoundary plus deferred stage reflection lifecycle across official publication boundary and failed-stage evidence",
-      "bytes": 171346,
-      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499"
+      "bytes": 186193,
+      "sha256_after": "ab21411219fcac7e17ce16ed5e9a616e7cfacaf0d66e030e9d6773ac13b27569"
     },
     {
       "source": "tests/close/close-contract.test.mjs",
@@ -2341,8 +2341,8 @@
       "consumer": "build-reflection-page and private evolution adapters",
       "delete_condition": "remove when M16 data-plane is retired",
       "content_change": "candidate, tax, proof, lock and projection contracts",
-      "bytes": 108472,
-      "sha256_after": "5317601c92b8958032edbd341a033d82c392e0551fd8668f480c812e79df28c4"
+      "bytes": 108488,
+      "sha256_after": "13c0d09267dfd60cba12f1ef3c67f60748c4984136886426b0ca3ed578bab639"
     },
     {
       "source": "runtime/schemas/workflow-evolution.v1.json",
@@ -2396,8 +2396,8 @@
       "consumer": "private reflect command, stage-reflection page and M16 projection; failure facts remain the durable merge/publication recovery signal",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "authenticated validate-lessons-publish reflection deep module with retryable lesson recovery and immutable failure facts",
-      "bytes": 43575,
-      "sha256_after": "80bc3f7ff2f0ab61413b23551fe66181842bd7b7508e760f30aab66393526ed4"
+      "bytes": 43600,
+      "sha256_after": "1aa2074661b57c4e19b82fbe616fca8eb0ceee5999e7f4ed4b63be4d8c614864"
     },
     {
       "source": "runtime/stage/stage-runner.mjs",
@@ -2407,8 +2407,8 @@
       "consumer": "on-stage-end reflection scheduling and shared reflect transaction",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "route scheduled reflections through runStageReflection and preserve truthful not_scheduled availability facts",
-      "bytes": 171346,
-      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499"
+      "bytes": 186193,
+      "sha256_after": "ab21411219fcac7e17ce16ed5e9a616e7cfacaf0d66e030e9d6773ac13b27569"
     },
     {
       "source": "tools/cli/stage-runtime.mjs",
@@ -2592,7 +2592,7 @@
       "destination": "runtime/task/task-capability.mjs",
       "status": "move",
       "owner": "workflowhub-m17-repo-skills-multicli-20260903 T7",
-      "consumer": "runtime/task/task-handle.mjs, runtime/task/workspace.mjs, runtime/review/review-record-route.mjs, runtime/evidence/audit-summary-carrier.mjs, core/artifact-dir.mjs",
+      "consumer": "runtime/task/task-handle.mjs, runtime/task/workspace.mjs, runtime/review/review-record-route.mjs, core/artifact-dir.mjs",
       "delete_condition": "restore old path only with a new decision and current consumer proof",
       "content_change": "path-only move; all current imports now use runtime/task/task-capability.mjs",
       "bytes_before": 1268,
@@ -2718,8 +2718,8 @@
       "consumer": "metrics report, repo-skills manifest generator, and skill closure checker",
       "delete_condition": "remove metrics_enabled only when the metric report and manifest fields are retired together",
       "content_change": "add metrics_enabled to all 40 skill entries; true for stage consumers and false for non-core entries",
-      "bytes_after": 58475,
-      "sha256_after": "1ad3f26e4abfdf985030c365fc1285c93dd1cd9d3665c932a242d1ed757fdcd0"
+      "bytes_after": 79043,
+      "sha256_after": "0f3ce6ef51d0264732c70fc1c977f87e5e67ff0bb3fe01b34f80f6f19480796a"
     },
     {
       "source": "tools/cli/repo-skills-manifest.mjs",
@@ -2751,8 +2751,8 @@
       "consumer": "wh-review skill closure and M18 distribution metadata",
       "delete_condition": "remove broker dependency metadata only when the external broker boundary is retired or replaced",
       "content_change": "declare host-provided 3rd-review-broker engines-style dependency and refresh current file hashes",
-      "bytes_after": 4256,
-      "sha256_after": "90ca1fc860163569f68d20801ac8e996ecf38c98113efaccb2c1c346ed368cab"
+      "bytes_after": 4537,
+      "sha256_after": "9e044b50213d505da649a3337aa65fdb0932fb9edd46850f7168952e71420a40"
     },
     {
       "source": "skills/wh-review/scripts/third-review-host-config.mjs",
@@ -2762,8 +2762,8 @@
       "consumer": "trusted 3rd-review host config loader",
       "delete_condition": "remove probe only when broker compatibility is provided by an approved replacement boundary",
       "content_change": "report unknown compatibility without semver and compatible or incompatible when broker semver is available",
-      "bytes_after": 29538,
-      "sha256_after": "db00dbb5b32f00c9c1801084697851400a93c368b074fe53e1c50cf47f6b5643"
+      "bytes_after": 37876,
+      "sha256_after": "4f12472109436319241a97f47e06723755653545a724472bd515bb13fed518c7"
     },
     {
       "source": "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
@@ -2806,8 +2806,8 @@
       "consumer": "wh-review bundle closure hash",
       "delete_condition": "revert only when the T18 bundle metadata is removed",
       "content_change": "refresh wh-review local_bundle_hash after broker metadata, cross-project diff delivery, and file hash updates",
-      "bytes_after": 78230,
-      "sha256_after": "3b222a8a0c4cdb831eab920338d97211dc8581be58e9a5685ee05a649942887f"
+      "bytes_after": 79043,
+      "sha256_after": "0f3ce6ef51d0264732c70fc1c977f87e5e67ff0bb3fe01b34f80f6f19480796a"
     },
     {
       "source": "docs/cli-tool-mapping.md",
@@ -2872,8 +2872,8 @@
       "consumer": "T21 clean-install acceptance gate",
       "delete_condition": "revert only when the no-argument clean-install gate is replaced with an equally complete default check",
       "content_change": "make the exact no-argument gate execute runner, skill bundle, layout, five-stage task, and current-tree checks",
-      "bytes_after": 16748,
-      "sha256_after": "57460a7601010bbc901e93222f0d92147aae4095d52ed39bb2161ef784866adf"
+      "bytes_after": 17057,
+      "sha256_after": "a4982d14df93309bb579e057ab7c53ff007e35eb7ed6487c81b660ef9b4027ca"
     },
     {
       "source": "docs/operations/clean-install-archive.md",
@@ -2923,7 +2923,7 @@
       "consumer": "stage-runner#runStageEndReflection for four author stages",
       "delete_condition": "remove when the four author-stage current handoff consumer is retired or replaced by an approved equivalent",
       "content_change": "atomic current-only Markdown renderer and readback binding for stage handoff",
-      "sha256_after": "dc020d9a9520bf9b53c46d45d5503f1d822cc4b8c2c1bd477fec2041459a36eb"
+      "sha256_after": "8d73adfa736cf3dd111e239d5f607b2a6e79d22fc76f054aecf93052e31a23f7"
     },
     {
       "source": "skills/stage-handoff",
@@ -3051,7 +3051,7 @@
       "delete_condition": "remove build-prd hash entries when the non-stage review consumer is retired",
       "content_change": "add build-prd contract and refresh hashes for non-stage review assets",
       "bytes_after": 4537,
-      "sha256_after": "24e815f54933048e8696c8987eeeb88963d9c9f0e241184492d2e68723741593"
+      "sha256_after": "9e044b50213d505da649a3337aa65fdb0932fb9edd46850f7168952e71420a40"
     },
     {
       "source": "runtime/review/stage-materials.json",
@@ -3105,8 +3105,8 @@
       "consumer": "trusted non-stage build_prd route/profile selection",
       "delete_condition": "remove non_stage route validation when build-prd review consumer is retired",
       "content_change": "validate and resolve wh_review.non_stage.build_prd while keeping REVIEW_STAGES exactly five",
-      "bytes_after": 37812,
-      "sha256_after": "18176fdb5de16b454a389da9ae9ce120905bd9512729ad12bc4e1cb5b016b3ad"
+      "bytes_after": 37876,
+      "sha256_after": "4f12472109436319241a97f47e06723755653545a724472bd515bb13fed518c7"
     },
     {
       "source": "skills/wh-review/scripts/review-runner.mjs",
@@ -3127,8 +3127,8 @@
       "consumer": "canonical review recorder fail-closed report-only rejection",
       "delete_condition": "remove only when build_prd persistence receives separately authorized schemas/routes",
       "content_change": "reject build_prd before authenticated canonical attempt/result preparation or writes, including task-bound E2E unavailable/result routes",
-      "bytes_after": 64130,
-      "sha256_after": "aebf0c8ef08683676d04066ffd96d673da34ac66243f798a9ddf1c6e4ea108cd"
+      "bytes_after": 99593,
+      "sha256_after": "9bc5c22d9e247e847a56b5875cd473e410d3b8c25fe246e5d93b85d9dfa12589"
     },
     {
       "source": "skills/wh-review/scripts/simple-review-runner.mjs",
@@ -3138,8 +3138,8 @@
       "consumer": "non-stage sentinel identity validation before provider dispatch",
       "delete_condition": "remove only when a separately authorized build_prd request identity contract replaces the sentinel",
       "content_change": "block build_prd review_kind on formal stages or with review_track/review_scope",
-      "bytes_after": 48915,
-      "sha256_after": "70a0f311e95d93adb70e274cc7c97cd01064984717a45663c22f44adedcf1865"
+      "bytes_after": 67269,
+      "sha256_after": "3834e05658682fe91ffc81375d59a524cc71347dd17269edcdf70c10e06031f0"
     },
     {
       "source": "skills/wh-review/scripts/review-semantic-projection.mjs",
@@ -3205,6 +3205,78 @@
       "consumer": "T012 final build-code acceptance aggregation via existing acceptance_data command executor",
       "delete_condition": "remove when an approved native executor emits the same bounded per-AC JSON and preserves the nine-file, raw-output, and unavailable semantics",
       "content_change": "test-only Vitest JSON reporter adapter with explicit selector mapping, cross-pair AC-CLOSE-002 coverage, raw child output, and D029 qualitative unavailable facts"
+    },
+    {
+      "source": "runtime/task/task-index.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T006",
+      "consumer": "no production consumer after the current-row migration; readers use facts.jsonl",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed with its exclusive core test after every production index read and write was retired"
+    },
+    {
+      "source": "runtime/evidence/audit-summary-carrier.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production consumer; the read-only runner fixture keeps the retired audit-summary hash recipe locally",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed after no production reader remained; the byte recipe stays in tests/helpers/read-only-runner-fixture.mjs"
+    },
+    {
+      "source": "runtime/evidence/boundary-confirm.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production consumer; only tests/boundary-confirm.test.mjs referenced it",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed together with its exclusive test after no production caller remained"
+    },
+    {
+      "source": "runtime/evidence/capability-doctor.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production consumer; only core/__tests__/capability-doctor.test.mjs referenced it",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed together with its exclusive test after no production caller remained"
+    },
+    {
+      "source": "runtime/evidence/requirement-ledger.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production consumer; only tests/requirement-lineage.test.mjs referenced it",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed together with its exclusive lineage test after no production caller remained"
+    },
+    {
+      "source": "runtime/evidence/text-utils.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production consumer; only tests/build-code-target.test.mjs referenced it",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed together with its exclusive test after truncateWords lost every production caller"
+    },
+    {
+      "source": "runtime/evidence/journal-schema.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production and no test consumer",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed as a named leaf with zero production and zero test references"
+    },
+    {
+      "source": "runtime/evidence/receipt-schema.mjs",
+      "destination": null,
+      "status": "deleted-final-cleanup",
+      "owner": "workflowhub mechanism simplification T002",
+      "consumer": "no production and no test consumer",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed as a re-export shim with zero production and zero test references"
     }
   ]
 }

@@ -75,11 +75,11 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "e3890df63e9658d21049c5ae6e9ec731c05e008b60c59258f8efa8560b6032d2"
+      "sha256": "d0b14de20767a679dbbce459b2270fd377294dd8eb8e68d3e3978522560b77fe"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
-      "sha256": "4f1ba51f49cd6fe503ce26341c6c0b2bc9bfcf6c8f08337e4c14f0a8a9264c7e"
+      "sha256": "5868ce6dad8181e476184e76ac32ec2c0fadf5b6c2a5e3f7e2111989b3fea466"
     },
     {
       "path": "scripts/review-output.mjs",
@@ -87,11 +87,11 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "87e96181bf19e196c33e245ce7f1113287a786b86c9a6966cdd53ea0fff02087"
+      "sha256": "652d35dd3f8481d1734d357aa512617820adfec46e115040e1888381ab81ac8b"
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "79c328194a897d6b8996710edd7995bb377b24f19e8f576de7c300981dda9853"
+      "sha256": "aee8d0c053aeb0b43b2e539c182222e8a62715c0198c1b2399c6180c2564c1ac"
     },
     {
       "path": "scripts/review-runner.mjs",
@@ -111,15 +111,15 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "18176fdb5de16b454a389da9ae9ce120905bd9512729ad12bc4e1cb5b016b3ad"
+      "sha256": "4f12472109436319241a97f47e06723755653545a724472bd515bb13fed518c7"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "a6f74538902c6a69e9aa995145c60cef1e952b0c40e56ecef4c03158f3704949"
+      "sha256": "19dc5cb5d080132fce8d2010f7f61ac6f0863977b3fa91a3a21c5ff70a50ad94"
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "73e9335e9806db8d00c1c952519608e4c8ac44e1ca05b138b28a959a66096ed4"
+      "sha256": "3834e05658682fe91ffc81375d59a524cc71347dd17269edcdf70c10e06031f0"
     },
     {
       "path": "stage-skill-plan.json",

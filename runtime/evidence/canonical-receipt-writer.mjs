@@ -13,6 +13,7 @@ import { validateSchema } from "../review/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
 import { validateBuildCodePhaseEvidence, validateInteractionLifecycleSequence } from "../stage/stage-content-contracts.mjs";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const TEST_OUTPUT_REF = /^quality\/tests\/output\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
@@ -21,8 +22,8 @@ const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
 const TEST_CAPTURE_LOCK_WAIT_MS = 10_000;
 const IMPLEMENTATION_CAPTURE_LOCK_REF = "locks/implementation-capture.execution.lock";
 const IMPLEMENTATION_CAPTURE_LOCK_WAIT_MS = 10_000;
-export const TEST_CAPTURE_TIMEOUT_MS = 10 * 60 * 1000;
-const MAX_TEST_CAPTURE_TIMEOUT_MS = 15 * 60 * 1000;
+const TEST_CAPTURE_TIMEOUT_MS = 45 * 60 * 1000;
+const MAX_TEST_CAPTURE_TIMEOUT_MS = 45 * 60 * 1000;
 const VERIFY_REVIEW_PROTOCOL = "architect-once-repair-once-review-once-repair-once";
 const VERIFY_REVIEW_STEPS = Object.freeze(["architect_review", "main_repair_1", "independent_review", "main_repair_2"]);
 const CURRENT_MATERIAL_COMPONENTS = new Set(["decision", "spec", "plan", "tasks"]);
@@ -208,7 +209,7 @@ export function freezeReviewMaterial({ task, bytes } = {}) {
 export function readFrozenReviewMaterial({ task, ref, sha256: expectedSha256 } = {}) {
   const safeTask = assertTaskHandle(task);
   if (typeof ref !== "string" || !/^quality\/evidence\/review-materials\/[a-f0-9]{64}\.json$/.test(ref)
-      || !/^[a-f0-9]{64}$/.test(expectedSha256 ?? "")) {
+      || !SHA256_HEX.test(expectedSha256 ?? "")) {
     throw new TypeError("frozen review material ref/hash is invalid");
   }
   const raw = safeTask.readRecord(ref);
@@ -219,7 +220,7 @@ export function readFrozenReviewMaterial({ task, ref, sha256: expectedSha256 } =
       || Object.keys(value).some((key) => !new Set(["schema_version", "content_encoding", "content_sha256", "content_base64"]).has(key))
       || value.schema_version !== "workflowhub-frozen-review-material.v1"
       || value.content_encoding !== "base64"
-      || !/^[a-f0-9]{64}$/.test(value.content_sha256 ?? "")
+      || !SHA256_HEX.test(value.content_sha256 ?? "")
       || typeof value.content_base64 !== "string") {
     throw new Error("frozen review material record is invalid");
   }
@@ -336,7 +337,7 @@ function reusableTestCapture({ task, workspace, snapshot, stage, component, comm
     }
     if (receipt.exit_code !== 0 || typeof receipt.output_ref !== "string"
         || !TEST_OUTPUT_REF.test(receipt.output_ref)
-        || typeof receipt.output_hash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.output_hash)
+        || typeof receipt.output_hash !== "string" || !SHA256_HEX.test(receipt.output_hash)
         || typeof receipt.command_hash !== "string" || receipt.command_hash !== sha256(command)) {
       if (candidateRef === receiptRef) throw new Error("existing test receipt is invalid");
       continue;
@@ -349,7 +350,7 @@ function reusableTestCapture({ task, workspace, snapshot, stage, component, comm
     const materialOnlySnapshot = receipt.snapshot_tree !== snapshot.tree
       && isMaterialOnlySnapshotDelta(workspace.worktreeRoot, receipt.snapshot_tree, snapshot.tree, task.identity.taskId);
     const snapshotMatches = receipt.snapshot_tree === snapshot.tree || materialOnlySnapshot;
-    const sourceDigestMatches = /^[a-f0-9]{64}$/.test(snapshot.source_digest ?? "")
+    const sourceDigestMatches = SHA256_HEX.test(snapshot.source_digest ?? "")
       && receipt.source_digest === snapshot.source_digest;
     // A committed executor status writeback changes HEAD and the full
     // workspace tree, but it does not change the implementation or test
@@ -527,7 +528,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
       throw new TypeError("decision_log payload required");
     }
     if (payload.contract_refs !== undefined && (!Array.isArray(payload.contract_refs)
-        || payload.contract_refs.some((entry) => !entry || typeof entry.ref !== "string" || !/^[a-f0-9]{64}$/.test(entry.hash ?? "")))) {
+        || payload.contract_refs.some((entry) => !entry || typeof entry.ref !== "string" || !SHA256_HEX.test(entry.hash ?? "")))) {
       throw new TypeError("decision contract_refs must contain canonical ref/hash pairs");
     }
     const decisionHash = sha256(payload.decision_log);
@@ -587,7 +588,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
         if (!binding || typeof binding !== "object" || Array.isArray(binding)
             || Object.keys(binding).some((key) => key !== "ref" && key !== "sha256")
             || typeof binding.ref !== "string" || binding.ref.trim() === ""
-            || !/^[a-f0-9]{64}$/.test(binding.sha256 ?? "")) {
+            || !SHA256_HEX.test(binding.sha256 ?? "")) {
           throw new TypeError(`verification item ${entry.id} evidence_refs[${bindingIndex}] is invalid`);
         }
         const nested = safeTask.readRecord(binding.ref);
@@ -623,7 +624,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
           if (!binding || typeof binding !== "object" || Array.isArray(binding)
               || Object.keys(binding).some((key) => key !== "ref" && key !== "sha256")
               || typeof binding.ref !== "string" || binding.ref.trim() === ""
-              || !/^[a-f0-9]{64}$/.test(binding.sha256 ?? "")) {
+              || !SHA256_HEX.test(binding.sha256 ?? "")) {
             throw new TypeError(`requirement replay item ${entry.source_id} evidence_refs[${bindingIndex}] is invalid`);
           }
           const nested = safeTask.readRecord(binding.ref);
@@ -668,7 +669,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();
     const refs = payload.refs.map((entry, index) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.ref !== "string" || !/^(?:evidence|quality\/evidence)\//.test(entry.ref) || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new TypeError(`evidence ref ${index} is invalid`);
+      if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.ref !== "string" || !/^(?:evidence|quality\/evidence)\//.test(entry.ref) || !SHA256_HEX.test(entry.sha256 ?? "")) throw new TypeError(`evidence ref ${index} is invalid`);
       const raw = safeTask.readRecord(entry.ref);
       if (sha256(raw) !== entry.sha256) throw new Error(`evidence ref hash mismatch: ${entry.ref}`);
       const acceptance = validateAcceptanceEvidence(JSON.parse(raw), `evidence ref ${index}`);

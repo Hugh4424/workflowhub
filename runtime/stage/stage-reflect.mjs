@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -35,7 +36,6 @@ export const STAGE_REFLECTION_STAGES = Object.freeze([
 ]);
 
 const STAGES = new Set(STAGE_REFLECTION_STAGES);
-const SHA256_HEX = /^[a-f0-9]{64}$/;
 const AVAILABILITY_STATES = new Set(["unavailable", "not_scheduled"]);
 const AVAILABILITY_REASONS = new Set([
   "executor_absent",

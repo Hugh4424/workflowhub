@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { SHA256_HEX } from "../runtime/evidence/canonical-utils.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -16,13 +17,12 @@ import { parseReviewerOutput } from "../runtime/review/review-output.mjs";
 import { canonicalReviewFindings, deriveSeriousReviewPause, isActionableSeriousFinding, validateReportableFindingDispositions, validateRiskAcceptance } from "../runtime/review/stage-review-disposition.mjs";
 import { ArtifactDir, artifactReference } from "./artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES, inspectMaterialWorkspace } from "../runtime/task/material-workspace.mjs";
-import { appendTaskFact, initializeTaskStore, readTaskFacts } from "../runtime/task/task-store.mjs";
+import { initializeTaskStore, readTaskFacts, writeStageRow } from "../runtime/task/task-store.mjs";
 import { createTaskWorktreeRemoval, inspectWorktreeCleanup, openCurrentTaskWorkspace } from "../runtime/task/workspace.mjs";
 import { deriveCurrentProductRelease, deriveStageOutcomeStatuses, stageMaterialScopeRevisions, STAGE_PREDICATES, qualityPredicateSatisfied } from "../runtime/stage/completion-predicates.mjs";
 import { authenticateStageOutcomeForProjection } from "../runtime/stage/stage-runner.mjs";
 import { activeAcceptanceCriterionIds, readTaskTypeFromDecisionLog } from "../runtime/stage/stage-content-contracts.mjs";
 
-const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
 const GOVERNED_EXECUTORS = new WeakSet();
 const PHYSICAL_DELIVERY_FACTS = Object.freeze([
@@ -177,7 +177,7 @@ function authenticateFindingDispositionEvidence(task, fact, nestedValues) {
     throw new Error("finding disposition evidence is missing its source review and disposition bindings");
   }
   const reviews = subjectFact.source_review_refs.map((binding) => {
-    if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")
+    if (!binding || typeof binding.ref !== "string" || !SHA256_HEX.test(binding.sha256 ?? "")
         || !binding.ref.startsWith("quality/reviews/results/")) {
       throw new Error("finding disposition source review binding is invalid");
     }
@@ -193,7 +193,7 @@ function authenticateFindingDispositionEvidence(task, fact, nestedValues) {
   });
   const riskIds = [];
   for (const binding of subjectFact.risk_acceptance_refs) {
-    if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")
+    if (!binding || typeof binding.ref !== "string" || !SHA256_HEX.test(binding.sha256 ?? "")
         || typeof binding.finding_id !== "string") throw new Error("finding disposition risk acceptance binding is invalid");
     const raw = task.readRecord(binding.ref);
     if (sha256(raw) !== binding.sha256) throw new Error(`finding disposition risk acceptance hash mismatch: ${binding.ref}`);
@@ -223,7 +223,7 @@ function authenticateFindingDispositionEvidence(task, fact, nestedValues) {
 }
 
 function readQualityEvidenceBinding(task, binding, label) {
-  if (!binding || typeof binding.ref !== "string" || !/^quality\/(?!.*\.\.)[^\s]+$/.test(binding.ref) || !HASH.test(binding.sha256 ?? "")) {
+  if (!binding || typeof binding.ref !== "string" || !/^quality\/(?!.*\.\.)[^\s]+$/.test(binding.ref) || !SHA256_HEX.test(binding.sha256 ?? "")) {
     throw new Error(`${label} binding is invalid`);
   }
   let raw;
@@ -297,7 +297,7 @@ function authenticateStageQualityLeaf(task, binding, context, seen = new Set(), 
   }
   if (value?.schema_version === "workflowhub-verification-test-proof.v1") {
     if (!taskMatches || value.stage !== "verify-code" || !treeMatches || value.outcome !== "passed"
-        || typeof value.test_receipt_ref !== "string" || !HASH.test(value.test_receipt_hash ?? "")) {
+        || typeof value.test_receipt_ref !== "string" || !SHA256_HEX.test(value.test_receipt_hash ?? "")) {
       throw new Error(`verification test proof provenance is invalid: ${binding.ref}`);
     }
     authenticateStageQualityLeaf(task, { ref: value.test_receipt_ref, sha256: value.test_receipt_hash }, { ...context, status: "passed" }, nextSeen, depth + 1);
@@ -307,7 +307,7 @@ function authenticateStageQualityLeaf(task, binding, context, seen = new Set(), 
     if (!taskMatches || value.stage !== "verify-code" || !treeMatches
         || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
         || !value.materials || Object.keys(value.materials).sort().join(",") !== "decision-log.md,plan.md,spec.md,tasks.md"
-        || Object.values(value.materials).some((digest) => !HASH.test(digest ?? ""))) {
+        || Object.values(value.materials).some((digest) => !SHA256_HEX.test(digest ?? ""))) {
       throw new Error(`verification material proof provenance is invalid: ${binding.ref}`);
     }
     return;
@@ -402,7 +402,7 @@ function currentQualityValue(task, ref) {
         || !Array.isArray(value.evidence) || value.evidence.length === 0
         || value.evidence.some((entry) => !entry || typeof entry.ref !== "string" || entry.ref.trim() === ""
           || !/^quality\/[^/].+$/.test(entry.ref) || entry.ref.includes("..")
-          || !HASH.test(entry.sha256 ?? "")
+          || !SHA256_HEX.test(entry.sha256 ?? "")
           || entry.evidence_type !== ({
             test: "test_receipt",
             review: "review_result",
@@ -537,7 +537,7 @@ function authenticatedQualityEvidence(task, fact) {
           throw new Error(`mini-task acceptance evidence is not bound to the current task/snapshot: ${entry.ref}`);
         }
         const readBound = (binding, label) => {
-          if (!binding || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) throw new Error(`${label} binding is invalid: ${entry.ref}`);
+          if (!binding || typeof binding.ref !== "string" || !SHA256_HEX.test(binding.sha256 ?? "")) throw new Error(`${label} binding is invalid: ${entry.ref}`);
           const nestedRaw = task.readRecord(binding.ref);
           if (sha256(nestedRaw) !== binding.sha256) throw new Error(`${label} hash mismatch: ${binding.ref}`);
           return JSON.parse(nestedRaw);
@@ -654,7 +654,7 @@ function authenticatedTestSnapshotCommit(task, fact, { currentSnapshotTree = fac
   const evidence = Array.isArray(fact?.evidence)
     ? fact.evidence.find((entry) => entry?.evidence_type === "test_receipt")
     : null;
-  if (!evidence || typeof evidence.ref !== "string" || !HASH.test(evidence.sha256 ?? "")) {
+  if (!evidence || typeof evidence.ref !== "string" || !SHA256_HEX.test(evidence.sha256 ?? "")) {
     throw unavailableVerifySnapshotCommit("test receipt evidence is missing");
   }
   let raw;
@@ -797,7 +797,7 @@ function currentVerifyFacts(task, expected = {}) {
         throw new Error(`MINI_TASK_QUALITY_INVALID: ${ref} has an invalid kind/status/stage for ${value.subject}`);
       }
       for (const [index, evidence] of value.evidence.entries()) {
-        if (!evidence || typeof evidence.ref !== "string" || !/^quality\//.test(evidence.ref) || !HASH.test(evidence.sha256 ?? "")) {
+        if (!evidence || typeof evidence.ref !== "string" || !/^quality\//.test(evidence.ref) || !SHA256_HEX.test(evidence.sha256 ?? "")) {
           throw new Error(`MINI_TASK_QUALITY_INVALID: ${ref} evidence[${index}] is not canonical`);
         }
         if (sha256(task.readRecord(evidence.ref)) !== evidence.sha256) {
@@ -951,7 +951,7 @@ function normalizePlanningAttachments(value) {
   const normalized = value.map((entry, index) => {
     const item = plain(entry, `planning required_attachments[${index}]`);
     const path = repositoryPath(item.path, `planning required_attachments[${index}].path`);
-    if (!HASH.test(item.sha256 ?? "")) throw new TypeError(`planning required_attachments[${index}].sha256 must be a SHA-256 hash`);
+    if (!SHA256_HEX.test(item.sha256 ?? "")) throw new TypeError(`planning required_attachments[${index}].sha256 must be a SHA-256 hash`);
     return Object.freeze({ path, sha256: item.sha256.toLowerCase() });
   });
   const paths = new Set();
@@ -1279,7 +1279,7 @@ export async function recordManualDeliveryClose({
   const confirmation = closeConfirmation(task, planHash, closeConfirmationRef);
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
 
-  await executeClosePlan({
+  const executed = await executeClosePlan({
     task,
     kernel,
     plan,
@@ -1306,7 +1306,7 @@ export async function recordManualDeliveryClose({
   };
   return task.withRecordLock("locks/close.execution.lock", () => {
     createOrVerify(task, "operations/close/manual-risk-close.json", record, "manual risk close");
-    return Object.freeze(record);
+    return withCloseActionRowErrors(record, executed);
   });
 }
 
@@ -1583,7 +1583,7 @@ export async function closeDelivery({
   };
   return task.withRecordLock("locks/close.execution.lock", () => {
     createOrVerify(task, "operations/close/completed.json", completion, "close completion");
-    return Object.freeze(completion);
+    return withCloseActionRowErrors(completion, executed);
   });
 }
 
@@ -1603,6 +1603,97 @@ async function probeSatisfied(executor, step, phase) {
     if (verified !== true) throw new Error(`close step ${step.step_id} physical state verification failed`);
   }
   return observation;
+}
+
+const CLOSE_ACTION_FOR_OPERATION = Object.freeze({
+  "commit-delivery": "delivery_committed",
+  "merge-task-branch": "merge",
+  "archive-spec": "archive",
+  "push-target-branch": "push",
+  "cleanup": "worktree_cleanup",
+});
+
+/**
+ * Record one close-action row for a step whose physical state is already
+ * confirmed. The row is written only after the action really happened; a write
+ * failure stays visible instead of being reported as a completed close action.
+ */
+function recordCloseActionRow(task, planHash, step, mode, now) {
+  const action = CLOSE_ACTION_FOR_OPERATION[step.operation];
+  if (typeof action !== "string") throw new Error(`close step ${step.step_id} has no physical close-action mapping`);
+  try {
+    return writeStageRow(task.taskPath, {
+      record_kind: "close_action",
+      stage: "close",
+      source: "task-close",
+      created_at: now(),
+      material_digest: { value: null, reason: "a close action is not bound to a material revision" },
+      snapshot_tree: { value: null, reason: "a close action is not bound to a workspace snapshot" },
+      review_origin: "not_run",
+      review_result_ref: { value: null, reason: "a close action runs no review" },
+      finding_dispositions: [],
+      spec_analyze: { value: null, reason: "a close action runs no spec analysis" },
+      evidence: { value: [{ command: `close:${step.operation}`, exit_code: 0, failure_signature: mode }] },
+      layer_states: {
+        implementation_completion: "completed",
+        stage_quality: "incomplete",
+        delivery: "completed",
+        task_closure: "incomplete",
+      },
+      serious_issue_disposition: { value: null, reason: "a close action carries no serious-issue disposition" },
+      close_action: { action, result: mode, ref: `operations/close/plans/${planHash}/steps/${step.step_id}.json` },
+      handoff: { value: null, reason: "close-action rows carry no handoff items" },
+    });
+  } catch (error) {
+    return Object.freeze({ action, status: "unavailable", error: error?.message ?? String(error) });
+  }
+}
+
+/**
+ * Carry a failed close-action row write onto the returned close result. The
+ * persisted close record keeps its frozen bytes; only the close output reports
+ * that a physically completed action has no execution-record row.
+ */
+function withCloseActionRowErrors(result, executed) {
+  return executed?.close_action_row_errors === undefined
+    ? Object.freeze(result)
+    : Object.freeze({ ...result, close_action_row_errors: executed.close_action_row_errors });
+}
+
+/**
+ * Read the close-action rows this plan's physical actions depend on back from
+ * the execution record. This is the production reader of the frozen row
+ * values: the close state readback shows what each action really recorded
+ * (result, ref, recorded_at) instead of only whether the record file exists.
+ * An unreadable or missing record stays a visible fact with its real reason;
+ * it never re-derives or blocks the physical delivery state.
+ */
+function readRecordedCloseActions(task, plan) {
+  const required = plan.steps
+    .map((step) => CLOSE_ACTION_FOR_OPERATION[step.operation])
+    .filter((action) => typeof action === "string");
+  let reason = null;
+  let rows = [];
+  try {
+    rows = readTaskFacts(task.taskPath).filter((row) => row.record_kind === "close_action");
+  } catch (error) {
+    reason = error?.message ?? String(error);
+  }
+  const recorded = new Map(rows.map((row) => [row.close_action.action, row]));
+  return Object.freeze({
+    status: reason !== null ? "unavailable" : required.every((action) => recorded.has(action)) ? "recorded" : "incomplete",
+    ...(reason === null ? {} : { reason }),
+    actions: Object.freeze(required.map((action) => {
+      const row = recorded.get(action);
+      return Object.freeze({
+        action,
+        recorded: row !== undefined,
+        result: row?.close_action?.result ?? null,
+        ref: row?.close_action?.ref ?? null,
+        recorded_at: row?.created_at ?? null,
+      });
+    })),
+  });
 }
 
 function completedRecord(task, planHash, step, observation, mode, now) {
@@ -1893,7 +1984,7 @@ function declarationRefs(materials) {
 function planningDeclarationMaterialExpectations(materialIdentity) {
   const expected = new Map(PLANNING_MATERIAL_FILES.map((file) => [file, materialIdentity?.materials?.[file]]));
   for (const attachment of materialIdentity?.attachments ?? []) {
-    if (!attachment || typeof attachment.path !== "string" || !HASH.test(attachment.sha256 ?? "")) {
+    if (!attachment || typeof attachment.path !== "string" || !SHA256_HEX.test(attachment.sha256 ?? "")) {
       throw new Error("planning close attachment identity is invalid");
     }
     if (expected.has(attachment.path)) throw new Error("planning close attachment ref conflicts with a material ref");
@@ -1953,7 +2044,7 @@ function readPlanningDeclaration({ task, declarationRef, materialIdentity }) {
   const expected = planningDeclarationMaterialExpectations(materialIdentity);
   const refs = new Map();
   for (const [index, item] of value.material_refs.entries()) {
-    if (!item || typeof item !== "object" || typeof item.ref !== "string" || !HASH.test(item.sha256 ?? "")) {
+    if (!item || typeof item !== "object" || typeof item.ref !== "string" || !SHA256_HEX.test(item.sha256 ?? "")) {
       throw new Error(`planning archive declaration material_refs[${index}] is invalid`);
     }
     const key = planningDeclarationMaterialKey(item.ref, materialIdentity);
@@ -2063,7 +2154,7 @@ function validateDeliveryPlan(plan, task, kernel) {
       throw new Error("planning close material identity is invalid");
     }
     if (!planning.materials || typeof planning.materials !== "object" || Array.isArray(planning.materials)
-        || PLANNING_MATERIAL_FILES.some((file) => !HASH.test(planning.materials[file] ?? ""))) {
+        || PLANNING_MATERIAL_FILES.some((file) => !SHA256_HEX.test(planning.materials[file] ?? ""))) {
       throw new Error("planning close material hashes are invalid");
     }
     const declarationMaterialRefs = declarationRefs(planning.materials);
@@ -2154,13 +2245,13 @@ function closeConfirmation(task, planHash, ref) {
   const keys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "human_confirmation_ref", "human_confirmation_hash", "confirmed_at"]);
   if (Object.keys(confirmation).some((key) => !keys.has(key))) throw new Error("close confirmation contains unknown fields");
   if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("close confirmation identity is invalid");
-  if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) throw new Error("close confirmation plan hash mismatch");
+  if (!SHA256_HEX.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) throw new Error("close confirmation plan hash mismatch");
   if (!["confirmed", "rejected", "timeout"].includes(confirmation.outcome)) throw new Error("close confirmation outcome is invalid");
   if (confirmation.outcome === "timeout") {
     if (confirmation.human_confirmation_ref !== null || confirmation.human_confirmation_hash !== null) throw new Error("timeout close confirmation must not bind a human confirmation");
     return confirmation;
   }
-  if (typeof confirmation.human_confirmation_ref !== "string" || !HASH.test(confirmation.human_confirmation_hash ?? "")) throw new Error("close confirmation must bind a human confirmation");
+  if (typeof confirmation.human_confirmation_ref !== "string" || !SHA256_HEX.test(confirmation.human_confirmation_hash ?? "")) throw new Error("close confirmation must bind a human confirmation");
   const humanRaw = task.readRecord(confirmation.human_confirmation_ref);
   if (sha256(humanRaw) !== confirmation.human_confirmation_hash) throw new Error("close confirmation human confirmation hash mismatch");
   const human = JSON.parse(humanRaw);
@@ -2234,7 +2325,7 @@ function requiredCloseAuthorizations(plan, task, step) {
 }
 
 function readPreparedClosePlan(task, planHash, label) {
-  if (!HASH.test(planHash ?? "")) throw new TypeError(`${label} must be a SHA-256 hash`);
+  if (!SHA256_HEX.test(planHash ?? "")) throw new TypeError(`${label} must be a SHA-256 hash`);
   const ref = `operations/close/plans/${planHash}/plan.json`;
   const raw = task.readRecord(ref);
   let record;
@@ -2603,6 +2694,11 @@ export function prepareDeliveryClosePlan({
           material_revision: materialRevision,
           material_scope_revisions: stageMaterialScopeRevisions(materialValues),
           snapshot_root: worktree,
+          // The current stage result is the frozen row of the single execution
+          // record, exactly as the public status path reads it. A stage whose
+          // row is missing stays unavailable with an observable reason instead
+          // of falling back to the old stage-outcome envelope bytes.
+          read_task_facts: () => readTaskFacts(task.taskPath),
           authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({
             task,
             kernel,
@@ -2858,6 +2954,9 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     physical_missing: Object.freeze(physicalMissing),
     step_records: Object.freeze(stepRecords.map((record) => structuredClone(record))),
     completed: completed === null ? null : structuredClone(completed),
+    // The execution record's own view of this plan's physical actions. The row
+    // values reach a real caller here rather than only a test.
+    close_actions: readRecordedCloseActions(task, plan),
     facts: Object.freeze(facts),
   });
 }
@@ -3294,6 +3393,20 @@ export async function executeClosePlan(options = {}) {
     }
 
     const consumedOperations = new Set();
+    // Every close action that really happened leaves exactly one execution
+    // record row. A failed row write never rolls the physical action back, but
+    // it must stay visible on the close result instead of being swallowed.
+    const closeActionRowErrors = [];
+    const recordCloseAction = (step, mode) => {
+      const recorded = recordCloseActionRow(task, planHash, step, mode, now);
+      if (recorded?.status === "unavailable") {
+        closeActionRowErrors.push(Object.freeze({ step_id: step.step_id, action: recorded.action, error: recorded.error }));
+      }
+      return recorded;
+    };
+    const closeResult = (result) => Object.freeze(closeActionRowErrors.length === 0
+      ? result
+      : { ...result, close_action_row_errors: Object.freeze([...closeActionRowErrors]) });
     for (const step of plan.steps) {
       const executor = executorFor(executors, step);
       const recordPath = `${base}/steps/${step.step_id}.json`;
@@ -3327,12 +3440,14 @@ export async function executeClosePlan(options = {}) {
             // downstream consumers cannot recognise recovery (review finding
             // F-c213b3773792).
             createOrVerify(task, completionPath, completedRecord(task, planHash, step, before, "reconciled", now), `close step ${step.step_id} recovery`);
+            recordCloseAction(step, "reconciled");
             continue;
           }
           await executor.execute(step, before);
           const after = await probeSatisfied(executor, step, "post-failure-execution");
           if (!after.satisfied) throw new Error(`close step ${step.step_id} did not reach its declared physical state`);
           createOrVerify(task, completionPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id} recovery`);
+          recordCloseAction(step, "executed");
           continue;
         }
         if (prior.status !== "completed") throw new Error(`close step ${step.step_id} record conflicts with plan`);
@@ -3341,6 +3456,7 @@ export async function executeClosePlan(options = {}) {
       }
       if (before.satisfied) {
         createOrVerify(task, recordPath, completedRecord(task, planHash, step, before, "reconciled", now), `close step ${step.step_id}`);
+        recordCloseAction(step, "reconciled");
         continue;
       }
       let after;
@@ -3355,6 +3471,10 @@ export async function executeClosePlan(options = {}) {
         throw error;
       }
       createOrVerify(task, recordPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id}`);
+      // The physical action is confirmed above; only now does the close action
+      // become a recorded fact.  Without this call a first-time close performs
+      // every physical action and records none of them.
+      recordCloseAction(step, "executed");
     }
 
     const deliveryState = plan.delivery ? inspectDeliveryCloseState({ task, kernel, plan }) : null;
@@ -3367,7 +3487,7 @@ export async function executeClosePlan(options = {}) {
     }
     if (manualRiskClose) {
       if (acceptedCompletion) throw new Error("manual risk close conflicts with a normal completion record");
-      return Object.freeze({
+      return closeResult({
         status: "delivered_with_risk",
         close_mode: "manual-risk-close",
         physical_state: deliveryState ? physicalStateForRecord(deliveryState) : {},
@@ -3375,7 +3495,7 @@ export async function executeClosePlan(options = {}) {
     }
     if (isDeclaredPlanningDelivery(plan, task)) {
       if (acceptedCompletion) throw new Error("declared planning close conflicts with a normal completion record");
-      return Object.freeze({
+      return closeResult({
         status: "delivered",
         close_mode: "planning",
         plan_hash: planHash,
@@ -3387,7 +3507,7 @@ export async function executeClosePlan(options = {}) {
         physical_state: deliveryState ? physicalStateForRecord(deliveryState) : {},
       });
     }
-    if (acceptedCompletion) return Object.freeze(acceptedCompletion);
+    if (acceptedCompletion) return closeResult(acceptedCompletion);
     const completion = {
       schema_version: "task-close-completed.v1",
       task_id: task.identity.taskId,
@@ -3405,6 +3525,6 @@ export async function executeClosePlan(options = {}) {
       completed_at: now(),
     };
     if (!options.deferCompletionRecord) createOrVerify(task, "operations/close/completed.json", completion, "close completion");
-    return Object.freeze(completion);
+    return closeResult(completion);
   });
 }

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
+import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 
 export const PACKET_SOURCE_PREFIX = ".wh-review-packets";
 
@@ -137,8 +138,8 @@ export function migrateWhReviewConfig({ configPath, backupPath, expectedHash = n
 export function restoreWhReviewConfig({ configPath, backupPath, expectedCurrentHash, expectedBackupHash } = {}) {
   const target = regularFile(absoluteRegularPath(configPath, "configPath"), "workflowhub host config");
   const backup = regularFile(absoluteRegularPath(backupPath, "backupPath"), "workflowhub config backup");
-  if (typeof expectedCurrentHash !== "string" || !/^[a-f0-9]{64}$/.test(expectedCurrentHash)) throw new TypeError("expectedCurrentHash must be a SHA-256 hash");
-  if (typeof expectedBackupHash !== "string" || !/^[a-f0-9]{64}$/.test(expectedBackupHash)) throw new TypeError("expectedBackupHash must be a SHA-256 hash");
+  if (typeof expectedCurrentHash !== "string" || !SHA256_HEX.test(expectedCurrentHash)) throw new TypeError("expectedCurrentHash must be a SHA-256 hash");
+  if (typeof expectedBackupHash !== "string" || !SHA256_HEX.test(expectedBackupHash)) throw new TypeError("expectedBackupHash must be a SHA-256 hash");
   const backupBytes = readFileSync(backup);
   const backupHash = sha256(backupBytes);
   if (backupHash !== expectedBackupHash) throw conflictError("backup bytes do not match expectedBackupHash");

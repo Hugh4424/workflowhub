@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import { assertArtifactDir } from "../../core/artifact-dir.mjs";
@@ -7,7 +8,6 @@ import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-
 import { isExecutionRecordOnlyMaterialDelta } from "../../runtime/task/git-worktree-snapshot.mjs";
 
 const OID = /^[a-f0-9]{40,64}$/;
-const HASH = /^[a-f0-9]{64}$/;
 const MATERIAL_NAMES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 
 function incomplete(message) {
@@ -58,7 +58,7 @@ function currentMaterials(_task, artifacts) {
 }
 
 function binding(task, item, label) {
-  if (!item || typeof item.ref !== "string" || !HASH.test(item.sha256 ?? "")) incomplete(`${label} binding is invalid`);
+  if (!item || typeof item.ref !== "string" || !SHA256_HEX.test(item.sha256 ?? "")) incomplete(`${label} binding is invalid`);
   let raw;
   try { raw = task.readRecord(item.ref); }
   catch (error) {

@@ -14,6 +14,7 @@ import { redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstru
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
+import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 
 // Managed review ownership lives in 3rd-review. WorkflowHub must keep polling
 // while the broker reports a live session.
@@ -337,7 +338,7 @@ function decodeSerializedMaterials(packet) {
   for (const entry of packet.materials) {
     exactKeys(entry, SERIALIZED_MATERIAL_KEYS, "provider input material");
     if (typeof entry.key !== "string" || !new Set(["bytes", "text", "json"]).has(entry.value_kind)
-        || typeof entry.content_base64 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")
+        || typeof entry.content_base64 !== "string" || !SHA256_HEX.test(entry.sha256 ?? "")
         || Object.hasOwn(materials, entry.key)) throw new TypeError("provider input material is invalid");
     let content;
     try {
@@ -355,7 +356,7 @@ function decodeSerializedMaterials(packet) {
 
 function rebuildSerializedPacket(packet) {
   if (!plainRecord(packet) || packet.schema_version !== "wh-review-simple-packet.v1" || !Array.isArray(packet.materials)
-      || !/^[a-f0-9]{64}$/.test(packet.material_id ?? "")) throw new TypeError("provider packet is invalid");
+      || !SHA256_HEX.test(packet.material_id ?? "")) throw new TypeError("provider packet is invalid");
   if (Object.keys(packet).some((key) => !SIMPLE_PACKET_KEYS.has(key))) throw new TypeError("provider packet has unsupported fields");
   const identity = reviewIdentityFromInput(packet);
   const materials = decodeSerializedMaterials(packet);
@@ -554,7 +555,7 @@ export function rehydrateProviderInput(bytes, attachmentRoot) {
   catch { throw new TypeError("provider input is invalid"); }
   exactKeys(value, PROVIDER_INPUT_TOP_LEVEL_KEYS, "provider input");
     if (value.schema_version !== "wh-review-provider-input.v1" || typeof value.envelope_sha256 !== "string"
-        || !/^[a-f0-9]{64}$/.test(value.envelope_sha256)) throw new TypeError("provider input is invalid");
+        || !SHA256_HEX.test(value.envelope_sha256)) throw new TypeError("provider input is invalid");
     const packet = rebuildSerializedPacket(value.packet);
     const envelope = canonicalProviderEnvelopeFields(value);
     const unsigned = { schema_version: "wh-review-provider-input.v1", packet, ...envelope };

@@ -9,7 +9,7 @@ import { canonicalJson } from "../../runtime/evidence/canonical-source.mjs";
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
-import { initializeTaskStore, readTaskFacts, readTaskIndex } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore, readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 
@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 describe("protocol error trace contract", () => {
-  it("RED: appends one existing ten-field fact only after a successful in-place publication retry", async () => {
+  it("writes one current sixteen-key stage row only after a successful in-place publication retry", async () => {
     const fixture = state();
     const seam = publicationSeam(fixture);
     const handler = vi.fn(async () => ({ facts: { source: "valid-handler-result" }, evidence_refs: [] }));
@@ -104,39 +104,65 @@ describe("protocol error trace contract", () => {
 
     const facts = readTaskFacts(fixture.task.taskPath);
     expect(facts).toHaveLength(1);
-    const fact = facts[0];
+    const row = facts[0];
     const materialDigest = materialRevisionFromValues(seam.attempts[0].materials.values).replace(/^revision-/, "");
-    const tracePayload = {
-      stage: "build-code",
-      class_id: TRACE_CLASS,
-      occurred_at: fact.created_at,
-      status: TRACE_STATUS,
-    };
-    expect(Object.keys(fact).sort()).toEqual([
-      "content_hash", "created_at", "invocation_id", "material_digest", "output_ref",
-      "source", "source_digest", "stage", "status", "task_id",
+    // The frozen sixteen-key field table, with the empty-with-reason encoding.
+    expect(Object.keys(row).sort()).toEqual([
+      "close_action", "created_at", "evidence", "finding_dispositions", "handoff", "layer_states",
+      "material_digest", "record_kind", "review_origin", "review_result_ref", "serious_issue_disposition",
+      "snapshot_tree", "source", "spec_analyze", "stage", "task_id",
     ]);
-    expect(fact).toMatchObject({
+    expect(row).toMatchObject({
+      record_kind: "stage",
       task_id: fixture.task.identity.taskId,
       stage: "build-code",
-      material_digest: materialDigest,
-      source_digest: seam.attempts[0].snapshot.source_digest,
-      invocation_id: fixture.context.workflowRunId,
       source: `protocol_error:${TRACE_CLASS}`,
-      status: TRACE_STATUS,
       created_at: expect.any(String),
-      output_ref: "facts.jsonl",
+      review_origin: "not_run",
     });
-    expect(Number.isFinite(Date.parse(fact.created_at))).toBe(true);
-    expect(fact.content_hash).toBe(sha256(canonicalJson(tracePayload)));
+    expect(row.material_digest).toEqual({ value: materialDigest });
+    expect(row.evidence.value[0]).toMatchObject({ command: `protocol-error:${TRACE_CLASS}`, exit_code: 0, failure_signature: TRACE_STATUS });
+    expect(row.close_action.value).toBeNull();
+    expect(typeof row.close_action.reason).toBe("string");
+    expect(Number.isFinite(Date.parse(row.created_at))).toBe(true);
     expect(seam.publishStage).toHaveBeenCalledTimes(2);
     expect(handler).toHaveBeenCalledOnce();
 
+    // A repaired trace replaces its own stage row instead of appending one.
+    // Compare the durable bytes against an explicitly constructed expected
+    // row: parsing the same facts.jsonl line that produced `row` would be a
+    // self-comparison and could never fail.
     const rawLines = readFileSync(join(fixture.task.taskPath, "facts.jsonl"), "utf8").trimEnd().split("\n");
-    const factRef = "facts.jsonl#1";
-    const factHash = sha256(`${rawLines[0]}\n`);
-    const indexEntry = readTaskIndex(fixture.task.taskPath).facts.find(({ ref }) => ref === factRef);
-    expect(indexEntry).toMatchObject({ ref: factRef, sha256: factHash, content_hash: fact.content_hash, external_raw_ref: "facts.jsonl" });
+    expect(rawLines).toHaveLength(1);
+    expect(JSON.parse(rawLines[0])).toEqual({
+      record_kind: "stage",
+      task_id: fixture.task.identity.taskId,
+      stage: "build-code",
+      source: `protocol_error:${TRACE_CLASS}`,
+      created_at: expect.any(String),
+      material_digest: { value: materialDigest },
+      snapshot_tree: { value: seam.attempts[0].snapshot.tree, reason: "snapshot tree recovered from the authenticated snapshot" },
+      review_origin: "not_run",
+      review_result_ref: { value: null, reason: "a protocol-error trace reports no review result" },
+      finding_dispositions: [],
+      spec_analyze: { value: null, reason: "a protocol-error trace runs no spec analysis" },
+      evidence: {
+        value: [{
+          command: `protocol-error:${TRACE_CLASS}`,
+          exit_code: 0,
+          failure_signature: TRACE_STATUS,
+        }],
+      },
+      layer_states: {
+        implementation_completion: "completed",
+        stage_quality: "incomplete",
+        delivery: "unavailable",
+        task_closure: "unavailable",
+      },
+      serious_issue_disposition: { value: null, reason: "a protocol-error trace is a repair record, not a serious-issue disposition" },
+      close_action: { value: null, reason: "stage rows never carry a close action" },
+      handoff: { value: null, reason: "a protocol-error trace hands nothing over" },
+    });
   });
 
   it("does not append a repaired fact when the one allowed publication retry fails", async () => {

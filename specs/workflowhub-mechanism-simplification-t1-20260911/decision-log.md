@@ -183,7 +183,7 @@
 - 基线 = 本任务 HEAD 重测值：markdownlint **612** error / 35 files、`check-task-record-paths.mjs` **10** FAIL、`verify-structure.mjs` **2** FAIL（§4.8）。合入后任一计数上升即判不通过。
 - 本任务四份材料 markdownlint **0 error**（当前本文件已 0 error，受此约束持续保持）。
 - 针对性测试按各批次清单执行；**禁止**全量 `vitest` / `npm test` / `test:safe`。
-- 历史 store（**51** 个 `facts.jsonl`）在改字段表与删 `index.json` 后仍可 `status`，0 抛错。
+- 历史 store（**51** 个 `facts.jsonl`）在改字段表与删 `index.json` 后仍可 `status`，0 抛错。 此处保留原验收表述作来源；当前历史验收集合已由§18真实用户澄清替代为50个其他任务，原51测量值不变。
 - 净减账：允许 `unknown`，但必须写「为何算不出 + 下次可算的触发条件」；至少一个确定性净减项（`task-index.mjs` −30 行）。
 
 #### 非目标（E-1 ~ E-20 原样沿用，逐条见 PRD L160–L183）
@@ -1021,7 +1021,7 @@ grill_summary:
 | R-12 | **各批缺可执行的针对性测试命令**（红 #1/#11、蓝 #7） | 补进 §3.8：C0 = `node -e` 断言（零新增文件，不跑 vitest）；C1 = `npx vitest run tests/task-record-paths-check.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`；C2 = `npx vitest run tests/stage-plan-task-contract.test.mjs tests/contract/stage-reflection-paths.test.mjs tests/contract/derive-consumption-edges.test.mjs --poolOptions.forks.singleFork --no-fileParallelism`；C3 = 按 PRD C3 §17 的 16 个文件清单执行。**禁止全量 `vitest` / `npm test` / `test:safe`** |
 | R-13 | **`facts.jsonl` 恢复/重试与跨任务交接模型无法闭合**（红 #14、蓝 #17） | 写死规则：**同一 stage 只允许一行**；`unavailable`/`incomplete`/`partial` 之后的同 task 修复是**更新该 stage 已有的那一行**（同一写者、同一 `record_kind:"stage"`），**不追加第二行**；给 C5 的交接事实**写在同一行**的 `handoff` 语义字段，**不新增行、不新增对象**。读者规则：`status` / close / 下一 stage 只读当前行的最新值 |
 | R-14 | **D-015 的「只读分流」口径自相矛盾**（蓝 #6） | 统一：**C3 撞上 RISK-002 时，允许且仅允许"只读形状分流"**（读取侧按行形状判定，**不新增任何写入路径**）；**禁止**任何写入型兼容路径或双写（写入型兼容 = 立即停批记 `incomplete`）。§11 被拒选项仅指"写入型兼容路径"与"回退扩键方案"，**不含只读分流**；C2 沿用 `monitoring-fact.v1` 的只读分流是同一原则的既有先例 |
-| R-15 | **C3 验收的"一个记录文件"与历史目录豁免未写清**（红 #16） | 写死：**"任务目录只剩一个执行记录文件"适用于本任务之后新建的任务目录**；51 个历史任务目录保持原样（`index.json` 不删、不改），历史兼容判据只要求"仍可 `status`"。命令口径：`grep -rn 'index\.json' --include=*.mjs core runtime tools skills workflows \| grep -v node_modules` 期望 **0 生产命中**（字面 `index.json`；`diff-index.json` 等复合名不计入） |
+| R-15 | **C3 验收的"一个记录文件"与历史目录豁免未写清**（红 #16） | 写死：**"任务目录只剩一个执行记录文件"适用于本任务之后新建的任务目录**；51 个历史任务目录保持原样（`index.json` 不删、不改），历史兼容判据只要求"仍可 `status`"。命令口径：`grep -rn 'index\.json' --include=*.mjs core runtime tools skills workflows \| grep -v node_modules` 期望 **0 生产命中**（字面 `index.json`；`diff-index.json` 等复合名不计入）  当前验收集合由§18替代为50个其他任务；本行51保留为当时表述。 |
 
 ### 16.3 处置判定（35 条）
 
@@ -1046,3 +1046,19 @@ grill_summary:
 4. **当前阶段当场修复了什么**（`current_stage_repairs`）：方向审查 16 条 → `fixed` 9 / `accepted_risk` 7（其中 6 条是用户已两次裁决的两组争议）；细节审查 35 条 → `fixed` 20 / `accepted_risk` 6；**2 条 blocking 全部修复**；另修 3 处材料自缺陷（缺失的 `## UI applicability`、§8.1 计数、§6 与 §3.9 的口径冲突）。
 5. **剩余风险、未决和延期**（`remaining_risks`）：RISK-001（Tier B 仓外未知消费者，用户接受）、RISK-002（C3 历史兼容，最高优先）、RISK-003（上游指针属双写，用户接受）、RISK-004~007；OPEN-002/003/004；**延期项 = 零**（三处后置为交接项 HANDOFF-001~003，各带 owner/触发/消费者/关闭条件）。
 6. **下游可以直接消费什么、不能自行猜什么**（`next_stage_boundary`）：可直接消费 = 本文件的 OI 终态、§3.5 范围与验收口径、§3.6 口径定义、§3.8 流程与失败语义、§3.9 命名、§9 决定链、§16.2 的 15 条当场修复；**不能自行猜** = `facts.jsonl` 的精确键名（OPEN-004：build-spec 必须冻结键集 + 老 reader 兼容测试）、E-1~E-20 的逐条正文（在 PRD L160–L183，本任务只给冻结点）、以及任何被审查点名但用户已接受的争议项（RISK-001/003，不得改写成"审查通过"）。
+
+## 18. build-plan 期间的历史验收集合澄清
+
+当前用户真实答复：“采用，继续吧”。答复对应的问题是：是否采用“50 个其他任务验证历史只读兼容，本任务单独验证新写入与状态读取”的口径。
+
+据此，后续 C0/C3 的历史只读验收集合固定为本次现场枚举中排除当前任务后的 50 个目录；当前任务不加入历史字节不变集合，按新 writer 到真实 reader/status 的既定路径单独验证。当前四材料据此细化，§3.6、§16.2 中的历史测量值（facts.jsonl 51、index.json 51 等）作为原测量事实保留，不改写成 50。旧审查与旧阶段 outcome 原件不改写。
+
+原枚举与真实答复证据：`quality/evidence/build-plan/historical-selection-research-001.json`、`quality/evidence/build-plan/historical-selection-clarification-001.json`。本节只澄清只读验收集合；实现测试及本次最终计划验收仍需真实执行和答复。
+
+### 18.1 唯一归档目录的既有身份错误例外
+
+继续核查50个目录后，用户对“50个目录都保留字节保护、49个有效任务status零抛错、1个归档目录保留明确身份错误并验证只读解析”的问题真实回复：“采用既有错误例外（推荐）”。
+
+该例外只适用于 `_discarded-m16-experience-loop-repair`：其manifest task_id为 `m16-experience-loop-repair`，原身份派生目录不存在，现有TaskHandle拒绝目录名与任务ID不一致。50个目录仍全部进入清单/hash与只读解析；49个有效任务必须真实status且零抛错；该唯一归档目录保留真实身份拒绝原件，状态标为 `known_identity_error`，不得称status通过。其他身份错误、解析失败、状态入口错误、历史字节变化或缺原件均失败。
+
+源证据：`quality/evidence/build-plan/historical-archive-exception-clarification-002.json`，以及其中绑定的唯一目录/manifest身份/manifest hash。现有身份认证保持原规则，不新增历史运行分支，不更名、不改写历史。当前任务仍按§18及C3新写入读取路径另验。§18及更早条文的“全部status零抛错”在历史集合上以本节49正常+1明确错误的精确口径为准。

@@ -1,10 +1,10 @@
 import { closeSync, constants, existsSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeSync } from "node:fs";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const DIRECTORY = constants.O_DIRECTORY ?? 0;
-const HASH = /^[a-f0-9]{64}$/;
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const FACT_KEYS = Object.freeze(["task_id", "stage", "material_digest", "source_digest", "invocation_id", "source", "status", "content_hash", "created_at", "output_ref"]);
 const HISTORICAL_FACT_TYPES = new Set(["stage", "step", "skill", "session", "subagent", "token", "tool_use", "duration", "retry", "review", "test", "acceptance_criterion", "confirmation", "verify", "artifact", "health", "automation", "human_intervention", "source_status", "transcript_event"]);
@@ -15,7 +15,6 @@ const HISTORICAL_FACT_KEYS = Object.freeze(["schema_version", "fact_id", "task_i
 const HISTORICAL_FACT_KEY_SET = new Set(HISTORICAL_FACT_KEYS);
 const HISTORICAL_LEGACY_FACT_KEY_SET = new Set(HISTORICAL_FACT_KEYS.filter((key) => key !== "step_slug"));
 const HISTORICAL_SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const FORBIDDEN_INDEX_KEYS = new Set(["current", "parent", "previous", "generation", "selector", "successor"]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 function fsyncDirectory(path) {
@@ -111,24 +110,6 @@ function withStoreLock(root, operation) {
   try { return operation(); } finally { closeSync(fd); rmSync(lock, { force: true }); }
 }
 
-function initialIndex(taskId, verifyHash = null) {
-  return {
-    schema_version: "task-index.v1",
-    task_id: taskId,
-    facts: [],
-    quality: {
-      reviews: [],
-      tests: [],
-      verify: verifyHash === null ? null : indexRef({
-        ref: "quality/verify.json", sha256: verifyHash, schema: "quality-verify.v1", task_id: taskId,
-        logical_ref: "quality/verify.json", content_hash: verifyHash, version: "v1", related_task_id: taskId,
-        external_raw_ref: "task.json", external_governance_archive_ref: null,
-      }),
-    },
-    archives: [],
-  };
-}
-
 function plainRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -173,7 +154,13 @@ function validateHistoricalMonitoringFact(value, taskId, projectName) {
   for (const key of ["adapter_version", "skill_version"]) {
     if (value[key] !== null && !nonEmptyHistoricalText(value[key])) throw new Error(`${key} is invalid`);
   }
-  if (!Array.isArray(value.evidence_refs) || value.evidence_refs.some((ref) => !nonEmptyHistoricalText(ref) || !HISTORICAL_SAFE_REF.test(ref))) throw new Error("evidence_refs is invalid");
+  // Historical evidence refs predate the safe-ref grammar and legitimately use
+  // task-relative paths. Read them without rewriting anything; a traversal or
+  // absolute path is still rejected.
+  const historicalEvidenceRef = (ref) => nonEmptyHistoricalText(ref)
+    && (HISTORICAL_SAFE_REF.test(ref)
+      || (!ref.startsWith("/") && !ref.split(/[\\/]+/).includes("..") && /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(ref)));
+  if (!Array.isArray(value.evidence_refs) || value.evidence_refs.some((ref) => !historicalEvidenceRef(ref))) throw new Error("evidence_refs is invalid");
   return value;
 }
 
@@ -190,52 +177,14 @@ function parseFactRecords(raw, taskId, projectName) {
     if (["quality-fact.v1", "quality-verify.v1"].includes(value?.schema_version)) {
       throw new Error(`quality facts must be stored under quality/facts, not facts.jsonl line ${index + 1}`);
     }
+    if (TASK_RECORD_KINDS.includes(value?.record_kind)) {
+      try { validateStageRow(value, taskId); }
+      catch (error) { throw new Error(`task record row is invalid on line ${index + 1}: ${error.message}`); }
+      return Object.freeze({ kind: "task-record", value });
+    }
     validateFact(value, taskId);
     return Object.freeze({ kind: "task", value });
   });
-}
-
-function indexRef(value) {
-  return {
-    ref: value.ref,
-    sha256: value.sha256,
-    schema: value.schema,
-    task_id: value.task_id,
-    logical_ref: value.logical_ref ?? value.ref,
-    content_hash: value.content_hash ?? value.sha256,
-    version: value.version ?? "v1",
-    related_task_id: value.related_task_id ?? value.task_id,
-    external_raw_ref: value.external_raw_ref ?? null,
-    external_governance_archive_ref: value.external_governance_archive_ref ?? null,
-    ...(value.stage === undefined ? {} : { stage: value.stage }),
-  };
-}
-
-function validateIndexRef(value, label) {
-  if (!value || typeof value !== "object"
-      || typeof value.ref !== "string" || !HASH.test(value.sha256 ?? "")
-      || typeof value.schema !== "string" || typeof value.task_id !== "string"
-      || typeof value.logical_ref !== "string" || !HASH.test(value.content_hash ?? "")
-      || typeof value.version !== "string" || typeof value.related_task_id !== "string"
-      || !["string", "object"].includes(typeof value.external_raw_ref)
-      || !["string", "object"].includes(typeof value.external_governance_archive_ref)) {
-    throw new Error(`${label} is not a complete task index reference`);
-  }
-  if (value.external_raw_ref !== null && typeof value.external_raw_ref !== "string") throw new Error(`${label}.external_raw_ref is invalid`);
-  if (value.external_governance_archive_ref !== null && typeof value.external_governance_archive_ref !== "string") throw new Error(`${label}.external_governance_archive_ref is invalid`);
-  return value;
-}
-
-function validateIndex(value, taskId) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || value.schema_version !== "task-index.v1" || value.task_id !== taskId) throw new Error("task index identity is invalid");
-  for (const key of Object.keys(value)) if (FORBIDDEN_INDEX_KEYS.has(key)) throw new Error(`task index contains forbidden lineage field: ${key}`);
-  if (!Array.isArray(value.facts) || !value.quality || !Array.isArray(value.quality.reviews) || !Array.isArray(value.quality.tests)) throw new Error("task index shape is invalid");
-  value.facts.forEach((item, index) => validateIndexRef(item, `facts[${index}]`));
-  value.quality.reviews.forEach((item, index) => validateIndexRef(item, `quality.reviews[${index}]`));
-  value.quality.tests.forEach((item, index) => validateIndexRef(item, `quality.tests[${index}]`));
-  if (value.quality.verify !== null) validateIndexRef(value.quality.verify, "quality.verify");
-  value.archives.forEach((item, index) => validateIndexRef(item, `archives[${index}]`));
-  return value;
 }
 
 export function initializeTaskStore(taskRoot, { taskId } = {}) {
@@ -260,10 +209,9 @@ export function initializeTaskStore(taskRoot, { taskId } = {}) {
     }, null, 2)}\n`;
     const verifyPath = safeRecordPath(identity.root, "quality/verify.json");
     if (!existsSync(verifyPath)) atomicWrite(identity.root, "quality/verify.json", verifyRaw, { createOnly: true });
-    const indexPath = safeRecordPath(identity.root, "index.json");
-    if (!existsSync(indexPath)) atomicWrite(identity.root, "index.json", `${JSON.stringify(initialIndex(identity.taskId, sha256(verifyRaw)), null, 2)}\n`, { createOnly: true });
-    const index = validateIndex(JSON.parse(readFileSync(indexPath, "utf8")), identity.taskId);
-    return Object.freeze({ task_id: identity.taskId, root: identity.root, index });
+    // A new task owns exactly one execution record file. The retired index
+    // object is no longer created, read, or written for current tasks.
+    return Object.freeze({ task_id: identity.taskId, root: identity.root, record_ref: "facts.jsonl" });
   });
 }
 
@@ -273,61 +221,201 @@ export function readTaskFacts(taskRoot) {
   return parseFactRecords(raw, identity.taskId, identity.projectName).map(({ value }) => value);
 }
 
-export function readTaskIndex(taskRoot) {
-  const identity = assertRoot(taskRoot);
-  return validateIndex(JSON.parse(readFileSync(safeRecordPath(identity.root, "index.json"), "utf8")), identity.taskId);
-}
-
-export function replaceTaskIndex(taskRoot, value, options = {}) {
-  const identity = assertRoot(taskRoot, value?.task_id);
-  validateIndex(value, identity.taskId);
-  return atomicWrite(identity.root, "index.json", `${JSON.stringify(value, null, 2)}\n`, options);
-}
-
 function validateFact(value, taskId) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("task fact must be an object");
   const keys = Object.keys(value).sort();
   if (keys.join("\0") !== [...FACT_KEYS].sort().join("\0")) throw new Error("task fact contains unsupported fields");
-  if (value.task_id !== taskId || !STAGES.has(value.stage) || !HASH.test(value.material_digest) || !HASH.test(value.source_digest) || !HASH.test(value.content_hash)) throw new Error("task fact identity or digest is invalid");
+  if (value.task_id !== taskId || !STAGES.has(value.stage) || !SHA256_HEX.test(value.material_digest) || !SHA256_HEX.test(value.source_digest) || !SHA256_HEX.test(value.content_hash)) throw new Error("task fact identity or digest is invalid");
   if (typeof value.invocation_id !== "string" || value.invocation_id.trim() === "" || typeof value.source !== "string" || value.source.trim() === "" || typeof value.status !== "string" || typeof value.output_ref !== "string" || !Number.isFinite(Date.parse(value.created_at))) throw new Error("task fact fields are invalid");
   return value;
 }
 
-export function appendTaskFact(taskRoot, input, options = {}) {
+/** The frozen 16-key row contract shared by stage rows and close-action rows. */
+export const TASK_RECORD_KINDS = Object.freeze(["stage", "close_action"]);
+export const STAGE_ROW_KEYS = Object.freeze([
+  "record_kind", "task_id", "stage", "source", "created_at",
+  "material_digest", "snapshot_tree",
+  "review_origin", "review_result_ref", "finding_dispositions", "spec_analyze",
+  "evidence", "layer_states", "serious_issue_disposition",
+  "close_action", "handoff",
+]);
+export const LAYER_STATE_VALUES = Object.freeze(["completed", "unavailable", "incomplete", "partial"]);
+export const REVIEW_ORIGINS = Object.freeze(["conducted", "unavailable", "not_run", "same_source_degraded", "dispatched_uncollected"]);
+export const FINDING_DISPOSITIONS = Object.freeze(["fixed", "rejected_invalid", "accepted_risk", "needs_human"]);
+export const CLOSE_ACTIONS = Object.freeze(["delivery_committed", "archive", "merge", "push", "worktree_cleanup"]);
+
+function recordError(message) { return new Error(`task record row is invalid: ${message}`); }
+
+function exactKeys(value, expected, label) {
+  const keys = Object.keys(value).sort();
+  if (keys.join("\0") !== [...expected].sort().join("\0")) throw recordError(`${label} key set must equal the frozen field table`);
+}
+
+/**
+ * A conditional field carries its value when it has one, and otherwise carries
+ * the fixed empty-with-reason encoding: value stays empty and the reason says
+ * why. A reason without an empty value position is not accepted either.
+ */
+function conditionValue(value, label, { allowNull = false } = {}) {
+  if (value === null && allowNull) return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw recordError(`${label} must be a value-or-reason object`);
+  const keys = Object.keys(value).sort();
+  // Exactly the two frozen field names, and `value` must be present.
+  if (!keys.includes("value") || keys.some((key) => !["reason", "value"].includes(key))) {
+    throw recordError(`${label} must carry only value and reason`);
+  }
+  if (value.value === null) {
+    if (typeof value.reason !== "string" || value.reason.trim() === "") throw recordError(`${label} requires a reason when its value is empty`);
+    return value;
+  }
+  if (typeof value.value === "string" && value.value.trim() === "") throw recordError(`${label} value must be null or a real value`);
+  if (value.reason !== undefined && value.reason !== null && (typeof value.reason !== "string" || value.reason.trim() === "")) {
+    throw recordError(`${label} reason must be non-empty when present`);
+  }
+  return value;
+}
+
+/**
+ * Evidence carries the commands that really ran: command, integer exit code,
+ * and a one-line reproducible failure signature. It is still a conditional
+ * field, so a row with no command keeps the empty-with-reason encoding.
+ */
+function evidenceValue(value, label) {
+  const condition = conditionValue(value, label);
+  if (condition.value === null) return condition;
+  if (!Array.isArray(condition.value) || condition.value.length === 0) throw recordError(`${label} value must be a non-empty list of executed commands`);
+  for (const entry of condition.value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw recordError(`${label} entries must be objects`);
+    const keys = Object.keys(entry).sort().join("\0");
+    if (keys !== ["command", "exit_code", "failure_signature"].sort().join("\0")) throw recordError(`${label} entries must carry command, exit_code, and failure_signature`);
+    if (typeof entry.command !== "string" || entry.command.trim() === "") throw recordError(`${label} entries require a command`);
+    if (!Number.isInteger(entry.exit_code)) throw recordError(`${label} entries require an integer exit code`);
+    if (typeof entry.failure_signature !== "string" || entry.failure_signature.trim() === "") throw recordError(`${label} entries require a one-line failure signature`);
+  }
+  return condition;
+}
+
+function validateLayerStates(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw recordError(`${label} must be an object`);
+  if (Object.keys(value).sort().join("\0") !== ["delivery", "implementation_completion", "stage_quality", "task_closure"].sort().join("\0")) {
+    throw recordError(`${label} must carry exactly the four independent layers`);
+  }
+  for (const [layer, state] of Object.entries(value)) {
+    if (!LAYER_STATE_VALUES.includes(state)) throw recordError(`${label}.${layer} must be one of the four machine values`);
+  }
+  return value;
+}
+
+function validateFindingDispositions(value, label) {
+  if (!Array.isArray(value)) throw recordError(`${label} must be an array`);
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw recordError(`${label} entries must be objects`);
+    if (Object.keys(entry).sort().join("\0") !== "disposition\0finding") throw recordError(`${label} entries must carry exactly finding and disposition`);
+    if (typeof entry.finding !== "string" || entry.finding.trim() === "") throw recordError(`${label} entries require a finding id`);
+    if (!FINDING_DISPOSITIONS.includes(entry.disposition)) throw recordError(`${label} disposition must be one of the four frozen values`);
+  }
+  return value;
+}
+
+function validateStageRow(value, taskId) {
+  exactKeys(value, STAGE_ROW_KEYS, "stage row");
+  if (!TASK_RECORD_KINDS.includes(value.record_kind)) throw recordError("record_kind must be stage or close_action");
+  if (value.task_id !== taskId) throw recordError("task identity mismatch");
+  if (value.record_kind === "stage") {
+    if (!STAGES.has(value.stage)) throw recordError("stage must be one of the five formal stages");
+    // A stage row never carries a close action, and like every other
+    // conditional field it must still use the frozen empty-with-reason
+    // encoding: an empty value needs a non-empty reason.
+    conditionValue(value.close_action, "close_action");
+    if (value.close_action.value !== null) throw recordError("stage rows must leave close_action empty with a reason");
+  } else {
+    if (value.stage !== "close") throw recordError("close-action rows must use stage close");
+    if (value.close_action === null || !CLOSE_ACTIONS.includes(value.close_action.action)) throw recordError("close-action rows require one of the five physical actions");
+    if (typeof value.close_action.result !== "string" || value.close_action.result.trim() === "") throw recordError("close-action rows require a result");
+    if (value.close_action.ref !== undefined && value.close_action.ref !== null
+        && (typeof value.close_action.ref !== "string" || value.close_action.ref.trim() === "")) {
+      throw recordError("close-action ref must be null or a non-empty named reference");
+    }
+  }
+  if (typeof value.source !== "string" || value.source.trim() === "") throw recordError("source must be a non-empty writer identity");
+  if (!Number.isFinite(Date.parse(value.created_at))) throw recordError("created_at must be an ISO-compatible timestamp");
+  // The spec's fixed empty-with-reason encoding applies to every conditional
+  // field, including the two material fields.
+  conditionValue(value.material_digest, "material_digest");
+  conditionValue(value.snapshot_tree, "snapshot_tree");
+  if (value.material_digest.value !== null && !SHA256_HEX.test(value.material_digest.value)) throw recordError("material_digest value must be a sha256");
+  if (value.snapshot_tree.value !== null && !/^[a-f0-9]{40,64}$/.test(value.snapshot_tree.value)) throw recordError("snapshot_tree value must be a Git tree id");
+  if (!REVIEW_ORIGINS.includes(value.review_origin)) throw recordError("review_origin must be one of the five frozen values");
+  const reviewRef = value.review_result_ref && typeof value.review_result_ref === "object" && !Array.isArray(value.review_result_ref)
+    ? value.review_result_ref.value
+    : value.review_result_ref;
+  if (value.review_origin === "conducted" && !(typeof reviewRef === "string" && reviewRef.trim() !== "")) {
+    throw recordError("conducted reviews require a named review_result_ref");
+  }
+  if (value.review_origin !== "conducted") {
+    if (value.review_result_ref === null) throw recordError("review_result_ref must stay empty-with-reason unless the review was conducted");
+    conditionValue(value.review_result_ref, "review_result_ref");
+    if (value.review_result_ref.value !== null) throw recordError("review_result_ref must stay empty unless the review was conducted");
+  }
+  validateFindingDispositions(value.finding_dispositions, "finding_dispositions");
+  conditionValue(value.spec_analyze, "spec_analyze");
+  evidenceValue(value.evidence, "evidence");
+  validateLayerStates(value.layer_states, "layer_states");
+  conditionValue(value.serious_issue_disposition, "serious_issue_disposition");
+  conditionValue(value.handoff, "handoff");
+  return value;
+}
+
+function materialiseStageRow(input, taskId, createdAt) {
+  const row = {
+    record_kind: input?.record_kind === "close_action" ? "close_action" : "stage",
+    task_id: taskId,
+    stage: input?.stage,
+    source: input?.source,
+    created_at: input?.created_at ?? createdAt,
+    material_digest: input?.material_digest ?? { value: null, reason: "no material digest recorded for this row" },
+    snapshot_tree: input?.snapshot_tree ?? { value: null, reason: "no snapshot tree recorded for this row" },
+    review_origin: input?.review_origin ?? "not_run",
+    review_result_ref: input?.review_result_ref ?? { value: null, reason: "no review result reference for this row" },
+    finding_dispositions: input?.finding_dispositions ?? [],
+    spec_analyze: input?.spec_analyze ?? { value: null, reason: "spec analysis not run for this row" },
+    evidence: input?.evidence ?? { value: null, reason: "no command evidence recorded for this row" },
+    layer_states: input?.layer_states ?? {
+      implementation_completion: "incomplete", stage_quality: "incomplete", delivery: "unavailable", task_closure: "unavailable",
+    },
+    serious_issue_disposition: input?.serious_issue_disposition ?? { value: null, reason: "no serious issue recorded for this row" },
+    close_action: input?.close_action ?? { value: null, reason: "this row carries no close action" },
+    handoff: input?.handoff ?? { value: null, reason: "no handoff item recorded for this row" },
+  };
+  return row;
+}
+
+/**
+ * Write the current row for one stage, or one close action, into the single
+ * execution record file. A same-stage (or same-action) write replaces that row
+ * in place; a different stage appends. Failure keeps the previous bytes.
+ */
+export function writeStageRow(taskRoot, input, options = {}) {
   const identity = assertRoot(taskRoot, input?.task_id);
   return withStoreLock(identity.root, () => {
-    const record = {
-      task_id: identity.taskId,
-      stage: input.stage,
-      material_digest: input.material_digest,
-      source_digest: input.source_digest,
-      invocation_id: input.invocation_id,
-      source: input.source,
-      status: input.status,
-      content_hash: input.content_hash,
-      created_at: input.created_at ?? new Date().toISOString(),
-      output_ref: input.output_ref,
-    };
-    validateFact(record, identity.taskId);
-    const oldFactsRaw = readFileSync(safeRecordPath(identity.root, "facts.jsonl"), "utf8");
-    const lineRaw = `${JSON.stringify(record)}\n`;
-    const lineNumber = oldFactsRaw === "" ? 1 : oldFactsRaw.trimEnd().split("\n").length + 1;
-    const ref = `facts.jsonl#${lineNumber}`;
-    const oldIndex = readTaskIndex(identity.root);
-    const nextIndex = structuredClone(oldIndex);
-    nextIndex.facts.push(indexRef({
-      ref, sha256: sha256(lineRaw), schema: "task-fact.v1", task_id: identity.taskId, stage: record.stage,
-      logical_ref: ref, content_hash: record.content_hash, version: "v1", related_task_id: identity.taskId,
-      external_raw_ref: record.output_ref, external_governance_archive_ref: null,
-    }));
-    try {
-      atomicWrite(identity.root, "facts.jsonl", oldFactsRaw + lineRaw, { testHooks: options.testHooks, hookName: "beforeFactsRename" });
-      atomicWrite(identity.root, "index.json", `${JSON.stringify(nextIndex, null, 2)}\n`, { testHooks: options.indexTestHooks, hookName: "beforeIndexRename" });
-    } catch (error) {
-      try { atomicWrite(identity.root, "facts.jsonl", oldFactsRaw); } catch {}
-      throw error;
-    }
-    return Object.freeze({ ref, sha256: sha256(lineRaw), value: Object.freeze(record) });
+    const row = materialiseStageRow(input, identity.taskId, options.now ?? new Date().toISOString());
+    validateStageRow(row, identity.taskId);
+    const factsPath = safeRecordPath(identity.root, "facts.jsonl");
+    const oldRaw = readFileSync(factsPath, "utf8");
+    const lines = oldRaw === "" ? [] : oldRaw.trimEnd().split("\n");
+    const rows = lines.map((line, index) => {
+      try { return JSON.parse(line); } catch { throw new Error(`facts.jsonl line ${index + 1} is invalid JSON`); }
+    });
+    const sameRow = (value) => value?.record_kind === row.record_kind
+      && (row.record_kind === "stage" ? value.stage === row.stage : value.close_action?.action === row.close_action?.action);
+    const index = rows.findIndex(sameRow);
+    const action = index >= 0 ? "replaced" : "inserted";
+    if (action === "inserted") rows.push(row); else rows[index] = row;
+    const lineRaw = `${JSON.stringify(row)}\n`;
+    const nextRaw = rows.map((value) => `${JSON.stringify(value)}\n`).join("");
+    const ref = `facts.jsonl#${(action === "inserted" ? rows.length : index + 1)}`;
+    atomicWrite(identity.root, "facts.jsonl", nextRaw, { testHooks: options.testHooks, hookName: "beforeFactsRename" });
+    return Object.freeze({ action, ref, sha256: sha256(lineRaw), value: Object.freeze(row) });
   });
 }
 

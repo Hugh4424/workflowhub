@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 import { resolveLocalSkill, validateReviewBundleProjection, validateSkillBundle } from "../adapters/local-skill-resolver.mjs";
+import { SHA256_HEX_CASE_INSENSITIVE } from "./canonical-utils.mjs";
 import { findUndeclaredStaticDependencies } from "./skill-static-deps.mjs";
 
 const MAKE_DECISION_ONLY_SKILLS = new Set(["talk-with-zhipeng", "grill-with-docs"]);
@@ -366,7 +367,7 @@ export function checkReleaseClosure({ skillRelease, runnerRelease } = {}) {
         errors.push(`${label} release file entry is invalid`);
         continue;
       }
-      if (typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(entry.sha256)) {
+      if (typeof entry.sha256 !== "string" || !SHA256_HEX_CASE_INSENSITIVE.test(entry.sha256)) {
         errors.push(`${label} release file sha256 is invalid: ${entry.path}`);
       }
       paths.push(entry.path);

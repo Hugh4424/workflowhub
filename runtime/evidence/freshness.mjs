@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "./canonical-utils.mjs";
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof, deriveAcceptanceExecutionAssertions, validateAcceptanceExecutionEvidence, validateCanonicalQualityFact } from "./canonical-evidence-validators.mjs";
+import { CLOSE_PLAN_REF, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
@@ -17,7 +18,7 @@ import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 
 function readTypedExecutionFact(selection, fact, read, dependencies, key) {
-  if (!selection || !HASH.test(selection.sha256 ?? "")
+  if (!selection || !SHA256_HEX.test(selection.sha256 ?? "")
       || selection.ref !== `quality/evidence/stage-quality/build-code/acceptance_execution-${selection.sha256}.json`
       || !/^quality\/facts\/[a-f0-9]{64}\.json$/.test(selection.quality_fact_ref ?? "")) throw new Error("execution review source selection is invalid");
   const factKey = `${key}:execution-fact`;
@@ -129,10 +130,8 @@ export function authenticateExecutionConfirmation(confirmation, reference, revie
   return expected.ref;
 }
 
-const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
 const REVIEW_STATUSES = new Set(["clean", "findings", "resolved", "unavailable"]);
-const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
 const browserQaValidator = new Ajv2020({ allErrors: true, strict: false }).compile(browserQaSchema);
 
 /** Authenticate the existing immutable review chain before consuming it. */
@@ -220,7 +219,7 @@ export function authenticateCodeReviewRepairs({ review, result, taskId, snapshot
     for (const source of repair.source_refs) {
       if (typeof source?.path !== "string" || !source.path || source.path.startsWith("/") || source.path.includes("\\")
           || source.path.split("/").some((part) => ["", ".", ".."].includes(part)) || paths.has(source.path)
-          || (source.sha256 !== null && !HASH.test(source.sha256 ?? ""))) throw new Error("review repair source ref is invalid");
+          || (source.sha256 !== null && !SHA256_HEX.test(source.sha256 ?? ""))) throw new Error("review repair source ref is invalid");
       paths.add(source.path);
       const currentHash = sourceHash(snapshotTree, source.path), reviewedHash = sourceHash(review.snapshot_tree, source.path);
       if (currentHash !== source.sha256 || (currentHash === null && reviewedHash === null)) throw new Error("review repair source hash does not match the current snapshot");
@@ -231,7 +230,7 @@ export function authenticateCodeReviewRepairs({ review, result, taskId, snapshot
     const checks = new Set();
     for (const check of repair.check_refs) {
       if (!/^quality\/tests\/[A-Za-z0-9._/-]+\.json$/.test(check?.ref ?? "") || check.ref.split("/").includes("..")
-          || !HASH.test(check.sha256 ?? "") || checks.has(check.ref)) throw new Error("review repair check ref is invalid");
+          || !SHA256_HEX.test(check.sha256 ?? "") || checks.has(check.ref)) throw new Error("review repair check ref is invalid");
       checks.add(check.ref);
       const raw = read(check.ref);
       if (sha256(raw) !== check.sha256) throw new Error("review repair check hash mismatch");
@@ -282,7 +281,7 @@ export function bindFreshness({ ref, raw, snapshotTree }) {
 }
 
 export function assertFresh(binding, { read, snapshotTree }) {
-  if (!binding || typeof binding !== "object" || !HASH.test(binding.sha256 ?? "")) {
+  if (!binding || typeof binding !== "object" || !SHA256_HEX.test(binding.sha256 ?? "")) {
     throw new TypeError("freshness binding is invalid");
   }
   if (binding.snapshot_tree !== snapshotTree) throw new Error("STALE_FACT: snapshot_tree changed");
@@ -325,7 +324,7 @@ function expectedPassed(status, passed, failed, nonterminal) {
 function readBoundJson(binding, read, dependencies, key) {
   if (!binding || typeof binding !== "object" || Array.isArray(binding)
       || typeof binding.ref !== "string" || binding.ref.trim() === ""
-      || !HASH.test(binding.sha256 ?? "")) {
+      || !SHA256_HEX.test(binding.sha256 ?? "")) {
     dependencies[key] = "stale";
     return null;
   }
@@ -347,7 +346,7 @@ function sameAcceptanceScenario(left, right) {
 
 function authenticatePublishedAttachment(binding, read, dependencies, key) {
   if (!binding || typeof binding !== "object" || Array.isArray(binding)
-      || typeof binding.ref !== "string" || !HASH.test(binding.sha256 ?? "")) {
+      || typeof binding.ref !== "string" || !SHA256_HEX.test(binding.sha256 ?? "")) {
     throw new Error("browser attachment binding is invalid");
   }
   const publication = readBoundJson(binding, read, dependencies, key);
@@ -359,7 +358,7 @@ function authenticatePublishedAttachment(binding, read, dependencies, key) {
       || publication.schema_version !== "workflowhub-evidence-publication.v1"
       || typeof publication.source_path !== "string" || publication.source_path.trim() === ""
       || publication.source_path.startsWith("/") || publication.source_path.split(/[\\/]/).includes("..")
-      || !HASH.test(publication.content_sha256 ?? "")
+      || !SHA256_HEX.test(publication.content_sha256 ?? "")
       || publication.content_encoding !== "base64"
       || typeof publication.content_base64 !== "string"
       || typeof publication.publisher !== "string" || publication.publisher.trim() === ""
@@ -400,7 +399,7 @@ function authenticateBrowserAcceptance(value, fact, scenario, read, dependencies
   screenshots.forEach((screenshot, index) => authenticatePublishedAttachment(
     { ref: screenshot?.ref, sha256: screenshot?.hash }, read, dependencies, `${key}:screenshot:${index}`,
   ));
-  if (typeof value.test?.output_ref !== "string" || !HASH.test(value.test?.output_hash ?? "")) {
+  if (typeof value.test?.output_ref !== "string" || !SHA256_HEX.test(value.test?.output_hash ?? "")) {
     throw new Error("browser acceptance test output binding is invalid");
   }
   const outputRaw = readBound({ ref: value.test.output_ref, sha256: value.test.output_hash }, read, dependencies, `${key}:test-output`);
@@ -408,7 +407,7 @@ function authenticateBrowserAcceptance(value, fact, scenario, read, dependencies
 }
 
 function authenticateExecutionActor(binding, fact, read, dependencies, key) {
-  if (!binding || !HASH.test(binding.stage_outcome_hash ?? "")
+  if (!binding || !SHA256_HEX.test(binding.stage_outcome_hash ?? "")
       || binding.stage_outcome_ref !== `quality/evidence/stage-outcomes/build-code/${binding.stage_outcome_hash}.json`) throw new Error("nested acceptance execution stage outcome binding is invalid");
   const outcomeKey = `${key}:stage-outcome`;
   const reference = { ref: binding.stage_outcome_ref, sha256: binding.stage_outcome_hash };

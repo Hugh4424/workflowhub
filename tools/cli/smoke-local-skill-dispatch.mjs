@@ -6,6 +6,7 @@ import {
   loadStageSkillStepManifest,
   resolveStageSkillPackages,
 } from "../../runtime/stage/stage-skill-runtime.mjs";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 
@@ -39,7 +40,7 @@ export function smokeLocalSkillPackages(packageRoot) {
           || !payload.resolved_bundle_paths.every((entry) => isInside(path.join(root, "skills"), entry))) {
         throw new Error(`${stage}/${name}: resolved path escaped the portable package`);
       }
-      if (!/^[a-f0-9]{64}$/.test(payload.bundle_hash)) {
+      if (!SHA256_HEX.test(payload.bundle_hash)) {
         throw new Error(`${stage}/${name}: invalid bundle hash`);
       }
       bundleHashes.push(payload.bundle_hash);

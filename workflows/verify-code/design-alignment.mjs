@@ -1,5 +1,5 @@
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 const ARTIFACT_KINDS = new Set(["spec", "plan", "tasks", "evidence", "code"]);
-const HASH = /^[a-f0-9]{64}$/;
 const SNAPSHOT = /^[a-f0-9]{40,64}$/;
 import { buildConsumerCensus, validateProjectStandardSources } from "../../runtime/stage/stage-content-contracts.mjs";
 
@@ -13,7 +13,7 @@ function reference(value) {
   const ref = text(value.ref);
   const hash = text(value.hash);
   const id = text(value.id);
-  const hashIsValid = artifact_kind === "code" ? SNAPSHOT.test(hash ?? "") : HASH.test(hash ?? "");
+  const hashIsValid = artifact_kind === "code" ? SNAPSHOT.test(hash ?? "") : SHA256_HEX.test(hash ?? "");
   if (!artifact_kind || !ARTIFACT_KINDS.has(artifact_kind) || !ref || ref.startsWith("/")
       || ref.split("/").includes("..") || !hashIsValid || !id) return null;
   return { artifact_kind, ref, hash, id };

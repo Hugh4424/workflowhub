@@ -73,12 +73,10 @@ describe("core/runtime layering", () => {
     expect(stronglyConnectedComponents(staticGraph())).toEqual([]);
   });
 
-  it("keeps freshness and audit carrying independent from TaskKernel implementation", () => {
+  it("keeps freshness and acceptance validation independent from TaskKernel implementation", () => {
     const freshness = readFileSync(resolve(root, "runtime/evidence/freshness.mjs"), "utf8");
-    const auditCarrier = readFileSync(resolve(root, "runtime/evidence/audit-summary-carrier.mjs"), "utf8");
     const acceptanceValidator = readFileSync(resolve(root, "runtime/evidence/acceptance-evidence-validator.mjs"), "utf8");
     expect(freshness).not.toContain("task-kernel-implementation");
-    expect(auditCarrier).not.toContain("task-handle.mjs");
     expect(acceptanceValidator).not.toMatch(/(?:task-kernel|task-handle|core\/)/);
   });
 });

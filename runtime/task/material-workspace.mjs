@@ -1,4 +1,5 @@
 import { closeSync, constants, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
+import { SHA256_HEX } from "../evidence/canonical-utils.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { canonicalJson } from "../evidence/canonical-source.mjs";
@@ -97,7 +98,6 @@ export function replaceMaterialAtomic(root, file, content, options = {}) {
 const STAGE_INPUT_PACKET_VERSION = "stage-input-packet.v1";
 const WORKER_BRIEF_VERSION = "workflowhub-worker-brief.v1";
 const SNAPSHOT = /^[a-f0-9]{40}$/i;
-const HASH = /^[a-f0-9]{64}$/;
 
 function normalizePacketText(value) {
   if (typeof value !== "string") throw new TypeError("stage input packet file content must be text");
@@ -168,7 +168,7 @@ export function buildStageInputPacket({ task_id, stage, material_revision, snaps
     const normalized = normalizePacketText(entry.content);
     files[entry.path] = normalized;
     const sourceDigest = entry.source_digest ?? sha256(Buffer.from(normalized, "utf8"));
-    if (!HASH.test(sourceDigest)) throw new TypeError(`derived file ${entry.path} source_digest is invalid`);
+    if (!SHA256_HEX.test(sourceDigest)) throw new TypeError(`derived file ${entry.path} source_digest is invalid`);
     return { path: entry.path, source_digest: sourceDigest, sha256: sha256(Buffer.from(normalized, "utf8")), producer: entry.producer, consumer: entry.consumer, authority: "non-material" };
   }).sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
   const manifest = {
@@ -191,7 +191,7 @@ export function verifyStageInputPacket(packet) {
     return Object.freeze({ ok: false, reason: "packet_shape_invalid" });
   }
   const manifest = packet.manifest;
-  if (manifest.algorithm_version !== STAGE_INPUT_PACKET_VERSION || !HASH.test(manifest.packet_freeze_hash ?? "") || packet.packet_freeze_hash !== manifest.packet_freeze_hash) {
+  if (manifest.algorithm_version !== STAGE_INPUT_PACKET_VERSION || !SHA256_HEX.test(manifest.packet_freeze_hash ?? "") || packet.packet_freeze_hash !== manifest.packet_freeze_hash) {
     return Object.freeze({ ok: false, reason: "packet_manifest_invalid" });
   }
   const expected = new Set([
@@ -234,12 +234,12 @@ function validateWorkerBriefShape(value) {
   for (const [key, label] of [["task_id", "task_id"], ["stage", "stage"], ["material_revision", "material_revision"], ["objective", "objective"]]) {
     if (typeof value[key] !== "string" || value[key].trim() === "") return workerBriefError(`worker_brief_${label}_missing`);
   }
-  if (!HASH.test(value.material_revision)) return workerBriefError("worker_brief_material_revision_invalid");
+  if (!SHA256_HEX.test(value.material_revision)) return workerBriefError("worker_brief_material_revision_invalid");
   if (!SNAPSHOT.test(value.snapshot_tree ?? "")) return workerBriefError("worker_brief_snapshot_invalid");
   if (!Array.isArray(value.source_summary) || value.source_summary.length === 0) return workerBriefError("worker_brief_source_summary_missing");
   for (const [index, source] of value.source_summary.entries()) {
     if (!source || typeof source !== "object" || Array.isArray(source)
-        || !validWorkerRef(source.ref) || !HASH.test(source.sha256 ?? "")) {
+        || !validWorkerRef(source.ref) || !SHA256_HEX.test(source.sha256 ?? "")) {
       return workerBriefError(`worker_brief_source_summary_invalid:${index}`);
     }
   }
@@ -250,7 +250,7 @@ function validateWorkerBriefShape(value) {
       || typeof value.boundary.output_contract !== "string" || value.boundary.output_contract.trim() === "") {
     return workerBriefError("worker_brief_boundary_invalid");
   }
-  if (typeof value.brief_hash !== "string" || !HASH.test(value.brief_hash)) return workerBriefError("worker_brief_hash_invalid");
+  if (typeof value.brief_hash !== "string" || !SHA256_HEX.test(value.brief_hash)) return workerBriefError("worker_brief_hash_invalid");
   return null;
 }
 

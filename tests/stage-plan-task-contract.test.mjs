@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 
 let validatePlanTaskContract;
@@ -434,5 +436,81 @@ describe("FR-PLN-005/006 engineering lens stays complete and lens-only", () => {
     ]) expect(skill).toContain(term);
     expect(skill).toMatch(/lens-only/i);
     expect(skill).toMatch(/no stage result and no provider verdict/i);
+  });
+});
+
+describe("T1 AC-MS-005", () => {
+  const repoRoot = resolve(join(fileURLToPath(new URL(".", import.meta.url)), ".."));
+  const scannedRoots = ["core", "runtime", "tools", "skills", "workflows", "metrics", "scripts"];
+  const ignoredSegments = new Set(["node_modules", "archive"]);
+
+  function walk(directory, files = []) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (ignoredSegments.has(entry.name) || entry.name.startsWith(".")) continue;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) walk(path, files);
+      else if (/\.(?:mjs|js|cjs|ts)$/.test(entry.name)) files.push(path);
+    }
+    return files;
+  }
+
+  function declarationsMatching(pattern) {
+    const found = [];
+    for (const absolute of scannedRoots.flatMap((name) => walk(join(repoRoot, name)))) {
+      const source = readFileSync(absolute, "utf8");
+      source.split("\n").forEach((line, index) => {
+        const text = line.trim();
+        if (pattern.test(text)) found.push({ file: relative(repoRoot, absolute).replaceAll("\\", "/"), line: index + 1, text });
+      });
+    }
+    return found;
+  }
+
+  it("T1 AC-MS-005 uses one owner per equivalent definition", () => {
+    const violations = [];
+    const shaOwner = "runtime/evidence/canonical-utils.mjs";
+    const shaDeclarations = declarationsMatching(/^(?:export[ \t]+)?const[ \t]+[A-Z0-9_]+[ \t]*=[ \t]*\/\^\[a-f0-9\]\{64\}\$\/;[ \t]*$/);
+    if (shaDeclarations.length !== 1 || shaDeclarations[0]?.file !== shaOwner || !shaDeclarations[0]?.text.includes("SHA256_HEX")) {
+      violations.push(`same-semantics SHA-256 hex grammar declarations: ${JSON.stringify(shaDeclarations)}`);
+    }
+    const ciDeclarations = declarationsMatching(/^(?:export[ \t]+)?const[ \t]+[A-Z0-9_]+[ \t]*=[ \t]*\/\^\[a-f0-9\]\{64\}\$\/i;[ \t]*$/);
+    if (ciDeclarations.length !== 1 || ciDeclarations[0]?.file !== shaOwner || !ciDeclarations[0]?.text.includes("SHA256_HEX_CASE_INSENSITIVE")) {
+      violations.push(`case-insensitive grammar declarations: ${JSON.stringify(ciDeclarations)}`);
+    }
+    // One owner each; STAGE_REFLECTION_REF additionally keeps exactly one
+    // deliberately narrower variant, whose accept set its resolver really uses.
+    const owners = new Map([
+      ["STAGE_OUTCOME_REF", { file: "runtime/evidence/canonical-evidence-validators.mjs", extra: [] }],
+      ["STAGE_REFLECTION_REF", { file: "runtime/evidence/canonical-evidence-validators.mjs", extra: ["runtime/task/task-kernel-implementation.mjs"] }],
+      ["CLOSE_PLAN_REF", { file: "runtime/evidence/canonical-evidence-validators.mjs", extra: [] }],
+    ]);
+    for (const [name, owner] of owners) {
+      const found = declarationsMatching(new RegExp(`(?:export[ \\t]+)?const[ \\t]+${name}[ \\t]*=`));
+      const files = found.map((entry) => entry.file);
+      const expected = [owner.file, ...owner.extra];
+      if (found.length !== expected.length || expected.some((file) => !files.includes(file)) || new Set(files).size !== files.length) {
+        violations.push(`${name} declarations: ${JSON.stringify(found)}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("T1 AC-MS-005 keeps the different-semantics definitions with their distinct accept sets", async () => {
+    const violations = [];
+    // This stays separate on purpose: it accepts a differently bound form than
+    // the shared owner's stage-reflection grammar, so merging would widen the
+    // accepted set beyond what its real producer can emit.
+    const distinct = [
+      ["runtime/evidence/canonical-evidence-validators.mjs", "/^quality\\/evidence\\/stage-outcome-proofs\\/([a-f0-9]{64})\\.json$/"],
+    ];
+    for (const [file, literal] of distinct) {
+      if (!readFileSync(join(repoRoot, file), "utf8").includes(literal)) violations.push(`${file} lost ${literal}`);
+    }
+    const owner = await import("../runtime/evidence/canonical-utils.mjs");
+    if (!(owner.SHA256_HEX instanceof RegExp) || owner.SHA256_HEX.flags.includes("i")) violations.push("SHA256_HEX is not exported as the case-sensitive grammar");
+    if (!(owner.SHA256_HEX_CASE_INSENSITIVE instanceof RegExp) || !owner.SHA256_HEX_CASE_INSENSITIVE.flags.includes("i")) violations.push("SHA256_HEX_CASE_INSENSITIVE is not exported as the case-insensitive grammar");
+    for (const value of ["a".repeat(64), "0123456789abcdef".repeat(4)]) if (owner.SHA256_HEX?.test(value) !== true) violations.push(`SHA256_HEX rejected a real digest: ${value.length}`);
+    for (const value of ["A".repeat(64), "a".repeat(63), "a".repeat(65), `x${"a".repeat(64)}`]) if (owner.SHA256_HEX?.test(value) !== false) violations.push(`SHA256_HEX accepted an invalid digest: ${value.length}`);
+    expect(violations).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@ import { listDeliveryFiles, listUntrackedFiles } from "./inventory.mjs";
 import { buildRunnerRelease, installRunnerRelease, validateRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
 import { buildSkillBundleRelease, validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { resolveStageSkillPackages } from "../../runtime/stage/stage-skill-runtime.mjs";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -88,7 +89,7 @@ export async function smokeReleasedStageDependencies({ sourceRoot, runnerRoot, b
     });
     const dependencies = prepared.manifest.skills.map((dependency) => {
       const payload = prepared.payloads.get(dependency.name);
-      if (!payload || !/^[a-f0-9]{64}$/.test(payload.bundle_hash ?? "")) {
+      if (!payload || !SHA256_HEX.test(payload.bundle_hash ?? "")) {
         throw new Error(`${stage}/${dependency.name}: released dependency did not resolve`);
       }
       const dependencyHash = assertReleasedSourceInput({

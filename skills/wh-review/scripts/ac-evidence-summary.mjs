@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
+import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 
 import { assertTaskHandle } from "../../../runtime/task/task-handle.mjs";
 import { validateAcceptanceEvidence } from "../../../runtime/task/task-kernel-implementation.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 
-const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
 const EVIDENCE_REF = /^(?:evidence|quality\/evidence)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const RECEIPT_REF = /^quality\/tests\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
@@ -25,7 +25,7 @@ function parseOptionalJson(raw) {
 
 function normalizedHash(value, label) {
   const hash = typeof value === "string" ? value.replace(/^sha256:/, "") : "";
-  if (!HASH.test(hash)) throw new Error(`MATERIAL_INCOMPLETE: ${label} hash is invalid`);
+  if (!SHA256_HEX.test(hash)) throw new Error(`MATERIAL_INCOMPLETE: ${label} hash is invalid`);
   return hash;
 }
 

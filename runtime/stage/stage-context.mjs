@@ -218,7 +218,35 @@ export function bootstrapStage(
       ...(candidate ? { candidateWorkspace: candidate, artifacts: candidateArtifacts } : {}),
     });
   }
-  const workspace = openCurrentTaskWorkspace(taskHandle);
+  let workspace;
+  let workspaceDegrade = null;
+  try {
+    workspace = openCurrentTaskWorkspace(taskHandle);
+  } catch (error) {
+    // A read-only status projection must stay available for historical tasks
+    // whose target workspace no longer exists. Degrade to an honest
+    // workspace-less projection instead of failing the reader; every writing
+    // path still fails loudly.
+    if (!readOnly || error?.code !== "ENOENT") throw error;
+    // Keep the original failure observable: without it every downstream reader
+    // only sees a generic missing-capability TypeError and the missing path is
+    // unrecoverable from the error. This is a recorded degradation, not a
+    // rethrown failure, so the projection stays available.
+    workspaceDegrade = Object.freeze({
+      code: error.code,
+      message: error.message,
+      path: error.path ?? null,
+      cause: error,
+    });
+  }
+  if (!workspace) {
+    return Object.freeze({
+      ...base,
+      kernel,
+      workflowRunId: kernel.deriveStageWorkflowRunId(normalizedStage),
+      workspace_unavailable: workspaceDegrade,
+    });
+  }
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
   const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
   if (!readOnly && (normalizedStage === "build-code" || normalizedStage === "verify-code")) {

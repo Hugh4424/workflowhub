@@ -6,7 +6,6 @@ import { createHash } from "node:crypto";
 const [suite, phase = "red", exitText = "1", baselineExitText = "1", baselineHash = "", outputHash = "", outputRef = ""] = process.argv.slice(2);
 const suites = {
   "pool-tax": ["tests/contract/workflow-evolution-candidates.test.mjs"],
-  "ledger-brief": ["tests/contract/workflow-evolution-ledgers.test.mjs", "tests/contract/generate-iteration-brief.test.mjs", "tests/contract/check-skill-updates.test.mjs"],
   monitor: ["tests/contract/build-reflection-page.test.mjs"],
   governance: ["tests/contract/workflow-evolution-governance.test.mjs", "tests/e2e/workflow-evolution-current.test.mjs", "tests/contract/public-behavior-baseline.test.mjs"],
 };

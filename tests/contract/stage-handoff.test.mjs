@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { runStageEndReflection, runOfficialStage, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
 import { renderStageHandoff, publishStageHandoff, SECTION_TITLES } from "../../runtime/stage/stage-handoff.mjs";
 import { publishStageReflectionExecutionFailure, validateStageReflectionSibling } from "../../runtime/stage/stage-reflect.mjs";
@@ -659,5 +660,138 @@ describe("stage-handoff current view contract", () => {
     expect(result.stage_reflection).toMatchObject({ status: "completed", persisted: true });
     expect(result.stage_handoff).toMatchObject({ status: "published", current: true });
     expect(result.stage_outcome_ref).toBe(state.source.ref);
+  });
+});
+
+describe("T1 AC-MS-016", () => {
+  it("T1 AC-MS-016 reads all three handoffs from the real current row", async () => {
+    const { mkdtempSync, realpathSync, readFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { execFileSync } = await import("node:child_process");
+    const { createTask } = await import("../../runtime/task/task-handle.mjs");
+    const { initializeTaskStore, readTaskFacts, writeStageRow } = await import("../../runtime/task/task-store.mjs");
+
+    const storage = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ac016-")));
+    const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-ac016-repo-")));
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    const task = createTask({ storageRoot: storage, manifest: {
+      schema_version: "1.0.0", project_name: "workflowhub", task_id: "ac016",
+      created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
+    } });
+    initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+
+    // The three handoff facts live on the same stage row, not in extra rows or
+    // extra objects.
+    writeStageRow(task.taskPath, {
+      record_kind: "stage", stage: "build-code", source: "ac016-fixture",
+      review_origin: "not_run", finding_dispositions: [],
+      evidence: { value: [{ command: "true", exit_code: 0, failure_signature: "none" }] },
+      handoff: {
+        value: [
+          { id: "HANDOFF-001", owner: "task II C5", trigger: "C3 merged", consumer: "identity/path-card writer", close_condition: "identity/path-cards stop being written" },
+          { id: "HANDOFF-002", owner: "task II C4 and 3rd-review", trigger: "C4 starts", consumer: "C4 implementation and review caller", close_condition: "same-material rework can rerun without REQUEST_ID_CONFLICT" },
+          { id: "HANDOFF-003", owner: "host", trigger: "host behaviour changes", consumer: "build-code users", close_condition: "worktrees are no longer created per phase" },
+        ],
+      },
+    });
+
+    const rows = readTaskFacts(task.taskPath);
+    expect(rows).toHaveLength(1);
+    const handoffs = rows[0].handoff.value;
+    expect(handoffs).toHaveLength(3);
+    for (const item of handoffs) {
+      for (const field of ["id", "owner", "trigger", "consumer", "close_condition"]) {
+        expect(typeof item[field], `${item.id}.${field}`).toBe("string");
+        expect(item[field].trim()).not.toBe("");
+      }
+    }
+    expect(handoffs.map((item) => item.id)).toEqual(["HANDOFF-001", "HANDOFF-002", "HANDOFF-003"]);
+
+    // The facts are reachable through the production reader, and no extra row,
+    // object, or directory was created for them.
+    const raw = readFileSync(join(task.taskPath, "facts.jsonl"), "utf8").trimEnd().split("\n");
+    expect(raw).toHaveLength(1);
+    expect(JSON.parse(raw[0]).handoff.value).toHaveLength(3);
+  });
+});
+
+describe("T1 stage handoff material boundary", () => {
+  it("refuses to publish a handoff when a current material is missing", () => {
+    const state = fixture("handoff-missing-current-material", "build-code");
+    rmSync(join(state.candidateWorkspace.worktreeRoot, "specs", "handoff-missing-current-material", "spec.md"));
+    expect(() => publishStageHandoff({
+      task: state.task, kernel: state.kernel, artifacts: state.artifacts,
+      taskId: state.context.identity.taskId, stage: "build-code",
+      snapshotTree: state.source.value.snapshot_tree,
+      materialScopeRevision: state.source.value.material_scope_revision,
+      reflectionStatus: "completed", stageOutcome: state.source,
+      materials: Object.fromEntries(Object.entries(canonicalStageMaterials())),
+      nextAction: "must not be published",
+    })).toThrow();
+  });
+
+  it("surfaces a missing CURRENT material through the real stage-end entrypoint instead of a silent omission", async () => {
+    const { initializeTaskStore } = await import("../../runtime/task/task-store.mjs");
+    const state = fixture("handoff-entry-missing-current-material", "build-spec");
+    // The stage row is the execution record the stage-end path writes; the
+    // fixture only needs the record file it has not created yet.
+    initializeTaskStore(state.task.taskPath, { taskId: state.task.identity.taskId });
+    const materialDir = join(state.candidateWorkspace.worktreeRoot, "specs", state.context.identity.taskId);
+    // spec.md is inside build-spec's own material scope, so the narrowed
+    // ENOENT allowlist must NOT drop it: the projection has to surface the
+    // real read failure rather than publish a handoff missing a material this
+    // stage owns.
+    rmSync(join(materialDir, "spec.md"), { force: true });
+
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed", judgment: judgmentFor(state), stageOutcome: state.source, now: NOW,
+    });
+
+    // The contract is "never publish a projection that silently omits a
+    // material this stage owns": the stage-end path must fail loudly. Widening
+    // the ENOENT allowlist back to every material drops spec.md from the
+    // projection and the run surfaces a real failure instead of a delivered
+    // handoff, which this assertion catches.
+    const projection = result.stage_handoff;
+    expect(projection.status === "published" && projection.current === true).toBe(false);
+    expect(existsSync(join(state.task.taskPath, "quality/evidence/handoff/build-spec.md"))).toBe(false);
+    expect(projection.status).toBe("unavailable");
+    expect(projection.current).toBe(false);
+    // The failure names the real reason, a missing material, and it is not
+    // rewritten as a successful delivery.
+    expect(projection.error).toMatch(/spec\.md|material/);
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].evidence.value[0]).toMatchObject({ command: "stage-handoff:build-spec", exit_code: 1, failure_signature: "unavailable" });
+  });
+
+  it("still publishes through the real stage-end entrypoint when a FUTURE material is missing", async () => {
+    const { initializeTaskStore } = await import("../../runtime/task/task-store.mjs");
+    const state = fixture("handoff-entry-missing-future-material", "build-spec");
+    initializeTaskStore(state.task.taskPath, { taskId: state.task.identity.taskId });
+    const materialDir = join(state.candidateWorkspace.worktreeRoot, "specs", state.context.identity.taskId);
+    // plan.md and tasks.md belong to build-plan, not build-spec, so the
+    // narrowed allowlist keeps them out of the handoff material set.
+    rmSync(join(materialDir, "plan.md"), { force: true });
+    rmSync(join(materialDir, "tasks.md"), { force: true });
+    const source = sourceForAttempt(state, "attempt-entry-missing-future-materials");
+    const judgment = judgmentFor({ ...state, source });
+
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed", judgment, stageOutcome: source, now: NOW,
+    });
+
+    expect(result.stage_handoff).toMatchObject({
+      status: "published", current: true, ref: "quality/evidence/handoff/build-spec.md",
+    });
+    const rendered = readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8");
+    expect(rendered).toContain("## 13. 可自行判断与必须问用户的边界");
+    expect(rendered).toContain("- `decision-log.md`");
+    // The omitted material is absent from the projection; nothing invented it.
+    expect(rendered).not.toContain('"ref":"plan.md"');
+    expect(readTaskFacts(state.task.taskPath)[0].evidence.value[0]).toMatchObject({
+      command: "stage-handoff:build-spec", exit_code: 0, failure_signature: "published",
+    });
   });
 });

@@ -25,6 +25,7 @@ import {
   recordManualDeliveryClose,
 } from "../../core/task-close.mjs";
 import { deriveCurrentCloseProjection } from "../../runtime/stage/current-close-projection.mjs";
+import { SHA256_HEX } from "../../runtime/evidence/canonical-utils.mjs";
 
 const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -49,7 +50,7 @@ function taskPath(values, project, taskId) {
 }
 
 function isPostCleanupArchivePlanRecord(task, planHash) {
-  if (!/^[a-f0-9]{64}$/.test(planHash ?? "")) return false;
+  if (!SHA256_HEX.test(planHash ?? "")) return false;
   try {
     const record = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
     const steps = record?.plan?.steps;
@@ -84,7 +85,7 @@ function context(values, { workspaceRequired = true, postConfirmation = false } 
 }
 
 function preparedPlan(task, hash) {
-  if (!/^[a-f0-9]{64}$/.test(hash ?? "")) throw new TypeError("--plan-hash must be a SHA-256 hash");
+  if (!SHA256_HEX.test(hash ?? "")) throw new TypeError("--plan-hash must be a SHA-256 hash");
   const record = JSON.parse(task.readRecord(`operations/close/plans/${hash}/plan.json`));
   if (record.schema_version !== "task-close-plan-record.v1" || record.task_id !== task.identity.taskId || record.plan_hash !== hash || closePlanHash(record.plan) !== hash) {
     throw new Error("prepared close plan record is invalid");
@@ -128,7 +129,7 @@ function postCleanupArchiveInput(values, command) {
 }
 
 function resultSourceRef(result, fallback) {
-  if (result?.status === "delivered" && /^[a-f0-9]{64}$/.test(result.plan_hash ?? "")) {
+  if (result?.status === "delivered" && SHA256_HEX.test(result.plan_hash ?? "")) {
     return `operations/close/plans/${result.plan_hash}/plan.json`;
   }
   return fallback;

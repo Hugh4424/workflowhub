@@ -31,6 +31,9 @@ import { activeAcceptanceCriterionIds, validatePlanTaskContract } from "../../ru
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
 import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
+// The two stage-result projections read their current result from the frozen
+// stage row of the single execution record, never from stage-outcome bytes.
+import { readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../runtime/task/workspace.mjs";
@@ -343,6 +346,7 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
     material_scope_revisions: stageMaterialScopeRevisions(materials),
     snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
     quality_fact_observations: qualityFactObservations,
+    read_task_facts: () => readTaskFacts(context.task.taskPath),
     authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
   });
   return deriveCurrentProductRelease({
@@ -386,6 +390,7 @@ export function deriveCurrentStatusDomains(context, {
     material_scope_revisions: stageMaterialScopeRevisions(materials),
     snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
     quality_fact_observations: allQualityFactObservations,
+    read_task_facts: () => readTaskFacts(context.task.taskPath),
     authenticate: ({ stage: outcomeStage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage: outcomeStage }, outcomeStage, ref),
   });
   const quality = deriveStageCompletion(stage, observations, {
@@ -796,6 +801,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           material_scope_revisions: stageMaterialScopeRevisions(materials),
           snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
           quality_fact_observations: allQualityFactObservations,
+          read_task_facts: () => readTaskFacts(context.task.taskPath),
           authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
         })
       : null;
@@ -808,6 +814,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
           material_revision: materialRevision,
           material_scope_revisions: stageMaterialScopeRevisions(materials),
           snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+          read_task_facts: () => readTaskFacts(context.task.taskPath),
           authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
         })
       : null;
@@ -885,14 +892,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         || typeof input.command !== "string"
         || typeof input.receipt_ref !== "string"
         || (input.output_ref !== undefined && typeof input.output_ref !== "string")
-        || Object.keys(input).some((key) => !new Set(["command", "receipt_ref", "output_ref"]).has(key))) {
-      throw new TypeError("test capture input requires command, receipt_ref, and optional output_ref only");
+        || (input.timeout_ms !== undefined && (!Number.isSafeInteger(input.timeout_ms) || input.timeout_ms < 1))
+        || Object.keys(input).some((key) => !new Set(["command", "receipt_ref", "output_ref", "timeout_ms"]).has(key))) {
+      throw new TypeError("test capture input requires command, receipt_ref, optional output_ref, and optional timeout_ms");
     }
     const capture = values.stage === "build-code" ? captureBuildCodeTests : captureVerifyCodeTests;
     return capture(input.command, input.receipt_ref, {
       task: context.task,
       workspace: context.workspace,
       ...(input.output_ref === undefined ? {} : { outputRef: input.output_ref }),
+      ...(input.timeout_ms === undefined ? {} : { timeoutMs: input.timeout_ms }),
     });
   }
   if (command === "capture-evidence") {

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createTask } from "../../runtime/task/task-handle.mjs";
-import { appendTaskFact, initializeTaskStore } from "../../runtime/task/task-store.mjs";
+import { initializeTaskStore, writeStageRow } from "../../runtime/task/task-store.mjs";
 import { publishQualityFact } from "../../runtime/evidence/quality-store.mjs";
 
 function task(projectName = "workflowhub-fixture") {
@@ -23,10 +23,10 @@ function task(projectName = "workflowhub-fixture") {
 describe("journal replacement", () => {
   it("replacement:journal records facts without a transition journal", () => {
     const value = task();
-    appendTaskFact(value.taskPath, {
-      stage: "build-code", material_digest: "a".repeat(64), source_digest: "b".repeat(64),
-      invocation_id: "journal-replacement", source: "replacement-test", status: "passed",
-      content_hash: "c".repeat(64), output_ref: "quality/tests/journal.json",
+    writeStageRow(value.taskPath, {
+      record_kind: "stage", stage: "build-code", source: "replacement-test",
+      review_origin: "not_run", finding_dispositions: [],
+      evidence: { value: [{ command: "true", exit_code: 0, failure_signature: "none" }] },
     });
     publishQualityFact(value.taskPath, "tests", {
       task_id: value.identity.taskId, stage: "build-code", status: "passed", source: "replacement-test",

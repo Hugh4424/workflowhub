@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
-export function workflowHubConfigPath({ env = process.env, home = homedir() } = {}) {
+function workflowHubConfigPath({ env = process.env, home = homedir() } = {}) {
   const xdgConfigHome = env?.XDG_CONFIG_HOME;
   const configHome = typeof xdgConfigHome === "string" && xdgConfigHome.trim() !== ""
     ? xdgConfigHome.trim()

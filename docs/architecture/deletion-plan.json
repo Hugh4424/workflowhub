@@ -427,7 +427,8 @@
       "title": "Stage-transition journal authority",
       "candidatePaths": [
         "core/journal-appender.mjs",
-        "core/journal-schema.mjs",
+        "runtime/evidence/journal-schema.mjs",
+        "runtime/evidence/receipt-schema.mjs",
         "core/chain-topology.mjs"
       ],
       "consumers": [
@@ -522,7 +523,7 @@
       "candidatePaths": [
         "core/dispatch-component.mjs",
         "core/resolve-component.mjs",
-        "core/task-index.mjs",
+        "runtime/task/task-index.mjs",
         "workflows/_spike"
       ],
       "consumers": [

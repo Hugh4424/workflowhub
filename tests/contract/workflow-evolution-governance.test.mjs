@@ -10,7 +10,7 @@ afterEach(() => { while (temporaryRoots.length) rmSync(temporaryRoots.pop(), { r
 describe("M16 governance registration", () => {
   it("registers each production module and private adapter with a real consumer", async () => {
     const moveMap = JSON.parse(readFileSync(resolve(root, "docs/architecture/move-map.json"), "utf8"));
-    const production = ["runtime/evidence/workflow-evolution.mjs", "runtime/schemas/workflow-evolution.v1.json", "tools/cli/generate-iteration-brief.mjs", "tools/cli/record-evolution-result.mjs", "tools/cli/check-skill-updates.mjs", "tools/cli/derive-consumption-edges.mjs", "tools/cli/build-reflection-page.mjs", "tools/cli/build-reflection-page-template.html"];
+    const production = ["runtime/evidence/workflow-evolution.mjs", "runtime/schemas/workflow-evolution.v1.json", "tools/cli/derive-consumption-edges.mjs", "tools/cli/build-reflection-page.mjs", "tools/cli/build-reflection-page-template.html"];
     for (const file of production) {
       const entry = [...moveMap.entries].reverse().find((value) => value.destination === file);
       expect(entry, `missing move-map entry for ${file}`).toBeTruthy();
@@ -115,14 +115,13 @@ describe("M16 governance registration", () => {
   });
   it("keeps the public runtime surface at seven behaviours", () => {
     const facade = readFileSync(resolve(root, "runtime/interface/runtime-facade.mjs"), "utf8");
-    expect(facade).not.toMatch(/RUNTIME_BEHAVIORS[^\n]*evolution|generate-iteration-brief/);
+    expect(facade).not.toMatch(/RUNTIME_BEHAVIORS[^\n]*evolution/);
   });
 
   it("keeps candidate, page, and brief projection local, deterministic, and honest about unverified benefit", () => {
     const sources = [
       "runtime/evidence/workflow-evolution.mjs",
       "tools/cli/build-reflection-page.mjs",
-      "tools/cli/generate-iteration-brief.mjs",
       "tools/cli/build-reflection-page-template.html",
     ].map((path) => readFileSync(resolve(root, path), "utf8")).join("\n");
     expect(sources).not.toMatch(/\b(?:fetch|XMLHttpRequest|setTimeout|setInterval)\s*\(/);

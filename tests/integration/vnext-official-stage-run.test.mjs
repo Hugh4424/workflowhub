@@ -67,6 +67,12 @@ function fixture(taskId = "vnext-stage-run") {
   return { root, task, candidate, kernel };
 }
 
+function taskScopedEnv(root) {
+  const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
+  for (const key of ["CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH", "CODEX_CLI_VERSION"]) delete env[key];
+  return env;
+}
+
 function contextFor(stage, state) {
   return {
     stage,
@@ -2489,5 +2495,60 @@ describe("vNext official stage completion", () => {
     expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
+  });
+});
+
+describe("T1 AC-MS-020", () => {
+  it("T1 AC-MS-020 publishes only current facts and reads real status", async () => {
+    const state = fixture("vnext-ms-020");
+    const { initializeTaskStore, readTaskFacts, writeStageRow } = await import("../../runtime/task/task-store.mjs");
+    initializeTaskStore(state.task.taskPath, { taskId: state.task.identity.taskId });
+
+    // The production writer publishes one current row for the stage.
+    writeStageRow(state.task.taskPath, {
+      record_kind: "stage", stage: "build-code", source: "ms020-fixture",
+      review_origin: "unavailable",
+      review_result_ref: { value: null, reason: "no review dispatched in this fixture" },
+      finding_dispositions: [],
+      evidence: { value: [{ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" }] },
+      layer_states: {
+        implementation_completion: "completed", stage_quality: "incomplete",
+        delivery: "unavailable", task_closure: "unavailable",
+      },
+    });
+    const rows = readTaskFacts(state.task.taskPath);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ record_kind: "stage", stage: "build-code" });
+
+    // No stage-outcome file and no index object is produced for a current task.
+    expect(existsSync(join(state.task.taskPath, "index.json"))).toBe(false);
+    const outcomeDir = join(state.task.taskPath, "quality", "evidence", "stage-outcomes");
+    expect(existsSync(outcomeDir)).toBe(false);
+
+    // The real status entry point reads the current row and reports both
+    // projections without inventing completion.
+    const status = spawnSync(process.execPath, [
+      join(process.cwd(), "tools", "cli", "stage-runtime.mjs"), "status", "--action=begin",
+      "--stage=build-code", "--project=WorkflowHub", "--task=vnext-ms-020",
+    ], { cwd: process.cwd(), encoding: "utf8", env: taskScopedEnv(state.root) });
+    expect(status.status, status.stderr).toBe(0);
+    const parsed = JSON.parse(status.stdout);
+    expect(Object.hasOwn(parsed, "quality_status")).toBe(true);
+    expect(Object.hasOwn(parsed, "execution_outcome")).toBe(true);
+
+    // A same-stage update keeps exactly one row and changes the read value.
+    writeStageRow(state.task.taskPath, {
+      record_kind: "stage", stage: "build-code", source: "ms020-fixture",
+      review_origin: "conducted", review_result_ref: { value: "quality/reviews/results/current.json" },
+      finding_dispositions: [{ finding: "F-1", disposition: "fixed" }],
+      evidence: { value: [{ command: "npx vitest run tests/demo.test.mjs", exit_code: 0, failure_signature: "none" }] },
+      layer_states: {
+        implementation_completion: "completed", stage_quality: "completed",
+        delivery: "unavailable", task_closure: "unavailable",
+      },
+    });
+    const after = readTaskFacts(state.task.taskPath);
+    expect(after).toHaveLength(1);
+    expect(after[0].review_origin).toBe("conducted");
   });
 });
