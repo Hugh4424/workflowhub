@@ -3,12 +3,12 @@
   "source": {
     "git_head": "1d9a93fe2f10e02b959ba7c9b9aa11d4366932f3",
     "tracked_files": 1001,
-    "delivery_files": 1056,
-    "source_files": 308
+    "delivery_files": 1070,
+    "source_files": 312
   },
   "measurements": {
     "formal_test_files": {
-      "actual": 150,
+      "actual": 153,
       "definition": "*.test.* and */__tests__/*"
     },
     "test_support_lines": {
@@ -144,17 +144,17 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 32724,
+      "actual": 32996,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 22724,
+      "delta_from_target": 22996,
       "within_limit": false
     },
     "production_lines": {
-      "actual": 38615,
+      "actual": 38706,
       "target": 12000,
       "limit": 15000,
-      "delta_from_target": 26615,
+      "delta_from_target": 26706,
       "within_limit": false
     },
     "public_runner_behaviors": {
