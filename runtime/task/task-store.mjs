@@ -216,7 +216,7 @@ function validateFact(value, taskId) {
   return value;
 }
 
-/** The frozen 16-key row contract shared by stage rows and close-action rows. */
+/** Legacy/base 16-key row contract shared by stage rows and close-action rows. */
 export const TASK_RECORD_KINDS = Object.freeze(["stage", "close_action"]);
 export const STAGE_ROW_KEYS = Object.freeze([
   "record_kind", "task_id", "stage", "source", "created_at",
@@ -225,6 +225,7 @@ export const STAGE_ROW_KEYS = Object.freeze([
   "evidence", "layer_states", "serious_issue_disposition",
   "close_action", "handoff",
 ]);
+const BUILD_CODE_PROGRESS_ROW_KEYS = Object.freeze([...STAGE_ROW_KEYS, "phase_progress"]);
 export const LAYER_STATE_VALUES = Object.freeze(["completed", "unavailable", "incomplete", "partial"]);
 export const REVIEW_ORIGINS = Object.freeze(["conducted", "unavailable", "not_run", "same_source_degraded", "dispatched_uncollected"]);
 export const FINDING_DISPOSITIONS = Object.freeze(["fixed", "rejected_invalid", "accepted_risk", "needs_human", "user_decided"]);
@@ -235,6 +236,20 @@ function recordError(message) { return new Error(`task record row is invalid: ${
 function exactKeys(value, expected, label) {
   const keys = Object.keys(value).sort();
   if (keys.join("\0") !== [...expected].sort().join("\0")) throw recordError(`${label} key set must equal the frozen field table`);
+}
+
+function validatePhaseProgress(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw recordError("phase_progress must be an object");
+  exactKeys(value, ["phase_id", "task_id", "material_revision", "recorded_at"], "phase_progress");
+  if (typeof value.phase_id !== "string" || !/^P[1-9][0-9]*$/.test(value.phase_id)) throw recordError("phase_progress.phase_id is invalid");
+  if (typeof value.task_id !== "string" || !/^T[0-9]{3,}$/.test(value.task_id)) throw recordError("phase_progress.task_id is invalid");
+  if (typeof value.material_revision !== "string" || !/^revision-[a-f0-9]{64}$/.test(value.material_revision)) {
+    throw recordError("phase_progress.material_revision is invalid");
+  }
+  if (typeof value.recorded_at !== "string" || !Number.isFinite(Date.parse(value.recorded_at))) {
+    throw recordError("phase_progress.recorded_at is invalid");
+  }
+  return value;
 }
 
 /**
@@ -316,7 +331,11 @@ export function readCurrentStageFindingDispositionSummary(taskRoot, { taskId, st
 }
 
 function validateStageRow(value, taskId) {
-  exactKeys(value, STAGE_ROW_KEYS, "stage row");
+  const hasPhaseProgress = Object.hasOwn(value, "phase_progress");
+  if (hasPhaseProgress && (value.record_kind !== "stage" || value.stage !== "build-code")) {
+    throw recordError("phase_progress is only supported on build-code stage rows");
+  }
+  exactKeys(value, hasPhaseProgress ? BUILD_CODE_PROGRESS_ROW_KEYS : STAGE_ROW_KEYS, "stage row");
   if (!TASK_RECORD_KINDS.includes(value.record_kind)) throw recordError("record_kind must be stage or close_action");
   if (value.task_id !== taskId) throw recordError("task identity mismatch");
   if (value.record_kind === "stage") {
@@ -361,6 +380,7 @@ function validateStageRow(value, taskId) {
   validateLayerStates(value.layer_states, "layer_states");
   conditionValue(value.serious_issue_disposition, "serious_issue_disposition");
   conditionValue(value.handoff, "handoff");
+  if (hasPhaseProgress) validatePhaseProgress(value.phase_progress);
   return value;
 }
 
@@ -384,6 +404,7 @@ function materialiseStageRow(input, taskId, createdAt) {
     serious_issue_disposition: input?.serious_issue_disposition ?? { value: null, reason: "no serious issue recorded for this row" },
     close_action: input?.close_action ?? { value: null, reason: "this row carries no close action" },
     handoff: input?.handoff ?? { value: null, reason: "no handoff item recorded for this row" },
+    ...(Object.hasOwn(input ?? {}, "phase_progress") ? { phase_progress: input.phase_progress } : {}),
   };
   return row;
 }
@@ -396,14 +417,25 @@ function materialiseStageRow(input, taskId, createdAt) {
 export function writeStageRow(taskRoot, input, options = {}) {
   const identity = assertRoot(taskRoot, input?.task_id);
   return withStoreLock(identity.root, () => {
-    const row = materialiseStageRow(input, identity.taskId, options.now ?? new Date().toISOString());
-    validateStageRow(row, identity.taskId);
     const factsPath = safeRecordPath(identity.root, "facts.jsonl");
     const oldRaw = readFileSync(factsPath, "utf8");
     const lines = oldRaw === "" ? [] : oldRaw.trimEnd().split("\n");
     const rows = lines.map((line, index) => {
       try { return JSON.parse(line); } catch { throw new Error(`facts.jsonl line ${index + 1} is invalid JSON`); }
     });
+    const sameInputRow = (value) => value?.record_kind === (input?.record_kind === "close_action" ? "close_action" : "stage")
+      && (input?.record_kind === "close_action"
+        ? value.close_action?.action === input?.close_action?.action
+        : value.stage === input?.stage);
+    const priorIndex = rows.findIndex(sameInputRow);
+    const priorRow = priorIndex >= 0 ? rows[priorIndex] : null;
+    const inputWithPreservedProgress = priorRow?.record_kind === "stage"
+      && Object.hasOwn(priorRow, "phase_progress")
+      && !Object.hasOwn(input ?? {}, "phase_progress")
+      ? { ...input, phase_progress: priorRow.phase_progress }
+      : input;
+    const row = materialiseStageRow(inputWithPreservedProgress, identity.taskId, options.now ?? new Date().toISOString());
+    validateStageRow(row, identity.taskId);
     const sameRow = (value) => value?.record_kind === row.record_kind
       && (row.record_kind === "stage" ? value.stage === row.stage : value.close_action?.action === row.close_action?.action);
     const index = rows.findIndex(sameRow);

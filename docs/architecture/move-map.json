@@ -3439,6 +3439,69 @@
       "content_change": "accept the broker's real health shape (optional error, pending) and attach a public-safe managed_observation to a rejected managed envelope",
       "bytes_after": 69153,
       "sha256_after": "100d15ea73ea17966dfb852be313f630dff22b19b35a023999e34dbf0344b6db"
+    },
+    {
+      "source": "runtime/review/ocr-delegation-adapter.mjs",
+      "destination": "runtime/review/ocr-delegation-adapter.mjs",
+      "status": "add",
+      "owner": "WorkflowHub review runtime",
+      "consumer": "tools/cli/stage-runtime.mjs OCR review route and OCR delegation contract tests",
+      "delete_condition": "remove when the stage-runtime OCR route no longer uses this adapter and an audited replacement owns packet preparation and delegated execution",
+      "content_change": "runtime-owned OCR packet preparation, prompt-constraint validation, delegated execution, cancellation, and unavailable-result handling"
+    },
+    {
+      "source": "skills/architect-code-review/SKILL.md",
+      "destination": "skills/architect-code-review/SKILL.md",
+      "status": "add",
+      "owner": "verify-code code-review skill",
+      "consumer": "verify-code skill dependency and code-review fact handler",
+      "delete_condition": "remove when verify-code and all explicit callers retire the Architect-Code-Review contract",
+      "content_change": "portable verify-code code-review instructions and evidence-anchored findings contract"
+    },
+    {
+      "source": "skills/architect-code-review/skill-bundle.json",
+      "destination": "skills/architect-code-review/skill-bundle.json",
+      "status": "add",
+      "owner": "Architect-Code-Review skill bundle",
+      "consumer": "verify-code bundle dependency and Skill Bundle release closure",
+      "delete_condition": "remove with retirement of the Architect-Code-Review skill and its verify-code consumer",
+      "content_change": "hash-bound portable skill manifest with upstream source attribution"
+    },
+    {
+      "source": "tests/contract/ocr-ac001-013-experiments.test.mjs",
+      "destination": "tests/contract/ocr-ac001-013-experiments.test.mjs",
+      "status": "add",
+      "owner": "CARD-05 OCR AC-REVIEW-001/013 acceptance experiments",
+      "consumer": "targeted Vitest JSON receipt and CARD-05 P5 canonical attempt/result readback for AC-REVIEW-001/013",
+      "delete_condition": "retain until an approved replacement preserves independent per-route dispatch, plain-path omission, and canonical readback experiments",
+      "content_change": "isolated public review route experiments for configured/unconfigured providers, mode counts, path-only inputs, and wrong caller content hash; controlled outputs are not LLM quality verdicts"
+    },
+    {
+      "source": "tests/review/ocr-ac002-007-experiments.test.mjs",
+      "destination": "tests/review/ocr-ac002-007-experiments.test.mjs",
+      "status": "add",
+      "owner": "CARD-05 OCR AC-REVIEW-002/007 acceptance experiments",
+      "consumer": "targeted Vitest JSON receipt and CARD-05 P5 canonical aggregation and provider-ledger readback for AC-REVIEW-002/007",
+      "delete_condition": "retain until an approved replacement preserves successful-route union, source strength, and provider-ledger readback experiments",
+      "content_change": "isolated controlled public-route experiments for shared and unique findings, failed members, identity, usage, and capture-limit facts"
+    },
+    {
+      "source": "tests/contract/ocr-ac006-011-experiments.test.mjs",
+      "destination": "tests/contract/ocr-ac006-011-experiments.test.mjs",
+      "status": "add",
+      "owner": "CARD-05 OCR AC-REVIEW-006/011 acceptance experiments",
+      "consumer": "targeted Vitest receipt and CARD-05 P5 direct-executor health, cancellation, and fallback fact readback for AC-REVIEW-006/011",
+      "delete_condition": "retain until an approved replacement preserves direct-executor terminal, cancellation, owner-loss, and one-fallback experiments",
+      "content_change": "isolated controlled child-process and public review experiments for health, explicit cancellation, owner loss, and unavailable fallback disclosure"
+    },
+    {
+      "source": "tests/contract/ocr-ac006-wallclock.test.mjs",
+      "destination": "tests/contract/ocr-ac006-wallclock.test.mjs",
+      "status": "add",
+      "owner": "CARD-05 OCR AC-REVIEW-006 real-wallclock experiment",
+      "consumer": "explicit targeted wallclock run and CARD-05 P5 evidence readback for direct OCR no-timeout behavior",
+      "delete_condition": "retain until an approved replacement supplies equivalent real-wallclock evidence for direct OCR waiting and fast-result retention",
+      "content_change": "controlled real-child experiment observes fast finding retention while another provider remains active beyond 21 minutes; fixture findings are not LLM quality verdicts"
     }
   ]
 }

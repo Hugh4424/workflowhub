@@ -10,7 +10,7 @@ function observation(subject, status = subject === "code_review" ? "recorded" : 
   return {
     authenticated: true,
     freshness: { status: "current" },
-    ...(subject === "code_review" ? { review_status: "clean", review_source: "wh_review.v2" } : {}),
+    ...(subject === "code_review" ? { review_status: "clean", review_source: "ocr-delegation" } : {}),
     fact: {
       ref: `quality/facts/${subject}-${status}.json`,
       value: {
@@ -19,7 +19,7 @@ function observation(subject, status = subject === "code_review" ? "recorded" : 
         kind: subject === "code_review" ? "review" : subject === "human_confirmation" ? "confirmation" : "acceptance_criterion",
         subject,
         status,
-        ...(subject === "code_review" ? { review_status: "clean", source: "wh_review.v2" } : {}),
+        ...(subject === "code_review" ? { review_status: "clean" } : {}),
         task_id: "e2e-verdict",
         snapshot_tree: TREE,
         material_revision: `revision-${HASH}`,
@@ -70,12 +70,12 @@ describe("acceptance verdict independence", () => {
 
   it("adds the E2E predicate only when the verify stage actually publishes the conditional fact", () => {
     const base = [observation("code_review"), observation("human_confirmation")];
-    expect(deriveStageCompletion("verify-code", base)).toMatchObject({ status: "completed" });
-    expect(deriveStageCompletion("verify-code", [...base, observation("e2e_acceptance", "missing")])).toMatchObject({
+    expect(deriveStageCompletion("verify-code", base, { authenticateCodeReview: () => true })).toMatchObject({ status: "completed" });
+    expect(deriveStageCompletion("verify-code", [...base, observation("e2e_acceptance", "missing")], { authenticateCodeReview: () => true })).toMatchObject({
       status: "in_progress",
       missing: expect.arrayContaining(["e2e_acceptance"]),
     });
-    expect(deriveStageCompletion("verify-code", [...base, observation("e2e_acceptance")])).toMatchObject({ status: "completed" });
+    expect(deriveStageCompletion("verify-code", [...base, observation("e2e_acceptance")], { authenticateCodeReview: () => true })).toMatchObject({ status: "completed" });
   });
 
   it("ignores stale E2E facts when projecting the current verify-code requirements", () => {
@@ -84,7 +84,7 @@ describe("acceptance verdict independence", () => {
       authenticated: false,
       freshness: { status: "stale" },
     };
-    expect(deriveStageCompletion("verify-code", [observation("code_review"), stale])).toMatchObject({
+    expect(deriveStageCompletion("verify-code", [observation("code_review"), stale], { authenticateCodeReview: () => true })).toMatchObject({
       status: "completed",
       missing: [],
     });

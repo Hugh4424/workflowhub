@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -16,6 +16,7 @@ import {
 import { assertNoCloseExecutionSidecars, captureExecutionSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { recordDshCodeReviewResult } from "../../runtime/review/review-record-route.mjs";
 import { deriveStatusRootCauses } from "../../tools/cli/stage-runtime.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
@@ -224,7 +225,8 @@ describe("P5 close sidecar and archive contract", () => {
       task: state.task,
       stage: "verify-code",
       snapshotTree: snapshot.tree,
-      provider: "fixture",
+      materialRevision: state.kernel.currentVNextMaterialRevision(),
+      provider: "dsh-code-review",
       verdict: "pass",
     });
     const reviewRaw = state.task.readRecord(review.resultRef);
@@ -251,27 +253,51 @@ describe("P5 close sidecar and archive contract", () => {
     expect(prepared.plan.delivery.quality_gaps).not.toEqual(expect.arrayContaining([
       expect.stringMatching(/^verify-code(?: freshness)?:/),
     ]));
+    expect(prepared.plan.delivery.quality_gaps).toEqual([]);
     expect(prepared.plan.delivery.quality_status).toBe("observed");
   });
 
   it("does not turn recorded code-review findings into a material-freshness gap", () => {
     const state = fixture();
-    const snapshot = state.kernel.currentVNextSnapshot();
-    const review = writeFormalReviewFixture({
+    const identity = state.kernel.currentVNextContext();
+    const findingPath = `specs/${state.task.identity.taskId}/spec.md`;
+    const findingEvidence = readFileSync(join(state.candidate.worktreeRoot, findingPath), "utf8").split(/\r?\n/, 1)[0];
+    const finding = {
+      severity: "minor",
+      path: findingPath,
+      line: 1,
+      issue: "fixture minor review finding",
+      root_cause: "the fixture intentionally models a nonblocking review finding",
+      recommendation: "retain the finding without treating it as stale",
+      evidence_kind: "direct",
+      evidence: findingEvidence,
+    };
+    const review = recordDshCodeReviewResult({
       task: state.task,
-      stage: "verify-code",
-      snapshotTree: snapshot.tree,
-      provider: "fixture",
-      verdict: "fail",
-      findingSeverity: "minor",
+      kernel: state.kernel,
+      result: { findings: [finding] },
     });
-    const reviewRaw = state.task.readRecord(review.resultRef);
+    const reviewRaw = state.task.readRecord(review.result_ref);
+    const reviewResult = JSON.parse(reviewRaw);
+    expect(reviewResult).toMatchObject({
+      task_id: state.task.identity.taskId,
+      stage: "verify-code",
+      snapshot_tree: identity.snapshot.tree,
+      material_revision: identity.materialRevision,
+      source: {
+        target_commit: identity.snapshot.head,
+        base_commit: identity.snapshot.commit,
+        base_tree: identity.snapshot.tree,
+        captured_head: identity.snapshot.head,
+      },
+      provider_results: [{ provider: "dsh-code-review", output: { findings: [expect.objectContaining({ severity: "minor" })] } }],
+    });
     state.kernel.publishVNextQualityFact("verify-code", {
       kind: "review",
       status: "recorded",
       review_status: "findings",
       subject: "code_review",
-      evidence: [{ ref: review.resultRef, sha256: sha256(reviewRaw), evidence_type: "review_result" }],
+      evidence: [{ ref: review.result_ref, sha256: sha256(reviewRaw), evidence_type: "review_result" }],
     });
     state.kernel.publishHumanConfirmation("verify-code", {
       decision: "accepted",

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
@@ -18,7 +18,41 @@ const packet = createSimpleReviewPacket({ stage: "verify-code", materials, authe
 const materialId = packet.material_id;
 const evidenceHash = packet.authenticated_evidence_sha256;
 const roots = [];
-afterEach(() => { vi.useRealTimers(); while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+const retryingCleanupRoots = new Set();
+const cleanupReadyRoots = new Set();
+const retryableCleanupErrors = new Set(["ENOTEMPTY", "EBUSY"]);
+function makeTemporaryDirectoriesRemovable(root) {
+  const stat = lstatSync(root);
+  if (!stat.isDirectory()) return;
+  const mode = stat.mode & 0o777;
+  if ((mode & 0o200) === 0) chmodSync(root, mode | 0o200);
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const child = join(root, entry.name);
+    if (lstatSync(child).isDirectory()) makeTemporaryDirectoriesRemovable(child);
+  }
+}
+async function removeTemporaryRootAfterRuntimeCleanup(root) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!retryableCleanupErrors.has(error?.code) || attempt >= 7) throw error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+    }
+  }
+}
+afterEach(async () => {
+  vi.useRealTimers();
+  while (roots.length) {
+    const root = roots.pop();
+    if (retryingCleanupRoots.delete(root)) {
+      if (!cleanupReadyRoots.delete(root)) throw new Error(`refusing to remove managed-test root before terminal/client cleanup: ${root}`);
+      makeTemporaryDirectoriesRemovable(root);
+      await removeTemporaryRootAfterRuntimeCleanup(root);
+    } else rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function reviewResult(request, overrides = {}) {
   return {
@@ -513,19 +547,30 @@ describe("managed review lifecycle boundary", () => {
     });
   });
 
-  it("consumes a failed non-terminal member immediately without waiting or cancelling", async () => {
+  it("keeps polling after failed non-terminal health until the broker reports terminal", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-member-health-")));
     roots.push(attachmentRoot);
     const calls = [];
+    const requestIds = [];
+    let polls = 0;
     const client = {
       async startManaged(value) {
         calls.push("start");
+        requestIds.push(value.requestId);
         return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
           state: "running", material_id: value.materials.materialId };
       },
       async statusManaged(value) {
         calls.push("status");
-        return managedHealthEnvelope({ requestId: value.requestId, runtimeId: managedRuntime, envelopeMaterialId: value.materials.materialId });
+        requestIds.push(value.requestId);
+        polls += 1;
+        if (polls === 1) {
+          return managedHealthEnvelope({ requestId: value.requestId, runtimeId: managedRuntime, envelopeMaterialId: value.materials.materialId });
+        }
+        return {
+          ...JSON.parse(managedWire("terminal", { requestId: value.requestId, outcome: "completed" }).stdout),
+          material_id: value.materials.materialId,
+        };
       },
       async cancelManaged() { calls.push("cancel"); throw new Error("member health facts must not cancel the managed runtime"); },
     };
@@ -538,19 +583,12 @@ describe("managed review lifecycle boundary", () => {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
       client,
-      managedTerminalWaitMs: 0,
       managedStatusPollMs: 0,
     });
 
-    expect(result).toMatchObject({
-      status: "unavailable",
-      provider_results: [{
-        status: "failed",
-        error: { code: "PROVIDER_PRINT_TIMEOUT" },
-        last_progress_at_ms: 1_234,
-      }],
-    });
-    expect(calls).toEqual(["start", "status"]);
+    expect(result).toMatchObject({ status: "available", outcome: "completed" });
+    expect(calls).toEqual(["start", "status", "status"]);
+    expect(new Set(requestIds).size).toBe(1);
   });
 
   it("keeps polling a live managed session by default without cancelling it", async () => {
@@ -620,81 +658,71 @@ describe("managed review lifecycle boundary", () => {
     expect(calls).toEqual(["start", "status"]);
   });
 
-  it("stops waiting at the production terminal wait without cancelling the broker", async () => {
-    // Option B (user decision 2026-09-11): the bounded wait stops WAITING, not
-    // the work. 3rd-review's v4 policy forbids elapsed-time termination of an
-    // active provider, and D-030③ forbids WorkflowHub inventing its own stall
-    // verdict, so the caller records a truthful fact and leaves the broker
-    // running. cancelManaged must therefore NEVER be reached on this path.
-    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-timeout-")));
+  it("cancels the managed broker and reads back its terminal state after AbortSignal", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-abort-")));
     roots.push(attachmentRoot);
+    const controller = new AbortController();
     const calls = [];
+    let statusCalls = 0;
+    let cancellationRequested = false;
     const running = (value) => ({ version: "workflowhub-run.v1", request_id: value.requestId,
       runtime_id: managedRuntime, state: "running", material_id: value.materials.materialId });
     const client = {
       async startManaged(value) { calls.push("start"); return running(value); },
-      async statusManaged(value) { calls.push("status"); return running(value); },
-      async cancelManaged() { calls.push("cancel"); throw new Error("caller-side wall-clock termination is forbidden"); },
+      async statusManaged(value) {
+        calls.push("status");
+        statusCalls += 1;
+        if (statusCalls === 2) controller.abort(new Error("operator cancelled"));
+        if (cancellationRequested) return {
+          version: "workflowhub-run.v1",
+          request_id: value.requestId,
+          runtime_id: managedRuntime,
+          state: "terminal",
+          material_id: value.materials.materialId,
+          group: {
+            runtime_id: managedRuntime,
+            material_id: value.materials.materialId,
+            outcome: "cancelled",
+            providers: [{
+              provider: managedProvider,
+              status: "cancelled",
+              error: { code: "CANCELLED", message: "operator cancelled" },
+              output: null,
+              timing: null,
+              usage: null,
+            }],
+          },
+        };
+        return running(value);
+      },
+      async cancelManaged(value) {
+        calls.push("cancel");
+        expect(value).toMatchObject({ runtimeId: managedRuntime });
+        cancellationRequested = true;
+        return { cancelled: true };
+      },
     };
     const result = await runSimpleReview({
-      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed explicit cancellation bytes" },
     }, {
+      signal: controller.signal,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
       }, provider_models: { [managedProvider]: "review-model" } }),
       client,
-      managedTerminalWaitMs: 0,
       managedStatusPollMs: 0,
     });
 
     expect(result).toMatchObject({ status: "unavailable", runtime_id: managedRuntime,
-      error: { code: "REVIEW_WAIT_EXCEEDED" } });
-    expect(calls).toEqual(["start", "status"]);
+      error: { code: "REVIEW_CANCELLED", message: "operator cancelled" } });
+    expect(result).toMatchObject({ outcome: "cancelled",
+      provider_results: [{ provider: managedProvider, status: "cancelled", error: { code: "CANCELLED" } }] });
+    expect(calls).toEqual(["start", "status", "status", "cancel", "status"]);
   });
 
-  it("lets the managed runner publish REVIEW_WAIT_EXCEEDED without the recorder aborting it", async () => {
-    const { task, kernel } = fixture();
-    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-recorder-timeout-")));
-    roots.push(attachmentRoot);
-    const calls = [];
-    const running = (value) => ({ version: "workflowhub-run.v1", request_id: value.requestId,
-      runtime_id: managedRuntime, state: "running", material_id: value.materials.materialId });
-    const client = {
-      async startManaged(value) { calls.push("start"); return running(value); },
-      async statusManaged(value) { calls.push("status"); return running(value); },
-      async cancelManaged() { calls.push("cancel"); throw new Error("the recorder must not cancel a managed wait"); },
-    };
-    const recorded = await recordSimpleReviewRequest({
-      task,
-      kernel,
-      request: request(),
-      reviewRoundTimeoutMs: null,
-      resolveRouteIdentity: () => ({ route_identity: sha("route") }),
-      runRound: (value, { signal } = {}) => runSimpleReview(value, {
-        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-        resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
-        selectProviders: () => ({ providers: [managedProvider], provider_identities: {
-          [managedProvider]: { source_id: "review/source", config_id: "review-config" },
-        }, provider_models: { [managedProvider]: "review-model" } }),
-        client,
-        signal,
-        managedTerminalWaitMs: 0,
-        managedStatusPollMs: 0,
-      }),
-    });
-
-    expect(recorded).toMatchObject({ status: "recorded", dispatch_state: "dispatched", result_ref: null });
-    expect(JSON.parse(task.readRecord(recorded.attempt_ref))).toMatchObject({
-      terminal_status: "unavailable",
-      dispatch_state: "dispatched",
-      error: { code: "REVIEW_WAIT_EXCEEDED" },
-    });
-    expect(calls).toEqual(["start", "status"]);
-  });
-
-  it("rechecks terminal state at the unchanged 20-minute boundary before returning", async () => {
+  it("keeps polling after a 10-minute fake-time jump until the broker reports terminal", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-final-recheck-")));
@@ -711,7 +739,7 @@ describe("managed review lifecycle boundary", () => {
         calls.push("status");
         polls += 1;
         if (polls === 1) {
-          vi.setSystemTime(1_200_000);
+          vi.setSystemTime(600_001);
           return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
             state: "running", material_id: value.materials.materialId };
         }
@@ -790,6 +818,250 @@ describe("managed review lifecycle boundary", () => {
       attachments: { version: 1, bundle_id: materialId },
     });
     expect(calls[1]).toMatchObject({ command: "status", runtimeId: managedRuntime });
+  });
+
+  it("real candidate managed health reaches terminal", async () => {
+    const candidateRoot = process.env.WH_TEST_THIRD_REVIEW_ROOT;
+    if (!candidateRoot) throw new Error("WH_TEST_THIRD_REVIEW_ROOT must name the isolated 3rd-review candidate");
+    const cli = join(resolve(candidateRoot), "scripts", "3rd-review.mjs");
+    expect(existsSync(cli)).toBe(true);
+
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-real-managed-health-")));
+    roots.push(root);
+    retryingCleanupRoots.add(root);
+    const isolatedHome = join(root, "home");
+    const workflowhubConfigDir = join(isolatedHome, ".config", "workflowhub");
+    const packetRoot = join(root, "packets");
+    const runtimeRoot = join(root, "runtime");
+    const fakeProvider = join(root, "fake-kimi");
+    const startedMarker = join(root, "provider-started");
+    const releaseMarker = join(root, "provider-release");
+    const hostConfigPath = join(workflowhubConfigDir, "config.json");
+    const brokerConfigPath = join(root, "3rd-review.json");
+    mkdirSync(workflowhubConfigDir, { recursive: true });
+    mkdirSync(packetRoot);
+    mkdirSync(runtimeRoot);
+
+    const markerEnv = {
+      WH_TEST_MANAGED_PROVIDER_STARTED: startedMarker,
+      WH_TEST_MANAGED_PROVIDER_RELEASE: releaseMarker,
+    };
+    writeFileSync(fakeProvider, `#!/usr/bin/env node
+import { existsSync, writeFileSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
+
+writeFileSync(process.env.WH_TEST_MANAGED_PROVIDER_STARTED, "started\\n");
+console.log(JSON.stringify({ role: "meta", type: "system.version", version: "0.40.1" }));
+console.log(JSON.stringify({ role: "assistant", content: "fake provider is working" }));
+while (!existsSync(process.env.WH_TEST_MANAGED_PROVIDER_RELEASE)) await delay(10);
+console.log(JSON.stringify({ role: "assistant", content: JSON.stringify({ findings: [] }) }));
+console.error("To resume this session: kimi -r fake-kimi-session");
+`);
+    chmodSync(fakeProvider, 0o700);
+
+    writeFileSync(brokerConfigPath, JSON.stringify({
+      version: 4,
+      tiers: [["kimi"]],
+      runtime: {
+        root: runtimeRoot,
+        ttl_hours: 24,
+        max_prompt_bytes: 100_000,
+        max_output_bytes: 100_000,
+        liveness_interval_ms: 25,
+        orphan_timeout_ms: 1_000,
+      },
+      attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
+      providers: {
+        kimi: {
+          enabled: true,
+          command: fakeProvider,
+          model: "fake-kimi-model",
+          effort: null,
+          thinking: null,
+          auth: { type: "env", env: Object.keys(markerEnv) },
+          env: [],
+        },
+      },
+    }));
+    writeFileSync(hostConfigPath, JSON.stringify({
+      third_review: {
+        command: [process.execPath, cli],
+        config: brokerConfigPath,
+        attachment_root: packetRoot,
+      },
+      wh_review: {
+        version: 2,
+        stages: {
+          "build-code": { initial: ["kimi"], mode: "full_only", minimum_heterologous: 1 },
+        },
+      },
+    }));
+
+    const previousHome = process.env.HOME;
+    const previousMarkerEnv = Object.fromEntries(Object.keys(markerEnv).map((key) => [key, process.env[key]]));
+    process.env.HOME = isolatedHome;
+    Object.assign(process.env, markerEnv);
+    const hostAbortController = new AbortController();
+
+    const client = new ReviewProviderClient({ command: [process.execPath, cli], config: brokerConfigPath, timeoutMs: null });
+    const actualStartManaged = client.startManaged.bind(client);
+    const actualStatusManaged = client.statusManaged.bind(client);
+    const actualCancelManaged = client.cancelManaged.bind(client);
+    let managedContext = null;
+    let startedLifecycle = null;
+    let runtimeId = null;
+    let observedHealth = null;
+    let observedTerminal = null;
+    const managedStatusObservations = [];
+    let terminalCleanupConfirmed = false;
+    client.startManaged = async (value) => {
+      managedContext = value;
+      try {
+        const started = await actualStartManaged(value);
+        startedLifecycle = started;
+        runtimeId = started.runtime_id;
+        return started;
+      } catch (error) {
+        runtimeId = error?.managed_observation?.runtime_id ?? null;
+        throw error;
+      }
+    };
+    client.statusManaged = async (value) => {
+      const status = await actualStatusManaged(value);
+      managedStatusObservations.push({
+        input: {
+          requestId: value.requestId,
+          runtimeId: value.runtimeId,
+          materialId: value.materials.materialId,
+        },
+        status,
+      });
+      if (status.state === "running" && status.providers?.kimi) observedHealth = status;
+      if (status.state === "terminal") {
+        observedTerminal = status;
+        terminalCleanupConfirmed = true;
+      }
+      return status;
+    };
+
+    let reviewPromise = null;
+    let primaryError = null;
+    try {
+      reviewPromise = runSimpleReview({
+        stage: "build-code",
+        host_provider: "codex",
+        materials: { implementation: "managed health boundary fixture" },
+      }, { client, managedStatusPollMs: 20, signal: hostAbortController.signal });
+
+      await Promise.race([
+        vi.waitFor(() => {
+          expect(observedHealth).toMatchObject({
+            state: "running",
+            providers: {
+              kimi: { status: "running", last_progress_at_ms: expect.any(Number) },
+            },
+          });
+        }, { timeout: 10_000, interval: 20 }),
+        reviewPromise.then(() => { throw new Error("managed review reached terminal before health was observed"); }),
+      ]);
+
+      expect(observedHealth.providers.kimi.last_progress_at_ms).toBeGreaterThan(0);
+      expect(existsSync(startedMarker)).toBe(true);
+      writeFileSync(releaseMarker, "release\\n");
+
+      const result = await reviewPromise;
+      // Request/material originate in the start input; the broker returns the runtime identity.
+      const expectedManagedIdentity = {
+        requestId: managedContext.requestId,
+        runtimeId: startedLifecycle.runtime_id,
+        materialId: managedContext.materials.materialId,
+      };
+      expect(startedLifecycle).toMatchObject({
+        request_id: expectedManagedIdentity.requestId,
+        runtime_id: expectedManagedIdentity.runtimeId,
+        material_id: expectedManagedIdentity.materialId,
+      });
+      expect(managedStatusObservations.map(({ status }) => status.state)).toContain("running");
+      const terminalObservation = managedStatusObservations.find(({ status }) => status.state === "terminal");
+      expect(terminalObservation).toBeDefined();
+      for (const { input, status } of managedStatusObservations) {
+        expect(input).toEqual(expectedManagedIdentity);
+        expect(status).toMatchObject({
+          request_id: expectedManagedIdentity.requestId,
+          runtime_id: expectedManagedIdentity.runtimeId,
+          material_id: expectedManagedIdentity.materialId,
+        });
+      }
+      expect(terminalObservation.status.group).toMatchObject({ runtime_id: expectedManagedIdentity.runtimeId });
+      expect(observedTerminal).toMatchObject({
+        state: "terminal",
+        group: { outcome: "completed", providers: [{ status: "completed" }] },
+      });
+      expect(result).toMatchObject({
+        status: "available",
+        outcome: "completed",
+        runtime_id: terminalObservation.status.group.runtime_id,
+        material_id: terminalObservation.status.material_id,
+        provider_results: [{ provider: "kimi", status: "completed" }],
+      });
+    } catch (error) {
+      primaryError = error;
+      throw error;
+    } finally {
+      try {
+        if (runtimeId && managedContext && observedTerminal === null) {
+          const context = { ...managedContext, runtimeId };
+          try {
+            await actualCancelManaged(context);
+          } catch {
+            // A concurrent terminal transition can make cancellation unnecessary;
+            // the status loop below is the authoritative cleanup check.
+          }
+          const cleanupController = new AbortController();
+          const cleanupTimer = setTimeout(() => cleanupController.abort(new Error("test cleanup grace expired")), 10_000);
+          const cleanupContext = { ...context, signal: cleanupController.signal };
+          try {
+            while (!cleanupController.signal.aborted) {
+              let terminal;
+              try {
+                terminal = await actualStatusManaged(cleanupContext);
+              } catch (error) {
+                if (cleanupController.signal.aborted) break;
+                throw error;
+              }
+              if (terminal.state === "terminal") {
+                terminalCleanupConfirmed = true;
+                break;
+              }
+              await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+            }
+          } finally {
+            clearTimeout(cleanupTimer);
+          }
+          if (!terminalCleanupConfirmed) {
+            hostAbortController.abort(new Error("managed test cleanup grace expired after explicit broker cancellation"));
+            if (reviewPromise) await reviewPromise.catch(() => {});
+            throw new Error("broker did not report terminal within the 10-second test cleanup grace after explicit cancellation; preserving the temporary root because the provider may still be active");
+          }
+        }
+        if (reviewPromise) await reviewPromise.catch(() => {});
+        if (!runtimeId || terminalCleanupConfirmed) cleanupReadyRoots.add(root);
+      } catch (cleanupError) {
+        if (!terminalCleanupConfirmed) {
+          hostAbortController.abort(new Error("managed test cleanup failed before terminal confirmation"));
+          if (reviewPromise) await reviewPromise.catch(() => {});
+        }
+        if (primaryError) throw new AggregateError([primaryError, cleanupError], "managed health test failed and cleanup did not reach terminal");
+        throw cleanupError;
+      } finally {
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
+        for (const [key, value] of Object.entries(previousMarkerEnv)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    }
   });
 
   it("classifies plain-text managed stderr instead of leaking SyntaxError", async () => {

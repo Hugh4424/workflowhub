@@ -44,19 +44,48 @@ function fixture(stage) {
 function sourceOutcome(state, stage) {
   return writeStageOutcomeFixture({ ...state, workspace: state.candidateWorkspace, stage, attemptId: `consumer-${stage}-attempt`, status: "incomplete" });
 }
-function reflectionInput(state, stage, outcome) {
+// Reflection v2 safe_ref excludes quality/facts and facts.jsonl; cite the
+// current run's stage-quality evidence leaf referenced by its canonical fact.
+function currentStageQualityEvidenceRef(state, stage, binding, priorFactRefs) {
+  const refs = state.task.listCanonicalQualityFactRefs();
+  for (const ref of refs) {
+    if (priorFactRefs.has(ref)) continue;
+    const raw = state.task.readRecord(ref);
+    const fact = JSON.parse(raw);
+    const factHash = ref.slice("quality/facts/".length, -".json".length);
+    if (fact.fact_id !== `quality-${factHash}`
+        || fact.schema_version !== "quality-fact.v1"
+        || fact.task_id !== binding.task_id
+        || fact.stage !== stage
+        || fact.snapshot_tree !== binding.snapshot_tree
+        || fact.material_revision !== binding.material_revision) continue;
+    for (const evidence of fact.evidence ?? []) {
+      if (evidence.evidence_type !== "acceptance_evidence") continue;
+      const envelope = JSON.parse(state.task.readRecord(evidence.ref));
+      for (const nested of envelope.refs ?? []) {
+        if (!new RegExp(`^quality/evidence/stage-quality/${stage}/[^/]+-[a-f0-9]{64}\\.json$`).test(nested.ref ?? "")) continue;
+        const value = JSON.parse(state.task.readRecord(nested.ref));
+        if (value.task_id === binding.task_id && value.stage === stage
+            && value.snapshot_tree === binding.snapshot_tree
+            && value.material_revision === binding.material_revision) return nested.ref;
+      }
+    }
+  }
+  throw new Error(`runStage did not publish current ${stage} stage-quality evidence for the reflection binding`);
+}
+function reflectionInput(state, stage, binding, priorFactRefs) {
   return {
     schema_version: "stage-reflection.v2", record_kind: "judgment", task_id: state.task.identity.taskId, stage,
     stage_status: "failed", generated_at: "2026-09-08T00:00:00Z", status: "ok", error: null,
     identity: { task_id: state.task.identity.taskId, worktree: state.candidateWorkspace.worktreeRoot,
       branch: execFileSync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: state.candidateWorkspace.worktreeRoot, encoding: "utf8" }).trim(),
-      attempt: outcome.value.attempt_id, snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision },
+      attempt: binding.attempt, snapshot_tree: binding.snapshot_tree, material_revision: binding.material_revision },
     judgments: [{ subject_id: "current-outcome", subject_kind: "step", classification: "keep", severity: "low",
-      reason: "The authenticated incomplete execution remains visible.", evidence_refs: [outcome.ref], confidence: "medium", next_review_trigger: "next execution" }],
+      reason: "The current stage execution remains visible.", evidence_refs: [currentStageQualityEvidenceRef(state, stage, binding, priorFactRefs)], confidence: "medium", next_review_trigger: "next execution" }],
     interventions: [], lessons_added: [],
     ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
     status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
-    executor: { source_id: "fixture/workflow-synchronization", attempt_id: outcome.value.attempt_id, started_at: "2026-09-08T00:00:01Z", completed_at: "2026-09-08T00:00:02Z", output_hash: "a".repeat(64) },
+    executor: { source_id: "workflowhub-current-session", attempt_id: binding.attempt, started_at: "2026-09-08T00:00:01Z", completed_at: "2026-09-08T00:00:02Z", output_hash: "a".repeat(64) },
     output_hash: "a".repeat(64),
     source_completeness: { compaction: false, truncation: false, visible_scope: "fixture execution", unknown_reasons: [] },
   };
@@ -78,12 +107,17 @@ describe("P4 workflow declarations reach their current consumers", () => {
     expect(step).toMatchObject({ on_stage_end: true, blocking: false });
     const refs = step.completion_evidence.filter((entry) => entry.kind === "stage_reflection");
     expect(refs).toHaveLength(1); // Deleting evidence cannot satisfy the contract.
-    const state = fixture(stage), outcome = sourceOutcome(state, stage);
+    const state = fixture(stage);
+    const attemptId = `consumer-${stage}-reflection-attempt`;
+    const priorFactRefs = new Set(state.task.listCanonicalQualityFactRefs());
     let calls = 0;
-    const result = await runStage(stage, state.context, async () => ({ facts: {} }), {}, {
-      stageReflection: { stageStatus: "failed", execute: async () => { calls++; return reflectionInput(state, stage, outcome); } },
+    const result = await runStage(stage, state.context, async () => ({ facts: {
+      ...(stage === "verify-code" ? { completion_subjects: { e2e_acceptance: { status: "missing", detail: "reflection fixture", evidence_refs: [] } } } : {}),
+    } }), {}, {
+      stageReflection: { stageStatus: "failed", attemptId, execute: async ({ currentBinding }) => { calls++; return reflectionInput(state, stage, currentBinding, priorFactRefs); } },
     });
     expect(calls).toBe(1);
+    expect(result.stage_reflection.error).toBeUndefined();
     expect(result.stage_reflection).toMatchObject({ status: "completed", persisted: true });
     const actualRef = result.stage_reflection.ref;
     const raw = state.task.readRecord(actualRef);
@@ -94,9 +128,9 @@ describe("P4 workflow declarations reach their current consumers", () => {
     expect(state.task.readRecord(declaredRef)).toBe(raw);
   }, 30000);
 
-  it.each(STAGES)("%s review binding cannot consume missing receipts or a deleted result", async (stage) => {
+  it.each(STAGES.slice(0, 3))("%s authoring review binding cannot consume missing receipts or a deleted result", async (stage) => {
     const { skills } = manifests(stage);
-    const dependencies = skills.filter((skill) => ["wh-review", "dsh-code-review"].includes(skill.name));
+    const dependencies = skills.filter((skill) => skill.name === "wh-review");
     expect(dependencies.length).toBeGreaterThan(0);
     const observed = new Set();
     const material = canonicalStageMaterials();
@@ -109,10 +143,7 @@ describe("P4 workflow declarations reach their current consumers", () => {
     try { handlerResult = await officialStageHandler(stage)(worker, { receipts: {} }); }
     catch (error) { expect(error).toBeInstanceOf(Error); handlerResult = { facts: {}, missing_items: [error.message] }; }
     for (const dependency of dependencies) {
-      expect(dependency.consumer.target).toBe({
-        "wh-review": "stage-handlers#safeReviewFacts",
-        "dsh-code-review": "stage-handlers#codeReviewFacts",
-      }[dependency.name]);
+      expect(dependency.consumer.target).toBe("stage-handlers#safeReviewFacts");
       const binding = validateSkillConsumerBinding({ dependency, identity, outcome: { status: "completed", trigger: true, executed: true } });
       const args = { worker, skillId: dependency.name, binding, handlerInput: { receipts: {} }, stageOutcome: { value: {} }, handlerResult };
       expect(validateSkillConsumerExecution(args).status).toBe("incomplete");

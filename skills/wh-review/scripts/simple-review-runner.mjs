@@ -20,26 +20,9 @@ import { compactVerifyCodeMaterials } from "./review-input-bounds.mjs";
 import { SHA256_HEX } from "../../../runtime/evidence/canonical-utils.mjs";
 import stageMaterials from "../../../runtime/review/stage-materials.json" with { type: "json" };
 
-// Managed review ownership lives in 3rd-review. WorkflowHub must keep polling
-// while the broker reports a live session.
-//
-// Bounded caller-side wait (user decision 2026-09-11, option B):
-// 3rd-review's v4 policy forbids *any* elapsed-time termination of an active
-// provider (lib/config.mjs:35/:47/:68 reject idle_timeout_ms, max_duration_ms,
-// deadline_ms; lib/health-runner.mjs:54 keeps PROCESS_STALLED diagnostic-only;
-// five tests enforce that). So a silent provider can legitimately never reach a
-// terminal state. Waiting forever is therefore not a bug fix — it is the
-// designed consequence.
-//
-// This bound stops *waiting*, NOT the work: the broker is deliberately NOT
-// cancelled, its operation keeps its own runtime (each review creates a fresh
-// runtime via `createdRuntime = !continuing`), OPERATION_ACTIVE is runtime
-// scoped, and orphans are reaped by `cleanup(root, ttl_hours)`. The caller
-// records a truthful `REVIEW_WAIT_EXCEEDED` -> "stalled" fact instead.
-//
-// It is a total wait bound, NOT a stall detector: D-030③ forbids WorkflowHub
-// from inventing its own wall-clock stall verdict.
-const DEFAULT_MANAGED_TERMINAL_WAIT_MS = 1_200_000;
+// Managed review ownership lives in 3rd-review. Keep polling the same managed
+// request until the broker reports a real terminal state. An explicit
+// AbortSignal requests broker cancellation; it does not stop terminal polling.
 // Each managed status poll spawns a fresh 3rd-review CLI process, so the poll
 // interval is a direct CPU/process-churn knob: at 1s two paired roles spawn
 // ~2 processes per second for the whole terminal wait. 5s keeps terminal
@@ -69,6 +52,11 @@ function reviewCancelledError(signal) {
 
 function throwIfReviewAborted(signal) {
   if (signal?.aborted) throw reviewCancelledError(signal);
+}
+
+function isReviewAbortError(error) {
+  return error?.name === "AbortError"
+    || ["ABORT_ERR", "CANCELLED", "PROCESS_CANCELLED", "REVIEW_CANCELLED"].includes(error?.code);
 }
 
 function waitForManagedPoll(delayMs, signal) {
@@ -132,7 +120,7 @@ const FOCUS = Object.freeze({
   "build-code/phase": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
   "build-code/integration": "Focus on the final current worktree implementation, the complete user flow, cross-Phase seams, real interfaces, state transitions, failure recovery, necessity, and actionable major or blocking risks. The host validates AC bindings separately; do not report missing or unknown task rows, receipts, snapshots, lineage, or evidence metadata unless it directly causes or conceals a user-visible behavior failure. Do not replay Phase history, cumulative diffs, or require a provider pass.",
   "build-code": "Check the submitted implementation material for correctness, real consumers, failure paths, tests, and unnecessary code.",
-  "verify-code": "Check only the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. Do not report T010 status, AC coverage, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
+  "verify-code": "Check the submitted implementation and test code for correctness, real consumer seams, lifecycle/concurrency and security risks, failure boundaries, and test strength. When authenticated-evidence.json is supplied for a reviewed_execution-bound request, use it only to compare code/test claims with recorded execution and identify false-green behavior. Do not report T010 status, AC coverage, evidence completeness, repository-wide gate status, review packet/material completeness, receipt or provenance availability, or release/close status as code findings; those are acceptance and quality facts outside this review.",
   build_prd: "Review only the complete PRD materials (decision log, PRD, task map, design facts, quality facts, and declared supporting facts) for coverage, task ownership, handoff, acceptance, and necessity. This is report-only advice for the non-formal build-prd surface; do not treat it as a formal stage, verdict, completion, or release authorization.",
   "mini_task.design": "Check that the mini-task remains small, complete, testable, and reversible.",
   "mini_task.implementation": "Check implementation correctness, user result, tests, and scope boundaries.",
@@ -571,84 +559,68 @@ function buildBundle(attachmentRoot, input) {
   };
 }
 
-async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials, minimumHeterologous, providerModels }, dependencies) {
+async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials }, dependencies) {
   const signal = assertReviewAbortSignal(dependencies.signal ?? null);
-  const maxWaitMs = dependencies.managedTerminalWaitMs ?? DEFAULT_MANAGED_TERMINAL_WAIT_MS;
   const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
-  if (maxWaitMs !== null && (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0)) {
-    throw new TypeError("managedTerminalWaitMs must be null or a non-negative safe integer");
-  }
   if (!Number.isSafeInteger(pollMs) || pollMs < 0) throw new TypeError("managedStatusPollMs must be a non-negative safe integer");
-  const startedAt = Date.now();
   let current = lifecycle;
   let lastObservation = lifecycle;
   const context = { requestId, hostProvider, providers, materials, runtimeId: lifecycle.runtime_id };
-  const consumeMemberFailure = (value) => {
-    const source = value?.providers;
-    if (!source || typeof source !== "object") return null;
-    const entries = Array.isArray(source)
-      ? source.map((item) => [item?.provider, item])
-      : Object.entries(source);
-    const members = entries
-      .filter(([provider, item]) => typeof provider === "string" && item && typeof item === "object" && !Array.isArray(item))
-      .map(([provider, item]) => ({ ...item, provider: item.provider ?? provider }));
-    const failed = members.filter((item) => item.status === "failed" || item.status === "stalled"
-      || (typeof item.error?.code === "string" && item.error.code.trim() !== ""));
-    if (failed.length === 0 || members.length === 0) return null;
-    const requiredModels = Number.isSafeInteger(minimumHeterologous) ? minimumHeterologous : 1;
-    const possibleModels = new Set(members
-      .filter((item) => !failed.includes(item) && item.status !== "cancelled")
-      .map((item) => providerModels?.[item.provider] ?? item.provider));
-    if (failed.length < members.length && possibleModels.size >= requiredModels) return null;
-    // This is a local projection of an explicit broker member failure, not a
-    // WorkflowHub wall-clock verdict. Keep the broker running and let the
-    // normal result mapper preserve the member's failure facts.
-    return {
-      ...value,
-      state: "terminal",
-      group: {
-        version: 4,
-        host_provider: hostProvider,
-        outcome: "unavailable",
-        providers: members,
-        round: Number.isSafeInteger(value.round) ? value.round : 0,
-        runtime_id: value.runtime_id,
-        selected_tier: Number.isSafeInteger(value.last_selected_tier) ? value.last_selected_tier : null,
-      },
-    };
-  };
-  // A zero-length test/override already uses its first status request as the
-  // boundary poll. Positive waits get one extra status request after the
-  // deadline is observed, preserving the existing immediate-zero semantics.
-  let boundaryRecheckDone = maxWaitMs === null || maxWaitMs === 0;
-  while (current.state !== "terminal") {
-    throwIfReviewAborted(signal);
+  let cancellation = null;
+  let cancellationRequested = false;
+  const cancelManagedReview = async () => {
+    cancellationRequested = true;
+    const error = reviewCancelledError(signal);
     try {
-      current = await client.statusManaged({ ...context, ...(signal === null ? {} : { signal }) });
-      lastObservation = current;
+      if (typeof client.cancelManaged !== "function") {
+        throw Object.assign(new Error("managed review client does not support broker cancellation"), {
+          code: "MANAGED_CANCEL_UNAVAILABLE",
+        });
+      }
+      await client.cancelManaged(context);
+    } catch (cancelError) {
+      const normalized = normalizeProviderError(cancelError);
+      error.message = `${error.message}; broker cancellation failed: ${normalized.code} (${normalized.message})`;
+      if (normalized.code) error.cause_code = normalized.code;
+    }
+    cancellation = normalizeProviderError(error);
+  };
+  const terminalResult = (value) => cancellation === null
+    ? value
+    : { ...value, review_cancellation: cancellation };
+  while (current.state !== "terminal") {
+    if (!cancellationRequested && signal?.aborted) await cancelManagedReview();
+    try {
+      const observation = await client.statusManaged({
+        ...context,
+        ...(!cancellationRequested && signal !== null ? { signal } : {}),
+      });
+      lastObservation = observation;
+      if (observation?.state !== "terminal"
+          && (observation?.request_id !== (lifecycle.request_id ?? requestId)
+            || observation?.runtime_id !== lifecycle.runtime_id
+            || observation?.material_id !== materials.materialId)) {
+        throw Object.assign(
+          new Error("3rd-review managed status identity differs from the active request"),
+          { code: "PROTOCOL_INCOMPATIBLE" },
+        );
+      }
+      current = observation;
     } catch (error) {
+      if (!cancellationRequested && signal?.aborted && isReviewAbortError(error)) continue;
       if (error && typeof error === "object") error.managed_observation = lastObservation;
       throw error;
     }
-    if (current.state === "terminal") return current;
-    const memberFailure = consumeMemberFailure(current);
-    if (memberFailure) return memberFailure;
-    if (maxWaitMs !== null && Date.now() - startedAt >= maxWaitMs) {
-      if (!boundaryRecheckDone) {
-        boundaryRecheckDone = true;
-        continue;
-      }
-      // Stop WAITING, not the work: do not call cancelManaged here. 3rd-review
-      // owns provider lifetime; killing it would be exactly the caller-side
-      // wall-clock termination that D-030③ forbids. Record the fact instead.
-      const error = new Error(`managed review did not reach a terminal state within ${maxWaitMs} ms; the broker was NOT cancelled and may still complete`);
-      error.code = "REVIEW_WAIT_EXCEEDED";
-      error.managed_observation = lastObservation;
+    if (current.state === "terminal") return terminalResult(current);
+    try {
+      await waitForManagedPoll(pollMs, cancellationRequested ? null : signal);
+    } catch (error) {
+      if (!cancellationRequested && signal?.aborted && isReviewAbortError(error)) continue;
+      if (error && typeof error === "object") error.managed_observation = lastObservation;
       throw error;
     }
-    await waitForManagedPoll(pollMs, signal);
   }
-  return current;
+  return terminalResult(current);
 }
 
 function materialIdForInput(input) {
@@ -1447,6 +1419,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     const hostProvider = input.host_provider ?? input.hostProvider;
     const prompt = promptForPair(pair);
     let group;
+    let reviewCancellation = null;
     if (typeof client.startManaged === "function") {
       const requestId = managedRequestId(input, {
         materialId: bundle.materialId,
@@ -1468,15 +1441,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         });
         if (lifecycle.state !== "terminal") {
           const consumeTerminal = dependencies.onManagedTerminal
-            ?? ((value) => waitForManagedTerminal({
-              ...value,
-              minimumHeterologous: minimum,
-              providerModels: selectedModels,
-            }, dependencies));
+            ?? ((value) => waitForManagedTerminal(value, dependencies));
           const terminal = await consumeTerminal({
             lifecycle, client, requestId, hostProvider, providers: dispatchProviders,
             materials: bundle, prompt, reviewMode: route.mode,
           });
+          reviewCancellation = terminal?.review_cancellation ?? null;
           lifecycle = terminal?.state ? terminal : { ...lifecycle, state: "terminal", group: terminal };
         }
         if (lifecycle?.state !== "terminal") throw Object.assign(new Error("managed review terminal event is invalid"), { code: "PROTOCOL_INCOMPATIBLE" });
@@ -1534,7 +1504,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           // classification when it reported one.
           dispatch_state: observation?.dispatch_state ?? (lifecycle ? "dispatched" : "blocked_before_dispatch"),
           request_id: requestId,
-          runtime_id: observation?.runtime_id ?? lifecycle?.runtime_id ?? null,
+          runtime_id: lifecycle?.runtime_id ?? observation?.runtime_id ?? null,
           minimum_heterologous: minimum,
           provider_selection: providerSelectionOutput(providerSelection),
           provider_results: providerResults,
@@ -1728,7 +1698,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     const available = semanticModels.size >= minimum;
     const observedMaterialId = brokerMaterialIds[0] ?? bundle.materialId;
     const baseResult = {
-      status: available ? "available" : "unavailable",
+      status: reviewCancellation !== null ? "unavailable" : available ? "available" : "unavailable",
       stage: input.stage,
       ...reviewSubjectFields(input),
       review_track: reviewTrack,
@@ -1739,6 +1709,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       provider_attempts: dispatchProviders.length,
       runtime_id: group.runtimeId,
       outcome: group.outcome,
+      ...authenticatedEvidenceFields(input),
       ...(group.transport_timeout ? { transport_timeout: group.transport_timeout } : {}),
       ...(Object.hasOwn(group, "initial_result_ref") ? { initial_result_ref: group.initial_result_ref } : {}),
       ...(group.publication ? { publication: group.publication } : {}),
@@ -1749,7 +1720,9 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       ...((materialDiscardedFacts.length > 0 || discardedFacts.length > 0)
         ? { discarded_facts: [...materialDiscardedFacts, ...discardedFacts] }
         : {}),
-      ...(available ? {} : { error: unavailableReason(providers) }),
+      ...(reviewCancellation !== null
+        ? { error: reviewCancellation }
+        : available ? {} : { error: unavailableReason(providers) }),
     };
     if (!Array.isArray(group.supplements) || group.supplements.length === 0) {
       return { ...baseResult, ...(Array.isArray(group.supplements) ? { supplements: group.supplements } : {}) };

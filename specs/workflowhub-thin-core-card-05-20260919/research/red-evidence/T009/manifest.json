@@ -1,0 +1,14 @@
+{
+  "schema_version": "card05-red-command.v1",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "task": "T009",
+  "command": "npx vitest run tests/contract/review-public-entrypoints.test.mjs -t ORACLE-P5-UNAVAILABLE",
+  "exit_code": 1,
+  "target_failure": "ORACLE-P5-UNAVAILABLE: official run hard-threw on zero-provider REVIEW_HISTORY_UNAVAILABLE attempt",
+  "channels": {
+    "stdout": "stdout.log",
+    "stderr": "stderr.log"
+  },
+  "source_kind": "actual-scoped-reexecution",
+  "recorded_at": "2026-09-22T06:59:50.663Z"
+}

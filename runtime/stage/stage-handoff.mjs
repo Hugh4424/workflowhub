@@ -180,8 +180,11 @@ function deriveNextAction(stage, stageStatus, materials = null) {
   const post = materialNamesFor(materials).includes("phases/index.md");
   const materialPhrase = post ? "当前 cohort 材料集合（spec.md、phases/index.md 和全部物理 Phase）" : "当前四份材料";
   const boundaryPhrase = post ? "对应 Phase 文件" : "plan.md / tasks.md";
-  if (stageStatus !== "completed") {
+  if (stageStatus === "in_progress") {
     return `继续处理当前 \`${stage}\`：按本 handoff 的非完成行与 run 结果修复后重跑本阶段。`;
+  }
+  if (stageStatus !== "completed") {
+    return `当前 \`${stage}\` 的完成状态为 \`${stageStatus}\`；不要据此进入下一阶段，先读取现有正式事实并确认当前阶段是否完成。`;
   }
   if (next === null) {
     return `\`${stage}\` 不在四阶段作者链条上：按四份材料与正式质量原件确认后续动作。`;
@@ -318,7 +321,7 @@ export function renderStageHandoff({
   snapshotTree,
   materialScopeRevision,
   reflectionStatus,
-  stageStatus = "completed",
+  stageStatus = "unknown",
   observation = null,
   diagnostic = null,
   sourceRefs = [],
@@ -483,7 +486,7 @@ export function publishStageHandoff({
   snapshotTree,
   materialScopeRevision,
   reflectionStatus,
-  stageStatus = "completed",
+  stageStatus = "unknown",
   observation = null,
   diagnostic = null,
   stageOutcome = null,

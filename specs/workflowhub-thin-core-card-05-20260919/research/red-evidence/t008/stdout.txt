@@ -1,0 +1,73 @@
+✔ legacy elapsed-time configuration is rejected (1.682583ms)
+✔ a provider deadline cannot reintroduce a second execution timer (0.465792ms)
+✔ config keeps usable tiers when dormant providers or duplicate routes exist (0.618166ms)
+✖ direction flow material without review_flow fails before provider dispatch (95.498667ms)
+✔ default route runs every heterologous provider in its first tier (198.754459ms)
+✔ default route dispatches every provider in a tier concurrently (260.944417ms)
+✔ continuation uses only each provider's own native session (353.857417ms)
+✔ falls through only after an entire tier has no success (106.147125ms)
+✔ falls through after every provider in a tier fails (118.045ms)
+✔ reports missing environment authentication without running the provider (15.438709ms)
+✔ bounds private raw capture and preserves an explicit output-limit failure (73.861083ms)
+✔ persists OpenCode terminal failure classification and observed session identity (76.898958ms)
+✔ recovers an OpenCode no-terminal result in the same native session (111.49425ms)
+✔ fails closed when OpenCode terminal recovery changes its session (119.120416ms)
+✔ accepts one fenced JSON object from OpenCode terminal recovery (111.117958ms)
+✔ keeps terminal recovery evidence when the recovered output still leaks a private path (156.364125ms)
+✔ preserves the original OpenCode no-terminal error when recovery fails (111.99675ms)
+✔ provider terminal recovery stays within its scoped recovery budget (209.6505ms)
+✔ bounded terminal recovery fails closed when the resumed provider never terminates (131.518542ms)
+✔ does not recover an OpenCode terminal failure without a session id (50.887833ms)
+✔ continuation excludes providers removed from the current config (222.656125ms)
+✔ cleanup removes expired inactive state (0.758167ms)
+✔ cancel persists an independent cancellation marker (159.290583ms)
+✔ cancelling a tier does not fall through to the next tier (137.952792ms)
+✔ runtime keeps process liveness and output progress as separate timestamps (227.685833ms)
+✔ providers receive isolated workspaces and independent review inputs (106.043875ms)
+✔ cleanup reaps an orphaned broker process and records ORPHANED_BROKER (66.66575ms)
+✔ cleanup does not reap an active provider only because its heartbeat is stale (27.233375ms)
+✔ detached guardian reaps only after its owner identity is confirmed dead (81.455208ms)
+✔ detached guardian stays active until a later owner death (1085.200875ms)
+✔ guardian records a reused worker identity as orphaned without signalling that PID (79.104417ms)
+✔ a reused worker PID is never signalled by cleanup or cancel (50.719709ms)
+✔ owner PID reuse is distinguished by its recorded process start identity (62.00225ms)
+✔ broker updates last progress for parsed stream output (121.690541ms)
+✔ Kimi records stream progress and APIEmptyResponseError retries (89.610167ms)
+✔ a dead health probe does not terminate an otherwise live Kimi process (101.638625ms)
+✔ managed start survives a SIGTERM caller and reconnects through public status (333.581583ms)
+✔ managed public status follows the current operation from starting through running to terminal (139.281209ms)
+✔ CLI exposes public managed start, status, and provider-free cancel (245.743333ms)
+✔ managed start is request-id idempotent and rejects a changed immutable binding (322.601042ms)
+✔ managed start reconnects when an equivalent sealed packet has a new staging source (334.136667ms)
+✔ expired managed runtime removes its request-id binding with the runtime (590.590417ms)
+✔ managed cancel is the only provider stop path and publishes a terminal cancelled group (153.920875ms)
+✔ lost manager publishes SESSION_MANAGER_LOST without signalling a healthy provider, then explicit cancel stops it (150.501375ms)
+✔ fast managed completion preserves its terminal group (547.548292ms)
+✔ managed public terminal group keeps a polluted provider isolated and private paths absent (242.363208ms)
+✔ managed terminal status rejects an unbound or expanded public group (833.201292ms)
+✔ managed continuation creates one distinct non-overlapping operation (272.124042ms)
+✔ concurrent distinct managed continuation starts atomically admit one operation (640.631708ms)
+ℹ tests 49
+ℹ suites 0
+ℹ pass 48
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4972.782791
+
+✖ failing tests:
+
+test at test/broker.test.mjs:56:1
+✖ direction flow material without review_flow fails before provider dispatch (95.498667ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///Users/Hugh/Hugh/Project/3rd-review-card05-broker-red/test/broker.test.mjs:80:3)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { code: 'MATERIAL_INCOMPLETE' },
+    operator: 'rejects',
+    diff: 'simple'
+  }

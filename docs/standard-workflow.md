@@ -18,9 +18,10 @@
 2. 每个声明的 step 都要留下真实的最小结果：完成、跳过（有真实原因）、未完成或不可用。
    manifest 只是预期拓扑，不能代替实际执行；缺步、重复、乱序、旧快照和依赖未完成都要
    真实暴露。
-3. `make-decision`、`build-spec`（仅 pre）、`build-plan`、`build-code` 各自在本 stage 收尾调用
-   `spec-analyze`。它是这四个 stage 的唯一 stage-end 语义检查和质量事实契约 owner；
-   `verify-code` 不调用它，改由 `dsh-code-review` 做当前实现的代码审查。现有 stage
+3. `make-decision`、`build-spec`（仅 pre）、`build-code`，以及 pre cohort 的 `build-plan`，
+   各自在本 stage 收尾调用 `spec-analyze` 执行既有语义检查和质量事实契约。post cohort 的
+   `build-plan` 也调用 `spec-analyze`，但只报告材料结构；语义判断由现有 merged review 和
+   finding dispositions 承担。`verify-code` 不调用它，以一次 OCR worktree 审查核对当前实现。现有 stage
    publication 是唯一写入路径，原子写入 `quality/facts` 与 acceptance evidence。
    `spec-analyze` 不直接改当前材料，不创建第二 store、投影或门禁；结果只是现有事实和摘要。
    缺失或 `unavailable` 不等于通过，也不能阻止同 task 修复。
@@ -79,10 +80,10 @@ host、doctor、status、monitor、run、review、verify、confirm、authorize�
 
 ### review、测试和成本
 
-`wh-review` 是唯一的异源审查入口。审查 packet 只包含当前主题和真实证据；provider 的
-等待、死亡、坏输出、transport failure 和同源降级都保留原始事实，不能伪造空 findings 或
-pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设置六分钟/两分钟终止
-边界；需要恢复时按公共合同重新请求，仍不可用就明确记录 `unavailable`/`SAME_SOURCE`。
+代码审查使用 OCR delegation：`build-code` 每个 Phase 一次，`verify-code` 在最终 worktree
+一次。`wh-review` 保留给 make-decision、build-spec、build-plan 等其它审查面。各自的
+provider 身份、终态、findings 与失败原样记录；无真实审查结果时保留 `unavailable`，
+不把空 findings 当作补救结果。
 
 没有真实主题变化，不重复全文读取、测试、review 或 analyzer。材料、风险或有效 finding
 实际变化时，只重跑受影响的检查；build-code 的最终 aggregate 按计划在全部 phase 完成后
@@ -92,8 +93,10 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 
 ### stage 结束
 
-`make-decision`、`build-spec`、`build-plan`、`build-code` 在各自 stage 结束前唯一调用对应的
-`spec-analyze` profile；`verify-code` 改用 `dsh-code-review` 和一次异源代码 review。并把
+`make-decision`、`build-spec`、`build-code` 以及 pre cohort 的 `build-plan` 在各自 stage
+结束前调用对应的 `spec-analyze` 语义检查 profile；post cohort 的 `build-plan` 只调用结构报告，
+语义责任由现有 merged review 和 finding dispositions 承担。`verify-code` 对最终 worktree
+执行一次 OCR 独立代码审查，并把
 与本 stage 职责对应的摘要交给用户：
 
 1. 当前阶段做了什么；
@@ -103,8 +106,9 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 5. 剩余风险、未决和延期；
 6. 下游可以直接消费什么、不能自行猜什么。
 
-发现的 finding 必须先在当前 stage 修复，再重跑受影响的 `spec-analyze` profile；不能静默
-交给下游。六项摘要和 `unavailable`/`incomplete` 事实随当前阶段事实交接，不新建
+发现的 finding 由当前 stage 逐条处置；实际修复后只重跑受影响的检查，使用
+`spec-analyze` 的 stage 也仅重跑受影响的 profile。六项摘要和
+`unavailable`/`incomplete` 事实随当前阶段事实交接，不新建
 store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实。
 
 每个 stage 结束时，当前主会话必须按 `stage-reflection` 技能先产出 judgment JSON，再调用实际公共入口 `run --action=reflect`。判断 JSON 使用六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；每个区块条目带真实 `evidence_refs` 与 `confidence`。已检查但无观察写 `none_observed`，无法判断写 `unknown` 并给 `unknown_reason`，确实不适用写 `not_applicable` 并说明原因，不能静默省略。v2 还保留 `status_matrix`、`identity`、`source_completeness` 三件套；它们是事实投影，不是质量结论。
@@ -236,7 +240,7 @@ post 读取已有 `spec.md` 与 `phases/P<n>.md`、`phases/index.md`（如有）
 post 按 `workflows/build-plan/steps.json` 的 13 步执行：读取当前材料 → 条件研究 →
 规格澄清 → `spec-specify` 写产品规格 → 条件 UI readiness → `spec-plan` 在同一
 `spec.md` 写全局工程方案并生成每个 `phases/P<n>.md` → 测试系统蓝图 →
-测试路由 → 一次合并独立审查 → 主会话处置 findings → 最终 `spec-analyze` →
+测试路由 → 一次合并独立审查 → 主会话处置 findings → 最终结构型 `spec-analyze` 报告 →
 发布并取得真实人工确认 → 阶段反思。`spec-tasks` 从各 Phase 头部生成
 `phases/index.md`，只列路径、锚点、写集、依赖和 consumer，不复制正文或执行状态。
 pre/history 继续按原 `build-spec → build-plan` 路线消费旧四材料，不迁移旧文件。
@@ -252,9 +256,10 @@ pre/history 核心产物仍是 `plan.md`、`tasks.md`。每个行为 Phase 必�
 
 ### 专业质量
 
-本阶段的专业质量由测试系统蓝图、工程审查、测试路由、计划审查和当前 stage 的
-`spec-analyze` 共同形成；它们必须把每个行为风险落到可执行任务和真实 oracle，不能用任务
-数量、文件列表或测试命令字符串代替设计质量。
+post 阶段的专业质量由测试系统蓝图、工程审查、测试路由、计划审查、现有合并审查及其
+finding dispositions 共同形成；post build-plan 的 `spec-analyze` 只检查材料结构，不负责
+需求语义判断。pre/history build-plan 保持既有 `spec-analyze` 语义检查合同。每个行为风险都必须
+落到可执行任务和真实 oracle，不能用任务数量、文件列表或测试命令字符串代替设计质量。
 
 ### 下游交接
 
@@ -278,7 +283,7 @@ build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
 5. `invoke-concrete-testing-skill`：直接调用适用的 backend、frontend 或 fullstack testing。
 6. `run-tests`：按实际范围跑 focused test，保存命令、退出码、oracle、快照和限制。
 7. `scan-diff`：反向检查 FR、AC、状态、错误/取消/恢复、并发和接口边界。
-8. `review-change`：对当前 phase 做一次独立 advice review；健康 provider 不被手动杀掉。
+8. `review-change`：对当前 Phase diff 发起一次 OCR 独立审查，记录真实结果或 unavailable。
 9. `analyze-review-findings`：逐条记录 fixed、rejected_invalid、accepted_risk 或 needs_human。
 10. `capture-implementation`：保存实现、测试、AC trace、review 和阶段事实。
 11. `authenticate-current-task-completion`：确认 task facts 绑定当前 snapshot，不把旧结果冒充
@@ -287,13 +292,12 @@ build-code 按当前 cohort 材料中的 Phase 执行：post 读 `spec.md`、
 每个 phase 都重复以上循环，但不重复无关的全量测试或 review。有效问题在当前 phase 修复，
 然后只重跑受影响检查。所有 implementation phase 完成后才进入最终步骤：
 
-1. `run-final-aggregate-and-ac-trace`：在同一 current snapshot 按计划运行一次完整 aggregate，
+1. `run-final-aggregate-and-ac-trace`：在同一 current snapshot 按计划运行一次最终 aggregate，
     逐 AC 记录 pass、fail、unknown、deferred 或 not_applicable。
-2. `final-integration-review`：审查跨 phase seam、完整实现和最终证据；无可信终态就保持
-    unavailable/incomplete。
-3. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
+2. `stage-end-spec-analyze`：检查原始需求、当前 cohort 材料、实现、测试、AC、review 和真实用户
     结果；当前 stage 修复实现或事实缺口。
-4. `publish-code-result`：交接实现和完整 build-code 摘要。
+3. `publish-code-result`：交接实现和完整 build-code 摘要。已有 integration review 原件作为
+    只读历史事实保留，不作为当前额外审查或完成证明。
 
 ### 产物、完成与失败边界
 
@@ -304,9 +308,9 @@ finding 必须原样保留。它们是质量事实，不得伪造，但也不应
 
 ### 专业质量
 
-本阶段的专业质量由实际 changed files 路由、具体测试技能、scan-diff、每个 phase 的独立
-`wh-review`、finding 处置、当前快照绑定和最终 integration review 共同形成；它们检查真实
-行为、失败/恢复边界、跨 phase seam 和用户结果，不把绿色测试或空 findings 单独当成交付证明。
+本阶段的专业质量由实际 changed files 路由、具体测试技能、scan-diff、每个 Phase 的一次
+OCR 独立审查、finding 处置、当前快照绑定、最终 aggregate 和逐 AC 结果共同形成。跨 Phase
+接口在实际测试、AC 与最终 worktree 审查中核对；绿色测试或空 findings 都不能单独证明交付。
 
 ### 下游交接
 
@@ -318,22 +322,23 @@ push、merge、cleanup 不在 build-code 中自动执行。
 
 ### 标准输入
 
-当前代码 diff、真实入口和 consumer、实现评估、相关测试上下文、失败/恢复边界和开放代码风险。
-当前 cohort 材料只作为理解意图的背景，不在本阶段重新验收。
+当前 worktree diff、完整 AC、真实入口和 consumer、实现评估、相关测试上下文、
+失败/恢复边界和开放代码风险。当前 cohort 材料用于理解意图；逐 AC 的实际结果由
+build-code 的最终 aggregate 与验收事实承载，verify-code 核对代码风险，不重跑聚合测试。
 
 ### 标准步骤与最小结果
 
-1. `read-current-materials-and-code`：读取代码审查 skill、当前改动和上游材料背景。
-2. `architect-code-review`：沿真实入口、consumer、接口、状态、生命周期、安全和失败边界做一次架构代码审查。
-3. `main-agent-repair-batch-1`：修复影响代码交付的有效 finding。
-4. `inspect-real-entry-and-tests`：检查真实入口和相关测试强度，只跑必要的受影响检查。
-5. `run-one-independent-code-review`：使用 `dsh-code-review` 和一次异源 provider 只审查当前代码 findings。
-6. `main-agent-repair-batch-2`：处置这一轮异源代码 findings，不循环审查。
-7. `run-final-code-check-and-handoff`：做必要的最终代码检查并交接剩余代码风险。
-8. `publish-code-review-fact`：写入当前代码 review 质量事实。
-9. `handoff-code-review`：用大白话交接代码入口、consumer、修复和风险。
-10. `finalize-code-review`：自动记录绑定当前 task、材料和快照的代码审查结论；不再等待重复人工确认，不补材料、不补 AC、不补证据树。
-11. `publish-verification-result`：汇报代码审查结果、质量缺口和剩余风险并在 close 前停下。
+1. `read-current-materials-and-code`：读取当前改动、完整 AC 和上游材料背景，确定真实入口、consumer 与风险。
+2. `ocr-code-review`：以当前 worktree diff、完整 AC、真实执行上下文发起一次终末 OCR 独立审查；记录 findings 或 unavailable。
+3. `publish-code-review-fact`：消费该次 canonical result 或 unavailable attempt，发布当前代码质量事实。
+4. `main-agent-repair-batch-1`：逐条判断有效 finding，并在同一任务修复。
+5. `inspect-real-entry-and-tests`：沿真实入口、consumer、接口、生命周期、安全和失败边界检查代码与测试强度。
+6. `targeted-recheck`：仅对实际修复及受影响行为做必要的定向复验。
+7. `record-finding-dispositions`：记录每条 finding 的处置和实际复验结果。
+8. `run-final-code-check-and-handoff`：核对当前代码风险、逐项实际结果和剩余缺口。
+9. `handoff-code-review`：交接代码入口、consumer、修复、审查事实和风险。
+10. `finalize-code-review`：读回同一次 review 及处置，按当前 task、材料和快照记录结论。
+11. `publish-verification-result`：汇报代码质量和验收限制，在 close 前停下。
 
 ### 产物、完成与失败边界
 
@@ -344,8 +349,9 @@ push、merge、cleanup 不在 build-code 中自动执行。
 
 ### 专业质量
 
-本阶段的专业质量由架构师代码审查、真实 consumer/lifecycle/security 检查、一次异源代码复核
-和最终收尾检查形成。上游材料问题回对应 stage 处理；verify-code 不重新构造它们的证据。
+本阶段的专业质量由一次终末 OCR worktree 审查、真实 consumer/lifecycle/security 检查、
+finding 处置和必要的定向复验形成。Architect-Code-Review 只供显式独立诊断或历史结果解读；
+已有 integration review 事实只读保留。上游材料问题回对应 stage 处理。
 
 ### 下游交接和停止点
 

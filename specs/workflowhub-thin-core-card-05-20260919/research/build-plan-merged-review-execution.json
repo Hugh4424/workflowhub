@@ -1,0 +1,82 @@
+{
+  "schema_version": "card05-build-plan-review-execution.v1",
+  "stage": "build-plan",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "command": "node tools/cli/stage-runtime.mjs review --action=record --stage=build-plan --project=workflowhub --task=workflowhub-thin-core-card-05-20260919 --input=/tmp/card05-build-plan-review-input.json",
+  "input_sha256": "67ffc77c902245897d2f838c4f93622418bdc7c12edfba5ab2f5991af109d7ed",
+  "exit_code": 0,
+  "stdout": {
+    "status": "recorded",
+    "dispatch_state": "dispatched",
+    "attempt_ref": "quality/reviews/attempts/6a3dde2f-8b13-5a0c-a661-c28b4a4fed3b/attempt.json",
+    "result_ref": "quality/reviews/results/build-plan-simple-6a3dde2f-8b13-5a0c-a661-c28b4a4fed3b.json",
+    "report_ref": "quality/reviews/reports/build-plan-simple-6a3dde2f-8b13-5a0c-a661-c28b4a4fed3b.md",
+    "retry": {
+      "requested": true,
+      "admitted": true,
+      "basis": "material_changed"
+    }
+  },
+  "canonical_records": [
+    {
+      "ref": "quality/reviews/attempts/18480263-0962-528e-a47c-2e2d4e9c5e8f/attempt.json",
+      "sha256": "7527ad33830064f7ef957b112044c92fae9119b7eb97e3098d0d93dc1e39a9a5"
+    },
+    {
+      "ref": "quality/reviews/attempts/6a3dde2f-8b13-5a0c-a661-c28b4a4fed3b/attempt.json",
+      "sha256": "c862aa6e486b84fdc54eeb80b94d2c9f8b5d5a4b6a141dbeaad6b22dc99a3189"
+    },
+    {
+      "ref": "quality/reviews/results/build-plan-simple-6a3dde2f-8b13-5a0c-a661-c28b4a4fed3b.json",
+      "sha256": "8573ebc79a5aa429ef8b23ebae944bc95aaac8822d5a499acce9ff05507ff043"
+    },
+    {
+      "ref": "quality/reviews/reports/build-plan-simple-6a3dde2f-8b13-5a0c-a661-c28b4a4fed3b.md",
+      "sha256": "3e03a350490c67e65ffe3c65444a13a16657c3fe9796da11a92cf12e37de01e6"
+    }
+  ],
+  "provider_attempts": [
+    {
+      "provider": "kimi/coding",
+      "status": "completed",
+      "elapsed_ms": 333531,
+      "usage": null
+    },
+    {
+      "provider": "pi/v4flash",
+      "status": "completed",
+      "elapsed_ms": 124975,
+      "usage": {
+        "input": 5482,
+        "output": 26772,
+        "cacheRead": 25600,
+        "cacheWrite": 0,
+        "reasoning": 24987,
+        "totalTokens": 57854,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "provider": "antigravity/flash",
+      "status": "completed",
+      "elapsed_ms": 176279,
+      "usage": null
+    },
+    {
+      "provider": "codex/luna",
+      "status": "completed",
+      "elapsed_ms": 566803,
+      "usage": null
+    }
+  ],
+  "limits": [
+    "First request returned unavailable before dispatch with provider_attempts=[]; its CLI exit was 0 and remains immutable.",
+    "Current result is independent advice on the frozen packet; subsequent material repairs are disposed without another provider review."
+  ]
+}

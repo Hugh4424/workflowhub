@@ -57,4 +57,23 @@ describe("WorkflowHub Stage Agent stop hook", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("uses the renamed Architect skill in the verify-code template", () => {
+    const root = mkdtempSync(join(tmpdir(), "workflowhub-verify-template-"));
+    try {
+      const outputPath = join(root, "verify-outcome-template.json");
+      const result = spawnSync(process.execPath, [protocol, "write-template", "--output", outputPath, "--runtime-root", process.cwd(), "--stage", "verify-code"], {
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      const template = JSON.parse(readFileSync(outputPath, "utf8"));
+      expect(template.code_review).toMatchObject({
+        stage: "verify-code",
+        step_slug: "finalize-code-review",
+        skill_id: "architect-code-review",
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

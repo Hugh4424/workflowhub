@@ -1,0 +1,1 @@
+npx vitest run tests/contract/ocr-delegation-route.test.mjs -t ORACLE-P3-CANDIDATE

@@ -12,9 +12,10 @@ import { validateCanonicalImplementationReceipt, validateCanonicalTestReceipt } 
 import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
-import { validatePhaseCompletion } from "../runtime/task/task-kernel-implementation.mjs";
+import { validatePhaseCompletion, validateStageFacts } from "../runtime/task/task-kernel-implementation.mjs";
 import { openAcceptedWorkspace } from "../runtime/task/workspace.mjs";
 import { validateBuildCodePhaseEvidence } from "../runtime/stage/stage-content-contracts.mjs";
+import { certifyBuildCodeQualityBasis } from "../runtime/stage/stage-handlers.mjs";
 import { runCapture as runBuildCodeCapture } from "../workflows/build-code/capture.mjs";
 import { runCapture as runVerifyCodeCapture } from "../workflows/verify-code/capture.mjs";
 
@@ -52,6 +53,60 @@ describe("official component receipt authority", () => {
       formal_record_status: { status: "unavailable", reason: "fixture has no Phase history" },
     };
     expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it("accepts current completion without integration review while validating legacy review bindings", () => {
+    const current = {
+      status: "completed",
+      evidence_ref: "evidence/phase-result.json",
+      evidence_hash: "a".repeat(64),
+      formal_record_status: { status: "unavailable", reason: "Phase history unavailable" },
+    };
+    expect(validatePhaseCompletion(current, "build-code facts.phase_completion", { allowLegacyBoolean: false })).toBe(current);
+    expect(() => validatePhaseCompletion({
+      ...current,
+      integration_review: { ref: "reviews/results/old.json", sha256: "invalid" },
+    })).toThrow(/integration_review\.sha256/);
+  });
+
+  it("uses a Phase review for build-code quality and does not credit an integration review", () => {
+    const basis = {
+      changedFiles: ["runtime/feature.mjs"],
+      plannedChanges: ["runtime/feature.mjs"],
+      tests: { exit_code: 0 },
+      expectedAc: ["AC-1"], coveredAc: ["AC-1"],
+      formalRecordStatus: { status: "unavailable", reason: "Phase history unavailable" },
+    };
+    const phase = certifyBuildCodeQualityBasis({ ...basis, review: {
+      status: "recorded", review_scope: "phase", subject_kind: "phase", phase_id: "P2",
+      result_ref: "quality/reviews/results/phase.json", result_hash: "b".repeat(64),
+    } });
+    expect(phase.quality_gaps).toEqual([]);
+    expect(phase.review).toMatchObject({ ref: "quality/reviews/results/phase.json", status: "recorded" });
+    const oldIntegration = certifyBuildCodeQualityBasis({ ...basis, review: {
+      status: "recorded", review_scope: "integration", subject_kind: "worktree", phase_id: null,
+      result_ref: "quality/reviews/results/integration.json", result_hash: "c".repeat(64),
+    } });
+    expect(oldIntegration.quality_gaps).toContain("authenticated Phase review fact is unavailable");
+    expect(certifyBuildCodeQualityBasis({ ...basis }).quality_gaps)
+      .toContain("authenticated Phase review fact is unavailable");
+  });
+
+  it("publishes an honest unavailable build-code review when no receipt was supplied", () => {
+    const facts = {
+      changed: [],
+      tests: {
+        command: "node --test", exit_code: 0, command_hash: "a".repeat(64),
+        snapshot_head: "b".repeat(40), snapshot_tree: "c".repeat(40), snapshot_commit: "d".repeat(40),
+        output_ref: "quality/tests/output/test.txt", output_hash: "e".repeat(64),
+      },
+      review: { status: "unavailable", snapshot_tree: "c".repeat(40), error: { code: "REVIEW_UNAVAILABLE", message: "no review receipt" } },
+      phase_completion: {
+        status: "completed", evidence_ref: "quality/evidence/phase.json", evidence_hash: "f".repeat(64),
+      },
+      acceptance_coverage: {},
+    };
+    expect(validateStageFacts("build-code", facts)).toBe(facts);
   });
 
   it("rejects caller boolean phase completion for current publication", () => {

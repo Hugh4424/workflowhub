@@ -528,7 +528,8 @@ export function publishStageReviewFact({ trusted, stage, reviewTrack = null, rev
     stage,
     kind: "review",
     status: result.status === "available" ? "recorded" : "unavailable",
-    // verify-code's canonical code_review belongs to dsh-code-review. Keep
+    // verify-code's canonical code_review belongs to Architect-Code-Review; its
+    // authenticated provider source remains dsh-code-review. Keep
     // this broker result under the existing advisory subject so it cannot
     // compete with the completion fact while its provenance remains intact.
     subject: "independent_review",

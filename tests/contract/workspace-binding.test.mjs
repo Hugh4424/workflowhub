@@ -70,6 +70,16 @@ describe("authenticated current Workspace binding", () => {
     expect(artifacts.reference("tasks.md")).toBe("specs/demo-workspace-binding/tasks.md");
   });
 
+  it("builds canonical task references from Windows-style roots", () => {
+    const receiver = {
+      root: String.raw`C:\workflowhub\specs\demo-workspace-binding`,
+      path() {},
+    };
+
+    expect(ArtifactDir.prototype.reference.call(receiver, "tasks.md"))
+      .toBe("specs/demo-workspace-binding/tasks.md");
+  });
+
   it("keeps old manifests readable when the target path is the trusted task worktree", () => {
     const state = fixture({ explicit: false });
 

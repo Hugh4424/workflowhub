@@ -1,0 +1,14 @@
+{
+  "schema_version": "card05-red-command.v1",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "task": "T003",
+  "command": "npx vitest run tests/review/review-record-route.test.mjs -t 'P2 prewritten review union and anchor oracles'",
+  "exit_code": 1,
+  "target_failure": "ORACLE-P2-UNION at line 140 returned null result_ref; ORACLE-P2-ANCHOR at line 168 changed false to true",
+  "channels": {
+    "stdout": "stdout.log",
+    "stderr": "stderr.log"
+  },
+  "source_kind": "actual-scoped-reexecution",
+  "recorded_at": "2026-09-22T06:59:50.663Z"
+}

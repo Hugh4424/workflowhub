@@ -147,7 +147,36 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     ? null
     : validateExistingWorkspaceBinding({ targetRepoRoot: target, workspaceRoot: values["workspace-root"] });
   const inputs = values.inputs ? JSON.parse(readFileSync(values.inputs, "utf8")) : {};
-  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs) || Object.keys(inputs).some((key) => !["decision", "spec", "build_plan"].includes(key)) || Object.values(inputs).some((ref) => typeof ref !== "string" || !isAbsolute(ref))) throw new TypeError("inputs must contain only absolute decision/spec/build_plan accepted refs");
+  const rawRequirementRecords = inputs?.raw_requirement?.records;
+  const safeTaskEvidenceRef = (ref) => typeof ref === "string"
+    && ref.startsWith("quality/evidence/")
+    && ref.slice("quality/evidence/".length).split("/").every((segment) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment));
+  const safeRawRequirementRecordRef = (ref) => safeTaskEvidenceRef(ref)
+    && ref.startsWith("quality/evidence/raw-requirements/");
+  const validRawRequirementRecord = (record) => record && typeof record === "object" && !Array.isArray(record)
+    && Object.keys(record).every((key) => ["ref", "sha256", "content"].includes(key))
+    && safeRawRequirementRecordRef(record.ref)
+    && SHA256.test(record.sha256 ?? "")
+    && typeof record.content === "string"
+    && sha256(record.content) === record.sha256;
+  const validRawRequirement = (value) => value && typeof value === "object" && !Array.isArray(value)
+    && safeTaskEvidenceRef(value.ref)
+    && SHA256.test(value.sha256 ?? "")
+    && Object.keys(value).every((key) => ["ref", "sha256", "records"].includes(key))
+    && (value.records === undefined || Array.isArray(value.records)
+      && value.records.length > 0
+      && value.records.every(validRawRequirementRecord)
+      && new Set(value.records.map((record) => record.ref)).size === value.records.length
+      && value.records.some((record) => record.ref === value.ref && record.sha256 === value.sha256));
+  const invalidInputs = !inputs || typeof inputs !== "object" || Array.isArray(inputs)
+    || Object.keys(inputs).some((key) => !["decision", "spec", "build_plan", "raw_requirement"].includes(key))
+    || Object.entries(inputs).some(([key, value]) => key === "raw_requirement"
+      ? !validRawRequirement(value)
+      : typeof value !== "string" || !isAbsolute(value));
+  if (invalidInputs) throw new TypeError("inputs must contain absolute decision/spec/build_plan refs or a task-relative raw_requirement {ref,sha256,records?}; raw requirement records need safe evidence refs and matching source-byte hashes");
+  const manifestInputs = inputs.raw_requirement
+    ? { ...inputs, raw_requirement: { ref: inputs.raw_requirement.ref, sha256: inputs.raw_requirement.sha256 } }
+    : inputs;
   const storageResolution = resolveStorageRootDetails({ env, home });
   const storageRoot = storageResolution.storage_root;
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
@@ -166,13 +195,14 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     write_resolution_source: storageResolution.selected_source,
     ...(existingWorkspace ? { workspace_mode: "existing", workspace_root: existingWorkspace.worktreeRoot } : {}),
     issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [],
-    inputs,
+    inputs: manifestInputs,
   } });
   // A new task is not ready until its authenticated parallel worktree exists.
   // Prepare it before initializing the task store, so Git/path failures
   // surface at bootstrap rather than at publication.
   const workspace = prepareTaskWorkspace(task);
   const store = initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+  for (const record of rawRequirementRecords ?? []) task.createRecordAtomic(record.ref, record.content);
   const activationDiagnosticRef = recordActivationDiagnostic(task, activation);
   const bootstrapIdentity = recordBootstrapTransaction(task, {
     status: "completed",

@@ -144,8 +144,9 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(names("build-code")).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
       "frontend-component-quality",
-      "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
+      "fullstack-slice-testing", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
+    expect(names("build-code")).not.toContain("wh-review");
     expect(stepSlugs("build-code")).toContain("inspect-and-route-actual-tests");
     expect(stepSlugs("build-code")).toContain("invoke-concrete-testing-skill");
     expect(evidenceKinds("build-code")).not.toContain("skill_invocation");
@@ -169,13 +170,24 @@ describe("D-015 stage routing and concrete testing contract", () => {
     const skill = read("workflows/build-code/SKILL.md");
     expect(skill).toMatch(/findings\s+and\s+transport status are not a progression gate/i);
     expect(skill).toMatch(/limits the completion claim[\s\S]*allows same-task repair/i);
-    expect(skill).toMatch(/final tests[\s\S]*AC trace[\s\S]*integration review/i);
+    expect(skill).toMatch(/final test[\s\S]*AC facts[\s\S]*stage-end-spec-analyze/i);
+    expect(skill).toMatch(/Historical integration review outcomes stay visible but[\s\S]*do not require a new dispatch/i);
     expect(skill).toMatch(/Completion:\s*no finding is unexplained/i);
     expect(skill).toMatch(/never.*provider.*pass/i);
-    const finalReview = buildCodeSteps.find((step) => step.step_slug === "final-integration-review");
-    expect(finalReview).toBeDefined();
-    expect(finalReview.order).toBeGreaterThan(buildCodeSteps.find((step) => step.step_slug === "run-tests").order);
-    expect(stepSlugs("build-code").indexOf("stage-end-spec-analyze")).toBeGreaterThan(stepSlugs("build-code").indexOf("final-integration-review"));
+    expect(stepSlugs("build-code")).not.toContain("final-integration-review");
+    expect(stepSlugs("build-code")).not.toContain("integration-review");
+    const phaseReview = buildCodeSteps.find((step) => step.step_slug === "review-change");
+    expect(phaseReview.observable_result).toMatch(/review_scope=phase/);
+    expect(phaseReview.order).toBeGreaterThan(buildCodeSteps.find((step) => step.step_slug === "run-tests").order);
+    const aggregate = buildCodeSteps.find((step) => step.step_slug === "run-final-aggregate-and-ac-trace");
+    expect(aggregate.completion_evidence.map(({ kind }) => kind)).toContain("test");
+    expect(aggregate.order).toBeGreaterThan(phaseReview.order);
+    expect(stepSlugs("build-code").indexOf("stage-end-spec-analyze")).toBeGreaterThan(stepSlugs("build-code").indexOf(aggregate.step_slug));
+    const verifySteps = steps("verify-code");
+    const finalReview = verifySteps.find((step) => step.step_slug === "ocr-code-review");
+    expect(finalReview.observable_result).toMatch(/一次 OCR 独立代码审查/);
+    expect(verifySteps.find((step) => step.step_slug === "publish-code-review-fact").observable_result)
+      .toMatch(/code_review 质量事实/);
   });
 
   it("does not make an external stage outcome part of any active step contract", () => {

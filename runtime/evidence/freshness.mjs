@@ -13,7 +13,7 @@ import { ensureGitSnapshotObjectStore } from "../task/git-worktree-snapshot.mjs"
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
-import { reviewPacketMaterialId } from "../review/review-packet-identity.mjs";
+import { authenticatedEvidenceDigest } from "../review/review-packet-identity.mjs";
 import { createQualityFact, qualityFactDigest } from "./quality-fact.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { CURRENT_MATERIAL_FILES, materialFilesForCohort } from "../task/material-workspace.mjs";
@@ -113,16 +113,34 @@ export function authenticateOrdinaryExecutionReview(review, fact, read, dependen
   if (bytes.toString("base64") !== frozen.content_base64 || sha256(bytes) !== frozen.content_sha256
       || frozen.content_sha256 !== frozenRef.provider_input_sha256) throw new Error("frozen execution review original bytes hash mismatch");
   const request = JSON.parse(bytes.toString("utf8"));
-  if (request.stage !== "verify-code" || reviewPacketMaterialId(request) !== review.material_id
-      || ordinaryReviewMaterialRevision(request.materials.runtime_current_materials, fact.material_scope) !== fact.material_revision) throw new Error("ordinary review did not consume the bound material bundle");
+  const executionEvidence = request.authenticated_evidence;
+  if (request.stage !== "verify-code") throw new Error("ordinary execution review frozen request is not verify-code");
+  // The ordinary OCR route projects a task-bound packet; the frozen host
+  // request is broader than those provider-visible bytes. Its generic packet
+  // hash is therefore not the dispatched packet identity. Authenticate the
+  // recorder's canonical packet attestation against both immutable records
+  // and the exact evidence bytes retained in the frozen request instead.
+  const closure = attempt.closure_manifest;
+  const evidenceHash = authenticatedEvidenceDigest(executionEvidence);
+  if (!closure || closure.version !== "wh-review-closure.v1"
+      || closure.packet_sha256 !== review.material_id || closure.material_id !== review.material_id
+      || closure.snapshot_tree !== fact.snapshot_tree || closure.material_revision !== fact.material_revision
+      || closure.authenticated_evidence_sha256 !== evidenceHash
+      || attempt.authenticated_evidence_sha256 !== evidenceHash
+      || review.authenticated_evidence_sha256 !== evidenceHash) {
+    throw new Error("ordinary execution review OCR packet identity mismatch");
+  }
+  if (ordinaryReviewMaterialRevision(executionEvidence?.runtime_current_materials, fact.material_scope) !== fact.material_revision) {
+    throw new Error("ordinary execution review material revision does not match the current bound materials");
+  }
   const execution = readTypedExecutionFact(request.reviewed_execution, fact, read, dependencies, key);
   if (binding.reviewed_execution.ref !== request.reviewed_execution.ref
       || binding.reviewed_execution.sha256 !== request.reviewed_execution.sha256
       || !sameActor(binding.reviewed_execution.actor, execution.actor)
-      || request.materials.runtime_execution?.raw !== read(binding.reviewed_execution.ref)) throw new Error("ordinary review execution does not match its frozen bundle");
+      || executionEvidence?.runtime_execution?.raw !== read(binding.reviewed_execution.ref)) throw new Error("ordinary review execution does not match its frozen bundle");
   for (const item of execution.aggregate.subject_fact.execution_items) {
     for (const reference of item.evidence_refs) {
-      const frozenRecord = request.materials.runtime_execution_records?.find((entry) => entry.ref === reference.ref && entry.sha256 === reference.sha256);
+      const frozenRecord = executionEvidence?.runtime_execution_records?.find((entry) => entry.ref === reference.ref && entry.sha256 === reference.sha256);
       if (!frozenRecord || frozenRecord.raw !== read(reference.ref)) throw new Error("ordinary review omitted actual per-AC execution bytes");
     }
   }
@@ -549,9 +567,24 @@ export function authenticateAcceptanceExecutionAggregate(value, fact, read, depe
 
 function authenticateE2eAcceptanceStageQuality(value, fact, read, dependencies, key) {
   if (!value || value.schema_version !== "stage-quality-evidence.v1" || value.task_id !== fact.task_id
-      || value.stage !== "verify-code" || value.subject !== "e2e_acceptance" || value.status !== "passed"
-      || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree
-      || value.subject_fact?.status !== "passed" || value.subject_fact.evidence_refs?.length !== 3) throw new Error("nested e2e acceptance stage evidence is invalid");
+      || value.stage !== "verify-code" || value.subject !== "e2e_acceptance"
+      || value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree) {
+    throw new Error("nested e2e acceptance stage evidence is invalid");
+  }
+  // A missing/deferred E2E result is still an authenticated current fact. It
+  // must be visible as missing, not discarded as stale; empty refs ensure it
+  // cannot be mistaken for an execution/review/confirmation chain.
+  if (value.status === "missing") {
+    if (fact.status !== "missing" || value.subject_fact?.status !== "missing"
+        || !Array.isArray(value.subject_fact.evidence_refs) || value.subject_fact.evidence_refs.length !== 0) {
+      throw new Error("nested missing e2e acceptance evidence is invalid");
+    }
+    return;
+  }
+  if (value.status !== "passed" || fact.status !== "passed"
+      || value.subject_fact?.status !== "passed" || value.subject_fact.evidence_refs?.length !== 3) {
+    throw new Error("nested e2e acceptance stage evidence is invalid");
+  }
   const selected = {};
   for (const [index, reference] of value.subject_fact.evidence_refs.entries()) {
     const kind = /^quality\/evidence\/acceptance\/build-code\/acceptance_execution-/.test(reference.ref) ? "execution"

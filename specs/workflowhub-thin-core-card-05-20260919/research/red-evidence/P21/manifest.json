@@ -1,0 +1,14 @@
+{
+  "schema_version": "card05-red-command.v1",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "task": "P21",
+  "command": "npx vitest run tests/official-make-decision-cli.test.mjs -t ORACLE-P21-UNKNOWN-ARG --reporter=dot",
+  "exit_code": 1,
+  "target_failure": "ORACLE-P21-UNKNOWN-ARG: unknown --receipts option was ignored and run executed",
+  "channels": {
+    "stdout": "stdout.log",
+    "stderr": "stderr.log"
+  },
+  "source_kind": "actual-scoped-reexecution",
+  "recorded_at": "2026-09-22T06:59:50.663Z"
+}

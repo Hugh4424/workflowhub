@@ -9,7 +9,7 @@
       "stage": "verify-code",
       "surface": "stage",
       "class_id": "verify_outcome_unbound_review",
-      "error": "verify-code quality_review is not bound to the dsh-code-review stage outcome"
+      "error": "verify-code quality_review is not bound to the Architect-Code-Review stage outcome"
     },
     {
       "entry_id": "29aea205-9fe0-4456-a3e9-f6475153a9ee",
@@ -19,7 +19,7 @@
       "stage": "verify-code",
       "surface": "stage",
       "class_id": "verify_review_without_outcome",
-      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+      "error": "verify-code quality_review requires a bound Architect-Code-Review stage outcome"
     },
     {
       "entry_id": "a4a06292-c12f-4bdc-9bfd-646e6169bbab",
@@ -29,7 +29,7 @@
       "stage": "verify-code",
       "surface": "stage",
       "class_id": "verify_review_without_outcome",
-      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+      "error": "verify-code quality_review requires a bound Architect-Code-Review stage outcome"
     },
     {
       "entry_id": "50d4f9d1-1cf1-401d-b893-d08533b90641",
@@ -39,7 +39,7 @@
       "stage": "verify-code",
       "surface": "stage",
       "class_id": "verify_review_without_outcome",
-      "error": "verify-code quality_review requires a bound dsh-code-review stage outcome"
+      "error": "verify-code quality_review requires a bound Architect-Code-Review stage outcome"
     }
   ]
 }

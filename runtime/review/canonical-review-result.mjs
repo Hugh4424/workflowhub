@@ -18,9 +18,8 @@ export function parseCanonicalReviewerOutput(raw, options = {}) {
   return parseReviewerOutput(raw, options);
 }
 
-// `dsh-code-review` is the canonical verify-code skill id, and older DSH
-// review records used that id as the provider label while correctly declaring
-// the underlying adapter as `dsh`. Keep this compatibility mapping explicit
+// `dsh-code-review` remains the upstream provider source label for the renamed
+// `architect-code-review` skill. Keep that provider/adapter mapping explicit
 // and centralized; arbitrary provider/adapter mismatches must still fail
 // authentication.
 const PROVIDER_ADAPTER_ALIASES = new Map([
@@ -61,22 +60,20 @@ function reviewMemberKey(item) {
 function normalizedIssue(value) {
   return value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(Boolean);
 }
-function overlap(left, right) {
-  const leftTerms = new Set(left); const rightTerms = new Set(right);
-  if (!leftTerms.size || !rightTerms.size) return 0;
-  let shared = 0;
-  for (const term of leftTerms) if (rightTerms.has(term)) shared += 1;
-  return shared / Math.min(leftTerms.size, rightTerms.size);
-}
 function findingKey(finding) {
   return `${finding.path}\u0000${finding.line ?? ""}\u0000${normalizedIssue(finding.issue).join(" ")}`;
 }
 function sameCluster(cluster, candidate) {
   const seed = cluster.members[0];
   if (seed.finding.path !== candidate.finding.path) return false;
-  if (seed.finding.line !== undefined && candidate.finding.line !== undefined && seed.finding.line !== candidate.finding.line) return false;
+  // Corroboration needs the same concrete source line. A missing line cannot
+  // act as a wildcard, because unrelated findings in one file would merge.
+  if (!Number.isInteger(seed.finding.line) || !Number.isInteger(candidate.finding.line)
+      || seed.finding.line !== candidate.finding.line) return false;
   const left = normalizedIssue(seed.finding.issue); const right = normalizedIssue(candidate.finding.issue);
-  return left.join(" ") === right.join(" ") || overlap(left, right) >= 0.7;
+  // Similar wording is not proof of the same claim. In particular, token
+  // overlap can erase negation and incorrectly manufacture corroboration.
+  return left.join(" ") === right.join(" ");
 }
 function clusterRecord(cluster, roleCoverage = []) {
   const members = [...cluster.members].sort((left, right) => left.provider.localeCompare(right.provider)
@@ -94,6 +91,8 @@ function clusterRecord(cluster, roleCoverage = []) {
     } else { disposition = "needs_corroboration"; evidenceStatus = "single_inference"; }
   }
   const finding = members[0].finding;
+  const sourceKeys = new Set(members.map(({ source_id, adapter, provider }) => source_id ?? adapter ?? provider));
+  const sourceStrength = sourceKeys.size >= 2 ? "corroborated" : "single_source";
   const roles = [...new Set(roleCoverage.map(({ role }) => role).filter((role) => role === "red" || role === "blue"))].sort();
   const providerRoles = Object.fromEntries([...new Set(members.map(({ provider }) => provider))].sort().map((provider) => [
     provider,
@@ -121,11 +120,11 @@ function clusterRecord(cluster, roleCoverage = []) {
     recommendation: finding.recommendation,
     providers: [...new Set(members.map(({ provider }) => provider))],
     adapter_count: new Set(members.map(({ adapter }) => adapter)).size,
-    finding_count: members.length, disposition, evidence_status: evidenceStatus,
+    finding_count: members.length, disposition, evidence_status: evidenceStatus, source_strength: sourceStrength,
     ...roleFacts,
     provider_findings: members.map(({ provider, adapter, role, finding: member, anchorValid }) => ({
       provider, adapter, ...(role ? { role } : {}), severity: member.severity, evidence_kind: member.evidence_kind ?? "unspecified",
-      evidence_anchor_valid: anchorValid !== false,
+      evidence_anchor_valid: anchorValid === true,
     })),
   };
 }
@@ -189,15 +188,26 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   });
   const valid = [...byMember.values()].map(({ item }) => item).sort((left, right) => left.provider.localeCompare(right.provider)
     || reviewMemberKey(left).localeCompare(reviewMemberKey(right)));
-  const candidates = valid.flatMap((item) => {
+  // Quorum counts each authenticated member once (`valid`), but the finding
+  // union must retain distinct claims from every valid result by that member.
+  // Deduplicate retries only at member + finding identity so a repeated claim
+  // cannot manufacture extra corroboration.
+  const seenMemberFindings = new Set();
+  const candidates = validReviewItems.flatMap((item) => {
     // The source identity was already authenticated above. Reuse that exact
     // identity for finding adjudication instead of deriving a second adapter
     // value from the provider label.
     const identity = sourceIdentityOf(item, { requireIdentity, requireSourceId });
-    return item.review.findings.map((finding, index) => ({
-      provider: item.provider, adapter: identity.adapter, role: item.role ?? null, finding, index,
-      anchorValid: item.evidenceAnchors?.[index] ?? true,
-    }));
+    const memberKey = reviewMemberKey(item);
+    return item.review.findings.flatMap((finding, index) => {
+      const candidateKey = `${memberKey}\u0000${findingKey(finding)}`;
+      if (seenMemberFindings.has(candidateKey)) return [];
+      seenMemberFindings.add(candidateKey);
+      return [{
+        provider: item.provider, adapter: identity.adapter, source_id: identity.source_id, role: item.role ?? null, finding, index,
+        anchorValid: item.evidenceAnchors?.[index] === true,
+      }];
+    });
   }).sort((left, right) => findingKey(left.finding).localeCompare(findingKey(right.finding)) || left.provider.localeCompare(right.provider) || left.index - right.index);
   const grouped = [];
   for (const candidate of candidates) {
@@ -206,7 +216,12 @@ export function aggregateCanonicalProviderResults(providerResults, minimumReview
   }
   const clusters = grouped.map((cluster) => clusterRecord(cluster, validReviewItems)).sort((left, right) => left.id.localeCompare(right.id));
   const actionable = clusters.filter(({ disposition }) => disposition === "actionable");
-  const findings = clusters.filter(({ disposition, severity }) => disposition === "actionable" || severity === "minor");
+  // Preserve every valid provider finding in the canonical union.  Evidence
+  // that is single-source, needs corroboration, or has an invalid anchor is
+  // still a review fact; downstream disposition decides whether it is
+  // actionable.  Dropping those clusters here loses the provider's evidence
+  // and makes invalid-anchor facts look like no finding was returned.
+  const findings = clusters;
   const adjudication = { version: "wh-review-adjudication.v1", clusters, actionable };
   const distinctAdapters = new Set(valid.map((item) => sourceIdentityOf(item, { requireIdentity, requireSourceId })?.adapter).filter(Boolean)).size;
   const distinctSources = new Set(valid.map((item) => sourceIdentityOf(item, { requireIdentity, requireSourceId })?.source_id).filter(Boolean)).size;
@@ -269,7 +284,8 @@ function policyFacts(attempt, fallbackMinimumReviewers) {
 }
 
 export function authenticateCanonicalReviewResult({
-  attempt, result, providerOutputs, fallbackMinimumReviewers = 1, assess = (items) => items, requireEvidenceAnchors = undefined,
+  attempt, result, providerOutputs, fallbackMinimumReviewers = 1, assess = (items) => items,
+  requireEvidenceAnchors = undefined, allowPartial = false,
 }) {
   const policy = policyFacts(attempt, fallbackMinimumReviewers);
   const { minimum, priority, eligible } = policy;
@@ -329,7 +345,15 @@ export function authenticateCanonicalReviewResult({
     requireIdentity: policy.requireIdentity ?? false,
     requireSourceId: policy.requireSourceId ?? false,
   });
-  if (aggregation.status !== "available") invalid("completed provider outputs do not satisfy review quorum");
+  const partial = allowPartial && aggregation.status === "unavailable"
+    && attempt.terminal_status === "unavailable" && attempt.error?.code === "OCR_INDEPENDENCE_INCOMPLETE"
+    && attempt.result_ref === result.result_ref && attempt.coverage?.group_outcome === "partial"
+    && attempt.coverage.minimum_required === minimum
+    && attempt.coverage.valid_provider_count === aggregation.valid.length && aggregation.valid.length > 0
+    && attempt.coverage.selected_count === attempt.provider_attempts.length
+    && isDeepStrictEqual(attempt.coverage.selected_profiles, attempt.provider_attempts.map((item) => item.provider))
+    && attempt.provider_attempts.every((item) => item.status !== "running");
+  if (aggregation.status !== "available" && !partial) invalid("completed provider outputs do not satisfy review quorum");
   const expectedProviderResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   const expectedFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
   const expectedAdjudication = { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters };

@@ -50,9 +50,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 
 ## 仓内运行技能
 
-共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，portable workflow 也通过同一声明式依赖闭包加载，wh-review
-把适用的普通 review lens 放进同一 frozen packet，不重复建立 planning advisory 的事实或
-控制面；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
+共同规则：所有路径都在 `skills/`；Stage-owned 组件通过 `skill-deps.yaml` 显式加载，portable workflow 也通过同一声明式依赖闭包加载；authoring review 的适用 lens 由 wh-review 放进 frozen packet，代码审查由 OCR delegation 处理；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
 - `stage-reflection` — native；五个 authoring stage 的 stage-end 判断层复盘。只消费当前会话记忆、lessons 索引和本 stage outcome；由 runner 先追加 raw observation，再由技能产出 judgment 记录并调用确定性 validator；不生成质量分数或继续工作门禁。
 - `stage-handoff` — native；四个 authoring stage 的 reflection 后 current handoff。只写 `quality/evidence/handoff/<stage>.md` 固定当前视图，原子覆盖、读回绑定，失败保持 `unavailable`/stale 警告；不挂载 verify-code，不生成质量事实或推进门禁。
@@ -70,9 +68,9 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `spec-plan` — adapted；build-plan。来源 [Spec Kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a) plan 与 Superpowers [`writing-plans`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans)，MIT。保持 workflowhub 唯一 plan 格式。
 - `spec-tasks` — adapted；build-plan。来源 [Spec Kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a) tasks 与 Superpowers `writing-plans`，MIT。补 Goal/Files/Tasks/Verify/Knowledge/STOP 映射。
 - `spec-analyze` — native；build-plan。report-only 一致性 lens。`upstream=[]`；历史吸收 Spec Kit analyze 思路。
-- `wh-review` — native；全部五阶段。唯一异源审查调度层。`upstream=[]`；禁止第二 review flow。
-- `dsh-code-review` — adapted；verify-code 唯一代码审查 lens。来源 DeepSeek Harness [`dsh-code-review`](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-code-review)，并内联吸收同版本 [`dsh-find-simplifications`](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-find-simplifications)、[`dsh-doc-standards`](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-doc-standards)、[`dsh-prose-standard`](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-prose-standard)、[`dsh-trim-cot-leakage`](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-trim-cot-leakage)；一次调用内执行，不新增 review 轮次或控制面。
-- `mini-task` — native；standalone。独立小功能薄流程；复用四材料、两类 wh-review、真实结果和现有 task-close；不增加第六 stage 或任务关系对象。
+- `wh-review` — native；make-decision/build-spec/build-plan 的 authoring review。普通 build-code/verify-code 通过 `review --action=record` 走 OCR delegation，再分别以 `run` 的 `receipts.review` / `receipts.quality_review` 消费 canonical 结果或 unavailable attempt。`upstream=[]`；保留原始 provenance。
+- `Architect-Code-Review`（skill ID：`architect-code-review`；历史来源 `dsh-code-review`）— adapted；可选独立代码 diff 诊断与历史审查解读，无当前 stage-owned consumer，不将其输出充当 OCR 的正式 review receipt。来源 DeepSeek Harness [`dsh-code-review`](https://github.com/deepseek-ai/deepseek-harness/tree/99f6f02fecdb7dff40c3fbc9470f5907c29f74ca/.agents/skills/dsh-code-review)，并内联吸收同一版本的简化、文档、prose 与过程叙述 lens。
+- `mini-task` — native；standalone。独立小功能薄流程；复用当前材料、正式审查结果和现有 task-close；不增加第六 stage 或任务关系对象。
 - `workflowhub-host-protocol` — standalone native draft；宿主适配层规则。未接入任何 Stage skill-deps，不参与 WorkflowHub 阶段门禁。
 - `plan-ceo-review` — adapted；make-decision/build-spec 的 wh-review packet advisory lens。来源 gstack [`plan-ceo-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-ceo-review)，MIT。裁为 packet-local report-only lens，去 runtime/gbrain/telemetry、独立事实和调用收据。
 - `plan-design-review` — adapted；build-spec UI 条件。来源 gstack [`plan-design-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review)，MIT。去浏览器 daemon。
@@ -99,7 +97,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - AgentHub `scope-triage` → make-decision S0.5 与 build-spec 高危词浮现。只保留内联分档语义，不保留独立 runtime skill。
 - Superpowers `test-driven-development` + Matt `tdd` → `workflows/build-code/SKILL.md`、`capture.mjs`、`test-strategy`。只吸收 RED/GREEN、fresh evidence、anti-pattern；不复制重复 TDD 编排器。
 - Superpowers `subagent-driven-development` → build-code phase executor、独立上下文、`PHASE_RESULT`。宿主 subagent 是 capability，不是 skill。
-- Superpowers `requesting-code-review` → `wh-review` V4。sealed packet、provider receipt、continuation flow 已承接。
+- Superpowers `requesting-code-review` → `wh-review` V4 的 authoring review。代码审查现由 OCR delegation 处理。
 - Superpowers `verification-before-completion` → verify-code freshness、AC coverage、L2/L3。
 - Superpowers `finishing-a-development-branch` → verify-code close、人工 merge、worktree 清理。
 - Superpowers `writing-plans` → `spec-plan/spec-tasks` 字段与任务粒度，不复制第二模板。

@@ -8,7 +8,7 @@ import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
 import { aggregateCanonicalProviderResults } from "../review/canonical-review-result.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
-import { equivalentWorkspaceTrees, isExecutionRecordOnlyMaterialDelta } from "../task/git-worktree-snapshot.mjs";
+import { equivalentWorkspaceTrees } from "../task/git-worktree-snapshot.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { buildStageCompletion } from "../evidence/stage-completion-facts.mjs";
 import { validateBrowserQaEvidence, validateReviewAttemptObservation } from "../evidence/stage-content-evidence.mjs";
@@ -216,7 +216,7 @@ const COMPLETION_COPY = Object.freeze({
   "make-decision": { objective: "把方向和取舍整理成可执行的最终决定", approach: "核对真实交互、文档拷问和正式审查后发布最终决定", effect: "下一阶段只需读取已接受的最终决定", next_owner: "build-spec" },
   "build-spec": { objective: "把已接受的决定写成完整需求规格", approach: "解决重大歧义并用正式审查验证最终规格", effect: "实施计划可以从稳定规格继续", next_owner: "build-plan" },
   "build-plan": { objective: "把需求规格拆成可验证的实施计划", approach: "生成计划和任务清单并完成工程审查", effect: "实现阶段获得明确顺序、边界和验收方法", next_owner: "build-code" },
-  "build-code": { objective: "按已接受计划完成实现", approach: "分阶段实现、测试并完成最终集成审查", effect: "验证阶段可以检查同一份最终实现", next_owner: "verify-code" },
+  "build-code": { objective: "按已接受计划完成实现", approach: "分阶段实现、测试并处置 Phase 审查 finding", effect: "验证阶段可以检查同一份最终实现", next_owner: "verify-code" },
   "verify-code": { objective: "对当前实现完成一次高质量代码审查", approach: "沿真实入口、consumer、生命周期、安全和失败边界检查代码", effect: "任务获得代码风险结论或回同一 task 修复", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
@@ -224,9 +224,8 @@ const RECEIPT_KEYS = Object.freeze({
   "build-spec": new Set(["spec", "review", "research", "clarify", "risk_acceptance", "audit"]),
   "build-plan": new Set(["plan", "tasks", "research", "review", "risk_acceptance", "audit", "confirmation"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "ui_qa"]),
-  // quality_review is the dsh-code-review result;
-  // review is the existing wh-review advisory receipt and never feeds the
-  // canonical completion subject.
+  // quality_review is the current OCR delegation result; review only carries
+  // an authenticated build-code Phase result across the stage boundary.
   "verify-code": new Set(["quality_review", "review", "confirmation"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
@@ -1866,15 +1865,15 @@ export function certifyBuildCodeQualityBasis({
   const outside = [...new Set(changedFiles)].filter((path) => !planned.has(path));
   const qualityGaps = [];
   if (tests?.exit_code !== 0) qualityGaps.push("current risk tests are not passing");
-  if (review?.status !== "recorded" && review?.status !== "unavailable") {
-    // Keep the legacy verdict-only diagnostic readable for old history while
-    // making the new recorded/unavailable fact boundary authoritative.
-    qualityGaps.push("integration review is not passing");
-  }
+  const phaseReview = review?.review_scope === "phase"
+    && review?.subject_kind === "phase"
+    && typeof review?.phase_id === "string"
+    && review.phase_id.trim() !== "";
   const reviewRef = review?.result_ref ?? review?.attempt_ref;
   const reviewHash = review?.result_hash ?? review?.attempt_hash;
-  if (typeof reviewRef !== "string" || !SHA256_HEX.test(reviewHash ?? "")) {
-    qualityGaps.push("authenticated independent review fact is unavailable");
+  if (!phaseReview || review?.status !== "recorded"
+      || typeof reviewRef !== "string" || !SHA256_HEX.test(reviewHash ?? "")) {
+    qualityGaps.push("authenticated Phase review fact is unavailable");
   }
   if (!Array.isArray(expectedAc) || !Array.isArray(coveredAc) || !sameStringSet(coveredAc, expectedAc)) {
     qualityGaps.push("current acceptance coverage differs from the current spec AC set");
@@ -1886,7 +1885,7 @@ export function certifyBuildCodeQualityBasis({
   return Object.freeze({
     changed: Object.freeze([...new Set(changedFiles)]),
     audit_gaps: Object.freeze(outside.length ? [`current diff includes files outside historical task boundaries: ${outside.join(", ")}`] : []),
-    review: Object.freeze({ ref: reviewRef ?? null, sha256: reviewHash ?? null, status: review.status ?? null }),
+    review: Object.freeze({ ref: reviewRef ?? null, sha256: reviewHash ?? null, status: review?.status ?? null }),
     quality_gaps: Object.freeze(qualityGaps),
     formal_record_status: Object.freeze({ ...formalRecordStatus }),
   });
@@ -1970,8 +1969,6 @@ export function certifyCurrentTaskCompletion(worker, {
       ...(task.fields?.["精确文件"]?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
       ...(task.fields?.boundary?.match(/`([^`]+)`/g) ?? []).map((path) => path.slice(1, -1)),
     ]))];
-  const reviewRef = review.result_ref ?? review.attempt_ref;
-  const reviewHash = review.result_hash ?? review.attempt_hash;
   if (!acceptanceCoverage || !Array.isArray(acceptanceCoverage.accepted_criterion_ids)
       || acceptanceCoverage.accepted_criterion_ids.length === 0) {
     completionGaps.push("build-code acceptance coverage is unavailable; quality warning only");
@@ -2007,7 +2004,6 @@ export function certifyCurrentTaskCompletion(worker, {
     status: "completed",
     evidence_ref: worker.artifactRef(post ? "phases/index.md" : "tasks.md"),
     evidence_hash: hashText(worker.readArtifact(post ? "phases/index.md" : "tasks.md")),
-    integration_review: { ref: reviewRef, sha256: reviewHash },
     formal_record_status: formal,
     quality_gaps: Object.freeze([...(quality.quality_gaps ?? []), ...completionGaps]),
   };
@@ -2022,23 +2018,17 @@ export function certifyCurrentTaskCompletion(worker, {
   return Object.freeze(completion);
 }
 
-function uncertifiedBuildCodeCompletion(worker, review, snapshotTree) {
-  const reviewRef = review?.facts?.result_ref ?? review?.facts?.attempt_ref;
-  const reviewHash = review?.facts?.result_hash ?? review?.facts?.attempt_hash;
-  if (typeof reviewRef !== "string" || !SHA256_HEX.test(reviewHash ?? "")) {
-    throw new Error("build-code snapshot consistency cannot be disclosed without an authenticated review reference");
-  }
+function uncertifiedBuildCodeCompletion(worker, snapshotTree) {
   const completion = {
     status: "completed",
     evidence_ref: worker.artifactRef(worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md"),
     evidence_hash: hashText(worker.readArtifact(worker.manifest?.activation_cohort === "post" ? "phases/index.md" : "tasks.md")),
-    integration_review: { ref: reviewRef, sha256: reviewHash },
     formal_record_status: {
       status: "unavailable",
-      reason: "implementation, tests, and review facts use different snapshots; current completion was not certified",
+      reason: "implementation and tests do not bind the current snapshot; current completion was not certified",
     },
     quality_gaps: [
-      "implementation, tests, and review use different snapshots; current completion was not certified",
+      "implementation and tests do not bind the current snapshot; current completion was not certified",
       ...(snapshotTree ? [] : ["current build-code snapshot is unavailable"]),
     ],
   };
@@ -2124,36 +2114,28 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
   if (attempt.terminal_status !== "unavailable" || !attempt.error) throw new Error("review attempt ref must describe an unavailable review");
   if (!SHA256_HEX.test(item.evidence.sha256)) throw new Error("review unavailable attempt hash must be sha256");
   if (expectedTrack !== undefined && attempt.review_track !== expectedTrack) throw new Error(`review must use wh-review ${expectedTrack} track`);
-  // A broker group can terminate before dispatching any provider. Preserve
-  // that terminal transport fact as unavailable; do not accept an empty
-  // provider list for provider-specific failures or malformed results.
-  const groupTerminalWithoutProvider = new Set([
-    "MATERIAL_INCOMPLETE",
-    "MATERIAL_FORBIDDEN",
-    "REVIEW_INPUT_TOO_LARGE",
-    "GROUP_OUTCOME_UNAVAILABLE",
-    "PROCESS_TIMEOUT",
-    "ROUTE_UNAVAILABLE",
-    "REVIEW_BROKER_START_FAILED",
-    "BROKER_EXIT_NONZERO",
-    "REVIEW_BROKER_EXIT_NONZERO",
-    "REVIEW_EXECUTION_TIMEOUT",
-    "REVIEW_CANCELLED",
-    "REVIEW_ROUTE_RESOLUTION_TIMEOUT",
-    // Managed start can succeed while the broker has not emitted a terminal
-    // group event yet. That is a real dispatched transport fact, not a
-    // provider-specific failure requiring fabricated provider attempts.
-    "REVIEW_STATUS_UNAVAILABLE",
-    "REVIEW_NO_SEMANTIC_RESULT",
-    "REVIEW_PROVIDER_OUTPUT_INVALID",
-    "PROTOCOL_INCOMPATIBLE",
-    // The review recorder validates reviewed_execution before any provider
-    // bundle is built. Its canonical pre-dispatch failure has no provider
-    // attempt by design and must remain consumable as an unavailable fact.
+  // The producer records whether the request was stopped before provider
+  // dispatch or sent to an executor whose terminal response was not parsed.
+  // Those structured transport states can legitimately have no provider
+  // attempts. Older immutable attempts predate dispatch_state, so retain only
+  // their previously recognized group-terminal errors as a read exception.
+  // A new dispatched attempt still requires its actual provider records.
+  const legacyGroupTerminalWithoutProvider = new Set([
+    "MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "REVIEW_INPUT_TOO_LARGE",
+    "GROUP_OUTCOME_UNAVAILABLE", "PROCESS_TIMEOUT", "ROUTE_UNAVAILABLE",
+    "REVIEW_BROKER_START_FAILED", "BROKER_EXIT_NONZERO", "REVIEW_BROKER_EXIT_NONZERO",
+    "REVIEW_EXECUTION_TIMEOUT", "REVIEW_CANCELLED", "REVIEW_ROUTE_RESOLUTION_TIMEOUT",
+    "REVIEW_STATUS_UNAVAILABLE", "REVIEW_NO_SEMANTIC_RESULT",
+    "REVIEW_PROVIDER_OUTPUT_INVALID", "PROTOCOL_INCOMPATIBLE",
     "REVIEW_EXECUTION_PREPARATION_FAILED",
   ]);
-  if (attempt.provider_attempts.length === 0 && !groupTerminalWithoutProvider.has(attempt.error.code)) {
-    throw new Error("review unavailable attempt must contain provider attempts");
+  const permitsEmptyProviderAttempts = new Set(["blocked_before_dispatch", "sent_unparsed"]).has(attempt.dispatch_state)
+    || (!Object.hasOwn(attempt, "dispatch_state") && legacyGroupTerminalWithoutProvider.has(attempt.error.code));
+  if (attempt.provider_attempts.length === 0 && !permitsEmptyProviderAttempts) {
+    throw new Error("review unavailable attempt without provider attempts must have a non-dispatched transport state");
+  }
+  if (attempt.provider_attempts.length > 0 && attempt.dispatch_state === "blocked_before_dispatch") {
+    throw new Error("review blocked before dispatch cannot contain provider attempts");
   }
   const latestByProvider = new Map();
   for (const providerAttempt of attempt.provider_attempts) {
@@ -2208,18 +2190,6 @@ function scopeFacts(scope) {
     phase_id: scope.phase_id,
     review_scope: scope.review_scope,
   };
-}
-function requireFinalIntegrationReview(review, label) {
-  if (!review || !review.scope) return `${label} is missing an authenticated integration review fact`;
-  const legacyPass = review.facts?.status === undefined && review.facts?.verdict === "pass";
-  if (!new Set(["recorded", "unavailable"]).has(review.facts?.status) && !legacyPass) {
-    return `${label} is not recorded as a current review fact; quality remains visible but does not block stage progression`;
-  }
-  const scope = review.scope;
-  if (scope.subject_kind !== "worktree" || scope.review_scope !== "integration" || scope.phase_id !== null || scope.candidate_tree !== review.facts.snapshot_tree) {
-    return `${label} is not a same-snapshot full-worktree integration review; quality remains visible but does not block stage progression`;
-  }
-  return null;
 }
 function riskAcceptanceForReview(worker, invocation, review, expectedTrack, receiptName, stage = worker.stage) {
   const supplied = invocation.receipts?.[receiptName];
@@ -3552,13 +3522,9 @@ function bindFinalReview(worker, invocation, review, currentTree, {
     });
   }
   if (review.facts?.status === "unavailable") return { evidence: [] };
-  // Non-build-code reviews are advice about the material they actually saw.
-  // Their reviewed snapshot remains provenance, not an expiry condition. The
-  // implementation review is the only review that must bind the current tree.
-  if (stage === "build-code" && review.value.snapshot_tree !== currentTree
-      && !isExecutionRecordOnlyMaterialDelta(worker.workspace?.worktreeRoot ?? worker.candidateWorkspace?.worktreeRoot, review.value.snapshot_tree, currentTree, worker.identity.taskId)) {
-    throw new Error(`${stage} review does not bind the final current snapshot`);
-  }
+  // The authenticated review snapshot records what was actually reviewed.
+  // Same-task repairs do not expire that fact; current code and tests are
+  // bound separately to the current tree by the build-code handler.
   return { evidence: [] };
 }
 
@@ -4016,8 +3982,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       requireRiskAcceptance: false,
       requireDispositions: false,
     });
-    const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
-    const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
+    const dispositions = findingDispositions(review.facts.review_scope === "phase" ? [review] : [], input, worker.currentMaterialRevision);
     const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
     const acceptanceCoverage = acceptanceExecution.requires_execution
       ? acceptanceCoverageForExecution(worker, input, snapshot?.tree ?? null, acceptanceExecution)
@@ -4065,7 +4030,6 @@ HANDLERS.set("build-code", async (worker, input) => {
       missing_items: [
         "current implementation/test facts are unavailable; record them when available",
         ...acceptanceExecution.missing_items,
-        ...(reviewWarning ? [reviewWarning] : []),
         ...(review.missing_items ?? []),
         ...dispositions.missing_items,
         ...(input.contract_facts === undefined ? [] : contractFacts.missing_items),
@@ -4078,7 +4042,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       businessFacts: { content: "present", code: "unknown", tests: "unknown", acceptance_criteria: "unknown" },
       audit: null,
       verification: review.facts.status === "recorded"
-        ? "当前材料可继续；实现和测试质量事实尚未提供，现有集成审查已保留"
+        ? "当前材料可继续；实现和测试质量事实尚未提供，现有 Phase 审查已保留"
         : "当前材料可继续；实现、测试和审查质量事实尚未提供",
     });
   }
@@ -4090,9 +4054,8 @@ HANDLERS.set("build-code", async (worker, input) => {
   const audit = (() => {
     try { return auditFacts(worker, input); }
     catch (error) {
-      // Audit summaries are diagnostic publication support.  A stale or
-      // unavailable summary must be disclosed, but cannot block current
-      // implementation, tests, AC coverage, or integration review facts.
+      // Audit summaries are diagnostic publication support. A stale or
+      // unavailable summary cannot block current implementation or quality facts.
       auditGaps.push(`audit unavailable/unverified/mismatch: ${error.message}`, "support:audit");
       return null;
     }
@@ -4101,22 +4064,17 @@ HANDLERS.set("build-code", async (worker, input) => {
   if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array");
   for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
   const currentFactsSnapshot = currentSnapshotTree ?? null;
-  // The integration review's snapshot is provenance, not a freshness gate: it
-  // reviewed the code as of that snapshot, and later repairs do not invalidate
-  // it. Only implementation and test snapshots must match the current tree.
+  // A Phase review's snapshot remains provenance after same-task repairs.
+  // Implementation and test receipts still bind the current tree.
   const snapshotMismatch = currentFactsSnapshot === null
     || impl.value.snapshot_tree !== currentFactsSnapshot
     || tests.facts.snapshot_tree !== currentFactsSnapshot;
   if (snapshotMismatch) {
-    missingItems.push("implementation, tests, and review use different snapshots; current completion was not certified");
+    missingItems.push("implementation and tests do not bind the current snapshot; current completion was not certified");
   }
-  const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
-  if (reviewWarning) missingItems.push(reviewWarning);
-  const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
-  // An unavailable build-code review is an explicit non-gating quality fact;
-  // keep its status visible without turning the advice-only review into an
-  // ordinary completion gap. Verify-code reports its unavailable current
-  // review as a concrete finding-disposition gap instead.
+  const dispositions = findingDispositions(review.facts.review_scope === "phase" ? [review] : [], input, worker.currentMaterialRevision);
+  // An unavailable Phase review remains an explicit quality gap, while
+  // implementation, tests, and AC work can continue in the same task.
   if (review.facts.status !== "unavailable") missingItems.push(...dispositions.missing_items);
   const acceptanceExecution = await acceptanceExecutionFacts(worker, currentFactsSnapshot);
   if (acceptanceExecution.status !== "executed" && acceptanceExecution.status !== "not_applicable") {
@@ -4129,25 +4087,18 @@ HANDLERS.set("build-code", async (worker, input) => {
     missingItems.push(`acceptance coverage unavailable: ${error.message}`);
     coverage = { snapshot_tree: currentFactsSnapshot, accepted_criterion_ids: [], items: [] };
   }
-  let reviewBinding = { evidence: [] };
-  try { reviewBinding = bindFinalReview(worker, input, review, currentFactsSnapshot, { stage: "build-code" }); }
-  catch (error) { missingItems.push(`build-code review binding unavailable: ${error.message}`); }
   if (tests.facts.exit_code !== 0) missingItems.push("build-code final tests are not passing; quality warning only");
   if (tests.facts.runtime_profile !== undefined && (tests.facts.runtime_profile_status !== "ready" || tests.facts.runtime_profile_authenticated !== true)) {
     missingItems.push("build-code runtime profile unavailable; test quality remains unavailable");
   }
   const actualChangedFiles = authenticatedImplementationChanged(worker, impl.value);
-  const integrationAudit = typeof worker.inspectIntegrationReviewSubject === "function"
-    ? worker.inspectIntegrationReviewSubject(currentFactsSnapshot, { implementation_ref: impl.ref, green_ref: tests.ref })
-    : { formal_record_status: unavailableFormalRecordStatus() };
   const phase = snapshotMismatch
-    ? uncertifiedBuildCodeCompletion(worker, review, currentFactsSnapshot)
+    ? uncertifiedBuildCodeCompletion(worker, currentFactsSnapshot)
     : certifyCurrentTaskCompletion(worker, {
       changedFiles: actualChangedFiles,
       tests: tests.facts,
       review: review.facts,
       acceptanceCoverage: coverage,
-      formalRecordStatus: integrationAudit.formal_record_status,
     });
   const acceptanceComplete = coverage.accepted_criterion_ids.length > 0
     && coverage.items.length === coverage.accepted_criterion_ids.length
@@ -4184,7 +4135,7 @@ HANDLERS.set("build-code", async (worker, input) => {
       },
       ...(audit?.facts ?? {}),
     },
-    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(uiQa?.evidence ? [uiQa.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...reviewBinding.evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
+    evidence_refs: [impl.evidence, { ref: impl.value.diff_ref, sha256: impl.value.diff_hash }, tests.evidence, ...(review.evidence ? [review.evidence] : []), ...(uiQa?.evidence ? [uiQa.evidence] : []), ...(audit?.evidence ? [audit.evidence] : []), ...review.risk_evidence, ...coverage.items.flatMap((item) => item.evidence_refs)],
     missing_items: [
       ...missingItems,
       ...(input.contract_facts === undefined ? [] : contractFacts.missing_items),
@@ -4204,8 +4155,8 @@ HANDLERS.set("build-code", async (worker, input) => {
     },
     audit,
     verification: review.facts.status === "unavailable"
-      ? "正式测试通过；独立审查暂不可用，已保留为质量事实，verify-code 必须如实显示不完整"
-      : (tests.facts.exit_code === 0 ? "正式测试通过，最终实现与集成审查绑定同一快照" : "正式测试未通过"),
+      ? "正式测试通过；Phase 审查暂不可用，已保留为质量事实"
+      : (tests.facts.exit_code === 0 ? "正式测试通过；Phase 审查与 finding 处置单独记录" : "正式测试未通过"),
   });
 });
 
@@ -4216,16 +4167,12 @@ HANDLERS.set("verify-code", async (worker, input) => {
   const review = codeReviewFacts(worker, input, "quality_review");
   // A build-code Phase review is an existing K5 input. Read it through the
   // existing `review` receipt slot and authenticate it with the producer stage;
-  // this leaves quality_review as verify-code's own lens. A verify-code review
-  // in the same slot remains the existing optional independent/advisory path.
+  // this leaves quality_review as verify-code's own lens.
   const phaseReview = phaseReviewFacts(worker, input);
-  const independentReview = phaseReview === null && input.receipts?.review !== undefined
-    ? safeReviewFacts(worker, input, "review", undefined, "verify-code", {
-      requireRiskAcceptance: false,
-      requireDispositions: false,
-    })
-    : null;
-  const reviewConclusions = partitionVerifyReviewConclusions({ phaseReview, codeReview: review, independentReview });
+  if (input.receipts?.review !== undefined && phaseReview === null) {
+    throw new Error("verify-code receipts.review only accepts a build-code Phase review; use receipts.quality_review for OCR code review");
+  }
+  const reviewConclusions = partitionVerifyReviewConclusions({ phaseReview, codeReview: review });
   const componentQuality = componentQualityConsumerFacts(worker, input);
   const findings = Array.isArray(review.value?.findings) ? review.value.findings : [];
   const actionableFindings = findings.filter(isActionableSeriousFinding);
@@ -4261,7 +4208,6 @@ HANDLERS.set("verify-code", async (worker, input) => {
       review_diagnostics: reviewDiagnostics,
       ...(phaseReview ? { phase_review: phaseReview.facts } : {}),
       review_conclusions: reviewConclusions,
-      ...(independentReview ? { review: independentReview.facts } : {}),
       component_quality: componentQuality.facts,
       ...(e2eAcceptance.required ? { e2e_acceptance: e2eAcceptance } : {}),
       completion_subjects: {
@@ -4282,13 +4228,12 @@ HANDLERS.set("verify-code", async (worker, input) => {
     evidence_refs: [
       ...(review.evidence ? [review.evidence] : []),
       ...(phaseReview?.evidence ? [phaseReview.evidence] : []),
-      ...(independentReview?.evidence ? [independentReview.evidence] : []),
     ],
     missing_items: [...reviewMissing, ...componentQuality.missing_items, ...e2eAcceptance.missing_items],
   }, {
     worker,
     artifacts: [],
-    reviews: [review, ...(phaseReview ? [phaseReview] : []), ...(independentReview ? [independentReview] : [])],
+    reviews: [review, ...(phaseReview ? [phaseReview] : [])],
     businessFacts: {
       content: "not_applicable",
       code: review.facts.status === "recorded" ? "reviewed" : "unknown",

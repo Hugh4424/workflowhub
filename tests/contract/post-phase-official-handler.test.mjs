@@ -184,7 +184,6 @@ describe("post build-plan official handler", () => {
         material_revision: materialRevision,
         source_content_sha256: sourceContentSha256,
         skill_bundle_sha256: skillBundleSha256,
-        source_ids: ["U-001"],
       });
       expect(request.materials).toMatchObject({
         decision_log: artifacts.read("decision-log.md"),
@@ -202,7 +201,7 @@ describe("post build-plan official handler", () => {
         material_revision: materialRevision,
         source_content_sha256: sourceContentSha256,
         skill_bundle_sha256: skillBundleSha256,
-        source_ids: ["U-001"],
+        source_ids: request.source_ids,
         result: {
           status: "inconsistent",
           facts: { lens_execution_id: "build-code-lens-current-revision" },
@@ -226,7 +225,7 @@ describe("post build-plan official handler", () => {
     });
   });
 
-  it("CARD07 P4 official final analyze reads decision-log originals but never invents semantic coverage", async () => {
+  it("post build-plan final analyze reports structure without semantic census", async () => {
     const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
     const context = {
       stage: "build-plan", task, kernel, identity: task.identity, manifest: task.manifest,
@@ -237,21 +236,17 @@ describe("post build-plan official handler", () => {
       spec_analyze: { result: { status: "consistent" } },
     })).rejects.toThrow(/unknown fields: spec_analyze/);
     const result = await runOfficialStage("build-plan", context, { receipts: {} });
-    expect(result.quality_advisories).toContain("stage-end-spec-analyze:inconsistent");
+    expect(result.quality_advisories).not.toContain("stage-end-spec-analyze:inconsistent");
     const facts = (result.quality_advisory_fact_refs ?? []).map((ref) => JSON.parse(task.readRecord(ref)));
     const fact = facts.find((item) => item.subject === "stage_end_spec_analyze");
-    expect(fact).toMatchObject({ subject: "stage_end_spec_analyze", status: "missing" });
+    expect(fact).toMatchObject({ subject: "stage_end_spec_analyze", status: "passed" });
     const acceptance = JSON.parse(task.readRecord(fact.evidence[0].ref));
     const stageQuality = JSON.parse(task.readRecord(acceptance.refs[0].ref));
-    expect(stageQuality.subject_fact.analysis_result).toMatchObject({ status: "inconsistent" });
-    expect(stageQuality.subject_fact.analysis_result.facts.requirement_count).toBe(1);
+    expect(stageQuality.subject_fact.analysis_result).toMatchObject({ status: "reported" });
+    expect(stageQuality.subject_fact.analysis_result.facts.requirement_count).toBeNull();
     expect(stageQuality.subject_fact.analysis_result.facts.source_content_sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(stageQuality.subject_fact.analysis_result.facts.skill_bundle_sha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(stageQuality.subject_fact.analysis_result.facts.source_units).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "U-001", kind: "verbatim_u", start_line: expect.any(Number), content_sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }),
-    ]));
-    expect(stageQuality.subject_fact.analysis_result.errors.join("; ")).toMatch(/U-001 status=partial/);
-    expect(stageQuality.subject_fact.analysis_result.errors.join("; ")).not.toMatch(/original_requirement material|authenticated original source census/);
+    expect(stageQuality.subject_fact.analysis_result.errors).toEqual([]);
   });
 
   it("publishes final analysis against one current snapshot, material revision, original source and skill bundle", async () => {
@@ -267,10 +262,10 @@ describe("post build-plan official handler", () => {
 
     const result = await runOfficialStage("build-plan", context, { receipts: {} });
     const { fact, acceptance, stageQuality, analysis } = analyzerReadback(task, result);
-    expect(fact).toMatchObject({ status: "missing", snapshot_tree: snapshotTree, material_revision: materialRevision });
+    expect(fact).toMatchObject({ status: "passed", snapshot_tree: snapshotTree, material_revision: materialRevision });
     expect(acceptance).toMatchObject({ snapshot_tree: snapshotTree, freshness: { snapshot_tree: snapshotTree, material_revision: materialRevision } });
     expect(stageQuality).toMatchObject({ snapshot_tree: snapshotTree, material_revision: materialRevision });
-    expect(analysis).toMatchObject({ status: "inconsistent", facts: {
+    expect(analysis).toMatchObject({ status: "reported", facts: {
       source_content_sha256: sha256(decisionLog), skill_bundle_sha256: sha256(skillBundle),
     } });
   });
@@ -296,7 +291,6 @@ describe("post build-plan official handler", () => {
         material_revision: materialRevision,
         source_content_sha256: sourceContentSha256,
         skill_bundle_sha256: skillBundleSha256,
-        source_ids: ["U-001"],
       });
       expect(request.materials).toMatchObject({
         decision_log: artifacts.read("decision-log.md"),
@@ -313,10 +307,9 @@ describe("post build-plan official handler", () => {
         material_revision: materialRevision,
         source_content_sha256: sourceContentSha256,
         skill_bundle_sha256: skillBundleSha256,
-        source_ids: ["U-001"],
         result: {
           status: "inconsistent",
-          facts: { lens_execution_id: "lens-current-revision", source_ids: ["U-001"] },
+          facts: { lens_execution_id: "lens-current-revision" },
           errors: ["U-001 semantic coverage remains unknown"],
         },
       };
@@ -329,7 +322,7 @@ describe("post build-plan official handler", () => {
     expect(stageQuality).toMatchObject({ snapshot_tree: snapshotTree, material_revision: materialRevision });
     expect(analysis).toMatchObject({
       status: "inconsistent",
-      facts: { lens_execution_id: "lens-current-revision", source_ids: ["U-001"] },
+      facts: { lens_execution_id: "lens-current-revision" },
       errors: expect.arrayContaining(["U-001 semantic coverage remains unknown"]),
     });
   });
@@ -341,8 +334,8 @@ describe("post build-plan official handler", () => {
       workflowRunId: kernel.deriveStageWorkflowRunId("build-plan"), candidateWorkspace, workspace, artifacts,
     };
     const { fact, analysis } = analyzerReadback(task, await runOfficialStage("build-plan", context, { receipts: {} }));
-    expect(fact.status).not.toBe("passed");
-    expect(analysis.status).not.toBe("consistent");
+    expect(fact.status).toBe("passed");
+    expect(analysis.status).toBe("reported");
     expect(analysis.facts.lens_execution_status).toBe("unavailable");
   });
 
@@ -361,15 +354,14 @@ describe("post build-plan official handler", () => {
       runSpecAnalyze: async () => { throw new Error(secret); },
     });
     const { fact, stageQuality, analysis } = analyzerReadback(task, result);
-    expect(fact.status).toBe("missing");
+    expect(fact.status).toBe("passed");
     expect(stageQuality).toMatchObject({ snapshot_tree: snapshotTree, material_revision: materialRevision });
-    expect(analysis.status).not.toBe("consistent");
+    expect(analysis.status).toBe("reported");
     expect(analysis.facts).toMatchObject({
       source_content_sha256: sourceContentSha256,
       skill_bundle_sha256: skillBundleSha256,
       lens_execution_status: "unavailable",
       lens_failure_code: "executor_rejected",
-      source_units: expect.arrayContaining([expect.objectContaining({ id: "U-001" })]),
     });
     expect(JSON.stringify({ result, stageQuality, analysis })).not.toContain(secret);
   });
@@ -391,7 +383,6 @@ describe("post build-plan official handler", () => {
         material_revision: kernel.currentVNextMaterialRevision(),
         source_content_sha256: sha256(artifacts.read("decision-log.md")),
         skill_bundle_sha256: sha256(readFileSync(new URL("../../skills/spec-analyze/skill-bundle.json", import.meta.url))),
-        source_ids: ["U-001"],
         result: { status: "unknown", facts: { lens_execution_id: "unknown-verdict" }, errors: ["semantic equivalence unknown"] },
       }),
     }));
@@ -407,7 +398,6 @@ describe("post build-plan official handler", () => {
 
   it.each([
     ["stale material revision", (bound) => ({ ...bound, material_revision: "old-revision" }), /material_revision does not match/],
-    ["missing source ID", (bound) => ({ ...bound, source_ids: [] }), /source_ids do not match/],
     ["self-asserted consistency", (bound) => ({ ...bound, result: { ...bound.result, status: "consistent" } }), /unauthenticated consistency/],
   ])("rejects a portable lens result with %s", async (_name, alter, errorPattern) => {
     const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
@@ -425,7 +415,6 @@ describe("post build-plan official handler", () => {
       material_revision: kernel.currentVNextMaterialRevision(),
       source_content_sha256: sha256(artifacts.read("decision-log.md")),
       skill_bundle_sha256: sha256(readFileSync(new URL("../../skills/spec-analyze/skill-bundle.json", import.meta.url))),
-      source_ids: ["U-001"],
       result: { status: "inconsistent", facts: {}, errors: ["semantic coverage unknown"] },
     };
     await expect(runOfficialStage("build-plan", context, { receipts: {} }, {
@@ -454,7 +443,7 @@ describe("post build-plan official handler", () => {
     expect(nextTree).not.toBe(oldTree);
 
     const second = analyzerReadback(task, await runOfficialStage("build-plan", context, { receipts: {} }));
-    expect(second.fact.status).toBe("missing");
+    expect(second.fact.status).toBe("passed");
     expect(second.stageQuality).toMatchObject({ material_revision: nextRevision, snapshot_tree: nextTree });
     expect(second.stageQuality.material_revision).not.toBe(oldRevision);
     expect(second.analysis.facts.source_content_sha256).toBe(first.analysis.facts.source_content_sha256);
@@ -464,7 +453,7 @@ describe("post build-plan official handler", () => {
     });
   });
 
-  it("keeps a weakened every-round requirement non-pass at the official publication boundary", async () => {
+  it("keeps a weakened semantic statement for independent review rather than the structural report", async () => {
     const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
     const context = {
       stage: "build-plan", task, kernel, identity: task.identity, manifest: task.manifest,
@@ -479,13 +468,13 @@ describe("post build-plan official handler", () => {
     ));
 
     const { fact, analysis } = analyzerReadback(task, await runOfficialStage("build-plan", context, { receipts: {} }));
-    expect(fact.status).not.toBe("passed");
-    expect(analysis.status).not.toBe("consistent");
+    expect(fact.status).toBe("passed");
+    expect(analysis.status).toBe("reported");
     expect(analysis.facts.source_content_sha256).toBe(sha256(decisionLog));
-    expect(analysis.errors.join("; ")).toMatch(/U-001 status=(?:partial|missing)/);
+    expect(analysis.errors).toEqual([]);
   });
 
-  it("does not publish a pass when the decision-log original statement is absent", async () => {
+  it("keeps a missing decision-log statement for independent review", async () => {
     const { task, candidateWorkspace, workspace, artifacts, kernel } = fixture();
     const context = {
       stage: "build-plan", task, kernel, identity: task.identity, manifest: task.manifest,
@@ -495,10 +484,10 @@ describe("post build-plan official handler", () => {
     artifacts.writeAtomic("decision-log.md", noOriginal);
 
     const { fact, analysis } = analyzerReadback(task, await runOfficialStage("build-plan", context, { receipts: {} }));
-    expect(fact.status).not.toBe("passed");
-    expect(analysis.status).not.toBe("consistent");
+    expect(fact.status).toBe("passed");
+    expect(analysis.status).toBe("reported");
     expect(analysis.facts.source_content_sha256).toBe(sha256(noOriginal));
-    expect(analysis.errors.join("; ")).toMatch(/decision-log original source census|unmapped|source/i);
+    expect(analysis.errors).toEqual([]);
   });
 
   it("consumes physical Phase files and never requires plan/tasks placeholders", async () => {

@@ -1,0 +1,10 @@
+cwd: /Users/Hugh/Hugh/Project/3rd-review-card05-broker-red
+command: node --test test/broker.test.mjs test/managed-session-lifecycle.test.mjs
+exit_code: 1
+captured_at: 2026-09-22T07:01:13Z
+git_branch: codex/card05-broker-red
+git_head: a96f28b724b7f14df307716cb3feeae21da13d88
+test/broker.test.mjs sha256: 911ee760b277d59c522fd49f9791fd4df9201f5e70ed8bd58a9565485600d7b2
+test/managed-session-lifecycle.test.mjs sha256: c1cf23917eecde4cfac80d81c61b733f1cd6d78ba4667a9d8f1356323344f06e
+worktree_status: modified test/broker.test.mjs only
+baseline_limit: isolated worktree starts at clean HEAD; the second repository's main checkout has 13 unrelated or overlapping dirty files that are not included.

@@ -3,6 +3,34 @@ import {
   deriveStageCompletion,
   deriveStageProgress,
 } from "../../runtime/stage/completion-predicates.mjs";
+import {
+  derivePhaseProgressStatus,
+  phaseProgressTargetExists,
+  projectStageExecutionOutcome,
+} from "../../tools/cli/stage-runtime.mjs";
+
+const POST_PHASE_MATERIALS = {
+  "phases/index.md": [
+    "# Phase index",
+    "",
+    "## Execution Index",
+    "",
+    "| phase | authority ref | semantic anchor | write set | dependency | consumer |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| `P1` | `phases/P1.md` | `phase-p1` | `src/a.mjs` | `none` | `build-code` |",
+  ].join("\n"),
+  "phases/P1.md": [
+    "# Phase P1 — First phase",
+    "",
+    "## L1 — Tasks",
+    "",
+    "### T001 — First task",
+    "",
+    "### T002 — Second task",
+    "",
+    "## L2 — Notes",
+  ].join("\n"),
+};
 
 describe("WorkflowHub stage progress contract", () => {
   it.each([
@@ -71,6 +99,88 @@ describe("WorkflowHub stage progress contract", () => {
       required_materials: ["decision-log.md", "spec.md"],
       missing_materials: ["spec.md"],
     });
+  });
+
+  it("reads a current resume cursor without turning it into completion or work status", () => {
+    const cursor = {
+      phase_id: "P1",
+      task_id: "T002",
+      material_revision: `revision-${"a".repeat(64)}`,
+      recorded_at: "2026-09-25T01:02:03.000Z",
+    };
+
+    const result = derivePhaseProgressStatus({
+      cursor,
+      currentMaterialRevision: cursor.material_revision,
+      materials: POST_PHASE_MATERIALS,
+      activationCohort: "post",
+    });
+
+    expect(result).toEqual({ freshness: "current", cursor });
+    expect(deriveStageProgress("build-code", [], {
+      "decision-log.md": "decision",
+      "spec.md": "spec",
+      ...POST_PHASE_MATERIALS,
+    }, { activationCohort: "post" })).toMatchObject({ work_status: "ready" });
+    expect(deriveStageCompletion("build-code", [])).toMatchObject({ status: "in_progress" });
+  });
+
+  it("labels a cursor stale only when its material revision changed", () => {
+    const cursor = {
+      phase_id: "P1",
+      task_id: "T002",
+      material_revision: `revision-${"a".repeat(64)}`,
+      recorded_at: "2026-09-25T01:02:03.000Z",
+    };
+
+    expect(derivePhaseProgressStatus({
+      cursor,
+      currentMaterialRevision: `revision-${"b".repeat(64)}`,
+      materials: POST_PHASE_MATERIALS,
+      activationCohort: "post",
+    })).toMatchObject({ freshness: "stale", reason: "material_revision_mismatch", cursor });
+  });
+
+  it("validates cursor targets against the indexed physical Phase and its Task cards", () => {
+    const materials = { ...POST_PHASE_MATERIALS, "spec.md": "Current spec" };
+    expect(phaseProgressTargetExists({ phase_id: "P1", task_id: "T002" }, materials)).toBe(true);
+    expect(phaseProgressTargetExists({ phase_id: "P1", task_id: "T999" }, materials)).toBe(false);
+    expect(phaseProgressTargetExists({ phase_id: "P2", task_id: "T002" }, materials)).toBe(false);
+  });
+
+  it("does not project a cursor-only row as a stage-end execution outcome", () => {
+    const derived = {
+      "build-code": {
+        status: "unavailable",
+        blocking: false,
+        attempt_count: 1,
+        completed_attempt_count: 0,
+        refs: ["facts.jsonl"],
+      },
+    };
+
+    expect(projectStageExecutionOutcome("build-code", derived, [{
+      record_kind: "stage",
+      stage: "build-code",
+      source: "phase-progress-cursor",
+    }])).toMatchObject({
+      status: "unavailable",
+      attempt_count: 0,
+      completed_attempt_count: 0,
+      refs: [],
+      diagnostic: { code: "phase_progress_cursor_only" },
+    });
+
+    expect(projectStageExecutionOutcome("build-code", derived, [{
+      record_kind: "stage",
+      stage: "build-code",
+      source: "stage-end:build-code",
+    }])).toBe(derived["build-code"]);
+
+    expect(projectStageExecutionOutcome("build-code", derived, [
+      { record_kind: "stage", stage: "build-code", source: "phase-progress-cursor" },
+      { record_kind: "stage", stage: "build-code", source: "stage-end:build-code" },
+    ])).toBe(derived["build-code"]);
   });
 
   it("rejects completed plus incomplete fake green while keeping work ready", () => {

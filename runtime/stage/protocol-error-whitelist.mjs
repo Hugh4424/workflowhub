@@ -51,23 +51,25 @@ const RAW_WHITELIST = [
     class_id: "verify_review_without_outcome",
     stages: ["verify-code"],
     surfaces: ["stage"],
-    match: (message) => message === "verify-code quality_review requires a bound dsh-code-review stage outcome",
-    diagnostic: diagnostic("review_binding", "a current dsh-code-review stage outcome", "quality_review was supplied without a bound stage outcome"),
+    match: (message) => message === "verify-code quality_review requires a bound Architect-Code-Review stage outcome",
+    diagnostic: diagnostic("review_binding", "a current Architect-Code-Review stage outcome", "quality_review was supplied without a bound stage outcome"),
   },
   {
     class_id: "verify_outcome_unbound_review",
     stages: ["verify-code"],
     surfaces: ["stage"],
-    match: (message) => message === "verify-code quality_review is not bound to the dsh-code-review stage outcome"
-      || message === "verify-code quality_review is not bound to a dsh-code-review stage outcome",
-    diagnostic: diagnostic("review_binding", "quality_review_ref equals the dsh-code-review stage outcome ref", "the stage outcome has no bound quality_review_ref"),
+    match: (message) => message === "verify-code quality_review is not bound to the Architect-Code-Review stage outcome"
+      || message === "verify-code quality_review is not bound to an Architect-Code-Review stage outcome"
+      || message === "verify-code quality_review is not bound to a complete OCR review ref/hash pair",
+    diagnostic: diagnostic("review_binding", "quality_review_ref equals the authenticated OCR review ref", "the stage outcome has no complete review ref/hash pair"),
   },
   {
     class_id: "verify_review_mismatch",
     stages: ["verify-code"],
     surfaces: ["stage"],
-    match: (message) => message === "verify-code quality_review does not match the dsh-code-review stage outcome",
-    diagnostic: diagnostic("review_binding", "the derived dsh-code-review result ref/hash", "the supplied quality_review binding differs from the derived pair"),
+    match: (message) => message === "verify-code quality_review does not match the Architect-Code-Review stage outcome"
+      || message === "verify-code quality_review does not match the OCR review stage outcome",
+    diagnostic: diagnostic("review_binding", "the authenticated OCR result ref/hash", "the supplied quality_review binding differs from the derived pair"),
   },
   {
     class_id: "verify_receipt_fields",
@@ -103,7 +105,7 @@ const RAW_WHITELIST = [
     class_id: "close_review_binding",
     stages: ["verify-code"],
     surfaces: ["resolved-review-authorization"],
-    match: (message) => message === "verify-code quality_review requires a bound dsh-code-review stage outcome"
+    match: (message) => message === "verify-code quality_review requires a bound Architect-Code-Review stage outcome"
       || message === "resolved review authorization does not bind the current review evidence",
     diagnostic: diagnostic("review_binding", "the current review evidence is bound to the stage outcome", "the review evidence is absent or bound to another outcome"),
   },
@@ -113,7 +115,9 @@ const RAW_WHITELIST = [
     surfaces: ["resolved-review-authorization"],
     match: (message) => message === "resolved review authorization review result hash mismatch"
       || message === "resolved review authorization review result identity mismatch"
-      || message === "resolved review authorization code_review binding is invalid",
+      || message === "resolved review authorization code_review binding is invalid"
+      || message === "resolved review current-session source is not an authenticated OCR result"
+      || message === "resolved review authorization source is not an authenticated OCR result",
     diagnostic: diagnostic("review_identity", "the review result has the current task/stage identity and hash", "the review result hash or identity does not match"),
   },
   {

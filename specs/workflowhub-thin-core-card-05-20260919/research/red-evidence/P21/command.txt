@@ -1,0 +1,1 @@
+npx vitest run tests/official-make-decision-cli.test.mjs -t ORACLE-P21-UNKNOWN-ARG --reporter=dot

@@ -1,0 +1,14 @@
+{
+  "schema_version": "card05-red-command.v1",
+  "task_id": "workflowhub-thin-core-card-05-20260919",
+  "task": "T005",
+  "command": "npx vitest run tests/contract/review-materials-contract.test.mjs -t ORACLE-P3-PACKET",
+  "exit_code": 1,
+  "target_failure": "ORACLE-P3-PACKET: integration diff absent; verify-code AC forbidden",
+  "channels": {
+    "stdout": "stdout.log",
+    "stderr": "stderr.log"
+  },
+  "source_kind": "actual-scoped-reexecution",
+  "recorded_at": "2026-09-22T06:59:50.663Z"
+}

@@ -14,7 +14,10 @@ import {
   recordTaskBoundE2eReviewUnavailable,
 } from "../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
+import { authenticateStageReviewResult } from "../../runtime/evidence/freshness.mjs";
+import { authenticateCurrentOcrReviewFact } from "../../runtime/stage/stage-runner.mjs";
 import { resolveReviewRouteIdentity } from "../../runtime/review/review-route-identity.mjs";
+import { aggregateCanonicalProviderResults } from "../../runtime/review/canonical-review-result.mjs";
 import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
@@ -103,6 +106,120 @@ function contentHash(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
+const findingFor = (provider, issue, line) => ({
+  ...baseResult().findings[0],
+  provider,
+  path: "materials/06-implementation_summary.md",
+  line,
+  issue,
+  root_cause: issue,
+});
+
+describe("P2 prewritten review union and anchor oracles", () => {
+  it("ORACLE-P2-UNION: records every successful member and labels single versus corroborated findings", () => {
+    const { task, kernel } = makeTask();
+    const first = baseResult().provider_results[0];
+    const second = {
+      ...first,
+      provider: "opencode/pax3.8",
+      identity: { provider: "opencode/pax3.8", adapter: "opencode", source_id: "opencode/pax3.8", config_id: "cfg-pax", model: "pax/qwen3.8" },
+      evidence_anchor_valid: [true, true],
+    };
+    const failed = {
+      provider: "kimi/coding", status: "failed", error: { code: "PROCESS_DEAD", message: "transport failed" },
+      timing: { started_at_ms: 3, completed_at_ms: 4, duration_ms: 1 }, usage: null, evidence_anchor_valid: [],
+    };
+    const raw = {
+      ...baseResult(), status: "available-with-failures", outcome: "partial", minimum_heterologous: 1,
+      provider_results: [{ ...first, evidence_anchor_valid: [true, true] }, second, failed],
+      findings: [
+        findingFor("codex/luna", "shared state update skips the consumer", 10),
+        findingFor("opencode/pax3.8", "shared state update skips the consumer", 10),
+        findingFor("codex/luna", "only the first reviewer found stale writes", 20),
+        findingFor("opencode/pax3.8", "only the second reviewer found a lost retry", 30),
+      ],
+    };
+    const refs = recordSimpleReviewResult({ task, kernel, result: raw });
+    expect(refs.result_ref).toEqual(expect.any(String));
+    const saved = JSON.parse(task.readRecord(refs.result_ref));
+    expect(saved.findings).toHaveLength(3);
+    const byLine = new Map(saved.findings.map((finding) => [finding.line, finding]));
+    expect(byLine.get(10)).toMatchObject({ providers: ["codex/luna", "opencode/pax3.8"], source_strength: "corroborated" });
+    expect(byLine.get(20)).toMatchObject({ providers: ["codex/luna"], source_strength: "single_source" });
+    expect(byLine.get(30)).toMatchObject({ providers: ["opencode/pax3.8"], source_strength: "single_source" });
+    expect(JSON.parse(task.readRecord(refs.attempt_ref)).provider_attempts).toHaveLength(3);
+  });
+
+  it("ORACLE-P2-SAME-MEMBER-UNION: keeps unique findings across results from one member without counting retries twice", () => {
+    const identity = { provider: "codex/luna", adapter: "codex", source_id: "codex/luna", config_id: "cfg", model: "gpt-5.6-luna" };
+    const firstFinding = findingFor("codex/luna", "first valid finding from this member", 51);
+    const secondFinding = findingFor("codex/luna", "second valid finding from this member", 52);
+    const result = aggregateCanonicalProviderResults([
+      { provider: "codex/luna", identity, review: { findings: [firstFinding] }, evidenceAnchors: [true] },
+      { provider: "codex/luna", identity, review: { findings: [firstFinding, secondFinding] }, evidenceAnchors: [true, true] },
+    ], 1, { requireIdentity: true, requireSourceId: true });
+
+    expect(result.status).toBe("available");
+    expect(result.valid).toHaveLength(1);
+    expect(result.findings.map(({ issue }) => issue).sort()).toEqual([
+      "first valid finding from this member",
+      "second valid finding from this member",
+    ]);
+    expect(result.findings.every(({ source_strength, finding_count }) => source_strength === "single_source" && finding_count === 1)).toBe(true);
+  });
+
+  it("ORACLE-P2-CLAIM-IDENTITY: does not corroborate opposite claims or findings without matching source lines", () => {
+    const { task, kernel } = makeTask();
+    const raw = {
+      ...baseResult(),
+      provider_results: [
+        { ...baseResult().provider_results[0], evidence_anchor_valid: [true, true] },
+        {
+          ...baseResult().provider_results[0],
+          provider: "opencode/pax3.8",
+          identity: { provider: "opencode/pax3.8", adapter: "opencode", source_id: "opencode/pax3.8", config_id: "cfg-pax", model: "pax/qwen3.8" },
+          evidence_anchor_valid: [true, true],
+        },
+      ],
+      findings: [
+        findingFor("codex/luna", "shared state does not validate token", 40),
+        findingFor("opencode/pax3.8", "shared state validates token", 40),
+        findingFor("codex/luna", "request identity is checked before dispatch", undefined),
+        findingFor("opencode/pax3.8", "request identity is checked before dispatch", 41),
+      ],
+    };
+    const refs = recordSimpleReviewResult({ task, kernel, result: raw });
+    const saved = JSON.parse(task.readRecord(refs.result_ref));
+    expect(saved.findings).toHaveLength(4);
+    expect(saved.findings.map((finding) => finding.source_strength)).toEqual([
+      "single_source", "single_source", "single_source", "single_source",
+    ]);
+  });
+
+  it("ORACLE-P2-ANCHOR: keeps a provider-declared invalid anchor invalid in task-bound E2E output", () => {
+    const { task, kernel } = makeTask();
+    const snapshot = kernel.currentVNextSnapshot();
+    const materialRevision = kernel.currentVNextMaterialRevision();
+    const result = {
+      ...baseResult(), stage: "verify-code",
+      provider_results: [{ ...baseResult().provider_results[0], evidence_anchor_valid: [false] }],
+      findings: [findingFor("codex/luna", "nonexistent file line cannot prove the finding", 999)],
+    };
+    const binding = {
+      snapshot_tree: snapshot.tree, material_revision: materialRevision,
+      frozen_material: { ref: `quality/evidence/review-materials/${"a".repeat(64)}.json`, sha256: "a".repeat(64), provider_input_sha256: result.material_id },
+      reviewed_execution: { ref: `quality/evidence/stage-quality/build-code/acceptance_execution-${"b".repeat(64)}.json`, sha256: "b".repeat(64), actor: { source_id: "workflowhub-session" } },
+      reviewer_actor: { source_id: "codex/luna", run_id: "fixture-run" },
+    };
+    const refs = recordTaskBoundE2eReviewResult({ task, result, binding });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    const output = JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref));
+    expect(output.evidence_anchor_valid).toEqual([false]);
+    const saved = JSON.parse(task.readRecord(refs.result_ref));
+    expect(saved.findings[0].provider_findings[0].evidence_anchor_valid).toBe(false);
+  });
+});
+
 describe("review record route", () => {
   it("RED: keeps a spec-analyze skip in both facts and the error ledger", () => {
     const result = validateStageSpecAnalyzeProfile({
@@ -168,6 +285,99 @@ describe("review record route", () => {
       parse_outcome: null,
       error: { code: "PROCESS_DEAD" },
     });
+  });
+
+  it("keeps terminal OCR health on the canonical attempt without adding health to broker results", () => {
+    const { task, kernel } = makeTask();
+    const health = {
+      provider: "codex/luna", status: "completed", liveness: false,
+      last_liveness_at_ms: 10, last_output_at_ms: 11,
+      progress_events: 2, stdout_bytes: 128, stderr_bytes: 0,
+    };
+    const result = baseResult();
+    result.provider_results[0].execution = { health };
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.provider_attempts[0].execution.health).toEqual(health);
+
+    const broker = baseResult();
+    broker.material_id = "f".repeat(64);
+    const brokerRefs = recordSimpleReviewResult({ task, kernel, result: broker });
+    const brokerAttempt = JSON.parse(task.readRecord(brokerRefs.attempt_ref));
+    expect(brokerAttempt.provider_attempts[0].execution).not.toHaveProperty("health");
+  });
+
+  it("keeps failed OCR health and the original provider error on an unavailable attempt", () => {
+    const { task, kernel } = makeTask();
+    const result = baseResult();
+    result.status = "unavailable";
+    result.outcome = "unavailable";
+    result.findings = [];
+    Object.assign(result.provider_results[0], {
+      status: "failed",
+      error: { code: "OCR_PROVIDER_EXIT_NONZERO", message: "stderr from provider" },
+      evidence_anchor_valid: [],
+      execution: { health: {
+        // The child exited successfully, but its review output failed parsing.
+        provider: "codex/luna", status: "completed", liveness: false,
+        last_liveness_at_ms: null, last_output_at_ms: null,
+        progress_events: 0, stdout_bytes: 0, stderr_bytes: 17,
+      } },
+    });
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.terminal_status).toBe("unavailable");
+    expect(attempt.provider_attempts[0].error).toEqual(result.provider_results[0].error);
+    expect(attempt.provider_attempts[0].execution.health).toEqual(result.provider_results[0].execution.health);
+  });
+
+  it("keeps valid terminal health and raw error after post-dispatch fallback", async () => {
+    const { task, kernel } = makeTask();
+    const request = { stage: "build-code", materials: { implementation: "health fallback bytes" } };
+    const result = baseResult();
+    result.stage = "build-plan"; // Force the existing post-dispatch unavailable projection.
+    result.provider_results[0] = {
+      ...result.provider_results[0], status: "failed",
+      error: { code: "OCR_PROVIDER_EXIT_NONZERO", message: "original provider failure" },
+      execution: { health: {
+        provider: "codex/luna", status: "failed", liveness: false,
+        last_liveness_at_ms: 20, last_output_at_ms: null,
+        progress_events: 1, stdout_bytes: 0, stderr_bytes: 42,
+      } },
+    };
+    const refs = await recordSimpleReviewRequest({ task, kernel, request, runRound: async () => result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    validateSchema("attempt", attempt);
+    expect(attempt.terminal_status).toBe("unavailable");
+    expect(attempt.provider_attempts[0].error).toEqual(result.provider_results[0].error);
+    expect(attempt.provider_attempts[0].execution.health).toEqual(result.provider_results[0].execution.health);
+  });
+
+  it("rejects unvalidated health fields and a health snapshot bound to another provider", () => {
+    const { task, kernel } = makeTask();
+    const result = baseResult();
+    result.provider_results[0].execution = { health: {
+      provider: "codex/luna", status: "completed", liveness: false,
+      last_liveness_at_ms: null, last_output_at_ms: null,
+      progress_events: 0, stdout_bytes: 0, stderr_bytes: 0,
+    } };
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    attempt.provider_attempts[0].execution.health.stderr_tail = "private output";
+    expect(() => validateSchema("attempt", attempt)).toThrow(/SCHEMA_VALIDATION_FAILED/);
+    delete attempt.provider_attempts[0].execution.health.stderr_tail;
+    attempt.provider_attempts[0].execution.health.stdout_bytes = -1;
+    expect(() => validateSchema("attempt", attempt)).toThrow(/SCHEMA_VALIDATION_FAILED/);
+    attempt.provider_attempts[0].execution.health.stdout_bytes = 0;
+    delete attempt.provider_attempts[0].execution.health.last_output_at_ms;
+    expect(() => validateSchema("attempt", attempt)).toThrow(/SCHEMA_VALIDATION_FAILED/);
+    attempt.provider_attempts[0].execution.health.last_output_at_ms = null;
+    attempt.provider_attempts[0].execution.health.liveness = true;
+    expect(() => validateSchema("attempt", attempt)).toThrow(/SCHEMA_VALIDATION_FAILED/);
+    result.provider_results[0].execution.health.provider = "opencode/pax3.8";
+    expect(() => recordSimpleReviewResult({ task, kernel, result })).toThrow(/health does not match/);
   });
 
   it("persists an available simple review result", async () => {
@@ -245,6 +455,69 @@ describe("review record route", () => {
     const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
     expect(attempt.terminal_status).toBe("unavailable");
     expect(task.readRecord(refs.report_ref)).toContain('"coverage": "incomplete"');
+  });
+
+  it("ORACLE-AC002-PARTIAL-QUORUM: records one successful finding without satisfying a two-source quorum", async () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(), status: "unavailable", outcome: "failed", minimum_heterologous: 2,
+      error: { code: "OCR_INDEPENDENCE_INCOMPLETE", message: "only one independent reviewer completed" },
+      provider_results: [baseResult().provider_results[0], {
+        provider: "kimi/coding", status: "failed",
+        identity: { provider: "kimi/coding", adapter: "kimi", source_id: "kimi/coding", config_id: "cfg-kimi", model: "kimi" },
+        error: { code: "AUTHENTICATION_FAILED", message: "provider unavailable" },
+        evidence_anchor_valid: [], timing: { started_at_ms: 3, completed_at_ms: 4, duration_ms: 1 }, usage: null,
+      }],
+    };
+    const options = {
+      task, kernel, request: { stage: "build-code", materials: { implementation: "partial quorum fixture" } },
+      materialIdForRequest: () => result.material_id,
+      runRound: async () => result,
+    };
+    const recorded = await recordSimpleReviewRequest(options);
+    expect(recorded.result_ref).toEqual(expect.any(String));
+    expect(recorded.status).toBe("recorded");
+    const attempt = JSON.parse(task.readRecord(recorded.attempt_ref));
+    const canonical = JSON.parse(task.readRecord(recorded.result_ref));
+    validateSchema("attempt", attempt);
+    validateSchema("result", canonical);
+    expect(attempt).toMatchObject({ terminal_status: "unavailable", error: { code: "OCR_INDEPENDENCE_INCOMPLETE" },
+      review_policy: { minimum_heterologous: 2 }, coverage: { group_outcome: "partial", valid_provider_count: 1, minimum_required: 2 },
+      provider_attempts: [{ status: "completed" }, { status: "failed", error: { code: "AUTHENTICATION_FAILED" } }] });
+    const providerOutput = JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref));
+    expect(JSON.parse(providerOutput.content).findings).toHaveLength(1);
+    expect(canonical.findings).toEqual([expect.objectContaining({ providers: ["codex/luna"], source_strength: "single_source" })]);
+    const report = task.readRecord(recorded.report_ref);
+    expect(report).toContain('"semantic_status": "partial"');
+    expect(report).toContain('"coverage": "incomplete"');
+    expect(() => authenticateStageReviewResult(canonical, { taskId: task.identity.taskId, read: task.readRecord })).toThrow();
+    const reused = await recordSimpleReviewRequest(options);
+    expect(reused).toMatchObject({ reused: true, result_ref: recorded.result_ref });
+  });
+
+  it("ORACLE-AC002-PARTIAL-NO-CLEAN: zero findings from one source do not complete quality", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(), status: "unavailable", outcome: "failed", minimum_heterologous: 2,
+      error: { code: "OCR_INDEPENDENCE_INCOMPLETE", message: "one reviewer did not complete" },
+      findings: [],
+      provider_results: [{ ...baseResult().provider_results[0], evidence_anchor_valid: [] }, {
+        provider: "kimi/coding", status: "failed", error: { code: "AUTHENTICATION_FAILED", message: "provider unavailable" },
+        timing: { started_at_ms: 3, completed_at_ms: 4, duration_ms: 1 }, usage: null, evidence_anchor_valid: [],
+      }],
+    };
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    const canonical = JSON.parse(task.readRecord(refs.result_ref));
+    expect(canonical.findings).toEqual([]);
+    expect(attempt).toMatchObject({ terminal_status: "unavailable", coverage: { group_outcome: "partial" } });
+    expect(task.readRecord(refs.report_ref)).toContain('"coverage": "incomplete"');
+    expect(() => authenticateStageReviewResult(canonical, { taskId: task.identity.taskId, read: task.readRecord })).toThrow();
+    expect(authenticateCurrentOcrReviewFact(task, {
+      task_id: task.identity.taskId, stage: "build-code", subject: "integration_review", kind: "review", status: "recorded",
+      snapshot_tree: attempt.snapshot_tree, material_revision: attempt.material_revision,
+      evidence: [{ ref: refs.result_ref, sha256: contentHash(task.readRecord(refs.result_ref)), evidence_type: "review_result" }],
+    }, { snapshotTree: attempt.snapshot_tree, materialRevision: attempt.material_revision })).toBe(false);
   });
 
   it("rejects a semantic result whose findings field is missing instead of treating it as clean", () => {

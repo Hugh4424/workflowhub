@@ -93,7 +93,7 @@ export const STAGE_PREDICATES = Object.freeze({
   "build-code": Object.freeze({
     risk_tests_fresh: "test",
     acceptance_criteria: "acceptance_criterion",
-    finding_dispositions: "acceptance_criterion", integration_review: "review",
+    finding_dispositions: "acceptance_criterion",
   }),
   "verify-code": Object.freeze({
     code_review: "review",
@@ -102,8 +102,8 @@ export const STAGE_PREDICATES = Object.freeze({
 
 // Review and its dispositions are useful advice in the three authoring
 // stages. They stay recorded and visible without becoming completion gates.
-// build-code keeps both dispositions and its final integration review in
-// STAGE_PREDICATES because that is the one user-defined implementation gate.
+// build-code keeps finding dispositions required; Phase review advice remains
+// visible without requiring a second full-worktree review.
 //
 // `stage_end_spec_analyze` is advisory everywhere on purpose. The current
 // WorkflowHub session may publish the semantic fact when its packet is
@@ -114,9 +114,8 @@ export const STAGE_ADVISORY_PREDICATES = Object.freeze({
   "make-decision": Object.freeze({ direction_review: "review", detail_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
   "build-spec": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
   "build-plan": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
-  "build-code": Object.freeze({ stage_end_spec_analyze: "acceptance_criterion" }),
-  // wh-review's verify-code result is advice only.
-  "verify-code": Object.freeze({ independent_review: "review" }),
+  "build-code": Object.freeze({ phase_review: "review", stage_end_spec_analyze: "acceptance_criterion" }),
+  "verify-code": Object.freeze({}),
 });
 
 const FINDING_TERMINAL_STATUSES = new Set(["fixed", "rejected_invalid", "user_decided", "accepted_risk"]);
@@ -246,13 +245,18 @@ export function separateAttemptFindingFacts({ attempt_status, attempt_error = nu
   });
 }
 
-export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, subject = fact?.subject, review_status: reviewStatus, review_source: reviewSource } = {}) {
+export function qualityPredicateSatisfied(fact, kind, {
+  stage = fact?.stage, subject = fact?.subject,
+  review_status: reviewStatus, review_source: reviewSource,
+  review_authenticated: reviewAuthenticated = false,
+} = {}) {
   if (kind === "review") {
     // A real unavailable attempt is a current quality fact, but it is not a
     // completed independent review. It remains visible to stage handlers and
     // never blocks same-task repair; it must not satisfy formal completion.
     if (stage === "verify-code" && subject === "code_review") {
-      if (reviewSource !== undefined && reviewSource !== "wh_review.v2") return false;
+      if (!new Set(["ocr-delegation", "architect-code-review"]).has(reviewSource)
+          || reviewAuthenticated !== true) return false;
       // A review may finish with findings that were fixed in the same task.
       // `resolved` is a current disposition, not a claim that the old review
       // snapshot was clean.  Keep accepting the legacy `clean` value for
@@ -260,7 +264,7 @@ export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, sub
       return fact.status === "recorded" && new Set(["clean", "resolved"]).has(reviewStatus);
     }
     if (stage === "build-code" && subject === "integration_review") {
-      if (reviewSource !== undefined && reviewSource !== "wh_review.v2") return false;
+      if (reviewSource !== "ocr-delegation" || reviewAuthenticated !== true) return false;
       // build-code already has the required finding-disposition predicate;
       // the review fact only needs to be authentic and recorded.  Requiring a
       // second "clean" label duplicated that disposition check and created a
@@ -337,6 +341,7 @@ function selectLatestAcceptanceCandidates(candidates) {
 export function deriveStageCompletion(stage, observations = [], {
   requireStageOutcome = false,
   stageOutcomeStatus = null,
+  authenticateCodeReview = null,
   // Kept only as an ignored compatibility argument for legacy callers.
   // `outline_closed` is historical diagnostic data, never a current
   // completion predicate for either cohort.
@@ -403,8 +408,20 @@ export function deriveStageCompletion(stage, observations = [], {
     const observation = selected.observation;
     const fact = observation.fact?.value ?? observation.fact;
     const reviewStatus = observation.review_status ?? fact.review_status;
-    const reviewSource = observation.review_source ?? fact.review_source ?? fact.source;
-    if (qualityPredicateSatisfied(fact, fact.kind, { stage, subject, review_status: reviewStatus, review_source: reviewSource })) {
+    // verify-code's canonical source comes from the authenticated review
+    // record, never from a caller-written fact label such as `source`.
+    const codeReviewSubject = (stage === "verify-code" && subject === "code_review")
+      || (stage === "build-code" && subject === "integration_review");
+    const reviewSource = codeReviewSubject
+      ? observation.review_source
+      : observation.review_source ?? fact.review_source ?? fact.source;
+    const reviewAuthenticated = codeReviewSubject
+      && typeof authenticateCodeReview === "function"
+      && authenticateCodeReview({ fact, observation }) === true;
+    if (qualityPredicateSatisfied(fact, fact.kind, {
+      stage, subject, review_status: reviewStatus, review_source: reviewSource,
+      review_authenticated: reviewAuthenticated,
+    })) {
       satisfied.set(subject, observation);
     }
   }

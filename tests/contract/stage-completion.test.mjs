@@ -89,7 +89,7 @@ function boundVerifyCodeReviewOutcome({ suffix = null, taskId = "task", snapshot
     stageOutcome,
     stageOutcomeHash: outcomeHash,
     records: new Map([[stageOutcome, outcomeRaw]]),
-    observation: { fact: { ref: `quality/facts/${outcomeHash}.json`, value: reviewFact }, authenticated: true, freshness: { status: "current" } },
+    observation: { fact: { ref: `quality/facts/${outcomeHash}.json`, value: reviewFact }, authenticated: true, freshness: { status: "current" }, review_source: "ocr-delegation" },
   };
 }
 
@@ -101,7 +101,7 @@ function observations(stage) {
     },
     freshness: { status: "current" },
     authenticated: true,
-    ...((stage === "verify-code" && subject === "code_review") || (stage === "build-code" && subject === "integration_review") ? { review_status: "clean" } : {}),
+    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean", review_source: "ocr-delegation" } : {}),
   }));
 }
 
@@ -156,6 +156,8 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["build-plan"]).not.toHaveProperty("finding_dispositions");
     expect(STAGE_ADVISORY_PREDICATES["build-plan"].finding_dispositions).toBe("acceptance_criterion");
     expect(STAGE_PREDICATES["build-code"].finding_dispositions).toBe("acceptance_criterion");
+    expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("integration_review");
+    expect(STAGE_ADVISORY_PREDICATES["build-code"].phase_review).toBe("review");
     expect(STAGE_PREDICATES["make-decision"]).not.toHaveProperty("independent_review");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["build-code"]).not.toHaveProperty("tasks_complete");
@@ -164,24 +166,66 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("full_tests_fresh");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("same_build_integration_review");
     expect(STAGE_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
-    expect(STAGE_ADVISORY_PREDICATES["verify-code"].independent_review).toBe("review");
+    expect(STAGE_ADVISORY_PREDICATES["verify-code"]).not.toHaveProperty("independent_review");
   });
 
   it("does not treat a recorded verify-code review without a disposition as complete", () => {
     const facts = observations("verify-code").map((entry) => entry.fact.value.subject === "code_review"
       ? { ...entry, review_status: undefined }
       : entry);
-    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({
+    expect(deriveStageCompletion("verify-code", facts, { authenticateCodeReview: () => true })).toMatchObject({
       status: "in_progress",
       missing: expect.arrayContaining(["code_review"]),
     });
+  });
+
+  it("does not complete verify-code from an OCR source label without canonical authentication", () => {
+    const facts = observations("verify-code");
+    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({ status: "in_progress", missing: ["code_review"] });
+    expect(deriveStageCompletion("verify-code", facts, { authenticateCodeReview: () => false }))
+      .toMatchObject({ status: "in_progress", missing: ["code_review"] });
+    facts.find(({ fact }) => fact.value.subject === "code_review").review_source = "arbitrary-provider";
+    expect(deriveStageCompletion("verify-code", facts, { authenticateCodeReview: () => true }))
+      .toMatchObject({ status: "in_progress", missing: ["code_review"] });
+  });
+
+  it("does not let a historical integration review replace finding disposition", () => {
+    const facts = observations("build-code").filter(({ fact }) => fact.value.subject !== "finding_dispositions");
+    facts.push({
+      fact: { ref: "quality/old-integration.json", value: {
+        task_id: "task", stage: "build-code", kind: "review", subject: "integration_review", status: "recorded",
+      } },
+      authenticated: true, review_source: "ocr-delegation",
+    });
+    expect(deriveStageCompletion("build-code", facts)).toMatchObject({ status: "in_progress", missing: ["finding_dispositions"] });
+  });
+
+  it("completes build-code from tests, ACs, and finding disposition without an integration review", () => {
+    const facts = observations("build-code").filter(({ fact }) => fact.value.subject !== "integration_review");
+    expect(deriveStageCompletion("build-code", facts)).toMatchObject({
+      status: "completed",
+      missing: [],
+    });
+    expect(() => assertStageCompleted("build-code", facts)).not.toThrow();
+  });
+
+  it("does not demand another Phase review after a code repair", () => {
+    const facts = observations("build-code");
+    facts.push({
+      fact: { ref: "quality/phase-review.json", value: {
+        task_id: "task", stage: "build-code", kind: "review", subject: "phase_review",
+        status: "recorded", snapshot_tree: "prior-phase-tree",
+      } },
+      authenticated: true,
+    });
+    expect(deriveStageCompletion("build-code", facts)).toMatchObject({ status: "completed", missing: [] });
   });
 
   it("accepts a repaired review without requiring a clean re-review", () => {
     const facts = observations("verify-code").map((entry) => entry.fact.value.subject === "code_review"
       ? { ...entry, review_status: "resolved" }
       : entry);
-    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({
+    expect(deriveStageCompletion("verify-code", facts, { authenticateCodeReview: () => true })).toMatchObject({
       status: "completed",
       missing: [],
     });
@@ -189,7 +233,7 @@ describe("five-stage completion predicates derive only from quality facts", () =
 
   for (const stage of Object.keys(STAGE_PREDICATES)) {
     it(`${stage} completes from the exact authenticated fresh fact set`, () => {
-      expect(deriveStageCompletion(stage, observations(stage))).toMatchObject({ stage, status: "completed", missing: [] });
+      expect(deriveStageCompletion(stage, observations(stage), { authenticateCodeReview: () => true })).toMatchObject({ stage, status: "completed", missing: [] });
     });
     for (const subject of Object.keys(STAGE_PREDICATES[stage])) {
       const legacyUiApplicability = stage === "make-decision" && subject === "ui_applicability";
@@ -205,16 +249,15 @@ describe("five-stage completion predicates derive only from quality facts", () =
             : entry)
           : observations(stage).filter((entry) => entry.fact.value.subject !== subject);
         if (legacyUiApplicability) {
-          expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "completed", missing: [] });
+          expect(deriveStageCompletion(stage, facts, { authenticateCodeReview: () => true })).toMatchObject({ status: "completed", missing: [] });
         } else {
-          expect(deriveStageCompletion(stage, facts)).toMatchObject({ status: "in_progress", missing: [subject] });
+          expect(deriveStageCompletion(stage, facts, { authenticateCodeReview: () => true })).toMatchObject({ status: "in_progress", missing: [subject] });
         }
       });
     }
   }
 
   it.each([
-    ["build-code", "integration_review"],
     ["build-code", "acceptance_criteria"],
     ["verify-code", "code_review"],
   ])("%s cannot complete without required %s", (stage, subject) => {
@@ -243,11 +286,11 @@ describe("five-stage completion predicates derive only from quality facts", () =
 
   it("keeps a stage incomplete when two current facts claim the same predicate", () => {
     const facts = observations("build-code");
-    const original = facts.find(({ fact }) => fact.value.subject === "integration_review");
+    const original = facts.find(({ fact }) => fact.value.subject === "finding_dispositions");
     facts.push(structuredClone(original));
     const result = deriveStageCompletion("build-code", facts);
-    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["integration_review"]) });
-    expect(result.predicates.integration_review).toMatchObject({ status: "conflict", fact_ref: null });
+    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["finding_dispositions"]) });
+    expect(result.predicates.finding_dispositions).toMatchObject({ status: "conflict", fact_ref: null });
   });
 
   it("keeps a failed and a passed current fact in conflict instead of filtering the failed one", () => {
@@ -292,29 +335,30 @@ describe("five-stage completion predicates derive only from quality facts", () =
 
   it("keeps an equal terminal timestamp in explicit conflict instead of using ref order", () => {
     const facts = observations("build-code");
-    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
-    review.fact.value.recorded_at = "2026-08-22T00:00:00.000Z";
+    const disposition = facts.find(({ fact }) => fact.value.subject === "finding_dispositions");
+    disposition.fact.value.recorded_at = "2026-08-22T00:00:00.000Z";
     facts.push({
-      ...structuredClone(review),
+      ...structuredClone(disposition),
       fact: {
-        ref: "quality/integration-review-duplicate.json",
-        value: { ...review.fact.value, fact_id: "integration-review-duplicate" },
+        ref: "quality/finding-disposition-duplicate.json",
+        value: { ...disposition.fact.value, fact_id: "finding-disposition-duplicate" },
       },
     });
 
     const result = deriveStageCompletion("build-code", facts);
 
-    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["integration_review"]) });
-    expect(result.predicates.integration_review).toMatchObject({ status: "conflict", fact_ref: null });
+    expect(result).toMatchObject({ status: "in_progress", missing: expect.arrayContaining(["finding_dispositions"]) });
+    expect(result.predicates.finding_dispositions).toMatchObject({ status: "conflict", fact_ref: null });
   });
 
-  it("keeps a real unavailable review visible without declaring stage completion", () => {
-    const facts = observations("build-code");
-    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
-    review.fact.value.status = "unavailable";
+  it("keeps missing finding disposition incomplete when Phase review is unavailable", () => {
+    const facts = observations("build-code").filter(({ fact }) => fact.value.subject !== "finding_dispositions");
+    facts.push({ fact: { ref: "quality/phase-review.json", value: {
+      task_id: "task", stage: "build-code", kind: "review", subject: "phase_review", status: "unavailable",
+    } }, authenticated: true });
     expect(deriveStageCompletion("build-code", facts)).toMatchObject({
       status: "in_progress",
-      missing: expect.arrayContaining(["integration_review"]),
+      missing: expect.arrayContaining(["finding_dispositions"]),
     });
     expect(deriveStageProgress("build-code", facts, {
       "decision-log.md": "decision",
@@ -324,13 +368,13 @@ describe("five-stage completion predicates derive only from quality facts", () =
     })).toMatchObject({ work_status: "ready" });
   });
 
-  it("does not treat a provider-style passed review fact as recorded review", () => {
-    const facts = observations("build-code");
-    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
+  it("does not treat a provider-style passed code review fact as recorded review", () => {
+    const facts = observations("verify-code");
+    const review = facts.find(({ fact }) => fact.value.subject === "code_review");
     review.fact.value.status = "passed";
-    expect(deriveStageCompletion("build-code", facts)).toMatchObject({
+    expect(deriveStageCompletion("verify-code", facts, { authenticateCodeReview: () => true })).toMatchObject({
       status: "in_progress",
-      missing: expect.arrayContaining(["integration_review"]),
+      missing: expect.arrayContaining(["code_review"]),
     });
   });
 
@@ -366,9 +410,6 @@ describe("five-stage completion predicates derive only from quality facts", () =
 
   it("lets build-code finding disposition, not a clean label, decide completion", () => {
     const facts = observations("build-code");
-    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
-    review.review_status = "findings";
-    review.fact.value.findings = [{ severity: "major", disposition: "open" }];
     expect(deriveStageCompletion("build-code", facts)).toMatchObject({
       status: "completed",
       missing: [],

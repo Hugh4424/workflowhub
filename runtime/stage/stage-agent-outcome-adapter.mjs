@@ -7,14 +7,14 @@ import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureExecutionSnapshot, materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
-import { CURRENT_MATERIAL_FILES, verifyWorkerBrief } from "../task/material-workspace.mjs";
+import { CURRENT_MATERIAL_FILES, materialFilesForCohort, verifyWorkerBrief } from "../task/material-workspace.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import {
   STAGE_SPEC_ANALYZE_PROFILES,
   validateInteractionLifecycleSequence,
   validateStageSpecAnalyzeProfile,
 } from "./stage-content-contracts.mjs";
-import { STAGE_FACT_MATERIALS, stageMaterialScopeRevision } from "./completion-predicates.mjs";
+import { stageFactMaterialFiles, stageMaterialScopeRevision } from "./completion-predicates.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding } from "./stage-skill-runtime.mjs";
 import { isAuthenticatedRequirementResult } from "../evidence/codex-transcript-adapter.mjs";
 
@@ -208,17 +208,26 @@ function activeWorkspace({ workspace, candidateWorkspace }) {
   return active;
 }
 
-function readMaterials(artifacts, stage = null) {
+function readMaterials(artifacts, stage = null, activationCohort = "pre") {
   if (!(artifacts instanceof ArtifactDir)) throw new TypeError("Stage Agent outcome adapter requires an authenticated ArtifactDir");
-  const values = CURRENT_MATERIAL_FILES.map((file) => {
+  const baseFiles = activationCohort === "post"
+    ? ["decision-log.md", "spec.md", "phases/index.md"]
+    : CURRENT_MATERIAL_FILES;
+  const read = (file) => {
     try { return [file, artifacts.read(file)]; }
     catch (error) {
       if (error?.code === "ENOENT") return [file, null];
       throw error;
     }
-  });
+  };
+  const values = baseFiles.map(read);
+  const files = materialFilesForCohort(activationCohort, Object.fromEntries(values));
+  for (const file of files.slice(baseFiles.length)) values.push(read(file));
+  const materialMap = Object.fromEntries(values);
   const revision = materialRevisionFromValues(values);
-  const materialScope = stage && STAGE_FACT_MATERIALS[stage] ? STAGE_FACT_MATERIALS[stage] : CURRENT_MATERIAL_FILES;
+  const materialScope = stage
+    ? stageFactMaterialFiles(stage, materialMap, { activationCohort })
+    : files;
   const scopeValues = materialScope.map((file) => values.find(([name]) => name === file) ?? [file, null]);
   return Object.freeze({
     values: Object.freeze(values),
@@ -227,11 +236,24 @@ function readMaterials(artifacts, stage = null) {
       file, content === null ? null : sha256(content),
     ]))),
     material_scope: Object.freeze([...materialScope]),
-    material_scope_revision: stage ? stageMaterialScopeRevision(stage, Object.fromEntries(values)) : materialRevisionFromValues(scopeValues),
+    material_scope_revision: stage
+      ? stageMaterialScopeRevision(stage, materialMap, { activationCohort })
+      : materialRevisionFromValues(scopeValues),
     material_scope_hashes: Object.freeze(Object.fromEntries(scopeValues.map(([file, content]) => [
       file, content === null ? null : sha256(content),
     ]))),
   });
+}
+
+function stageAnalyzerProfile(stage, activationCohort, materialFiles) {
+  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
+  if (stage !== "build-plan" || activationCohort !== "post") return profile;
+  const phaseFiles = materialFiles.filter((file) => /^phases\/P[1-9][0-9]*\.md$/.test(file)).sort();
+  return {
+    ...profile,
+    required_materials: ["decision_log", "spec", "phase_index"],
+    required_evidence: ["decision-log", "spec", "phase-index", ...phaseFiles],
+  };
 }
 
 // The immutable per-subject proof and its outcome envelope share this exact
@@ -307,7 +329,7 @@ function materialBindingContent(file, content) {
 function bindAnalyzerPacketIdentity(packet, identity) {
   const bind = (value, label) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-    for (const key of ["task_id", "stage", "material_revision", "snapshot_tree"]) {
+    for (const key of ["task_id", "stage", "material_revision", "snapshot_tree", "activation_cohort"]) {
       if (value[key] !== undefined && value[key] !== identity[key]) {
         throw new Error(`${label}.${key} does not match the authenticated Stage Agent identity`);
       }
@@ -442,14 +464,15 @@ function bindAcceptanceCoverageEvidence(packet, evidence, identity) {
   };
 }
 
-function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest, skills, requirementAuthentication = null }) {
-  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
+function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest, skills, activationCohort, requirementAuthentication = null }) {
+  const materialText = materialTextMap(materials);
+  const postPlan = stage === "build-plan" && activationCohort === "post";
+  const profile = stageAnalyzerProfile(stage, activationCohort, Object.keys(materialText));
   const input = object(execution.spec_analyze, "execution.spec_analyze");
   const packetInput = object(input.packet, "execution.spec_analyze.packet");
   const analyzerStep = manifest.steps.find((step) => ["stage-end-spec-analyze", "final-spec-analyze"].includes(step.step_slug));
   const analyzerSkill = skills.skills?.find((skill) => skill.name === "spec-analyze");
   if (!analyzerStep || !analyzerSkill) throw new Error(`${stage} manifests must declare stage-end spec-analyze`);
-  const materialText = materialTextMap(materials);
   const implementationMaterial = profile.required_materials.includes("implementation")
     ? text(input.implementation_material, "execution.spec_analyze.implementation_material")
     : null;
@@ -493,11 +516,19 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
       ...(testResult && Object.keys(testResult).length > 0 ? { test_result: testResult } : {}),
     };
   });
-  const analyzerMaterials = Object.fromEntries(profile.required_materials.map((name) => {
-    if (name === "original_requirement" || name === "decision_log") return [name, materialText["decision-log.md"]];
-    if (name === "spec" || name === "plan" || name === "tasks") return [name, materialText[`${name}.md`]];
-    return [name, implementationMaterial];
-  }));
+  const analyzerMaterials = postPlan
+    ? {
+        decision_log: materialText["decision-log.md"],
+        spec: materialText["spec.md"],
+        phase_index: materialText["phases/index.md"],
+        phases: Object.fromEntries(Object.entries(materialText)
+          .filter(([file]) => /^phases\/P[1-9][0-9]*\.md$/.test(file))),
+      }
+    : Object.fromEntries(profile.required_materials.map((name) => {
+      if (name === "original_requirement" || name === "decision_log") return [name, materialText["decision-log.md"]];
+      if (name === "spec" || name === "plan" || name === "tasks") return [name, materialText[`${name}.md`]];
+      return [name, implementationMaterial];
+    }));
   const analyzerBindings = {};
   for (const name of profile.required_materials) {
     if (name === "implementation") {
@@ -507,16 +538,30 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
       if (!proof) throw new Error(`${stage} implementation material must bind an actual evidence record`);
       analyzerBindings[name] = { ...proof, snapshot_tree: snapshot.tree, material_sha256: sha256(implementationMaterial) };
     } else {
-      const sourceRef = name === "original_requirement" || name === "decision_log" ? "decision-log.md" : `${name}.md`;
+      const sourceRef = ({
+        original_requirement: "decision-log.md",
+        decision_log: "decision-log.md",
+        spec: "spec.md",
+        plan: "plan.md",
+        tasks: "tasks.md",
+        phase_index: "phases/index.md",
+      })[name] ?? `${name}.md`;
       if (typeof materialText[sourceRef] !== "string") throw new Error(`${stage} analyzer material ${sourceRef} is unavailable`);
       analyzerBindings[name] = { source_ref: sourceRef, sha256: sha256(materialBindingContent(sourceRef, materialText[sourceRef])), snapshot_tree: snapshot.tree };
     }
+  }
+  if (postPlan) {
+    analyzerBindings.phases = Object.fromEntries(Object.entries(analyzerMaterials.phases).map(([file, content]) => {
+      if (typeof content !== "string") throw new Error(`${stage} analyzer material ${file} is unavailable`);
+      return [file, { source_ref: file, sha256: sha256(content), snapshot_tree: snapshot.tree }];
+    }));
   }
   const identity = {
     task_id: taskId,
     stage,
     material_revision: materials.revision,
     snapshot_tree: snapshot.tree,
+    activation_cohort: activationCohort,
   };
   const authenticatedMessages = stage === "make-decision"
     && isAuthenticatedRequirementResult(requirementAuthentication)
@@ -571,8 +616,8 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
 function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifest, skills }) {
   const input = object(execution.code_review, "execution.code_review");
   const reviewStep = manifest.steps.find((step) => step.step_slug === "finalize-code-review");
-  const reviewSkill = skills.skills?.find((skill) => skill.name === "dsh-code-review");
-  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare dsh-code-review and finalize-code-review");
+  const reviewSkill = skills.skills?.find((skill) => skill.name === "architect-code-review");
+  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare architect-code-review and finalize-code-review");
   const result = object(input.result, "execution.code_review.result");
   const allowed = new Set(["status", "findings", "summary", "focus", "repairs"]);
   const unknown = Object.keys(result).filter((key) => !allowed.has(key));
@@ -608,7 +653,7 @@ function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifes
  * spec-analyze remains material_incomplete.  The value is still useful because
  * it lets the official route publish the real failure and monitoring facts.
  */
-function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId, reason, manifest, skills, snapshotTree, materialRevision }) {
+function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId, reason, manifest, skills, snapshotTree, materialRevision, activationCohort = "pre", materialFiles = [] }) {
   const safeReason = text(reason, "unavailable reason");
   const producer = {
     kind: "stage-agent",
@@ -644,8 +689,8 @@ function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId,
   const skillsOutcomes = skills.skills.map((skill) => ({
     skill_id: skill.name,
     status: "unavailable",
-    trigger: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
-    executed: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
+    trigger: skill.name === (stage === "verify-code" ? "architect-code-review" : "spec-analyze"),
+    executed: skill.name === (stage === "verify-code" ? "architect-code-review" : "spec-analyze"),
     version: "unavailable",
     input_refs: [],
     output_refs: [],
@@ -666,17 +711,18 @@ function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId,
         snapshot_tree: snapshotTree,
         material_revision: materialRevision,
         step_slug: "finalize-code-review",
-        skill_id: "dsh-code-review",
+        skill_id: "architect-code-review",
         result: { status: "unavailable", findings: [], summary: `Stage Agent 未提供代码审查结果：${safeReason}` },
       },
     };
   }
-  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
+  const profile = stageAnalyzerProfile(stage, activationCohort, materialFiles);
   const evidenceSubjects = Object.fromEntries(
     profile.required_evidence.map((logicalRef) => [logicalRef, firstSubject]),
   );
   const specAnalyze = {
     packet: {
+      activation_cohort: activationCohort,
       original_requirements: [],
       coverage: [],
       current_stage_repairs: [],
@@ -720,7 +766,7 @@ export function publishStageAgentOutcome({
       active,
       safeArtifacts,
       snapshot: active.captureSnapshot?.() ?? captureExecutionSnapshot(active.worktreeRoot),
-      materials: readMaterials(safeArtifacts, stage),
+      materials: readMaterials(safeArtifacts, stage, safeTask.manifest.activation_cohort ?? "pre"),
     });
   })();
   const safeTask = capturedIdentity.safeTask;
@@ -809,7 +855,17 @@ export function publishStageAgentOutcome({
   };
   const stageReview = stage === "verify-code"
     ? buildCodeReviewOutcome({ execution: adapterInput, stage, snapshot, materials, manifest, skills })
-    : buildAnalyzer({ execution: adapterInput, taskId: safeTask.identity.taskId, stage, snapshot, materials, manifest, skills, requirementAuthentication });
+    : buildAnalyzer({
+      execution: adapterInput,
+      taskId: safeTask.identity.taskId,
+      stage,
+      snapshot,
+      materials,
+      manifest,
+      skills,
+      activationCohort: safeTask.manifest.activation_cohort ?? "pre",
+      requirementAuthentication,
+    });
   const value = {
     schema_version: "workflowhub-stage-outcomes.v1",
     task_id: safeTask.identity.taskId,
@@ -1079,7 +1135,7 @@ export function publishUnavailableStageAgentOutcome({
     active,
     safeArtifacts,
     snapshot: active.captureSnapshot?.() ?? captureExecutionSnapshot(active.worktreeRoot),
-    materials: readMaterials(safeArtifacts, stage),
+    materials: readMaterials(safeArtifacts, stage, safeTask.manifest.activation_cohort ?? "pre"),
   });
   const manifest = loadStageManifest(stage, new URL("../../", import.meta.url).pathname);
   const skills = loadStageSkillManifest(new URL("../../", import.meta.url).pathname, stage).manifest;
@@ -1097,6 +1153,8 @@ export function publishUnavailableStageAgentOutcome({
       skills,
       snapshotTree: stageIdentity.snapshot.tree,
       materialRevision: stageIdentity.materials.revision,
+      activationCohort: safeTask.manifest.activation_cohort ?? "pre",
+      materialFiles: stageIdentity.materials.values.map(([file]) => file),
     }),
   });
 }

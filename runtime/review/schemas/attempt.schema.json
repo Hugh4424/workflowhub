@@ -257,6 +257,21 @@
                     "additionalProperties": false
                   },
                   "usage": { "type": ["object", "null"] },
+                  "health": {
+                    "type": "object",
+                    "required": ["provider", "status", "liveness", "last_liveness_at_ms", "last_output_at_ms", "progress_events", "stdout_bytes", "stderr_bytes"],
+                    "properties": {
+                      "provider": { "type": "string", "minLength": 1 },
+                      "status": { "enum": ["completed", "failed", "cancelled"] },
+                      "liveness": { "const": false },
+                      "last_liveness_at_ms": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 },
+                      "last_output_at_ms": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 },
+                      "progress_events": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                      "stdout_bytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                      "stderr_bytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+                    },
+                    "additionalProperties": false
+                  },
                   "deadline_ms": { "type": ["integer", "null"], "minimum": 1 },
                   "recovery": {
                     "type": ["object", "null"],

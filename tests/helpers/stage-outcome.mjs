@@ -230,6 +230,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     stage,
     material_revision: revision,
     snapshot_tree: snapshot.tree,
+    activation_cohort: task.manifest.activation_cohort ?? "pre",
   };
   const analyzerPacket = {
     original_requirements: [{ id: "R-001", summary: materialText["decision-log.md"] }],
@@ -341,7 +342,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
   const skillOutcomes = (skillManifest.skills ?? []).map(({ name }) => {
     const resultSummary = `resolved ${name}`;
     return {
-      skill_id: name, status, trigger: true, executed: name === "spec-analyze" || name === "dsh-code-review" || status === "completed", version: "fixture-1.0.0",
+      skill_id: name, status, trigger: true, executed: name === "spec-analyze" || name === "architect-code-review" || status === "completed", version: "fixture-1.0.0",
       input_refs: [],
       result_summary: resultSummary,
       evidence_refs: makeEvidence({ subjectKind: "skill", subjectId: name, outcomeStatus: status, resultSummary }),
@@ -368,7 +369,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
         snapshot_tree: snapshot.tree,
         material_revision: revision,
         step_slug: "finalize-code-review",
-        skill_id: "dsh-code-review",
+        skill_id: "architect-code-review",
         ...(qualityReview ? {
           quality_review_ref: qualityReview.ref ?? qualityReview.resultRef,
         quality_review_hash: qualityReview.sha256 ?? sha256(task.readRecord(qualityReview.ref ?? qualityReview.resultRef)),

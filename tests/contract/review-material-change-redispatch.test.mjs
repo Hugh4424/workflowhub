@@ -89,6 +89,30 @@ function reviewResult(input) {
 }
 
 describe("review material change reuse contract", () => {
+  it("ORACLE-P2-PLAIN-PATH dispatches a plain text material path without caller metadata", async () => {
+    const state = fixture();
+    let dispatches = 0;
+    const request = {
+      stage: "build-code",
+      host_provider: "codex/luna",
+      materials: { approved_spec: "spec.md" },
+    };
+    const recorded = await recordSimpleReviewRequest({
+      task: state.task,
+      kernel: state.kernel,
+      request,
+      resolveRouteIdentity: route,
+      runRound: async (input) => {
+        dispatches += 1;
+        return reviewResult(input);
+      },
+    });
+
+    expect(dispatches).toBe(1);
+    expect(recorded).toMatchObject({ status: "recorded", dispatch_state: "dispatched" });
+    expect(recorded.attempt_ref).toBeTruthy();
+  });
+
   it("keeps the semantic material identity stable and sensitive to material change", () => {
     const input = {
       stage: "build-code",
@@ -111,6 +135,14 @@ describe("review material change reuse contract", () => {
       ...input,
       materials: { ...input.materials, approved_spec: "changed semantic bytes" },
     }, { instructionText: "transport instructions" })).not.toBe(materialId);
+  });
+
+  it("does not create a raw-material identity when verify-code compaction throws", () => {
+    const input = { stage: "verify-code", materials: { changed_files: "diff" } };
+    expect(() => reviewPacketMaterialId(input, {
+      instructionText: "verify-code instructions",
+      compactMaterials: () => { throw new Error("compaction failed"); },
+    })).toThrow("compaction failed");
   });
 
   it("redispatches a new canonical attempt on changed material and reuses identical material", async () => {
@@ -271,7 +303,14 @@ describe("review material change reuse contract", () => {
       dispatch_state: "blocked_before_dispatch",
       error: { code: "REVIEW_SOURCE_DRIFT" },
     });
-    expect(drifted.attempt_ref).toBeUndefined();
+    expect(drifted.attempt_ref).toMatch(/^quality\/reviews\/attempts\/[^/]+\/attempt\.json$/);
+    expect(drifted.result_ref).toBeNull();
+    expect(JSON.parse(state.task.readRecord(drifted.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: [],
+      error: { code: "REVIEW_SOURCE_DRIFT" },
+    });
     expect(recorded.reused).toBe(false);
   });
 
@@ -306,7 +345,14 @@ describe("review material change reuse contract", () => {
       dispatch_state: "blocked_before_dispatch",
       error: { code: "REVIEW_SOURCE_DRIFT" },
     });
-    expect(drifted).not.toHaveProperty("attempt_ref");
+    expect(drifted.attempt_ref).toMatch(/^quality\/reviews\/attempts\/[^/]+\/attempt\.json$/);
+    expect(drifted.result_ref).toBeNull();
+    expect(JSON.parse(state.task.readRecord(drifted.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: [],
+      error: { code: "REVIEW_SOURCE_DRIFT" },
+    });
   });
 
   it("retains a dispatched source/material drift failure and admits a material_changed retry", async () => {

@@ -24,7 +24,7 @@
 
 ## 来源与决策映射
 
-> 本节只保存 ID 关系，不复制 decision-log 正文；没有来源的新增需求必须回到 make-decision。
+> 本节只保存 ID 关系，不复制 decision-log 正文；没有来源的新增需求必须回到 make-decision。来源必须明确标注原始 PRD/用户要求、decision-log 或已接受裁决。
 
 | Source ID | Decision ID | FR / AC IDs | Status / affected scope | Unresolved / handoff |
 | --- | --- | --- | --- | --- |
@@ -185,6 +185,7 @@
 
 ### Code Anchors
 
+- **来源边界**：原始 PRD/用户要求与 decision-log 只作为来源映射，不在实现设计中创建第二份需求账本。
 - **现状与目标差异**：[填写：已核实的现有行为、目标行为、真实消费者；证据路径/符号]
 - **读取顺序**：[填写：实现者先查的最小路径与符号，再查的邻接 consumer；无需全仓扫描]
 - **代码锚点**：[填写：每个被改接口的精确路径、符号、签名、schema 和证据；不存在时写 NEW + 目标 consumer]

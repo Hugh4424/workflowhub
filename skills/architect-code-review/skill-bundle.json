@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "skill": "dsh-code-review",
+  "skill": "architect-code-review",
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "a5bdb9d1e0c81e5a66dcb9af2041b1b96f06df2fd6134aaa02c86bf24d1d3f8c"
+      "sha256": "95e69ae87911c965f0c618ad7400ceddfdacf4d6e1f3857d0f5260375f8c88bd"
     }
   ],
   "sources": [

@@ -20,7 +20,7 @@ ordered steps are `read-current-materials`, `conditional-spec-research`,
 
 K1 source-to-FR/AC translation; K2 requirement coverage; K3 four-part AC;
 K4 state coverage; K5 one clarify owner; K6 one review and disposition; K7
-five-input analysis; K8 packet lenses; K9 frozen RED/GREEN and oracle; K10
+current-material consistency report; K8 packet lenses; K9 frozen RED/GREEN and oracle; K10
 routing and test blueprint; K11 explicit omissions/reflection; K12 structured
 questions and actual confirmation. Each K has the named step as consumer and
 the corresponding observable result as oracle. No K creates a new stage, skill,
@@ -244,16 +244,21 @@ not new workflow stages and not gates.
    route, or authenticated source may trigger a retry; never retry an
    unchanged request merely to obtain a cleaner label.
 8. After findings disposition and the last authored spec/Phase/index revision, actually
-   invoke the existing `spec-analyze` lens once as the strict final
+   invoke the existing `spec-analyze` lens once as the final report-only
    cross-document check before `publish-plan-result` (the user may call this
-   `speckit-analyze`). Its current packet must cover the raw requirement
-   source, decision-log-derived facts, spec, all Phase files, index, flow/state/boundary/
-   non-goal coverage, every `DEFER-*`/`OPEN-*` owner/trigger/handoff/close
-   condition, and every task oracle. Record the returned lens result in the
-   existing quality-fact path; a prose claim that it ran is not execution
-   evidence. The result is report-only: retain findings or
-   `incomplete`/`unavailable` honestly, do not create a fifth material, and do
-   not turn it into a new quality gate or provider pass.
+   `speckit-analyze`). The runtime reports current decision-log, spec, Phase
+   and index structure, required fields, references and index agreement.
+   Requirement omissions, flow/state/boundary/non-goal meaning,
+   `DEFER-*`/`OPEN-*` handoff semantics and oracle adequacy are judged by the
+   existing independent merged review and its finding disposition. Record
+   the returned result in the existing quality-fact path; a prose claim that
+   it ran is not execution evidence. This report does not require a separate
+   raw-requirement inventory or caller-provided coverage array. The existing
+   independent merged review, finding disposition and actual user confirmation
+   carry semantic quality judgment. A result of `reported` means the final
+   check ran; it is not semantic consistency or review pass. Retain findings or
+   `incomplete`/`unavailable` honestly; do not create a fifth material or a
+   new quality gate.
 
 ## Plan and phase contract
 

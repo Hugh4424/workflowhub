@@ -396,7 +396,7 @@ Grill 按上游 round/frontier 协议运行：一批只放互相独立的问题�
 `build-spec` 阶段出现方向性歧义时必须显式调用 `spec-clarify` 并记录触发原因；没有歧义时必须显式记录 `trigger=false`、原因和零个未决方向性问题。Spec 不能引入上游 decision-log 未授权的新产品方向。
 
 **spec-analyze profile 扩展**：
-stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `build-spec` 比对 spec 与上游 decision-log 的方向一致性和 Clarify 记录。`verify-code` 不经过此 lens，而使用 `dsh-code-review`。
+stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `build-spec` 比对 spec 与上游 decision-log 的方向一致性和 Clarify 记录。`verify-code` 不经过此 lens，而使用 `Architect-Code-Review`。
 
 ## 收敛大纲与收口闭环（2026-09-09，已选设计·尚未实现）
 
@@ -429,3 +429,25 @@ stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `buil
 工作包引用同一份权威用户目标与跨任务需求，只写本包差异；多个工作包完成不等于整体功能已从真实入口验过。接续依赖清晰记录与读取，不隐含独立后台平台或跨宿主自动恢复。
 
 示例：基础能力工作包可以按自身测试记录完成；整体功能仍由执行主会话组织真实入口联通验收，不能只把各包完成状态相加。
+
+## 审查链接入术语（2026-09-22，方向已选，尚未实施）
+
+本节记录 `workflowhub-thin-core-card-05-20260919` 的已选方向；上文五阶段与执行记录仍描述现行系统，不因本节而失效。方向来源：该任务 `decision-log.md` 的 D-004/D-005/D-017/D-019/D-021；架构取舍见 ADR-0032。
+
+**委托模式（Delegation Mode）**：审查工具的两种运行模式之一。工具只做确定性工程（文件筛选、规则解析），**实际审查推理由宿主 Agent 用自身 LLM 完成**；工具端不调用 LLM、不需要 API key。与「工具自管 LLM」相对。委托模式下工具**不产出 finding，也不提供 finding schema**——两者均由宿主侧定义。一手核实记录见该任务 `decision-log.md` G-CK。
+
+**适配合同（Adapter Contract）**：新审查工具接入**前**必须冻结的接口契约，六要素=输入形态（`diff` / `worktree` / `packet` 选其一）、finding schema、超时语义、unavailable 状态集合、provider 身份记录、审查事实写入位置。合同冻结前不得接入。
+
+**审查层（Review Layer）**：承载**派发语义、聚合语义、超时与取消、启动自检、成本计量**的编排层。审查的失败病因层在此，不在具体审查工具；因此修复对象是这一层，而非给某个工具打补丁。
+
+**any-of-N（任一成功即通过）**：多路异源审查并发执行，**任一路成功即视为审查通过**；已完成的审查一律**降级使用**（单一来源 findings 以 `independence: partial` 标注），**不得丢弃**。取代此前的 quorum 语义。**（2026-09-22 修订（依 D-035）：上面这句是**派发判据**，**不是结果取舍判据**——「任一成功即通过」只决定**是否要派发 / 是否算有审查发生**；**结果取舍**为**并集入账 + 逐条标来源强度**：多源一致的条目标 `corroborated`、单源的条目标 `single_source`，两档**一律入账**，**不得因单源而丢弃、也不得把单源写成多源已核**。原句逐字保留于本条。）**
+
+**single_source（单源条目）**：某条 finding 只被**一路**审查产出、无第二路异源产出同一条时的**来源强度标注**。依 D-035，单源条目**照样入账**，但必须标 `single_source`，**不得**读作已被多源核验。
+
+**corroborated（多源一致条目）**：某条 finding 被**多路异源**审查一致产出时的**来源强度标注**。依 D-035，多源一致只表示「该条被多路指出」，**不自动表示该条为真**；与单源条目一样必须带证据锚定。
+
+**findings 有效率**：对比实验指标之一——产出的 finding 中，被判定为真实问题的比例。
+
+**锚定准确率**：对比实验指标之一——finding 的 `path` 真实存在、且行号落在该文件实际行数范围内的比例。可机器计算。
+
+**独立替代审查**：审查工具不可用时，由**未参与实现者**完成的一次独立审查，来源与缺口如实保留。旧 wh-review/broker 路径**仅为只读历史证据，不构成可执行 fallback**；替代也不可用时该审查事实记 `unverified` 并如实披露，不冒充已审。

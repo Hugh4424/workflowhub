@@ -1,16 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
-import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
+import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import { prepareTaskBoundBuildCodeReviewBundle, prepareTaskBoundIntegrationReviewBundle, stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 import {
   importCanonicalReviewResult,
   recordSimpleReviewRequest,
+  recordSimpleReviewResult,
 } from "../../runtime/review/review-record-route.mjs";
 import { createSimpleReviewPacket } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
@@ -51,11 +53,30 @@ function makeTask() {
   return { root, task, candidateWorkspace, kernel: createTaskKernel(task, { candidateWorkspace }) };
 }
 
+async function withRuntimeEnvironment(state, action) {
+  const keys = ["HOME", "WORKFLOWHUB_TASK_DIR", "CODEX_SESSION_ID", "CODEX_THREAD_ID", "CODEX_ROLLOUT_PATH", "WORKFLOWHUB_CODEX_ROLLOUT_PATH"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  const home = join(state.root, "home");
+  mkdirSync(home, { recursive: true });
+  process.env.HOME = home;
+  process.env.WORKFLOWHUB_TASK_DIR = state.root;
+  for (const key of keys.slice(2)) delete process.env[key];
+  try {
+    return await action();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 function resultFor(request) {
   return {
     status: "available", stage: request.stage, review_track: null, review_kind: null,
     material_id: createSimpleReviewPacket(request).material_id, runtime_id: "runtime-public-import",
     outcome: "completed",
+    ocr: { version: "fixture-ocr", preview: { reviewable_files: [] }, rules: { rules: [] }, manifest: [] },
     provider_results: [{
       provider: "codex/luna", status: "completed",
       identity: { provider: "codex/luna", adapter: "codex", source_id: "codex/luna", config_id: "fixture-config", model: "gpt-5.6-luna" },
@@ -117,6 +138,159 @@ async function existingImportFixture() {
 }
 
 describe("public review result entrypoint", () => {
+  it.each([
+    ["build-code", "code_review", {}],
+    ["build-code", "review_scope", "phase"],
+    ["build-code", "phase_id", "P1"],
+    ["verify-code", "code_review", {}],
+  ])("rejects %s run input field %s before publication", async (stage, field, value) => {
+    const state = makeTask();
+    ArtifactDir.open(state.candidateWorkspace.worktreeRoot, state.task)
+      .writeAtomic("decision-log.md", "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n");
+    const inputPath = join(state.root, "run-input.json");
+    writeFileSync(inputPath, JSON.stringify({ [field]: value }), "utf8");
+
+    await withRuntimeEnvironment(state, async () => {
+      await expect(stageRuntimeMain([
+        "run", "--action=execute", `--stage=${stage}`, "--project=workflowhub",
+        `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
+      ], { cwd: state.candidateWorkspace.worktreeRoot })).rejects.toThrow(`run input has unknown fields: ${field}`);
+    });
+    expect(existsSync(join(state.task.taskPath, "facts.jsonl"))).toBe(false);
+  });
+
+  it.each([
+    ["phase", { review_scope: "phase", phase_id: "P2" }, "phase_review", "phase", "P2"],
+    ["integration", { review_scope: "integration" }, "integration_review", "worktree", null],
+  ])("run preserves OCR %s provenance without an integration completion fact", async (_label, scope, subject, subjectKind, phaseId) => {
+    const state = makeTask();
+    ArtifactDir.open(state.candidateWorkspace.worktreeRoot, state.task)
+      .writeAtomic("decision-log.md", "# Decision log\n\n## 任务身份\n\n- **任务类型**：普通任务\n");
+    const inputPath = join(state.root, "build-code-run.json");
+    const request = {
+      stage: "build-code", host_provider: "codex/luna", materials: { implementation: "current diff" },
+      review_scope: scope.review_scope, subject_kind: subjectKind, phase_id: phaseId,
+    };
+    const recorded = await recordSimpleReviewRequest({
+      task: state.task, kernel: state.kernel, request,
+      resolveRouteIdentity: fixtureRouteIdentity,
+      runRound: async (value) => ({ ...resultFor(value),
+        subject_kind: subjectKind, phase_id: phaseId, review_scope: scope.review_scope }),
+    });
+    writeFileSync(inputPath, JSON.stringify({ receipts: { review: recorded.result_ref } }), "utf8");
+    const args = ["run", "--stage=build-code", "--project=workflowhub", `--task=${state.task.identity.taskId}`, `--input=${inputPath}`];
+
+    await withRuntimeEnvironment(state, async () => {
+      const run = await stageRuntimeMain(args, { cwd: state.candidateWorkspace.worktreeRoot });
+      const facts = run.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
+      const reviewFact = facts.find((fact) => fact.kind === "review" && fact.subject === subject);
+
+      if (subject === "phase_review") {
+        expect(reviewFact).toMatchObject({ status: "recorded", review_status: "clean" });
+        expect(reviewFact.evidence.find((item) => item.evidence_type === "review_result").ref)
+          .toBe(recorded.result_ref);
+      } else {
+        expect(reviewFact).toBeUndefined();
+      }
+      expect(facts.find((fact) => fact.kind === "review" && fact.subject === "integration_review"))
+        .toBeUndefined();
+      const status = await stageRuntimeMain([
+        "status", "--stage=build-code", "--project=workflowhub", `--task=${state.task.identity.taskId}`,
+      ], { cwd: state.candidateWorkspace.worktreeRoot });
+      expect(status.quality_predicates).not.toHaveProperty("integration_review");
+      expect(status.quality_missing).not.toContain("integration_review");
+
+      const review = JSON.parse(state.task.readRecord(recorded.result_ref));
+      expect(review).toMatchObject({
+        task_id: state.task.identity.taskId,
+        stage: "build-code",
+        attempt_ref: recorded.attempt_ref,
+        subject_kind: subjectKind,
+        phase_id: phaseId,
+        review_scope: scope.review_scope,
+        findings: [],
+        provider_results: [{ provider: "codex/luna" }],
+      });
+      const attempt = JSON.parse(state.task.readRecord(review.attempt_ref));
+      expect(attempt.provider_attempts).toMatchObject([
+        { provider: "codex/luna", identity: { source_id: "codex/luna" } },
+      ]);
+    });
+  });
+
+  it("ORACLE-P5-UNAVAILABLE: official run consumes its own blocked-before-dispatch history failure", async () => {
+    const { task, kernel, candidateWorkspace } = makeTask();
+    const artifacts = ArtifactDir.open(candidateWorkspace.worktreeRoot, task);
+    const recorded = recordSimpleReviewResult({
+      task, kernel,
+      result: {
+        ...resultFor({ stage: "build-spec", materials: { draft_spec: "fixture" } }),
+        status: "unavailable", outcome: "unavailable", dispatch_state: "blocked_before_dispatch",
+        provider_results: [], findings: [],
+        error: { code: "REVIEW_HISTORY_UNAVAILABLE", message: "prior pair binding is invalid" },
+      },
+    });
+    const original = JSON.parse(task.readRecord(recorded.attempt_ref));
+    expect(original).toMatchObject({
+      terminal_status: "unavailable", dispatch_state: "blocked_before_dispatch",
+      provider_attempts: [], error: { code: "REVIEW_HISTORY_UNAVAILABLE" },
+    });
+    const official = await runOfficialStage("build-spec", {
+      stage: "build-spec", task, kernel, identity: task.identity,
+      workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"),
+      manifest: task.manifest, workspace: candidateWorkspace, artifacts,
+    }, { receipts: { review: recorded.attempt_ref } });
+    expect(official.quality_advisories).toContain("independent_review:unavailable");
+    const reviewFacts = official.quality_fact_refs.map((ref) => JSON.parse(task.readRecord(ref)))
+      .filter((fact) => fact.kind === "review");
+    expect(reviewFacts).toContainEqual(expect.objectContaining({
+      kind: "review",
+      status: "unavailable",
+      evidence: expect.arrayContaining([expect.objectContaining({ ref: recorded.attempt_ref })]),
+    }));
+    expect(reviewFacts).not.toContainEqual(expect.objectContaining({ status: "passed" }));
+  });
+
+  it("consumes sent-unparsed zero-provider executor outcomes by transport state", async () => {
+    const fixture = makeTask();
+    const artifacts = ArtifactDir.open(fixture.candidateWorkspace.worktreeRoot, fixture.task);
+    const recorded = recordSimpleReviewResult({
+      task: fixture.task,
+      kernel: fixture.kernel,
+      result: {
+        ...resultFor({ stage: "build-spec", materials: { draft_spec: "fixture" } }),
+        status: "unavailable",
+        outcome: "unavailable",
+        dispatch_state: "sent_unparsed",
+        provider_results: [],
+        findings: [],
+        error: { code: "OCR_EXECUTOR_CANCEL_UNCONFIRMED", message: "executor termination was not confirmed" },
+      },
+    });
+
+    const official = await runOfficialStage("build-spec", {
+      stage: "build-spec", task: fixture.task, kernel: fixture.kernel, identity: fixture.task.identity,
+      workflowRunId: fixture.kernel.deriveStageWorkflowRunId("build-spec"),
+      manifest: fixture.task.manifest, workspace: fixture.candidateWorkspace, artifacts,
+    }, { receipts: { review: recorded.attempt_ref } });
+
+    expect(official.quality_advisories).toContain("independent_review:unavailable");
+    const reviewFacts = official.quality_fact_refs.map((ref) => JSON.parse(fixture.task.readRecord(ref)))
+      .filter((fact) => fact.kind === "review");
+    expect(reviewFacts).toContainEqual(expect.objectContaining({
+      kind: "review",
+      status: "unavailable",
+      evidence: expect.arrayContaining([expect.objectContaining({ ref: recorded.attempt_ref })]),
+    }));
+    expect(reviewFacts).not.toContainEqual(expect.objectContaining({ status: "passed" }));
+    expect(JSON.parse(fixture.task.readRecord(recorded.attempt_ref))).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "sent_unparsed",
+      provider_attempts: [],
+      error: { code: "OCR_EXECUTOR_CANCEL_UNCONFIRMED" },
+    });
+  });
+
   it("builds a phase review bundle from the authenticated current source", () => {
     const fixture = makeTask();
     const attachmentRoot = join(fixture.root, "review-data");
@@ -166,6 +340,92 @@ describe("public review result entrypoint", () => {
     expect(sourceDisposed).toBe(true);
     expect(bundle.materialId).toBe("b".repeat(64));
     bundle.dispose();
+  });
+
+  it("builds the verify-code OCR packet with the real diff and complete AC text", () => {
+    const fixture = makeTask();
+    writeFileSync(join(fixture.candidateWorkspace.worktreeRoot, "README.md"), "current implementation for AC-1\n");
+    const attachmentRoot = join(fixture.root, "review-data");
+    mkdirSync(attachmentRoot);
+    const acceptance = "AC-1: The current implementation must preserve this complete criterion and its failure path.";
+    const bundle = prepareTaskBoundBuildCodeReviewBundle({ task: fixture.task, workspace: openCurrentTaskWorkspace(fixture.task) }, {
+      stage: "verify-code", subject_kind: "worktree", materials: {
+        changed_files: "README.md",
+        implementation_assessment: "Inspect the current implementation.",
+        test_context: "The focused check is pending.",
+        open_risks: "No known risk has been accepted.",
+        acceptance_criteria: acceptance,
+      },
+    }, { loadConfig: () => ({ attachmentRoot }) });
+    try {
+      const paths = bundle.manifest.map((entry) => entry.path);
+      expect(paths).toContain("changes.diff");
+      expect(paths).toContain("requirements/acceptance_criteria.md");
+      expect(readFileSync(join(bundle.bundleRoot, "changes.diff"), "utf8")).toContain("current implementation for AC-1");
+      expect(readFileSync(join(bundle.bundleRoot, "requirements/acceptance_criteria.md"), "utf8")).toBe(acceptance);
+      expect(readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8")).toContain("Do not invoke Agent, subagent");
+      expect(paths.some((path) => path.startsWith("contracts/") || path.startsWith("skills/") || path === "packet-plan.json")).toBe(false);
+      expect(readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8")).not.toMatch(/wh-review|broker/i);
+    } finally {
+      bundle.dispose();
+    }
+  });
+
+  it.each([
+    ["phase", { stage: "build-code", review_scope: "phase", subject_kind: "phase", phase_id: "P2" }],
+    ["integration", { stage: "build-code", review_scope: "integration", subject_kind: "worktree", phase_id: null }],
+    ["verify", { stage: "verify-code", subject_kind: "worktree" }],
+  ])("projects the %s OCR control packet without legacy review instructions", (_label, identity) => {
+    const fixture = makeTask();
+    const attachmentRoot = join(fixture.root, "review-data");
+    mkdirSync(attachmentRoot);
+    const bundle = prepareTaskBoundBuildCodeReviewBundle({ task: fixture.task, workspace: fixture.candidateWorkspace }, {
+      ...identity, materials: { acceptance_criteria: "AC-1: preserve the complete criterion." },
+    }, {
+      loadConfig: () => ({ attachmentRoot }),
+      captureSource: () => ({ dispose() {} }),
+      buildMaterials: ({ materials, candidateExperiment }) => {
+        expect(candidateExperiment).toBe(true);
+        const bundleRoot = join(attachmentRoot, `legacy-${_label}`);
+        mkdirSync(bundleRoot);
+        const entries = [
+          ["source.json", "{}"], ["changes.diff", "diff --git a/README.md b/README.md\n"],
+          ["requirements/acceptance_criteria.md", "AC-1: preserve the complete criterion."],
+          ["review-instructions.md", materials.review_instructions],
+          ["contracts/provider-protocol.md", "old wh-review broker prompt"],
+          ["skills/review/SKILL.md", "old broker reviewer skill"],
+          ["packet-plan.json", "{\"legacy\":true}"],
+        ];
+        const manifest = entries.map(([path, contents]) => {
+          const filePath = join(bundleRoot, path);
+          mkdirSync(join(filePath, ".."), { recursive: true });
+          writeFileSync(filePath, contents);
+          return { path, bytes: Buffer.byteLength(contents), sha256: sha256(contents) };
+        });
+        return { bundleRoot, materialId: "b".repeat(64), manifest };
+      },
+    });
+    try {
+      const paths = bundle.manifest.map(({ path }) => path);
+      expect(paths).toContain("changes.diff");
+      expect(paths).toContain("requirements/acceptance_criteria.md");
+      expect(paths).not.toContain("contracts/provider-protocol.md");
+      expect(paths).not.toContain("skills/review/SKILL.md");
+      expect(paths).not.toContain("packet-plan.json");
+      const instructions = readFileSync(join(bundle.bundleRoot, "review-instructions.md"), "utf8");
+      expect(instructions).toContain("full acceptance-criteria text");
+      expect(instructions).toContain("independent LLM judgment");
+      expect(instructions).toContain("findings array");
+      expect(instructions).toContain("positive integer line");
+      expect(instructions).toContain("blocking|major|minor");
+      expect(instructions).toContain("root_cause");
+      expect(instructions).toContain("evidence_kind (direct|inferred|machine)");
+      expect(instructions).toContain("evidence containing a verbatim source excerpt in backticks");
+      expect(instructions).toContain("cited line or the next two lines");
+      expect(instructions).not.toMatch(/wh-review|broker/i);
+    } finally {
+      bundle.dispose();
+    }
   });
 
   it("keeps the integration compatibility export usable with review_kind", () => {

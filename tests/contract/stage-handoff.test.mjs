@@ -9,6 +9,7 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { readTaskFacts } from "../../runtime/task/task-store.mjs";
+import { deriveStageOutcomeStatuses } from "../../runtime/stage/completion-predicates.mjs";
 import { runStageEndReflection, runOfficialStage, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
 import { renderStageHandoff, publishStageHandoff, SECTION_TITLES } from "../../runtime/stage/stage-handoff.mjs";
 import { publishStageReflectionExecutionFailure, validateStageReflectionSibling } from "../../runtime/stage/stage-reflect.mjs";
@@ -152,6 +153,22 @@ afterEach(() => {
 });
 
 describe("stage-handoff current view contract", () => {
+  it("binds the runtime-default cohort into a WorkflowHub-session analyzer before authentication", () => {
+    const state = fixture("handoff-session-cohort-binding", "build-spec");
+    const { recorder, spec_analyze } = recordPreOutcomeSession(state);
+    const packet = structuredClone(spec_analyze.packet);
+    delete packet.clarify.activation_cohort;
+
+    const outcome = recorder.finish({
+      status: "completed",
+      spec_analyze: { ...spec_analyze, packet },
+    });
+    const source = authenticateStageOutcomeForProjection(state.context, "build-spec", outcome.ref);
+
+    expect(source.value.spec_analyze.packet.clarify.activation_cohort).toBe("pre");
+    expect(source.value.spec_analyze.result.status).toBe("consistent");
+  });
+
   it.each([undefined, "completed"])("publishes the session outcome before handoff without claiming the hook executed (status=%s)", (status) => {
     const state = fixture("handoff-pre-outcome", "build-plan");
     const { recorder, spec_analyze } = recordPreOutcomeSession(state);
@@ -616,6 +633,54 @@ describe("stage-handoff current view contract", () => {
     expect(result.stage_handoff).toMatchObject({ status: "published", current: true, ref: "quality/evidence/handoff/build-spec.md" });
     expect(readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8")).toContain("## 13. 可自行判断与必须问用户的边界");
     expect(JSON.parse(state.task.readRecord(result.ref)).executor.source_id).toBe("fixture/session-memory");
+  });
+
+  it("keeps build-code current when its run succeeds but completion remains in progress", async () => {
+    const state = fixture("handoff-build-code-in-progress", "build-code");
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed",
+      handlerResult: { status: "in_progress", quality_status: "incomplete" },
+      judgment: judgmentFor(state),
+      stageOutcome: state.source,
+      now: NOW,
+    });
+
+    const row = readTaskFacts(state.task.taskPath).find((entry) => entry.record_kind === "stage" && entry.stage === "build-code");
+    expect(row?.layer_states).toMatchObject({
+      implementation_completion: "partial",
+      stage_quality: "incomplete",
+    });
+    const status = deriveStageOutcomeStatuses({
+      task_id: state.context.identity.taskId,
+      read: () => { throw new Error("current stage row must remain the sole status source"); },
+      authenticate: () => null,
+      read_task_facts: () => readTaskFacts(state.task.taskPath),
+    });
+    expect(status["build-code"]).toBe("partial");
+    const handoff = readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8");
+    expect(handoff).toContain("- stage status: `in_progress`");
+    expect(handoff).toContain("继续处理当前 `build-code`");
+    expect(handoff).not.toContain("进入 `verify-code`");
+  });
+
+  it("advances build-code only when the existing completion predicate is complete", async () => {
+    const state = fixture("handoff-build-code-complete", "build-code");
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed",
+      handlerResult: { status: "completed", quality_status: "passed" },
+      judgment: judgmentFor(state),
+      stageOutcome: state.source,
+      now: NOW,
+    });
+
+    const row = readTaskFacts(state.task.taskPath).find((entry) => entry.record_kind === "stage" && entry.stage === "build-code");
+    expect(row?.layer_states).toMatchObject({
+      implementation_completion: "completed",
+      stage_quality: "completed",
+    });
+    const handoff = readFileSync(join(state.task.taskPath, result.stage_handoff.ref), "utf8");
+    expect(handoff).toContain("- stage status: `completed`");
+    expect(handoff).toContain("进入 `verify-code`");
   });
 
   it("publishes the current handoff when a later stage material does not exist yet", async () => {
