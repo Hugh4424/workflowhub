@@ -71,6 +71,14 @@
     "snapshot_tree": "b000000000000000000000000000000000000000",
     "material_revision": "revision-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
+  "executor": {
+    "source_id": "fixture/reflection-executor",
+    "attempt_id": "attempt-001",
+    "started_at": "2026-08-30T00:00:01.000Z",
+    "completed_at": "2026-08-30T00:00:02.000Z",
+    "output_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "output_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "source_completeness": {
     "compaction": false,
     "truncation": false,

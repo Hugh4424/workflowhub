@@ -74,6 +74,12 @@ function inputFor(context, input) {
     identity: { task_id: context.identity.taskId, worktree: context.candidateWorkspace.worktreeRoot,
       branch: context.candidateWorkspace.branch, attempt: outcome.value.attempt_id,
       snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision },
+    executor: input.executor ?? {
+      kind: "fixture-reflection-executor", source_id: "fixture/reflection-executor",
+      attempt_id: outcome.value.attempt_id, started_at: "2026-08-30T00:00:01.000Z",
+      completed_at: "2026-08-30T00:00:02.000Z", output_hash: "a".repeat(64),
+    },
+    output_hash: input.output_hash ?? "a".repeat(64),
     ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
     status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
     source_completeness: { compaction: false, truncation: false, visible_scope: "fixture outcome", unknown_reasons: [] },
@@ -136,8 +142,19 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
       throw new Error("reflection executor failed");
     });
     expect(result.status).not.toBe("failed");
-    expect(result.stage_reflection).toMatchObject({ status: "unavailable", step_status: "unavailable", persisted: false, ref: null });
+    expect(result.stage_reflection).toMatchObject({ status: "failed", step_status: "failed", reflection_status: "failed", persisted: true });
+    expect(result.stage_reflection.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
     expect(result.stage_reflection.error).toMatch(/reflection executor failed/);
+  });
+
+  it("does not let a legacy fixed reflection block persistence of a current execution failure", async () => {
+    const state = fixture("reflection-failed-after-legacy");
+    state.task.writeRecordAtomic("quality/stage-reflection/build-spec.json", "legacy bytes\n");
+    const result = await runReflection(state, "completed", async () => { throw new Error("current executor failed"); });
+    expect(result.stage_reflection).toMatchObject({ status: "failed", persisted: true });
+    expect(result.stage_reflection.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
+    expect(state.task.readRecord("quality/stage-reflection/build-spec.json")).toBe("legacy bytes\n");
+    expect(JSON.parse(state.task.readRecord(result.stage_reflection.ref))).toMatchObject({ status: "failed", error: { summary: "current executor failed" } });
   });
 
   it("runs the reflection for a completed stage and commits lessons after execution", async () => {
@@ -174,13 +191,15 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
   it.each([
     ["timeout", async () => { throw new Error("reflection timeout"); }],
     ["failed", async () => { throw new Error("reflection failed"); }],
-  ])("keeps executor %s unavailable when no judgment was returned", async (_scenario, execute) => {
+  ])("keeps executor %s failed when no judgment was returned", async (_scenario, execute) => {
     const state = fixture(`raw-prelude-${_scenario}`);
     const result = await runReflection(state, "failed", execute);
-    expect(result.stage_reflection).toMatchObject({ status: "unavailable", persisted: false, ref: null });
+    expect(result.stage_reflection).toMatchObject({ status: "failed", persisted: true });
+    expect(result.stage_reflection.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
     expect(result.stage_reflection.error).toMatch(/reflection (timeout|failed)/);
-    expect(existsSync(join(state.task.taskPath, "quality/stage-reflection/build-spec.json"))).toBe(false);
-    expect(existsSync(lessonPath(state))).toBe(false);
+    expect(existsSync(join(state.task.taskPath, result.stage_reflection.ref))).toBe(true);
+    expect(existsSync(lessonPath(state))).toBe(true);
+    expect(readFileSync(lessonPath(state), "utf8")).toContain('"merged":false');
   });
 
   it("preserves failed judgment A while publishing corrected judgment B", async () => {
@@ -302,11 +321,12 @@ describe("stage-runner on_stage_end reflection scheduling", () => {
     const result = await runReflection(state, "completed", () => new Promise(() => {}), { timeoutMs: 10 });
     expect(result.status).not.toBe("failed");
     expect(result.stage_reflection).toMatchObject({
-      status: "unavailable",
-      step_status: "unavailable",
-      reflection_status: "unavailable",
-      persisted: false,
+      status: "failed",
+      step_status: "failed",
+      reflection_status: "failed",
+      persisted: true,
     });
+    expect(result.stage_reflection.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
     expect(result.stage_reflection.error).toMatch(/timed out after 10ms/);
   }, 15_000);
 });

@@ -296,7 +296,7 @@ function authenticatedProfileEvidence({ task, snapshotTree, runtimeProfile, capa
   };
 }
 
-function reusableTestCapture({ task, snapshot, stage, component, command, receiptRef, outputRef, runtimeProfile, capabilityProof, behaviorFingerprint }) {
+function reusableTestCapture({ task, workspace, snapshot, stage, component, command, receiptRef, outputRef, runtimeProfile, capabilityProof, behaviorFingerprint }) {
   const candidateRefs = [
     receiptRef,
     ...(stage === "verify-code" && command.trim() === FULL_TEST_COMMAND && typeof task.listCanonicalTestReceiptRefs === "function"
@@ -727,7 +727,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
           runtimeProfile,
           capabilityProof,
         });
-        const reusable = reusableTestCapture({ task: safeTask, snapshot: before, stage, component, command, receiptRef, outputRef, runtimeProfile: profileEvidence.runtimeProfile, capabilityProof: profileEvidence.capabilityProof, behaviorFingerprint });
+        const reusable = reusableTestCapture({ task: safeTask, workspace: safeWorkspace, snapshot: before, stage, component, command, receiptRef, outputRef, runtimeProfile: profileEvidence.runtimeProfile, capabilityProof: profileEvidence.capabilityProof, behaviorFingerprint });
         if (reusable !== undefined) return reusable;
         const headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
         const startedAt = now();

@@ -121,7 +121,15 @@ function assertTaskHandle(task) {
   return task;
 }
 
-function createCanonicalRecord(task, relativePath, data) {
+function createCanonicalRecord(task, relativePath, data, kernel = null) {
+  if (kernel && typeof kernel.publishCanonicalRecord === "function") {
+    try {
+      const current = task.readRecord(relativePath);
+      if (current !== data) throw new Error(`immutable review record conflict: ${relativePath}`);
+      return { idempotent: true };
+    } catch (error) { if (error?.code !== "ENOENT") throw error; }
+    return kernel.publishCanonicalRecord(relativePath, data);
+  }
   try {
     const current = task.readRecord(relativePath);
     if (current !== data) throw new Error(`immutable review record conflict: ${relativePath}`);
@@ -189,6 +197,25 @@ function requestLockHash(request, materialId, routeIdentity) {
     authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
   };
   return textHash(canonicalJson(stable));
+}
+
+function reviewSubjectHash(subject) {
+  return textHash(canonicalJson(subject ?? null));
+}
+
+function attemptSubjectHash(attempt) {
+  const value = attempt?.closure_manifest?.subject_sha256 ?? attempt?.subject_sha256;
+  return typeof value === "string" && SHA256_HEX.test(value) ? value : null;
+}
+
+function subjectMatchesAttempt(attempt, subject) {
+  const actual = attemptSubjectHash(attempt);
+  // Older canonical attempts predate the closure subject hash. They can only
+  // remain in the default null-subject namespace; a non-null subject cannot
+  // be proven equivalent and must stay fail-closed.
+  return actual === null
+    ? (subject === undefined || subject === null)
+    : actual === reviewSubjectHash(subject);
 }
 
 function findReusableReview({ history, request, identity, materialId, requestKey }) {
@@ -469,14 +496,44 @@ function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
         output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })), } };
 }
 
-function readCanonicalBudgetHistory(task) {
+function readCanonicalBudgetHistory(task, scope = null) {
   if (typeof task.listCanonicalReviewAttemptRefs !== "function") throw new Error("canonical attempt inventory is unavailable");
   const refs = task.listCanonicalReviewAttemptRefs();
   if (!Array.isArray(refs) || new Set(refs).size !== refs.length) throw new Error("canonical attempt inventory is invalid");
+  const classifyScope = (attempt) => {
+    // A malformed historical record can still carry a trustworthy namespace
+    // discriminator.  Stage is part of the review budget key, so an explicit
+    // different stage is provably foreign even when the legacy record omitted
+    // task_id/material identity.  Do not let that unrelated debris block the
+    // current stage; same-stage records remain unknown/fail-closed below.
+    if (scope !== null && typeof attempt?.stage === "string" && attempt.stage !== scope.stage) return "foreign";
+    if (scope === null || !attempt || typeof attempt !== "object"
+        || attempt.task_id !== task.identity.taskId
+        || typeof attempt.stage !== "string"
+        || typeof attempt.snapshot_tree !== "string"
+        || typeof attempt.material_revision !== "string") return "unknown";
+    const required = [
+      [attempt.stage, scope.stage],
+      [attempt.review_track ?? null, scope.reviewTrack],
+      [attempt.review_kind ?? null, scope.reviewKind],
+      [attempt.subject_kind ?? "worktree", scope.subjectKind],
+      [attempt.review_scope ?? (attempt.stage === "build-code" ? "integration" : null), scope.reviewScope],
+    ];
+    if (required.some(([actual, expected]) => actual !== expected)) return "foreign";
+    const actualSubjectHash = attemptSubjectHash(attempt);
+    if (actualSubjectHash !== null && actualSubjectHash !== scope.subjectSha256) return "foreign";
+    if (actualSubjectHash === null && scope.subjectSha256 !== reviewSubjectHash(null)) return "unknown";
+    if ((attempt.phase_id ?? null) !== scope.phaseId
+        || attempt.snapshot_tree !== scope.snapshotTree
+        || attempt.material_revision !== scope.materialRevision) return "unknown";
+    return "current";
+  };
   const entries = refs.map((ref) => {
+    let parsedAttempt = null;
     try {
     const raw = task.readRecord(ref);
     const attempt = JSON.parse(raw);
+    parsedAttempt = attempt;
     if (attempt.task_id !== task.identity.taskId || typeof attempt.attempt_id !== "string"
         || ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`
         || !MATERIAL_REVISION.test(attempt.material_revision ?? "") || !GIT_OID.test(attempt.snapshot_tree ?? "")
@@ -507,8 +564,18 @@ function readCanonicalBudgetHistory(task) {
       provider_attempts: attempt.provider_attempts.map((item) => ({ status: item.status,
         output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })),
     } };
-    } catch (error) { error.review_attempt_ref = ref; throw error; }
-  });
+    } catch (error) {
+      // A damaged record from another stage in the same task is historical
+      // noise and must not consume or block this request. Any damaged record
+      // from the requested stage remains relevant history: an exact current
+      // record is an incomplete canonical fact, while an older/phase-mismatched
+      // record keeps the budget unknown because dispatch cannot be justified.
+      const classification = classifyScope(parsedAttempt);
+      if (classification === "foreign") return null;
+      if (classification === "current") error.review_attempt_ref = ref;
+      throw error;
+    }
+  }).filter(Boolean);
   const byRef = new Map(entries.map((entry) => [entry.fact.attempt_ref, entry]));
   const seenPairs = new Set();
   return entries.filter((entry) => {
@@ -599,14 +666,32 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   const lockRef = "quality/reviews/request-locks/current-round.lock";
   const operation = async () => {
     let history;
-    try { history = readCanonicalBudgetHistory(taskHandle); }
+    try {
+      history = readCanonicalBudgetHistory(taskHandle, {
+        stage: request.stage,
+        snapshotTree: before.tree,
+        materialRevision: before.materialRevision,
+        phaseId: request.phase_id ?? null,
+        reviewTrack: request.review_track ?? request.reviewTrack ?? null,
+        reviewKind: request.review_kind ?? request.reviewKind ?? null,
+        subjectKind: request.subject_kind ?? "worktree",
+        reviewScope: request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null),
+        subjectSha256: reviewSubjectHash(request.subject),
+        materialId,
+      });
+    }
     catch (error) {
       if (error.review_attempt_ref) {
         let damaged;
         try { damaged = JSON.parse(taskHandle.readRecord(error.review_attempt_ref)); } catch { /* unavailable history stays unknown */ }
         if (damaged?.stage === request.stage && damaged?.snapshot_tree === before.tree
             && damaged?.material_revision === before.materialRevision
-            && (damaged?.phase_id ?? null) === (request.phase_id ?? null)) {
+            && (damaged?.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
+            && (damaged?.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
+            && (damaged?.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
+            && (damaged?.phase_id ?? null) === (request.phase_id ?? null)
+            && (damaged?.review_scope ?? (damaged?.stage === "build-code" ? "integration" : null)) === (request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null))
+            && subjectMatchesAttempt(damaged, request.subject)) {
           error.code = "REVIEW_RECORD_INCOMPLETE";
           error.attempt_ref = error.review_attempt_ref;
           throw error;
@@ -621,7 +706,9 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
       && (prior.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
       && (prior.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
       && (prior.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
-      && (prior.phase_id ?? null) === (request.phase_id ?? null);
+      && (prior.phase_id ?? null) === (request.phase_id ?? null)
+      && (prior.review_scope ?? (prior.stage === "build-code" ? "integration" : null)) === (request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null))
+      && subjectMatchesAttempt(prior, request.subject);
     const priorSubject = history.filter((entry) => entry.consumesRound && sameSubject(entry.attempt));
     const changed = priorSubject.some((entry) => entry.attempt.material_revision !== before.materialRevision);
     const latestCurrent = priorSubject.filter((entry) => entry.attempt.material_revision === before.materialRevision).at(-1) ?? null;
@@ -634,7 +721,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
     const kind = request.review_scope === "phase" ? "phase"
       : routeRepaired ? "route_repair"
         : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
-    const attempts = history.filter((entry) => entry.consumesRound).map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
+    const attempts = priorSubject.map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
     const reviewBudget = validateReviewBudget({ material_revision: before.materialRevision,
       attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id,
         route_identity: routeIdentity, closure_identity: currentClosureIdentity,
@@ -870,7 +957,7 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
   if (["source", "base_tree", "candidate_tree", "snapshot_tree", "material_revision"].some((key) => Object.hasOwn(result, key))) throw new TypeError("review result identity fields must come from the authenticated current context");
   if (!result?.role_results) {
     const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { budgetContext, executionContext, closureManifest });
-    for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw);
+    for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw, kernel);
     return prepared.refs;
   }
   if (typeof result.pair_id !== "string" || !result.pair_id.trim() || !SHA256_HEX.test(result.material_id ?? "")) throw new TypeError("paired review pair_id and material identity are required");
@@ -896,8 +983,8 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
   };
   // Validate both roles before any writes. Stable refs make a retry after a
   // partial filesystem write complete the same records without redispatch.
-  for (const entry of Object.values(prepared)) for (const [ref, raw] of entry.records) createCanonicalRecord(handle, ref, raw);
-  createCanonicalRecord(handle, reportRef, "# Paired review\n\nrequest_key: " + (requestKey ?? "none") + "\n\n```json\n" + JSON.stringify(summary, null, 2) + "\n```\n");
+  for (const entry of Object.values(prepared)) for (const [ref, raw] of entry.records) createCanonicalRecord(handle, ref, raw, kernel);
+  createCanonicalRecord(handle, reportRef, "# Paired review\n\nrequest_key: " + (requestKey ?? "none") + "\n\n```json\n" + JSON.stringify(summary, null, 2) + "\n```\n", kernel);
   return summary;
 }
 

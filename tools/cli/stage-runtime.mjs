@@ -26,9 +26,10 @@ import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveCurrentProductRelease, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveCurrentProductRelease, deriveExecutionOutcomes, deriveProductRelease, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
 import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { evaluateFactFreshness } from "../../runtime/evidence/freshness.mjs";
+import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
 import { CURRENT_MATERIAL_FILES } from "../../runtime/task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openTask } from "../../runtime/task/task-handle.mjs";
@@ -319,7 +320,20 @@ function currentProductReleaseView({ context, currentSnapshot, materialRevision,
 // Keep status as a read-only projection of the existing facts. The grouping
 // makes the next action obvious without turning quality facts into a new gate
 // or hiding unavailable/not-applicable evidence.
-export function deriveStatusGroups({ stage = null, quality, productRelease, observations = [] } = {}) {
+function gapRootCauseId(gap) {
+  const text = String(gap);
+  const prerequisite = /^verify-code prerequisite missing:\s*(.+)$/.exec(text);
+  if (prerequisite) return gapRootCauseId(prerequisite[1]);
+  const stagePredicate = /^stage_predicate_missing:([^:]+):(.+)$/.exec(text);
+  if (stagePredicate) return `stage_predicate_missing:${stagePredicate[1]}:${stagePredicate[2]}`;
+  const stageCompletion = /^stage_completion_(?:missing|not_completed|unbound):(.+)$/.exec(text);
+  if (stageCompletion) return `stage_completion:${stageCompletion[1]}`;
+  const acceptance = /^(acceptance_result_(?:not_pass|unbound|missing|unexpected)):(.+?)(?::.*)?$/.exec(text);
+  if (acceptance) return `${acceptance[1]}:${acceptance[2]}`;
+  return text;
+}
+
+export function deriveStatusGroups({ stage = null, quality, productRelease, observations = [], research = null, closePreparationGaps: closePreparationGapsInput = undefined, close_preparation_gaps: closePreparationGapsSnakeInput = undefined } = {}) {
   // Status is a projection of the same authenticated/current facts used by
   // deriveStageCompletion. Never let a stale or unauthenticated attempt hide
   // a current actionable gap, and never let array order decide which attempt
@@ -371,24 +385,72 @@ export function deriveStatusGroups({ stage = null, quality, productRelease, obse
     }
   }
   const quality_gaps = [...new Set(productRelease?.reasons ?? [])];
+  const release_gaps = [...quality_gaps];
   const close_supported = stage === "verify-code";
-  // Read-only preflight for physical close. These are facts to surface to the
-  // operator, never a new gate or a replacement for verify-code quality.
-  const close_preparation_gaps = close_supported
-    ? [...new Set([
+  const close_gaps = [...new Set(closePreparationGapsInput ?? closePreparationGapsSnakeInput ?? (close_supported
+    ? [
       ...missing.map((subject) => `verify-code prerequisite missing: ${subject}`),
       ...quality_gaps,
-    ])]
-    : [];
+    ]
+    : []))];
+  const qualityRootCauses = new Set(missing.map((gap) => gapRootCauseId(gap)));
+  const gapGroups = new Map();
+  const addGap = (gap, view, source) => {
+    const text = String(gap);
+    const rootCauseId = gapRootCauseId(text);
+    const group = gapGroups.get(rootCauseId) ?? {
+      root_cause_id: rootCauseId,
+      source_layer: source,
+      owner: "stage-runtime",
+      derived_views: [],
+      gaps: [],
+    };
+    if (!group.gaps.includes(text)) group.gaps.push(text);
+    if (!group.derived_views.includes(view)) group.derived_views.push(view);
+    if (group.source_layer !== "quality" && source === "quality") group.source_layer = "quality";
+    gapGroups.set(rootCauseId, group);
+  };
+  for (const gap of missing) addGap(gap, "quality", "quality");
+  for (const gap of release_gaps) {
+    // A release reason is not automatically a quality gap.  Only retain the
+    // quality view when it resolves to a currently missing quality root cause.
+    if (qualityRootCauses.has(gapRootCauseId(gap))) addGap(gap, "quality", "quality");
+    addGap(gap, "release", "release");
+  }
+  for (const gap of close_gaps) addGap(gap, "close", "close");
+  const disclosedResearch = research ?? (() => {
+    const candidates = current.filter((observation) => (observation?.fact?.value ?? observation?.fact)?.subject === "research");
+    const value = candidates.at(-1)?.fact?.value ?? candidates.at(-1)?.fact;
+    return value ? { status: value.status } : null;
+  })();
+  if (disclosedResearch?.status === "unavailable") external_unavailable.push("research:unavailable");
+  // Read-only preflight for physical close. These are facts to surface to the
+  // operator, never a new gate or a replacement for verify-code quality.
+  const close_preparation_gaps = close_gaps;
   return Object.freeze({
     actionable_now: Object.freeze(actionable_now),
     external_unavailable: Object.freeze(external_unavailable),
     not_applicable: Object.freeze(not_applicable),
     quality_gaps: Object.freeze(quality_gaps),
-    release_gaps: Object.freeze(quality_gaps),
+    release_gaps: Object.freeze(release_gaps),
+    gap_groups: Object.freeze([...gapGroups.values()].map((group) => Object.freeze({
+      ...group,
+      derived_views: Object.freeze(group.derived_views),
+      gaps: Object.freeze(group.gaps),
+    }))),
     close_supported,
     close_preparation_gaps: Object.freeze(close_preparation_gaps),
     next_action: actionable_now[0] ?? (external_unavailable[0] ?? null),
+    research: research ?? Object.freeze({
+      status: "unavailable",
+      report_ref: null,
+      report_sha256: null,
+      required_questions: [],
+      covered_questions: [],
+      tool_attempts: [],
+      gaps: [],
+      fallback: { approval_status: "not_requested", requested_route: null, used_routes: [] },
+    }),
   });
 }
 
@@ -610,8 +672,40 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         : { status: "unknown", authenticated: false };
       observations.push({ fact: { ref, value }, authenticated: freshness.authenticated === true, recorded: true, freshness });
     }
+    const researchStage = ["make-decision", "build-spec", "build-plan"].includes(values.stage);
+    const researchReports = current && researchStage
+      ? listCurrentResearchReports({
+          task: context.task,
+          taskId: context.task.identity.taskId,
+          stage: values.stage,
+          snapshotTree: current.tree,
+          materialScopeRevision: stageMaterialScopeRevision(values.stage, materials),
+        })
+      : [];
+    const researchDisclosure = deriveResearchStatus(researchReports);
+    const authenticatedResearchReports = researchReports.filter((report) => report?.value?.recorded_at);
+    const statusObservations = authenticatedResearchReports.length > 0
+      ? [...observations, ...authenticatedResearchReports.map((report) => ({
+          fact: { ref: report.ref, value: { ...report.value, subject: "research" } },
+          authenticated: true,
+          recorded: true,
+          freshness: { status: "current" },
+        }))]
+      : observations;
     const stageOutcomeStatuses = current
       ? deriveStageOutcomeStatuses({
+          task_id: context.identity.taskId,
+          read: readQualityEvidence(context.task),
+          stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, context.task.listCanonicalStageOutcomeRefs(stage)])),
+          snapshot_tree: current.tree,
+          material_revision: materialRevision,
+          material_scope_revisions: stageMaterialScopeRevisions(materials),
+          snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
+          authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
+        })
+      : null;
+    const executionOutcome = current
+      ? deriveExecutionOutcomes({
           task_id: context.identity.taskId,
           read: readQualityEvidence(context.task),
           stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, context.task.listCanonicalStageOutcomeRefs(stage)])),
@@ -634,7 +728,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         acceptance_results: [],
         expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
       });
-    const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations });
+    const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations: statusObservations, research: researchDisclosure });
     return Object.freeze({
       ...progression,
       quality_status: quality.status,
@@ -645,6 +739,8 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       product_release_reasons: productRelease.reasons,
       product_release_input_refs: productRelease.input_refs,
       status_groups: statusGroups,
+      research: researchDisclosure,
+      execution_outcome: executionOutcome?.[values.stage] ?? { status: "unavailable", blocking: false, attempt_count: 0, completed_attempt_count: 0, refs: [], diagnostic: null },
     });
   }
   authenticateStageWriteBoundary(context, {
@@ -775,21 +871,38 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     const allowedRunFields = new Set([
       "receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts",
-      "fallback_protocol", "review_budget", "user_reply",
+      "fallback_protocol", "review_budget", "user_reply", "stage_reflection",
+      ...(values.stage === "make-decision" ? ["research_report"] : []),
+      ...(values.stage === "verify-code" ? ["verify_summary"] : []),
       ...(values.stage === "build-spec" || values.stage === "build-plan" ? ["decision_freeze"] : []),
     ]);
-    const suppliedInput = input ?? {};
+    const suppliedInput = { ...(input ?? {}) };
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(suppliedInput.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
+    if (Object.hasOwn(suppliedInput, "research_report")) {
+      const receipts = suppliedInput.receipts && typeof suppliedInput.receipts === "object" && !Array.isArray(suppliedInput.receipts)
+        ? { ...suppliedInput.receipts }
+        : {};
+      if (receipts.research !== undefined) throw new TypeError("run research_report cannot be combined with receipts.research");
+      const publication = context.kernel.completeMakeDecisionResearch({ report: suppliedInput.research_report });
+      receipts.research = publication.ref;
+      suppliedInput.receipts = receipts;
+      delete suppliedInput.research_report;
+    }
     // Missing, stale, or unavailable upstream quality facts remain visible in
     // quality/product-release projections, but never become a work permit.
     // Stage outcomes must be supplied explicitly by the caller; no host
     // session is scanned or rebound as a side effect of public run.
-    return runOfficialStage(values.stage, context, {
+    const verifySummary = suppliedInput.verify_summary;
+    delete suppliedInput.verify_summary;
+    const stageResult = await runOfficialStage(values.stage, context, {
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
     }, stageReflectionPublication(services));
+    if (verifySummary === undefined) return stageResult;
+    const publication = context.kernel.publishVerifySummary(verifySummary);
+    return Object.freeze({ ...stageResult, verify_summary: publication });
   }
   if (command === "confirm") {
     if (input !== undefined) {

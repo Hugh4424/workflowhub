@@ -37,6 +37,11 @@
 **stage-reflection**：
 每个正式 stage 结束时由主会话运行的复盘判断层机制，记录当前 stage 的保留、优化、简化、合并、移除候选、补充或待证据判断；新版执行闭环=主会话产出判断 JSON→私有 reflect 命令完成机器校验/合并/发布；状态含 ok/degraded/failed/unavailable（无人执行）/not_scheduled（未触发）。它对应 ADR 0021/0023，不是新的 stage、事实源或质量 gate。
 
+**stage-handoff**：
+四个作者 stage 在 reflection 终态后生成的当前交接视图。它固定写入
+`quality/evidence/handoff/<stage>.md`，只保留四份材料与正式原件的指针、状态、边界和
+下一步；每次成功原子覆盖并读回校验，不保留历史版本，不是质量事实、发布结论或推进门。
+
 **复盘执行闭环（reflect）**：
 stage 末由主会话触发、机器完成 raw 前奏校验、validate、lessons 合并与固定路径 immutable 发布的私有 CLI 命令；会话只产出判断内容，机器不生成判断。对应 ADR 0023。
 

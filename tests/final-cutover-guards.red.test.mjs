@@ -953,6 +953,50 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
+  it("downgrades both ACs when their proving anchors overlap, independent of input order", async () => {
+    const stage = "build-code";
+    const diffEvidence = JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: "HEAD", snapshot_tree: tree });
+    const diffHash = createHash("sha256").update(diffEvidence).digest("hex");
+    const values = {
+      "quality/evidence/implementation.json": canonical(stage, { producer: { stage, component: "implementation", version: "1" }, changed: [], snapshot_head: tree, snapshot_tree: tree, snapshot_commit: "HEAD", diff_ref: "evidence/diff.patch", diff_hash: diffHash, phase_completion: true }),
+      "quality/tests/tests.json": testsReceipt(stage),
+      "quality/reviews/results/review.json": reviewReceipt(stage),
+      "evidence/diff.patch": diffEvidence,
+      "evidence/ac1.json": { result: "pass" },
+      "evidence/ac2.json": { result: "pass" },
+    };
+    const documents = completedBuildCodeDocuments();
+    documents.spec = documents.spec.replace("- **AC1**: the accepted facts retain integration scope. ← FR-DEMO-001", "- **AC1**: the accepted facts retain integration scope. ← FR-DEMO-001\n- **AC2**: a distinct result is preserved independently. ← FR-DEMO-001");
+    const worker = {
+      ...workerFor(stage, values), workspace: { worktreeRoot: resolve(".") },
+      readArtifact: (name) => documents[name.replace(/\.md$/, "")],
+      artifactRef: (name) => `specs/task/${name}`,
+      readEvidence: (ref) => ref === "evidence/diff.patch"
+        ? ({ bytes: values[ref], sha256: diffHash })
+        : ({ bytes: JSON.stringify(values[ref]), sha256: sha }),
+    };
+    const ac1 = {
+      acceptance_criterion_id: "AC1", status: "covered", evidence_refs: [{ ref: "evidence/ac1.json", sha256: sha }],
+      scenario: "保存记录一", oracle: "返回记录一", actual_outcome: "返回了记录一", coverage_limits: "未覆盖断网",
+      implementation_anchor: { id: "impl-1", path: "src/feature.mjs", start_line: 10, end_line: 20, role: "implementation" },
+      verification_anchor: { id: "test-1", path: "tests/feature.test.mjs", start_line: 10, end_line: 12, role: "verification" },
+    };
+    const ac2 = {
+      acceptance_criterion_id: "AC2", status: "covered", evidence_refs: [{ ref: "evidence/ac2.json", sha256: sha }],
+      scenario: "删除记录二", oracle: "返回记录二删除态", actual_outcome: "返回了记录二删除态", coverage_limits: "未覆盖重试",
+      implementation_anchor: { id: "impl-2", path: "src/feature.mjs", start_line: 18, end_line: 25, role: "implementation" },
+      verification_anchor: { id: "test-2", path: "tests/feature.test.mjs", start_line: 30, end_line: 32, role: "verification" },
+    };
+    for (const items of [[ac1, ac2], [ac2, ac1]]) {
+      const result = await officialStageHandler(stage)(worker, {
+        receipts: { implementation: "quality/evidence/implementation.json", tests: "quality/tests/tests.json", review: "quality/reviews/results/review.json", audit: worker.auditRef },
+        acceptance_coverage: { snapshot_tree: tree, accepted_criterion_ids: ["AC1", "AC2"], items },
+      });
+      expect(result.facts.acceptance_coverage.items.map((item) => [item.acceptance_criterion_id, item.status]).sort())
+        .toEqual([["AC1", "unknown"], ["AC2", "unknown"]]);
+    }
+  });
+
   it("rejects a forged current global test receipt before task audit is considered", async () => {
     const stage = "build-code";
     const forgedTests = testsReceipt(stage);

@@ -37,6 +37,7 @@ const FORBIDDEN_MANIFEST_FIELDS = new Set([
 ]);
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const CANONICAL_RECORD_WRITERS = new WeakMap();
+const VERIFY_SUMMARY_WRITERS = new WeakMap();
 const INVOCATION_IDENTITY_WRITERS = new WeakMap();
 const PATH_CARD_WRITERS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
@@ -413,6 +414,9 @@ function assertPublicRecordWritable(relativePath) {
   if (relativePath === "task.json") {
     throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   }
+  if (relativePath === "index.json" || relativePath === "quality/verify.json") {
+    throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
+  }
   if (relativePath.startsWith("results/")) throw new Error(`results records are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   if (/^(?:receipts|reviews|evidence)\//.test(relativePath)) throw new Error(`record is canonical-receipt-owned and cannot be written through TaskHandle: ${relativePath}`);
   if (/^quality\/facts\//.test(relativePath)) throw new Error(`quality facts are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
@@ -674,6 +678,31 @@ function makeTaskHandle(taskPath, manifest) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
+    /** Enumerate immutable content-addressed research reports. */
+    listCanonicalResearchReportRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const qualityRoot = resolve(realTaskPath, "quality");
+      const researchRoot = resolve(qualityRoot, "evidence", "research");
+      assertInside(realTaskPath, qualityRoot, "quality directory");
+      assertInside(realTaskPath, researchRoot, "research evidence directory");
+      if (!existsSync(researchRoot)) return Object.freeze([]);
+      const qualityIdentity = directorySnapshot(realTaskPath, qualityRoot);
+      const researchIdentity = directorySnapshot(realTaskPath, researchRoot);
+      const refs = readdirSync(researchRoot, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
+        .map((entry) => {
+          const candidate = resolve(researchRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`research report must be a regular non-symlink JSON file: ${entry.name}`);
+          return `quality/evidence/research/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(researchIdentity);
+      verifyDirectorySnapshot(qualityIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
     /** Enumerate immutable vNext quality facts without exposing storage paths. */
     listCanonicalQualityFactRefs() {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
@@ -837,6 +866,14 @@ function makeTaskHandle(taskPath, manifest) {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
   });
+  VERIFY_SUMMARY_WRITERS.set(frozen, (data, options) => {
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    if (typeof data !== "string" || data.length === 0) throw new TypeError("verify summary data is required");
+    const result = writeAtomicAt(realTaskPath, "quality/verify.json", data, options);
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    return result;
+  });
   INVOCATION_IDENTITY_WRITERS.set(frozen, (relativePath, data) => {
     if (!/^identity\/executions\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json$/.test(relativePath ?? "")) {
       throw new Error("invocation identity path is invalid");
@@ -908,6 +945,12 @@ export function createTaskKernel(taskHandle, options) {
       assertTaskHandle(task);
       const writer = CANONICAL_RECORD_WRITERS.get(task);
       if (typeof writer !== "function") throw new TypeError("authentic TaskHandle canonical writer required");
+      return writer;
+    },
+    createVerifySummaryWriterFor(task) {
+      assertTaskHandle(task);
+      const writer = VERIFY_SUMMARY_WRITERS.get(task);
+      if (typeof writer !== "function") throw new TypeError("authentic TaskHandle verify summary writer required");
       return writer;
     },
   }));

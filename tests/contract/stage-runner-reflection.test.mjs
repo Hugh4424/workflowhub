@@ -74,6 +74,12 @@ function inputFor(context, input) {
     identity: { task_id: context.identity.taskId, worktree: context.candidateWorkspace.worktreeRoot,
       branch: context.candidateWorkspace.branch, attempt: outcome.value.attempt_id,
       snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision },
+    executor: input.executor ?? {
+      kind: "fixture-reflection-executor", source_id: "fixture/reflection-executor",
+      attempt_id: outcome.value.attempt_id, started_at: "2026-08-31T00:00:01.000Z",
+      completed_at: "2026-08-31T00:00:02.000Z", output_hash: "a".repeat(64),
+    },
+    output_hash: input.output_hash ?? "a".repeat(64),
     ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
     status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
     source_completeness: { compaction: false, truncation: false, visible_scope: "fixture outcome", unknown_reasons: [] },

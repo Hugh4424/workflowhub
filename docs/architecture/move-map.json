@@ -850,8 +850,8 @@
       "status": "move",
       "sha256_before": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
       "bytes": 3330,
-      "sha256_after": "7f346cb54cb7d97ea6fd3245ce21d961ad2ec9c024385290f1627720e9e3a4af",
-      "content_change": "import/path-only"
+      "sha256_after": "8a204eec524610468d922ecb64881a49e6d997e144fc8b30c8c09eddc88c91ca",
+      "content_change": "import/path plus execution outcome semantic signature"
     },
     {
       "source": "core/publication.mjs",
@@ -1204,8 +1204,8 @@
       "destination": "runtime/evidence/canonical-receipt-writer.mjs",
       "status": "moved-R007",
       "sha256_before": "5012f3a45ce60baa6b3c30d9a9cadbe2fea1ed7287a7dd0dd3ad3acba44d83cb",
-      "sha256_after": "2a09125ba69fa786d01794d1e38625fb1cddab90447de631ed943efdf6c5cabc",
-      "bytes": 30918,
+      "sha256_after": "5a2d43aad17f3f0698ab9317a1678bc5dce9daa4f4b6a9b0c7f37a8f19c8ee7e",
+      "bytes": 52300,
       "content_change": "import/path-only"
     },
     {
@@ -1352,16 +1352,16 @@
       "destination": "runtime/stage/stage-handlers.mjs",
       "status": "moved-T012",
       "sha256_before": "a828ccbbd72409cf0c914bdf0186afe2e969766ae162a8e552aeefe85f8ce33a",
-      "sha256_after": "af62070319d537012efc18435bfe7b78a19f365402c2fa547231cb5c2bbc4c15",
-      "content_change": "path-only move"
+      "sha256_after": "c9defe5fc63d2f17265241b20b0978fac6d180381d23b3b3bce5f871e8a8dc7d",
+      "content_change": "path move plus scoped research material binding"
     },
     {
       "source": "core/stage-runner.mjs",
       "destination": "runtime/stage/stage-runner.mjs",
       "status": "moved-T012",
       "sha256_before": "c11f82565b0997498897d1d2681fff1fe371785062abd14ffa302ba6349d92df",
-      "sha256_after": "d034e5f7950821f7fb60790f86a993163097abe0ae4eca156d899bd9db4721ff",
-      "content_change": "path-only move"
+      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499",
+      "content_change": "path move plus reflection provenance and failure persistence"
     },
     {
       "source": "core/stage-skill-invocation.mjs",
@@ -1380,7 +1380,7 @@
       "destination": "runtime/task/task-handle.mjs",
       "status": "moved-T012",
       "sha256_before": "e237055160096341ca899046fc73c40a16c12c929e1ff6f114edd36b122bac6a",
-      "sha256_after": "a166fd05bcec7aa0ecc2b04e9190d4323914de1ef229e2d54a551e391e4a6406",
+      "sha256_after": "ca442068f89244ce4e3abecacb131bc4a4e716478efe782c170c08f0850d0ff2",
       "content_change": "path-only move"
     },
     {
@@ -1396,8 +1396,8 @@
       "destination": "runtime/task/task-kernel-implementation.mjs",
       "status": "moved-T012",
       "sha256_before": "ee3aaba2b97690fc8f6a440138e48b10830d9edfe22d21bc115d4f75bc25c211",
-      "sha256_after": "796f60d7251b2befb5d221f97f5661e15d205db29eeee55f750d711461638cf1",
-      "content_change": "path-only move"
+      "sha256_after": "5a33faffb024f3269391c9c5abb9ba29dd809452634f12251bf521abae33585c",
+      "content_change": "path move plus scoped research revision helper"
     },
     {
       "source": "core/task-recovery.mjs",
@@ -1446,8 +1446,8 @@
       "destination": "tools/cli/stage-runtime.mjs",
       "status": "moved-T012",
       "sha256_before": "b2f8475cbe599bb32d314b58035387967e5742a5e2962d6eb4ee25a20a361f5b",
-      "sha256_after": "ebd3f6201fa5736c85d9979055170b0bc46496f035a3eb30aeec30ea19e62410",
-      "content_change": "path-only move"
+      "sha256_after": "6e465dce061d4b0aa31aeb103e335305c617b9065e84ebd78a23435467c3e6c9",
+      "content_change": "path move plus scoped research status and root-cause gap grouping"
     },
     {
       "source": "scripts/task-close.mjs",
@@ -2176,8 +2176,8 @@
       "owner": "stage-runner",
       "consumer": "T7 FR-LEFT-001/004",
       "content_change": "added assertWriteBoundary plus deferred stage reflection lifecycle across official publication boundary and failed-stage evidence",
-      "bytes": 106731,
-      "sha256_after": "097adb986a6b69045659a8367531db1da51c57f16de0fade5ea295ea0e0b4e64"
+      "bytes": 171346,
+      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499"
     },
     {
       "source": "tests/close/close-contract.test.mjs",
@@ -2238,8 +2238,8 @@
       "delete_condition": "remove when the stage-reflection skill and projection are retired",
       "content_change": "judgment-only stage reflection schema with quality-safe and merged lesson references, without quality scoring fields",
       "sha256_before": null,
-      "bytes": 5824,
-      "sha256_after": "a44e40ab55d45f8e056da1e7331a627ff3c93f7bcd3513b30f399f04c1103ba7"
+      "bytes": 6966,
+      "sha256_after": "a3f71e6bdecc4078fb14d894723fde18be0577491e6acf943003666faab287d2"
     },
     {
       "source": "runtime/schemas/stage-reflection.v2.json",
@@ -2250,8 +2250,8 @@
       "delete_condition": "remove when v2 stage-reflection records and their consumers are retired",
       "content_change": "independent v2 schema for six structured blocks, status matrix, identity, and source completeness",
       "sha256_before": null,
-      "bytes": 10003,
-      "sha256_after": "ccf472b02b9d29c344bd19d209c3ecb765d65663227da76ff7dcb856b8369639"
+      "bytes": 11130,
+      "sha256_after": "866d606d5515bd2101c3aabb3a261d45fe8b73f2f935fd06c569de18565379a7"
     },
     {
       "source": "skills/stage-reflection",
@@ -2308,8 +2308,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 43846,
-      "sha256_after": "7d0787140fde2ad5d6e04813c6522c5b622a641381a1e400a8cf94aecaa28df6"
+      "bytes": 44964,
+      "sha256_after": "985c989e7d8c44162a6e5565ce92c7db64f131dff2e00f0f3c80e083447e5aae"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2386,8 +2386,8 @@
       "consumer": "private reflect command, stage-reflection page and M16 projection; failure facts remain the durable merge/publication recovery signal",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "authenticated validate-lessons-publish reflection deep module with retryable lesson recovery and immutable failure facts",
-      "bytes": 26218,
-      "sha256_after": "f47b9f80aa33c0041c25dd8abdf503bf5985570dd325a5722696fdb047618e99"
+      "bytes": 43575,
+      "sha256_after": "80bc3f7ff2f0ab61413b23551fe66181842bd7b7508e760f30aab66393526ed4"
     },
     {
       "source": "runtime/stage/stage-runner.mjs",
@@ -2397,8 +2397,8 @@
       "consumer": "on-stage-end reflection scheduling and shared reflect transaction",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "route scheduled reflections through runStageReflection and preserve truthful not_scheduled availability facts",
-      "bytes": 124437,
-      "sha256_after": "ea0f0fa83816978347b570547489523e83eedb5de5b91b35f3f5404d7d494bcd"
+      "bytes": 171346,
+      "sha256_after": "ed61e6d3666afda08f14987218e3503fb90085e9320575a0ebbcc24bc9b98499"
     },
     {
       "source": "tools/cli/stage-runtime.mjs",
@@ -2408,8 +2408,8 @@
       "consumer": "run:reflect private action route",
       "delete_condition": "remove when the stage reflection mechanism is retired",
       "content_change": "add private reflect command and route it through existing public run behavior",
-      "bytes": 43641,
-      "sha256_after": "fb55de913d3ad3f2a88433c0eb7a64ac27544b4ec0e28c7781880b667d1ab6d6"
+      "bytes": 51013,
+      "sha256_after": "6e465dce061d4b0aa31aeb103e335305c617b9065e84ebd78a23435467c3e6c9"
     },
     {
       "source": "tools/cli/import-historical-reflection.mjs",
@@ -2886,6 +2886,26 @@
       "content_change": "repository fixture keeps twelve AC-to-anchor rows after runtime quality artifacts moved to the external task store",
       "bytes_after": 1191,
       "sha256_after": "1778a568e6084e98fb96e41c991b4b909164903d8d50fcb1431134e9fd1a9ef9"
+    },
+    {
+      "source": "runtime/stage/stage-handoff.mjs",
+      "destination": "runtime/stage/stage-handoff.mjs",
+      "status": "add",
+      "owner": "build-code T012 stage-handoff current-view publisher",
+      "consumer": "stage-runner#runStageEndReflection for four author stages",
+      "delete_condition": "remove when the four author-stage current handoff consumer is retired or replaced by an approved equivalent",
+      "content_change": "atomic current-only Markdown renderer and readback binding for stage handoff",
+      "sha256_after": "dc020d9a9520bf9b53c46d45d5503f1d822cc4b8c2c1bd477fec2041459a36eb"
+    },
+    {
+      "source": "skills/stage-handoff",
+      "destination": "skills/stage-handoff",
+      "status": "add",
+      "owner": "stage-handoff portable skill",
+      "consumer": "four author-stage end hooks and stage-handoff contract tests",
+      "delete_condition": "remove when all four author-stage handoff hooks and their consumer are retired",
+      "content_change": "portable current-only handoff contract with stale/unavailable and no-gate boundaries",
+      "sha256_after": "5b0252d45de7389499a409efa584903796c66515a770b5cdc3d5959773b9f43f"
     }
   ]
 }

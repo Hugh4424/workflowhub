@@ -15,6 +15,11 @@
     "evidence_ref": { "type": "string", "minLength": 1 },
     "evidence_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "material_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+    "criteria": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+    "missing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "created_at": { "type": "string", "format": "date-time" }
   }
 }

@@ -56,6 +56,8 @@ function reflectionInput(state, stage, outcome) {
     interventions: [], lessons_added: [],
     ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
     status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+    executor: { source_id: "fixture/workflow-synchronization", attempt_id: outcome.value.attempt_id, started_at: "2026-09-08T00:00:01Z", completed_at: "2026-09-08T00:00:02Z", output_hash: "a".repeat(64) },
+    output_hash: "a".repeat(64),
     source_completeness: { compaction: false, truncation: false, visible_scope: "fixture execution", unknown_reasons: [] },
   };
 }

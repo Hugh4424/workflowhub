@@ -137,7 +137,7 @@ function lifecycleEvents(prefix = "fixture-confirmation") {
 }
 
 /** Test-only Stage Agent producer fixture; runtime authenticates every byte. */
-export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null, skipAnalyzerValidation = false, workflowRunId = undefined, producer = null } = {}) {
+export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null, codeReviewResult = null, skipAnalyzerValidation = false, workflowRunId = undefined, producer = null } = {}) {
   if (!task?.identity?.taskId || !kernel?.publishCanonicalRecord || !artifacts?.read) throw new TypeError("stage outcome fixture requires task, kernel, and ArtifactDir");
   const active = workspace ?? candidateWorkspace;
   if (!active?.worktreeRoot) throw new TypeError("stage outcome fixture requires an authenticated workspace");
@@ -373,7 +373,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
           quality_review_ref: qualityReview.ref ?? qualityReview.resultRef,
         quality_review_hash: qualityReview.sha256 ?? sha256(task.readRecord(qualityReview.ref ?? qualityReview.resultRef)),
         } : {}),
-        result: {
+        result: codeReviewResult ?? {
           status: String(qualityReview?.ref ?? qualityReview?.resultRef ?? "").includes("/attempts/") ? "unavailable" : "clean",
           findings: [],
           summary: "fixture current implementation code review completed",

@@ -63,7 +63,7 @@ describe("stage-reflection skill contract", () => {
     expect(skill).toContain("consumption_status");
     expect(skill).toContain("zero_consumption_proof");
     expect(bundle).toMatchObject({ schema_version: 1, skill: "stage-reflection" });
-    expect(bundle.files).toEqual(expect.arrayContaining(["SKILL.md"]));
+    expect(bundle.files.map((entry) => typeof entry === "string" ? entry : entry.path)).toEqual(expect.arrayContaining(["SKILL.md"]));
   });
 
   it.each(workflowPaths)("documents the stage-end reflection route in %s", (path) => {

@@ -54,6 +54,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 控制面；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
 - `stage-reflection` — native；五个 authoring stage 的 stage-end 判断层复盘。只消费当前会话记忆、lessons 索引和本 stage outcome；由 runner 先追加 raw observation，再由技能产出 judgment 记录并调用确定性 validator；不生成质量分数或继续工作门禁。
+- `stage-handoff` — native；四个 authoring stage 的 reflection 后 current handoff。只写 `quality/evidence/handoff/<stage>.md` 固定当前视图，原子覆盖、读回绑定，失败保持 `unavailable`/stale 警告；不挂载 verify-code，不生成质量事实或推进门禁。
 
 - `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87)，Apache-2.0。首次导入的核心文件已逐 blob 对上该 commit；仓内打包，不做全局安装。
 - `decision-log` — native；make-decision。结构化唯一权威需求记录。`upstream=[]`；随 stage 合同更新。

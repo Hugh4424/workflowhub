@@ -320,7 +320,7 @@ describe("current quality boundary", () => {
     const reviewSteps = verifySteps.filter(({ step_slug }) => step_slug === "run-one-independent-code-review");
 
     expect(reviewSteps).toHaveLength(1);
-    expect(reviewSteps[0].observable_result).toMatch(/异源|independent/i);
+    expect(reviewSteps[0].observable_result).toMatch(/异源|独审|independent/i);
     expect(verifyCode).toMatch(/不重新检查其完整性/);
     expect(verifyCode).toMatch(/不列 AC 逐条结论/);
     expect(verifyCode).not.toMatch(/语义反向检查/);
@@ -389,7 +389,7 @@ describe("risk acceptance behavior", () => {
   it("writes a needs_human reply back as user_decided with user reply evidence", () => {
     const result = validateReportableFindingDispositions({
       result: reportableFinding(),
-      dispositions: [findingDisposition({ status: "needs_human", source: "review", evidence_ref: "quality/reviews/results/review.json" })],
+      dispositions: [findingDisposition({ status: "needs_human", source: "review", evidence_ref: "quality/reviews/results/review.json", card_hash: "a".repeat(64) })],
       userReply: {
         finding_id: "F-123456789abc",
         reply_ref: "host-message://risk-reply-1",
@@ -444,9 +444,10 @@ describe("risk acceptance behavior", () => {
       })],
     });
     expect(result.facts.status).toBe("incomplete");
-    expect(result.missing_items).toEqual([
+    expect(result.missing_items).toEqual(expect.arrayContaining([
       "accepted_risk requires an authenticated user risk receipt for: F-123456789abc",
-    ]);
+      expect.stringMatching(/accepted_risk_requires_authorized_finding.*accepted_risk_requires_authorization_receipt.*accepted_risk_requires_risk_record/),
+    ]));
   });
 
   it("rejects a non-risk option", () => {

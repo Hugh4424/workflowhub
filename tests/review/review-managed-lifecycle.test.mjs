@@ -314,6 +314,73 @@ describe("managed review lifecycle boundary", () => {
     expect(calls.map(({ command }) => command)).toEqual(["start", "status"]);
   });
 
+  it("keeps polling a live managed session by default without cancelling it", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-live-session-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    let polls = 0;
+    const client = {
+      async startManaged(value) {
+        calls.push("start");
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "running", material_id: value.materials.materialId };
+      },
+      async statusManaged(value) {
+        calls.push("status");
+        polls += 1;
+        if (polls === 1) return { version: "workflowhub-run.v1", request_id: value.requestId,
+          runtime_id: managedRuntime, state: "running", material_id: value.materials.materialId };
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "terminal", material_id: value.materials.materialId, group: managedGroup("completed") };
+      },
+      async cancelManaged(value) { calls.push({ command: "cancel", ...value }); throw new Error("live sessions must not be cancelled by the default poller"); },
+    };
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      } }),
+      client,
+      managedStatusPollMs: 0,
+    });
+
+    expect(result).toMatchObject({ status: "available", runtime_id: managedRuntime, outcome: "completed" });
+    expect(calls).toEqual(["start", "status", "status"]);
+  });
+
+  it("does not cancel a managed runtime when a status poll is temporarily unavailable", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-status-error-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const client = {
+      async startManaged(value) {
+        calls.push("start");
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "running", material_id: value.materials.materialId };
+      },
+      async statusManaged() { calls.push("status"); throw Object.assign(new Error("status unavailable"), { code: "REVIEW_STATUS_UNAVAILABLE" }); },
+      async cancelManaged() { calls.push("cancel"); throw new Error("status errors must not cancel live sessions"); },
+    };
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed runner bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      } }),
+      client,
+      managedStatusPollMs: 0,
+    });
+
+    expect(result).toMatchObject({ status: "unavailable", runtime_id: managedRuntime,
+      error: { code: "REVIEW_STATUS_UNAVAILABLE" } });
+    expect(calls).toEqual(["start", "status"]);
+  });
+
   it("cancels a managed runtime that exceeds the production terminal wait", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-production-timeout-")));
     roots.push(attachmentRoot);
