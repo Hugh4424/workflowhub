@@ -488,6 +488,9 @@ function authenticatedQualityEvidence(task, fact) {
         expectedProducerComponent,
         requirePassed: fact.status === "passed",
       });
+      if (fact.status === "passed" && value.runtime_profile !== undefined && (value.runtime_profile_status !== "ready" || value.runtime_profile_authenticated !== true)) {
+        throw new Error(`passed test evidence has unavailable runtime profile: ${entry.ref}`);
+      }
       const output = task.readRecord(value.output_ref);
       if (sha256(output) !== value.output_hash) throw new Error(`test evidence output hash mismatch: ${value.output_ref}`);
     } else if (fact.kind === "acceptance_criterion") {

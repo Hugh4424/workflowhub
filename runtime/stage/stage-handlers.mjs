@@ -705,6 +705,9 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
   if (item.value.command_hash !== hashText(item.value.command)) throw new Error(`${name}.command_hash does not match command`);
   if (item.value.source_digest !== undefined && !SHA256.test(item.value.source_digest)) throw new Error(`${name}.source_digest must be sha256`);
   if (!/^quality\/tests\/output\//.test(item.value.output_ref) || item.value.output_ref.includes("..")) throw new Error(`${name}.output_ref must use canonical test-output namespace`);
+  if (item.value.runtime_profile !== undefined && (typeof item.value.runtime_profile !== "object" || Array.isArray(item.value.runtime_profile))) throw new TypeError(`${name}.runtime_profile must be an object`);
+  if (item.value.runtime_profile_status !== undefined && !["ready", "unavailable", "incomplete"].includes(item.value.runtime_profile_status)) throw new Error(`${name}.runtime_profile_status is invalid`);
+  if (item.value.runtime_profile_authenticated !== undefined && typeof item.value.runtime_profile_authenticated !== "boolean") throw new TypeError(`${name}.runtime_profile_authenticated must be boolean`);
   return {
     facts: {
       command: item.value.command,
@@ -721,6 +724,13 @@ function testFacts(worker, invocation, name = "tests", producerStage = worker.st
       receipt_hash: item.evidence.sha256,
       output_ref: item.value.output_ref,
       output_hash: item.value.output_hash,
+      ...(item.value.runtime_profile === undefined ? {} : { runtime_profile: item.value.runtime_profile }),
+      ...(item.value.runtime_profile_status === undefined ? {} : { runtime_profile_status: item.value.runtime_profile_status }),
+      ...(item.value.runtime_profile_authenticated === undefined ? {} : { runtime_profile_authenticated: item.value.runtime_profile_authenticated }),
+      ...(item.value.capability_proof === undefined ? {} : { capability_proof: item.value.capability_proof }),
+      ...(item.value.behavior_fingerprint === undefined ? {} : { behavior_fingerprint: item.value.behavior_fingerprint }),
+      ...(item.value.behavior_fingerprint_status === undefined ? {} : { behavior_fingerprint_status: item.value.behavior_fingerprint_status }),
+      ...(item.value.duration_ms === undefined ? {} : { duration_ms: item.value.duration_ms }),
     },
     evidence: item.evidence,
   };
@@ -1862,6 +1872,10 @@ function verifyUnavailableReview(worker, item, expectedTrack, producerStage = wo
     "REVIEW_BROKER_EXIT_NONZERO",
     "REVIEW_EXECUTION_TIMEOUT",
     "REVIEW_CANCELLED",
+    // Managed start can succeed while the broker has not emitted a terminal
+    // group event yet. That is a real dispatched transport fact, not a
+    // provider-specific failure requiring fabricated provider attempts.
+    "REVIEW_STATUS_UNAVAILABLE",
     "REVIEW_NO_SEMANTIC_RESULT",
     "REVIEW_PROVIDER_OUTPUT_INVALID",
     "PROTOCOL_INCOMPATIBLE",
@@ -3713,6 +3727,9 @@ HANDLERS.set("build-code", async (worker, input) => {
   try { reviewBinding = bindFinalReview(worker, input, review, tests.facts.snapshot_tree, { stage: "build-code" }); }
   catch (error) { missingItems.push(`build-code review binding unavailable: ${error.message}`); }
   if (tests.facts.exit_code !== 0) missingItems.push("build-code final tests are not passing; quality warning only");
+  if (tests.facts.runtime_profile !== undefined && (tests.facts.runtime_profile_status !== "ready" || tests.facts.runtime_profile_authenticated !== true)) {
+    missingItems.push("build-code runtime profile unavailable; test quality remains unavailable");
+  }
   const actualChangedFiles = authenticatedImplementationChanged(worker, impl.value);
   const integrationAudit = typeof worker.inspectIntegrationReviewSubject === "function"
     ? worker.inspectIntegrationReviewSubject(tests.facts.snapshot_tree, { implementation_ref: impl.ref, green_ref: tests.ref })
@@ -3763,7 +3780,7 @@ HANDLERS.set("build-code", async (worker, input) => {
     businessFacts: {
       content: "present",
       code: "complete",
-      tests: tests.facts.exit_code === 0 ? "passed" : "failed",
+      tests: tests.facts.exit_code === 0 && (tests.facts.runtime_profile === undefined || (tests.facts.runtime_profile_status === "ready" && tests.facts.runtime_profile_authenticated === true)) ? "passed" : (tests.facts.exit_code === 0 ? "unavailable" : "failed"),
       // An empty or unavailable coverage object must never become green via
       // Array.prototype.every([]).  Coverage is a quality fact, not a default
       // success value.

@@ -95,6 +95,7 @@ export function replaceMaterialAtomic(root, file, content, options = {}) {
 }
 
 const STAGE_INPUT_PACKET_VERSION = "stage-input-packet.v1";
+const WORKER_BRIEF_VERSION = "workflowhub-worker-brief.v1";
 const SNAPSHOT = /^[a-f0-9]{40}$/i;
 const HASH = /^[a-f0-9]{64}$/;
 
@@ -208,4 +209,80 @@ export function verifyStageInputPacket(packet) {
   const rebuiltHash = packetHash(manifest, Object.fromEntries(Object.entries(packet.files).map(([path, value]) => [path, normalizePacketText(value)])));
   if (rebuiltHash !== manifest.packet_freeze_hash) return Object.freeze({ ok: false, reason: "packet_freeze_hash_mismatch" });
   return Object.freeze({ ok: true, packet_freeze_hash: rebuiltHash, manifest: Object.freeze({ ...manifest }) });
+}
+
+const WORKER_BRIEF_KEYS = new Set([
+  "schema_version", "task_id", "stage", "material_revision", "snapshot_tree",
+  "source_summary", "objective", "boundary", "brief_hash",
+]);
+const WORKER_BOUNDARY_KEYS = new Set(["allowed_tools", "forbidden_inputs", "output_contract"]);
+
+function workerBriefError(...errors) {
+  return Object.freeze({ ok: false, status: "unavailable", errors: Object.freeze(errors) });
+}
+
+function validWorkerRef(value) {
+  return typeof value === "string" && value.length > 0 && !value.startsWith("/")
+    && !value.includes("\\") && !value.split("/").some((part) => part === "" || part === "." || part === "..");
+}
+
+function validateWorkerBriefShape(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return workerBriefError("worker_brief_shape_invalid");
+  const unknown = Object.keys(value).filter((key) => !WORKER_BRIEF_KEYS.has(key));
+  if (unknown.length) return workerBriefError("worker_brief_unknown_field", ...unknown);
+  if (value.schema_version !== WORKER_BRIEF_VERSION) return workerBriefError("worker_brief_version_invalid");
+  for (const [key, label] of [["task_id", "task_id"], ["stage", "stage"], ["material_revision", "material_revision"], ["objective", "objective"]]) {
+    if (typeof value[key] !== "string" || value[key].trim() === "") return workerBriefError(`worker_brief_${label}_missing`);
+  }
+  if (!HASH.test(value.material_revision)) return workerBriefError("worker_brief_material_revision_invalid");
+  if (!SNAPSHOT.test(value.snapshot_tree ?? "")) return workerBriefError("worker_brief_snapshot_invalid");
+  if (!Array.isArray(value.source_summary) || value.source_summary.length === 0) return workerBriefError("worker_brief_source_summary_missing");
+  for (const [index, source] of value.source_summary.entries()) {
+    if (!source || typeof source !== "object" || Array.isArray(source)
+        || !validWorkerRef(source.ref) || !HASH.test(source.sha256 ?? "")) {
+      return workerBriefError(`worker_brief_source_summary_invalid:${index}`);
+    }
+  }
+  if (!value.boundary || typeof value.boundary !== "object" || Array.isArray(value.boundary)) return workerBriefError("worker_brief_boundary_missing");
+  const boundaryUnknown = Object.keys(value.boundary).filter((key) => !WORKER_BOUNDARY_KEYS.has(key));
+  if (boundaryUnknown.length) return workerBriefError("worker_brief_boundary_unknown_field", ...boundaryUnknown);
+  if (!Array.isArray(value.boundary.allowed_tools) || !Array.isArray(value.boundary.forbidden_inputs)
+      || typeof value.boundary.output_contract !== "string" || value.boundary.output_contract.trim() === "") {
+    return workerBriefError("worker_brief_boundary_invalid");
+  }
+  if (typeof value.brief_hash !== "string" || !HASH.test(value.brief_hash)) return workerBriefError("worker_brief_hash_invalid");
+  return null;
+}
+
+/** Build the content-addressed, self-contained brief sent to one narrow worker. */
+export function buildWorkerBrief({ task_id, stage, material_revision, snapshot_tree, source_summary, objective, boundary } = {}) {
+  const value = {
+    schema_version: WORKER_BRIEF_VERSION,
+    task_id,
+    stage,
+    material_revision,
+    snapshot_tree,
+    source_summary: Array.isArray(source_summary) ? source_summary.map((entry) => ({ ref: entry?.ref, sha256: entry?.sha256 })) : source_summary,
+    objective,
+    boundary: boundary && typeof boundary === "object" ? {
+      allowed_tools: Array.isArray(boundary.allowed_tools) ? [...boundary.allowed_tools] : boundary.allowed_tools,
+      forbidden_inputs: Array.isArray(boundary.forbidden_inputs) ? [...boundary.forbidden_inputs] : boundary.forbidden_inputs,
+      output_contract: boundary.output_contract,
+    } : boundary,
+    brief_hash: null,
+  };
+  const { brief_hash: _ignored, ...withoutHash } = value;
+  value.brief_hash = sha256(canonicalJson(withoutHash));
+  const validation = validateWorkerBriefShape(value);
+  if (validation) throw new TypeError(validation.errors.join("; "));
+  return Object.freeze({ ...value, source_summary: Object.freeze(value.source_summary.map((entry) => Object.freeze({ ...entry }))), boundary: Object.freeze({ ...value.boundary, allowed_tools: Object.freeze([...value.boundary.allowed_tools]), forbidden_inputs: Object.freeze([...value.boundary.forbidden_inputs]) }) });
+}
+
+/** Verify a worker brief without reading history, transcripts, or a live workspace. */
+export function verifyWorkerBrief(value) {
+  const shapeError = validateWorkerBriefShape(value);
+  if (shapeError) return shapeError;
+  const { brief_hash: _ignored, ...withoutHash } = value;
+  if (sha256(canonicalJson(withoutHash)) !== value.brief_hash) return workerBriefError("worker_brief_hash_mismatch");
+  return Object.freeze({ ok: true, status: "ready", task_id: value.task_id, stage: value.stage, material_revision: value.material_revision, snapshot_tree: value.snapshot_tree, brief_hash: value.brief_hash });
 }

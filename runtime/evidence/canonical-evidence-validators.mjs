@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
 import qualityFactSchema from "../schemas/quality-fact.v1.json" with { type: "json" };
+import { validateTestRuntimeProfile } from "../stage/stage-content-contracts.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -163,7 +164,7 @@ function object(value, label) {
 }
 
 export function validateCanonicalTestReceipt(value, {
-  taskId, stage, snapshotTree, expectedProducerComponent = undefined, allowedProducerComponents = undefined, expectedCommand = undefined, requirePassed = false,
+  taskId, stage, snapshotTree, expectedProducerComponent = undefined, allowedProducerComponents = undefined, expectedCommand = undefined, requirePassed = false, requireRuntimeProfile = false,
 } = {}) {
   object(value, "canonical test receipt");
   if (value.schema_version !== "workflowhub-receipt.v1"
@@ -185,6 +186,26 @@ export function validateCanonicalTestReceipt(value, {
     throw new Error("canonical test receipt producer component is not allowed");
   }
   if (value.source_digest !== undefined && !HASH.test(value.source_digest)) throw new Error("canonical test receipt source_digest is invalid");
+  if (requireRuntimeProfile && value.runtime_profile === undefined) throw new Error("canonical test receipt runtime profile is required");
+  let runtimeProfileStatus = "ready";
+  if (value.runtime_profile !== undefined) {
+    const profile = validateTestRuntimeProfile(value.runtime_profile, { allowUnavailable: true });
+    if (profile.errors.length > 0) throw new Error(`canonical test receipt runtime profile is ${profile.status}`);
+    runtimeProfileStatus = profile.status;
+    if (value.duration_ms !== undefined && value.runtime_profile.ceiling_ms < value.duration_ms) throw new Error("canonical test receipt duration exceeds runtime profile ceiling");
+    if (value.runtime_profile_status !== undefined && value.runtime_profile_status !== profile.status) throw new Error("canonical test receipt runtime profile status is not bound");
+    if (value.runtime_profile_authenticated !== undefined && value.runtime_profile_authenticated !== (profile.ok && profile.status === "ready")) throw new Error("canonical test receipt runtime profile authentication is not bound");
+    if (value.runtime_profile_status === "ready" && (!profile.ok || profile.status !== "ready")) throw new Error("canonical test receipt cannot claim an unauthenticated runtime profile");
+  }
+  if (value.capability_proof !== undefined || requireRuntimeProfile) {
+    const proof = validateTestRuntimeProfile({
+      ...(value.runtime_profile ?? {}),
+      capability_proof: value.capability_proof,
+      behavior_fingerprint: value.behavior_fingerprint ?? value.runtime_profile?.behavior_fingerprint,
+    }, { requireProof: requireRuntimeProfile, allowUnavailable: true });
+    if (proof.errors.length > 0) throw new Error(`canonical test receipt capability proof is ${proof.status}`);
+  }
+  if (value.duration_ms !== undefined && (!Number.isSafeInteger(value.duration_ms) || value.duration_ms < 0)) throw new Error("canonical test receipt duration_ms is invalid");
   if (requirePassed && value.exit_code !== 0) throw new Error("canonical test receipt did not pass");
   return value;
 }
