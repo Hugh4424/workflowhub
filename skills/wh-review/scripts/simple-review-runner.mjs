@@ -67,7 +67,7 @@ function redactHostPaths(value) {
   return redacted;
 }
 
-const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "materials/02-approved_spec.md",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the bundle-relative path shown in the manifest.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
+const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "diff-shards/S-0024.diff",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the manifest-relative path recorded in manifest.json, for example diff-shards/S-0024.diff.\n- Never prefix path with bundle/; never use an absolute path or a private/source path.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
 
 const RESULT_PROMPT = `Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\n\n${RESULT_SAMPLE}`;
 
@@ -517,7 +517,7 @@ function buildBundle(attachmentRoot, input) {
   };
 }
 
-async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials }, dependencies) {
+async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials, minimumHeterologous, providerModels }, dependencies) {
   const maxWaitMs = dependencies.managedTerminalWaitMs ?? DEFAULT_MANAGED_TERMINAL_WAIT_MS;
   const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
   if (maxWaitMs !== null && (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0)) {
@@ -526,16 +526,68 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvid
   if (!Number.isSafeInteger(pollMs) || pollMs < 0) throw new TypeError("managedStatusPollMs must be a non-negative safe integer");
   const startedAt = Date.now();
   let current = lifecycle;
+  let lastObservation = lifecycle;
   const context = { requestId, hostProvider, providers, materials, runtimeId: lifecycle.runtime_id };
+  const consumeMemberFailure = (value) => {
+    const source = value?.providers;
+    if (!source || typeof source !== "object") return null;
+    const entries = Array.isArray(source)
+      ? source.map((item) => [item?.provider, item])
+      : Object.entries(source);
+    const members = entries
+      .filter(([provider, item]) => typeof provider === "string" && item && typeof item === "object" && !Array.isArray(item))
+      .map(([provider, item]) => ({ ...item, provider: item.provider ?? provider }));
+    const failed = members.filter((item) => item.status === "failed" || item.status === "stalled"
+      || (typeof item.error?.code === "string" && item.error.code.trim() !== ""));
+    if (failed.length === 0 || members.length === 0) return null;
+    const requiredModels = Number.isSafeInteger(minimumHeterologous) ? minimumHeterologous : 1;
+    const possibleModels = new Set(members
+      .filter((item) => !failed.includes(item) && item.status !== "cancelled")
+      .map((item) => providerModels?.[item.provider] ?? item.provider));
+    if (failed.length < members.length && possibleModels.size >= requiredModels) return null;
+    // This is a local projection of an explicit broker member failure, not a
+    // WorkflowHub wall-clock verdict. Keep the broker running and let the
+    // normal result mapper preserve the member's failure facts.
+    return {
+      ...value,
+      state: "terminal",
+      group: {
+        version: 4,
+        host_provider: hostProvider,
+        outcome: "unavailable",
+        providers: members,
+        round: Number.isSafeInteger(value.round) ? value.round : 0,
+        runtime_id: value.runtime_id,
+        selected_tier: Number.isSafeInteger(value.last_selected_tier) ? value.last_selected_tier : null,
+      },
+    };
+  };
+  // A zero-length test/override already uses its first status request as the
+  // boundary poll. Positive waits get one extra status request after the
+  // deadline is observed, preserving the existing immediate-zero semantics.
+  let boundaryRecheckDone = maxWaitMs === null || maxWaitMs === 0;
   while (current.state !== "terminal") {
-    current = await client.statusManaged(context);
+    try {
+      current = await client.statusManaged(context);
+      lastObservation = current;
+    } catch (error) {
+      if (error && typeof error === "object") error.managed_observation = lastObservation;
+      throw error;
+    }
     if (current.state === "terminal") return current;
+    const memberFailure = consumeMemberFailure(current);
+    if (memberFailure) return memberFailure;
     if (maxWaitMs !== null && Date.now() - startedAt >= maxWaitMs) {
+      if (!boundaryRecheckDone) {
+        boundaryRecheckDone = true;
+        continue;
+      }
       // Stop WAITING, not the work: do not call cancelManaged here. 3rd-review
       // owns provider lifetime; killing it would be exactly the caller-side
       // wall-clock termination that D-030③ forbids. Record the fact instead.
       const error = new Error(`managed review did not reach a terminal state within ${maxWaitMs} ms; the broker was NOT cancelled and may still complete`);
       error.code = "REVIEW_WAIT_EXCEEDED";
+      error.managed_observation = lastObservation;
       throw error;
     }
     if (pollMs > 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -700,6 +752,7 @@ function blockedPreflight(input, code, message, diagnostic, pair = null, extra =
   const error = { code, message: redactHostPaths(message), diagnostic };
   return unavailableResult(input, error, pair, {
     dispatch_state: "blocked_before_dispatch",
+    provider_attempts: 0,
     provider_results: [],
     findings: [],
     ...extra,
@@ -781,7 +834,12 @@ function rejectCallerInstructions(materials, { allowDeclaredInstructions = false
   }
 }
 
-function runStaticPreflight(input, { route, providerSelection, runnerOwnsBundle = true }, pair = null) {
+async function runStaticPreflight(input, {
+  route,
+  providerSelection,
+  runnerOwnsBundle = true,
+  providerPreflight = null,
+}, pair = null) {
   let rule;
   try {
     rule = staticReviewRule(input);
@@ -843,7 +901,47 @@ function runStaticPreflight(input, { route, providerSelection, runnerOwnsBundle 
   }
   const materialPreflight = shouldRunMaterialPreflight(input, rule)
     || input.stage === "build-prd" || input.review_kind === "build_prd" || input.reviewKind === "build_prd";
-  return materialPreflight ? runMaterialAllowlistPreflight(input, rule, pair) : null;
+  const materialResult = materialPreflight ? runMaterialAllowlistPreflight(input, rule, pair) : null;
+  if (materialResult) return materialResult;
+  if (typeof providerPreflight !== "function") return null;
+
+  const providerResults = [];
+  for (const provider of providerSelection.providers) {
+    const result = await providerPreflight({
+      provider,
+      model: providerSelection.provider_models?.[provider] ?? null,
+      identity: providerSelection.provider_identities?.[provider] ?? null,
+    });
+    if (!result || typeof result !== "object" || Array.isArray(result)
+        || !["ready", "blocked"].includes(result.status)) {
+      throw new TypeError(`provider preflight result for ${provider} is invalid`);
+    }
+    if (result.status === "blocked"
+        && !["MODEL_ID_INVALID", "CLI_UNAVAILABLE", "AUTH_INVALID", "ACTIVE_PROBE_FAILED"].includes(result.error?.code)) {
+      throw new TypeError(`provider preflight error for ${provider} is invalid`);
+    }
+    providerResults.push({ ...result, provider });
+  }
+  const blockedProviders = providerResults.filter((result) => result.status === "blocked");
+  if (blockedProviders.length === 0) return null;
+  if (blockedProviders.length === providerSelection.providers.length) {
+    const first = blockedProviders[0];
+    const error = first.error && typeof first.error === "object" ? first.error : {};
+    return blockedPreflight(
+      input,
+      error.code,
+      error.message ?? "provider static preflight failed",
+      error.diagnostic ?? preflightDiagnostic({
+        field: "provider_preflight",
+        expected: "ready or structured blocked provider preflight result",
+        actual: "blocked without diagnostic",
+        nextAction: "repair provider preflight and retry",
+      }),
+      pair,
+      { provider_attempts: 0 },
+    );
+  }
+  return { blocked_provider_results: blockedProviders };
 }
 
 function callerOwnedPreflightInput(input) {
@@ -858,10 +956,18 @@ function callerOwnedPreflightInput(input) {
   };
 }
 
-function evidenceAnchorValidity(bundleRoot, findings) {
+function evidenceAnchorValidity(bundleRoot, findings, deliveryManifest) {
+  const deliveredPaths = new Set(
+    Array.isArray(deliveryManifest)
+      ? deliveryManifest
+        .map((entry) => entry?.path)
+        .filter((path) => typeof path === "string")
+      : [],
+  );
   return findings.map((finding) => {
     if (!finding || typeof finding.path !== "string" || finding.path.startsWith("/")
-        || finding.path.includes("\\") || finding.path.split("/").includes("..")) return false;
+        || finding.path.includes("\\") || finding.path.split("/").includes("..")
+        || !deliveredPaths.has(finding.path)) return false;
     const target = join(bundleRoot, ...finding.path.split("/"));
     if (!existsSync(target)) return false;
     if (finding.line === undefined || finding.line === null) return true;
@@ -872,7 +978,7 @@ function evidenceAnchorValidity(bundleRoot, findings) {
   });
 }
 
-function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIdentities, selectedModels, bundleRoot }) {
+function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIdentities, selectedModels, bundleRoot, deliveryManifest }) {
   const provider = supplement?.provider;
   if (typeof provider !== "string" || !selectedSet.has(provider)) {
     const error = new Error("supplement provider is not part of the trusted review selection");
@@ -887,7 +993,7 @@ function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIden
     invalid.code = "SUPPLEMENT_INVALID";
     throw invalid;
   }
-  const evidenceAnchors = evidenceAnchorValidity(bundleRoot, parsed.findings);
+  const evidenceAnchors = evidenceAnchorValidity(bundleRoot, parsed.findings, deliveryManifest);
   if (!evidenceAnchors.every(Boolean)) {
     const error = new Error("supplement finding evidence does not anchor to submitted material");
     error.code = "EVIDENCE_ANCHOR_INVALID";
@@ -930,6 +1036,7 @@ function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
     identity: item.identity,
     ...pairFields(pair),
     session_id: item.session_id ?? null,
+    ...(item.last_progress_at_ms === undefined ? {} : { last_progress_at_ms: item.last_progress_at_ms }),
     // Provider adapters are untrusted transport boundaries. Keep the
     // provider's machine-readable code, but never expose raw adapter errors or
     // host paths in the public review result.
@@ -1146,14 +1253,45 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       nextAction: "repair the provider route and retry",
     }), pair);
   }
-  const preflight = runStaticPreflight(
+  const preflight = await runStaticPreflight(
     callerOwnedPreflightInput(canonicalInput),
-    { route, providerSelection, runnerOwnsBundle: typeof dependencies.buildBundle !== "function" },
+    {
+      route,
+      providerSelection,
+      runnerOwnsBundle: typeof dependencies.buildBundle !== "function",
+      providerPreflight: dependencies.providerPreflight,
+    },
     pair,
   );
-  if (preflight) return preflight;
-  const minimum = validateReviewThreshold(route, providerSelection);
+  if (preflight?.status) return preflight;
+  const blockedProviderResults = preflight?.blocked_provider_results ?? [];
   const selectedProviders = providerSelection.providers;
+  const blockedProviderSet = new Set(blockedProviderResults.map((item) => item.provider));
+  const dispatchProviders = selectedProviders.filter((provider) => !blockedProviderSet.has(provider));
+  const dispatchEligibleProfiles = (providerSelection.eligible_profiles ?? selectedProviders)
+    .filter((provider) => !blockedProviderSet.has(provider));
+  let minimum;
+  try {
+    // Preflight may remove providers after the initial route selection. The
+    // broker must receive a quorum that is valid for the providers that can
+    // actually be dispatched, not for the stale preflight selection.
+    minimum = validateReviewThreshold(route, {
+      ...providerSelection,
+      providers: dispatchProviders,
+      eligible_profiles: dispatchEligibleProfiles,
+    });
+  } catch (error) {
+    const dispatchModels = dispatchEligibleProfiles.map((provider) => providerSelection.provider_models?.[provider]);
+    return blockedPreflight(canonicalInput, "REVIEW_THRESHOLD_INVALID", error.message, preflightDiagnostic({
+      field: "minimum_heterologous",
+      expected: "explicit positive integer no greater than distinct eligible underlying model identities after provider preflight",
+      actual: `${new Set(dispatchModels).size} distinct eligible underlying model identities remain after filtering blocked providers`,
+      nextAction: "repair provider availability or review threshold and retry",
+    }), pair, {
+      minimum_heterologous: route?.minimum_heterologous ?? null,
+      provider_selection: providerSelectionOutput(providerSelection),
+    });
+  }
   const selectedIdentities = providerSelection.provider_identities ?? null;
   const selectedModels = providerSelection.provider_models ?? null;
   const selectedSet = new Set(selectedProviders);
@@ -1182,7 +1320,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       const requestId = managedRequestId(input, {
         materialId: bundle.materialId,
         hostProvider,
-        providers: selectedProviders,
+        providers: dispatchProviders,
         providerIdentities: selectedIdentities,
         minimumHeterologous: minimum,
         reviewMode: route.mode,
@@ -1191,16 +1329,20 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       let lifecycle = null;
       try {
         lifecycle = await client.startManaged({
-          requestId, hostProvider, providers: selectedProviders, materials: bundle, prompt,
+          requestId, hostProvider, providers: dispatchProviders, materials: bundle, prompt,
           minimumHeterologous: minimum,
           reviewMode: route.mode,
           reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
         });
         if (lifecycle.state !== "terminal") {
           const consumeTerminal = dependencies.onManagedTerminal
-            ?? ((value) => waitForManagedTerminal(value, dependencies));
+            ?? ((value) => waitForManagedTerminal({
+              ...value,
+              minimumHeterologous: minimum,
+              providerModels: selectedModels,
+            }, dependencies));
           const terminal = await consumeTerminal({
-            lifecycle, client, requestId, hostProvider, providers: selectedProviders,
+            lifecycle, client, requestId, hostProvider, providers: dispatchProviders,
             materials: bundle, prompt, reviewMode: route.mode,
           });
           lifecycle = terminal?.state ? terminal : { ...lifecycle, state: "terminal", group: terminal };
@@ -1208,19 +1350,28 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         if (lifecycle?.state !== "terminal") throw Object.assign(new Error("managed review terminal event is invalid"), { code: "PROTOCOL_INCOMPATIBLE" });
         group = normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels, pair);
       } catch (error) {
+        const observation = error?.managed_observation;
+        const source = observation?.providers;
+        const entries = Array.isArray(source)
+          ? source.map((item) => [item?.provider ?? item?.identity?.provider, item])
+          : source && typeof source === "object" ? Object.entries(source) : [];
+        const providerResults = entries
+          .filter(([provider, item]) => typeof provider === "string" && item && typeof item === "object" && !Array.isArray(item))
+          .map(([provider, item]) => publicProviderResult({ ...item, provider: item.provider ?? provider }, undefined, pair));
         return unavailableResult(input, normalizeProviderError(error), pair, {
           dispatch_state: lifecycle ? "dispatched" : "blocked_before_dispatch",
           request_id: requestId,
-          runtime_id: lifecycle?.runtime_id ?? null,
+          runtime_id: observation?.runtime_id ?? lifecycle?.runtime_id ?? null,
           minimum_heterologous: minimum,
           provider_selection: providerSelectionOutput(providerSelection),
+          provider_results: providerResults,
         });
       }
     } else {
       try {
         group = await client.runGroup({
           hostProvider,
-          providers: selectedProviders,
+          providers: dispatchProviders,
           materials: bundle,
           prompt,
           minimumHeterologous: minimum,
@@ -1299,29 +1450,41 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         };
       }
       if (item.status === "completed" && typeof item.output === "string" && item.error === null) {
+        let parsed;
         try {
-          const parsed = parseReviewerOutput(item.output, { requireEvidence: true });
-          const evidenceAnchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings);
-          if (!evidenceAnchors.every(Boolean)) {
-            return {
-              ...publicProviderResult(item, evidenceAnchors, pair),
-              status: "failed",
-              error: { code: "EVIDENCE_ANCHOR_INVALID", message: "provider finding evidence does not anchor to submitted material" },
-            };
-          }
-          if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
-          for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
-          return publicProviderResult(item, evidenceAnchors, pair);
-        } catch {
-          return { ...publicProviderResult(item, undefined, pair), status: "failed", error: { code: "OUTPUT_INVALID", message: "provider output is not valid findings JSON" } };
+          parsed = parseReviewerOutput(item.output, { requireEvidence: true });
+        } catch (error) {
+          const parseError = typeof error?.parse_error === "string" && error.parse_error.trim() !== ""
+            ? error.parse_error
+            : "provider output candidate is invalid";
+          return {
+            ...publicProviderResult(item, undefined, pair),
+            status: "failed",
+            error: {
+              code: "OUTPUT_INVALID",
+              message: "provider output is not valid findings JSON",
+              parse_error: redactHostPaths(parseError),
+            },
+          };
         }
+        const evidenceAnchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings, bundle.deliveryManifest);
+        if (!evidenceAnchors.every(Boolean)) {
+          return {
+            ...publicProviderResult(item, evidenceAnchors, pair),
+            status: "failed",
+            error: { code: "EVIDENCE_ANCHOR_INVALID", message: "provider finding evidence does not anchor to submitted material" },
+          };
+        }
+        if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
+        for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
+        return publicProviderResult(item, evidenceAnchors, pair);
       }
       return publicProviderResult(item, undefined, pair);
     });
     // A broker may finish a partial group without emitting a member for every
     // selected provider. Make that omission an explicit failed provider fact;
     // never let a clean-looking result hide an unobserved selected route.
-    for (const provider of selectedProviders) {
+    for (const provider of dispatchProviders) {
       if (seenProviders.has(provider)) continue;
       const expectedIdentity = selectedIdentities && typeof selectedIdentities === "object"
         ? selectedIdentities[provider] : null;
@@ -1331,6 +1494,27 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         identity: { provider, ...(expectedIdentity && typeof expectedIdentity === "object" ? expectedIdentity : {}) },
         error: { code: "PROVIDER_RESULT_MISSING", message: "trusted review route omitted a selected provider result" },
       }, undefined, pair));
+    }
+    for (const item of blockedProviderResults) {
+      const sourceError = item.error && typeof item.error === "object" ? item.error : {};
+      const blocked = publicProviderResult({
+        ...item,
+        status: "failed",
+        error: {
+          code: "PROVIDER_HEALTH_FAILED",
+          message: sourceError.message ?? "provider preflight failed",
+          ...(typeof sourceError.code === "string" && sourceError.code.trim() !== ""
+            ? { cause_code: sourceError.code }
+            : {}),
+        },
+        identity: item.identity ?? null,
+        timing: item.timing ?? null,
+        usage: item.usage ?? null,
+      }, undefined, pair);
+      if (item.error?.diagnostic && blocked.error) {
+        blocked.error = { ...blocked.error, diagnostic: item.error.diagnostic };
+      }
+      providers.push(blocked);
     }
     // A broker member without a provider identity cannot be bound to any
     // trusted selection. Do not expose an extra `unknown` member that the
@@ -1362,6 +1546,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       review_kind: reviewKind,
       material_id: observedMaterialId,
       ...pairFields(pair),
+      dispatch_state: "dispatched",
+      provider_attempts: dispatchProviders.length,
       runtime_id: group.runtimeId,
       outcome: group.outcome,
       ...(group.transport_timeout ? { transport_timeout: group.transport_timeout } : {}),
@@ -1379,6 +1565,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     try {
       const supplements = group.supplements.map((supplement) => bindReviewSupplementToSelection(supplement, {
         selectedSet, selectedIdentities, selectedModels, bundleRoot: bundle.bundleRoot,
+        deliveryManifest: bundle.deliveryManifest,
       }));
       return supplements.reduce((current, supplement) => registerReviewSupplement(current, supplement), {
         ...baseResult,

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import {
   runSimpleReview,
   serializeProviderInput,
 } from "../simple-review-runner.mjs";
+import { selectTrustedReviewProviderSelection } from "../third-review-host-config.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -35,7 +36,12 @@ function completeBuildPrdMaterials() {
 
 // Shared by the static-preflight and neutral-identity suites. It simulates only
 // the host dependencies; production defaults still resolve the trusted route.
-function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"], mode: "single_round" }, selection = { providers: ["other/model"] }, broker = null, callLog = null } = {}) {
+function trustedDependencies(attachmentRoot, {
+  route = { initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 },
+  selection = { providers: ["other/model"], provider_models: { "other/model": "other-model" } },
+  broker = null,
+  callLog = null,
+} = {}) {
   let brokerCalls = 0;
   const dependencies = {
     loadConfig: () => {
@@ -65,6 +71,36 @@ function trustedDependencies(attachmentRoot, { route = { initial: ["other/model"
     },
   };
   return { dependencies, calls: () => brokerCalls };
+}
+
+function providerSelectionFor(providers, models = {}) {
+  return {
+    providers: [...providers],
+    provider_identities: Object.fromEntries(providers.map((provider, index) => [provider, {
+      source_id: `preflight-source-${index}`,
+      config_id: `preflight-config-${index}`,
+    }])),
+    provider_models: Object.fromEntries(providers.map((provider, index) => [provider, models[provider] ?? `preflight-model-${index}`])),
+  };
+}
+
+function preparedBundle(attachmentRoot) {
+  return {
+    bundleRoot: join(attachmentRoot, "bundle"),
+    attachmentRoot,
+    sourcePrefix: "bundle",
+    materialId: "a".repeat(64),
+    deliveryManifest: [],
+    dispose() {},
+  };
+}
+
+function buildCodePhaseMaterials() {
+  return {
+    approved_spec: "approved spec",
+    acceptance_criteria: "acceptance criteria",
+    test_evidence: "test evidence",
+  };
 }
 
 describe("simple material-only review", () => {
@@ -248,8 +284,8 @@ describe("simple material-only review", () => {
       materials: { zebra: "zebra bytes", alpha: "alpha bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
           const manifest = JSON.parse(readFileSync(join(request.materials.bundleRoot, "manifest.json"), "utf8"));
@@ -297,13 +333,13 @@ describe("simple material-only review", () => {
     let providerMaterialId = null;
     const result = await runSimpleReview(input, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
           providerMaterialId = request.materials.materialId;
           return { runtimeId: "runtime-bounded-identity", outcome: "completed", material_id: providerMaterialId, providers: [{
-            provider: "other/model", status: "completed", identity: { provider: "other/model" }, error: null,
+            provider: "other/model", status: "completed", identity: { provider: "other/model", model: "other-model" }, error: null,
             output: JSON.stringify({ findings: [] }), timing: null, usage: null,
           }] };
         },
@@ -332,10 +368,10 @@ describe("simple material-only review", () => {
     const forgedMaterialId = "f".repeat(64);
     const result = await runSimpleReview(input, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: { async runGroup(request) {
-        expect(request.strictProtocol).toBe(false);
+        expect(request.strictProtocol).toBe(true);
         return {
           runtimeId: "runtime-forged-material-id",
           outcome: "completed",
@@ -373,15 +409,15 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup(request) {
           calls.push({ pair_id: request.pair_id, role: request.role, materialId: request.materials.materialId });
           return {
             runtimeId: `runtime-${request.role}`, outcome: "completed",
             providers: [{
-              provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+              provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
               output: JSON.stringify({ findings: [] }), timing: null, usage: null,
             }],
           };
@@ -409,11 +445,11 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup(request) {
         return { runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
-          provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+          provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
           output: JSON.stringify({ findings: [] }), timing: null, usage: null,
         }] };
       } },
@@ -449,8 +485,8 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-pair-identity", outcome: "unavailable", providers: [{
           provider: "model-a", status: "failed",
@@ -473,13 +509,13 @@ describe("simple material-only review", () => {
     }, {
       pairId: "pair-material-mismatch",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup(request) {
         return {
           material_id: request.role === "red" ? request.materials.materialId : "f".repeat(64),
           runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
-            provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+            provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
             output: JSON.stringify({ findings: [] }), timing: null, usage: null,
           }],
         };
@@ -509,8 +545,8 @@ describe("simple material-only review", () => {
     }, {
       pairId: `pair-${incompleteRole}-incomplete`,
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup(request) {
         if (request.role === incompleteRole) {
           return { runtimeId: `runtime-${request.role}`, outcome: "unavailable", providers: [{
@@ -519,7 +555,7 @@ describe("simple material-only review", () => {
           }] };
         }
         return { runtimeId: `runtime-${request.role}`, outcome: "completed", providers: [{
-          provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+          provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
           output: JSON.stringify({ findings: [] }), timing: null, usage: null,
         }] };
       } },
@@ -540,13 +576,13 @@ describe("simple material-only review", () => {
     }, {
       pairId: "pair-provider-failure",
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"], provider_models: { "model-a": "model-a-model", "model-b": "model-b-model" } }),
       client: { async runGroup(request) {
         const failed = request.role === "red";
         return { runtimeId: `runtime-${request.role}`, outcome: failed ? "partial" : "completed", providers: [
-          { provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null },
-          { provider: "model-b", status: failed ? "failed" : "completed", identity: { provider: "model-b" }, error: failed ? { code: "RATE_LIMITED", message: "fixture" } : null, output: failed ? undefined : JSON.stringify({ findings: [] }), timing: null, usage: null },
+          { provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null },
+          { provider: "model-b", status: failed ? "failed" : "completed", identity: { provider: "model-b", model: "model-b-model" }, error: failed ? { code: "RATE_LIMITED", message: "fixture" } : null, output: failed ? undefined : JSON.stringify({ findings: [] }), timing: null, usage: null },
         ] };
       } },
     });
@@ -572,8 +608,8 @@ describe("simple material-only review", () => {
       materials: { decision: "current decision bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
           calls.push({
@@ -584,7 +620,7 @@ describe("simple material-only review", () => {
           return {
             runtimeId: "runtime-1", outcome: "completed",
             providers: [{
-              provider: "other/model", status: "completed", identity: { provider: "other/model" }, error: null,
+              provider: "other/model", status: "completed", identity: { provider: "other/model", model: "other-model" }, error: null,
               output: JSON.stringify({ findings: [{ severity: "minor", path: "materials/01-decision.md", line: 1, issue: "gap", recommendation: "fix" }] }),
               timing: null, usage: null,
             }],
@@ -613,8 +649,8 @@ describe("simple material-only review", () => {
       materials: { implementation: "current implementation", tests: "current tests" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: {
         async runGroup(request) {
           instructions = readFileSync(join(request.materials.bundleRoot, "review-instructions.md"), "utf8");
@@ -642,19 +678,19 @@ describe("simple material-only review", () => {
       materials: { raw_requirement: "requirement", spec: "spec body" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"], provider_models: { "model-a": "model-a-model", "model-b": "model-b-model" } }),
       client: {
         async runGroup() {
           return {
             runtimeId: "runtime-bad", outcome: "partial",
             providers: [
               {
-                provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+                provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
                 output: "not-json", timing: null, usage: null,
               },
               {
-                provider: "model-b", status: "completed", identity: { provider: "model-b" }, error: null,
+                provider: "model-b", status: "completed", identity: { provider: "model-b", model: "model-b-model" }, error: null,
                 output: JSON.stringify({ findings: [{ severity: "major", path: "materials/02-spec.md", line: 1, issue: "gap", recommendation: "fix", root_cause: "missing test", evidence_kind: "direct", evidence: "none" }] }),
                 timing: null, usage: null,
               },
@@ -681,14 +717,14 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup() {
           return {
             runtimeId: "runtime-anchor-invalid", outcome: "completed",
             providers: [{
-              provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+              provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
               output: JSON.stringify({ findings: [{
                 severity: "major", path: "materials/missing.md", line: 1,
                 issue: "gap", recommendation: "fix", root_cause: "fixture",
@@ -714,8 +750,8 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() { throw new Error("broker failed at /tmp/private-review/config.json"); } },
     });
     expect(result).toMatchObject({ status: "unavailable", error: { code: "REVIEW_BROKER_EXIT_NONZERO" } });
@@ -733,8 +769,8 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-error", outcome: "unavailable", providers: [{
           provider: "model-a", status: "failed", identity: { provider: "model-a" },
@@ -755,11 +791,11 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a", "model-b"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a", "model-b"], provider_models: { "model-a": "model-a-model", "model-b": "model-b-model" } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-partial", outcome: "partial", providers: [{
-          provider: "model-a", status: "completed", identity: { provider: "model-a" }, error: null,
+          provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
           output: JSON.stringify({ findings: [] }), timing: null, usage: null,
         }] };
       } },
@@ -781,13 +817,13 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: {
         async runGroup() {
           const provider = sourceCode === "OUTPUT_INVALID"
             ? {
-              provider: "model-a", status: "completed", identity: { provider: "model-a" },
+              provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" },
               error: null, output: "not-json", timing: null, usage: null,
             }
             : {
@@ -817,8 +853,8 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() { throw Object.assign(new Error("broker fixture"), { code: sourceCode }); } },
     });
     expect(result).toMatchObject({ status: "unavailable", error: { code: publicCode } });
@@ -835,8 +871,8 @@ describe("simple material-only review", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-classification", outcome: "unavailable", providers: [{
           provider: "model-a", status: "failed", identity: { provider: "model-a" },
@@ -883,8 +919,8 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-identity-degraded", outcome: "unavailable", providers: [{
           provider: "model-a", status: "failed",
@@ -909,8 +945,8 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-identity-plain", outcome: "unavailable", providers: [{
           provider: "model-a", status: "failed",
@@ -932,8 +968,8 @@ describe("simple material-only review", () => {
       stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async runGroup() {
         return { runtimeId: "runtime-missing-provider", outcome: "unavailable", providers: [{
           status: "failed", identity: null, error: { code: "PROCESS_EXIT_NONZERO", message: "provider exited" },
@@ -956,8 +992,8 @@ describe("simple material-only review", () => {
       stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["model-a"], provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
       client: { async startManaged() {
         return { state: "terminal", group: { runtime_id: "runtime-managed-identity", outcome: "completed", providers: [{
           provider: "model-a", status: "completed", output: JSON.stringify({ findings: [] }), error: null, timing: null, usage: null,
@@ -971,6 +1007,49 @@ describe("simple material-only review", () => {
         identity: { provider: "model-a", adapter: "model-a", source_id: "trusted-source", config_id: "trusted-config" },
       }],
     });
+  });
+
+  it("keeps polling when one managed member failed but a running member can still satisfy quorum", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-wait-")));
+    roots.push(attachmentRoot);
+    const statuses = [
+      {
+        state: "running",
+        runtime_id: "runtime-managed-wait",
+        providers: {
+          "model-a": { status: "failed", error: { code: "RATE_LIMITED" }, last_progress_at_ms: 1 },
+          "model-b": { status: "running", error: null, last_progress_at_ms: 2 },
+        },
+      },
+      {
+        state: "terminal",
+        group: {
+          runtime_id: "runtime-managed-wait",
+          outcome: "completed",
+          providers: [
+            { provider: "model-a", status: "completed", output: JSON.stringify({ findings: [] }), error: null, timing: null, usage: null },
+            { provider: "model-b", status: "completed", output: JSON.stringify({ findings: [] }), error: null, timing: null, usage: null },
+          ],
+        },
+      },
+    ];
+    let statusCalls = 0;
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a", "model-b"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => providerSelectionFor(["model-a", "model-b"], { "model-a": "model-a-model", "model-b": "model-b-model" }),
+      managedStatusPollMs: 0,
+      managedTerminalWaitMs: 1000,
+      client: {
+        async startManaged() { return { state: "running", runtime_id: "runtime-managed-wait" }; },
+        async statusManaged() { return statuses[statusCalls++]; },
+      },
+    });
+
+    expect(statusCalls).toBe(2);
+    expect(result).toMatchObject({ status: "available", outcome: "completed" });
   });
 
 });
@@ -1163,6 +1242,432 @@ describe("review flow static preflight", () => {
     expect(calls).toEqual([]);
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
   });
+
+  // AC-PREFLIGHT-001 / FR-PREFLIGHT-001: the invalid host must be rejected by
+  // the trusted host-config seam before the runner can create a bundle or ask
+  // the provider client to acquire its dispatch/claim boundary.
+  it("blocks an unsupported host_provider before bundle, lock, or dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-host-provider-preflight-")));
+    roots.push(attachmentRoot);
+    const brokerConfig = join(attachmentRoot, "3rd-review.json");
+    writeFileSync(brokerConfig, JSON.stringify({
+      version: 4,
+      tiers: [["antigravity/flash"]],
+      providers: {
+        "antigravity/flash": { enabled: true, source_id: "preflight-source", model: "gemini-3.8-flash-high" },
+      },
+    }));
+    const route = { initial: ["antigravity/flash"], mode: "single_round", minimum_heterologous: 1 };
+    const events = [];
+    let dispatches = 0;
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "claude",
+      preflight: true,
+      materials: buildCodePhaseMaterials(),
+    }, {
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => route,
+      selectProviders: (configPath, hostProvider, selectedRoute) =>
+        selectTrustedReviewProviderSelection(configPath, hostProvider, selectedRoute),
+      buildBundle: () => { events.push("bundle"); return preparedBundle(attachmentRoot); },
+      client: { async runGroup() {
+        events.push("lock", "dispatch");
+        dispatches += 1;
+        return { runtimeId: "runtime-invalid-host", outcome: "unavailable", providers: [] };
+      } },
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: 0,
+    });
+    expect(dispatches).toBe(0);
+    expect(events).toEqual([]);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  // AC-PREFLIGHT-002 / FR-PREFLIGHT-002: keep every probe's machine code and
+  // the existing four-field diagnostic shape at the public blocked boundary.
+  it.each([
+    ["model id", "MODEL_ID_INVALID", {
+      field: "model_id", expected: "provider CLI model list", actual: "agy-model-not-listed",
+      next_action: "repair the provider model and retry",
+    }],
+    ["CLI", "CLI_UNAVAILABLE", {
+      field: "cli", expected: "executable provider CLI", actual: "missing-cli",
+      next_action: "install or repair the provider CLI and retry",
+    }],
+    ["authentication", "AUTH_INVALID", {
+      field: "auth", expected: "valid native or env authentication", actual: "required credential is missing",
+      next_action: "repair provider authentication and retry",
+    }],
+    ["active probe", "ACTIVE_PROBE_FAILED", {
+      field: "active_probe", expected: "provider responds to the lightweight probe", actual: "probe exited non-zero",
+      next_action: "repair provider availability and retry",
+    }],
+  ])("blocks a provider with an invalid %s before bundle, lock, or dispatch", async (label, code, diagnostic) => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-provider-preflight-")));
+    roots.push(attachmentRoot);
+    const provider = "antigravity/flash";
+    const selection = providerSelectionFor([provider], { [provider]: "agy-model-not-listed" });
+    const route = { initial: [provider], mode: "single_round", minimum_heterologous: 1 };
+    const events = [];
+    let dispatches = 0;
+    const { dependencies, calls } = trustedDependencies(attachmentRoot, {
+      route,
+      selection,
+      callLog: events,
+    });
+    dependencies.providerPreflight = ({ provider: currentProvider } = {}) => {
+      events.push(`preflight:${currentProvider}`);
+      return {
+        provider: currentProvider,
+        status: "blocked",
+        error: { code, message: `${label} preflight failed`, diagnostic },
+      };
+    };
+    dependencies.buildBundle = () => { events.push("bundle"); return preparedBundle(attachmentRoot); };
+    dependencies.client = { async runGroup() {
+      events.push("lock", "dispatch");
+      dispatches += 1;
+      return {
+        runtimeId: "runtime-provider-preflight",
+        outcome: "unavailable",
+        providers: [{
+          provider,
+          status: "failed",
+          identity: { provider, adapter: "antigravity", ...selection.provider_identities[provider] },
+          error: { code: "RUNTIME_FIXTURE", message: "provider was reached" },
+          timing: null,
+          usage: null,
+        }],
+      };
+    } };
+
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      preflight: true,
+      materials: buildCodePhaseMaterials(),
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: 0,
+      error: { code, diagnostic },
+    });
+    expect(events).toContain(`preflight:${provider}`);
+    expect(events).not.toContain("bundle");
+    expect(events).not.toContain("lock");
+    expect(events).not.toContain("dispatch");
+    expect(dispatches).toBe(0);
+    expect(calls()).toBe(0);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("RED: maps a preflight-blocked provider to the public failed result contract", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-provider-preflight-partial-")));
+    roots.push(attachmentRoot);
+    const blockedProvider = "antigravity/flash";
+    const healthyProvider = "kimi/coding";
+    const selection = providerSelectionFor([blockedProvider, healthyProvider], {
+      [blockedProvider]: "agy-model-not-listed",
+      [healthyProvider]: "kimi-for-coding",
+    });
+    const route = { initial: [blockedProvider, healthyProvider], mode: "single_round", minimum_heterologous: 1 };
+    const events = [];
+    const dispatchProviders = [];
+    const { dependencies } = trustedDependencies(attachmentRoot, { route, selection, callLog: events });
+    dependencies.providerPreflight = ({ provider } = {}) => {
+      events.push(`preflight:${provider}`);
+      return provider === blockedProvider
+        ? {
+            provider,
+            status: "blocked",
+            error: {
+              code: "MODEL_ID_INVALID",
+              message: "model is not listed by the provider CLI",
+              diagnostic: {
+                field: "model_id", expected: "provider CLI model list", actual: "agy-model-not-listed",
+                next_action: "repair the provider model and retry",
+              },
+            },
+          }
+        : { provider, status: "ready" };
+    };
+    dependencies.buildBundle = () => { events.push("bundle"); return preparedBundle(attachmentRoot); };
+    dependencies.client = { async runGroup(request) {
+      events.push("lock", "dispatch");
+      dispatchProviders.push([...request.providers]);
+      return {
+        runtimeId: "runtime-provider-preflight-partial",
+        outcome: "completed",
+        providers: [{
+          provider: healthyProvider,
+          status: "completed",
+          identity: {
+            provider: healthyProvider,
+            adapter: "kimi",
+            ...selection.provider_identities[healthyProvider],
+            model: selection.provider_models[healthyProvider],
+          },
+          error: null,
+          output: JSON.stringify({ findings: [] }),
+          timing: null,
+          usage: null,
+        }],
+      };
+    } };
+
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      preflight: true,
+      materials: buildCodePhaseMaterials(),
+    }, dependencies);
+
+    expect(result).toMatchObject({ status: "available", dispatch_state: "dispatched", provider_attempts: 1 });
+    const blockedOutput = result.provider_results.find(({ provider }) => provider === blockedProvider);
+    expect(blockedOutput).toMatchObject({
+      provider: blockedProvider,
+      status: "failed",
+      error: expect.objectContaining({ code: "PROVIDER_HEALTH_FAILED" }),
+    });
+    expect(result.provider_results.map(({ status }) => status)).not.toContain("blocked");
+    expect(dispatchProviders).toEqual([[healthyProvider]]);
+    expect(events.indexOf(`preflight:${blockedProvider}`)).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf(`preflight:${healthyProvider}`)).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf("bundle")).toBeGreaterThan(events.indexOf(`preflight:${healthyProvider}`));
+  });
+
+  // AC-PREFLIGHT-003 / FR-PREFLIGHT-003: a static probe can pass while an
+  // antigravity-style exit-0/empty-output failure appears only at runtime.
+  it("keeps a runtime agy timeout as a dispatched provider failure, not a static preflight capture", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-provider-preflight-runtime-")));
+    roots.push(attachmentRoot);
+    const provider = "antigravity/flash";
+    const selection = providerSelectionFor([provider], { [provider]: "gemini-3.8-flash-high" });
+    const route = { initial: [provider], mode: "single_round", minimum_heterologous: 1 };
+    const events = [];
+    const { dependencies } = trustedDependencies(attachmentRoot, { route, selection, callLog: events });
+    dependencies.providerPreflight = ({ provider: currentProvider } = {}) => {
+      events.push(`preflight:${currentProvider}`);
+      return { provider: currentProvider, status: "ready" };
+    };
+    dependencies.buildBundle = () => { events.push("bundle"); return preparedBundle(attachmentRoot); };
+    dependencies.client = { async runGroup() {
+      events.push("lock", "dispatch");
+      return {
+        runtimeId: "runtime-agy-timeout",
+        outcome: "unavailable",
+        providers: [{
+          provider,
+          status: "failed",
+          identity: { provider, adapter: "antigravity", ...selection.provider_identities[provider], model: selection.provider_models[provider] },
+          error: { code: "PROCESS_TIMEOUT", message: "agy print timeout after 5m0s with empty stdout" },
+          execution: { process_outcome: "timeout", parse_outcome: "empty_output" },
+          timing: null,
+          usage: null,
+        }],
+      };
+    } };
+
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      preflight: true,
+      materials: buildCodePhaseMaterials(),
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "dispatched",
+      provider_attempts: 1,
+      error: { code: "REVIEW_EXECUTION_TIMEOUT", cause_code: "PROCESS_TIMEOUT" },
+      provider_results: [{
+        provider,
+        status: "failed",
+        error: { code: "PROCESS_TIMEOUT" },
+        execution: { process_outcome: "timeout", parse_outcome: "empty_output" },
+      }],
+    });
+    expect(events).toContain(`preflight:${provider}`);
+    expect(events).toContain("dispatch");
+    expect(result.dispatch_state).not.toBe("blocked_before_dispatch");
+  });
+});
+
+function p4Finding(overrides = {}) {
+  return {
+    severity: "minor",
+    path: "materials/01-implementation.md",
+    line: 1,
+    issue: "P4 format tolerance fixture",
+    recommendation: "retain the semantic finding",
+    root_cause: "format fixture",
+    evidence_kind: "direct",
+    evidence: "implementation line 1",
+    ...overrides,
+  };
+}
+
+async function runP4Provider({ output = null, error = null, materials = {
+  implementation: "implementation line 1\nimplementation line 2\n",
+} } = {}) {
+  const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-p4-format-")));
+  roots.push(attachmentRoot);
+  const { dependencies } = trustedDependencies(attachmentRoot);
+  dependencies.client = { async runGroup() {
+    return {
+      runtimeId: "runtime-p4-format",
+      outcome: error ? "unavailable" : "completed",
+      providers: [{
+        provider: "other/model",
+        status: error ? "failed" : "completed",
+        identity: { provider: "other/model", model: "other-model" },
+        error,
+        ...(error ? {} : { output }),
+        timing: null,
+        usage: null,
+      }],
+    };
+  } };
+  return runSimpleReview({ stage: "build-code", host_provider: "codex", materials }, dependencies);
+}
+
+describe("T007 P4 format tolerance", () => {
+  // AC-FORMAT-003 / OPEN-003: JSONL has precedence and contributes every
+  // parseable findings row instead of falling through to one JSON candidate.
+  it("prefers JSONL and collects findings from every parseable row", async () => {
+    const first = p4Finding({ issue: "jsonl first" });
+    const second = p4Finding({ line: 2, issue: "jsonl second" });
+    const result = await runP4Provider({
+      output: [
+        JSON.stringify({ trace_id: "first-row", findings: [first] }),
+        JSON.stringify({ findings: [second] }),
+      ].join("\n"),
+    });
+
+    expect(result).toMatchObject({ status: "available", findings: [
+      expect.objectContaining({ issue: "jsonl first", severity: "minor", provider: "other/model" }),
+      expect.objectContaining({ issue: "jsonl second", severity: "minor", provider: "other/model" }),
+    ] });
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", evidence_anchor_valid: [true, true] });
+  });
+
+  it("selects the unique findings-bearing fence when multiple fences are present", async () => {
+    const finding = p4Finding({ issue: "unique fenced finding" });
+    const result = await runP4Provider({
+      output: [
+        "provider explanation",
+        "```json",
+        JSON.stringify({ note: "not a review result" }),
+        "```",
+        "```json",
+        JSON.stringify({ findings: [finding] }),
+        "```",
+      ].join("\n"),
+    });
+
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [expect.objectContaining({ issue: "unique fenced finding", provider: "other/model" })],
+      provider_results: [{ status: "completed", evidence_anchor_valid: [true] }],
+    });
+  });
+
+  it("extracts nested findings from a larger object and ignores top-level extra keys", async () => {
+    const finding = p4Finding({ issue: "nested finding" });
+    const result = await runP4Provider({
+      output: JSON.stringify({
+        response: { payload: { findings: [finding] } },
+        trace_id: "ignored-top-level-key",
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [expect.objectContaining({ issue: "nested finding", provider: "other/model" })],
+    });
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", evidence_anchor_valid: [true] });
+  });
+
+  it("accepts extra top-level keys beside findings", async () => {
+    const finding = p4Finding({ issue: "extra-key finding" });
+    const result = await runP4Provider({
+      output: JSON.stringify({ findings: [finding], trace_id: "ignored" }),
+    });
+
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [expect.objectContaining({ issue: "extra-key finding", provider: "other/model" })],
+      provider_results: [{ status: "completed", evidence_anchor_valid: [true] }],
+    });
+  });
+
+  it("uses the first parseable JSON candidate when JSONL and fence extraction do not apply", async () => {
+    const first = p4Finding({ issue: "first candidate" });
+    const later = p4Finding({ issue: "later candidate" });
+    const result = await runP4Provider({
+      output: `provider prose: ${JSON.stringify({ findings: [first] })} then ${JSON.stringify({ findings: [later] })}`,
+    });
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toMatchObject({ issue: "first candidate", provider: "other/model" });
+    expect(result.provider_results[0]).toMatchObject({ status: "completed", evidence_anchor_valid: [true] });
+  });
+
+  it.each([
+    ["blocker", "blocking"], ["critical", "blocking"], ["fatal", "blocking"],
+    ["important", "major"], ["moderate", "major"], ["warning", "major"], ["significant", "major"],
+    ["nit", "minor"], ["trivial", "minor"], ["suggestion", "minor"], ["info", "minor"], ["note", "minor"],
+  ])("normalizes severity alias %s to %s", async (alias, canonical) => {
+    const result = await runP4Provider({ output: JSON.stringify({ findings: [p4Finding({ severity: alias, issue: `${alias} alias` })] }) });
+
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [expect.objectContaining({ severity: canonical, issue: `${alias} alias`, provider: "other/model" })],
+      provider_results: [{ status: "completed", evidence_anchor_valid: [true] }],
+    });
+  });
+
+  it("drops only an unknown-severity finding and keeps the provider completed", async () => {
+    const kept = p4Finding({ issue: "known severity" });
+    const dropped = p4Finding({ severity: "unrecognized-severity", issue: "drop only this finding" });
+    const result = await runP4Provider({ output: JSON.stringify({ findings: [kept, dropped] }) });
+
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [expect.objectContaining({ issue: "known severity", severity: "minor", provider: "other/model" })],
+      provider_results: [{ status: "completed", evidence_anchor_valid: [true] }],
+    });
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it("returns structured OUTPUT_INVALID with the parser error when all candidates are invalid", async () => {
+    const result = await runP4Provider({
+      output: [
+        "provider prose",
+        '{"findings":[}',
+        "```json",
+        '{"findings":[}',
+        "```",
+      ].join("\n"),
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      findings: [],
+      provider_results: [{
+        status: "failed",
+        error: { code: "OUTPUT_INVALID", parse_error: expect.any(String) },
+      }],
+    });
+    expect(result.provider_results[0].error.parse_error).toMatch(/JSON|fence|findings/i);
+  });
 });
 
 describe("neutral review instruction identity and trusted selection", () => {
@@ -1297,8 +1802,8 @@ describe("neutral review instruction identity and trusted selection", () => {
       },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       buildBundle: () => hostBundle,
       client: { async runGroup() {
         dispatches += 1;
@@ -1384,8 +1889,8 @@ describe("direction review flow transport parity", () => {
       review_flow: DIRECTION_FLOW,
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: { async runGroup(request) {
         seen.push(request.reviewFlow ?? null);
         return { runtimeId: "runtime-direction-flow", outcome: "unavailable", providers: [] };
@@ -1410,8 +1915,8 @@ describe("direction review flow transport parity", () => {
       review_flow: DIRECTION_FLOW,
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other/model"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
       client: { async runGroup(request) {
         materialIds.push(request.materials.materialId);
         return { runtimeId: "runtime-single-round", outcome: "unavailable", providers: [] };

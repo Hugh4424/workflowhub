@@ -238,7 +238,7 @@ command 在认证 worktree 以 argv 执行；service 从该 worktree 加载模�
 - **evidence_path**：`[填写：task-relative 最终证据路径]`
 - **coverage limits**：[填写：覆盖范围和明确未覆盖项]
 - **STOP**：[填写：命令损坏、AC 缺失、边界越界或需要新决策]
-- **execution_contract**：当前快照运行一次；失败保留原始输出，回受影响 task，不用全量重跑掩盖局部失败。
+- **execution_contract**：当前快照运行一次；优先使用有相同绑定的 current canonical test receipts；失败保留原始输出，回受影响 task，不用全量重跑掩盖局部失败。超时记录 `incomplete`，不会自动触发全量重跑；是否补跑由 owner 选择受影响范围。
 
 ## Dependency Graph
 

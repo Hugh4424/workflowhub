@@ -215,6 +215,8 @@
             "additionalProperties": false
           },
           "status": { "enum": ["running", "completed", "failed", "cancelled"] },
+          "process_outcome": { "type": ["string", "null"], "enum": ["ok", "exit_nonzero", "timeout", "launch_failure", null] },
+          "parse_outcome": { "type": ["string", "null"], "enum": ["ok", "invalid", "empty_output", null] },
           "session_id": { "type": ["string", "null"] },
           "runtime_id": { "type": ["string", "null"] },
           "session_artifact_path": { "type": ["string", "null"] },

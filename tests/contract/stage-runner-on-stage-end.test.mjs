@@ -2,18 +2,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
 
-import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import { canonicalStageMaterials } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const contexts = new Map();
-const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
@@ -65,33 +64,44 @@ function fixture(taskId) {
 
 function inputFor(context, input) {
   if (!input) return input;
-  const outcome = context.reflectionOutcome;
+  const snapshot = context.kernel.currentVNextSnapshot();
+  const materialRevision = context.kernel.currentVNextMaterialRevision();
+  const attemptId = `current-session-${context.identity.taskId}`;
+  const evidenceRef = "quality/tests/stage-runner-on-stage-end.current-session.json";
+  if (!context.currentSessionEvidence) {
+    const raw = `${JSON.stringify({
+      schema_version: "stage-runner-on-stage-end.current-session-evidence.v1",
+      task_id: context.identity.taskId,
+      stage: context.stage,
+      source: "workflowhub-current-session",
+      attempt_id: attemptId,
+      snapshot_tree: snapshot.tree,
+      material_revision: materialRevision,
+    }, null, 2)}\n`;
+    context.kernel.publishCanonicalRecord(evidenceRef, raw);
+    context.currentSessionEvidence = { ref: evidenceRef };
+  }
   return {
     ...input, schema_version: "stage-reflection.v2",
     judgments: [{ subject_id: "reflection-source", subject_kind: "step", classification: "keep", severity: "low",
-      reason: "Current authenticated stage outcome supports this fixture judgment.", evidence_refs: [outcome.ref],
+      reason: "Current authenticated session evidence supports this fixture judgment.", evidence_refs: [context.currentSessionEvidence.ref],
       confidence: "medium", next_review_trigger: "next execution" }, ...(input.judgments ?? [])],
     identity: { task_id: context.identity.taskId, worktree: context.candidateWorkspace.worktreeRoot,
-      branch: context.candidateWorkspace.branch, attempt: outcome.value.attempt_id,
-      snapshot_tree: outcome.value.snapshot_tree, material_revision: outcome.value.material_revision },
+      branch: context.candidateWorkspace.branch, attempt: attemptId,
+      snapshot_tree: snapshot.tree, material_revision: materialRevision },
     executor: input.executor ?? {
-      kind: "fixture-reflection-executor", source_id: "fixture/reflection-executor",
-      attempt_id: outcome.value.attempt_id, started_at: "2026-08-30T00:00:01.000Z",
+      kind: "workflowhub-current-session", source_id: "workflowhub-current-session",
+      attempt_id: attemptId, started_at: "2026-08-30T00:00:01.000Z",
       completed_at: "2026-08-30T00:00:02.000Z", output_hash: "a".repeat(64),
     },
     output_hash: input.output_hash ?? "a".repeat(64),
     ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"].map((key) => [key, { state: "none_observed", items: [] }])),
     status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"].map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
-    source_completeness: { compaction: false, truncation: false, visible_scope: "fixture outcome", unknown_reasons: [] },
+    source_completeness: { compaction: false, truncation: false, visible_scope: "current session", unknown_reasons: [] },
   };
 }
 function authenticatedInput(taskId, value) {
   const context = contexts.get(taskId);
-  const outcomeStatus = value.stage_status === "failed" ? "incomplete" : "completed";
-  if (!context.reflectionOutcome || context.reflectionOutcome.value.status !== outcomeStatus) {
-    context.reflectionOutcome = writeStageOutcomeFixture({ task: context.task, kernel: context.kernel, artifacts: context.artifacts,
-      workspace: context.candidateWorkspace, stage: context.stage, attemptId: `reflection-${value.stage_status}`, status: outcomeStatus });
-  }
   return inputFor(context, value);
 }
 

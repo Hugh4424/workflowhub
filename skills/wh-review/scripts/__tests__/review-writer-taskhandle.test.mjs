@@ -35,6 +35,15 @@ describe("review writer TaskHandle boundary", () => {
     expect(writeSemanticResult(task, "quality/reviews/results/a.json", result)).toBe("quality/reviews/results/a.json");
   });
 
+  it("retains process and parse outcomes in TaskHandle-written attempts", () => {
+    const task = fixture();
+    const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};
+    const attempt={version:"wh-review-attempt.v1",attempt_id:"outcomes",task_id:"review-task",stage:"build-code",review_track:null,source,snapshot_tree:"b".repeat(40),material_id:"c".repeat(64),provider_attempts:[{provider:"fixture",status:"completed",session_id:null,runtime_id:null,output_ref:null,error:null,process_outcome:"ok",parse_outcome:"ok"}],terminal_status:"semantic",error:null};
+    const ref = "quality/reviews/attempts/outcomes/attempt.json";
+    expect(writeAttempt(task, ref, attempt)).toBe(ref);
+    expect(JSON.parse(task.readRecord(ref))).toMatchObject({ provider_attempts: [{ process_outcome: "ok", parse_outcome: "ok" }] });
+  });
+
   it("keeps legacy session-artifact attempts readable but rejects new writes", () => {
     const task = fixture();
     const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertFresh, bindFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { sha256 } from "../../runtime/evidence/freshness.mjs";
 import { createQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 import { deriveExecutionOutcomes, deriveStageOutcomeStatuses } from "../../runtime/stage/completion-predicates.mjs";
 
@@ -52,15 +52,6 @@ function stageRow() {
 }
 
 describe("verify reads immutable facts without material-currentness invalidation", () => {
-  it("keeps a content-addressed evidence binding valid at its recorded snapshot", () => {
-    const raw = "evidence\n";
-    const binding = bindFreshness({ ref: "quality/evidence/example.txt", raw, snapshotTree: originalTree });
-
-    expect(assertFresh(binding, { read: () => raw, snapshotTree: originalTree })).toBe(true);
-    expect(() => assertFresh(binding, { read: () => raw, snapshotTree: editedTree })).toThrow(/snapshot_tree changed/);
-    expect(() => assertFresh(binding, { read: () => "changed\n", snapshotTree: originalTree })).toThrow(/hash changed/);
-  });
-
   it("retains a legacy stage outcome after material and worktree edits when its own bytes are authenticated", () => {
     const fixture = stageOutcomeFixture();
     const statuses = deriveStageOutcomeStatuses({

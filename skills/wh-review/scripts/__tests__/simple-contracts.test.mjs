@@ -1,8 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
 import yaml from "js-yaml";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { ReviewProviderClient } from "../review-provider-client.mjs";
+import { createSimpleReviewPacket, runSimpleReview, validateProviderResultsAgainstSelection } from "../simple-review-runner.mjs";
 
 const root = join(import.meta.dirname, "..", "..", "..");
 const projectRoot = join(root, "..");
@@ -11,6 +15,61 @@ const schemaRoot = join(runtimeReviewRoot, "schemas");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const hash = "a".repeat(64);
 const oid = "b".repeat(40);
+const temporaryRoots = [];
+
+function sha256(value) { return createHash("sha256").update(value, "utf8").digest("hex"); }
+
+afterEach(() => { while (temporaryRoots.length) rmSync(temporaryRoots.pop(), { recursive: true, force: true }); });
+
+function selectionFor(providers, models = {}) {
+  return {
+    providers: [...providers],
+    eligible_profiles: [...providers],
+    provider_identities: Object.fromEntries(providers.map((provider, index) => [
+      provider, { source_id: `source-${index + 1}`, config_id: `config-${index + 1}` },
+    ])),
+    provider_models: Object.fromEntries(providers.map((provider) => [provider, models[provider] ?? `${provider}-model`])),
+  };
+}
+
+function providerMember(selection, provider, output, overrides = {}) {
+  return {
+    provider,
+    status: "completed",
+    identity: {
+      provider,
+      adapter: provider.split("/", 1)[0],
+      ...selection.provider_identities[provider],
+      model: selection.provider_models[provider],
+    },
+    output,
+    error: null,
+    timing: null,
+    usage: null,
+    ...overrides,
+  };
+}
+
+function reviewGroup(selection, output, { provider = selection.providers[0], ...overrides } = {}) {
+  return {
+    runtimeId: "runtime-p4",
+    outcome: "completed",
+    round: 1,
+    selectedTier: null,
+    providers: [providerMember(selection, provider, output)],
+    ...overrides,
+  };
+}
+
+function runnerDependencies({ selection, minimum = 1, bundleRoot = root, deliveryManifest = [], group, calls = [] } = {}) {
+  return {
+    loadConfig: () => ({ whReview: {}, attachmentRoot: bundleRoot, config: "/unused/config.json", command: ["unused"] }),
+    resolveRoute: () => ({ initial: [...selection.providers], mode: "single_round", minimum_heterologous: minimum }),
+    selectProviders: () => selection,
+    buildBundle: () => ({ bundleRoot, materialId: hash, deliveryManifest, dispose() {} }),
+    client: { async runGroup() { calls.push("run"); return group ?? reviewGroup(selection, JSON.stringify({ findings: [] })); } },
+  };
+}
 
 function validator(name) {
   const ajv = new Ajv2020({ strict: false });
@@ -103,6 +162,321 @@ describe("simple wh-review contracts", () => {
     expect(validate(missingUserResult)).toBe(false);
   });
 
+  it("registers process and parse outcomes on provider attempts", () => {
+    const validateAttempt = validator("attempt.schema.json");
+    const baseAttempt = {
+      version: "wh-review-attempt.v1",
+      attempt_id: "attempt-1",
+      task_id: "task-1",
+      stage: "build-code",
+      review_track: null,
+      subject_kind: "worktree",
+      phase_id: null,
+      base_tree: oid,
+      candidate_tree: oid,
+      source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
+      snapshot_tree: oid,
+      material_id: hash,
+      provider_attempts: [{
+        provider: "opencode",
+        status: "failed",
+        session_id: null,
+        runtime_id: null,
+        output_ref: null,
+        error: { code: "PROCESS_TIMEOUT", message: "provider timed out" },
+        process_outcome: "timeout",
+        parse_outcome: "empty_output",
+      }],
+      terminal_status: "unavailable",
+      error: { code: "PROVIDER_UNAVAILABLE", message: "no valid provider" },
+    };
+
+    for (const process_outcome of ["ok", "exit_nonzero", "timeout", "launch_failure"]) {
+      for (const parse_outcome of ["ok", "invalid", "empty_output"]) {
+        const attempt = structuredClone(baseAttempt);
+        Object.assign(attempt.provider_attempts[0], { process_outcome, parse_outcome });
+        expect(validateAttempt(attempt), `${process_outcome}/${parse_outcome}: ${JSON.stringify(validateAttempt.errors)}`).toBe(true);
+      }
+    }
+    for (const outcome of [null]) {
+      const attempt = structuredClone(baseAttempt);
+      Object.assign(attempt.provider_attempts[0], { process_outcome: outcome, parse_outcome: outcome });
+      expect(validateAttempt(attempt), `${outcome}: ${JSON.stringify(validateAttempt.errors)}`).toBe(true);
+    }
+
+    const unknown = structuredClone(baseAttempt);
+    unknown.provider_attempts[0].future_outcome = "ignored";
+    expect(validateAttempt(unknown)).toBe(false);
+
+    const pathValue = structuredClone(baseAttempt);
+    pathValue.provider_attempts[0].process_outcome = "/private/process.log";
+    expect(validateAttempt(pathValue)).toBe(false);
+  });
+
+  it("RED: rejects a private host path before managed dispatch", async () => {
+    const calls = [];
+    const client = new ReviewProviderClient({
+      invoke: async (value) => {
+        calls.push(value);
+        return {
+          exitCode: 0,
+          stdout: `${JSON.stringify({
+            version: "workflowhub-run.v1",
+            request_id: "request-p4",
+            runtime_id: "runtime-p4",
+            state: "running",
+            material_id: hash,
+          })}\n`,
+          stderr: "",
+        };
+      },
+    });
+
+    await expect(client.startManaged({
+      requestId: "request-p4",
+      hostProvider: "file://private/host",
+      providers: ["other/model"],
+      materials: { bundleRoot: "bundle", materialId: hash, deliveryManifest: [] },
+      prompt: "review",
+      minimumHeterologous: 1,
+    })).rejects.toThrow();
+    expect(calls).toEqual([]);
+  });
+
+  it("RED: rejects a private host path on statusManaged before broker invocation", async () => {
+    const calls = [];
+    const client = new ReviewProviderClient({
+      invoke: async (value) => {
+        calls.push(value);
+        return {
+          exitCode: 0,
+          stdout: `${JSON.stringify({
+            version: "workflowhub-run.v1",
+            request_id: "request-p4",
+            runtime_id: "runtime-p4",
+            state: "running",
+            material_id: hash,
+          })}\n`,
+          stderr: "",
+        };
+      },
+    });
+
+    await expect(client.statusManaged({
+      requestId: "request-p4",
+      runtimeId: "runtime-p4",
+      hostProvider: "/private/host",
+      providers: ["other/model"],
+      materials: { materialId: hash },
+    })).rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects private and opaque hosts on cancelManaged before broker invocation", async () => {
+    for (const hostProvider of ["/private/host", "file://private/host"]) {
+      const calls = [];
+      const client = new ReviewProviderClient({
+        invoke: async (value) => {
+          calls.push(value);
+          return {
+            exitCode: 0,
+            stdout: `${JSON.stringify({
+              version: "workflowhub-run.v1",
+              request_id: "request-p4",
+              runtime_id: "runtime-p4",
+              state: "running",
+              material_id: hash,
+            })}\n`,
+            stderr: "",
+          };
+        },
+      });
+
+      await expect(client.cancelManaged({
+        requestId: "request-p4",
+        runtimeId: "runtime-p4",
+        hostProvider,
+        providers: ["other/model"],
+        materials: { materialId: hash },
+      })).rejects.toMatchObject({ code: "PUBLIC_RESULT_INVALID" });
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it("keeps caller material keys and runner-owned instructions fail-closed", async () => {
+    expect(() => createSimpleReviewPacket({
+      stage: "build-code",
+      materials: { review_instructions: "caller-authored instructions" },
+    })).toThrow(/MATERIAL_FORBIDDEN/);
+
+    const selection = selectionFor(["other/model"]);
+    const calls = [];
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      preflight: true,
+      materials: { unknown_material: "not in the stage allowlist" },
+    }, runnerDependencies({ selection, calls }));
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: 0,
+      error: { code: "MATERIAL_FORBIDDEN" },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("RED: rechecks quorum after preflight removes a provider", async () => {
+    const blockedProvider = "antigravity/flash";
+    const healthyProvider = "kimi/coding";
+    const selection = selectionFor([blockedProvider, healthyProvider], {
+      [blockedProvider]: "agy-model",
+      [healthyProvider]: "kimi-model",
+    });
+    const calls = [];
+    const dependencies = runnerDependencies({
+      selection,
+      minimum: 2,
+      calls,
+      group: reviewGroup(selection, JSON.stringify({ findings: [] }), { provider: healthyProvider }),
+    });
+    dependencies.providerPreflight = ({ provider }) => provider === blockedProvider
+      ? {
+          provider,
+          status: "blocked",
+          error: {
+            code: "ACTIVE_PROBE_FAILED",
+            message: "provider health probe failed",
+            diagnostic: {
+              field: "active_probe",
+              expected: "provider responds to the lightweight probe",
+              actual: "probe exited non-zero",
+              next_action: "repair provider availability and retry",
+            },
+          },
+        }
+      : { provider, status: "ready" };
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      preflight: true,
+      materials: {
+        approved_spec: "approved spec",
+        acceptance_criteria: "acceptance criteria",
+        test_evidence: "test evidence",
+      },
+    }, dependencies);
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: 0,
+      provider_results: [],
+      error: { code: "REVIEW_THRESHOLD_INVALID" },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("keeps provider results bound to the selected provider identity", () => {
+    const selection = selectionFor(["other/model"]);
+    const output = JSON.stringify({ findings: [] });
+    const valid = providerMember(selection, "other/model", output);
+
+    expect(() => validateProviderResultsAgainstSelection([{
+      ...valid,
+      identity: { ...valid.identity, source_id: "untrusted-source" },
+    }], selection)).toThrow(/trusted selection/);
+    expect(() => validateProviderResultsAgainstSelection([{
+      ...valid,
+      provider: "other/unselected",
+      identity: { ...valid.identity, provider: "other/unselected" },
+    }], selection)).toThrow(/uniquely bound/);
+  });
+
+  it("RED: requires findings to anchor to submitted material and a real line", async () => {
+    const bundleRoot = mkdtempSync(join(tmpdir(), "workflowhub-p4-anchor-red-"));
+    temporaryRoots.push(bundleRoot);
+    const submitted = "submitted line";
+    mkdirSync(join(bundleRoot, "materials"), { recursive: true });
+    writeFileSync(join(bundleRoot, "materials", "submitted.md"), submitted);
+    writeFileSync(join(bundleRoot, "materials", "unsubmitted.md"), "host-only line");
+    const selection = selectionFor(["other/model"]);
+    const manifest = [{
+      path: "materials/submitted.md",
+      bytes: Buffer.byteLength(submitted),
+      sha256: sha256(submitted),
+    }];
+
+    for (const finding of [
+      {
+        severity: "major", path: "materials/unsubmitted.md", line: 1,
+        issue: "provider selected an unsubmitted file", recommendation: "use submitted material",
+        root_cause: "anchor lookup escaped the manifest", evidence_kind: "direct", evidence: "manifest omits the file",
+      },
+      {
+        severity: "major", path: "materials/submitted.md", line: 2,
+        issue: "provider selected a nonexistent line", recommendation: "use a real line",
+        root_cause: "line boundary was not checked", evidence_kind: "direct", evidence: "the file has one line",
+      },
+    ]) {
+      const result = await runSimpleReview({
+        stage: "build-code",
+        host_provider: "codex",
+        materials: { unknown_material: "anchor fixture" },
+      }, runnerDependencies({
+        selection,
+        bundleRoot,
+        deliveryManifest: manifest,
+        group: reviewGroup(selection, JSON.stringify({ findings: [finding] })),
+      }));
+      expect(result).toMatchObject({
+        status: "unavailable",
+        provider_results: [{ status: "failed", error: { code: "EVIDENCE_ANCHOR_INVALID" } }],
+      });
+    }
+  });
+
+  it("keeps broker material identity bound to the submitted bundle", async () => {
+    const selection = selectionFor(["other/model"]);
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { unknown_material: "material identity fixture" },
+    }, runnerDependencies({
+      selection,
+      group: reviewGroup(selection, JSON.stringify({ findings: [] }), { material_id: "f".repeat(64) }),
+    }));
+    expect(result).toMatchObject({
+      status: "unavailable",
+      error: { code: "REVIEW_MATERIAL_IDENTITY_MISMATCH" },
+    });
+  });
+
+  it("keeps non-terminal groups and incomplete health members fail-closed", async () => {
+    const context = {
+      requestId: "request-p4",
+      runtimeId: "runtime-p4",
+      hostProvider: "codex",
+      providers: ["other/model"],
+      materials: { materialId: hash },
+    };
+    const base = {
+      version: "workflowhub-run.v1",
+      request_id: "request-p4",
+      runtime_id: "runtime-p4",
+      state: "running",
+      material_id: hash,
+    };
+    for (const envelope of [
+      { ...base, group: {} },
+      { ...base, providers: { "other/model": { status: "failed", error: { code: "PROCESS_TIMEOUT" } } } },
+    ]) {
+      const client = new ReviewProviderClient({
+        invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(envelope)}\n`, stderr: "" }),
+      });
+      await expect(client.statusManaged(context)).rejects.toMatchObject({ code: "PROTOCOL_INCOMPATIBLE" });
+    }
+  });
+
   it("documents the complete public review input instead of forcing callers to guess", () => {
     const skill = readFileSync(join(root, "wh-review", "SKILL.md"), "utf8");
     for (const field of ["stage", "host_provider", "materials"]) {
@@ -120,7 +494,7 @@ describe("simple wh-review contracts", () => {
 
   it("requires one explicit package root without checkout or path guessing", () => {
     const protocol = readFileSync(join(root, "workflowhub-host-protocol", "SKILL.md"), "utf8");
-    expect(protocol).toMatch(/项目登记资源或宿主明确注入的绝对路径/);
+    expect(protocol).toMatch(/项目登记资源或认证 task worktree 的绝对路径/);
     expect(protocol).toMatch(/不扫描目录、不猜路径、不从旧记录回退/);
     expect(protocol).not.toMatch(/multica repo checkout/);
     expect(protocol).not.toMatch(/WORKFLOWHUB_HOST_BRIDGE|invoke-stage-skill/);

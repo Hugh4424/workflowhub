@@ -13,7 +13,7 @@ import { deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevision,
 import { summarizeStageOutcome } from "../evidence/stage-completion-facts.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
-import { materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
+import { isExecutionRecordOnlyMaterialDelta, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
 import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
@@ -1609,8 +1609,10 @@ function evidenceCandidate(result, kind, subject, stage) {
   if (kind === "review" && ["direction_review", "detail_review"].includes(subject) && !subjectFact) {
     return null;
   }
-  const directRef = subjectFact?.receipt_ref ?? subjectFact?.result_ref ?? subjectFact?.attempt_ref ?? subjectFact?.confirmation_ref;
-  const directHash = subjectFact?.receipt_hash ?? subjectFact?.result_hash ?? subjectFact?.attempt_hash ?? subjectFact?.confirmation_hash;
+  const trackSubject = kind === "review" && ["direction_review", "detail_review"].includes(subject);
+  const directRef = trackSubject ? subjectFact?.result_ref : subjectFact?.receipt_ref ?? subjectFact?.result_ref ?? subjectFact?.attempt_ref ?? subjectFact?.confirmation_ref;
+  const directHash = trackSubject ? subjectFact?.result_hash : subjectFact?.receipt_hash ?? subjectFact?.result_hash ?? subjectFact?.attempt_hash ?? subjectFact?.confirmation_hash;
+  if (trackSubject && (!REVIEW_RESULT_REF.test(directRef ?? "") || !SHA256_HEX.test(directHash ?? ""))) return null;
   // verify-code has two intentionally separate review consumers. If the
   // canonical dsh-code-review slot is missing/unavailable, an advisory
   // wh-review in `facts.review` or generic evidence_refs must not be promoted
@@ -1654,6 +1656,15 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
     ? ctx.task.listCanonicalQualityFactRefs()
     : [];
   const materialRevision = ctx.kernel.currentVNextMaterialRevision();
+  const workspaceRoot = ctx.candidateWorkspace?.worktreeRoot ?? ctx.workspace?.worktreeRoot;
+  const taskId = ctx.task.identity.taskId;
+  const reusableSnapshot = (expectedTree) => expectedTree === snapshotTree
+    || isExecutionRecordOnlyMaterialDelta(workspaceRoot, expectedTree, snapshotTree, taskId)
+    || isStageMaterialOnlySnapshotDelta(workspaceRoot, expectedTree, snapshotTree, {
+      taskId,
+      downstreamMaterials: ["spec.md", "plan.md", "tasks.md"],
+      allowNonMaterialChanges: true,
+    });
   const candidates = new Map();
   for (const factRef of refs) {
     try {
@@ -1665,7 +1676,7 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
           || fact.subject !== "human_confirmation"
           || fact.kind !== "confirmation"
           || fact.status !== "passed"
-          || fact.snapshot_tree !== snapshotTree
+          || !reusableSnapshot(fact.snapshot_tree)
           || typeof evidence?.ref !== "string"
           || !evidence.ref.startsWith("quality/confirmations/")
           || typeof evidence.sha256 !== "string") continue;
@@ -1677,8 +1688,8 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
           || confirmation.task_id !== ctx.task.identity.taskId
           || confirmation.stage !== ctx.stage
           || confirmation.decision !== "accepted"
-          || confirmation.snapshot_tree !== snapshotTree
-          || confirmation.material_revision !== materialRevision) continue;
+          || !reusableSnapshot(confirmation.snapshot_tree)
+          || !(confirmation.material_revision === materialRevision || reusableSnapshot(confirmation.snapshot_tree))) continue;
       candidates.set(`${evidence.ref}:${evidence.sha256}`, { ref: evidence.ref, sha256: evidence.sha256 });
     } catch {
       // Ignore unrelated or historical quality facts; the current run remains fail-closed.
@@ -1692,6 +1703,9 @@ function currentConfirmationCandidate(ctx, snapshotTree) {
 
 function reviewEvidenceStatus(task, candidate, { stage = null, subject = null, snapshotTree = null } = {}) {
   if (!candidate) return { status: "missing", evidence_valid: false };
+  const expectedTrack = stage === "make-decision"
+    ? ({ direction_review: "direction", detail_review: "detail" }[subject] ?? null)
+    : null;
   let record;
   let raw;
   try {
@@ -1708,7 +1722,18 @@ function reviewEvidenceStatus(task, candidate, { stage = null, subject = null, s
       && snapshotTree !== null && record.snapshot_tree !== snapshotTree) {
     return { status: "missing", evidence_valid: false };
   }
+  if (expectedTrack !== null
+      && (record?.task_id !== task.identity.taskId || record?.stage !== stage || record?.review_track !== expectedTrack)) {
+    return { status: "missing", evidence_valid: false };
+  }
   if (/^quality\/reviews\/results\//.test(candidate.ref)) {
+    if (expectedTrack !== null) {
+      try {
+        authenticateStageReviewResult(record, { taskId: task.identity.taskId, read: task.readRecord });
+      } catch {
+        return { status: "missing", evidence_valid: false };
+      }
+    }
     if (record?.version === "wh-review-result.v1"
         && !Object.hasOwn(record, "verdict")
         && Array.isArray(record.provider_results)
@@ -1789,7 +1814,7 @@ function confirmationEvidenceStatus(task, candidate) {
 }
 
 function assertVNextSourceStable(ctx, expectedSnapshot) {
-  const observed = ctx.kernel.currentVNextSnapshot({ fresh: true });
+  const observed = ctx.kernel.currentVNextSnapshot();
   if (observed.source_digest !== expectedSnapshot.source_digest || observed.tree !== expectedSnapshot.tree) {
     const error = new Error(`FORMAL_SNAPSHOT_MISMATCH: expected source/tree ${expectedSnapshot.source_digest}/${expectedSnapshot.tree}, observed ${observed.source_digest}/${observed.tree}`);
     error.code = "FORMAL_SNAPSHOT_MISMATCH";
@@ -2397,7 +2422,7 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
   let rows = [], reason = null;
   try { rows = deriveAcceptanceExecutionAssertions(result.stdout, ids); }
   catch (error) { reason = error.message; }
-  const after = ctx.kernel.currentVNextContext({ fresh: true });
+  const after = ctx.kernel.currentVNextContext();
   let moduleStable = true;
   if (modulePath) {
     try { moduleStable = createHash("sha256").update(readFileSync(modulePath)).digest("hex") === moduleHash; }

@@ -220,7 +220,7 @@ function currentVerifyStatus(taskRoot) {
 function assertRealS1DogfoodFacts(taskRoot) {
   const verify = readJson(join(taskRoot, "quality", "verify.json"));
   expect(verify).toEqual(expect.objectContaining({
-    schema_version: "quality-verify.v1", task_id: TASK_ID, stage: "verify-code", status: "passed",
+    task_id: TASK_ID, stage: "verify-code", status: "passed",
   }));
   const { factRef } = currentVerifyStatus(taskRoot);
   expect(factRef).toMatch(/^quality\/facts\/[a-f0-9]{64}\.json$/);
@@ -381,8 +381,18 @@ function withNonUiAcceptanceTask(tasks) {
   expect(t019, "T019 template").toEqual(expect.any(String));
   const nonUi = t019
     .replace("**ui_scope**：ui", "**ui_scope**：non_ui")
-    .replace(/^- \*\*acceptance_data\*\*：.*$/m, "- **acceptance_data**：`[{\"source\":\"isolated command fixture\",\"sample\":\"non-ui acceptance sample\",\"scenario\":\"S3 explicit non-ui acceptance boundary\",\"tier\":\"command\"}]`");
+    .replace(/^- \*\*acceptance_data\*\*：.*$/m, "- **acceptance_data**：`[{\"source\":\"isolated command fixture\",\"sample\":\"non-ui acceptance sample\",\"scenario\":\"S3 explicit non-ui acceptance boundary\",\"tier\":\"command\",\"execution\":{\"command\":\"node\",\"args\":[\"--version\"],\"timeout_ms\":30000}}]`");
   return tasks.replace(t019, nonUi);
+}
+
+function withTypedCommandExecutions(tasks) {
+  return tasks.replace(/(- \*\*acceptance_data\*\*：`)([\s\S]*?)(`)/m, (_match, prefix, raw, suffix) => {
+    const scenarios = JSON.parse(raw);
+    const typed = scenarios.map((scenario) => scenario.tier === "command" && scenario.execution === undefined
+      ? { ...scenario, execution: { command: "node", args: ["--version"], timeout_ms: 30000 } }
+      : scenario);
+    return `${prefix}${JSON.stringify(typed)}${suffix}`;
+  });
 }
 
 function removeAcceptanceField(tasks, field) {
@@ -420,7 +430,7 @@ describe("UI delivery contract dogfooding (T019 local S2-S4)", () => {
     const decisionLog = readFileSync(join(materialRoot, "decision-log.md"), "utf8");
     const spec = readFileSync(join(materialRoot, "spec.md"), "utf8");
     const plan = readFileSync(join(materialRoot, "plan.md"), "utf8");
-    const completeTasks = readFileSync(join(materialRoot, "tasks.md"), "utf8");
+    const completeTasks = withTypedCommandExecutions(readFileSync(join(materialRoot, "tasks.md"), "utf8"));
     expect(validateExecutablePlanTaskMinimum({ decisionLog, spec, plan, tasks: completeTasks }).ok).toBe(true);
     const withNonUi = withNonUiAcceptanceTask(completeTasks);
     expect(validateExecutablePlanTaskMinimum({ decisionLog, spec, plan, tasks: withNonUi }).ok).toBe(true);

@@ -551,6 +551,10 @@ function findReusableReview({ history, request, routeIdentity = null, snapshotTr
     // fresh dispatch. The one remaining currentness guard is the verify-code
     // terminal review's authenticated code snapshot.
     if (request.stage === "verify-code" && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
+    if (attempt.terminal_status === "unavailable"
+        && attempt.error?.code === "REVIEW_WAIT_EXCEEDED"
+        && Array.isArray(attempt.provider_attempts)
+        && attempt.provider_attempts.length === 0) continue;
     if (retry?.admitted && attempt.request_key !== requestKey) continue;
     return entry.pairSummary ?? entry.prepared.refs;
   }
@@ -781,6 +785,8 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
   const retry = execution.retry ?? item?.retry ?? { count: 0, progress_events: 0 };
   const rawOutputRef = item?.raw_output_ref ?? execution.raw_output_ref ?? null;
   const identity = normalizeIdentity(item.identity, item.provider);
+  const processOutcome = Object.hasOwn(execution, "process_outcome") ? execution.process_outcome : item?.process_outcome;
+  const parseOutcome = Object.hasOwn(execution, "parse_outcome") ? execution.parse_outcome : item?.parse_outcome;
   return {
     provider: item.provider,
     status,
@@ -793,6 +799,8 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
     output_ref: outputRef,
     raw_output_ref: rawOutputRef,
     error: ["completed", "running"].includes(status) ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
+    ...(processOutcome === undefined ? {} : { process_outcome: processOutcome }),
+    ...(parseOutcome === undefined ? {} : { parse_outcome: parseOutcome }),
     ...(item?.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     execution: {
       adapter: execution.adapter ?? providerAdapter(item.provider),

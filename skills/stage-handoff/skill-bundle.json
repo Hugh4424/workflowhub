@@ -2,7 +2,7 @@
   "schema_version": 1,
   "skill": "stage-handoff",
   "files": [
-    { "path": "SKILL.md", "sha256": "cf1b88968ebf4c87909b2a3e7956d2a16312b30b8667093f69a96020a866aee1" }
+    { "path": "SKILL.md", "sha256": "315b923f7787922a1f1dc1eb781716553fe4ae0b013013e80c4151702ed79161" }
   ],
   "contract": "current-stage-handoff.v1",
   "contract_owner": "runtime/stage/stage-handoff.mjs"

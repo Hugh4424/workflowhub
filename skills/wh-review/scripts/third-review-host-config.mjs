@@ -201,10 +201,15 @@ const DECISION_TRACKS = new Set(["direction", "detail"]);
 const MINI_TASK_REVIEW_KINDS = new Set(["mini_task.design", "mini_task.implementation"]);
 const NON_STAGE_REVIEW_KINDS = new Set(["build_prd"]);
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework"]);
+const SUPPORTED_PROVIDER_IDS = new Set([
+  "claude-code", "codex", "cursor", "dsh", "grok", "kimi", "opencode", "antigravity", "pi",
+]);
 
 function adapterOf(provider, label) {
   if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z0-9](?:[a-z0-9-]|\.(?=[a-z0-9]))*)?$/.test(provider)) throw new Error(label + " must be a provider id");
-  return provider.split("/", 1)[0];
+  const adapter = provider.split("/", 1)[0];
+  if (!SUPPORTED_PROVIDER_IDS.has(adapter)) throw new Error(label + " must be a supported 3rd-review provider");
+  return adapter;
 }
 
 function nullableString(value, label) {

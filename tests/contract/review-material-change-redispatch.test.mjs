@@ -235,6 +235,65 @@ describe("review material change reuse contract", () => {
     expect(drifted).not.toHaveProperty("attempt_ref");
   });
 
+  it("retains a dispatched source/material drift failure and admits a material_changed retry", async () => {
+    const state = fixture();
+    const request = {
+      stage: "build-code",
+      host_provider: "codex/luna",
+      materials: { approved_spec: "source-drift-before-retry" },
+    };
+    let dispatches = 0;
+    const sourceDriftResult = (input) => {
+      const result = reviewResult(input);
+      return {
+        ...result,
+        status: "unavailable",
+        outcome: "unavailable",
+        runtime_id: "runtime-source-drift",
+        provider_results: [{
+          ...result.provider_results[0],
+          status: "failed",
+          session_id: "session-source-drift",
+          error: { code: "REVIEW_SOURCE_DRIFT", message: "source/material revision drifted during managed wait" },
+        }],
+        findings: [],
+        error: { code: "REVIEW_SOURCE_DRIFT", message: "source/material revision drifted during managed wait" },
+      };
+    };
+    const runRound = async (input) => {
+      dispatches += 1;
+      return dispatches === 1 ? sourceDriftResult(input) : reviewResult(input);
+    };
+
+    const first = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request, resolveRouteIdentity: route, runRound });
+    const attempt = JSON.parse(state.task.readRecord(first.attempt_ref));
+    expect(first).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", result_ref: null });
+    expect(attempt).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "dispatched",
+      error: { code: "REVIEW_SOURCE_DRIFT" },
+      provider_attempts: [{ session_id: "session-source-drift", runtime_id: "runtime-source-drift", status: "failed", error: { code: "REVIEW_SOURCE_DRIFT" } }],
+    });
+
+    const retryRequest = {
+      ...request,
+      materials: { approved_spec: "source-drift-after-retry" },
+      retry: { requested: true, basis: "material_changed", reason: "review material revision changed" },
+    };
+    const retried = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: retryRequest, resolveRouteIdentity: route, runRound });
+    const repeated = await recordSimpleReviewRequest({
+      task: state.task,
+      kernel: state.kernel,
+      request: { ...retryRequest, retry: { ...retryRequest.retry, reason: "same material retry" } },
+      resolveRouteIdentity: route,
+      runRound,
+    });
+
+    expect(dispatches).toBe(2);
+    expect(retried).toMatchObject({ status: "recorded", reused: false, dispatch_state: "dispatched", retry: { requested: true, admitted: true, basis: "material_changed" } });
+    expect(repeated).toMatchObject({ status: "recorded", reused: true, dispatch_state: "reused", attempt_ref: retried.attempt_ref, result_ref: retried.result_ref });
+  });
+
   it("records an unavailable fact when post-dispatch result validation fails", async () => {
     const state = fixture();
     let dispatches = 0;

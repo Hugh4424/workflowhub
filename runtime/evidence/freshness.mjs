@@ -266,27 +266,6 @@ function validateBrowserQaEvidence(value) {
 
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
-export function bindFreshness({ ref, raw, snapshotTree }) {
-  if (typeof ref !== "string" || ref.trim() === "") throw new TypeError("freshness ref is required");
-  if (typeof raw !== "string") throw new TypeError("freshness raw bytes are required");
-  if (typeof snapshotTree !== "string" || snapshotTree.trim() === "") throw new TypeError("freshness snapshot_tree is required");
-  return Object.freeze({ ref, sha256: sha256(raw), snapshot_tree: snapshotTree });
-}
-
-export function assertFresh(binding, { read, snapshotTree }) {
-  if (!binding || typeof binding !== "object" || !SHA256_HEX.test(binding.sha256 ?? "")) {
-    throw new TypeError("freshness binding is invalid");
-  }
-  if (binding.snapshot_tree !== snapshotTree) throw new Error("STALE_FACT: snapshot_tree changed");
-  let raw;
-  try { raw = read(binding.ref); } catch (error) {
-    if (error?.code === "ENOENT") throw new Error(`STALE_FACT: missing ${binding.ref}`);
-    throw error;
-  }
-  if (sha256(raw) !== binding.sha256) throw new Error(`STALE_FACT: hash changed for ${binding.ref}`);
-  return true;
-}
-
 function readBound(binding, read, dependencies, key) {
   let raw;
   try { raw = read(binding.ref); } catch (error) {

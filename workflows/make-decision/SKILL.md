@@ -101,6 +101,7 @@ new stage, public command, fifth material, independent state machine, or gate.
 ## 阶段末遗漏披露
 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
+若没有 stage outcome，也必须明确披露“outcome 缺失”；这不是“跳过”，而是当前事实 unavailable。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
 manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
@@ -216,13 +217,17 @@ decision and questions to the user.
      The only alternative `basis` is `three_inputs`.
      This is the sole decision-log fact a later acceptance card may reference;
      do not substitute policy IDs, task prose, or provider identity.
-2. Execute the manifest in order. Every step completion first
-   uses the existing make-decision writer to append one update to the same
-   `decision-log.md` ref/hash. The update records the step outcome, the actual
-   user reply or `no_new_requirement`, and the current/deferred/non-goal/open
-   disposition. Talk and research may add or revise OI rows, but they must
-   update the current outline version rather than create a second list. A write failure stays incomplete with its error; it is never
-   replaced by a final aggregate claim or a second log.
+2. Execute the manifest in order. `step 1–10 写材料；step 11–14 只落 task store`：
+   steps 1–10 write the current materials through their existing owners. From
+   step 11 through step 14, only write stage facts
+   to the task store (`quality/evidence/handoff/`,
+   `quality/stage-reflection/<stage>/`, and `facts.jsonl`); do not append
+   agent-created step sections to `decision-log.md`. The step outcome records
+   the actual user reply or `no_new_requirement`, and the
+   current/deferred/non-goal/open disposition. Talk and research may add or
+   revise OI rows, but they must update the current outline version rather than
+   create a second list. A write failure stays incomplete with its error; it is
+   never replaced by a final aggregate claim or a second log.
 3. The Talk flow uses steps 3, 4, 5, and 7: Talk round 1, proportionate
    research input, Talk round 2, then Talk round 3 after direction advice.
    Research is an input to Talk, not a review. When a question can materially

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { aggregateCanonicalProviderResults, authenticateCanonicalReviewResult } from "../../runtime/review/canonical-review-result.mjs";
+import { aggregateCanonicalProviderResults, authenticateCanonicalReviewResult, parseCanonicalReviewerOutput } from "../../runtime/review/canonical-review-result.mjs";
 import { deriveStageCompletion, STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
@@ -42,6 +42,97 @@ describe("review layering", () => {
       "runtime/review/review-policy.mjs",
       "runtime/review/integration-review-subject.mjs",
     ]) expect(readFileSync(resolve(root, path), "utf8")).not.toMatch(/skills\/wh-review/);
+  });
+
+  it("keeps the canonical parser production-owned and the skill adapter provider-isolated", () => {
+    const parser = readFileSync(resolve(root, "runtime/review/review-output.mjs"), "utf8");
+    const adapter = readFileSync(resolve(root, "skills/wh-review/scripts/review-output.mjs"), "utf8");
+    expect(parser).toMatch(/export function parseReviewerOutput/);
+    expect(parser).not.toMatch(/skills\/wh-review|review-provider-client|simple-review-runner/);
+    expect(adapter).toContain('export * from "../../../runtime/review/review-output.mjs";');
+    expect(adapter).not.toMatch(/function parseReviewerOutput/);
+  });
+
+  it("RED: rejects a host URI at the production findings parser boundary", () => {
+    const finding = {
+      severity: "major",
+      path: "file://private/review.md",
+      line: 1,
+      issue: "host path escaped into a finding anchor",
+      recommendation: "use a submitted bundle-relative material path",
+      root_cause: "provider path was not constrained",
+      evidence_kind: "direct",
+      evidence: "the finding path is a file URI",
+    };
+    expect(() => parseCanonicalReviewerOutput(JSON.stringify({ findings: [finding] }), { requireEvidence: true }))
+      .toThrow(/OUTPUT_INVALID/);
+  });
+
+  it("keeps serious finding evidence fields mandatory at the production parser boundary", () => {
+    const finding = {
+      severity: "major",
+      path: "materials/subject.md",
+      line: 1,
+      issue: "serious review gap",
+      recommendation: "repair the gap",
+      root_cause: "missing guard",
+      evidence_kind: "direct",
+      evidence: "the submitted material shows the gap",
+    };
+    for (const severity of ["major", "blocking"]) {
+      for (const field of ["evidence_kind", "evidence", "root_cause"]) {
+        const invalid = { ...finding, severity };
+        delete invalid[field];
+        expect(() => parseCanonicalReviewerOutput(JSON.stringify({ findings: [invalid] }), { requireEvidence: true }))
+          .toThrow(/OUTPUT_INVALID/);
+      }
+    }
+    expect(parseCanonicalReviewerOutput(JSON.stringify({ findings: [{ ...finding, severity: "minor", evidence_kind: undefined }] }), { requireEvidence: true }))
+      .toMatchObject({ findings: [{ severity: "minor" }] });
+  });
+
+  it("RED: does not let a malformed provider disappear behind a clean quorum peer", () => {
+    const malformed = {
+      severity: "major",
+      path: "materials/subject.md",
+      line: 1,
+      issue: "missing serious evidence",
+      recommendation: "add the evidence",
+    };
+    const result = aggregateCanonicalProviderResults([
+      { provider: "opencode/v4flash", review: { findings: [] } },
+      { provider: "kimi/coding", review: { findings: [malformed] } },
+    ], 1);
+    expect(result).toMatchObject({
+      status: "unavailable",
+      valid: [],
+      invalid_members: ["kimi/coding"],
+    });
+  });
+
+  it("RED: rejects a completed output ref bound to a different selected provider", () => {
+    const attempt = {
+      version: "wh-review-attempt.v1",
+      provider_attempts: [{
+        provider: "opencode/v4flash",
+        status: "completed",
+        output_ref: "quality/reviews/opencode.output.json",
+      }],
+    };
+    const result = {
+      provider_results: [{ provider: "opencode/v4flash", output: { findings: [] } }],
+      findings: [],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+    };
+    expect(() => authenticateCanonicalReviewResult({
+      attempt,
+      result,
+      providerOutputs: [{
+        ref: "quality/reviews/opencode.output.json",
+        provider: "kimi/coding",
+        review: { findings: [] },
+      }],
+    })).toThrow(/missing or misbound/);
   });
 
   it("accepts versioned provider profile identifiers in canonical review provenance", () => {
