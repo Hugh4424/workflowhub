@@ -20,6 +20,11 @@ review, a plain-language summary, and human confirmation.
 
 ## Runtime contract
 
+The stable Runner interface is the seven-behavior facade in
+`core/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`confirm`, and `authorize`. Commands below are delegated compatibility locators,
+not additional public Runner behaviors.
+
 `core/stage-context.mjs` is the external runner implementation. Consume only the
 branded StageContext from
 `bootstrapStage("build-plan", ...)`. Read accepted results only with
@@ -31,7 +36,7 @@ metadata only. Runner branch, dirty state, and old runner migration history
 never decide the stage result. Never search for or copy runner files into the
 target repository.
 
-Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
+Executable entry: `node scripts/stage-runtime.mjs run --action=execute --stage=build-plan
 --project=<project> --task=<task> --input=<component-receipts.json>`. Use the
 `confirm --attempt=<attempt> --decision=accepted|rejected` records the human
 decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
@@ -44,7 +49,7 @@ if present, remains historical audit only.
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
 is never an entry.
-`stage-runtime.mjs` has no `--help` command. Build-plan must not call `prepare`
+`stage-runtime.mjs` exposes only the seven behaviors and high-level actions in `--help`. Build-plan must not call `prepare`
 and must never pass `--runner-root`.
 
 Create an OS temporary directory first:
@@ -60,18 +65,18 @@ the Stage contract and can leave the host waiting for an unrelated tool callback
 Use this complete public sequence without inventing flags or input shapes:
 
 1. Before each review, publish both exact drafts under review:
-   `node scripts/stage-runtime.mjs artifact --stage=build-plan
+   `node scripts/stage-runtime.mjs run --action=draft --stage=build-plan
    --project=<project> --task=<task> --name=plan.md
    --input=$TMP_DIR/draft-plan.md` and
-   `node scripts/stage-runtime.mjs artifact --stage=build-plan
+   `node scripts/stage-runtime.mjs run --action=draft --stage=build-plan
    --project=<project> --task=<task> --name=tasks.md
    --input=$TMP_DIR/draft-tasks.md`.
 2. After review is finished and without changing either artifact, create each
    official receipt once:
-   `node scripts/stage-runtime.mjs receipt --stage=build-plan
+   `node scripts/stage-runtime.mjs run --action=record --stage=build-plan
    --project=<project> --task=<task> --component=plan
    --input=$TMP_DIR/plan-receipt.json` and
-   `node scripts/stage-runtime.mjs receipt --stage=build-plan
+   `node scripts/stage-runtime.mjs run --action=record --stage=build-plan
    --project=<project> --task=<task> --component=tasks
    --input=$TMP_DIR/tasks-receipt.json`.
    Each input shape is exactly `{"content":"<exact final markdown>"}`.
@@ -82,17 +87,17 @@ Use this complete public sequence without inventing flags or input shapes:
    A structural follow-up instead supplies its current full result as `review`.
    The runtime rejects a stale or cross-flow result/resolution.
 4. Publish the attempt:
-   `node scripts/stage-runtime.mjs run --stage=build-plan
+   `node scripts/stage-runtime.mjs run --action=execute --stage=build-plan
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
 5. After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
    a stage artifact, evidence ref, or handoff item.
 6. Record the human decision using the returned attempt ref:
-   `node scripts/stage-runtime.mjs confirm --stage=build-plan
+   `node scripts/stage-runtime.mjs confirm --action=decision --stage=build-plan
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --decision=accepted|rejected`.
 7. Only for an accepted decision, pass the returned confirmation ref:
-   `node scripts/stage-runtime.mjs accept --stage=build-plan
+   `node scripts/stage-runtime.mjs authorize --action=decision --stage=build-plan
    --project=<project> --task=<task> --attempt=<attempt-ref>
    --human-confirmation-ref=<confirmation-ref>`.
 
@@ -262,4 +267,4 @@ replace build-plan's normal confirmation or any structural gate.
 四材料更新使用 task-global append-only `task-material-revision.v1`。caller 只交 summary
 和 source refs；writer 从认证 ArtifactDir 注入 task identity/revision ID，并计算
 changed files、content/source hashes。旧版本只读；
-不要求 reopen/reset/rebind/checkpoint，不自动重审，也不把 revision lineage 变成开发 gate。
+不要求 repair cycle/reset/rebind/checkpoint，不自动重审，也不把 revision lineage 变成开发 gate。

@@ -18,6 +18,23 @@ function validateSchema(validate, value, label, errors) {
   if (!validate(value)) pushError(errors, `${label}: schema invalid: ${validate.errors.map(e => `${e.instancePath || "/"} ${e.message}`).join("; ")}`);
 }
 
+export function checkReleaseClosure({ skillRelease, runnerRelease } = {}) {
+  const errors = [];
+  if (skillRelease?.skill !== "workflowhub") errors.push("skill release identity is invalid");
+  if (runnerRelease?.release !== "workflowhub-runner") errors.push("runner release identity is invalid");
+  const skillFiles = new Set((skillRelease?.files ?? []).map((entry) => entry.path));
+  const runnerFiles = new Set((runnerRelease?.files ?? []).map((entry) => entry.path));
+  for (const locator of skillFiles) {
+    if (/(^|\/)(?:node_modules|tests?|specs?|evidence)(?:\/|$)/.test(locator)) {
+      errors.push(`skill release contains forbidden path: ${locator}`);
+    }
+  }
+  for (const locator of runnerFiles) {
+    if (locator.startsWith("node_modules/")) errors.push(`runner release contains installed dependency: ${locator}`);
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 export function checkSkillClosure(packageRoot) {
   const root = fs.realpathSync(packageRoot);
   const errors = [];

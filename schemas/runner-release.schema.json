@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/schemas/runner-release.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "release",
+    "version",
+    "runner_contract_major",
+    "runner_contract_minor",
+    "files"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "release": { "const": "workflowhub-runner" },
+    "version": { "type": "string", "minLength": 1 },
+    "runner_contract_major": { "type": "integer", "minimum": 1 },
+    "runner_contract_minor": { "type": "integer", "minimum": 0 },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

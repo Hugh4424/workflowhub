@@ -20,6 +20,11 @@ integration review. Missing, unchecked, stale, or hash-mismatched evidence is
 
 ## Runtime contract
 
+The stable Runner interface is the seven-behavior facade in
+`core/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`confirm`, and `authorize`. Commands below are delegated compatibility locators,
+not additional public Runner behaviors.
+
 `core/stage-context.mjs` is the external runner implementation. Consume only
 `bootstrapStage("verify-code", ...)`. Task records use the branded TaskHandle
 and TaskKernel. Product artifacts use ArtifactDir. Test and Git commands run
@@ -31,7 +36,7 @@ metadata only. Runner branch, dirty state, and old runner migration history
 never decide the stage result. Never search for or copy runner files into the
 target repository.
 
-Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
+Executable entry: `node scripts/stage-runtime.mjs run --action=execute --stage=verify-code
 --project=<project> --task=<task>
 --input=<component-receipts.json>`. Use the
 `confirm --attempt=<attempt> --decision=accepted|rejected` records the human
@@ -39,7 +44,7 @@ decision. Pass its returned ref to `accept --human-confirmation-ref`.
 
 The loaded Skill is the authoritative contract. Do not search the target
 repository for another Skill file. The target repository's `skills/` directory
-is never an entry. `stage-runtime.mjs` has no `--help` command. Verify-code must
+is never an entry. `stage-runtime.mjs` exposes only the seven behaviors and high-level actions in `--help`. Verify-code must
 not call `prepare` and must never pass `--runner-root`.
 
 Create an OS temporary directory first:
@@ -49,7 +54,7 @@ run input, or review request must stay under `$TMP_DIR`, never in the target
 base repository or accepted Workspace. Verification keeps product code
 read-only; canonical receipts and evidence remain owned by TaskKernel.
 
-Create the evidence aggregate with `node scripts/stage-runtime.mjs receipt
+Create the evidence aggregate with `node scripts/stage-runtime.mjs run --action=record
 --stage=verify-code --project=<project> --task=<task>
 --component=evidence
 --input=$TMP_DIR/evidence-refs.json`; every referenced hash is verified first.
@@ -111,9 +116,9 @@ through the corresponding `wh-review` refs.
 When an acceptance criterion fails, publish the verify-code attempt and retain
 the exact `acceptance-evidence.v1` reference whose `result` is `fail`; do not
 accept that failed verification attempt. The only repair handoff is:
-`node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project>
+`node scripts/stage-runtime.mjs status --action=repair --stage=build-code --project=<project>
 --task=<task> --verify-attempt=<failed-verify-attempt-ref>
---failure-evidence=<failed-acceptance-evidence-ref>`. Pass the immutable reopen
+--failure-evidence=<failed-acceptance-evidence-ref>`. Pass the immutable repair cycle
 ref returned by that command to the upstream Code Builder; it uses that ref on
 the replacement build-code `run`. The command binds this attempt and evidence
 hash to the old build-code acceptance, then permits one append-only replacement
@@ -129,18 +134,18 @@ reuses only the active accepted build-code final review for the identical tree.
 If verify-code is already accepted but current Workspace evidence exposes a
 lineage failure, do not edit or bypass its accepted record. First write the new
 canonical `acceptance-evidence.v1` failure, then use
-`node scripts/stage-runtime.mjs publish-verify-failure --stage=verify-code
+`node scripts/stage-runtime.mjs verify --action=failure --stage=verify-code
 --project=<project> --task=<task>
 --failure-evidence=<evidence/ref.json>`.
 The kernel binds the existing accepted verify result, the active build-code
 acceptance, the evidence hash, and the current Workspace snapshot into one new,
 unaccepted verify attempt. It rejects duplicate publication, changed bindings,
 non-failure evidence, and Workspace drift during publication. Use that returned
-attempt only for the controlled build-code reopen; never accept it.
+attempt only for the controlled build-code repair cycle; never accept it.
 
 After the repair produces a revised accepted build-code result, publish the
 fresh passing verification through
-`node scripts/stage-runtime.mjs publish-verify-passing --stage=verify-code
+`node scripts/stage-runtime.mjs verify --action=passing --stage=verify-code
 --project=<project> --task=<task>
 --input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
@@ -188,7 +193,7 @@ idempotent. Other attempts against a closed stage remain rejected.
    A missing command is an explicit `unknown`/failure in the verification map;
    never reuse an unrelated older command. Capture
    it through the only public path:
-   `node scripts/stage-runtime.mjs capture-tests --stage=verify-code
+   `node scripts/stage-runtime.mjs verify --action=tests --stage=verify-code
    --project=<project> --task=<task>
    --input=$TMP_DIR/test-capture.json`.
    The exact input shape is
@@ -197,7 +202,7 @@ idempotent. Other attempts against a closed stage remain rejected.
    complete command directly beside a formal capture; an identical request
    waits for and reuses a completed same-snapshot receipt.
 4. For every accepted AC, publish one leaf through
-   `node scripts/stage-runtime.mjs publish-acceptance-evidence
+   `node scripts/stage-runtime.mjs verify --action=criterion
    --stage=verify-code --project=<project> --task=<task>
    --input=$TMP_DIR/acceptance-evidence.json`. The exact input shape is
    `{"acceptance_criterion_id":"<AC-ID>","result":"pass|fail","refs":[{"ref":"<canonical evidence ref>","sha256":"<writer-returned hash>"}],"summary":{"scenario":"<scenario>","oracle":"<expected result>","actual_outcome":"<observed result>","evidence_type":"structured_observation","coverage_limits":["<limit or none>"],"exceptions":["<exception or none>"]}}`.
@@ -262,7 +267,7 @@ idempotent. Other attempts against a closed stage remain rejected.
 8. After evidence assembly, create `$TMP_DIR/run.json` with exactly:
    `{"receipts":{"tests":"receipts/verify-tests.json","review":"<active accepted build-code final review result-or-unavailable-attempt ref>","evidence":"evidence/verify-evidence.json"}}`.
    Publish the append-only pass or fail attempt with
-   `node scripts/stage-runtime.mjs run --stage=verify-code
+   `node scripts/stage-runtime.mjs run --action=execute --stage=verify-code
    --project=<project> --task=<task> --input=$TMP_DIR/run.json`.
    After `run` consumes the final input, let the host reclaim `$TMP_DIR`
    through its normal OS temporary lifecycle. Never treat the temporary path as
@@ -302,7 +307,7 @@ idempotent. Other attempts against a closed stage remain rejected.
    immutable migration lineage, atomically updates the target identity, and must
    finish before a fresh `prepare` run.
    If the later `merge-task-branch` step reports a planned merge conflict, do
-   not reopen build-code and do not create a new verify attempt. Invoke the
+   not repair cycle build-code and do not create a new verify attempt. Invoke the
    local `skills/resolving-merge-conflicts` skill on the task worktree. It
    merges the frozen target baseline into the task branch, resolves the
    conflict there, and commits the resolution. Then rerun the same close
@@ -424,4 +429,4 @@ evidence, acceptance evidence, or close authorization.
 是否齐全不决定代码、测试或 AC 是否完成。writer 注入身份并记录 parent、changed
 files、summary、source refs、content hashes；identity/revision ID/hashes 均由
 task-global writer 从认证 ArtifactDir 生成，caller 不得自报。旧 revision/accepted 只读，不触发
-reopen/reset/rebind/checkpoint 或自动 review。
+repair cycle/reset/rebind/checkpoint 或自动 review。
