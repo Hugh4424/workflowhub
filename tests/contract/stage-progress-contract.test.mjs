@@ -6,8 +6,8 @@ const read = (path) => readFileSync(path, "utf8");
 
 describe("WorkflowHub stage progress contract", () => {
   it("requires plan and tasks to expose their own stage progress rows", () => {
-    const plan = read("specs/requirements-completeness-audit-20260804/plan.md");
-    const tasks = read("specs/requirements-completeness-audit-20260804/tasks.md");
+    const plan = read("specs/multica-issues-monitoring-g6-g7-20260805/plan.md");
+    const tasks = read("specs/multica-issues-monitoring-g6-g7-20260805/tasks.md");
     expect(validateWorkflowHubStageProgress({ plan, tasks })).toMatchObject({ ok: true, errors: [] });
   });
 
@@ -24,6 +24,28 @@ describe("WorkflowHub stage progress contract", () => {
       status: "completed",
       progress_source: "declared-markdown-stage-progress",
       declared_quality_status: "incomplete",
+    });
+  });
+
+  it("keeps an explicitly incomplete stage incomplete in public progress", () => {
+    const result = deriveStageProgress("verify-code", [], {
+      "decision-log.md": "decision",
+      "spec.md": "spec",
+      "plan.md": "plan",
+      "tasks.md": [
+        "## WorkflowHub Stage Progress",
+        "| Stage | Status | Execution / evidence | Handoff / next |",
+        "| --- | --- | --- | --- |",
+        "| build-code | completed | quality_status=incomplete | verify-code |",
+        "| verify-code | incomplete | quality_status=incomplete | close |",
+      ].join("\n"),
+    });
+
+    expect(result).toMatchObject({
+      status: "incomplete",
+      progress_source: "declared-markdown-stage-progress",
+      declared_quality_status: "incomplete",
+      missing: ["stage-progress:incomplete"],
     });
   });
 

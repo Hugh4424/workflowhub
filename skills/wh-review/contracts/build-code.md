@@ -5,8 +5,9 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 ## 两种审查主体
 
 `phase_id` 存在时，runner 自动派生 `review_scope=phase`。这是一份严格代码审查：
-必须审查完整当前 Phase diff，不能只检查上轮 finding；正式 verdict 原样保留为质量事实，
-不成为 stage pass gate。
+必须审查完整当前 Phase diff，不能只检查上轮 finding；正式 verdict 原样保留为质量事实。
+review verdict 不是继续工作或无限复审的 gate；Phase 完成仍需要测试、AC、finding
+disposition 和 serious 风险处置事实。
 
 `phase_id` 缺失时，runner 自动派生 `review_scope=integration`，且
 `subject_kind=worktree`。它只用于所有 Phase 之后的最终集成审查，不能重放历史
@@ -117,9 +118,9 @@ build-code 边界，不适用 build-spec/build-plan/verify-code 的普通修复�
 
 provider 无法形成 semantic result 时，认证的 `unavailable` attempt 也是原样保留的
 质量事实，不得改写成 `pass`，也不得称为“审查通过”。Phase 与 Integration 的结构
-闭包仍按各自合同继续判定；`unavailable` 本身不使用 risk acceptance。只有认证的
-semantic `revise_required` 中存在 actionable `major|blocking` serious finding 时，
-才按精确 finding/card/reply 绑定要求修复或显式接受风险。
+闭包仍按各自合同继续判定；`unavailable` 本身不使用 risk acceptance。`revise_required`
+中存在 actionable `major|blocking` serious finding 时，按精确 finding/card/reply
+绑定要求修复或显式接受风险；不为取得 reviewer `pass` 无限重复审查。
 
 ## 输出
 

@@ -43,6 +43,9 @@ export function auditRuntimeHistoryReferences({ root = ROOT } = {}) {
     for (const path of walkFiles(root, directory)) {
       const text = readFileSync(resolve(root, path), "utf8");
       for (const marker of HISTORY_PATHS) if (text.includes(marker)) findings.push({ path, type: "historical_path_reference", marker });
+      if (/\b(?:history-inventory\.json|retention-manifest\.json)\b/.test(text)) {
+        findings.push({ path, type: "historical_inventory_reference" });
+      }
       if (/\bdual[-_ ]write\b|\bdualWrite\b/i.test(text)) findings.push({ path, type: "dual_write_marker" });
       if (/\b(?:legacy|historical)(?:[-_ ](?:history|task|archive))?[-_ ]?(?:reader|importer)\b|\b(?:read|load|import)(?:Legacy|Historical)(?:History|Task|Archive)?\b/i.test(text)) {
         findings.push({ path, type: "legacy_reader_or_importer_marker" });

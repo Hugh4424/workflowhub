@@ -118,6 +118,15 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
   };
   const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z", output_ref: "quality/tests/output/test.txt", output_hash: sha });
+  const reviewLineage = (requestId = "fixture-request") => ({
+    request_id: requestId,
+    prompt_hash: sha,
+    round: "initial",
+    prior_attempt_refs: [],
+    prior_runtime_ids: {},
+    correction_ref: null,
+    dispatch_sequence: 0
+  });
   const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree, subjectKind = "worktree") => {
     const reviewStage = stage === "verify-code" ? "build-code" : stage;
     const reviewScope = reviewStage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null;
@@ -128,7 +137,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     return { version: "wh-review-result.v1", task_id: "task", stage: reviewStage, review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshotTree,
       subject_kind: subjectKind, phase_id: subjectKind === "phase" ? "phase-1" : null, review_scope: reviewScope, base_tree: tree, candidate_tree: snapshotTree,
-      material_id: sha, attempt_ref: `quality/reviews/attempts/${stage}-attempt/attempt.json`,
+      material_id: sha, attempt_ref: `quality/reviews/attempts/${stage}-attempt/attempt.json`, lineage: reviewLineage(`${stage}-request`),
       provider_results: [{ provider: "fixture-provider", output: providerOutput }], verdict: resultVerdict,
       findings: aggregation ? aggregation.adjudication.reportFindings.map((item) => ({ provider: item.providers[0], ...item })) : (verdict === "invented" ? [{ provider: "fixture-provider", severity: "minor", path: "fixture", issue: "fixture", recommendation: "revise" }] : []),
       ...(aggregation ? { adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters } } : {}) };
@@ -193,6 +202,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       values[result.attempt_ref] = { version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: result.stage, review_track: result.review_track ?? null,
         source: result.source, snapshot_tree: result.snapshot_tree, material_id: result.material_id,
         subject_kind: result.subject_kind, phase_id: result.phase_id, review_scope: result.review_scope, base_tree: result.base_tree, candidate_tree: result.candidate_tree,
+        lineage: result.lineage,
         provider_attempts: [{ provider: "fixture-provider", status: "completed", session_id: "fixture", runtime_id: "fixture", output_ref: outputRef, error: null }], terminal_status: "semantic", error: null };
       values[outputRef] = { schema_version: "wh-review-provider-output.v1", task_id: "task", stage: result.stage, attempt_id: attemptId,
         provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex") };
@@ -672,6 +682,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage: "build-code", review_track: null,
       source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
       subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
+      lineage: reviewLineage("verify-unavailable-request"),
       material_id: sha, provider_attempts: [{
         provider: "fixture-provider", status: "completed", session_id: "old", runtime_id: "old", output_ref: earlierOutputRef, error: null,
       }, {
@@ -770,7 +781,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
       [attemptRef]: {
         version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage: "build-code", review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
-        material_id: sha, provider_attempts: [{
+        lineage: reviewLineage("false-unavailable-request"), material_id: sha, provider_attempts: [{
           provider: "fixture-provider", status: "completed", session_id: "session", runtime_id: "runtime", output_ref: outputRef, error: null,
         }], terminal_status: "unavailable", error: { code: "PROVIDER_UNAVAILABLE", message: "claimed unavailable" },
       },
@@ -1026,7 +1037,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         version: "wh-review-attempt.v1", attempt_id: "material-incomplete", task_id: "task", stage, review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
-        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        lineage: reviewLineage("material-incomplete-request"), material_id: sha, provider_attempts: [], terminal_status: "unavailable",
         error: { code: "MATERIAL_INCOMPLETE", message: "integration audit enrichment is incomplete" },
       },
       "evidence/diff.patch": diffEvidence,
@@ -1063,7 +1074,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         version: "wh-review-attempt.v1", attempt_id: "material-incomplete-no-scope", task_id: "task", stage, review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, base_tree: tree, candidate_tree: tree,
-        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        lineage: reviewLineage("material-incomplete-no-scope-request"), material_id: sha, provider_attempts: [], terminal_status: "unavailable",
         error: { code: "MATERIAL_INCOMPLETE", message: "integration audit enrichment is incomplete" },
       },
       "evidence/diff.patch": diffEvidence,
@@ -1097,7 +1108,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
         version: "wh-review-attempt.v1", attempt_id: "false-predispatch", task_id: "task", stage, review_track: null,
         source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
         subject_kind: "worktree", phase_id: null, review_scope: "integration", base_tree: tree, candidate_tree: tree,
-        material_id: sha, provider_attempts: [], terminal_status: "unavailable",
+        lineage: reviewLineage("false-predispatch-request"), material_id: sha, provider_attempts: [], terminal_status: "unavailable",
         error: { code: "PROVIDER_UNAVAILABLE", message: "claimed provider failure without an attempt" },
       },
     };
@@ -1232,7 +1243,9 @@ ${task("T002", "contract GREEN", 0, "T001")}
         expect.stringMatching(/canonical verification receipt is missing/i),
       ]),
     });
-    expect(result.missing_items).toHaveLength(4);
+    // A stale integration review is audit-only under the current verify
+    // contract; the actionable set is acceptance, snapshot, and receipt.
+    expect(result.missing_items).toHaveLength(3);
   });
 
   it("consumes the latest verify-code quality review resolution", async () => {

@@ -5,7 +5,9 @@ description: Report-only product-direction review lens for premise, scope, lever
 
 # plan-ceo-review
 
-Source: adapted from the project review baseline. Mode: `lens-only`.
+Source: adapted from the project review baseline. Mode: `advisory`, stage-owned,
+file-only, no stage result and no provider verdict. build-spec calls this skill
+before the final wh-review; wh-review only reads the resulting fact.
 
 ## Check
 

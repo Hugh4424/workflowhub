@@ -72,7 +72,7 @@ describe("simple wh-review contracts", () => {
     for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
       expect(skill, field).toContain(`\"${field}\"`);
     }
-    for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "test_evidence", "acceptance_evidence", "open_exceptions", "context_map", "evidence_map", "phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
+    for (const material of ["raw_requirement", "approved_decision", "draft_spec", "approved_spec", "acceptance_criteria", "architect_assessment", "final_test_summary", "open_risks", "test_evidence", "context_map", "evidence_map", "phase_map", "impact_map", "reuse_map", "acceptance_map"]) {
       expect(skill, material).toContain(material);
     }
     expect(skill).toMatch(/3rd-review config/i);
@@ -132,7 +132,8 @@ describe("simple wh-review contracts", () => {
     ).skills;
     expect(stageDependencies("build-spec").find(({ name }) => name === "spec-clarify"))
       .toMatchObject({ execution: "inline", invocation: "always", trigger: "ambiguity_scan" });
-    expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze")).toBeUndefined();
+    expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze"))
+      .toMatchObject({ execution: "inline", invocation: "always", trigger: "cross_material_analysis" });
     expect(stageDependencies("build-code").find(({ name }) => name === "review")).toBeUndefined();
     expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");
     expect(stageDependencies("verify-code").filter(({ name }) => ["test-strategy", "isolated-browser-qa"].includes(name)))
@@ -142,20 +143,23 @@ describe("simple wh-review contracts", () => {
   it("runs verify-code reviewer lenses after fresh evidence as non-gate quality facts", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["build-code"].required_skills).not.toHaveLength(0);
-    expect(plan.stages["verify-code"].invocation).toBe("post-evidence-non-gate");
+    expect(plan.stages["verify-code"].invocation).toBe("post-first-repair-non-gate");
     for (const stage of ["build-code", "verify-code"])
       for (const skill of plan.stages[stage].required_skills) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
     const deps = yaml.load(readFileSync(join(projectRoot, "workflows", "verify-code", "skill-deps.yaml"), "utf8"));
     expect(deps.skills.find(({ name }) => name === "wh-review"))
-      .toMatchObject({ execution: "inline", invocation: "always", trigger: "fresh_verification_evidence" });
+      .toMatchObject({ execution: "inline", invocation: "always", trigger: "post_first_repair" });
     const steps = readJson(join(projectRoot, "workflows", "verify-code", "steps.json")).steps;
-    const qualityReview = steps.find(({ step_slug }) => step_slug === "run-verify-quality-review");
+    const qualityReview = steps.find(({ step_slug }) => step_slug === "run-one-independent-architecture-review");
     const publish = steps.find(({ step_slug }) => step_slug === "publish-verification-attempt");
-    expect(qualityReview).toMatchObject({ order: 6, depends_on: [5], completion_evidence: [{ kind: "review", uri_or_path: "review://verify-code-quality" }] });
+    expect(qualityReview).toMatchObject({ order: 5, depends_on: [4], completion_evidence: expect.arrayContaining([
+      { kind: "review", uri_or_path: "review://verify-code-independent" },
+      { kind: "skill_invocation", uri_or_path: "skill://wh-review" },
+    ]) });
     expect(publish).toMatchObject({ order: 8, depends_on: [7] });
     const contract = readFileSync(join(root, "wh-review", "contracts", "verify-code.md"), "utf8");
-    expect(contract).toMatch(/标准 verify-code[\s\S]*新鲜测试[\s\S]*acceptance-evidence[\s\S]*wh-review/);
-    expect(contract).toMatch(/非 gate[\s\S]*不能自动接受[\s\S]*receipts\.review/);
+    expect(contract).toMatch(/post-repair[\s\S]*异源架构验收[\s\S]*wh-review/);
+    expect(contract).toMatch(/不是第二套证据审计[\s\S]*不重复调用 provider/);
   });
 
   it("accepts a terminal attempt and keeps unavailable outside semantic results", () => {
@@ -170,6 +174,15 @@ describe("simple wh-review contracts", () => {
       source: { target_commit: oid, base_commit: oid, base_tree: oid, captured_head: oid },
       snapshot_tree: oid,
       material_id: hash,
+      lineage: {
+        request_id: "request-1",
+        prompt_hash: hash,
+        round: "initial",
+        prior_attempt_refs: [],
+        prior_runtime_ids: {},
+        correction_ref: null,
+        dispatch_sequence: 0
+      },
       provider_attempts: [{ provider: "opencode", status: "failed", session_id: null, runtime_id: null, output_ref: null, error: { code: "AUTH", message: "login required" } }],
       terminal_status: "unavailable",
       error: { code: "PROVIDER_UNAVAILABLE", message: "no valid provider" }
@@ -215,12 +228,15 @@ describe("simple wh-review contracts", () => {
     expect(matrix.stages["build-code"].profiles.phase.source_bundle).toBe("diff");
     expect(matrix.stages["build-code"].profiles.integration.source_bundle).toBe("none");
     expect(matrix.stages["build-code"].profiles.integration.required).toEqual(expect.arrayContaining(["phase_coverage", "seam_index", "ac_trace"]));
-    for (const stage of ["build-spec", "build-plan", "verify-code"]) {
+    for (const stage of ["build-spec", "build-plan"]) {
       const rule = matrix.stages[stage];
       expect(rule.v2_required_maps).toEqual(["context_map", "evidence_map"]);
       expect(rule.required).toEqual(expect.arrayContaining(rule.v2_required_maps));
       expect(rule.optional).not.toEqual(expect.arrayContaining(rule.v2_required_maps));
     }
+    expect(matrix.stages["verify-code"].v2_required_maps).toEqual([]);
+    expect(matrix.stages["verify-code"].required).toEqual(expect.arrayContaining(["architect_assessment", "final_test_summary"]));
+    expect(matrix.stages["verify-code"].optional).toEqual(expect.arrayContaining(["acceptance_evidence", "context_map", "evidence_map"]));
     expect(matrix.stages["make-decision"].tracks.direction.v2_required_maps).toEqual([]);
     const detail = matrix.stages["make-decision"].tracks.detail;
     expect(detail.v2_required_maps).toEqual(["context_map", "evidence_map"]);
@@ -264,7 +280,7 @@ describe("simple wh-review contracts", () => {
       expect(contract, stage).toMatch(/verdict.*summary.*findings/s);
     }
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
-    expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
+    expect(plan.stages["build-spec"]).not.toHaveProperty("optional_skills");
     expect(plan.stages["verify-code"]).not.toHaveProperty("optional_skills");
   });
 

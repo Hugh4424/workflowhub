@@ -4,19 +4,19 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "a85ab7eb29e42e11284871f8e5ccc3a8f29288fe9871f9000934c56a0d43be13"
+      "sha256": "33e3a087594739f3a0a5a2c5952de51c0251f2dee21e909e0e5bdc788ebd965a"
     },
     {
       "path": "contracts/build-code.md",
-      "sha256": "6f9302aca5f4c85a6d51c2f2a5b9a4795c71ed6e32bdead17296f5ef69880075"
+      "sha256": "2fe08ba9094065a2c3c5daaba736dde884785c3a01227bcfa366209be1796a27"
     },
     {
       "path": "contracts/build-plan.md",
-      "sha256": "636e4835b160ca083912588399d7d09aca45c385f1a40cfe8de7cd1795f9b6f8"
+      "sha256": "bf425a7e09d259496475b8669f163218f392b65420ffd062745ef56c2ca8abb3"
     },
     {
       "path": "contracts/build-spec.md",
-      "sha256": "6db02a7766ed4380b34636060511879651dcae17e34ce63c1ec646c35a8cf051"
+      "sha256": "d612f6c11f48334ba1cd8dfed14cedcbb68fe1b38ef51ddead5f5ef168de9775"
     },
     {
       "path": "contracts/make-decision.md",
@@ -32,7 +32,7 @@
     },
     {
       "path": "contracts/verify-code.md",
-      "sha256": "cc5b873ba156ca6d056dfc9f3460dfec65997f35c06209644476a4e8120d32c2"
+      "sha256": "54d95c76483e7b87f0f850c9d20ec4447c20c0b7720b6cec31585f3ad20b871b"
     },
     {
       "path": "contracts/workflowhub-result.v1.json",
@@ -44,7 +44,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "c7c0e2913104de8da14f14b8c2fe13af5481c60bfcba26b0122130cc18ebbc64"
+      "sha256": "65246b60eef8343076c23620fcfc37ab979a6a1871404095282ba3c4055b656b"
     },
     {
       "path": "scripts/lib/safe-id.mjs",
@@ -60,7 +60,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "9a585c56a9befb97ffc8a90bee936692a96d1d5fb4c31fa42c013882e7fd9a3e"
+      "sha256": "e9eba469ee8dce30a841bec4dfe7fcd519a3f2987b380a8c6b398e04b19adcc2"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -76,15 +76,15 @@
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "0c1e41c385972b77870971c9c6ff0edb505289e1ac1a00734947c2c1383ef179"
+      "sha256": "787cb948a911fe4d97175a8d5a725e6591a0a46971881c7f03b2009955f49ac4"
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "940b9c35b3926af93a579a8380a66ff8c04e1c5444d756ad0cfbdec461571885"
+      "sha256": "e484987a1067b8c98828e736f7ddeef81a12ff0bb5ae54d1a7ef0004d2ddd8f1"
     },
     {
       "path": "scripts/review-source.mjs",
-      "sha256": "4927e372f630dcab14e0462e7ac1e4503bb8da62e2e5b7b21d8393f9d2363665"
+      "sha256": "c67a6b93671457ae0992f6dd95f18fec44aec9b168cb1789901a146ec773d093"
     },
     {
       "path": "scripts/schema-validator.mjs",
@@ -100,7 +100,7 @@
     },
     {
       "path": "stage-skill-plan.json",
-      "sha256": "2c55386409b978cccc18c156c856513196aaf49eef66231d210fe77e003b843f"
+      "sha256": "9fe1eb7264d2ee288da63871c28f121728bf982869f7830e7baae7ded32f2e52"
     }
   ]
 }

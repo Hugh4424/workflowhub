@@ -29,6 +29,30 @@ skills. Read `skills/spec-specify/SKILL.md` and use its
 the ten-dimension ambiguity scan from `skills/spec-clarify/SKILL.md`. These are
 portable content contracts, not a second stage or a second source of truth.
 
+## Fixed invocation order and outputs
+
+The stage-owned dispatcher runs the pre-review skills in this exact order:
+
+1. `spec-specify` reads `decision-log.md` and produces the current `spec.md` draft.
+2. `spec-clarify` scans ambiguity. A material ambiguity produces a host-visible
+   question for the main agent; the stage waits for the user's real reply before
+   claiming the ambiguity is resolved. No ambiguity produces a recorded skipped
+   reason.
+3. `simplicity-guard` checks whether the requested behavior can be deleted,
+   narrowed, or reused. Its advisory fact does not rewrite the spec by itself.
+4. `plan-ceo-review` checks problem, scope, value, alternatives, and product
+   direction. It produces an advisory fact for the main agent.
+5. `plan-design-review` is invoked only when the frozen scope contains UI; it
+   is otherwise recorded as conditional `not_invoked` with a reason.
+6. The stage freezes the spec and then invokes `wh-review` exactly once for an
+   independent suggestion. `wh-review` does not repeat the three pre-review
+   lenses.
+
+The outputs are the current `spec.md`, ambiguity facts, pre-review invocation
+facts, one wh-review attempt/result, and a main-agent finding disposition before
+the stage result is published. `spec-analyze` is deliberately absent because
+`plan.md` and `tasks.md` do not exist yet.
+
 1. Read the current decision log and any current plan or tasks before editing.
    Preserve locked product decisions. If a current plan or task conflicts with
    the direction, record the mismatch and revise the current materials; do not
@@ -104,8 +128,10 @@ current materials.
 
 Present the final current spec in a short brief: what it delivers, non-goals,
 key requirements and acceptance criteria, unresolved risks, and effects on the
-current plan/tasks. Ask for user confirmation only when a clarification, scope
-change, or risk choice needs their decision. That conversation is not an
+current plan/tasks. Ask for user input only when a clarification, scope change,
+or risk choice actually needs their decision. The user's existing instruction
+to continue without per-stage confirmation is sufficient for ordinary handoff;
+do not ask for a duplicate stage acceptance. That conversation is not an
 automatic acceptance, a new task, or permission for commit, push, merge,
 archive, or cleanup.
 
@@ -116,8 +142,10 @@ or handoff work.
 
 At the end of this stage, tell the user in plain language what was done, what
 the spec contains, what is out of scope, the main risks and deferred items, and
-what `build-plan` must not guess. Wait for the user's actual reply before
-handoff; without that reply the stage remains `in_progress`/`pending`.
+what `build-plan` must not guess. Continue to handoff under the existing
+authorization unless a new material decision is required. If a material
+clarification or risk choice is still open, wait for the user's actual reply
+before handoff; without that reply the stage remains `in_progress`/`pending`.
 
 ## Formal-record boundary
 

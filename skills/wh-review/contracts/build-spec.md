@@ -50,8 +50,10 @@ provider verdict 转成“审查通过”。
 - 验收是否客观、可判断。
 - 范围、非目标、状态和接口责任是否一致。
 - 是否伪造来源，或未经批准扩大、缩减范围。
-- 必须用 `simplicity-guard` 对每项新增能力执行 P0-P3；能删除就不保留，能复用
-  就不重写，识别 scope creep、重复已有能力和没有故障证据的长期能力。
+- `simplicity-guard`、`plan-ceo-review` 和条件 UI `plan-design-review` 已在
+  build-spec 的 wh-review 之前由 stage-owned dispatcher 执行；本次 provider
+  只读取这些 invocation facts 和冻结 spec，不重复调用或重复计数。若事实缺失，
+  报材料/调用事实缺口，不自行补做 lens。
 - 发现上述内容实质扩大实现或维护面时必须 `revise_required`，不得以补充更多
   要求、通用框架或未来兼容层代替删除。
 

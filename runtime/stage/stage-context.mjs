@@ -45,12 +45,14 @@ function bindCandidateWorkspace(context, candidate) {
   if (!context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
     throw new TypeError("unprepared make-decision StageContext required");
   }
-  const kernel = createTaskKernel(context.task, { candidateWorkspace: candidate });
+  const artifacts = ArtifactDir.open(candidate.worktreeRoot, context.task);
+  const kernel = createTaskKernel(context.task, { candidateWorkspace: candidate, artifacts });
   return Object.freeze({
     ...context,
     kernel,
     workflowRunId: kernel.deriveStageWorkflowRunId(context.stage),
     candidateWorkspace: candidate,
+    artifacts,
   });
 }
 
@@ -173,7 +175,12 @@ export function bootstrapStage(
   } else if (workspaceLifecycle !== undefined) {
     throw new TypeError(`unsupported make-decision workspaceLifecycle: ${workspaceLifecycle}`);
   }
-  const kernel = createTaskKernel(taskHandle, { candidateWorkspace: candidate });
+  const candidateArtifacts = candidate
+    ? ArtifactDir.open(candidate.worktreeRoot, taskHandle)
+    : undefined;
+  const kernel = createTaskKernel(taskHandle, {
+    ...(candidate ? { candidateWorkspace: candidate, artifacts: candidateArtifacts } : {}),
+  });
   const base = {
     stage: normalizedStage,
     task: taskHandle,
@@ -203,7 +210,10 @@ export function bootstrapStage(
         if (error?.code !== "ENOENT") throw error;
       }
     }
-    return Object.freeze({ ...base, ...(candidate ? { candidateWorkspace: candidate } : {}) });
+    return Object.freeze({
+      ...base,
+      ...(candidate ? { candidateWorkspace: candidate, artifacts: candidateArtifacts } : {}),
+    });
   }
   const workspace = openCurrentTaskWorkspace(taskHandle);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);

@@ -32,7 +32,7 @@
 - `test tier / test method`：`simple|feature|fullstack` 及适用测试方法与理由
 - `scenarios / commands / expected exit / oracle`：成功、失败、状态、seam/UI 场景；可直接执行命令；预期退出码；可观察判据
 - `fixtures_services`、`browser_route`、`evidence_path`、`coverage limits`：资源、清理、证据和未覆盖边界
-- `execution_contract`：`build-code` 只执行任务卡策略；缺失策略写 `MATERIAL_INCOMPLETE`
+- `execution_contract`：`build-code` 读取任务卡预判，核对真实 changed files，必要时重路由后调用具体测试技能；缺失策略写 `MATERIAL_INCOMPLETE`
 - `final current-snapshot aggregate strategy`：最终聚合必须在 build-plan 预先设计
 - `TaskKernel/evidence_refs`、`evidence_note`：实际命令、退出码、snapshot 和 canonical receipt 绑定
 

@@ -1,9 +1,9 @@
 stage: make-decision
 skills:
-  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, invocation: always, trigger: talk_round_1_2_3, bundle: skills/talk-with-zhipeng/skill-bundle.json }
-  - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: inline, invocation: always, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json }
-  - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, invocation: always, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json }
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
+  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, invocation: always, trigger: talk_round_1_2_3, bundle: skills/talk-with-zhipeng/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: inline, invocation: always, trigger: after_talk_round_3, bundle: skills/grill-with-docs/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, invocation: always, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, dispatch: stage }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }

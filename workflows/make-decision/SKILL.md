@@ -10,8 +10,8 @@ version: 3.0.0
 
 Turn the original requirement into one readable, user-confirmed direction. The
 result must state the problem, scope, non-goals, success criteria, important
-trade-offs, risks, and unresolved items. It creates the first current material:
-`decision-log.md`.
+trade-offs, risks, and unresolved items. It creates the first current material
+through the authenticated ArtifactDir as the task's `decision-log.md`.
 
 ## Working rule
 
@@ -21,6 +21,9 @@ The current materials are the source of truth:
 2. `spec.md`
 3. `plan.md`
 4. `tasks.md`
+
+These names are relative to the authenticated ArtifactDir. A root-level
+`decision-log.md` is not a current material and must never be read or written.
 
 At this stage, author the decision log from the original requirement and current
 facts. Later stages may revise it in the same task. Old accepted records,
@@ -43,10 +46,12 @@ may call `prepare` to create or validate the authenticated CandidateWorkspace;
 that is a write-boundary check, not a historical-progress gate.
 
 The launcher owns paths, TaskKernel records, execution identity, and metrics.
-Use `ctx.kernel` for records and `ctx.candidateWorkspace` only for permitted
-product files. Do not copy runner files into the target repository or pass
-`--runner-root`. Caller-owned temporary inputs stay under an OS temporary
-directory; canonical records stay TaskKernel-owned.
+Use `ctx.kernel` for records, `ctx.candidateWorkspace` for the authenticated
+worktree, and `ctx.artifacts` for the current material. Write only
+`ctx.artifacts.writeAtomic("decision-log.md", content)`; never write a root
+file or use a caller-supplied path. Do not copy runner files into the target
+repository or pass `--runner-root`. Caller-owned temporary inputs stay under
+an OS temporary directory; canonical records stay TaskKernel-owned.
 
 The current public sequence is `run`, `confirm`, then `authorize` when an
 irreversible operation needs authorization. There is no public `prepare`,
@@ -69,8 +74,10 @@ current material if needed.
    Use a frozen, non-sensitive request. Otherwise record a clear skip reason.
    Report the few findings that changed scope, constraints, or risk.
 4. Run `grill-with-docs` after Talk Round 3 to check the current domain and
-   documentation facts before drafting the decision record.
-5. Draft `decision-log.md`. For every load-bearing decision, record its source,
+   documentation facts before drafting the decision record. Grill must show a
+   visible plain-language summary, options, consequences, and risks in the
+   user's conversation; a silent child-agent call is not communication.
+5. Draft `decision-log.md` through `ctx.artifacts`. For every load-bearing decision, record its source,
    facts and constraints, choice and rationale, affected scope, consequences,
    risks, rejected alternatives, non-goals, and unresolved items. Use plain
    language and update `CONTEXT.md` or an ADR only when that documentation is
@@ -88,8 +95,10 @@ current material if needed.
    a safe delta cannot be derived, record the fallback full review explicitly.
 8. Publish the current decision receipt and facts using the runtime's declared
    schema. Publication must reject wrong task/workspace/runtime bindings,
-   mismatched content, or false execution identity. Missing historical evidence
-   is disclosed as audit debt, not used to prevent work.
+   mismatched content, or false execution identity. The bytes in
+   the ArtifactDir `decision-log.md` must equal the immutable quality-evidence
+   decision bytes; otherwise fail loudly. Missing historical evidence is
+   disclosed as audit debt, not used to prevent work.
 9. Present a short decision card: direction, scope, non-goals, success criteria,
    main risks, review facts, and unresolved items. Ask for explicit accept or
    reject and record the real answer with `confirm`; use `authorize` only for

@@ -42,22 +42,37 @@ ordinary implementation, material revision, repair, or the next Task.
    symbols, covered ACs, non-goals, compatibility boundary, test tier, STOP
    conditions, and expected handoff. Plan prose alone is not an implementation
    specification.
-3. Apply the Task in this order: read the task card's predesigned
-   `test_strategy`, write the behavior test when applicable, capture real RED
-   before implementation, make the smallest change, then execute the exact
-   commands, scenarios and oracles already recorded in `tasks.md`. Record the
+3. Apply the Task in this order: read the task card's predesigned route and
+   test intent, write the behavior test when applicable, capture real RED before
+   implementation, and make the smallest change. Then inspect the actual
+   changed files and real boundary. If that boundary differs from the plan,
+   invoke `test-routing-advisor` again and record the old route, new route and
+   reason. Invoke the selected concrete testing skill only now, after code
+   exists: `backend-testing`, `frontend-testing`, or `fullstack-slice-testing`.
+   Execute its returned/confirmed commands and the task oracle, then record
    actual result, evidence, snapshot and coverage limits. A pure
-   documentation/material Task records why RED or the recorded test strategy
-   is not applicable. The ordinary execution model must not re-route or
-   redesign the task's tests.
-4. Run the same test oracle for GREEN, then scan the complete diff against the
+   documentation/material Task may set testing_not_applicable=true with a
+   plain reason; the dispatcher records the concrete testing skills as
+   not_invoked for that task and does not invent a code test.
+   The selected route must include a focused test command for the changed
+   behavior; the final full regression command is a separate `verify-code`
+   boundary.
+   The `test-routing-advisor` result is the input to the next concrete-testing
+   dispatch: the stage host must pass its selected route as the authenticated
+   `stage_skill_dispatch.controls.selectedTestingSkill` (or the explicit
+   `testingNotApplicable` control). The private ordered dispatcher records this
+   handoff; it does not invent a route by inspecting an earlier skill's output.
+4. Run the selected GREEN test oracle, then scan the complete diff against the
    Phase Card and every current FR/AC consumer. Check behavior, state/data,
    error/cancel/recovery, shared interfaces, concurrency/atomicity and UI
-   browser evidence when relevant. A needed scope change is a same-task
+   browser evidence when relevant. A needed product scope change is a same-task
    scope-revision, not a silent allowlist expansion.
 5. Obtain one independent `wh-review` for the completed Phase. Preserve its actual
-   result: unavailable is never pass. A changed snapshot needs a fresh review
-   identity; an unchanged snapshot is never re-reviewed merely to chase pass.
+   result: unavailable is never pass. When the current task's materials explicitly
+   declare `phase_handoff_review: pass_required`, the Phase cannot hand off until
+   that review is `pass`; this is a task-local handoff condition, not a new public
+   runtime gate. A changed snapshot gets one fresh review identity after repair;
+   an unchanged snapshot is never re-reviewed merely to chase pass.
 6. Before any handoff, the main agent must inspect every review finding and
    record a plain disposition: `fixed`, `rejected_invalid`, `accepted_risk`,
    or `needs_human`. For a valid finding, repair the current Task and rerun its
@@ -74,57 +89,63 @@ ordinary implementation, material revision, repair, or the next Task.
    is recorded. Do not replay prior Phases or
    rebuild historical evidence.
 
+Every completed Phase executes its recorded route, checks the real changed-file
+range, invokes the selected concrete testing skill, and records test, review,
+finding-disposition, and handoff facts before the next Phase starts.
+
 The Phase Card, RED/GREEN evidence, predesigned test strategy and its execution
 report, diff scan, finding disposition, and handoff are quality facts. They do not create a
-new runtime state machine. Review `pass`, a clean worktree, a commit, or a
-full-suite run is not a build-code progression gate; missing facts remain
-visible and cannot be presented as completion.
+new runtime state machine. A current Phase review is required as a recorded quality
+fact; if the current task declares `phase_handoff_review: pass_required`, a
+non-pass result keeps that Phase handoff incomplete without creating a global gate.
+The review verdict is not a progression gate outside this task-local handoff rule.
+A clean worktree, commit, or full-suite run cannot replace that review or its evidence.
 
 An authenticated actionable major or blocking review finding remains a visible
-quality fact. It may affect the later formal acceptance conclusion, but it does
-not become a quality gate on same-task repair or ordinary progression. The
-finding itself does not stop the same task or the next Task once its disposition
-summary is recorded. Keep its canonical `wh-review` attempt as the quality fact,
-and require the disposition
-summary before handoff so the finding cannot disappear between stages. Do not
-create a fallback record, bridge, or substitute completion state from old
-provider output, tests, or AC evidence.
+quality fact. It keeps the current Phase completion conclusion incomplete until
+the main agent fixes it or records the exact accepted risk. Same-task repair is
+allowed; do not create a new task or a second state machine.
+Keep the canonical `wh-review` attempt and the disposition summary so the
+finding cannot disappear between stages. Do not create a fallback record, bridge,
+or substitute completion state from old provider output, tests, or AC evidence.
 
 ## Quality and publication
 
-Normal build-code testing is designed in `build-plan`: `simple` for
-non-behavior changes, `feature` for one feature domain, and `fullstack` for
-cross-boundary/API/data/auth/concurrency changes or uncertain scope.
-`tasks.md` contains the per-Task/Phase scenarios, commands, oracle, applicable
-test method, evidence path and coverage limits. Every completed Phase executes
-that recorded strategy and reports what really happened. The final aggregate
-strategy is a dedicated final Task/Phase card authored in `tasks.md`; build-code
-executes it directly and does not run a second route/blueprint/executor design
-loop. Full regression belongs to verify-code or an explicit plan item and is
-not repeated after every Task. UI changes additionally use the repository's
-isolated browser QA route when the recorded strategy requires it.
+Build-plan preselects `simple`, `feature`, or `fullstack` and the expected
+concrete testing skill for each Phase and the final aggregate. `tasks.md`
+contains the preselected scenarios, commands, oracle, evidence path and
+coverage limits. After implementation, build-code checks the real changed-file
+range; it reroutes only when the range differs, then invokes the concrete
+testing skill against the real range. It does not call
+`testing-system-blueprint`. The final aggregate has its own preselected route
+and concrete skill; build-code rechecks that route before execution. UI changes
+additionally use the repository's isolated browser QA route when the recorded
+strategy requires it.
 
-Use a recorded focused test command and risk-scoped tests during normal work.
-`build-code` does not require
-the complete regression command and must not run `npm test` merely to satisfy
-its stage predicate. The complete regression command belongs to the final
-`verify-code` boundary; run it there only when the current candidate has no
-fresh passing full-suite receipt.
+Use the recorded focused command for each Phase and the recorded full-suite
+command for the final aggregate. `build-code` must not run an unrelated full
+suite after every Task. `build-code` does not require the complete regression
+command before the final `verify-code` boundary. The final full test is a build-code handoff fact; verify-
+code independently replays the required paths and checks the full user flow.
+The final aggregate also has a dedicated final Task/Phase card so its route,
+command, oracle, result, limits, and handoff are separately reviewable.
 
 Stage progression is owned by the current four materials, with `plan.md` and
 `tasks.md` as the implementation progress record. A missing, stale, failed, or
-unavailable test, review, audit, or AC fact is recorded as a visible quality
-warning and never blocks moving to the next stage or continuing the same task.
-The resulting stage publication is explicitly progression-only when quality is
-incomplete; it is never an accepted record. Formal acceptance remains a
-separate conclusion and may not be inferred from stage progression. Do not
-create a successor, rebind, continuation, recovery bridge, synthetic
+unavailable test, review, audit, or AC fact remains visible; for build-code it
+keeps the current Phase handoff incomplete. The resulting stage publication is
+never an accepted record, and formal acceptance remains a separate conclusion.
+A missing advisory fact does not stop the same task or the next Task; it keeps
+the affected Phase handoff explicitly incomplete until the required evidence is
+produced.
+Do not create a successor, rebind, continuation, recovery bridge, synthetic
 checkpoint, or replacement task.
 
 Formal build-code completion also requires the same current snapshot, current
-test evidence, and final integration review. Stale, missing, or mismatched
-evidence means publish no completion; material makes old quality facts stale but
-never becomes a work permit check.
+test evidence, final integration review fact, and complete finding/AC disposition.
+Stale, missing, or mismatched evidence means publish no completion; `revise_required`,
+`unavailable`, and invalid output remain visible quality states. Material makes old
+quality facts stale but never becomes a work permit check.
 
 ## Runtime boundary
 

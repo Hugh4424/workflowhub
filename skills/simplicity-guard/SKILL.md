@@ -7,10 +7,11 @@ description: 审查方案是否走过四阶梯最小路径，识别范围膨胀�
 
 ## 定位
 
-`wh-review` 的只读 lens，不产 stage-result，不修改被审材料，不参与
-stage 生成或代码实现步骤。只用于 `make-decision/detail`、`build-spec`、
-`build-plan` 和 `build-code` 的 provider 冻结材料审查；不得用于
-`make-decision/direction` 或 `verify-code`。
+这是一个可直接由 stage-owned dispatcher 调用的只读 advisory lens/skill，不产
+stage-result，不修改被审材料。build-spec/build-plan 直接调用它并保存
+invocation fact；后续 wh-review 只读取该事实，不重复调用或重复计数。
+它也可以被其他明确声明的 review packet 复用，但不能被偷偷变成第二个
+stage owner。
 
 审查目标不是把缺口变成更多要求，而是找出能删除、复用或缩小的内容。
 发现额外内容时必须明确建议删除；不得用“以后可能需要”替它保留位置。

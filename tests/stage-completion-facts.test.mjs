@@ -110,16 +110,16 @@ describe("stage completion facts", () => {
       name: "spec-research", invocation_key: "default", bundle_hash: HASH,
       declared_trigger: "in_memory_research", invocation: "conditional",
     };
-    for (const fact of [
-      { ...declared, status: "not_invoked", reason: "" },
-      { ...declared, workflow_run_id: "another-run", status: "not_invoked", reason: "trigger_false" },
+    for (const [fact, expectedMissing] of [
+      [{ ...declared, status: "not_invoked", reason: "" }, "spec-research invocation is incomplete"],
+      [{ ...declared, workflow_run_id: "another-run", status: "not_invoked", reason: "trigger_false" }, "spec-research invocation is missing"],
     ]) {
       const system = renderSystemCompletion(fixture({
         declared_components: [declared],
         invocation_facts: [fact],
       }));
       expect(system.result).toBe("incomplete");
-      expect(system.missing_items).toContain("spec-research invocation is missing");
+      expect(system.missing_items).toContain(expectedMissing);
     }
   });
 
@@ -159,6 +159,24 @@ describe("stage completion facts", () => {
       result: "incomplete",
       missing_items: [expect.stringMatching(/spec-plan.*invocation|invocation.*spec-plan/i)],
     });
+  });
+
+  it("preserves unavailable invocation semantics instead of collapsing them into missing", () => {
+    const facts = fixture({
+      declared_components: [{
+        task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+        name: "spec-research", invocation_key: "default", bundle_hash: HASH,
+        declared_trigger: "in_memory_research", invocation: "always",
+      }],
+      invocation_facts: [{
+        task_id: "task-1", stage: "build-plan", workflow_run_id: "run-1",
+        name: "spec-research", invocation_key: "default", bundle_hash: HASH,
+        declared_trigger: "in_memory_research", status: "unavailable", reason: "independent_context_unavailable",
+      }],
+    });
+    const system = renderSystemCompletion(facts);
+    expect(system.result).toBe("incomplete");
+    expect(system.missing_items).toContain("spec-research invocation is unavailable: independent_context_unavailable");
   });
 
   it("keeps business completion usable while disclosing a missing audit record", () => {

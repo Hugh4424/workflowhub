@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review attempt",
   "type": "object",
-  "required": ["version", "attempt_id", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "provider_attempts", "terminal_status", "error"],
+  "required": ["version", "attempt_id", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "lineage", "provider_attempts", "terminal_status", "error"],
           "properties": {
     "version": { "const": "wh-review-attempt.v1" },
     "attempt_id": { "type": "string", "minLength": 1 },
@@ -27,6 +27,20 @@
     },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "lineage": {
+      "type": "object",
+      "required": ["request_id", "prompt_hash", "round", "prior_attempt_refs", "prior_runtime_ids", "correction_ref", "dispatch_sequence"],
+      "properties": {
+        "request_id": { "type": "string", "minLength": 1 },
+        "prompt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "round": { "enum": ["initial", "incremental", "closure", "full", "legacy"] },
+        "prior_attempt_refs": { "type": "array", "items": { "type": "string", "pattern": "^(?:quality/reviews|reviews)/attempts/[A-Za-z0-9._-]+/attempt\\.json$" } },
+        "prior_runtime_ids": { "type": "object", "additionalProperties": { "type": ["string", "null"] } },
+        "correction_ref": { "type": ["string", "null"], "pattern": "^(?:quality/reviews|reviews)/attempts/[A-Za-z0-9._-]+/attempt\\.json$" },
+        "dispatch_sequence": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "classification_manifest": {
       "type": "object", "required": ["version", "entries"],
       "properties": {

@@ -70,7 +70,7 @@ skills:
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 852eff6e208dc964e62d786b3fa940ecf7264fe96a3ae882ca8793e67598abd0
+    local_bundle_hash: 0f5dc3785ba5f3bb44dde860239533077e05e8291bf98325f002f1a98250217c
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 审查方案是否遵守四阶梯最小路径
@@ -153,7 +153,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.1.0
-    local_bundle_hash: f0fd50000e3de4ebd6564f85c7b0fbc8430d1f1e961e123726be7b9ce4051d87
+    local_bundle_hash: fa77f9924819079415083d96ad5c044bad7a1c7718931a4f0acec535bd345bed
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -169,7 +169,7 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: a2fd7fad66c94907bc8112604e8a13c8cb8855bd3f7556ca54978f5d821baf75
+    local_bundle_hash: e7e863e71153f99eb4d067204236e64c7e536f3d9fcce2f74542437c447d882e
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 独立检查 spec、plan、tasks 一致性
@@ -252,7 +252,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c9176c251af0dda88e9e4ce5458498c289e37aeab32c74ec4a05e31cfe7a8ff4
+    local_bundle_hash: 2213542ff123f57220b3393c3c54a6d6dbe4bb522b8fdb805036615d10b00d2a
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -265,7 +265,7 @@ skills:
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9d37db905836fb9d1d1fe418a7604299856af761e0bc3f53d96bdefed4964b2e
+    local_bundle_hash: e19c95d699bf2fb3a91ee597f3bb51d3348f04b2a023c1408551a00681a6ad69
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 产品方向审查 lens
@@ -278,7 +278,7 @@ skills:
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9547fcb2243bc2595a64dc67c80dec067dc0cb55fb1b978849732d3b5f127b94
+    local_bundle_hash: 7be5ec4257737961a394c9351bdf7982474b5cd746cd00648f3ded396e21822a
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
@@ -291,7 +291,7 @@ skills:
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: eac176f53236dffdaf6877442f3d94ecce36e29746e730cede5bc3e1812cd7db
+    local_bundle_hash: c6f2106125692adf36a17ce6845b5615b6d060728efe9dd68fb6f2d2147319e4
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 工程计划顺序、边界、失败模式和验证审查 lens
@@ -322,6 +322,7 @@ skills:
     status: adapted
     purpose: 用户结果、复现证据和遗漏场景验收 lens
     design_idea: report-only acceptance review
+    standalone: true
     used_by_stages: [verify-code]
     upstream: [{ <<: *gstack, path: "qa-only", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/qa-only" }]
     local_changes: 去浏览器 daemon；只消费 sealed packet
@@ -335,6 +336,7 @@ skills:
     status: adapted
     purpose: 验收闭环和验证证据 lens
     design_idea: 对 supplied evidence 做 report-only 检查
+    standalone: true
     used_by_stages: [verify-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/verify-change", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/verify-change" }]
     local_changes: 裁为 wh-review lens；full/close 语义由 verify-code 承接
@@ -418,41 +420,41 @@ skills:
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 1467cc3c80ee43c02130c03f060e3351cfd507f7345a64c8026a483fe77800be
+    local_bundle_hash: d2ffa5d6f6db9a4d2a16052b8685cb1fdc6a3db32d38b9abab35a2fc1c5c65bb
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 为 build-plan 的每个 Task/Phase 判定 simple/feature/fullstack 测试层级
+    purpose: 为 build-plan 的每个 Phase/最终测试预判层级，并在 build-code 按真实改动重路由
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages: [build-plan, build-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md" }]
-    local_changes: 保留三档路由判断；由 build-plan 写入 tasks.md，build-code 只执行记录，不引入跨仓执行器
+    local_changes: 保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判
     dependency_closure: []
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
   - name: testing-system-blueprint
     path: skills/testing-system-blueprint/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 507bf3ba5b31cd98ed7c0a506ebdcfab6f54b9b476bf9ba94e52af822099d364
+    local_bundle_hash: 47abb7b30f417f5ea1444b37151b6013a66b63b94328e1e4f5e8e68e225f4400
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 为 build-plan 的每个 Task/Phase 生成风险维度和证据计划
+    purpose: 保留可复用的测试蓝图参考，不进入本标准阶段调用链
     design_idea: blueprint 先于执行器，覆盖行为、状态、错误、seam 和交付限制
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages: []
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/testing-system-blueprint/SKILL.md" }]
-    local_changes: 适配为 report-only 设计技能；不新增 AgentHub release gate 或执行器控制面
+    local_changes: 标明不进入标准 build-plan/build-code 链；不新增 AgentHub release gate 或执行器控制面
     dependency_closure: []
     update_policy: 随测试证据合同和 build-code 阶段边界人工比较
   - name: backend-testing
     path: skills/backend-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 9d35a272e88e67d66253260ceec7e95d1f7c90aa46b97bc3320b14ed1a99e7e2
+    local_bundle_hash: aa1e90e5178bfe8db9aad6fecebc6e05b2add7406c0c7e08de434b07acc2dffc
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 为 build-plan 的后端改动设计风险导向测试策略，供 build-code 执行并保存报告
+    purpose: build-code 对真实后端改动执行风险导向测试策略并保存报告
     design_idea: 真实接口、数据、错误、权限和并发边界优先
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages: [build-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/backend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/backend-testing/SKILL.md" }]
     local_changes: 只保留测试方法和证据字段；失败是质量事实，不是推进 gate
     dependency_closure: []
@@ -460,13 +462,13 @@ skills:
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 10bc4cbd7b88426621f0f094236a768b220db6aac1c798cac7696d91c690d05c
+    local_bundle_hash: 96710249d3bd90473d20a065209660a4aeb7e42670bfff3833afb07b168f4618
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 为 build-plan 的前端改动设计状态、交互和 UI 测试策略，供 build-code 执行
+    purpose: build-code 对真实前端改动执行状态、交互和 UI 测试策略
     design_idea: 真实用户状态覆盖，适用时接 isolated browser QA
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages: [build-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/frontend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md" }]
     local_changes: 保留状态/交互维度；不把截图或 browser pass 变成普遍 gate
     dependency_closure: []
@@ -474,13 +476,13 @@ skills:
   - name: fullstack-slice-testing
     path: skills/fullstack-slice-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 0d0f974b22a61d8601d9dbab97619bb40611d91c4195e6210c11c69e3f4919a4
+    local_bundle_hash: 5a9ac25c2a9173bf72c907d0f80917ee1f6354ac4febe6b09e9e0ccdd0123d46
     last_reviewed_at: "2026-07-14"
     status: adapted
-    purpose: 为 build-plan 的跨边界改动设计最小真实链路策略，供 build-code 执行
+    purpose: build-code 对真实跨边界改动执行最小真实链路策略
     design_idea: 从用户输入贯通服务、数据、返回和呈现的 slice
     standalone: true
-    used_by_stages: [build-plan]
+    used_by_stages: [build-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md" }]
     local_changes: 适配为风险证据技能；不恢复强制 commit/worktree/release gate
     dependency_closure: []

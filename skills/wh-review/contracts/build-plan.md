@@ -50,8 +50,10 @@ provider verdict 转成“审查通过”。
 - 接口、状态、失败路径、并发和回退是否遗漏。
 - 验证是否能在行为错误时失败，而不是只检查文件存在。
 - 是否引入 spec 未要求的抽象、兼容层或范围。
-- 必须用 `simplicity-guard` 对每个新增模块、入口、状态、迁移和发布机制执行
-  P0-P3；优先删除、直接复用或手术式改造。
+- `simplicity-guard` 和 `plan-eng-review` 已在 build-plan 的 test-routing-advisor
+  之前由 stage-owned dispatcher 执行；本次 provider 只读取它们的 invocation
+  facts 和冻结 plan/tasks，不重复调用或重复计数。若事实缺失，报材料/调用事实
+  缺口，不自行补做 lens。
 - scope creep、重复已有能力、没有故障证据的长期能力，或修订后仍无理由保留
   的旧内容，实质扩大实现或维护面时必须 `revise_required`。
 

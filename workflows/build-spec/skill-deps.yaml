@@ -1,9 +1,11 @@
 stage: build-spec
 skills:
-  - { name: spec-specify, path: skills/spec-specify/SKILL.md, execution: inline, invocation: always, trigger: spec_draft, bundle: skills/spec-specify/skill-bundle.json }
-  - { name: spec-clarify, path: skills/spec-clarify/SKILL.md, execution: inline, invocation: always, trigger: ambiguity_scan, bundle: skills/spec-clarify/skill-bundle.json }
-  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
-  - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, invocation: conditional, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json }
+  - { name: spec-specify, path: skills/spec-specify/SKILL.md, execution: inline, invocation: always, trigger: spec_draft, bundle: skills/spec-specify/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: spec-clarify, path: skills/spec-clarify/SKILL.md, execution: inline, invocation: always, trigger: ambiguity_scan, bundle: skills/spec-clarify/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: inline, invocation: always, trigger: simplicity_check, bundle: skills/simplicity-guard/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: inline, invocation: always, trigger: product_direction_check, bundle: skills/plan-ceo-review/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, invocation: conditional, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json, owner: stage, dispatch: stage }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage, dispatch: stage }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }

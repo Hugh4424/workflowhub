@@ -2,15 +2,16 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createCanonicalReceiptWriter, writeCurrentImplementationReceipt, writeCurrentOfficialComponentReceipt, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
+import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeCurrentImplementationReceipt, writeCurrentOfficialComponentReceipt, writeOfficialComponentReceipt } from "../runtime/evidence/canonical-receipt-writer.mjs";
 import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { createTask } from "../runtime/task/task-handle.mjs";
 import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validatePhaseCompletion } from "../runtime/task/task-kernel-implementation.mjs";
 import { openAcceptedWorkspace } from "../runtime/task/workspace.mjs";
+import { validateBuildCodePhaseEvidence } from "../runtime/stage/stage-content-contracts.mjs";
 
 const temporary = [];
 function fixture() {
@@ -268,5 +269,83 @@ describe("official component receipt authority", () => {
       },
     });
     expect(JSON.parse(task.readRecord(verification.ref)).requirement_replay[0]).toMatchObject(replay);
+  });
+
+  it("bounds test-capture lease waits and preserves the owner timeout fact", () => {
+    const { task, worktree, workspace } = fixture();
+    let observed;
+    const writerModule = resolve(process.cwd(), "runtime/evidence/canonical-receipt-writer.mjs");
+    const taskModule = resolve(process.cwd(), "runtime/task/task-handle.mjs");
+    const workspaceModule = resolve(process.cwd(), "runtime/task/workspace.mjs");
+    const child = `
+      import { openTask } from ${JSON.stringify(`file://${taskModule}`)};
+      import { createCanonicalReceiptWriter } from ${JSON.stringify(`file://${writerModule}`)};
+      import { openAcceptedWorkspace } from ${JSON.stringify(`file://${workspaceModule}`)};
+      const task = openTask(${JSON.stringify(task.taskPath)}, { projectName: "Demo", taskId: "receipt-task" });
+      const workspace = openAcceptedWorkspace(task, { facts: { worktree_root: ${JSON.stringify(worktree)}, baseline_commit: ${JSON.stringify(workspace.baselineCommit)} } });
+      try {
+        createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "lease-timeout" })
+          .captureTests({ command: "true", receiptRef: "quality/tests/t007-child.json", outputRef: "quality/tests/output/t007-child", lockWaitMs: 25 });
+      } catch (error) {
+        console.error(error.message);
+        process.exitCode = 1;
+      }
+    `;
+    task.withRecordLock("locks/test-capture.execution.lock", () => {
+      try {
+        execFileSync(process.execPath, ["--input-type=module", "-e", child], { cwd: process.cwd(), encoding: "utf8", timeout: 500, stdio: ["ignore", "pipe", "pipe"] });
+        observed = { timedOut: false, stderr: "" };
+      } catch (error) {
+        observed = { timedOut: error.code === "ETIMEDOUT", stderr: String(error.stderr ?? "") };
+      }
+    });
+    expect(observed.timedOut).toBe(false);
+    expect(observed.stderr).toMatch(/timed out waiting for record lock|lease/i);
+  });
+
+  it("binds G6 phase evidence to distinct baselines and the current snapshot", () => {
+    const snapshotTree = "a".repeat(40);
+    expect(validateBuildCodePhaseEvidence({
+      schema_version: "build-code-phase-evidence.v1",
+      phase_id: "P4",
+      phase_order: ["T007", "T008"],
+      snapshot_tree: snapshotTree,
+      baseline: {
+        implementation: { kind: "implementation", commit: "b".repeat(40) },
+        integration: { kind: "integration", commit: "c".repeat(40) },
+      },
+      evidence: [{ ref: "quality/tests/output/p4/t007-red", sha256: "d".repeat(64), snapshot_tree: snapshotTree }],
+      failure_attribution: { status: "failed", category: "test_command", code: "EXIT_NONZERO", reason: "command failed" },
+    }, { snapshotTree })).toMatchObject({ phase_id: "P4", snapshot_tree: snapshotTree });
+  });
+
+  it("records command failure, baseline roles, and phase evidence in the receipt", () => {
+    const { task, workspace } = fixture();
+    const snapshotTree = captureWorkspaceSnapshot(workspace).tree;
+    const receipt = createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "g6-phase" })
+      .captureTests({
+        command: "false",
+        receiptRef: "quality/tests/t007-phase.json",
+        outputRef: "quality/tests/output/t007-phase",
+        phaseEvidence: {
+          phase_id: "P4",
+          phase_order: ["T007"],
+          baseline: { integration: { kind: "integration", commit: snapshotTree } },
+          evidence: [{ ref: "quality/tests/output/p4/t007-red", sha256: "d".repeat(64) }],
+          failure_attribution: { status: "failed", category: "test_command", code: "EXIT_NONZERO", reason: "command failed" },
+        },
+      });
+    expect(receipt).toMatchObject({
+      exit_code: 1,
+      lease: { status: "released" },
+      phase_evidence: {
+        phase_id: "P4",
+        baseline: {
+          implementation: { kind: "implementation", commit: workspace.baselineCommit },
+          integration: { kind: "integration", commit: snapshotTree },
+        },
+        failure_attribution: { status: "failed", code: "EXIT_NONZERO" },
+      },
+    });
   });
 });

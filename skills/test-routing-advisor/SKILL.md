@@ -1,11 +1,11 @@
 ---
 name: test-routing-advisor
-description: 在 build-plan 为每个 Task/Phase 选择 simple、feature 或 fullstack 测试层级；只判类，不执行测试。
+description: 在 build-plan 预判并在 build-code 必要时重判 simple、feature 或 fullstack 测试层级；只判类，不执行测试。
 ---
 
 # Test Routing Advisor
 
-独立读取 build-plan 传入的 `changed_files`、`phase_count`、`test_command`。禁止读取全局同名 skill，禁止执行测试，禁止修改仓库。输出会写入 tasks.md，供 build-code 直接执行。
+独立读取调用方传入的 `changed_files`、`phase_count`、`test_command` 和阶段标识。禁止读取全局同名 skill，禁止执行测试，禁止修改仓库。build-plan 的预判写入 tasks.md；build-code 的重判必须同时保留原预判、实际改动和重判理由。
 
 ## 判类
 

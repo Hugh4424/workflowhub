@@ -22,7 +22,7 @@
     },
     "history_inventory": {
       "ref": "docs/architecture/history-inventory.json",
-      "content_hash": "d553760ab6f45a94922076f098338871cc950730bf2ed8042c585d19d888bcfb"
+      "content_hash": "caa455c92958c540d0fb16017816efbae0f488862c28410b5b9aa1495f8e24a3"
     },
     "move_map": {
       "ref": "docs/architecture/move-map.json",
@@ -71,6 +71,11 @@
       "path": "runtime/review/stage-review-disposition.mjs",
       "disposition": "KEEP",
       "reason": "vNext risk pause and acceptance API is a live production capability consumed by stage handlers and task kernel"
+    },
+    {
+      "path": "specs/archive/requirements-completeness-audit-20260804/",
+      "disposition": "READ/KEEP",
+      "reason": "historical requirements archive is registered in the read-only history inventory"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,7 +15,9 @@ import {
   validateAuthorityMap,
   validateBuildCodeAcceptanceMap,
   validateDiffIndexBundle,
+  phaseDiffDeliveryForPath,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 
 const roots = [];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -109,6 +111,16 @@ describe("current review material and capture contracts", () => {
     expect(() => validateDiffIndexBundle(bundleRoot)).toThrow(/missing or tampered/);
   });
 
+  it("keeps implementation diffs complete and bounds non-code large-Phase diffs to summaries", () => {
+    expect(phaseDiffDeliveryForPath("runtime/stage/stage-runner.mjs")).toBe("included");
+    expect(phaseDiffDeliveryForPath("workflows/build-code/steps.json")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/spec-analyze/SKILL.md")).toBe("included");
+    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("skills/catalog.yaml")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
+  });
+
   it("uses the current canonical receipt writer through both build and verify capture wrappers", async () => {
     const { task, workspace } = taskFixture();
     const build = await runBuildCapture("true", "quality/tests/build-capture.json", {
@@ -119,5 +131,31 @@ describe("current review material and capture contracts", () => {
     });
     expect(build).toMatchObject({ exit_code: 0, stage: "build-code", source_digest: expect.any(String) });
     expect(verify).toMatchObject({ exit_code: 0, stage: "verify-code", source_digest: expect.any(String) });
+  });
+
+  it("captures only the authenticated Phase file set when phase paths are supplied", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-phase-source-")));
+    roots.push(root);
+    const repo = join(root, "repo");
+    mkdirSync(repo);
+    const git = (args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+    git(["init", "-q"]); git(["config", "user.name", "WorkflowHub Tests"]); git(["config", "user.email", "tests@workflowhub.local"]);
+    writeFileSync(join(repo, "phase.mjs"), "base\n");
+    writeFileSync(join(repo, "other.mjs"), "base\n");
+    git(["add", "."]); git(["commit", "-qm", "base"]);
+    writeFileSync(join(repo, "phase.mjs"), "phase changed\n");
+    writeFileSync(join(repo, "other.mjs"), "other changed\n");
+    const source = captureReviewSource({
+      sourceRoot: repo, targetRepoRoot: repo, reviewDataRoot: root,
+      phasePaths: ["phase.mjs"], includeDiff: true,
+    });
+    try {
+      expect(source.changedFiles.map(({ path }) => path)).toEqual(["phase.mjs"]);
+      const diff = readFileSync(source.diffPath, "utf8");
+      expect(diff).toContain("phase.mjs");
+      expect(diff).not.toContain("other.mjs");
+    } finally {
+      source.dispose();
+    }
   });
 });

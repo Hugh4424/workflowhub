@@ -11,11 +11,14 @@ import { captureExecutionSnapshot, isMaterialOnlySnapshotDelta } from "../task/g
 import { validateSchema } from "../review/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
 import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
+import { validateBuildCodePhaseEvidence } from "../stage/stage-content-contracts.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const FULL_TEST_COMMAND = "npm test";
 const TEST_CAPTURE_LOCK_REF = "locks/test-capture.execution.lock";
-const TEST_CAPTURE_LOCK_WAIT_MS = Number.MAX_SAFE_INTEGER;
+const TEST_CAPTURE_LOCK_WAIT_MS = 10_000;
+const VERIFY_REVIEW_PROTOCOL = "architect-once-repair-once-review-once-repair-once";
+const VERIFY_REVIEW_STEPS = Object.freeze(["architect_review", "main_repair_1", "independent_review", "main_repair_2"]);
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "decision-log", ref: "quality/evidence/decision.json" }),
   spec: Object.freeze({ stage: "build-spec", kind: "content", ref: "quality/evidence/spec.json" }),
@@ -29,6 +32,43 @@ function registrationFor(_task, component) { return OFFICIAL_COMPONENTS[componen
 
 function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+export function validateVerifyReviewCycle(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).some((key) => !new Set(["protocol", "steps", "conclusion"]).has(key))
+      || value.protocol !== VERIFY_REVIEW_PROTOCOL
+      || !Array.isArray(value.steps) || value.steps.length !== VERIFY_REVIEW_STEPS.length
+      || !new Set(["passed", "failed", "incomplete"]).has(value.conclusion)) {
+    throw new TypeError("verification review_cycle is invalid");
+  }
+  const allowedStatuses = {
+    architect_review: new Set(["completed"]),
+    main_repair_1: new Set(["applied", "not_needed"]),
+    independent_review: new Set(["completed", "unavailable"]),
+    main_repair_2: new Set(["applied", "not_needed"]),
+  };
+  const seen = new Set();
+  const steps = value.steps.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || Object.keys(entry).some((key) => !new Set(["step", "status", "note"]).has(key))
+        || entry.step !== VERIFY_REVIEW_STEPS[index]
+        || seen.has(entry.step)
+        || !allowedStatuses[entry.step]?.has(entry.status)
+        || typeof entry.note !== "string" || entry.note.trim() === "") {
+      throw new TypeError(`verification review_cycle step ${index} is invalid or out of order`);
+    }
+    seen.add(entry.step);
+    return { step: entry.step, status: entry.status, note: entry.note };
+  });
+  const independentReview = steps.find(({ step }) => step === "independent_review");
+  if (value.conclusion === "passed" && independentReview.status !== "completed") {
+    throw new TypeError("verification review_cycle cannot be passed when independent review is unavailable");
+  }
+  if (value.conclusion === "failed" && independentReview.status === "unavailable") {
+    throw new TypeError("verification review_cycle cannot call an unavailable independent review a code failure");
+  }
+  return { protocol: value.protocol, steps, conclusion: value.conclusion };
 }
 
 function readCanonicalRecord(task, ref) {
@@ -197,8 +237,8 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     }
     value = currentImplementationReceipt({ task: safeTask, workspace, version }).value;
   } else if (registration.kind === "verification-items") {
-    if (Object.keys(payload).some((key) => !new Set(["items", "requirement_replay"]).has(key)) || !Array.isArray(payload.items)) {
-      throw new TypeError("verification payload requires items and optional requirement_replay");
+    if (Object.keys(payload).some((key) => !new Set(["items", "review_cycle", "requirement_replay"]).has(key)) || !Array.isArray(payload.items)) {
+      throw new TypeError("verification payload requires items and optional review_cycle/requirement_replay");
     }
     const required = [
       "current_materials", "diff_scope", "risk_tests", "acceptance_criteria",
@@ -296,7 +336,12 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
         return { source_id: entry.source_id, status: entry.status, snapshot_tree: entry.snapshot_tree, linked_ids: [...entry.linked_ids], evidence_refs: evidenceRefs, reason: entry.reason, ...semantic };
       });
     }
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, items, ...(requirementReplay === undefined ? {} : { requirement_replay: requirementReplay }) };
+    const reviewCycle = payload.review_cycle === undefined ? undefined : validateVerifyReviewCycle(payload.review_cycle);
+    value = {
+      schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, items,
+      ...(reviewCycle === undefined ? {} : { review_cycle: reviewCycle }),
+      ...(requirementReplay === undefined ? {} : { requirement_replay: requirementReplay }),
+    };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();
@@ -368,12 +413,12 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
   if (typeof component !== "string" || component.trim() === "") throw new TypeError("canonical receipt producer component required");
   const write = createTaskKernel(safeTask).publishCanonicalRecord;
   const writer = {
-    captureTests({ command, receiptRef, outputRef } = {}) {
+    captureTests({ command, receiptRef, outputRef, lockWaitMs = TEST_CAPTURE_LOCK_WAIT_MS, phaseEvidence = null } = {}) {
       if (typeof command !== "string" || command.trim() === "") throw new TypeError("test command required");
       const receiptPattern = /^quality\/tests\/[a-zA-Z0-9._/-]+\.json$/;
       const outputPattern = /^quality\/tests\/output\/[a-zA-Z0-9._/-]+$/;
       if (!receiptPattern.test(receiptRef ?? "") || !outputPattern.test(outputRef ?? "")) throw new Error("canonical tests receipt/output namespace required");
-      return safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
+      const capture = () => safeTask.withRecordLock(TEST_CAPTURE_LOCK_REF, () => {
         const reusable = reusableTestCapture({ task: safeTask, workspace: safeWorkspace, stage, component, command, receiptRef, outputRef });
         if (reusable !== undefined) return reusable;
         const before = captureWorkspaceSnapshot(safeWorkspace), headBefore = before.head, treeBefore = before.tree, sourceDigestBefore = before.source_digest;
@@ -385,14 +430,59 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
         if (after.head !== headBefore || after.tree !== treeBefore || after.source_digest !== sourceDigestBefore) throw new Error("test command changed the bound Git HEAD/tree snapshot; receipt rejected");
         const exitCode = proc.status ?? (proc.error ? 1 : 128);
         const outputHash = sha256(output), commandHash = sha256(command);
+        let phaseEvidenceValue;
+        if (phaseEvidence !== null) {
+          if (!phaseEvidence || typeof phaseEvidence !== "object" || Array.isArray(phaseEvidence)) throw new TypeError("phaseEvidence must be an object or null");
+          phaseEvidenceValue = validateBuildCodePhaseEvidence({
+            schema_version: "build-code-phase-evidence.v1",
+            ...phaseEvidence,
+            snapshot_tree: treeBefore,
+            baseline: {
+              ...phaseEvidence.baseline,
+              implementation: { kind: "implementation", commit: safeWorkspace.baselineCommit },
+            },
+            failure_attribution: {
+              ...phaseEvidence.failure_attribution,
+              status: exitCode === 0 ? (phaseEvidence.failure_attribution?.status ?? "passed") : "failed",
+              code: exitCode === 0 ? (phaseEvidence.failure_attribution?.code ?? "NONE") : (phaseEvidence.failure_attribution?.code ?? `EXIT_${exitCode}`),
+              exit_code: exitCode,
+            },
+          }, { snapshotTree: treeBefore });
+        }
         write(outputRef, output);
-        const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, source_digest: sourceDigestBefore, started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
+        const receipt = {
+          schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage,
+          producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode,
+          snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, source_digest: sourceDigestBefore,
+          started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash,
+          lease: { status: "released", ref: TEST_CAPTURE_LOCK_REF, wait_ms: lockWaitMs },
+          ...(phaseEvidenceValue === undefined ? {} : { phase_evidence: phaseEvidenceValue }),
+          ...(exitCode === 0 || phaseEvidenceValue !== undefined ? {} : {
+            failure_attribution: { status: "failed", category: "test_command", code: `EXIT_${exitCode}`, exit_code: exitCode, reason: "test command exited non-zero" },
+          }),
+        };
         validateCanonicalTestReceipt(receipt, {
           taskId: safeTask.identity.taskId, stage, snapshotTree: treeBefore, subject: component,
         });
         const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
         return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
-      }, { waitMs: TEST_CAPTURE_LOCK_WAIT_MS });
+      }, { waitMs: lockWaitMs });
+      try {
+        return capture();
+      } catch (error) {
+        if (/timed out waiting for record lock/.test(error?.message ?? "")) {
+          let owner = null;
+          try {
+            const rawOwner = safeTask.readRecord(TEST_CAPTURE_LOCK_REF);
+            const parsed = JSON.parse(rawOwner);
+            owner = { pid: parsed.pid ?? null, host: parsed.host ?? null, started_at: parsed.started_at ?? null };
+          } catch {}
+          error.code = "TEST_CAPTURE_LEASE_TIMEOUT";
+          error.lease = { status: "timeout", ref: TEST_CAPTURE_LOCK_REF, wait_ms: lockWaitMs, owner };
+          error.message = `${error.message}; lease timeout after ${lockWaitMs}ms${owner ? `; owner=${owner.host ?? "unknown"}:${owner.pid ?? "unknown"}` : ""}`;
+        }
+        throw error;
+      }
     },
   };
   return Object.freeze(writer);
