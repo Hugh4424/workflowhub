@@ -2062,14 +2062,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：RED 未重放：旧 legacy 入口已在 Phase 3 按用户确认的 106 项处置后删除；继续重放会伪造不存在的删除前脚手架。Phase 6 GREEN 合同覆盖同一最终 oracle，并明确记录此限制。
+- **executed_commands**：未执行 T047 的预删除 RED；使用 Phase 6 GREEN focused gate 验证最终 zero-state：`./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs && node tools/architecture/inventory.mjs --check`（exit 0）。
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/287109254258747537af58ed98f564bc29d6124c3ecbfbf861d39277ec849cb0.json","sha256":"b651b2f91264af868445fc5734bf95701dfc5904a392a8e5f8091dcf6d82bf99"},{"ref":"receipts/build-tests-phase-6-legacy-zero-green-v2.json","sha256":"07da7bcd0a30dccf7238609c949fed13933bf305ea894ec6123b59b04e533e47"},{"ref":"reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json","sha256":"9b63a43e58113b388448a84c7d4d59ba9ffa13dca11366029e6e7345183e71b2"}]`
+- **covered_ac**：AC-08、AC-10、AC-13
+- **review_fact**：`reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json`
+- **completed_at**：2026-07-31
 
 #### T048 — 修复任何 legacy 残留并固化零值 guard
 
@@ -2100,14 +2100,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增并执行最终 legacy-zero 合同，刷新 repository inventory；Skill Bundle、Runner 和可执行发布面均通过 legacy=0 审计。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/legacy-zero.test.mjs && node tools/architecture/inventory.mjs --check`（exit 0）。
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/287109254258747537af58ed98f564bc29d6124c3ecbfbf861d39277ec849cb0.json","sha256":"b651b2f91264af868445fc5734bf95701dfc5904a392a8e5f8091dcf6d82bf99"},{"ref":"receipts/build-tests-phase-6-legacy-zero-green-v2.json","sha256":"07da7bcd0a30dccf7238609c949fed13933bf305ea894ec6123b59b04e533e47"},{"ref":"reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json","sha256":"9b63a43e58113b388448a84c7d4d59ba9ffa13dca11366029e6e7345183e71b2"}]`
+- **covered_ac**：AC-08、AC-10、AC-13
+- **review_fact**：`reviews/results/build-code-default-61a00017dd145e14c2663a38f6d4e55ba64776e6-9234e1fe-4a9a-4115-b4d8-e9f68d945bcd.json`
+- **completed_at**：2026-07-31
 
 ### Verify
 
