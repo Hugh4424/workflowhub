@@ -1111,6 +1111,34 @@ describe("simple material-only review", () => {
     });
   });
 
+  it("records a managed-observation identity gap as an unavailable failed member instead of crashing the recorder", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-observation-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" }, provider_identities: { "model-a": { source_id: "trusted-source", config_id: "trusted-config" } } }),
+      client: {
+        async startManaged() {
+          return { state: "running", runtime_id: "runtime-observation-gap", providers: [{
+            provider: "model-a", status: "completed", error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+          }] };
+        },
+        async statusManaged() { throw new Error("managed status transport failed"); },
+      },
+    });
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider_results: [{
+        provider: "model-a", status: "failed",
+        identity: { provider: "model-a", adapter: "model-a", source_id: "trusted-source", config_id: "trusted-config" },
+        error: { code: "PROVIDER_RESULT_INVALID" },
+      }],
+    });
+  });
+
   it("keeps polling when one managed member failed but a running member can still satisfy quorum", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-managed-wait-")));
     roots.push(attachmentRoot);

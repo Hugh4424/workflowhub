@@ -3420,6 +3420,16 @@
       "sha256_after": "25a03a60d84733e1889749a353d21dfd35c30762fffa710f3f7cec3a788e1535"
     },
     {
+      "source": "docs/contracts/card-01-stage-material-interface.md",
+      "destination": "docs/contracts/card-01-stage-material-interface.md",
+      "status": "add",
+      "owner": "workflowhub-thin-core-card-01-20260919 CARD-01 main session",
+      "consumer": "CARD-02..CARD-10 planning/verification readers and tests/integration/card-01-dual-journey.test.mjs",
+      "delete_condition": "remove only after an independently reviewed unified stage/material contract replaces it and no CARD-02..CARD-10 consumer remains",
+      "content_change": "public six-category stage/material contract plus explicit human-boundary and review-replay addendum; it records facts and never grants stage progression",
+      "sha256_after": "7aa596fb7f7e794b6b25af831fcef5aa321de0dbe2576f6c7eb20e2986447e63"
+    },
+    {
       "source": "skills/wh-review/scripts/review-provider-client.mjs",
       "destination": "skills/wh-review/scripts/review-provider-client.mjs",
       "status": "modify",

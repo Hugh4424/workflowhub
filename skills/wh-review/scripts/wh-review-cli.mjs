@@ -24,6 +24,7 @@ import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.m
 import { recordSimpleReviewRequest } from "../../../runtime/review/review-record-route.mjs";
 import {
   createSimpleReviewPacket,
+  simpleReviewProviderMaterialId,
   runSimpleReview,
   reviewSubjectFields,
   resolveSimpleReviewRouteIdentity,
@@ -554,7 +555,7 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, reco
       throw new TypeError("recordContext requires the authenticated task and kernel");
     }
     return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound,
-      materialIdForRequest: (value) => createSimpleReviewPacket(value).material_id, resolveRouteIdentity });
+      materialIdForRequest: simpleReviewProviderMaterialId, resolveRouteIdentity });
   }
   return runBareReview(request, runRound, resolveRouteIdentity, identity);
 }

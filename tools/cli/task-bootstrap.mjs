@@ -13,8 +13,8 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
@@ -28,6 +28,60 @@ import { prepareTaskWorkspace, validateExistingWorkspaceBinding } from "../../ru
 
 const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const SHA256 = /^[a-f0-9]{64}$/;
+const GIT_COMMIT = /^[a-f0-9]{40,64}$/;
+
+function isoNow(now) {
+  const value = typeof now === "function" ? now() : new Date();
+  if (!(value instanceof Date) || Number.isNaN(value.valueOf())) throw new TypeError("activation cohort clock must return a valid Date");
+  return value.toISOString();
+}
+
+function activationFailure(fallbackCommit, diagnostic) {
+  return Object.freeze({ cohort: "pre", entry_release_commit: fallbackCommit ?? "unknown", diagnostic });
+}
+
+/** Read the one-time CARD-01 activation marker. Missing or malformed is pre, never a bootstrap gate. */
+export function resolveCard01Activation({ storageRoot, fallbackCommit = "unknown", read = readFileSync } = {}) {
+  if (typeof storageRoot !== "string" || !isAbsolute(storageRoot)) throw new TypeError("activation storageRoot must be absolute");
+  const marker = join(storageRoot, "activation", "card-01.json");
+  if (!existsSync(marker)) return activationFailure(fallbackCommit, null);
+  let value;
+  try { value = JSON.parse(read(marker, "utf8")); }
+  catch (error) { return activationFailure(fallbackCommit, `activation marker is unreadable: ${error.message}`); }
+  const valid = value && typeof value === "object" && !Array.isArray(value)
+    && value.schema_version === "card-01-activation.v1"
+    && value.capability_acceptance && typeof value.capability_acceptance.ref === "string" && value.capability_acceptance.ref.trim() !== "" && SHA256.test(value.capability_acceptance.sha256 ?? "")
+    && value.release_marker && GIT_COMMIT.test(value.release_marker.commit ?? "") && new Set(["main", "release"]).has(value.release_marker.channel)
+    && value.entry_consumption && typeof value.entry_consumption.evidence_ref === "string" && value.entry_consumption.evidence_ref.trim() !== "" && Number.isFinite(Date.parse(value.entry_consumption.observed_at))
+    && Number.isFinite(Date.parse(value.activated_at));
+  if (!valid) return activationFailure(fallbackCommit, "activation marker is incomplete or invalid");
+  return Object.freeze({ cohort: "post", entry_release_commit: value.release_marker.commit, diagnostic: null });
+}
+
+export function activationManifestFields({ storageRoot, fallbackCommit = "unknown", now = () => new Date(), activation = undefined } = {}) {
+  const resolved = activation ?? resolveCard01Activation({ storageRoot, fallbackCommit });
+  return Object.freeze({
+    activation_cohort: resolved.cohort,
+    activation_cohort_frozen_at: isoNow(now),
+    entry_release_commit: resolved.entry_release_commit,
+  });
+}
+
+function recordActivationDiagnostic(task, activation) {
+  if (!activation.diagnostic) return null;
+  const value = {
+    record_kind: "activation_cohort_observation",
+    task_id: task.identity.taskId,
+    cohort: activation.cohort,
+    reason: activation.diagnostic,
+    observed_at: new Date().toISOString(),
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const ref = `quality/evidence/activation-cohort-attempts/${sha256(raw)}.json`;
+  task.createRecordAtomic(ref, raw);
+  return ref;
+}
 
 function recordBootstrapTransaction(task, creationResult) {
   const runId = `bootstrap-${task.identity.taskId}`;
@@ -97,6 +151,9 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
   const storageResolution = resolveStorageRootDetails({ env, home });
   const storageRoot = storageResolution.storage_root;
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
+  const fallbackCommit = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: target, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim();
+  const activation = resolveCard01Activation({ storageRoot, fallbackCommit });
+  const cohortFields = activationManifestFields({ storageRoot, fallbackCommit, activation });
   const task = createTask({ storageRoot, manifest: {
     schema_version: "1.0.0",
     execution_mode: "per_invocation",
@@ -105,6 +162,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     task_id: values.task,
     created_at: new Date().toISOString(),
     target_repo_root: target,
+    ...cohortFields,
     write_resolution_source: storageResolution.selected_source,
     ...(existingWorkspace ? { workspace_mode: "existing", workspace_root: existingWorkspace.worktreeRoot } : {}),
     issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [],
@@ -115,6 +173,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
   // surface at bootstrap rather than at publication.
   const workspace = prepareTaskWorkspace(task);
   const store = initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+  const activationDiagnosticRef = recordActivationDiagnostic(task, activation);
   const bootstrapIdentity = recordBootstrapTransaction(task, {
     status: "completed",
     task_path: task.taskPath,
@@ -134,6 +193,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     task_path_source: "canonical_resolver",
     storage_root: authority.storage_root,
     cutover_epoch: authority.cutover_epoch,
+    activation: Object.freeze({ cohort: activation.cohort, ...(activationDiagnosticRef ? { diagnostic_ref: activationDiagnosticRef } : {}) }),
     bootstrap_identity_ref: bootstrapIdentity.ref,
     workspace: Object.freeze({ worktree_root: workspace.worktreeRoot, branch: workspace.branch, baseline_commit: workspace.baselineCommit }),
   });

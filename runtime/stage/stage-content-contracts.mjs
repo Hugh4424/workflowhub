@@ -2786,7 +2786,7 @@ function markdownSectionBody(markdown, headingPattern) {
   const lines = String(markdown ?? "").split(/\r?\n/);
   let latest = null;
   for (let start = 0; start < lines.length; start += 1) {
-    const heading = lines[start].match(/^(#{1,3})\s*(.+?)\s*$/);
+    const heading = lines[start].match(/^(#{1,3})(?:\s+|$)(.+?)\s*$/);
     if (!heading || !headingPattern.test(heading[2])) continue;
     const body = [];
     for (let index = start + 1; index < lines.length; index += 1) {
@@ -2883,7 +2883,7 @@ export function readTaskTypeFromDecisionLog(decisionLogMarkdown) {
   const lines = text.split(/\r?\n/);
   const identityHeading = /^(?:任务身份|task identity)$/i;
   const identityHeadings = lines.filter((line) => {
-    const match = line.match(/^#{1,3}\s*(.+?)\s*$/);
+    const match = line.match(/^#{1,3}(?:\s+|$)(.+?)\s*$/);
     return match && identityHeading.test(match[1]);
   });
   if (identityHeadings.length !== 1) return "unknown";
@@ -3370,7 +3370,7 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   const errors = [];
   const text = String(decisionLogMarkdown ?? "");
   const hasSection = (pattern) => pattern.test(text);
-  const hasTaskIdentitySection = /^#{1,3}\s*(?:任务身份|task identity)\s*$/im.test(text);
+  const hasTaskIdentitySection = /^#{1,3}(?:\s+|$)(?:任务身份|task identity)\s*$/im.test(text);
   const taskType = readTaskTypeFromDecisionLog(text);
   if (hasTaskIdentitySection && taskType === "unknown") {
     errors.push("decision-log task type declaration is missing or invalid");

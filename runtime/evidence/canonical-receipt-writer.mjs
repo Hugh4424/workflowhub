@@ -212,21 +212,30 @@ export function readFrozenReviewMaterial({ task, ref, sha256: expectedSha256 } =
       || !SHA256_HEX.test(expectedSha256 ?? "")) {
     throw new TypeError("frozen review material ref/hash is invalid");
   }
-  const raw = safeTask.readRecord(ref);
-  if (sha256(raw) !== expectedSha256) throw new Error("frozen review material hash mismatch");
+  const unavailable = (id, reason) => Object.freeze({
+    status: "unavailable",
+    diagnostic: Object.freeze({ id, status: "invalid", reason }),
+  });
+  let raw;
+  try { raw = safeTask.readRecord(ref); }
+  catch (error) {
+    if (error?.code === "ENOENT") return unavailable("frozen_review_material_missing", `frozen review material is missing: ${ref}`);
+    throw error;
+  }
+  if (sha256(raw) !== expectedSha256) return unavailable("frozen_review_material_hash_mismatch", "frozen review material hash mismatch");
   let value;
-  try { value = JSON.parse(raw); } catch { throw new Error("frozen review material is not JSON"); }
+  try { value = JSON.parse(raw); } catch { return unavailable("frozen_review_material_invalid", "frozen review material is not JSON"); }
   if (!value || typeof value !== "object" || Array.isArray(value)
       || Object.keys(value).some((key) => !new Set(["schema_version", "content_encoding", "content_sha256", "content_base64"]).has(key))
       || value.schema_version !== "workflowhub-frozen-review-material.v1"
       || value.content_encoding !== "base64"
       || !SHA256_HEX.test(value.content_sha256 ?? "")
       || typeof value.content_base64 !== "string") {
-    throw new Error("frozen review material record is invalid");
+    return unavailable("frozen_review_material_invalid", "frozen review material record is invalid");
   }
   const bytes = Buffer.from(value.content_base64, "base64");
-  if (sha256(bytes) !== value.content_sha256) throw new Error("frozen review material content hash mismatch");
-  return Object.freeze({ bytes, provider_input_sha256: value.content_sha256 });
+  if (sha256(bytes) !== value.content_sha256) return unavailable("frozen_review_material_content_hash_mismatch", "frozen review material content hash mismatch");
+  return Object.freeze({ status: "recorded", bytes, provider_input_sha256: value.content_sha256 });
 }
 
 function profileMatches(receipt, runtimeProfile, capabilityProof, behaviorFingerprint) {

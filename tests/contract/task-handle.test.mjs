@@ -16,7 +16,7 @@ import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createTask, createTaskKernel, openTask } from "../../runtime/task/task-handle.mjs";
+import { createTask, createTaskKernel, localRecordLockOwnerMatchesMachine, openTask, recordLockMachineId, sameLocalRecordLockHost } from "../../runtime/task/task-handle.mjs";
 
 const temporaryDirs = [];
 const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../../runtime/task/task-handle.mjs");
@@ -596,6 +596,51 @@ describe("TaskHandle", () => {
     expect(acquired).toBe(true);
     await exited;
     expect(() => task.withRecordLock(lockRef, () => {}, { waitMs: -1 })).toThrow(/waitMs.*non-negative safe integer/);
+  });
+
+  it("recognizes only the local short-name and .local hostname aliases for dead record-lock recovery", () => {
+    expect(sameLocalRecordLockHost("MacBook-Pro", "MacBook-Pro.local")).toBe(true);
+    expect(sameLocalRecordLockHost("macbook-pro.local", "MACBOOK-PRO")).toBe(true);
+    expect(sameLocalRecordLockHost("MacBook-Pro.remote", "MacBook-Pro.local")).toBe(false);
+    expect(sameLocalRecordLockHost("MacBook-Pro.local.local", "MacBook-Pro.local")).toBe(false);
+    expect(sameLocalRecordLockHost("MacBook.Pro", "MacBook.Pro.local")).toBe(false);
+    expect(sameLocalRecordLockHost("Other-Mac", "MacBook-Pro.local")).toBe(false);
+  });
+
+  it("requires a bound machine instance before using PID liveness across hostname aliases", () => {
+    const machine = "a".repeat(64);
+    expect(localRecordLockOwnerMatchesMachine(
+      { host: "MacBook-Pro", machine_id: machine },
+      { currentHost: "MacBook-Pro.local", currentMachineId: machine },
+    )).toBe(true);
+    expect(localRecordLockOwnerMatchesMachine(
+      { host: "MacBook-Pro", machine_id: machine },
+      { currentHost: "MacBook-Pro.local", currentMachineId: "b".repeat(64) },
+    )).toBe(false);
+    expect(localRecordLockOwnerMatchesMachine(
+      { host: "MacBook-Pro" },
+      { currentHost: "MacBook-Pro.local", currentMachineId: machine },
+    )).toBe(false);
+    expect(localRecordLockOwnerMatchesMachine(
+      { host: "MacBook-Pro", machine_id: machine },
+      { currentHost: "MacBook-Pro", currentMachineId: "b".repeat(64) },
+    )).toBe(true);
+    expect(localRecordLockOwnerMatchesMachine(
+      { host: "MacBook-Pro" },
+      { currentHost: "MacBook-Pro" },
+    )).toBe(true);
+  });
+
+  it("derives an alias-machine digest from stable physical interfaces only", () => {
+    const physical = { en0: [{ internal: false, mac: "aa:bb:cc:dd:ee:ff" }] };
+    const changing = {
+      ...physical,
+      utun3: [{ internal: false, mac: "01:02:03:04:05:06" }],
+      awdl0: [{ internal: false, mac: "02:03:04:05:06:07" }],
+      docker0: [{ internal: false, mac: "03:04:05:06:07:08" }],
+      lo0: [{ internal: true, mac: "04:05:06:07:08:09" }],
+    };
+    expect(recordLockMachineId(changing)).toBe(recordLockMachineId(physical));
   });
 
   it("publishes task creation atomically and leaves no orphan on serialization failure", () => {

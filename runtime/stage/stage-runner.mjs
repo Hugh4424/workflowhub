@@ -2540,6 +2540,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   let allPassed = true;
   const qualityWarnings = [];
   const qualityAdvisories = [];
+  const machineGateDiagnosticRefs = [];
   const analyzerResult = result.spec_analyze?.result;
   // Semantic findings are quality facts. They are deliberately not an
   // execution/progression gate: the same stage can publish the finding so
@@ -2550,6 +2551,29 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
   }
   if (stageAnalyzeFact && analyzerResult?.status !== "consistent") {
     qualityAdvisories.push(`stage-end-spec-analyze:${analyzerResult?.status ?? "unavailable"}`);
+  }
+  for (const diagnostic of result.facts?.machine_gate_diagnostics ?? []) {
+    if (!diagnostic || typeof diagnostic !== "object"
+        || typeof diagnostic.id !== "string" || !diagnostic.id.trim()
+        || diagnostic.status !== "invalid" || typeof diagnostic.reason !== "string" || !diagnostic.reason.trim()) {
+      throw new Error("machine gate diagnostic is invalid");
+    }
+    const value = {
+      schema_version: "workflowhub-machine-gate-diagnostic.v1",
+      task_id: ctx.identity.taskId,
+      stage: ctx.stage,
+      id: diagnostic.id,
+      status: diagnostic.status,
+      reason: diagnostic.reason,
+      snapshot_tree: snapshot.tree,
+      recorded_at: publicationTimestamp,
+    };
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    const sha256 = createHash("sha256").update(raw).digest("hex");
+    const ref = `quality/evidence/machine-gate-diagnostics/${sha256}.json`;
+    publishVNextEvidence(ctx, ref, raw);
+    machineGateDiagnosticRefs.push(Object.freeze({ ref, sha256 }));
+    qualityAdvisories.push(`machine_gate:${diagnostic.id}:invalid`);
   }
   const predicateEntries = [
     ...Object.entries(STAGE_PREDICATES[ctx.stage])
@@ -2796,6 +2820,7 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     }),
     quality_fact_refs: Object.freeze(qualityFactRefs),
     quality_advisory_fact_refs: Object.freeze(qualityAdvisoryFactRefs),
+    ...(machineGateDiagnosticRefs.length ? { machine_gate_diagnostic_refs: Object.freeze(machineGateDiagnosticRefs) } : {}),
     ...(qualityAdvisories.length ? { quality_advisories: Object.freeze(qualityAdvisories) } : {}),
     ...(Array.isArray(result.skill_consumer_bindings) ? { skill_consumer_bindings: Object.freeze([...result.skill_consumer_bindings]) } : {}),
     ...(result.interaction_publication ? {
@@ -3442,6 +3467,7 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
   const handlerInput = structuredClone(input);
   const stageReflectionInput = {};
   let interactionPublication = null;
+  let interactionPublicationDiagnostic = null;
   // Direct callers of this low-level export may still replay an explicitly
   // supplied historical outcome. The public CLI rejects that field before it
   // reaches this function, so this compatibility branch cannot become the
@@ -3512,10 +3538,15 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
         if (receipts.interaction !== undefined) {
           throw new Error("interaction_aggregate cannot be combined with caller-supplied receipts.interaction");
         }
-        interactionPublication = ctx.kernel.completeMakeDecisionInteractionPublication({
-          aggregate: handlerInput.interaction_aggregate,
-        });
-        handlerInput.receipts = { ...receipts, interaction: interactionPublication.ref };
+        const aggregateInput = { aggregate: handlerInput.interaction_aggregate };
+        const observation = ctx.kernel.observeMakeDecisionInteractionPublication(aggregateInput);
+        if (observation.status === "recorded") {
+          interactionPublication = ctx.kernel.completeMakeDecisionInteractionPublication(aggregateInput);
+          handlerInput.receipts = { ...receipts, interaction: interactionPublication.ref };
+        } else {
+          interactionPublicationDiagnostic = observation.diagnostic;
+          handlerInput.receipts = receipts;
+        }
         delete handlerInput.interaction_aggregate;
       }
       if (stage === "verify-code") {
@@ -3613,7 +3644,23 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
       const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection, signal);
       officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
       const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
-      const disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome, currentReviewRepair);
+      let disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome, currentReviewRepair);
+      if (interactionPublicationDiagnostic !== null) {
+        disclosedHandlerResult = {
+          ...disclosedHandlerResult,
+          facts: {
+            ...(disclosedHandlerResult.facts ?? {}),
+            machine_gate_diagnostics: [
+              ...((disclosedHandlerResult.facts?.machine_gate_diagnostics ?? [])),
+              interactionPublicationDiagnostic,
+            ],
+          },
+          missing_items: [
+            ...(disclosedHandlerResult.missing_items ?? []),
+            `machine fact ${interactionPublicationDiagnostic.id} is ${interactionPublicationDiagnostic.status}: ${interactionPublicationDiagnostic.reason}`,
+          ],
+        };
+      }
       // The concrete reflection is published only after the stage result has
       // crossed the single write boundary. Keep an internal result marker so
       // the authenticated stage-outcome consumer binding can observe that the
