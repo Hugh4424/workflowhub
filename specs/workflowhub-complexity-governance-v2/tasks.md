@@ -1037,9 +1037,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T022 — 先证明 DEL-01 Grill replacement 旧入口仍可达
@@ -1075,9 +1075,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T023 — 垂直删除 DEL-01 Grill replacement
@@ -1113,9 +1113,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T024 — 先证明 DEL-02 Phase trace lineage 旧入口仍可达
@@ -1151,9 +1151,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T025 — 垂直删除 DEL-02 Phase trace lineage
@@ -1189,9 +1189,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T026 — 先证明 DEL-03 专用 invalidation 旧入口仍可达
@@ -1227,9 +1227,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T027 — 垂直删除 DEL-03 专用 invalidation
@@ -1265,9 +1265,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T028 — 先证明 DEL-04 continuation 旧入口仍可达
@@ -1303,9 +1303,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T029 — 垂直删除 DEL-04 continuation
@@ -1341,9 +1341,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T030 — 先证明 DEL-05 rebind 旧入口仍可达
@@ -1379,9 +1379,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T031 — 垂直删除 DEL-05 rebind
@@ -1417,9 +1417,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T032 — 先证明 DEL-06 reopen 旧入口仍可达
@@ -1455,9 +1455,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T033 — 垂直删除 DEL-06 reopen
@@ -1493,9 +1493,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T034 — 先证明 DEL-07 stage recovery 与 recover-spec 旧入口仍可达
@@ -1531,9 +1531,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T035 — 垂直删除 DEL-07 stage recovery 与 recover-spec
@@ -1569,9 +1569,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T036 — 先证明 DEL-08 recovery/reset workspace CAS 旧入口仍可达
@@ -1607,9 +1607,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T037 — 垂直删除 DEL-08 recovery/reset workspace CAS
@@ -1645,9 +1645,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T038 — 先证明 DEL-09 重复 invocation/completion projection 旧入口仍可达
@@ -1683,9 +1683,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T039 — 垂直删除 DEL-09 重复 invocation/completion projection
@@ -1721,9 +1721,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T040 — 先证明 DEL-10 stage-transition journal 旧入口仍可达
@@ -1759,9 +1759,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T041 — 垂直删除 DEL-10 stage-transition journal
@@ -1797,9 +1797,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T042 — 先证明 DEL-11 shadow current/head/checkpoint 旧入口仍可达
@@ -1835,9 +1835,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T043 — 垂直删除 DEL-11 shadow current/head/checkpoint
@@ -1873,9 +1873,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T044 — 先证明 DEL-12 旧 dispatch/config/index/spike 旧入口仍可达
@@ -1911,9 +1911,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T045 — 垂直删除 DEL-12 旧 dispatch/config/index/spike
@@ -1949,9 +1949,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 #### T046 — 复算全部删除归零项和跨切片回归
@@ -1987,9 +1987,9 @@
 - **status**：`completed`
 - **actual_changes**：KEEP branch completed; no deletion executed; consumer audit retained the candidate.
 - **executed_commands**：`node tools/architecture/deletion-proof.mjs --all --require-user-confirmation`; focused Phase 5 Vitest receipt; `node tools/architecture/inventory.mjs --check`; `node tools/architecture/complexity-report.mjs --check-hard-gates`.
-- **evidence_refs**：`evidence/phase-5/deletion-consumer-audit.json`; `receipts/build-tests-phase-5-focused-repair-v2.json`.
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/3687908d554a6c8ccbd15086d048dcf8bb270ea5f367f476c366ed943d00cf2c.json","sha256":"1dba2c14e9595af7473d3265e0724e698b622126c9ff4908efbed2b09d285cb9"},{"ref":"receipts/build-tests-phase-5-focused-repair-v3.json","sha256":"5e30884d473a9f5787021761010a35978d22ed3717da6176f5dc103bf5bdf5d5"},{"ref":"reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json","sha256":"098b23ba13369771e5ce808c5f9057bffc790ee62f3671204ccc2db7df9835d7"}]`
 - **covered_ac**：AC-13；AC-06/AC-07 为 KEEP 结果，未执行删除；AC-12 不在本 Phase 验证
-- **review_fact**：reviews/results/build-code-default-034566de73f779502cf13ebf9086e1ac7a5eb6d1-be9202c8-fa37-419d-b499-662a2bf2f4e7.json
+- **review_fact**：reviews/results/build-code-default-96cd98cdc5f7a86a896224064183f0787782538a-087680d5-de21-40e3-9299-ed38c4016420.json
 - **completed_at**：`2026-07-31`
 
 ### Verify
