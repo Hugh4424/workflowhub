@@ -1,7 +1,0 @@
-Phase 7 mutation guard evidence
-===============================
-Command: ./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs --reporter=verbose
-Exit code: 0
-Result: 1 test file passed; 5 tests passed
-Guards: identity/tree freshness, missing completion, failed review, unauthenticated confirmation, Skill Bundle test pollution.
-The five fixtures are synthetic seam checks; they do not replay KnowledgeDigest or PaperBuilder incidents.

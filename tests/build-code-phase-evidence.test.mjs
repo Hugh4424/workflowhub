@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildRunnerRelease } from "../runtime/distribution/runner-release.mjs";
 import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { stageRuntimeCliMain } from "../scripts/stage-runtime.mjs";
-import { assertLiveWorkspaceMatchesImplementation } from "../workflows/build-code/phase-evidence.mjs";
+import {
+  assertLiveWorkspaceMatchesImplementation,
+  readHistoricalPhaseResult,
+  readPhaseSuccessor,
+  validateAwaitingReviewSuccessorPreconditions,
+  validatePhaseEvidenceInput,
+} from "../workflows/build-code/phase-evidence.mjs";
 
 const roots = [];
 const packageRoot = new URL("..", import.meta.url).pathname;
@@ -157,6 +163,100 @@ describe("build-code composition contract", () => {
       "--task=task-one",
       "--input=/tmp/phase.json",
     ])).rejects.toThrow(/unknown public runtime behavior/i);
+  });
+
+  it("accepts successor plus predecessor-review binding for an awaiting-review predecessor", () => {
+    const base = {
+      phase_id: "phase-9", implementation_receipt_ref: "receipts/implementation.json",
+      green_test_receipt_ref: "receipts/tests.json", allowed_files: [],
+    };
+    expect(validatePhaseEvidenceInput({ ...base, phase_successor_reason: "refresh after material revision" }))
+      .toMatchObject({ phase_successor_reason: "refresh after material revision" });
+    expect(validatePhaseEvidenceInput({
+      ...base, phase_successor_reason: "refresh", review_result_ref: "reviews/results/current.json",
+    })).toMatchObject({ phase_successor_reason: "refresh", review_result_ref: "reviews/results/current.json" });
+    expect(() => validatePhaseEvidenceInput({
+      ...base, phase_successor_ref: "results/build-code/revisions/phase-successor-0001.json",
+    })).toThrow(/provided together/i);
+    expect(validatePhaseEvidenceInput({
+      ...base,
+      phase_successor_reason: "replace stale historical phase",
+      predecessor_phase_trace_ref: `evidence/phases/phase-9/${"a".repeat(40)}/phase-map-trace-${"b".repeat(64)}.json`,
+      predecessor_phase_trace_hash: "b".repeat(64),
+    })).toMatchObject({ predecessor_phase_trace_hash: "b".repeat(64) });
+    expect(() => validatePhaseEvidenceInput({
+      ...base, predecessor_phase_trace_ref: "evidence/legacy/trace.json", predecessor_phase_trace_hash: "b".repeat(64),
+      phase_successor_reason: "replace",
+    })).toThrow(/predecessor_phase_trace_ref is invalid/);
+  });
+
+  it("reads the immutable predecessor archive after the live Phase pointer moves", () => {
+    const predecessorRaw = `${JSON.stringify({ phase_id: "phase-9", status: "awaiting_review", snapshot_tree: "b".repeat(40) })}\n`;
+    const predecessorHash = createHash("sha256").update(predecessorRaw).digest("hex");
+    const archiveRef = `evidence/phase-successors/phase-9-phase-result-${predecessorHash}.json`;
+    const task = {
+      identity: { taskId: "archive-test" },
+      readRecord: (ref) => {
+        if (ref === archiveRef) return predecessorRaw;
+        if (ref === "phase-result.json") return `${JSON.stringify({ phase_id: "phase-9", status: "awaiting_review", snapshot_tree: "c".repeat(40) })}\n`;
+        const error = new Error(`missing ${ref}`); error.code = "ENOENT"; throw error;
+      },
+    };
+    expect(readHistoricalPhaseResult(task, archiveRef, predecessorHash, "phase-9").value.snapshot_tree).toBe("b".repeat(40));
+    expect(() => readHistoricalPhaseResult(task, archiveRef, "f".repeat(64), "phase-9")).toThrow(/archive binding|archive hash mismatch/);
+  });
+
+  it("rejects a historical archive whose phase identity is wrong", () => {
+    const raw = `${JSON.stringify({ phase_id: "phase-8", status: "awaiting_review" })}\n`;
+    const hash = createHash("sha256").update(raw).digest("hex");
+    const ref = `evidence/phase-successors/phase-9-phase-result-${hash}.json`;
+    const task = { identity: { taskId: "archive-test" }, readRecord: () => raw };
+    expect(() => readHistoricalPhaseResult(task, ref, hash, "phase-9")).toThrow(/archive hash mismatch/);
+  });
+
+  it("rejects legacy successors that have no immutable predecessor archive", () => {
+    const ref = "results/build-code/revisions/phase-successor-0001.json";
+    const raw = `${JSON.stringify({
+      schema_version: "workflowhub-build-code-phase-successor.v1",
+      task_id: "archive-test", stage: "build-code", phase_id: "phase-9",
+    })}\n`;
+    const task = { identity: { taskId: "archive-test" }, readRecord: (candidate) => {
+      if (candidate === ref) return raw;
+      throw new Error(`missing ${candidate}`);
+    } };
+    expect(() => readPhaseSuccessor(task, ref, createHash("sha256").update(raw).digest("hex"), {
+      phaseId: "phase-9",
+      implementation: { ref: "receipts/implementation.json", hash: "a".repeat(64), value: { snapshot_tree: "b".repeat(40) } },
+      green: { ref: "receipts/tests.json", hash: "c".repeat(64), value: { snapshot_tree: "b".repeat(40) } },
+      allowedFiles: [], guardedC2Paths: [], workspace: { worktreeRoot: "/tmp" },
+    })).toThrow(/binding does not match|archive/);
+  });
+
+  it("accepts a valid unavailable predecessor for an awaiting-review successor", () => {
+    expect(validateAwaitingReviewSuccessorPreconditions({
+      current: { status: "awaiting_review" },
+      predecessorReview: { ref: "reviews/attempts/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/attempt.json", hash: "a".repeat(64), status: "unavailable", verdict: null },
+      previousImplementationTree: "b".repeat(40), previousGreenTree: "b".repeat(40), previousSnapshotTree: "b".repeat(40),
+      previousAllowedFiles: ["README.md"], allowedFiles: ["README.md"],
+      previousGuardedC2Paths: [], guardedC2Paths: [],
+    })).toBe(true);
+  });
+
+  it.each([
+    ["missing predecessor review", { predecessorReview: null }, /authenticated unavailable predecessor review/],
+    ["invalid predecessor review", { predecessorReview: { status: "semantic", verdict: "pass", ref: "x", hash: "a".repeat(64) } }, /authenticated unavailable predecessor review/],
+    ["snapshot mismatch", { previousSnapshotTree: "c".repeat(40) }, /previous receipts do not bind/],
+    ["receipt tree mismatch", { previousGreenTree: "c".repeat(40) }, /previous receipts do not bind/],
+    ["allowlist mismatch", { allowedFiles: ["other.md"] }, /allowlist does not bind/],
+  ])("rejects %s for an awaiting-review successor", (_label, override, message) => {
+    const base = {
+      current: { status: "awaiting_review" },
+      predecessorReview: { ref: "reviews/attempts/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/attempt.json", hash: "a".repeat(64), status: "unavailable", verdict: null },
+      previousImplementationTree: "b".repeat(40), previousGreenTree: "b".repeat(40), previousSnapshotTree: "b".repeat(40),
+      previousAllowedFiles: ["README.md"], allowedFiles: ["README.md"],
+      previousGuardedC2Paths: [], guardedC2Paths: [],
+    };
+    expect(() => validateAwaitingReviewSuccessorPreconditions({ ...base, ...override })).toThrow(message);
   });
 
   it("ships the canonical Phase producer and excludes task-only migration scaffolding", async () => {

@@ -8,7 +8,7 @@
     },
     {
       "path": "scripts/multica-skill-sync.mjs",
-      "sha256": "76ca11c2107d629c09d2f8d83a5945188a50c6792b021a2ed2e9bfa2b6c1fd92"
+      "sha256": "b39a920e9e158073a61d12c2791fa641162cd3ce29d5169b91875feadee998e6"
     }
   ],
   "runtime_dependencies": [

@@ -9,7 +9,7 @@ import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validateAcceptanceEvidence } from "./task-kernel-implementation.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "../runtime/task/workspace-runner.mjs";
-import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { normalizeRuntimeOnlyPaths } from "../runtime/evidence/canonical-utils.mjs";
 import { authenticateAuditRetryEvidence, buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
@@ -181,7 +181,7 @@ export function writeCanonicalAuditSummary({ task, workspace, stage, throughStep
     : { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
   const activeRun = kernel.activeStageRun(stage);
   const workflowRunId = activeRun.run.workflow_run_id;
-  const snapshot = captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot);
+  const snapshot = captureExecutionSnapshot(safeWorkspace.worktreeRoot);
   const kinds = requiredStageContentKinds(stage);
   const contentEvidence = kinds.map((kind) => {
     const latest = readLatestStageContentEvidence({
@@ -317,7 +317,7 @@ function workspaceGit(workspace, args, label = "workspace Git command") {
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
 export function captureWorkspaceSnapshot(workspace) {
   const root = assertWorkspace(workspace).worktreeRoot;
-  return captureGitWorktreeSnapshot(root);
+  return captureExecutionSnapshot(root);
 }
 
 /** Fixed registry for official non-test component receipts. */

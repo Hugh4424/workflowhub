@@ -202,7 +202,7 @@ WorkflowHub 已有 make-decision、build-spec、build-plan、build-code、verify
 继续工作、正式结果结构有效、质量足以完成是三个独立判断。正式结果是当前事实的派生视图，不是第二套工作真相。
 
 - **FR-PUB-001**：正式结果必须由当前材料、当前代码快照、真实 Stage 与 Skill 调用、新鲜测试、逐项验收、独立审查、人工确认和适用的不可逆授权确定性计算。
-  - **范围边界**：文件存在、命令成功、provider 退出或旧 accepted 均不能单独构成完成
+  - **范围边界**：文件存在、命令成功、provider 退出或旧 accepted 均不能单独构成完成；历史 checkpoint 只证明 Git ref/tree 完整性，材料修订不阻塞普通工作，质量事实失鲜只在正式发布、verify 或 close 时使结果 incomplete。
   - **依据**：PFACT-03
   - **场景**：SCN-001、SCN-004、SCN-005
   - **验收**：AC-01、AC-04、AC-05

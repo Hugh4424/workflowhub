@@ -21,6 +21,18 @@ const ZERO_GATES = Object.freeze({
     runtimeRoots: ["core/", "scripts/", "schemas/", "skills/", "workflows/"],
     forbiddenContent: /legacy-reader|legacy-import|normalizeLegacyTask|legacy-import-proof/,
   }),
+  // T054's accepted plan names this same post-migration hard gate
+  // `task-only-governance`; retain the alias so the recorded gate command
+  // remains executable without introducing a second policy.
+  "task-only-governance": Object.freeze({
+    allowedPaths: Object.freeze(new Set([
+      "docs/architecture/legacy-task-inventory.json",
+      "docs/architecture/legacy-import-proof.json",
+      "tools/architecture/verify-migration-proof.mjs",
+    ])),
+    runtimeRoots: ["core/", "scripts/", "schemas/", "skills/", "workflows/"],
+    forbiddenContent: /legacy-reader|legacy-import|normalizeLegacyTask|legacy-import-proof/,
+  }),
 });
 
 function zeroGateErrors(name, { root = ROOT, env = process.env } = {}) {

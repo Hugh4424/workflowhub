@@ -7,6 +7,8 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { MATERIAL_FILES, createMaterialRevision } from "../../runtime/task/material-revision.mjs";
 import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { createTask, createTaskKernel } from "../../core/task-handle.mjs";
+import { readCurrentTaskMaterialRevision } from "../../core/stage-content-evidence.mjs";
+import { validateTaskMaterialRevisionVersionAware } from "../../runtime/stage/stage-content-contracts.mjs";
 
 const materials = Object.fromEntries(MATERIAL_FILES.map((name) => [name, `# ${name}\n`]));
 const requirements = {
@@ -96,6 +98,37 @@ describe("single material revision", () => {
       changeSummary: "coverage changed", sourceRefs: [{ ref: "coverage", hash: "3".repeat(64) }],
     });
     expect(next.revision.changed_files).toEqual(["requirements"]);
+  });
+
+  it("classifies top-level requirements as historical without changing the accepted bytes", () => {
+    const first = createMaterialRevision({ taskId: "task", materials, requirements, changeSummary: "initial", sourceRefs: [{ ref: "source", hash: "a".repeat(64) }] });
+    const validation = validateTaskMaterialRevisionVersionAware(first.revision);
+    expect(validation).toMatchObject({ ok: true, legacy: true, format: "task-material-revision.v1-top-level-requirements" });
+    expect(first.revision.requirements).toEqual(requirements);
+  });
+
+  it("repairs a historical material head by appending a canonical revision and CAS-swapping the pointer", () => {
+    const { task, artifacts } = productionFixture();
+    installRequirements(task, 1, "a");
+    const kernel = createTaskKernel(task, { artifacts });
+    const legacy = kernel.publishMaterialRevision({ change_summary: "historical head", source_refs: ["task.json"] });
+    const legacyRaw = task.readRecord(legacy.revision_ref);
+    artifacts.writeAtomic("spec.md", "# repaired spec\n");
+    const repaired = kernel.repairMaterialRevision({
+      change_summary: "normalize historical material revision",
+      source_refs: ["task.json"],
+      expected_current_ref: legacy.revision_ref,
+    });
+    expect(repaired).toMatchObject({ repaired: true, legacy_ref: legacy.revision_ref, parent_ref: legacy.revision_ref, current: true });
+    expect(repaired.revision_ref).not.toBe(legacy.revision_ref);
+    expect(task.readRecord(legacy.revision_ref)).toBe(legacyRaw);
+    expect(JSON.parse(task.readRecord(repaired.revision_ref))).not.toHaveProperty("requirements");
+    expect(readCurrentTaskMaterialRevision({ task })).toMatchObject({ legacy: false, ref: repaired.revision_ref });
+    expect(() => kernel.repairMaterialRevision({
+      change_summary: "stale repair",
+      source_refs: ["task.json"],
+      expected_current_ref: legacy.revision_ref,
+    })).not.toThrow();
   });
 
   it("production publishMaterialRevision uses the one core model and observes requirements current changes", () => {

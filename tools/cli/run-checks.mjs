@@ -31,8 +31,9 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// ponytail: repoRoot derived from import.meta.url (scripts/ → parent), not hardcoded
-const repoRoot = resolve(here, "..");
+// tools/cli/ -> repository root; run child checkers from the project root so
+// top-level contracts, metrics, fixtures, and workflows resolve consistently.
+const repoRoot = resolve(here, "..", "..");
 
 const node = process.execPath;
 

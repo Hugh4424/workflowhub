@@ -268,9 +268,10 @@ function committedTaskCloseRuntime(f) {
   execFileSync("git", ["clone", "-q", "--no-local", projectRoot, runner]);
   execFileSync("git", ["checkout", "-qb", "codex/task-close-test"], { cwd: runner });
   cpSync(join(projectRoot, "core"), join(runner, "core"), { recursive: true, force: true });
+  cpSync(join(projectRoot, "runtime"), join(runner, "runtime"), { recursive: true, force: true });
   cpSync(join(projectRoot, "scripts", "task-close.mjs"), join(runner, "scripts", "task-close.mjs"), { force: true });
   symlinkSync(realpathSync(join(projectRoot, "node_modules")), join(runner, "node_modules"));
-  execFileSync("git", ["add", "core", "scripts/task-close.mjs", "node_modules"], { cwd: runner });
+  execFileSync("git", ["add", "core", "runtime", "scripts/task-close.mjs", "node_modules"], { cwd: runner });
   execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "--allow-empty", "-qm", "task close runtime"], { cwd: runner });
   return join(runner, "scripts", "task-close.mjs");
 }

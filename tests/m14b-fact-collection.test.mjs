@@ -115,6 +115,11 @@ async function createM14bFixture() {
   for (const relative of ["config", "schemas", "skills", "workflows"]) {
     await cp(join(repositoryRoot, relative), join(workspace.worktreeRoot, relative), { recursive: true });
   }
+  // The clean task runner must carry the authoritative runtime schema bundle.
+  // The legacy top-level schemas/ directory is intentionally empty after the
+  // layout migration and cannot satisfy fact-collector/skill-closure checks.
+  await mkdir(join(workspace.worktreeRoot, "runtime"), { recursive: true });
+  await cp(join(repositoryRoot, "runtime", "schemas"), join(workspace.worktreeRoot, "runtime", "schemas"), { recursive: true });
   await cp(join(repositoryRoot, "THIRD_PARTY_NOTICES.md"), join(workspace.worktreeRoot, "THIRD_PARTY_NOTICES.md"));
   const sentinel = async (name, value = "sentinel") => {
     const path = join(task.taskPath, name);

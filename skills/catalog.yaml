@@ -233,7 +233,7 @@ skills:
   - name: workflowhub-multica-sync
     path: skills/workflowhub-multica-sync/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 65ebe8bf1e0b45b4e07b5bf2875e5ad83c8c186a02782a13efcd96c7a506a937
+    local_bundle_hash: e75f8c383a118a7d6190b96ef496f43ccc4c26db6cceebec3ec252d36fe994ad
     last_reviewed_at: "2026-07-14"
     status: native
     standalone: true
@@ -247,7 +247,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: de5e50086be67f44c9121b99dfa73966bbfe4d8dc01c38a824647c6ba33450e8
+    local_bundle_hash: 914c4ef4026b31d877b2feb9f7402da2773700c6b6d7002f5e4d4e8fd79ae686
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

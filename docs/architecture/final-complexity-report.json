@@ -1,0 +1,27 @@
+{
+  "schema_version": "workflowhub-final-complexity-report.v1",
+  "snapshot_tree": "6a75ce97bcc274d1307858c71d6a8fdfbefa255a",
+  "source_report": "docs/architecture/complexity-baseline.json",
+  "source_report_sha256": "9803c64a124e120b4c590d2da3ffb231f265b6d0d531fa9e1fdfb08828d79789",
+  "verification_scope": "phase-9-focused",
+  "focused_gate": {
+    "status": "passed",
+    "clean_install": "passed",
+    "e2e_scenarios": 3,
+    "mutation_samples": 5,
+    "direct_acceptance_criteria": 15
+  },
+  "full_suite": {
+    "status": "not_run_by_phase9_focused_policy",
+    "npm_test": null,
+    "npm_run_check": null
+  },
+  "safety": {
+    "source_tree_unchanged_during_clean_install": true,
+    "node_modules_tracked": 0,
+    "release_contains_tests": false,
+    "release_contains_evidence": false,
+    "hard_zero_report_reproducible": true
+  },
+  "next_gates": ["T055 three-provider architecture review", "T056 user DELETE/KEEP/diff confirmation"]
+}

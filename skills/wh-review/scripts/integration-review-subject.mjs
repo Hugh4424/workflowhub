@@ -10,6 +10,7 @@ const OID = /^[a-f0-9]{40,64}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const PHASE = /^[A-Za-z0-9._-]+$/;
 const PHASE_REVIEW_RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;
+const PHASE_REVIEW_ATTEMPT_REF = /^reviews\/attempts\/[A-Za-z0-9._-]+\/attempt\.json$/;
 const LINEAGE_KEYS = new Set([
   "schema_version", "project_name", "task_id", "stage", "phase_id", "snapshot_tree", "trace",
   "phase_evidence", "diff_scan", "implementation_receipt", "green_test_receipt", "red_test_receipt",
@@ -354,7 +355,11 @@ export function selectCanonicalPhaseTraces({
   if (!task || typeof task !== "object") throw new TypeError("task is required");
   if (typeof sourceRoot !== "string" || sourceRoot.length === 0) throw new TypeError("sourceRoot is required");
   if (!(corrections instanceof Map)) throw new TypeError("prevalidated corrections are required");
-  return task.listCanonicalPhaseMapTraceRefs().flatMap((ref) => {
+  // A legacy refresh/progress note can share the Phase evidence directory
+  // without being a canonical trace.  Ignore only such historical namespace
+  // debris here; actual phase-map traces still go through readTrace and fail
+  // closed on identity, material, snapshot, receipt, or review mismatches.
+  const traces = task.listCanonicalPhaseMapTraceRefs({ tolerateHistoricalInvalidRecords: true }).flatMap((ref) => {
     try { return [readTrace(task, sourceRoot, ref)]; }
     catch (error) {
       let trace;
@@ -364,6 +369,99 @@ export function selectCanonicalPhaseTraces({
       throw error;
     }
   });
+  // A same-phase replacement is not a new chain edge.  It is a bounded
+  // supersession of one immutable trace after a successor refresh.  Keep the
+  // old trace for audit, but only expose the replacement to path construction
+  // when the successor record binds both sides exactly.  An unbound duplicate
+  // remains visible and therefore makes integration fail closed as ambiguous.
+  const byPhase = new Map();
+  for (const trace of traces) {
+    const list = byPhase.get(trace.trace.phase_id) ?? [];
+    list.push(trace);
+    byPhase.set(trace.trace.phase_id, list);
+  }
+  const superseded = new Set();
+  for (const trace of traces) {
+    const phaseEvidence = trace.phaseEvidence?.value;
+    const successorRef = phaseEvidence?.phase_successor_ref;
+    const successorHash = phaseEvidence?.phase_successor_hash;
+    if (typeof successorRef !== "string" || !HASH.test(successorHash ?? "")) continue;
+    let successor;
+    try {
+      const record = readJson(task, successorRef, "Phase successor");
+      if (record.sha256 !== successorHash
+          || record.value?.schema_version !== "workflowhub-build-code-phase-successor.v2"
+          || record.value?.task_id !== task.identity.taskId
+          || record.value?.stage !== "build-code"
+          || record.value?.phase_id !== trace.trace.phase_id
+          || record.value?.current_snapshot_tree !== trace.trace.snapshot_tree
+          || record.value?.previous_canonical_phase_evidence_ref === undefined
+          || !HASH.test(record.value?.previous_canonical_phase_evidence_hash ?? "")
+          || record.value?.previous_snapshot_tree === undefined) continue;
+      successor = record.value;
+    } catch {
+      continue;
+    }
+    const predecessor = (byPhase.get(trace.trace.phase_id) ?? []).find((candidate) =>
+      candidate !== trace
+      && candidate.trace.canonical_phase_evidence.ref === successor.previous_canonical_phase_evidence_ref
+      && candidate.trace.canonical_phase_evidence.sha256 === successor.previous_canonical_phase_evidence_hash
+      && candidate.trace.snapshot_tree === successor.previous_snapshot_tree);
+    if (predecessor === undefined) continue;
+    superseded.add(predecessor);
+  }
+  // Explicit historical predecessors are recorded on the immutable successor
+  // itself.  This path intentionally does not consult phase-result.json: the
+  // live pointer may have moved since the predecessor was accepted.
+  const successorRefs = typeof task.listCanonicalPhaseSuccessorRefs === "function"
+    ? task.listCanonicalPhaseSuccessorRefs()
+    : [];
+  for (const successorRef of successorRefs) {
+    const successorRecord = readJson(task, successorRef, "Phase successor");
+    const successor = successorRecord.value;
+    const explicitRef = successor?.predecessor_phase_trace_ref;
+    const explicitHash = successor?.predecessor_phase_trace_hash;
+    if (explicitRef === undefined && explicitHash === undefined) continue;
+    if (typeof explicitRef !== "string" || !/^evidence\/phases\/[A-Za-z0-9._-]+\/[a-f0-9]{40,64}\/phase-map-trace-[a-f0-9]{64}\.json$/.test(explicitRef)
+        || !HASH.test(explicitHash ?? "")
+        || successorRecord.value?.schema_version !== "workflowhub-build-code-phase-successor.v2"
+        || successor.task_id !== task.identity.taskId
+        || successor.stage !== "build-code"
+        || !PHASE.test(successor.phase_id ?? "")
+        || !OID.test(successor.previous_snapshot_tree ?? "")
+        || !OID.test(successor.current_snapshot_tree ?? "")) {
+      incomplete(`explicit Phase successor binding is invalid: ${successorRef}`);
+    }
+    let predecessorTrace;
+    try {
+      predecessorTrace = readTrace(task, sourceRoot, explicitRef);
+    } catch (error) {
+      incomplete(`explicit Phase successor predecessor trace is invalid: ${explicitRef}: ${error.message}`);
+    }
+    if (predecessorTrace.traceSha256 !== explicitHash
+        || predecessorTrace.trace.phase_id !== successor.phase_id
+        || predecessorTrace.trace.snapshot_tree !== successor.previous_snapshot_tree
+        || predecessorTrace.trace.baseline_commit !== successor.previous_baseline_commit
+        || predecessorTrace.trace.implementation_commit !== successor.previous_implementation_commit
+        || !sameBinding(predecessorTrace.trace.diff_scan, { ref: successor.previous_diff_scan_ref, sha256: successor.previous_diff_scan_hash })
+        || !sameBinding(predecessorTrace.trace.canonical_phase_evidence, {
+          ref: successor.previous_canonical_phase_evidence_ref,
+          sha256: successor.previous_canonical_phase_evidence_hash,
+        })) {
+      incomplete(`explicit Phase successor predecessor does not bind its canonical trace: ${successorRef}`);
+    }
+    const predecessor = traces.find((candidate) => candidate.traceRef === explicitRef && candidate.traceSha256 === explicitHash);
+    if (predecessor === undefined) {
+      incomplete(`explicit Phase successor predecessor trace is not canonical in the selected evidence set: ${explicitRef}`);
+    }
+    const replacement = traces.find((candidate) => candidate.trace.phase_id === successor.phase_id
+      && candidate.trace.snapshot_tree === successor.current_snapshot_tree);
+    if (replacement === undefined || replacement === predecessor) {
+      incomplete(`explicit Phase successor replacement snapshot is not canonical: ${successorRef}`);
+    }
+    superseded.add(predecessor);
+  }
+  return traces.filter((trace) => !superseded.has(trace));
 }
 
 function traceCoverage(trace) {
@@ -460,6 +558,39 @@ function isTasksCompletionSeam({
   }
 }
 
+/**
+ * The first Phase has no predecessor trace.  Its only admissible bridge is
+ * the accepted build-plan checkpoint followed by a direct, material-only
+ * commit for this exact task.  This is intentionally stricter than the
+ * normal tasks-completion seam: no code, tests, or unrelated task may enter
+ * the chain before Phase 0 starts.
+ */
+export function isInitialTasksCompletionSeam({ task, sourceRoot, acceptedCommit, acceptedTree, candidateTrace } = {}) {
+  try {
+    if (!task || typeof sourceRoot !== "string" || sourceRoot.length === 0
+      || !candidateTrace?.trace || typeof acceptedCommit !== "string" || typeof acceptedTree !== "string") return false;
+    const candidate = candidateTrace.trace;
+    if (typeof candidate.baseline_commit !== "string" || typeof candidate.base_tree !== "string"
+      || candidate.baseline_commit === acceptedCommit) return false;
+    const parentLine = execFileSync("git", ["rev-list", "--parents", "-n", "1", candidate.baseline_commit], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim().split(/\s+/);
+    if (parentLine.length !== 2 || parentLine[1] !== acceptedCommit) return false;
+    if (gitTree(sourceRoot, acceptedCommit) !== acceptedTree
+      || gitTree(sourceRoot, candidate.baseline_commit) !== candidate.base_tree) return false;
+    const taskRoot = `specs/${task.identity.taskId}`;
+    const materialPaths = new Set(["decision-log.md", "spec.md", "plan.md", "tasks.md"]
+      .map((name) => `${taskRoot}/${name}`));
+    const changed = execFileSync("git", ["diff", "--name-only", acceptedCommit, candidate.baseline_commit, "--"], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim().split("\n").filter(Boolean);
+    return changed.length > 0 && changed.includes(`${taskRoot}/tasks.md`)
+      && changed.every((path) => materialPaths.has(path));
+  } catch {
+    return false;
+  }
+}
+
 function isFinalTasksCompletionSeam({ task, sourceRoot, previousTrace, previousTree, finalTree }) {
   try {
     const taskId = task.identity.taskId;
@@ -503,23 +634,189 @@ function isFinalTasksCompletionSeam({ task, sourceRoot, previousTrace, previousT
   }
 }
 
-function possiblePaths(traces, commit, tree, finalTree, sourceRoot, task, previousTrace = null, seen = new Set()) {
+function gitAncestor(root, ancestor, descendant) {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      cwd: root, stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch (error) {
+    if (error?.status === 1) return false;
+    throw error;
+  }
+}
+
+function gitTree(root, commit) {
+  return execFileSync("git", ["rev-parse", `${commit}^{tree}`], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
+function sameOrderedArray(left, right) {
+  return Array.isArray(left) && Array.isArray(right)
+    && left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function safeRepositoryPath(path) {
+  return typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.includes("\\")
+    && !path.split("/").some((part) => part === "" || part === "." || part === "..");
+}
+
+/**
+ * An unavailable Phase review is still a real, authenticated quality fact.
+ * It may be carried through an existing integration chain, but only when the
+ * canonical Phase trace and the formal wh-review attempt agree completely.
+ * A null/missing attempt is not an unavailable review; it is incomplete
+ * material and must not become a continuation seam.
+ */
+function isBoundUnavailablePhaseReview({ task, traceRecord, trace } = {}) {
+  const status = trace?.review_status ?? (trace?.review_result === null ? "unavailable" : "semantic");
+  if (status !== "unavailable") return false;
+  const reviewAttempt = traceRecord?.attempt;
+  const attemptBinding = trace?.review_attempt;
+  const attempt = reviewAttempt?.value;
+  if (trace?.verdict !== null || trace?.review_result !== null || traceRecord?.review !== null
+    || !attemptBinding || !PHASE_REVIEW_ATTEMPT_REF.test(attemptBinding.ref ?? "")
+    || !HASH.test(attemptBinding.sha256 ?? "")
+    || !reviewAttempt || reviewAttempt.ref !== attemptBinding.ref
+    || (reviewAttempt.sha256 ?? reviewAttempt.hash) !== attemptBinding.sha256
+    || !attempt || typeof attempt !== "object" || Array.isArray(attempt)) return false;
+  const expected = {
+    task_id: task?.identity?.taskId,
+    stage: "build-code",
+    subject_kind: "phase",
+    phase_id: trace.phase_id,
+    review_scope: "phase",
+    base_tree: trace.base_tree,
+    candidate_tree: trace.snapshot_tree,
+    snapshot_tree: trace.snapshot_tree,
+    material_id: trace.material_id,
+  };
+  if (Object.entries(expected).some(([key, value]) => attempt[key] !== value)
+    || attempt.version !== "wh-review-attempt.v1"
+    || attempt.terminal_status !== "unavailable"
+    || !Array.isArray(attempt.provider_attempts) || attempt.provider_attempts.length === 0
+    || !attempt.error || typeof attempt.error !== "object" || Array.isArray(attempt.error)
+    || typeof attempt.error.code !== "string" || attempt.error.code.trim() === ""
+    || typeof attempt.error.message !== "string" || attempt.error.message.trim() === "") return false;
+  return true;
+}
+
+/**
+ * Accept a successor whose baseline is a real, material-only descendant of
+ * the previous Phase implementation.  This is deliberately narrower than a
+ * generic Git ancestry check: every commit on the ancestry path may touch
+ * only this task's four canonical materials, and all receipts remain bound
+ * to the successor tree.  The caller never supplies a baseline or path.
+ */
+export function isVerifiedDescendantContinuation({ task, sourceRoot, previousTrace, candidateTrace } = {}) {
+  try {
+    if (!task || typeof task !== "object" || typeof sourceRoot !== "string" || sourceRoot.length === 0
+      || !previousTrace?.trace || !candidateTrace?.trace) return false;
+    const previous = previousTrace.trace;
+    const candidate = candidateTrace.trace;
+    if (previous.phase_id === candidate.phase_id
+      || typeof previous.implementation_commit !== "string"
+      || typeof previous.snapshot_tree !== "string"
+      || typeof candidate.baseline_commit !== "string"
+      || typeof candidate.base_tree !== "string") return false;
+    const previousReviewStatus = previous.review_status ?? (previous.review_result === null ? "unavailable" : "semantic");
+    const candidateReviewStatus = candidate.review_status ?? (candidate.review_result === null ? "unavailable" : "semantic");
+    if (previousReviewStatus === "unavailable" && !isBoundUnavailablePhaseReview({ task, traceRecord: previousTrace, trace: previous })) return false;
+    if (candidateReviewStatus === "unavailable") {
+      if (!isBoundUnavailablePhaseReview({ task, traceRecord: candidateTrace, trace: candidate })) return false;
+    } else if (candidateReviewStatus !== "semantic"
+      || candidateTrace.review === null
+      || !["pass", "revise_required"].includes(candidate.verdict)
+      || candidateTrace.review?.value?.verdict !== candidate.verdict) return false;
+
+    const previousTree = gitTree(sourceRoot, previous.implementation_commit);
+    const baselineTree = gitTree(sourceRoot, candidate.baseline_commit);
+    if (previousTree !== previous.snapshot_tree || baselineTree !== candidate.base_tree
+      || previous.implementation_commit === candidate.baseline_commit
+      || !gitAncestor(sourceRoot, previous.implementation_commit, candidate.baseline_commit)
+      || !gitAncestor(sourceRoot, candidate.baseline_commit, candidate.implementation_commit)) return false;
+
+    // A material successor cannot hide a transient code change in a commit
+    // that was later reverted.  Inspect every commit on the ancestry path,
+    // not only the net diff between the two endpoints.
+    const taskRoot = `specs/${task.identity.taskId}`;
+    const materialPaths = new Set(["decision-log.md", "spec.md", "plan.md", "tasks.md"]
+      .map((name) => `${taskRoot}/${name}`));
+    const commits = execFileSync("git", ["rev-list", "--parents", "--ancestry-path", `${previous.implementation_commit}..${candidate.baseline_commit}`], {
+      cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim().split("\n").filter(Boolean);
+    if (commits.length === 0) return false;
+    for (const line of commits) {
+      const [commit, ...parents] = line.split(/\s+/);
+      if (parents.length !== 1) return false;
+      const changed = execFileSync("git", ["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", commit], {
+        cwd: sourceRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      }).trim().split("\n").filter(Boolean);
+      if (changed.some((path) => !materialPaths.has(path))) return false;
+    }
+
+    const implementation = candidateTrace.implementation?.value;
+    const green = candidateTrace.green?.value;
+    const scan = candidateTrace.scan?.value;
+    const traceImplementation = candidate.implementation_receipt;
+    const traceGreen = candidate.green_test_receipt;
+    const implementationHash = candidateTrace.implementation?.sha256 ?? candidateTrace.implementation?.hash;
+    const greenHash = candidateTrace.green?.sha256 ?? candidateTrace.green?.hash;
+    if (!implementation || !green || !scan
+      || !sameBinding(traceImplementation, { ref: candidateTrace.implementation.ref, sha256: implementationHash })
+      || !sameBinding(traceGreen, { ref: candidateTrace.green.ref, sha256: greenHash })
+      || implementation.task_id !== task.identity.taskId || green.task_id !== task.identity.taskId
+      || implementation.snapshot_tree !== candidate.snapshot_tree || green.snapshot_tree !== candidate.snapshot_tree
+      || !OID.test(implementation.snapshot_commit ?? "") || !OID.test(green.snapshot_commit ?? "")
+      || gitTree(sourceRoot, implementation.snapshot_commit) !== candidate.snapshot_tree
+      || gitTree(sourceRoot, green.snapshot_commit) !== candidate.snapshot_tree
+      || scan.baseline_commit !== candidate.baseline_commit
+      || scan.implementation_commit !== candidate.implementation_commit
+      || scan.snapshot_tree !== candidate.snapshot_tree
+      || scan.safe !== true || (scan.violations ?? []).length !== 0
+      || (scan.allowlist_violations ?? []).length !== 0
+      || !sameOrderedArray(scan.allowed_files, candidate.allowed_files)
+      || !sameOrderedArray(scan.changed_files, candidate.changed_files)
+      || !Array.isArray(implementation.changed)
+      || !sameOrderedArray(implementation.changed, candidate.allowed_files)
+      || candidate.allowed_files.some((path) => !safeRepositoryPath(path))
+      || candidate.changed_files.some((path) => !safeRepositoryPath(path))) return false;
+    const allowed = new Set(candidate.allowed_files);
+    if (candidate.changed_files.some((path) => !allowed.has(path))) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function possiblePaths(traces, commit, tree, finalTree, sourceRoot, task, acceptedCommit, acceptedTree, previousTrace = null, seen = new Set()) {
   const key = `${commit}:${tree}`;
   if (seen.has(key)) return [];
   const nextSeen = new Set(seen); nextSeen.add(key);
   const paths = [];
   for (const trace of traces) {
     const direct = trace.trace.baseline_commit === commit && trace.trace.base_tree === tree;
-    if (!direct && !isTasksCompletionSeam({
+    const tasksSeam = !direct && (previousTrace
+      ? isTasksCompletionSeam({
+        task,
+        sourceRoot,
+        taskId: task.identity.taskId,
+        previousTrace,
+        previousCommit: commit,
+        previousTree: tree,
+        baselineCommit: trace.trace.baseline_commit,
+        baselineTree: trace.trace.base_tree,
+      })
+      : commit === acceptedCommit && tree === acceptedTree
+        && isInitialTasksCompletionSeam({ task, sourceRoot, acceptedCommit, acceptedTree, candidateTrace: trace }));
+    const descendant = !direct && !tasksSeam && isVerifiedDescendantContinuation({
       task,
       sourceRoot,
-      taskId: task.identity.taskId,
       previousTrace,
-      previousCommit: commit,
-      previousTree: tree,
-      baselineCommit: trace.trace.baseline_commit,
-      baselineTree: trace.trace.base_tree,
-    })) continue;
+      candidateTrace: trace,
+    });
+    if (!direct && !tasksSeam && !descendant) continue;
     const coverage = traceCoverage(trace);
     if (coverage.snapshot_tree === finalTree) {
       paths.push([coverage]);
@@ -542,6 +839,8 @@ function possiblePaths(traces, commit, tree, finalTree, sourceRoot, task, previo
       finalTree,
       sourceRoot,
       task,
+      acceptedCommit,
+      acceptedTree,
       trace,
       nextSeen,
     )) {
@@ -646,7 +945,10 @@ export function buildIntegrationReviewSubject({ task, sourceRoot, finalTree } = 
     task: safeTask, sourceRoot, corrections,
   });
   if (traces.length === 0) incomplete("implementation work requires at least one canonical Phase map trace");
-  const paths = possiblePaths(traces, accepted.commit, accepted.tree, finalTree, sourceRoot, safeTask);
+  const paths = possiblePaths(
+    traces, accepted.commit, accepted.tree, finalTree, sourceRoot, safeTask,
+    accepted.commit, accepted.tree,
+  );
   if (paths.length === 0) incomplete("no continuous Phase coverage chain reaches the final tree");
   if (paths.length !== 1) incomplete(`Phase coverage is ambiguous: ${paths.length} continuous chains reach the final tree`);
   const coverage = paths[0];

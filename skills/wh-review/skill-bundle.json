@@ -76,7 +76,7 @@
     },
     {
       "path": "scripts/__tests__/review-source-materials.test.mjs",
-      "sha256": "34dc24418f5dc967883831ae110bd1e78297ddf8270ddea37e0de90dcf21b755"
+      "sha256": "dba98b7a7b03c764613275664eb5261685a599110f387c88eacf10a66d7dcaaf"
     },
     {
       "path": "scripts/__tests__/ac-evidence-summary.test.mjs",
@@ -104,7 +104,7 @@
     },
     {
       "path": "scripts/__tests__/wh-review-cli.test.mjs",
-      "sha256": "5150e63f1f3e57ee554ad36fbf0be0754771ca822ac8ca2f1da251470a324e0a"
+      "sha256": "1f976dbd35ccb4d1f9204de7b2b6c698c2fc530957e4b74850a08f7a4643b2ba"
     },
     {
       "path": "scripts/lib/safe-id.mjs",
@@ -112,11 +112,11 @@
     },
     {
       "path": "scripts/phase-review-subject.mjs",
-      "sha256": "f16f3fcc6fa2f6fabe2375254a2392f88a67ae3cce3a5342256eb04c2d8c05a3"
+      "sha256": "63e57699a7b7eb7da9d523cad1a01e0d0c6dc764daf4c16afa03f1270270f85e"
     },
     {
       "path": "scripts/integration-review-subject.mjs",
-      "sha256": "903463a8bf6d4551426972e0a9d276d9e54e5c7ab765b223689189d7acb999ee"
+      "sha256": "296b9b5151a90f942ddf2b55f4b5fafda127d20e71382480636501e42c244ff3"
     },
     {
       "path": "scripts/review-controller.mjs",
@@ -124,7 +124,7 @@
     },
     {
       "path": "scripts/review-materials.mjs",
-      "sha256": "43bddb53700ab0011c1cc7c1ffcdbba01faeddc332f9a77f20820d37b6307f39"
+      "sha256": "7c2f7139528c8fdb8e1a876d594c6bbe809d700700715393ac207ae3ebba97e8"
     },
     {
       "path": "scripts/ac-evidence-summary.mjs",
@@ -140,15 +140,15 @@
     },
     {
       "path": "scripts/review-result.mjs",
-      "sha256": "eae4f772270aa427922145b6ccf97aad59b754dd782502d844bae0734290ff80"
+      "sha256": "9d22deb3adf477bcb89567dfa5395040ad55e2a08757f1e02c086521c2467524"
     },
     {
       "path": "scripts/review-runner.mjs",
-      "sha256": "25525d4be9508ef3bb5d44e3c62a320ce4268103bfeef4c655ae286af362d680"
+      "sha256": "5b4e96d71e976988f3d3c8ff0046b2ed5c39a5f057053847b91f4481071bde07"
     },
     {
       "path": "scripts/review-source.mjs",
-      "sha256": "89ab2a68e4fe85b9db34587a7e11f10eb931280e0e208ff6f997712552a37b69"
+      "sha256": "724679e2dac4bf9bd0cd7aa7b7a3526305b07e6825d657067bc2b270888aef18"
     },
     {
       "path": "scripts/schema-validator.mjs",
@@ -160,7 +160,7 @@
     },
     {
       "path": "scripts/wh-review-cli.mjs",
-      "sha256": "58a9fe9c9ff5b1ebb712d279f4e21d747a4a31bb8789e7bc960aba1c2817a47f"
+      "sha256": "126d161c69d4d9f7fba12f456c712a60d32e734a7a692d181d008509c4354082"
     },
     {
       "path": "stage-materials.json",

@@ -928,7 +928,12 @@ function makeTaskHandle(taskPath, manifest) {
       return Object.freeze(refs);
     },
     /** Enumerate only content-addressed Phase map traces; this is not a generic evidence walk. */
-    listCanonicalPhaseMapTraceRefs() {
+    listCanonicalPhaseMapTraceRefs(options = {}) {
+      const tolerateHistoricalInvalidRecords = options?.tolerateHistoricalInvalidRecords === true;
+      if (options === null || typeof options !== "object" || Array.isArray(options)
+          || Object.keys(options).some((key) => key !== "tolerateHistoricalInvalidRecords")) {
+        throw new TypeError("Phase trace listing options are invalid");
+      }
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       verifyManifest();
       const evidenceRoot = resolve(realTaskPath, "evidence");
@@ -962,6 +967,7 @@ function makeTaskHandle(taskPath, manifest) {
             const trace = /^phase-map-trace-[a-f0-9]{64}\.json$/.test(traceEntry.name);
             const supporting = /^(?:phase-evidence|diff-scan)-[a-f0-9]{64}\.json$/.test(traceEntry.name);
             if (!trace && !supporting) {
+              if (tolerateHistoricalInvalidRecords) continue;
               throw new Error(`Phase trace namespace has an invalid trace record: ${traceEntry.name}`);
             }
             const tracePath = resolve(snapshotRoot, traceEntry.name);
@@ -977,6 +983,37 @@ function makeTaskHandle(taskPath, manifest) {
       for (const identity of identities) verifyDirectorySnapshot(identity);
       verifyDirectorySnapshot(phasesIdentity);
       verifyDirectorySnapshot(evidenceIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
+    },
+    /** Enumerate append-only Phase successor records used for explicit historical predecessor bindings. */
+    listCanonicalPhaseSuccessorRefs() {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const resultsRoot = resolve(realTaskPath, "results");
+      const buildCodeRoot = resolve(resultsRoot, "build-code");
+      const revisionsRoot = resolve(buildCodeRoot, "revisions");
+      assertInside(realTaskPath, resultsRoot, "results directory");
+      assertInside(realTaskPath, buildCodeRoot, "build-code results directory");
+      assertInside(realTaskPath, revisionsRoot, "build-code revisions directory");
+      if (!existsSync(revisionsRoot)) return Object.freeze([]);
+      const identities = [
+        directorySnapshot(realTaskPath, resultsRoot),
+        directorySnapshot(realTaskPath, buildCodeRoot),
+        directorySnapshot(realTaskPath, revisionsRoot),
+      ];
+      const refs = readdirSync(revisionsRoot, { withFileTypes: true }).map((entry) => {
+        const candidate = resolve(revisionsRoot, entry.name);
+        const stat = lstatSync(candidate);
+        if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()) {
+          throw new Error(`Phase successor must be a regular non-symlink JSON file: ${entry.name}`);
+        }
+        if (/^phase-successor-[0-9]{4}\.json$/.test(entry.name)) {
+          return `results/build-code/revisions/${entry.name}`;
+        }
+        return null;
+      }).filter((ref) => ref !== null).sort((left, right) => left.localeCompare(right));
+      for (const identity of identities) verifyDirectorySnapshot(identity);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return Object.freeze(refs);
     },
@@ -1206,7 +1243,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-[0-9]{4}|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/invalidations\/[a-f0-9]{64}|results\/build-code\/revisions\/(?:reopen-[0-9]{4}|adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*)|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|runs\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:run-[0-9]{4}\.json|invalidations\/[a-f0-9]{64}\.json|journal-invalidations\/[a-f0-9]{64}\.json)|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|quality\/facts\/[a-f0-9]{64}\.json|publications\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json|materials\/(?:current|revisions\/[a-f0-9]{64})\.json|requirements\/current\.json|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/revisions\/continuation-[0-9]{4}|results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/invalidations\/[a-f0-9]{64}|results\/build-code\/revisions\/(?:reopen-[0-9]{4}|phase-successor-[0-9]{4}|adjudication-correction-[A-Za-z0-9][A-Za-z0-9._-]*)|results\/build-plan\/revisions\/baseline-rebind-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|runs\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:run-[0-9]{4}\.json|invalidations\/[a-f0-9]{64}\.json|journal-invalidations\/[a-f0-9]{64}\.json)|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*|quality\/facts\/[a-f0-9]{64}\.json|publications\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json|materials\/(?:current|revisions\/[a-f0-9]{64})\.json|requirements\/current\.json|identity\/phase-trace-lineage\/[A-Za-z0-9._-]+-[a-f0-9]{40,64}-[a-f0-9]{64}\.json)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;

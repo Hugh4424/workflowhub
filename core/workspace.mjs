@@ -3,7 +3,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { assertTaskHandle } from "./task-handle.mjs";
-import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { captureExecutionSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { readAuthenticatedDirtyCleanupBinding } from "./task-recovery.mjs";
 
 const WORKSPACES = new WeakSet();
@@ -228,7 +228,7 @@ function validateCandidate(task, expected, facts = {
   Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
   Object.defineProperty(candidate, "captureSnapshot", { enumerable: false, value: () => {
     validate();
-    return captureGitWorktreeSnapshot(realWorktree);
+    return captureExecutionSnapshot(realWorktree);
   } });
   CANDIDATE_WORKSPACES.add(candidate);
   return Object.freeze(candidate);
@@ -461,7 +461,7 @@ export function openAcceptedCandidateWorkspace(taskHandle, accepted) {
   Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
   Object.defineProperty(candidate, "captureSnapshot", { enumerable: false, value: () => {
     validate();
-    return captureGitWorktreeSnapshot(worktreeRoot);
+    return captureExecutionSnapshot(worktreeRoot);
   } });
   CANDIDATE_WORKSPACES.add(candidate);
   return Object.freeze(candidate);

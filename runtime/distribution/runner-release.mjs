@@ -74,11 +74,15 @@ export async function buildRunnerRelease({
     "package-lock.json",
     ...filesUnder(root, "core", (locator) => /\.(?:mjs|json)$/.test(locator)),
     ...filesUnder(root, "scripts", (locator) => locator.endsWith(".mjs") && !locator.includes("/__tests__/")),
-    ...filesUnder(root, "schemas", (locator) => locator.endsWith(".json")),
+    ...filesUnder(root, "tools/cli", (locator) => locator.endsWith(".mjs") && !locator.includes("/__tests__/")),
+    // Phase 8 moved the authoritative schema tree under runtime/.  Keep the
+    // release self-contained: installed Runner validation must not reach back
+    // into a source checkout or a now-empty legacy schemas/ directory.
+    ...filesUnder(root, "runtime/schemas", (locator) => locator.endsWith(".json")),
     ...filesUnder(root, "contracts", (locator) => /\.(?:json|contract)$/.test(locator) || locator.endsWith(".json")),
     ...filesUnder(root, "config", (locator) => /\.(?:ya?ml|json)$/.test(locator)),
     ...filesUnder(root, "metrics", (locator) => /\.(?:mjs|json)$/.test(locator)),
-    ...filesUnder(root, "workflows", (locator) => locator.endsWith(".mjs")),
+    ...filesUnder(root, "workflows", (locator) => locator.endsWith(".mjs") && !/\.test\.[^/]+$/.test(locator)),
   ...filesUnder(root, "skills/wh-review", (locator) =>
       !/(?:^|\/)__tests__(?:\/|$)|\.test\.[^/]+$/.test(locator)
       && !locator.endsWith("/skill-bundle.json")),

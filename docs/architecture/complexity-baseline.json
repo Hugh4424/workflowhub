@@ -3,12 +3,12 @@
   "source": {
     "git_head": "1d9a93fe2f10e02b959ba7c9b9aa11d4366932f3",
     "tracked_files": 1001,
-    "delivery_files": 1070,
-    "source_files": 312
+    "delivery_files": 1084,
+    "source_files": 319
   },
   "measurements": {
     "formal_test_files": {
-      "actual": 153,
+      "actual": 158,
       "definition": "*.test.* and */__tests__/*"
     },
     "test_support_lines": {
@@ -18,7 +18,7 @@
     },
     "persistent_object_families": {
       "source": "core/task-handle.mjs",
-      "source_sha256": "c2ea52dfd03967d95d95b72c5af0eee6f88ce390a896e878fd97924892296822",
+      "source_sha256": "39fa8b143d5194dc9e9e65afe6515b5b004e20e5fcf529c0abe742c1b97ab617",
       "names": [
         "confirmations",
         "evidence",
@@ -144,17 +144,17 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 32996,
+      "actual": 33930,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 22996,
+      "delta_from_target": 23930,
       "within_limit": false
     },
     "production_lines": {
-      "actual": 38706,
+      "actual": 39671,
       "target": 12000,
       "limit": 15000,
-      "delta_from_target": 26706,
+      "delta_from_target": 27671,
       "within_limit": false
     },
     "public_runner_behaviors": {
@@ -165,10 +165,10 @@
       "within_limit": false
     },
     "schemas": {
-      "actual": 45,
+      "actual": 48,
       "target": 8,
       "limit": 10,
-      "delta_from_target": 37,
+      "delta_from_target": 40,
       "within_limit": false
     },
     "persistent_object_families": {
@@ -179,10 +179,10 @@
       "within_limit": false
     },
     "largest_core_file_lines": {
-      "actual": 4956,
+      "actual": 5091,
       "target": 800,
       "limit": 1000,
-      "delta_from_target": 4156,
+      "delta_from_target": 4291,
       "within_limit": false
     },
     "focused_test_seconds": {
@@ -202,7 +202,7 @@
   },
   "hard_gates": {
     "dedicated_recovery_state": {
-      "actual": 514,
+      "actual": 515,
       "required_final": 0,
       "phase_0_status": "observed_for_planned_removal"
     },
@@ -220,7 +220,7 @@
   "hotspots": [
     {
       "path": "core/task-kernel-implementation.mjs",
-      "lines": 4956
+      "lines": 5091
     },
     {
       "path": "core/__tests__/task-kernel-publish.test.mjs",

@@ -143,6 +143,22 @@ describe("TaskHandle", () => {
     ]);
   });
 
+  it("can ignore historical non-trace notes only for the integration resolver", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const snapshot = "d".repeat(40);
+    const tracesRoot = join(taskPath, "evidence", "phases", "T04", snapshot);
+    mkdirSync(tracesRoot, { recursive: true });
+    const trace = "e".repeat(64);
+    writeFileSync(join(tracesRoot, `phase-map-trace-${trace}.json`), "{}\n");
+    writeFileSync(join(tracesRoot, "current-refresh-legacy.json"), "{}\n");
+
+    expect(() => task.listCanonicalPhaseMapTraceRefs()).toThrow(/invalid trace record/);
+    expect(task.listCanonicalPhaseMapTraceRefs({ tolerateHistoricalInvalidRecords: true })).toEqual([
+      `evidence/phases/T04/${snapshot}/phase-map-trace-${trace}.json`,
+    ]);
+  });
+
   it("rejects noncanonical entries and symlinks in the Phase trace namespace", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });

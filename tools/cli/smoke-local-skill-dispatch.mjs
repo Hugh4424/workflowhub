@@ -88,7 +88,11 @@ export async function smokeLocalSkillDispatch(packageRoot) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const root = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  // tools/cli is two levels below the package root.  Keep the smoke command
+  // pointed at the authoritative workflows/ tree rather than tools/workflows.
+  const root = process.argv[2]
+    ? path.resolve(process.argv[2])
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const result = await smokeLocalSkillDispatch(root);
   console.log(`local skill dispatch smoke: ok (${result.length} stages)`);
 }

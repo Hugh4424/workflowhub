@@ -17,7 +17,7 @@ function binding(value, label) {
   return Object.freeze({ ref: value.ref, hash: value.hash });
 }
 
-export function createMaterialRevision({ taskId, materials, requirements, previous = null, changeSummary, sourceRefs }) {
+export function createMaterialRevision({ taskId, materials, requirements, previous = null, changeSummary, sourceRefs, includeRequirements = true, preserveChangedFiles = null }) {
   if (typeof taskId !== "string" || taskId.trim() === "") throw new TypeError("taskId is required");
   if (!materials || typeof materials !== "object") throw new TypeError("four materials are required");
   if (typeof changeSummary !== "string" || changeSummary.trim() === "") throw new TypeError("changeSummary is required");
@@ -30,11 +30,19 @@ export function createMaterialRevision({ taskId, materials, requirements, previo
     if (typeof materials[file] !== "string") throw new TypeError(`material ${file} is required`);
     return [file, sha256(materials[file])];
   }));
-  const changedFiles = previous === null
+  let changedFiles = previous === null
     ? [...MATERIAL_FILES]
     : MATERIAL_FILES.filter((file) => previous.hashes?.[file] !== hashes[file]);
   if (previous === null || JSON.stringify(previous.requirements) !== JSON.stringify(requirementsBinding)) {
     changedFiles.push("requirements");
+  }
+  if (!includeRequirements) changedFiles = changedFiles.filter((file) => file !== "requirements");
+  // A legacy head may differ only by the historical requirements extension.
+  // A canonical successor still needs a non-empty changed_files provenance;
+  // preserve the predecessor's material-change set rather than inventing a
+  // new live-file change. This is used only by the explicit repair path.
+  if (changedFiles.length === 0 && Array.isArray(preserveChangedFiles)) {
+    changedFiles = MATERIAL_FILES.filter((file) => preserveChangedFiles.includes(file));
   }
   if (changedFiles.length === 0) return Object.freeze({ idempotent: true, revision: previous });
   const identity = {
@@ -46,8 +54,8 @@ export function createMaterialRevision({ taskId, materials, requirements, previo
     change_summary: changeSummary,
     source_refs: sourceRefs,
     hashes,
-    requirements: requirementsBinding,
   };
+  if (includeRequirements) identity.requirements = requirementsBinding;
   const digest = sha256(canonical(identity));
   const value = Object.freeze({
     schema_version: "task-material-revision.v1",

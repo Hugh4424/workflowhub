@@ -20,10 +20,10 @@ function run(root = repoRoot) {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-task-context-check-"));
   temporary.push(root);
-  mkdirSync(join(root, "scripts"), { recursive: true });
-  cpSync(checker, join(root, "scripts", "check-task-record-paths.mjs"));
-  mkdirSync(join(root, "core"), { recursive: true });
-  writeFileSync(join(root, "core", "task-identity.mjs"), "export const taskPath = join(root, 'Projects', project, 'tasks', task);\n");
+  mkdirSync(join(root, "tools", "cli"), { recursive: true });
+  cpSync(checker, join(root, "tools", "cli", "check-task-record-paths.mjs"));
+  mkdirSync(join(root, "runtime", "task"), { recursive: true });
+  writeFileSync(join(root, "runtime", "task", "task-identity.mjs"), "export const taskPath = join(root, 'Projects', project, 'tasks', task);\n");
   for (const stage of stages) {
     const directory = join(root, "workflows", stage);
     mkdirSync(directory, { recursive: true });

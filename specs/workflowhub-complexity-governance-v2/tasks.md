@@ -2461,6 +2461,37 @@
 - **追加输出**：新 material revision ref/hash、旧 revision ref/hash 保留、focused gate exit code；不得将本修复误报为 T054 全量完成。
 - **执行记录**：compatibility reader/repair focused gate 已完成；T054 仍保持 pending，下一步只运行计划结构、任务边界和材料绑定 focused checks。
 
+#### T054 execution snapshot / Phase successor correction（append-only）
+
+- **scope reason**：Phase 4 发现证据写入 candidate `evidence/**` 会改变执行 snapshot，进而使 implementation/test receipt 与 Phase identity 自失效；同时 accepted Phase 缺少同任务、同材料、同 receipts 的 append-only continuation。
+- **实现**：新增 execution snapshot（排除 evidence-only files，raw Git snapshot 仍严格）；receipt、Workspace、review source 统一使用 execution snapshot；Phase evidence 支持两步 successor：runtime 先由 `phase_successor_reason` 派生 canonical record，再用 `phase_successor_ref/hash` 绑定 review。
+- **拒绝条件**：跨 task/phase、手写或重定基线、非 Git ancestor、material revision 过期、receipt/tree/allowlist/guarded C2 不匹配、successor 与正式 review 同步创建均 fail-closed；`unavailable` 只保留质量事实。
+- **Phase 4 history-only checkpoint correction**：`verifyGitCheckpoint` 只校验历史 Git ref/tree 完整性；材料修订后历史 accepted/checkpoint 仍可读且只读，不再作为普通工作的许可证。材料漂移与质量事实失鲜只在正式发布、verify 或 close 时 fail-closed。
+- **awaiting-review successor**：当前 Phase 为 `awaiting_review` 且唯一 predecessor review 是已认证 `unavailable` 时，允许同一任务追加 successor；旧 Phase evidence、material/task binding、旧 implementation/GREEN receipts、Git ancestor、allowlist 和 guarded paths 必须全部匹配，否则拒绝。语义 `pass`、`revise_required`、缺失或无效 unavailable 不得走此分支。
+- **focused evidence**：36 assertions（Phase composition 6、execution snapshot 1、integration subject 29）通过；implementation/test receipts 已按当前 tree 重新生成，具体 canonical ref/hash 以本 correction 的最终 receipt report 为准；两者必须绑定同一 execution snapshot tree。
+- **边界**：本 correction 只记录执行 snapshot 与 successor 机制；不重放 provider，不改变旧 Phase 完成事实，不将 focused gate 误报为 T054 全量完成。
+
+##### T054 execution snapshot allowlist correction（append-only）
+
+- **追加原因**：T017 的 progression oracle 是本 Phase 4 历史推进许可证修复的真实 RED 证据；旧 Phase 9 allowlist 在该文件产生前已冻结，导致 successor 只能错误地把该测试视为越界。
+- **追加文件**：`tests/integration/execution-snapshot-isolation.test.mjs`
+- **边界**：只允许该测试文件及其已有 T054 execution-snapshot 断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
+- **验收**：当前四材料 successor 必须同时绑定修订后的 T054 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
+
+##### T054 Phase 4 lineage-test allowlist correction（append-only）
+
+- **追加原因**：Phase 4 的 immutable phase-result archive 与 same-phase trace 选择修复同时更新了 `core/__tests__/task-handle.test.mjs`；该测试是修复的直接回归证明，旧 Phase 9 allowlist 未包含它。
+- **追加文件**：`core/__tests__/task-handle.test.mjs`
+- **边界**：只允许该测试文件中与 Phase 4 immutable history/successor 绑定相关的断言；旧 Phase 9 allowlist、旧 diff scan、旧 receipts 和旧 review 事实保持只读不变。
+- **验收**：后续 successor 必须同时绑定本修订后的 allowlist、同一 execution snapshot tree 的 implementation/GREEN receipts；未绑定或混入其它路径时 fail-closed。
+
+##### T054 explicit predecessor successor API correction（append-only）
+
+- **追加原因**：Phase 4 需要从 canonical 49bd Phase trace 追加到当前 15be tree；successor 必须绑定显式历史 predecessor，不得把可变 live phase pointer 当作历史许可。
+- **追加文件**：`workflows/build-code/phase-evidence.mjs`、`core/task-handle.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`tests/build-code-phase-evidence.test.mjs`、`skills/wh-review/scripts/__tests__/integration-review-subject.test.mjs`
+- **边界**：只允许显式 predecessor ref/hash 校验、TaskHandle successor 枚举、same-phase trace supersession 及对应 focused tests；旧 Phase trace、live pointer、receipt 和 review 事实保持只读不变。
+- **验收**：canonical predecessor→replacement selector 通过；非 canonical、hash mismatch、跨 task/phase、非 ancestor 或 live pointer 回退均 fail-closed；focused gate 不替代 T054 全量完成。
+
 ##### 执行状态填写区（唯一完成权威）
 
 - [ ] **任务完成**

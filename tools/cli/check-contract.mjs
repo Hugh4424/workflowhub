@@ -22,7 +22,8 @@ import { fileURLToPath } from "node:url";
 import { validateContract } from "../../runtime/evidence/validate-contract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "..");
+// tools/cli/ -> repository root; contracts remain a top-level project concern.
+const repoRoot = resolve(here, "..", "..");
 
 // ---------------------------------------------------------------------------
 // Parse --contract flag
