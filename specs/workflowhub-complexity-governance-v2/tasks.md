@@ -42,7 +42,7 @@
 - **Phase**：Phase 0：冻结基线与逐文件清单
 - **goal**：生成当前 tree 的 inventory 与复杂度基线
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、N/A — first task
 - **依赖**：N/A — first task
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -80,7 +80,7 @@
 - **Phase**：Phase 0：冻结基线与逐文件清单
 - **goal**：先证明缺字段 deletion proof 会失败
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T001
 - **依赖**：T001
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -118,7 +118,7 @@
 - **Phase**：Phase 0：冻结基线与逐文件清单
 - **goal**：实现 deletion proof 校验与 12 类候选清单
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T002
 - **依赖**：T002
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -156,7 +156,7 @@
 - **Phase**：Phase 0：冻结基线与逐文件清单
 - **goal**：证明 node_modules 只是可重建本地缓存
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T001
 - **依赖**：T001
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -235,7 +235,7 @@
 - **Phase**：Phase 1：窄 Runtime facade 与双发布单元
 - **goal**：先冻结七行为 facade 和版本错配失败合同
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T003
 - **依赖**：T003
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -273,7 +273,7 @@
 - **Phase**：Phase 1：窄 Runtime facade 与双发布单元
 - **goal**：实现七行为 facade 和 Runner 兼容函数
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T005
 - **依赖**：T005
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -311,7 +311,7 @@
 - **Phase**：Phase 1：窄 Runtime facade 与双发布单元
 - **goal**：先证明 Bundle/Runner 夹带内容和隐式依赖会失败
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T006
 - **依赖**：T006
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -349,7 +349,7 @@
 - **Phase**：Phase 1：窄 Runtime facade 与双发布单元
 - **goal**：实现洁净 Skill Bundle 与 Local Runner Release
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T007
 - **依赖**：T007
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -428,7 +428,7 @@
 - **Phase**：Phase 2：单一材料修订与派生发布
 - **goal**：先冻结材料修订、质量事实和五阶段完成谓词
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T008
 - **依赖**：T008
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -466,7 +466,7 @@
 - **Phase**：Phase 2：单一材料修订与派生发布
 - **goal**：实现单一修订、质量事实和派生完成
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T009
 - **依赖**：T009
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -504,7 +504,7 @@
 - **Phase**：Phase 2：单一材料修订与派生发布
 - **goal**：先注入全部正式 writer 的五类故障
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T010
 - **依赖**：T010
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -542,7 +542,7 @@
 - **Phase**：Phase 2：单一材料修订与派生发布
 - **goal**：实现全部正式 writer 的原子、并发唯一胜者和幂等
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T011
 - **依赖**：T011
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -621,7 +621,7 @@
 - **Phase**：Phase 3：新任务单写与迁移脚手架即时退出
 - **goal**：先证明新任务单写和旧 writer 不可达
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T012
 - **依赖**：T012
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -659,7 +659,7 @@
 - **Phase**：Phase 3：新任务单写与迁移脚手架即时退出
 - **goal**：原子切换新任务 writer
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T013
 - **依赖**：T013
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -697,7 +697,7 @@
 - **Phase**：Phase 3：新任务单写与迁移脚手架即时退出
 - **goal**：审计真实旧任务并用冻结 fixture 证明一次性迁移完整性
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T014
 - **依赖**：T014
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -735,7 +735,7 @@
 - **Phase**：Phase 3：新任务单写与迁移脚手架即时退出
 - **goal**：完成真实旧任务处置证明并立即删除全部 legacy 脚手架
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T015
 - **依赖**：T015
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -814,7 +814,7 @@
 - **Phase**：Phase 4：切断历史推进许可证
 - **goal**：先证明普通工作仍被历史许可阻塞
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T016
 - **依赖**：T016
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -853,7 +853,7 @@
 - **Phase**：Phase 4：切断历史推进许可证
 - **goal**：切断 checkpoint/reopen/rebind/recovery 工作许可读取
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T017
 - **依赖**：T017
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -892,7 +892,7 @@
 - **Phase**：Phase 4：切断历史推进许可证
 - **goal**：先固定三条完整五阶段恢复 E2E 与源码不可变合同
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T018
 - **依赖**：T018
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -931,7 +931,7 @@
 - **Phase**：Phase 4：切断历史推进许可证
 - **goal**：完成三条合成五阶段恢复 E2E
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T019
 - **依赖**：T019
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1010,7 +1010,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：冻结逐项删除清单并取得用户确认
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T020
 - **依赖**：T020
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1048,7 +1048,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-01 Grill replacement 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T021
 - **依赖**：T021
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1086,7 +1086,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-01 Grill replacement
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T022
 - **依赖**：T022
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1124,7 +1124,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-02 Phase trace lineage 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T023
 - **依赖**：T023
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1162,7 +1162,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-02 Phase trace lineage
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T024
 - **依赖**：T024
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1200,7 +1200,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-03 专用 invalidation 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T025
 - **依赖**：T025
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1238,7 +1238,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-03 专用 invalidation
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T026
 - **依赖**：T026
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1276,7 +1276,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-04 continuation 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T027
 - **依赖**：T027
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1314,7 +1314,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-04 continuation
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T028
 - **依赖**：T028
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1352,7 +1352,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-05 rebind 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T029
 - **依赖**：T029
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1390,7 +1390,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-05 rebind
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T030
 - **依赖**：T030
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1428,7 +1428,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-06 reopen 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T031
 - **依赖**：T031
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1466,7 +1466,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-06 reopen
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T032
 - **依赖**：T032
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1504,7 +1504,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-07 stage recovery 与 recover-spec 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T033
 - **依赖**：T033
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1542,7 +1542,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-07 stage recovery 与 recover-spec
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T034
 - **依赖**：T034
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1580,7 +1580,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-08 recovery/reset workspace CAS 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T035
 - **依赖**：T035
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1618,7 +1618,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-08 recovery/reset workspace CAS
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T036
 - **依赖**：T036
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1656,7 +1656,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-09 重复 invocation/completion projection 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T037
 - **依赖**：T037
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1694,7 +1694,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-09 重复 invocation/completion projection
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T038
 - **依赖**：T038
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1732,7 +1732,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-10 stage-transition journal 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T039
 - **依赖**：T039
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1770,7 +1770,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-10 stage-transition journal
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T040
 - **依赖**：T040
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1808,7 +1808,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-11 shadow current/head/checkpoint 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T041
 - **依赖**：T041
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1846,7 +1846,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-11 shadow current/head/checkpoint
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T042
 - **依赖**：T042
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1884,7 +1884,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：先证明 DEL-12 旧 dispatch/config/index/spike 旧入口仍可达
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T043
 - **依赖**：T043
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1922,7 +1922,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：垂直删除 DEL-12 旧 dispatch/config/index/spike
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T044
 - **依赖**：T044
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -1960,7 +1960,7 @@
 - **Phase**：Phase 5：用户确认后的垂直删除
 - **goal**：复算全部删除归零项和跨切片回归
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T045
 - **依赖**：T045
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2039,7 +2039,7 @@
 - **Phase**：Phase 6：全局 legacy 归零复核
 - **goal**：建立全仓 legacy-zero 合同
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T046
 - **依赖**：T046
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2077,7 +2077,7 @@
 - **Phase**：Phase 6：全局 legacy 归零复核
 - **goal**：修复任何 legacy 残留并固化零值 guard
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T047
 - **依赖**：T047
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2156,7 +2156,7 @@
 - **Phase**：Phase 7：按外部质量谓词精简测试
 - **goal**：逐文件处置全部测试并按外部质量谓词重组
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T048
 - **依赖**：T048
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2179,14 +2179,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：按外部质量谓词完成逐文件 test disposition，保留唯一负向 oracle 并删除迁移专属测试。
+- **executed_commands**：`node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests && ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --reporter=dot`（exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e6a9b38fc1ede04b963323f65609c2b86c104b893ae11d571e30cbd3c08bdc6c.json","sha256":"1e181a68cc75d6cbac347e5ae309bb2c636539671713b6732238808287afdaa9"},{"ref":"receipts/build-tests-phase-7-test-disposition-mutations-v5.json","sha256":"10d2ee0062fa510b57813ae14d2fbb3c13dfa7f8d5a772f4feb69ef4fb18e14f"},{"ref":"reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json","sha256":"c8a87d3816ef135b230641bd2ce49aee076ecdbe99377623725bbecc26d11d16"}]`
+- **covered_ac**：AC-12、AC-14、AC-15
+- **review_fact**：`reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json`
+- **completed_at**：2026-07-31
 
 #### T050 — 先证明五个破坏样本至少一个未被抓住
 
@@ -2194,7 +2194,7 @@
 - **Phase**：Phase 7：按外部质量谓词精简测试
 - **goal**：先证明五个破坏样本至少一个未被抓住
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T049
 - **依赖**：T049
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2217,14 +2217,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：完成五类 mutation RED 设计并冻结 identity、completion、review、authorization、bundle 五类破坏样本。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/mutation-guards.test.mjs`（RED 证据已保留；最终 GREEN 由 T051 复核）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e6a9b38fc1ede04b963323f65609c2b86c104b893ae11d571e30cbd3c08bdc6c.json","sha256":"1e181a68cc75d6cbac347e5ae309bb2c636539671713b6732238808287afdaa9"},{"ref":"receipts/build-tests-phase-7-test-disposition-mutations-v5.json","sha256":"10d2ee0062fa510b57813ae14d2fbb3c13dfa7f8d5a772f4feb69ef4fb18e14f"},{"ref":"reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json","sha256":"c8a87d3816ef135b230641bd2ce49aee076ecdbe99377623725bbecc26d11d16"}]`
+- **covered_ac**：AC-05、AC-09、AC-10、AC-12
+- **review_fact**：`reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json`
+- **completed_at**：2026-07-31
 
 #### T051 — 完成五个破坏样本的反脆弱验证
 
@@ -2232,7 +2232,7 @@
 - **Phase**：Phase 7：按外部质量谓词精简测试
 - **goal**：完成五个破坏样本的反脆弱验证
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T050
 - **依赖**：T050
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2255,14 +2255,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：完成五类 mutation 反脆弱验证，确认关键保护删除时 verify 稳定拒绝。
+- **executed_commands**：`node tools/architecture/test-disposition.mjs --check --require-all-inventory-tests && ./node_modules/.bin/vitest run tests/contract/test-disposition.test.mjs tests/integration/mutation-guards.test.mjs tests/contract/repository-inventory.test.mjs --reporter=dot`（13/13 passed，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e6a9b38fc1ede04b963323f65609c2b86c104b893ae11d571e30cbd3c08bdc6c.json","sha256":"1e181a68cc75d6cbac347e5ae309bb2c636539671713b6732238808287afdaa9"},{"ref":"receipts/build-tests-phase-7-test-disposition-mutations-v5.json","sha256":"10d2ee0062fa510b57813ae14d2fbb3c13dfa7f8d5a772f4feb69ef4fb18e14f"},{"ref":"reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json","sha256":"c8a87d3816ef135b230641bd2ce49aee076ecdbe99377623725bbecc26d11d16"}]`
+- **covered_ac**：AC-05、AC-09、AC-10、AC-12
+- **review_fact**：`reviews/results/build-code-default-b7ec22ac1ced96e2a6613a328e49d9e38b5f774c-66b0e310-c22b-48fe-9f17-aa4bf7edecb0.json`
+- **completed_at**：2026-07-31
 
 ### Verify
 
@@ -2307,11 +2307,13 @@
 
 #### T052 — 生成冻结 move-map 并机械移动剩余 core/scripts/schemas
 
+- **phase_local_c2_paths**：本 Phase 仅允许对以下四个已声明迁移入口豁免路径级 C2 规则：`.github/workflows/ci.yml`、`package.json`、`scripts/__tests__/ci-chain-check.test.mjs`、`tools/cli/ci-chain-check.mjs`。仅豁免 `C2_FILE_PATH_RULES` 与 `testFilePath`；新增内容仍检查 semver 与不可逆 Git，其他路径一律拒绝。
+
 - **ID**：T052
 - **Phase**：Phase 8：最后机械搬目录与治理同步
 - **goal**：生成冻结 move-map 并机械移动剩余 core/scripts/schemas
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T051
 - **依赖**：T051
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2349,7 +2351,7 @@
 - **Phase**：Phase 8：最后机械搬目录与治理同步
 - **goal**：同步 AGENTS、CLAUDE、CONTEXT、ADR 与结构门
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T052
 - **依赖**：T052
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2428,7 +2430,7 @@
 - **Phase**：Phase 9：最终验证、三方架构审查与用户确认
 - **goal**：执行 clean install、完整测试、3 E2E、5 mutation 和直接 AC 覆盖审计
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T053
 - **依赖**：T053
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2466,7 +2468,7 @@
 - **Phase**：Phase 9：最终验证、三方架构审查与用户确认
 - **goal**：通过正式 wh-review 执行三方独立 architecture review 并处置有效 finding
 - **design_state**：ready
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T054
 - **依赖**：T054
 - **并行**：否 — 依赖与文件所有权要求串行
@@ -2504,7 +2506,7 @@
 - **Phase**：Phase 9：最终验证、三方架构审查与用户确认
 - **goal**：向用户展示最终删除清单、保留项、diff 和复杂度变化并确认
 - **design_state**：blocked-by-design
-- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"b8fefc059b4bc966ddb030bc8051ce2158d8f96e5e618ee3bf0490cc8b7ceaac","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
+- **versioned_refs**：`[{"artifact_kind":"spec","ref":"specs/workflowhub-complexity-governance-v2/spec.md","hash":"45c8636efbe544a06701ca1aaf90c6f11575a6bc9833e64cf95f72bc8ce55e04","id":"SPEC-WORKFLOWHUB-COMPLEXITY-V2"},{"artifact_kind":"plan","ref":"specs/workflowhub-complexity-governance-v2/plan.md","hash":"0cc347aaec474ba1325003881fbeeb7a0e7ea7d4a7dbb4730cd1a844a6021e3f","id":"PLAN-WORKFLOWHUB-COMPLEXITY-V2"}]`
 - **输入**：accepted spec、plan anchor、T055
 - **依赖**：T055
 - **并行**：否 — 依赖与文件所有权要求串行
