@@ -255,6 +255,18 @@ If the selected engine stayed blocked, report:
 - repair steps attempted
 - why the run stopped
 
+## WorkflowHub build-code handoff
+
+本技能只提供一次 invocation-scoped 的受控执行链；不创建 Runner、公共命令或持久浏览器状态。正式
+build-code handler 负责调用它并保存结果，重试必须使用新的 invocation，旧失败不能覆盖。证据除页面
+和截图外，还必须绑定 task、stage attempt、material revision、源码 snapshot、AC、Design.md 与
+Experience.md identity、service instance、API/DTO contract、隔离 browser profile，以及 console、
+network、focus、overflow、visual、a11y、performance 和 cleanup 事实。
+
+真实服务/API 不可用、身份错配、用户取消、浏览器或 oracle 失败、cleanup 失败，都要保留原始
+`failure_reason` 并返回 `failed`/`blocked`/`unknown`。组件 fixture 不等于真实页面；运行结果不回写
+Experience.md。没有 UI consumer 时只能输出带理由的 `not_applicable`，不能把缺证据当作 pass。
+
 ## Bundled Resources
 
 - `scripts/browser-qa-context.sh`: derives session, engine, host, allowed domains, auth/profile metadata.

@@ -103,6 +103,16 @@ gate, no gate is created, and no new stage, fifth material, or second authority
 is introduced.
 No new stage or no gate is introduced by the Component Quality Map.
 
+The plan consumes the project-level Design.md and Experience.md identities and
+the `consumer-census.v1` produced upstream. Plan entries must say which source
+owns each rule: Design.md for visual/component standards, Experience.md for
+page/interaction/test behavior. A plan may schedule an update to either source
+only when the confirmed change crosses that source's responsibility; reusing a
+bound rule is not a documentation task. Consumer coverage, CSS/token owner,
+state owner, and unknown reasons are planned as facts, not inferred from a
+component name. Build-plan designs these checks only; it does not run browser
+QA, create a Runner, or add another project standard file.
+
 Do not create a double-solution exercise, a build-plan Grill, a second decision
 log, a parallel review output, or a process summary. `simplicity-guard` and
 `plan-eng-review` are ordinary advisory lenses in the declared review contract,

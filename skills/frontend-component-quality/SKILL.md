@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Frontend Component Quality
 
-公开入口只有本技能。它输出 **Component Quality Map**，不替代 frontend-testing，不创建新 stage、第二 workflow、第二 entrypoint、独立 evidence store 或质量 gate；它是 no stage、no gate 的质量 lens。
+公开入口只有本技能。它输出 **Component Quality Map**，并消费 `buildConsumerCensus` 的真实消费者；不替代 frontend-testing，不创建新 stage、第二 workflow、第二 entrypoint、独立 evidence store 或质量 gate；它是 no stage、no gate 的质量 lens。
 
 ## Component Quality Map
 
@@ -22,6 +22,12 @@ version: 1.0.0
 消费者暂时无法确认时，用结构化 `unknown`/`unavailable` + reason 保留风险，不把它
 悄悄当成“零消费者”或删除依据。全局样式、跨 feature 覆盖或 `!important` 必须写理由
 和消费者。缺字段用 `unknown`、`unavailable` 或 `N/A + reason`，不能把字段名字当作质量通过。
+
+消费者盘点必须是可重放的 `consumer-census.v1`：输入包含 scanner version、源码 snapshot、
+scan config 和 route/import/lazy/CSS/data 的逐项 support matrix；输出按稳定 `consumer_id`
+排序。动态加载、生成代码、未支持框架、扫描失败和语义不确定必须带枚举 `unknown_reason`。
+人工体验/视觉语义只追加 `source=human`，不能覆盖扫描原始项；没有真实 consumer 时保留
+`unknown`，不能声称 component map 已完整。
 
 ## React/Next lens
 

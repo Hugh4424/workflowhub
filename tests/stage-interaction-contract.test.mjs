@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { validateInteractionLifecycleContract } from "../runtime/stage/stage-content-contracts.mjs";
+import * as contracts from "../runtime/stage/stage-content-contracts.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const compact = (value) => value.replace(/\s+/g, " ");
@@ -199,6 +200,27 @@ describe("current interaction boundary", () => {
     expect(grill).toMatch(/(?:conflict|冲突)[\s\S]{0,180}(?:result|disposition|处理结果)/i);
     expect(grill).toMatch(/(?:four|四项)[^。.;]{0,50}(?:exit checks|退出检查)/i);
     expect(grill).toMatch(/不得变成额外机器硬门/);
+  });
+
+  it("P1 RED: aggregate input binds requirement, decision, confirmation, and lifecycle", () => {
+    expect(typeof contracts.validateInteractionAggregateContract).toBe("function");
+    if (typeof contracts.validateInteractionAggregateContract !== "function") return;
+    const decisionHash = HASH;
+    const aggregate = {
+      schema_version: "workflowhub-interaction-aggregate.v1",
+      task_id: "task-ui-contract",
+      stage: "make-decision",
+      snapshot_tree: "b".repeat(40),
+      original_requirement: { ref: "decision-log.md", hash: HASH },
+      decision: { ref: "decision-log.md", hash: decisionHash, revision: `revision-${HASH}` },
+      confirmation: { ref: `quality/confirmations/${HASH}.json`, hash: HASH, result: "accepted" },
+      talk: { status: "completed", round_count: 1, lifecycle_rounds: [lifecycle("talk")] },
+      grill: { status: "completed", summary: "冲突已处理", decision_updates: ["保持当前范围"] },
+      advice: { status: "completed", result_ref: `quality/reviews/results/${HASH}.json`, result_hash: HASH },
+    };
+    expect(contracts.validateInteractionAggregateContract(aggregate).ok).toBe(true);
+    expect(contracts.validateInteractionAggregateContract({ ...aggregate, confirmation: undefined }).errors.join("\n")).toMatch(/MATERIAL_INCOMPLETE|confirmation/i);
+    expect(contracts.validateInteractionAggregateContract({ ...aggregate, talk: { ...aggregate.talk, lifecycle_rounds: [] } }).ok).toBe(false);
   });
 });
 

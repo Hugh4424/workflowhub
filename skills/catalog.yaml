@@ -110,7 +110,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.2.0
-    local_bundle_hash: 96eb520ddf3c4f596ba12fe076b6e7e7e3f0104f8c3dcb4057b433c67751089f
+    local_bundle_hash: 7c919fa05eae4e0240e2fcc4d33fb2286634b3f2832b178ac20965d3c9c5e7f1
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从自然语言生成可测试 spec
@@ -138,7 +138,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.3.0
-    local_bundle_hash: 8a7818d3ca709189365f98c31018c45b887eec7a9a726d5bad9d3e067df0f594
+    local_bundle_hash: 987119353be9c841708ac952d2cddc9892f8fd2d2d51ffb9d41830aa19212b44
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -154,7 +154,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 2.2.0
-    local_bundle_hash: b34612c84a06c1461f05514d6875e63ed107fc79de2205029a98687bba76d945
+    local_bundle_hash: 80ec931224b4b4c17aaa41a19d157eb4d4657b6f77dca3e50f334585cfe4f49d
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -499,7 +499,7 @@ skills:
   - name: frontend-testing
     path: skills/frontend-testing/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d7a22976c9d19dd148099815c498dca417440f54025fcfd17a85d9aa405e5b0c
+    local_bundle_hash: be95bfd74d7891c9ca44bd507d7754a81f9dc3dd5cfce55af0d61ee3a8d42e89
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: build-code 对真实前端改动执行状态、交互和 UI 测试策略
@@ -507,7 +507,7 @@ skills:
     standalone: true
     used_by_stages: [build-code]
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/frontend-testing/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing/SKILL.md" }]
-    local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；截图或 browser pass 不变成普遍 gate；delete-condition 为 frontend-testing 退役且无阶段引用
+    local_changes: 保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用
     dependency_closure: []
     update_policy: 随前端测试和 browser 证据合同人工比较
   - name: fullstack-slice-testing
@@ -527,22 +527,22 @@ skills:
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ab74c470d8444edbaab78b4773f5f9daed76afc8a96f910c42a3bb77dda4db64
+    local_bundle_hash: 25fc15c19529d9c79759f6067f95e065c53ec108ced6d5f9e4b78ff96ed5d39e
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     standalone: true
     used_by_stages: []
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "ab74c470d8444edbaab78b4773f5f9daed76afc8a96f910c42a3bb77dda4db64", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
-    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是真实 UI验收与 verify-code；blocked/unknown 保留 failure_reason；delete-condition 为 browser QA 路由退役或被唯一替代
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "25fc15c19529d9c79759f6067f95e065c53ec108ced6d5f9e4b78ff96ed5d39e", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
+    local_changes: 搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
 
   - name: ui-project-init
     path: skills/ui-project-init/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 7e5aa7ccf80fc3a5ac56215565653afbb0e3bf08fed0bb6092106c659894c6b6
+    local_bundle_hash: 99a3ef9e7f5ff7178266a4d4865a01e8ec47d38424da8c6488c5ee72d1df302b
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 为新项目和历史项目建立最小 UI 设计/组件基线
@@ -556,7 +556,7 @@ skills:
   - name: design-source-readiness
     path: skills/design-source-readiness/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 459cd9bcc76c100a1c9dfd71fd93a855e019290a704e784302eb14fe2b300367
+    local_bundle_hash: 0817e2ab99557a5b7d9af47f21b8decf44f4d7f3991545fcfccb1b89d570f14e
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 从项目级 Design.md 派生可读 Screen Read Map
@@ -570,7 +570,7 @@ skills:
   - name: frontend-component-quality
     path: skills/frontend-component-quality/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: bda2c1dc5328fbd620472439f7556f74b3f98655687f11a763d0c27ba0bcf895
+    local_bundle_hash: 5242bb057ddb1171011698dd98fe6238e44bc104cd16f04dd65be79e08f42e79
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 维护组件、状态、ViewModel 与 CSS/token 的可复核质量地图

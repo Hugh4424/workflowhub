@@ -129,6 +129,20 @@ describe("verify selects facts by freshness", () => {
     }, { read: io.read }).status).toBe("stale");
   });
 
+  it("keeps resolved review status scoped to verify-code code review", () => {
+    expect(() => createQualityFact({
+      taskId: "task",
+      stage: "build-code",
+      materialRevision: `revision-${"a".repeat(64)}`,
+      snapshotTree: "b".repeat(40),
+      kind: "review",
+      status: "recorded",
+      reviewStatus: "resolved",
+      subject: "integration_review",
+      evidence: [{ ref: "quality/reviews/results/review.json", sha256: "c".repeat(64), evidence_type: "review_result" }],
+    })).toThrow(/only valid for verify-code code_review/);
+  });
+
   it("rejects a v2 confirmation bound to a different material or snapshot", () => {
     const materialRevision = `revision-${"a".repeat(64)}`;
     const snapshotTree = "b".repeat(40);
@@ -218,6 +232,75 @@ describe("verify selects facts by freshness", () => {
       material_revision: "revision-new",
       snapshot_tree: "new-tree",
     }, { read: io.read }).status).toBe("stale");
+  });
+
+  it("replays a resolved repair disposition while retaining the reviewed snapshot", () => {
+    const reviewedTree = "a".repeat(40);
+    const currentTree = "b".repeat(40);
+    const materialRevision = `revision-${"c".repeat(64)}`;
+    const finding = {
+      provider: "fixture",
+      id: `F-${"d".repeat(12)}`,
+      severity: "major",
+      path: "runtime/example.mjs",
+      issue: "fixture actionable finding",
+      recommendation: "repair the fixture finding",
+      root_cause: "fixture",
+      providers: ["fixture"],
+      adapter_count: 1,
+      finding_count: 1,
+      disposition: "actionable",
+      evidence_status: "direct",
+      provider_findings: [{
+        provider: "fixture",
+        adapter: "fixture",
+        severity: "major",
+        evidence_kind: "direct",
+        evidence_anchor_valid: true,
+      }],
+    };
+    const review = {
+      version: "wh-review-result.v1",
+      task_id: "task",
+      stage: "verify-code",
+      review_track: null,
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+      base_tree: reviewedTree,
+      candidate_tree: reviewedTree,
+      source: { target_commit: reviewedTree, base_commit: reviewedTree, base_tree: reviewedTree, captured_head: reviewedTree },
+      snapshot_tree: reviewedTree,
+      material_id: "e".repeat(64),
+      material_revision: materialRevision,
+      attempt_ref: "quality/reviews/attempts/fixture/attempt.json",
+      provider_results: [{ provider: "fixture", output: { findings: [{ severity: "major", path: finding.path, issue: finding.issue, recommendation: finding.recommendation, root_cause: "fixture", evidence_kind: "direct", evidence: "fixture" }] } }],
+      findings: [finding],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [{ ...finding, provider: undefined }] },
+    };
+    const reviewRaw = JSON.stringify(review);
+    const fact = createQualityFact({
+      taskId: "task",
+      stage: "verify-code",
+      materialRevision,
+      snapshotTree: currentTree,
+      kind: "review",
+      status: "recorded",
+      reviewStatus: "resolved",
+      subject: "code_review",
+      evidence: [{ ref: "quality/reviews/results/fixture.json", sha256: sha256(reviewRaw), evidence_type: "review_result" }],
+    });
+    const io = store();
+    io.records.set(fact.ref, fact.raw);
+    io.records.set("quality/reviews/results/fixture.json", reviewRaw);
+    expect(evaluateFactFreshness({ ...fact.value, ref: fact.ref, sha256: sha256(fact.raw) }, {
+      material_revision: materialRevision,
+      snapshot_tree: currentTree,
+    }, { read: io.read })).toMatchObject({
+      status: "current",
+      authenticated: true,
+      review_status: "resolved",
+    });
   });
 
   it("keeps verify-code facts current when only the task execution-status block is written back", () => {

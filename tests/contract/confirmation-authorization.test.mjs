@@ -28,7 +28,7 @@ Revert current implementation.
 ## FR to AC to Step Traceability
 FR-001 → T001 → AC-001.
 ## Constitution Check
-F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 Q1 Q2 Q3 S1 S2 S3 S4 S5 S6 S7 S8.
+F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 Q1 Q2 Q3 S1 S2 S3 S4 S5 S6 S7 S8.
 ## Complexity Trade-offs
 Reuse existing code.
 ## Phase 1: Contract RED

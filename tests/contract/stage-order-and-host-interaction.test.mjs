@@ -1,9 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 
 import { validateInteractionLifecycleContract, validateInteractionLifecycleSequence } from "../../runtime/stage/stage-content-contracts.mjs";
 import { validateStageAgentInteractionRounds } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
+import {
+  bindCodexSessionTask,
+  finishCodexSessionEvent,
+  registerCodexSession,
+  readCurrentCodexSession,
+  sessionHandoffPath,
+  startCodexSessionEvent,
+} from "../../tools/host/workflowhub-codex-session-state.mjs";
+
+function eventFixture() {
+  const root = mkdtempSync(join(tmpdir(), "workflowhub-stage-order-contract-"));
+  const cwd = join(root, "workspace");
+  const taskPath = join(root, "task");
+  mkdirSync(join(cwd, "workflows", "build-code"), { recursive: true });
+  mkdirSync(taskPath, { recursive: true });
+  writeFileSync(join(cwd, "workflows", "build-code", "steps.json"), JSON.stringify({
+    schema_version: "2.0.0",
+    stage_slug: "build-code",
+    steps: [
+      { step_id: 1, step_slug: "read-current-task-documents", order: 1, depends_on: [] },
+      { step_id: 2, step_slug: "write-red-tests", order: 2, depends_on: [1] },
+      { step_id: 3, step_slug: "implement-change", order: 3, depends_on: [2] },
+    ],
+  }));
+  const sessionId = `stage-order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  registerCodexSession({ sessionId, transcriptPath: null, cwd, observedAtMs: 0 });
+  bindCodexSessionTask({ projectName: "workflowhub", taskId: "stage-order-task", taskPath, cwd });
+  return { root, cwd, sessionId };
+}
 
 const root = resolve(new URL("../..", import.meta.url).pathname);
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
@@ -93,5 +123,56 @@ describe("P1 stage order and real host interaction contract", () => {
     expect(talk).toMatch(/consequences and risks|后果和风险/i);
     expect(grill).toMatch(/(?:must not call wh-review|绝不调用 wh-review)[\s\S]{0,80}(?:review fact|review finding|review 结论)/i);
     expect(clarify).toMatch(/Publishing a batch card ends the current invocation/i);
+  });
+
+  it("rejects a later step while its predecessor is open and leaves the sidecar unchanged", () => {
+    const state = eventFixture();
+    try {
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1000 });
+      const before = JSON.parse(readFileSync(sessionHandoffPath(state.cwd), "utf8"));
+      expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1100 }))
+        .toThrow(/sequence invalid|still open|preced/i);
+      const after = JSON.parse(readFileSync(sessionHandoffPath(state.cwd), "utf8"));
+      expect(after.sessions[0].events).toEqual(before.sessions[0].events);
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 1200 });
+      expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1300 })).not.toThrow();
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a skill bound to its open parent step and rejects an unrelated parent", () => {
+    const state = eventFixture();
+    try {
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 2000 });
+      const skill = startCodexSessionEvent({ stage: "build-code", subjectKind: "skill", subjectId: "frontend-testing", parentSubjectId: "read-current-task-documents", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 2100 });
+      expect(skill.event_id).toMatch(/^event-/);
+      expect(readCurrentCodexSession({ cwd: state.cwd, stage: "build-code", sessionId: state.sessionId }).events)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ subject_kind: "skill", parent_subject_id: "read-current-task-documents" })]));
+      expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "skill", subjectId: "backend-testing", parentSubjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 2200 }))
+        .toThrow(/nested|parent step/i);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when historical completed step intervals overlap", () => {
+    const state = eventFixture();
+    try {
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 1000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 3000 });
+      // The old preflight allowed a caller to backdate the next step.  Once
+      // both events are terminal, the next start must expose that corrupt
+      // history instead of extending it.
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 2000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: state.cwd, sessionId: state.sessionId, endedAtMs: 4000 });
+      expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "implement-change", cwd: state.cwd, sessionId: state.sessionId, startedAtMs: 5000 }))
+        .toThrow(/history invalid|overlap/i);
+    } finally {
+      rmSync(sessionHandoffPath(state.cwd), { force: true });
+      rmSync(state.root, { recursive: true, force: true });
+    }
   });
 });

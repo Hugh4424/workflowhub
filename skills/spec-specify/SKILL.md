@@ -15,6 +15,14 @@ covering user outcomes, urgency, scope, scenarios, edge states, requirements,
 assumptions, risks, acceptance, business impact, regression paths, and explicit
 exclusions. Keep the quick-read section short; put narrative before trace fields.
 
+The template is the same content contract consumed by strict stage-end
+`spec-analyze`. Generate canonical `PFACT-{NNN}` and `AC-{DOMAIN}-{NNN}`
+records with explicit status, source/decision mapping, scenario, verification
+method, oracle, and failure condition. A generated spec must be parseable as-is;
+the host must not repair labels, statuses, or oracle text by hand after this
+skill returns. Legacy compact labels remain read-only migration input and never
+change the current strict profile.
+
 ## Artifact responsibility
 
 `spec.md` is the single source of product and behavior truth: problem, scope,

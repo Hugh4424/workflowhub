@@ -9,6 +9,7 @@ import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/s
 
 const HASH = /^[a-f0-9]{64}$/;
 const QUALITY_STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
+const REVIEW_STATUSES = new Set(["clean", "findings", "resolved", "unavailable"]);
 const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
 
 // Only reviews explicitly declared advisory by the stage contract can survive
@@ -129,7 +130,12 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
         }
       } else {
         validateSchema("result", value);
-        if (value.task_id !== fact.task_id || value.stage !== reviewStage || (!adviceReview && !allowMaterialOnlySnapshot && value.snapshot_tree !== fact.snapshot_tree)) {
+        const repairedReview = fact.stage === "verify-code"
+          && fact.subject === "code_review"
+          && fact.review_status === "resolved";
+        if (value.task_id !== fact.task_id || value.stage !== reviewStage
+            || (value.material_revision !== undefined && value.material_revision !== fact.material_revision)
+            || (!adviceReview && !allowMaterialOnlySnapshot && !repairedReview && value.snapshot_tree !== fact.snapshot_tree)) {
           throw new Error("review provenance mismatch");
         }
         // review_kind is optional for the five formal stages.  Older and
@@ -157,10 +163,12 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
         if (!subjectMatches) throw new Error("review subject mismatch");
         if (Object.hasOwn(value, "verdict")) throw new Error("current review result must not expose reviewer verdict");
         if (fact.status !== "recorded") throw new Error("review result requires a recorded review fact");
+        const hasActionableFinding = canonicalReviewFindings(value).some(isActionableSeriousFinding);
         if (fact.stage === "verify-code" && fact.subject === "code_review"
-            && canonicalReviewFindings(value).some(isActionableSeriousFinding)) {
+            && hasActionableFinding && !repairedReview) {
           throw new Error("verify-code code_review has actionable serious findings");
         }
+        if (repairedReview && !hasActionableFinding) throw new Error("resolved verify-code review must retain its actionable findings");
       }
     } else if (evidence.evidence_type === "acceptance_evidence") {
       const acceptance = validateAcceptanceEvidence(value);
@@ -226,15 +234,17 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
   if (factRaw !== undefined) {
     try {
       const parsed = JSON.parse(factRaw);
-      for (const field of ["schema_version", "fact_id", "task_id", "stage", "material_revision", "material_scope", "material_scope_revision", "snapshot_tree", "kind", "subject", "status"]) {
+      for (const field of ["schema_version", "fact_id", "task_id", "stage", "material_revision", "material_scope", "material_scope_revision", "snapshot_tree", "kind", "status", "review_status", "subject"]) {
         if (JSON.stringify(parsed[field]) !== JSON.stringify(fact[field])) dependencies.fact = "stale";
       }
       if (parsed.schema_version !== "quality-fact.v1") dependencies.fact = "stale";
       if (!QUALITY_STATUSES.has(parsed.status)
           || (parsed.status === "recorded" && parsed.kind !== "review")) dependencies.fact = "stale";
+      if (parsed.review_status !== undefined
+          && (parsed.kind !== "review" || !REVIEW_STATUSES.has(parsed.review_status))) dependencies.fact = "stale";
     } catch { dependencies.fact = "stale"; }
   }
-  let reviewStatus = null;
+  let reviewStatus = fact.review_status ?? null;
   for (const evidence of fact.evidence ?? []) {
     const key = `evidence:${evidence.ref}`;
     const raw = readBound(evidence, read, dependencies, key);
@@ -245,7 +255,7 @@ export function evaluateFactFreshness(fact, current, { read, workspaceRoot = nul
       try {
         const parsed = JSON.parse(raw);
         if (parsed?.version === "wh-review-result.v1" && Array.isArray(parsed.findings)) {
-          reviewStatus = canonicalReviewFindings(parsed).some(isActionableSeriousFinding) ? "findings" : "clean";
+          if (reviewStatus === null) reviewStatus = canonicalReviewFindings(parsed).some(isActionableSeriousFinding) ? "findings" : "clean";
         }
       } catch {
         // authenticateNested records the actual integrity failure below.

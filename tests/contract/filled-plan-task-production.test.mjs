@@ -39,7 +39,7 @@ const globalFiles = `### NEW
 const phaseFiles = `- **NEW**：\`tests/demo.test.mjs\`
 - **MODIFY**：\`core/demo.mjs\`
 - **DO NOT TOUCH**：\`core/authority.mjs\``;
-const constitutionBinding = `\`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"${"a".repeat(64)}","id":"CONSTITUTION","version":"1","clause_count":21}\``;
+const constitutionBinding = `\`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"${"a".repeat(64)}","id":"CONSTITUTION","version":"1","clause_count":22}\``;
 
 function renderPlanTemplate() {
   let plan = fillPlaceholders(read("skills/spec-plan/templates/plan-template.md"));

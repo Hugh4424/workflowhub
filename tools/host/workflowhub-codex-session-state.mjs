@@ -432,13 +432,102 @@ function sessionForMutation(cwd, sessionId = null) {
   return { state: result.state, session: result.session, state_path: result.state_path };
 }
 
-export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subjectId, cwd = process.cwd(), startedAtMs = Date.now(), sessionId = null } = {}) {
+function loadStageSequenceManifest(cwd, stage) {
+  const projectRoot = canonicalCwd(cwd);
+  const manifestPath = join(projectRoot, "workflows", stage, "steps.json");
+  if (!existsSync(manifestPath)) {
+    // Historical host fixtures may not carry a workflow package.  Keep those
+    // sidecars readable, but a real project checkout must fail closed instead
+    // of emitting an event without a declared sequence.
+    if (existsSync(join(projectRoot, ".git"))) throw new Error(`${stage} step manifest is unavailable; refusing to write an unbound event`);
+    return null;
+  }
+  let manifest;
+  try { manifest = JSON.parse(readFileSync(manifestPath, "utf8")); }
+  catch (error) { throw new Error(`${stage} step manifest is invalid: ${error.message}`); }
+  if (!manifest || manifest.stage_slug !== stage || !Array.isArray(manifest.steps) || manifest.steps.length === 0) {
+    throw new Error(`${stage} step manifest is invalid: expected a non-empty steps array`);
+  }
+  const seenIds = new Set();
+  const seenSlugs = new Set();
+  for (const step of manifest.steps) {
+    if (!Number.isSafeInteger(step?.step_id) || !Number.isSafeInteger(step?.order) || typeof step.step_slug !== "string" || step.step_slug.trim() === "") {
+      throw new Error(`${stage} step manifest contains an incomplete step identity`);
+    }
+    if (seenIds.has(step.step_id) || seenSlugs.has(step.step_slug) || step.order < 1) throw new Error(`${stage} step manifest contains duplicate or invalid step order`);
+    seenIds.add(step.step_id);
+    seenSlugs.add(step.step_slug);
+    if (step.depends_on !== undefined && (!Array.isArray(step.depends_on) || step.depends_on.some((id) => !seenIds.has(id) && !manifest.steps.some((candidate) => candidate?.step_id === id)))) {
+      throw new Error(`${stage} step manifest dependency is invalid for ${step.step_slug}`);
+    }
+  }
+  return manifest;
+}
+
+function latestEventForSubject(events, stage, subjectKind, subjectId) {
+  return events
+    .filter((entry) => entry.stage === stage && entry.subject_kind === subjectKind && entry.subject_id === subjectId)
+    .sort((a, b) => (a.ended_at_ms ?? Number.MAX_SAFE_INTEGER) - (b.ended_at_ms ?? Number.MAX_SAFE_INTEGER))
+    .at(-1) ?? null;
+}
+
+function preflightStartEvent(current, cwd, stage, subjectKind, subjectId, parentSubjectId = null) {
+  const manifest = loadStageSequenceManifest(cwd, stage);
+  if (!manifest) return { parentSubjectId: null };
+  const events = current.session.events;
+  const completedSteps = events
+    .filter((entry) => entry.stage === stage
+      && entry.subject_kind === "step"
+      && entry.status === "completed"
+      && Number.isSafeInteger(entry.started_at_ms)
+      && Number.isSafeInteger(entry.ended_at_ms))
+    .sort((left, right) => left.started_at_ms - right.started_at_ms);
+  for (let index = 0; index < completedSteps.length; index += 1) {
+    const left = completedSteps[index];
+    for (let next = index + 1; next < completedSteps.length; next += 1) {
+      const right = completedSteps[next];
+      if (right.started_at_ms >= left.ended_at_ms) break;
+      if (left.started_at_ms < right.ended_at_ms && right.started_at_ms < left.ended_at_ms) {
+        throw new Error(`${stage} step history invalid: completed steps ${left.subject_id} and ${right.subject_id} overlap`);
+      }
+    }
+  }
+  const openSteps = events.filter((entry) => entry.stage === stage && entry.subject_kind === "step" && entry.status === "open");
+  if (subjectKind === "step") {
+    const step = manifest.steps.find((entry) => entry.step_slug === subjectId);
+    if (!step) throw new Error(`${stage} step is not declared: ${subjectId}`);
+    if (openSteps.length > 0) throw new Error(`${stage} step sequence invalid: ${openSteps.map((entry) => entry.subject_id).join(", ")} is still open before ${subjectId}`);
+    for (const dependencyId of step.depends_on ?? []) {
+      const dependency = manifest.steps.find((entry) => entry.step_id === dependencyId);
+      const previous = dependency ? latestEventForSubject(events, stage, "step", dependency.step_slug) : null;
+      if (!previous || previous.status !== "completed") {
+        throw new Error(`${stage} step sequence invalid: dependency ${dependency?.step_slug ?? dependencyId} must be completed before ${subjectId}`);
+      }
+    }
+    const completedOrders = events
+      .filter((entry) => entry.stage === stage && entry.subject_kind === "step" && entry.status === "completed")
+      .map((entry) => manifest.steps.find((candidate) => candidate.step_slug === entry.subject_id)?.order)
+      .filter((order) => Number.isSafeInteger(order));
+    if (completedOrders.some((order) => order > step.order)) {
+      throw new Error(`${stage} step sequence invalid: ${subjectId} is after a later completed step`);
+    }
+    return { parentSubjectId: null };
+  }
+  const parent = parentSubjectId
+    ? openSteps.find((entry) => entry.subject_id === parentSubjectId)
+    : openSteps.at(-1);
+  if (parentSubjectId && !parent) throw new Error(`${stage} skill ${subjectId} must be nested under an open parent step: ${parentSubjectId}`);
+  return { parentSubjectId: parent?.subject_id ?? null };
+}
+
+export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subjectId, parentSubjectId = null, cwd = process.cwd(), startedAtMs = Date.now(), sessionId = null } = {}) {
   if (!STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
   if (!SUBJECT_KINDS.has(subjectKind)) throw new TypeError("subject_kind must be step or skill");
   const id = safeId(subjectId, "subject_id");
   const current = sessionForMutation(cwd, sessionId);
   const task = resolveSessionTaskId(current.session, taskId);
   const started = nowMs(startedAtMs);
+  const sequenceBinding = preflightStartEvent(current, cwd, stage, subjectKind, id, parentSubjectId);
   const sequence = current.session.events.length + 1;
   const event = {
     event_id: eventId(current.session.session_id, task, stage, subjectKind, id, started, sequence),
@@ -449,6 +538,7 @@ export function startCodexSessionEvent({ taskId = null, stage, subjectKind, subj
     started_at_ms: started,
     ended_at_ms: null,
     status: "open",
+    ...(sequenceBinding.parentSubjectId ? { parent_subject_id: sequenceBinding.parentSubjectId } : {}),
   };
   current.session.events.push(event);
   current.session.last_seen_at_ms = started;
@@ -545,6 +635,7 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
     ended_at_ms: entry.ended_at_ms,
     status: entry.status,
     result_summary: entry.result_summary,
+    ...(entry.parent_subject_id ? { parent_subject_id: entry.parent_subject_id } : {}),
     ...(entry.reason ? { reason: entry.reason } : {}),
     evidence: entry.evidence ?? [],
     ...(entry.usage ? { usage: entry.usage } : {}),
@@ -558,10 +649,16 @@ export function buildWorkflowHubSessionInput({ taskId, cwd = process.cwd(), stag
   const specAnalyze = stage
     ? current.spec_analyze_by_task_stage?.[task]?.[stage] ?? null
     : current.spec_analyze_by_task?.[task] ?? null;
+  // verify-code deliberately has no spec-analyze step.  Requiring a future
+  // stage's analyzer here made an otherwise complete review handoff look
+  // incomplete and turned an auxiliary fact into a hidden continuation gate.
+  // Authoring stages still require their declared analyzer; verify-code is
+  // complete when its own declared events are terminal.
+  const requiresSpecAnalyze = stage !== "verify-code";
   const complete = currentEvents.length > 0
     && currentEvents.every((entry) => entry.status === "completed")
     && !open
-    && specAnalyze !== null;
+    && (!requiresSpecAnalyze || specAnalyze !== null);
   return Object.freeze({
     status: "present",
     host: "codex",

@@ -14,6 +14,44 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "revision"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "revision": { "$ref": "#/$defs/nonEmpty" },
+        "instance": { "$ref": "#/$defs/nonEmpty" },
+        "contract": { "$ref": "#/$defs/nonEmpty" },
+        "ref": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "projectIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_kind", "path", "content_sha256", "revision", "anchor_id", "anchor_title", "anchor_source"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "document_kind": { "$ref": "#/$defs/nonEmpty" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+        },
+        "content_sha256": { "$ref": "#/$defs/sha256" },
+        "revision": { "$ref": "#/$defs/nonEmpty" },
+        "anchor_id": { "$ref": "#/$defs/nonEmpty" },
+        "anchor_title": { "$ref": "#/$defs/nonEmpty" },
+        "anchor_source": { "const": "explicit" },
+        "ref": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "cancellation": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["status"], "properties": { "status": { "const": "not_cancelled" } } },
+        { "type": "object", "additionalProperties": false, "required": ["status", "reason"], "properties": { "status": { "const": "cancelled" }, "reason": { "$ref": "#/$defs/nonEmpty" } } }
+      ]
+    },
     "state": {
       "type": "object",
       "additionalProperties": false,
@@ -39,7 +77,8 @@
       "required": ["name"],
       "properties": {
         "name": { "$ref": "#/$defs/nonEmpty" },
-        "data_ref": { "$ref": "#/$defs/nonEmpty" }
+        "data_ref": { "$ref": "#/$defs/nonEmpty" },
+        "fixture_only": { "type": "boolean" }
       }
     },
     "component": {
@@ -91,6 +130,13 @@
       "required": [
         "applicability",
         "result",
+        "task_id",
+        "stage",
+        "attempt_id",
+        "invocation_id",
+        "material_revision",
+        "snapshot_tree",
+        "acceptance_criterion_id",
         "route",
         "page",
         "scenario",
@@ -102,6 +148,14 @@
         "fixture",
         "component",
         "design_revision",
+        "design_identity",
+        "experience_identity",
+        "service_identity",
+        "api_identity",
+        "dto_identity",
+        "browser_profile",
+        "cancellation",
+        "observations",
         "visual",
         "a11y",
         "auth",
@@ -114,6 +168,13 @@
       "properties": {
         "applicability": { "const": "ui" },
         "result": { "enum": ["pass", "fail", "blocked", "unknown"] },
+        "task_id": { "$ref": "#/$defs/nonEmpty" },
+        "stage": { "const": "build-code" },
+        "attempt_id": { "$ref": "#/$defs/nonEmpty" },
+        "invocation_id": { "$ref": "#/$defs/nonEmpty" },
+        "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+        "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "acceptance_criterion_id": { "$ref": "#/$defs/nonEmpty" },
         "route": { "$ref": "#/$defs/nonEmpty" },
         "page": { "$ref": "#/$defs/nonEmpty" },
         "scenario": { "$ref": "#/$defs/nonEmpty" },
@@ -125,6 +186,26 @@
         "fixture": { "$ref": "#/$defs/fixture" },
         "component": { "$ref": "#/$defs/component" },
         "design_revision": { "$ref": "#/$defs/nonEmpty" },
+        "design_identity": { "$ref": "#/$defs/projectIdentity" },
+        "experience_identity": { "$ref": "#/$defs/projectIdentity" },
+        "service_identity": { "$ref": "#/$defs/identity" },
+        "api_identity": { "$ref": "#/$defs/identity" },
+        "dto_identity": { "$ref": "#/$defs/identity" },
+        "browser_profile": { "$ref": "#/$defs/identity" },
+        "evidence_ref": { "$ref": "#/$defs/nonEmpty" },
+        "evidence_hash": { "$ref": "#/$defs/sha256" },
+        "cancellation": { "$ref": "#/$defs/cancellation" },
+        "observations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["console", "network", "focus", "overflow"],
+          "properties": {
+            "console": { "type": "object", "minProperties": 1, "additionalProperties": true },
+            "network": { "type": "object", "minProperties": 1, "additionalProperties": true },
+            "focus": { "type": "object", "minProperties": 1, "additionalProperties": true },
+            "overflow": { "type": "object", "minProperties": 1, "additionalProperties": true }
+          }
+        },
         "visual": { "$ref": "#/$defs/visual" },
         "a11y": { "$ref": "#/$defs/a11y" },
         "failure_reason": { "$ref": "#/$defs/nonEmpty" },
@@ -201,13 +282,27 @@
           }
         },
         "cleanup": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["status", "app_service_running"],
-          "properties": {
-            "status": { "const": "completed" },
-            "app_service_running": { "const": true }
-          }
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "app_service_running"],
+              "properties": {
+                "status": { "const": "completed" },
+                "app_service_running": { "const": true }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "app_service_running", "reason"],
+              "properties": {
+                "status": { "enum": ["failed", "cancelled"] },
+                "app_service_running": { "type": "boolean" },
+                "reason": { "$ref": "#/$defs/nonEmpty" }
+              }
+            }
+          ]
         },
         "engine_switch": { "const": "no" }
       },
@@ -217,7 +312,8 @@
           "then": {
             "properties": {
               "test": { "properties": { "exit_code": { "const": 0 } } },
-              "screenshots": { "minItems": 1 }
+              "screenshots": { "minItems": 1 },
+              "cleanup": { "properties": { "status": { "const": "completed" }, "app_service_running": { "const": true } } }
             }
           }
         },

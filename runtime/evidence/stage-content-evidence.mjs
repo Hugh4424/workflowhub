@@ -244,6 +244,12 @@ function validatePayload(kind, payload) {
   }
 }
 
+/** Validate one complete browser QA observation without publishing a second record. */
+export function validateBrowserQaEvidence(value) {
+  validatePayload("browser-qa-evidence.v1", value);
+  return Object.freeze(value);
+}
+
 function validateValue(value) {
   if (!validateEnvelope(value)) throw new Error(`stage content envelope is invalid: ${schemaErrors(validateEnvelope)}`);
   validatePayload(value.kind, value.payload);

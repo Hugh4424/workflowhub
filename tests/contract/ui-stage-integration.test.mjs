@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,7 @@ import {
   validateUiContract,
   validateUiDesignLoopFact,
 } from "../../runtime/stage/stage-content-contracts.mjs";
+import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
 import { alignUiDesignEvidence } from "../../workflows/verify-code/design-alignment.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -302,6 +304,55 @@ test("design gaps remain unknown facts and never become a UI gate", () => {
   assert.ok(unknownConsumer.gaps.some((entry) => entry.reason === "component_quality_story_test_missing"));
 });
 
+test("UI alignment requires current sources and census, while non-UI and update-required remain explicit", () => {
+  const missing = alignUiDesignEvidence({
+    uiContract: { ui_applicability: "ui", design_status: "approved" },
+    component_quality_map: [],
+    consumer_facts: [],
+  });
+  assert.ok(missing.gaps.some((entry) => entry.reason === "project_standard_sources_missing"));
+  assert.ok(missing.gaps.some((entry) => entry.reason === "consumer_census_missing"));
+
+  const nonUi = alignUiDesignEvidence({
+    uiContract: { impact: "non_ui", design_status: "not_applicable" },
+  });
+  assert.equal(nonUi.gaps.some((entry) => entry.reason === "project_standard_sources_missing"), false);
+  assert.equal(nonUi.gaps.some((entry) => entry.reason === "consumer_census_missing"), false);
+
+  const identity = (kind, path, hash, revision, anchor_id, anchor_title, responsibilities) => ({
+    document_kind: kind, path, content_sha256: hash, revision, anchor_id, anchor_title, anchor_source: "explicit", owner: "ui-team", responsibilities,
+  });
+  const sources = {
+    design: identity("design", "Design.md", "a".repeat(64), "r1", "design-root", "Design", ["visual", "components"]),
+    experience: identity("experience", "Experience.md", "b".repeat(64), "r1", "experience-root", "Experience", ["page", "interaction"]),
+    update_required: true,
+    stage: "build-code",
+  };
+  const census = {
+    schema_version: "consumer-census.v1",
+    scanner_version: "test",
+    scan_config: {},
+    source_snapshot: { tree: "c".repeat(40) },
+    consumers: [],
+    support_matrix: ["route", "import", "lazy", "css", "data"].map((kind) => ({ kind, supported: true })),
+  };
+  const update = alignUiDesignEvidence({
+    uiContract: { ui_applicability: "ui", design_status: "approved", current_snapshot_tree: "c".repeat(40) },
+    project_standard_sources: sources,
+    consumer_census: census,
+    component_quality_map: [],
+  });
+  assert.equal(update.gaps.some((entry) => entry.reason === "project_standard_source_update_required"), false);
+
+  const stale = alignUiDesignEvidence({
+    uiContract: { ui_applicability: "ui", design_status: "approved", current_snapshot_tree: "d".repeat(40) },
+    project_standard_sources: sources,
+    consumer_census: census,
+    component_quality_map: [],
+  });
+  assert.ok(stale.gaps.some((entry) => entry.reason === "consumer_census_stale_snapshot"));
+});
+
 test("UI validators require state evidence, confirmation consistency, and component ownership facts", () => {
   const state = Object.fromEntries([
     ["name", "default"],
@@ -368,6 +419,8 @@ test("executable UI project init and Design.md readiness preserve unknown facts"
     mode: "new",
     design_path: "Design.md",
     design_revision: "2026.08",
+    experience_path: "Experience.md",
+    experience_revision: "2026.08",
     scope: "Settings page",
     component_boundary: "src/components/settings",
     style_boundary: "tokens/forms",
@@ -378,6 +431,8 @@ test("executable UI project init and Design.md readiness preserve unknown facts"
   assert.equal(initialized.ok, true, initialized.errors.join("; "));
   assert.equal(initialized.status, "ready");
   assert.equal(initialized.design_revision, "2026.08");
+  assert.equal(initialized.experience_path, "Experience.md");
+  assert.equal(initialized.experience_revision, "2026.08");
   assert.equal(initialized.gate, false);
 
   const legacy = buildUiProjectInitFact({ mode: "legacy", project_inventory: { routes: ["/settings"] } });
@@ -393,6 +448,8 @@ test("executable UI project init and Design.md readiness preserve unknown facts"
     mode: "legacy",
     design_path: "Design.md",
     design_revision: "legacy-2026.08",
+    experience_path: "Experience.md",
+    experience_revision: "legacy-2026.08",
     first_page: "Settings page",
     component_boundary: "src/components/settings",
     style_boundary: "src/styles/settings.css",
@@ -542,4 +599,295 @@ test("executable short prompt and design-loop facts cover recovery states", () =
     visible_actions: ["确认设计", "需要修改"],
   }).ok, false);
   assert.equal(validateUiDesignLoopFact({ ...base, state: "preview_ready", preview_refs: ["preview"], gate: true, visible_actions: ["确认设计", "需要修改"] }).ok, false);
+});
+
+test("P1 RED: project standards must have distinct identity and responsibilities", () => {
+  assert.equal(typeof contracts.validateProjectStandardSources, "function");
+  if (typeof contracts.validateProjectStandardSources !== "function") return;
+  const hash = (value) => createHash("sha256").update(value).digest("hex");
+  const design = {
+    document_kind: "design",
+    path: "Design.md",
+    content_sha256: hash("design-v1"),
+    revision: "design-1",
+    anchor_id: "design-principles",
+    anchor_title: "Design principles",
+    anchor_source: "explicit",
+    owner: "ui-team",
+    responsibilities: ["visual", "component", "responsive", "tokens"],
+    sections: ["purpose", "design principles", "tokens", "layout", "components", "states", "accessibility", "performance", "governance"],
+  };
+  const experience = {
+    document_kind: "experience",
+    path: "Experience.md",
+    content_sha256: hash("experience-v1"),
+    revision: "experience-1",
+    anchor_id: "settings-flow",
+    anchor_title: "Settings flow",
+    anchor_source: "explicit",
+    owner: "product-team",
+    responsibilities: ["pages", "interaction", "recovery", "long_term_scenarios"],
+    sections: ["purpose", "page index", "states", "user flow", "recovery", "accessibility interaction", "long-term scenarios", "known gaps"],
+  };
+  const valid = contracts.validateProjectStandardSources({ design, experience, stage: "build-spec" });
+  assert.equal(valid.ok, true, valid.errors?.join("; "));
+  assert.equal(valid.status, "bound_current");
+  const stringIdentityDelivery = contracts.validateDeliveryContract({
+    impact: "ui",
+    project_standard_sources: { design, experience },
+    ui_contract: {
+      design_identity: "design-1",
+      experience_identity: "experience-1",
+      census_ref: "census-1",
+      experience_scenario_ref: "settings-flow",
+      evidence_ref: "ui-evidence-1",
+    },
+    facts: {
+      design: { status: "passed" },
+      experience: { status: "passed" },
+      census: { status: "passed" },
+      evidence: { status: "passed" },
+    },
+  });
+  assert.equal(stringIdentityDelivery.ok, false, "Design/Experience bindings must carry the structured source identity");
+  assert.ok(stringIdentityDelivery.errors.some((error) => /structured.*identity/i.test(error)));
+  const malformedSourceDelivery = contracts.validateDeliveryContract({
+    impact: "ui",
+    project_standard_sources: { design: { document_kind: "design" }, experience },
+    ui_contract: {
+      design_identity: { document_kind: "design" },
+      experience_identity: experience,
+      census_ref: "census-1",
+      experience_scenario_ref: "settings-flow",
+      evidence_ref: "ui-evidence-1",
+    },
+    facts: { design: { status: "passed" }, experience: { status: "passed" }, census: { status: "passed" }, evidence: { status: "passed" } },
+  });
+  assert.ok(malformedSourceDelivery.errors.some((error) => /identity (?:source is missing|must be the structured)/i.test(error)), "partial source identities must not self-bind");
+  const ambiguousCensusDelivery = contracts.validateDeliveryContract({
+    impact: "ui",
+    project_standard_sources: { design, experience },
+    consumer_census: {
+      schema_version: "consumer-census.v1", scanner_version: "test", scan_config: {}, source_snapshot: { tree: "c".repeat(40) },
+      consumers: [{ kind: "route", path: "src/routes/settings.tsx", anchor: "route-settings", location: "/settings", page: "settings" }],
+      support_matrix: ["route", "import", "lazy", "css", "data"].map((kind) => ({ kind, supported: true })),
+    },
+    ui_contract: {
+      design_identity: design, experience_identity: experience,
+      census_ref: { replay_key: "wrong", ref: "not-the-census" }, experience_scenario_ref: "settings", evidence_ref: "ui-evidence-1",
+    },
+    facts: { design: { status: "passed" }, experience: { status: "passed" }, census: { status: "passed" }, evidence: { status: "passed" } },
+  });
+  assert.ok(ambiguousCensusDelivery.errors.some((error) => /census_ref/i.test(error)), "ambiguous census wrappers must not bind by one intersecting token");
+  assert.equal(contracts.validateProjectStandardSources({
+    design: { ...design, anchor_title: "Renamed design heading" },
+    experience,
+    bound: { design, experience },
+    stage: "build-spec",
+  }).status, "bound_current", "display-only anchor title does not change identity");
+  assert.equal(contracts.validateProjectStandardSources({
+    design,
+    experience,
+    update_required: true,
+    stage: "build-code",
+  }).status, "update_required");
+  assert.equal(contracts.validateProjectStandardSources({
+    design,
+    experience,
+    stage: "build-code",
+    require_current_binding: true,
+  }).ok, false, "build-code must not treat an unbound source copy as current");
+  assert.equal(contracts.validateProjectStandardSources({
+    design,
+    experience,
+    bound: { design, experience },
+    stage: "build-code",
+    require_current_binding: true,
+  }).ok, true);
+  assert.equal(contracts.validateProjectStandardSources({
+    design,
+    experience,
+    update_required: true,
+    stage: "build-plan",
+  }).ok, false);
+  assert.equal(contracts.validateProjectStandardSources({
+    design,
+    experience: { ...experience, responsibilities: ["pages", "interaction", "tokens"] },
+    stage: "build-spec",
+  }).ok, false);
+  assert.equal(contracts.validateProjectStandardSources({
+    design: { ...design, content_sha256: hash("design-v2") },
+    experience,
+    bound: { design, experience },
+    stage: "build-spec",
+  }).status, "stale");
+});
+
+test("P1 RED: census, impact, and conclusion preserve unknown facts", () => {
+  assert.equal(typeof contracts.buildConsumerCensus, "function");
+  assert.equal(typeof contracts.deriveChangeImpact, "function");
+  assert.equal(typeof contracts.deriveDeliveryConclusion, "function");
+  if ([contracts.buildConsumerCensus, contracts.deriveChangeImpact, contracts.deriveDeliveryConclusion].some((entry) => typeof entry !== "function")) return;
+  const census = contracts.buildConsumerCensus({
+    schema_version: "consumer-census.v1",
+    scanner_version: "scanner-1",
+    source_snapshot: { tree: "a".repeat(40) },
+    scan_config: { roots: ["src"], include_generated: false },
+    support_matrix: [
+      { kind: "route", supported: true, patterns: ["src/routes/**/*.tsx"] },
+      { kind: "import", supported: true, patterns: ["src/**/*.tsx"] },
+      { kind: "lazy", supported: false, unknown_reason: "unsupported_framework" },
+      { kind: "css", supported: true, patterns: ["src/**/*.css"] },
+      { kind: "data", supported: true, patterns: ["src/api/**/*.ts"] },
+    ],
+    consumers: [
+      { kind: "route", path: "src/routes/settings.tsx", anchor: "route-settings", location: "/settings", discovery_status: "discovered", page: "settings" },
+      { kind: "data", path: "src/api/settings.ts", anchor: "api-settings", location: "src/api/settings.ts", discovery_status: "discovered", data_chain: "settings" },
+      { kind: "lazy", path: "src/routes/generated.tsx", anchor: "route-generated", location: "/generated", discovery_status: "unknown", unknown_reason: "unsupported_framework", page: "generated" },
+    ],
+    human_additions: [
+      { kind: "route", path: "src/routes/help.tsx", anchor: "route-help", location: "/help", discovery_status: "discovered", page: "help", source: "human", reason: "product owner confirmed route", evidence_refs: ["quality/evidence/human-help-route.json"] },
+    ],
+  });
+  assert.equal(census.ok, true, census.errors?.join("; "));
+  assert.equal(census.schema_version, "consumer-census.v1");
+  assert.equal(census.consumers.every((entry) => typeof entry.consumer_id === "string"), true);
+  assert.deepEqual(census.consumers.map((entry) => entry.consumer_id), [...census.consumers].sort((a, b) => a.consumer_id.localeCompare(b.consumer_id)).map((entry) => entry.consumer_id));
+  assert.ok(census.consumers.some((entry) => entry.source === "human"));
+  assert.ok(census.consumers.some((entry) => entry.discovery_status === "unknown" && entry.unknown_reason === "unsupported_framework"));
+  const staleCensusDelivery = contracts.validateDeliveryContract({
+    impact: "ui",
+    current_snapshot_tree: "b".repeat(40),
+    consumer_census: census,
+    ui_contract: { design_identity: "design", experience_identity: "experience", census_ref: census.replay_key, experience_scenario_ref: "settings", evidence_ref: "ui-evidence" },
+  });
+  assert.ok(staleCensusDelivery.errors.some((error) => /census.*stale.*snapshot/i.test(error)), "UI delivery must reject census from an older implementation snapshot");
+  const collidingHuman = contracts.buildConsumerCensus({
+    schema_version: "consumer-census.v1", scanner_version: "scanner-1", source_snapshot: { tree: "a".repeat(40) }, scan_config: {},
+    support_matrix: ["route", "import", "lazy", "css", "data"].map((kind) => ({ kind, supported: true })),
+    consumers: [{ kind: "route", path: "src/routes/settings.tsx", anchor: "route-settings", location: "/settings", discovery_status: "discovered" }],
+    human_additions: [{ kind: "route", path: "src/routes/settings.tsx", anchor: "route-settings", location: "/settings", discovery_status: "discovered", reason: "duplicate human claim" }],
+  });
+  assert.equal(collidingHuman.ok, false);
+  assert.ok(collidingHuman.errors.some((error) => /collides with existing consumer/.test(error)));
+  const undocumentedHuman = contracts.buildConsumerCensus({
+    schema_version: "consumer-census.v1", scanner_version: "scanner-1", source_snapshot: { tree: "a".repeat(40) }, scan_config: {},
+    support_matrix: ["route", "import", "lazy", "css", "data"].map((kind) => ({ kind, supported: true })),
+    consumers: [],
+    human_additions: [{ kind: "route", path: "src/routes/help.tsx", anchor: "route-help", location: "/help", page: "help", discovery_status: "discovered" }],
+  });
+  assert.equal(undocumentedHuman.ok, false);
+  assert.ok(undocumentedHuman.errors.some((error) => /human addition.*(?:reason|evidence_refs)/i.test(error)));
+  const fullstack = contracts.deriveChangeImpact({ census, raw_requirement: "change settings page and API" });
+  assert.equal(fullstack.impact, "fullstack");
+  assert.equal(contracts.deriveChangeImpact({ raw_requirement: "前端和后端都改" }).impact, "fullstack", "combined UI/backend evidence must not be downgraded to backend");
+  assert.equal(contracts.deriveChangeImpact({ raw_requirement: { ui: true, backend: true } }).impact, "fullstack", "combined boolean evidence must retain both consumers");
+  const censusOrderA = contracts.buildConsumerCensus({ ...census, scan_config: { roots: ["src"], include_generated: false } });
+  const censusOrderB = contracts.buildConsumerCensus({ ...census, scan_config: { include_generated: false, roots: ["src"] } });
+  assert.equal(censusOrderA.replay_key, censusOrderB.replay_key, "census replay identity must ignore object-key insertion order");
+  const downgraded = contracts.deriveChangeImpact({ census, declared_impact: "non_ui", raw_requirement: "change settings page" });
+  assert.notEqual(downgraded.impact, "non_ui");
+  const unresolved = contracts.deriveChangeImpact({ census: { ...census, consumers: [{ ...census.consumers[0], discovery_status: "unknown", unknown_reason: "scan_failed" }] }, raw_requirement: "schema-only" });
+  assert.equal(unresolved.status, "unknown");
+  const unsupportedOnly = contracts.deriveChangeImpact({ census: { ...census, consumers: [], unknown_count: 1 } });
+  assert.equal(unsupportedOnly.status, "unknown");
+  assert.equal(contracts.deriveChangeImpact({ raw_requirement: { status: "unknown", reason: "not frozen" } }).impact, "unknown");
+  assert.equal(contracts.deriveDeliveryConclusion({ impact: "ui", facts: { design: { status: "passed" }, experience: { status: "unknown", reason: "missing" }, census: { status: "passed" }, evidence: { status: "passed" } } }).status, "unknown");
+  assert.equal(contracts.deriveDeliveryConclusion({ impact: "ui", facts: { design: { status: "failed", reason: "stale" }, experience: { status: "passed" } } }).status, "incomplete");
+  assert.equal(contracts.deriveDeliveryConclusion({ impact: "ui", facts: {
+    design: { status: "passed" }, experience: { status: "passed" }, census: { status: "not_applicable", reason: "scanner not installed" }, evidence: { status: "passed" },
+  } }).status, "incomplete", "required not_applicable must remain incomplete");
+  assert.equal(contracts.deriveDeliveryConclusion({ impact: "ui", facts: { design: { status: "passed" }, experience: { status: "passed" }, census: { status: "passed" }, evidence: { status: "passed" } } }).status, "covered");
+});
+
+test("P1 RED: UI/backend/fullstack delivery contracts expose layer failures", () => {
+  assert.equal(typeof contracts.validateDeliveryContract, "function");
+  if (typeof contracts.validateDeliveryContract !== "function") return;
+  const layer = (name, extra = {}) => ({
+    name,
+    status: "passed",
+    success: `${name} succeeded`,
+    failure: `${name} failed`,
+    state_owner: `${name}-owner`,
+    recovery: `${name}-retry-or-rollback`,
+    ...extra,
+  });
+  const dataContract = {
+    api: layer("api", { failure_classes: ["validation", "permission", "conflict", "upstream", "timeout"] }),
+    dto: layer("dto", { compatibility: "compatible" }),
+    schema_migration: layer("schema_migration", { atomicity: "transactional", stop_condition: "stop on mismatch", forward: "apply", rollback: "rollback" }),
+    persistence: layer("persistence", { atomic_commit: true, partial_commit_observable: true, idempotency: { supported: true, key: "request_id" } }),
+    consumer: layer("consumer", { retry: "retry transient", no_retry: "do not retry conflict", unknown: "manual diagnosis" }),
+    read_back: { status: "passed", correlation_id: "corr-1", consumer_id: "settings-page", value_ref: "settings-v1" },
+  };
+  assert.equal(contracts.validateDeliveryContract({ impact: "backend", data_contract: dataContract }).ok, true);
+  assert.equal(contracts.validateDeliveryContract({
+    impact: "backend",
+    data_contract: { ...dataContract, api: { ...dataContract.api, failure_classes: ["anything"] } },
+  }).ok, false, "arbitrary non-semantic failure labels must not satisfy the API failure contract");
+  assert.equal(contracts.validateDeliveryContract({ impact: "non_ui", reason: "CLI-only change" }).ok, true);
+  assert.equal(contracts.validateDeliveryContract({
+    impact: "backend",
+    data_contract: { ...dataContract, persistence: { ...dataContract.persistence, atomic_commit: false, atomic_commit_reason: "storage engine lacks transactions" } },
+  }).ok, true);
+  assert.equal(contracts.validateDeliveryContract({
+    impact: "fullstack",
+    ui_contract: { status: "passed", design_identity: "design-1", experience_identity: "experience-1", census_ref: "census-1", experience_scenario_ref: "settings-flow", evidence_ref: "ui-evidence-1" },
+    facts: { design: { status: "passed" }, experience: { status: "passed" }, census: { status: "passed" }, evidence: { status: "passed" } },
+    data_contract: { ...dataContract, read_back: { ...dataContract.read_back, value_ref: "different-value" } },
+    e2e_slice: { status: "passed", correlation_id: "corr-1", request_ref: "request-1", consumer_read_back_ref: "settings-v1" },
+  }).ok, false);
+  assert.equal(contracts.validateDeliveryContract({ impact: "backend", data_contract: { ...dataContract, dto: { ...dataContract.dto, compatibility: "defaulted" } } }).ok, false);
+  assert.equal(contracts.validateDeliveryContract({
+    impact: "fullstack",
+    ui_contract: { status: "passed", design_identity: "design-1", experience_identity: "experience-1", census_ref: "census-1", experience_scenario_ref: "settings-flow", evidence_ref: "ui-evidence-1" },
+    facts: {
+      design: { status: "passed" }, experience: { status: "passed" }, census: { status: "passed" }, evidence: { status: "passed" },
+    },
+    data_contract: dataContract,
+    e2e_slice: { status: "passed", correlation_id: "corr-1", request_ref: "request-1", consumer_read_back_ref: "settings-v1" },
+  }).ok, true);
+  assert.equal(contracts.validateDeliveryContract({
+    impact: "fullstack",
+    ui_contract: { status: "passed", design_identity: "design-1", experience_identity: "experience-1", census_ref: "census-1", experience_scenario_ref: "settings-flow", evidence_ref: "ui-evidence-1" },
+    data_contract: dataContract,
+    e2e_slice: { status: "passed", correlation_id: "corr-1", request_ref: "request-1", consumer_read_back_ref: "settings-v1" },
+  }).ok, false, "UI contract status alone must not fabricate four passed facts");
+  assert.equal(contracts.validateDeliveryContract({ impact: "fullstack", data_contract: dataContract }).ok, false);
+});
+
+test("UI delivery binds the declared contract to the current Design/Experience, census, and evidence identities", () => {
+  const design = {
+    document_kind: "design", path: "Design.md", content_sha256: "a".repeat(64), revision: "design-r1",
+    anchor_id: "design-root", anchor_title: "Design", anchor_source: "explicit", owner: "ui-team",
+    responsibilities: ["visual", "components"],
+  };
+  const experience = {
+    document_kind: "experience", path: "Experience.md", content_sha256: "b".repeat(64), revision: "experience-r1",
+    anchor_id: "experience-root", anchor_title: "Experience", anchor_source: "explicit", owner: "ui-team",
+    responsibilities: ["page", "interaction"],
+  };
+  const census = contracts.buildConsumerCensus({
+    schema_version: "consumer-census.v1", scanner_version: "scanner-1", source_snapshot: { tree: "c".repeat(40) }, scan_config: {},
+    support_matrix: ["route", "import", "lazy", "css", "data"].map((kind) => ({ kind, supported: true })),
+    consumers: [{ kind: "route", path: "src/routes/settings.tsx", anchor: "route-settings", location: "/settings", page: "settings", discovery_status: "discovered" }],
+  });
+  const base = {
+    impact: "ui",
+    project_standard_sources: { design, experience },
+    consumer_census: census,
+    ui_evidence: "ui-evidence-r1",
+    ui_contract: {
+      status: "passed", design_identity: design, experience_identity: experience, census_ref: census.replay_key,
+      experience_scenario_ref: "settings", evidence_ref: "ui-evidence-r1",
+    },
+    facts: {
+      design: { status: "passed", identity: design }, experience: { status: "passed", identity: experience },
+      census: { status: "passed", replay_key: census.replay_key }, evidence: { status: "passed", ref: "ui-evidence-r1" },
+    },
+  };
+  assert.equal(contracts.validateDeliveryContract(base).ok, true);
+  assert.equal(contracts.validateDeliveryContract({ ...base, ui_contract: { ...base.ui_contract, experience_identity: { ...experience, revision: "stale" } } }).ok, false);
+  assert.equal(contracts.validateDeliveryContract({ ...base, ui_contract: { ...base.ui_contract, census_ref: "other-census" } }).ok, false);
+  assert.equal(contracts.validateDeliveryContract({ ...base, consumer_census: { ...census, consumers: [] } }).ok, false);
 });

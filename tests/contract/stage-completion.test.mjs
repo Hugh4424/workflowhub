@@ -44,13 +44,23 @@ describe("five-stage completion predicates derive only from quality facts", () =
     expect(STAGE_ADVISORY_PREDICATES["verify-code"].independent_review).toBe("review");
   });
 
-  it("does not treat a recorded verify-code review without a clean result as complete", () => {
+  it("does not treat a recorded verify-code review without a disposition as complete", () => {
     const facts = observations("verify-code").map((entry) => entry.fact.value.subject === "code_review"
       ? { ...entry, review_status: undefined }
       : entry);
     expect(deriveStageCompletion("verify-code", facts)).toMatchObject({
       status: "in_progress",
       missing: expect.arrayContaining(["code_review"]),
+    });
+  });
+
+  it("accepts a repaired review without requiring a clean re-review", () => {
+    const facts = observations("verify-code").map((entry) => entry.fact.value.subject === "code_review"
+      ? { ...entry, review_status: "resolved" }
+      : entry);
+    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({
+      status: "completed",
+      missing: [],
     });
   });
 
@@ -187,14 +197,19 @@ describe("five-stage completion predicates derive only from quality facts", () =
     });
   });
 
-  it("does not satisfy build-code integration review while actionable findings remain", () => {
+  it("lets build-code finding disposition, not a clean label, decide completion", () => {
     const facts = observations("build-code");
     const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
     review.review_status = "findings";
     review.fact.value.findings = [{ severity: "major", disposition: "open" }];
     expect(deriveStageCompletion("build-code", facts)).toMatchObject({
+      status: "completed",
+      missing: [],
+    });
+    const withoutDisposition = facts.filter(({ fact }) => fact.value.subject !== "finding_dispositions");
+    expect(deriveStageCompletion("build-code", withoutDisposition)).toMatchObject({
       status: "in_progress",
-      missing: expect.arrayContaining(["integration_review"]),
+      missing: expect.arrayContaining(["finding_dispositions"]),
     });
   });
 

@@ -241,9 +241,9 @@ export function validateGovernanceContract({
   context = "",
   constitution_ids = [...String(constitution).matchAll(/^###\s+((?:F|Q|S)\d+)/gm)].map((match) => match[1]),
   checklist_ids = [...String(checklist).matchAll(/\*\*((?:F|Q|S)\d+)\*\*/g)].map((match) => match[1]),
-  expected_version = "1.5.0",
-  expected_revision = "2026-07-28",
-  expected_count = 21,
+  expected_version = "1.6.0",
+  expected_revision = "2026-08-25",
+  expected_count = 22,
   agents = "",
   require_agents = false,
 } = {}) {

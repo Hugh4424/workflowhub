@@ -49,7 +49,7 @@
 - **fixtures_services**：[填写：fixture、服务和清理责任 / N/A — reason]
 - **coverage limits**：[填写：本命令覆盖范围和明确未覆盖项]
 
-### UI phase/task fields (仅 UI scope 填写)
+##### UI phase/task fields (仅 UI scope 填写)
 
 - **ui_scope**：`ui` / `non_ui` / `unknown`，不允许 caller 降级事实。
 - **component action / real consumer**：[填写复用、修改、增加状态、局部新增、共享抽取或删除动作，以及真实消费者]

@@ -23,7 +23,7 @@ const files = `- **NEW**：\`tests/demo.test.mjs\`
 - **DO NOT TOUCH**：\`core/authority.mjs\``;
 
 const constitutionClauses = [
-  ..."F1 F2 F3 F4 F5 F6 F7 F8 F9 F10".split(" "),
+  ..."F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11".split(" "),
   ..."Q1 Q2 Q3".split(" "),
   ..."S1 S2 S3 S4 S5 S6 S7 S8".split(" "),
 ].map((id) => `- ${id} is satisfied.`).join("\n");
@@ -116,7 +116,7 @@ T001 → T002.
 | Automation gates | tests/demo.test.mjs | change | T001 | contract |
 
 ## Appendix A. Constitution Check
-- **Constitution binding**：\`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","id":"CONSTITUTION","version":"1","clause_count":21}\`
+- **Constitution binding**：\`{"artifact_kind":"constitution","ref":"constitution-checklist.md","hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","id":"CONSTITUTION","version":"1.6.0","clause_count":22}\`
 ${constitutionClauses}
 `;
 

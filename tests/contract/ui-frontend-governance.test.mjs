@@ -69,6 +69,32 @@ function validUiRun(overrides = {}) {
     fixture: { name: "settings-default", data_ref: "fixtures/settings.json" },
     component: { name: "SettingsForm", path: "src/components/SettingsForm.tsx" },
     design_revision: "Design.md@v1",
+    design_identity: {
+      document_kind: "design", path: "Design.md", content_sha256: "a".repeat(64), revision: "design-v1",
+      anchor_id: "design-components", anchor_title: "Components", anchor_source: "explicit",
+    },
+    experience_identity: {
+      document_kind: "experience", path: "Experience.md", content_sha256: "b".repeat(64), revision: "experience-v1",
+      anchor_id: "experience-settings", anchor_title: "Settings", anchor_source: "explicit",
+    },
+    service_identity: { name: "workflowhub-web", revision: "service-v1", instance: "fixture" },
+    api_identity: { name: "settings-api", revision: "api-v1", contract: "settings-v1" },
+    dto_identity: { name: "SettingsDto", revision: "dto-v1", contract: "settings-dto-v1" },
+    browser_profile: { name: "isolated-browser", revision: "profile-v1", ref: "isolated-browser-qa" },
+    task_id: "ui-contract-task",
+    stage: "build-code",
+    attempt_id: "build-code-attempt-1",
+    invocation_id: "ui-qa-invocation-1",
+    material_revision: `revision-${sha256}`,
+    snapshot_tree: "b".repeat(40),
+    acceptance_criterion_id: "AC-UI-001",
+    cancellation: { status: "not_cancelled" },
+    observations: {
+      console: { status: "clean" },
+      network: { status: "clean" },
+      focus: { status: "checked" },
+      overflow: { status: "none" },
+    },
     visual: { status: "observed", screenshot_refs: ["evidence/settings.png"] },
     a11y: { status: "checked", checks: ["keyboard", "labels"] },
     auth: { mode: "none", login_state_reused: false },
@@ -201,4 +227,16 @@ test("UI governance records have one owner, consumer, and deletion condition", (
   requireTerms("skills/reuse-registry.md", ["frontend-testing", "isolated-browser-qa", "owner", "consumer", "delete"]);
   requireTerms("CONTEXT.md", ["UI phase", "component", "browser", "screenshot", "unknown"]);
   requireTerms("THIRD_PARTY_NOTICES.md", ["browser QA", "frontend-testing"]);
+});
+
+test("P1 contract: UI skills name the dual-source identity and replayable census", () => {
+  requireTerms("skills/ui-project-init/SKILL.md", [
+    "Design.md", "Experience.md", "content_sha256", "anchor_id", "only build-code", "consumer-census.v1", "unknown_reason",
+  ]);
+  requireTerms("skills/design-source-readiness/SKILL.md", [
+    "Design.md", "Experience.md", "bound_current", "update_required", "stale", "anchor_id", "validateProjectStandardSources",
+  ]);
+  requireTerms("skills/frontend-component-quality/SKILL.md", [
+    "buildConsumerCensus", "consumer_id", "source=human", "unknown_reason", "route/import/lazy/CSS/data",
+  ]);
 });

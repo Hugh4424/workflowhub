@@ -61,6 +61,12 @@ material, review controller, or public command. Non-UI tasks retain the
 existing code-review path and record UI facts as not applicable.
 No new stage or no gate is introduced by this alignment check.
 
+The alignment projection also checks the current `Design.md` and `Experience.md`
+source identities and the `consumer-census.v1` against the real changed-file
+consumers. A stale hash, missing explicit anchor, missing consumer, or
+unsupported CSS/data route is reported with its unknown reason and evidence;
+verify-code does not rewrite either project standard or invent a browser pass.
+
 ## 审查依赖
 
 直接使用 `skill-deps.yaml` 声明的两个依赖：
@@ -68,7 +74,7 @@ No new stage or no gate is introduced by this alignment check.
 1. `dsh-code-review`：一次代码审查调用，内部包含 correctness、lifecycle、security、consumer fit、简化、变更文档和 prose 检查；
 2. `wh-review`：按受信配置发起一次异源 findings 审查，保留真实 provider、model、session、transport status、findings、error 和 provenance。
 
-provider 只能返回 `findings`。一次审查结束后不为得到空 findings、provider pass 或补齐证据再次调用；unavailable 如实记录，不能算 `pass`，不改写为空 findings。`unavailable` 绝不是 `pass`。
+provider 只能返回 `findings`。一次审查结束后不为得到空 findings、provider pass 或补齐证据再次调用；unavailable 如实记录，不能算 `pass`，不改写为空 findings。`unavailable` 绝不是 `pass`。如果 findings 在同一 task 已逐条修复，保留原 review 的快照身份，并把当前阶段结果记为 `resolved`；不把修复前的 review 改写成当前 `clean`，也不因为没有 `clean` 标签再开一轮审查。
 
 review 结果只是质量事实，不是继续工作的许可证。缺质量事实只限制完成声明，不限制继续验收和修复；发现代码 finding 就回同一 task 修复，不新建任务。
 
@@ -94,14 +100,14 @@ build-code 已有的测试事实可以作为代码审查输入，但 verify-code
 
 ## 结论
 
-- `passed`：当前代码 review 已完成，没有未处置的 actionable serious code finding；这不是“所有材料和证据都齐了”。
-- `incomplete`：代码 review unavailable，或仍有 actionable serious code finding；真实原因必须保留。
+- `passed`：当前代码 review 已完成，没有未处置的 actionable serious code finding；如果 finding 在同一 task 已修复，`resolved` 与无 finding 的 `clean` 具有同等完成含义；这不是“所有材料和证据都齐了”。
+- `incomplete`：代码 review unavailable，或仍有未处置的 actionable serious code finding；真实原因必须保留。
 - `failed`：代码本身有明确失败，回同一 task 修复。
 
 `incomplete` 只限制质量声明，不限制同一 task 继续修复。宿主推进使用 `work_status`/`continuation_allowed`，不能把 `status=in_progress` 或 `quality_status=incomplete` 当作工作冻结。
 
 ## 阶段末交接
 
-用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。
+用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和用户确认说明“现在交付什么”。
 
 不要求用户重复 Talk/Grill，不要求用户补交 verify-code 证据；只要求用户对当前代码审查结论作一次真实确认。这个确认不是 close 授权，也不授权 commit、push、merge、archive 或 cleanup。
