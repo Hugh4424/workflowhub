@@ -13,6 +13,7 @@ import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/ta
 import { createCanonicalReviewWriter } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { buildStageCompletion } from "../../runtime/evidence/stage-completion-facts.mjs";
 import { sha256 } from "../../runtime/evidence/freshness.mjs";
+import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const MATERIALS = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
@@ -86,6 +87,17 @@ function publishReviewFixture(state) {
   const ref = "quality/reviews/results/vnext-build-spec.json";
   state.kernel.publishCanonicalRecord(ref, raw);
   return { ref, sha256: sha256(raw) };
+}
+
+function stageOutcome(state, stage, { workspace = null, artifacts = null, attemptId = `attempt-${stage}` } = {}) {
+  return writeStageOutcomeFixture({
+    task: state.task,
+    kernel: state.kernel,
+    artifacts: artifacts ?? ArtifactDir.open((workspace ?? state.candidate).worktreeRoot, state.task),
+    ...(workspace ? { workspace } : { candidateWorkspace: state.candidate }),
+    stage,
+    attemptId,
+  });
 }
 
 describe("vNext official stage completion", () => {
@@ -278,7 +290,7 @@ describe("vNext official stage completion", () => {
       stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
       workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
       workspace, artifacts,
-    }, { receipts: { review: attemptRef } });
+    }, { receipts: { review: attemptRef, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts }).ref } });
 
     expect(result).toMatchObject({ status: "in_progress", work_status: "ready", quality_status: "incomplete" });
     expect(result.readiness).toMatchObject({ work_status: "ready", missing_materials: [] });
@@ -312,7 +324,7 @@ describe("vNext official stage completion", () => {
       stage: "build-spec", task: state.task, kernel, identity: state.task.identity,
       workflowRunId: kernel.deriveStageWorkflowRunId("build-spec"), manifest: state.task.manifest,
       workspace, artifacts,
-    }, { receipts: { spec: staleRef, review: review.ref } });
+    }, { receipts: { spec: staleRef, review: review.ref, stage_outcomes: stageOutcome(state, "build-spec", { workspace, artifacts, attemptId: "attempt-stale-material" }).ref } });
 
     expect(result).toMatchObject({ stage: "build-spec", work_status: "ready" });
     expect(["completed", "in_progress"]).toContain(result.status);
@@ -328,7 +340,7 @@ describe("vNext official stage completion", () => {
         stage, task: state.task, kernel, identity: state.task.identity,
         workflowRunId: kernel.deriveStageWorkflowRunId(stage), manifest: state.task.manifest,
         candidateWorkspace: state.candidate, artifacts,
-      }, {});
+      }, { receipts: { stage_outcomes: stageOutcome(state, stage).ref } });
       expect(result).toMatchObject({ stage, status: "in_progress", work_status: "ready", quality_status: "incomplete" });
       expect(result.quality_fact_refs.length).toBeGreaterThan(0);
     }

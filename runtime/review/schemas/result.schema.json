@@ -8,6 +8,7 @@
     "task_id": { "type": "string", "minLength": 1 },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "review_track": { "enum": ["direction", "detail", null] },
+    "review_kind": { "enum": ["mini_task.design", "mini_task.implementation", null] },
     "subject_kind": { "enum": ["worktree", "phase"] },
     "phase_id": { "type": ["string", "null"], "minLength": 1 },
     "review_scope": { "enum": ["phase", "integration", null] },

@@ -1,17 +1,21 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import yaml from "js-yaml";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { runStage } from "../../runtime/stage/stage-runner.mjs";
+import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { readTaskFacts } from "../../runtime/task/task-store.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
+import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -93,7 +97,11 @@ function publicStatus(state, stage) {
 function publicRun(state, stage, input) {
   const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
   const inputPath = join(state.root, `public-${stage}-input.json`);
-  writeFileSync(inputPath, `${JSON.stringify(input)}\n`);
+  const receipts = input?.receipts ?? {};
+  const prepared = receipts.stage_outcomes
+    ? input
+    : { ...input, receipts: { ...receipts, stage_outcomes: stageOutcomeReceipt(state, stage).ref } };
+  writeFileSync(inputPath, `${JSON.stringify(prepared)}\n`);
   const result = spawnSync(process.execPath, [
     runtime, "run", "--action=execute", `--stage=${stage}`, "--project=WorkflowHub",
     `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
@@ -104,6 +112,32 @@ function publicRun(state, stage, input) {
   });
   expect(result.status, `${stage}: ${result.stdout}\n${result.stderr}`).toBe(0);
   return JSON.parse(result.stdout);
+}
+
+function publicRunRaw(state, stage, input) {
+  const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
+  const inputPath = join(state.root, `public-raw-${stage}-input.json`);
+  writeFileSync(inputPath, `${JSON.stringify(input)}\n`);
+  return spawnSync(process.execPath, [
+    runtime, "run", "--action=execute", `--stage=${stage}`, "--project=WorkflowHub",
+    `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
+  ], {
+    cwd: state.repo,
+    env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
+    encoding: "utf8",
+  });
+}
+
+function stageOutcomeReceipt(state, stage, { attemptId = "attempt-stage-1", status = "completed" } = {}) {
+  return writeStageOutcomeFixture({
+    task: state.task,
+    kernel: state.kernel,
+    artifacts: state.artifacts,
+    candidateWorkspace: state.candidate,
+    stage,
+    attemptId,
+    status,
+  });
 }
 
 function publicConfirm(state, stage) {
@@ -301,6 +335,122 @@ function evidence(state, stage, { testExit = 0, review = "pass", confirm = true,
 }
 
 describe("current vNext five-stage runtime", () => {
+  it("requires an authenticated stage-outcome receipt instead of accepting caller facts alone", () => {
+    const state = fixture("stage-outcome-receipt-required");
+    const result = publicRunRaw(state, "build-spec", { receipts: { review: "quality/reviews/results/missing.json" } });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/stage[_ -]outcome|stage outcome|receipt/i);
+    expect(readTaskFacts(state.task.taskPath)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fact_type: "stage", stage: "build-spec", status: "unknown", reason: "stage_outcome_unavailable" }),
+      expect.objectContaining({ fact_type: "step", stage: "build-spec", status: "missing" }),
+      expect.objectContaining({ fact_type: "skill", stage: "build-spec", status: "unknown" }),
+    ]));
+  });
+
+  it("rejects evidence that is hashed correctly but belongs to another declared step", () => {
+    const state = fixture("stage-outcome-semantic-binding");
+    const original = stageOutcomeReceipt(state, "build-spec");
+    const tampered = structuredClone(original.value);
+    tampered.step_outcomes[0].evidence_refs = tampered.step_outcomes[1].evidence_refs;
+    const raw = `${JSON.stringify(tampered, null, 2)}\n`;
+    const hash = sha256(raw);
+    const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
+    state.kernel.publishCanonicalRecord(ref, raw);
+    const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/semantic binding|evidence|stage outcome/i);
+  });
+
+  it("requires the executed stage-end spec-analyze result and validates its actual semantics", () => {
+    const state = fixture("stage-outcome-spec-analyze-required");
+    const original = stageOutcomeReceipt(state, "build-spec");
+    const tampered = structuredClone(original.value);
+    delete tampered.spec_analyze;
+    const raw = `${JSON.stringify(tampered, null, 2)}\n`;
+    const hash = sha256(raw);
+    const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
+    state.kernel.publishCanonicalRecord(ref, raw);
+    const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/spec_analyze|spec-analyze|stage outcome/i);
+
+    const semanticTamper = structuredClone(original.value);
+    semanticTamper.spec_analyze.packet.coverage[0].actual_behavior = "文档文件存在";
+    const semanticRaw = `${JSON.stringify(semanticTamper, null, 2)}\n`;
+    const semanticHash = sha256(semanticRaw);
+    const semanticRef = `quality/evidence/stage-outcomes/build-spec/${semanticHash}.json`;
+    state.kernel.publishCanonicalRecord(semanticRef, semanticRaw);
+    const semanticResult = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: semanticRef } });
+    expect(semanticResult.status).not.toBe(0);
+    expect(`${semanticResult.stdout}\n${semanticResult.stderr}`).toMatch(/semantic|spec_analyze|stage outcome/i);
+
+    const materialTamper = structuredClone(original.value);
+    materialTamper.spec_analyze.packet.materials.decision_log = "伪造的 decision-log 内容";
+    materialTamper.spec_analyze.result = validateStageSpecAnalyzeProfile({
+      stage: "build-spec",
+      packet: materialTamper.spec_analyze.packet,
+    });
+    const materialRaw = `${JSON.stringify(materialTamper, null, 2)}\n`;
+    const materialHash = sha256(materialRaw);
+    const materialRef = `quality/evidence/stage-outcomes/build-spec/${materialHash}.json`;
+    state.kernel.publishCanonicalRecord(materialRef, materialRaw);
+    const materialResult = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: materialRef } });
+    expect(materialResult.status).not.toBe(0);
+    expect(`${materialResult.stdout}\n${materialResult.stderr}`).toMatch(/material|current|stage outcome/i);
+  });
+
+  it("publishes semantic spec-analyze facts without turning them into a run gate", () => {
+    const state = fixture("stage-outcome-spec-analyze-report-only");
+    const original = stageOutcomeReceipt(state, "build-spec");
+    const tampered = structuredClone(original.value);
+    tampered.spec_analyze.packet.coverage[0].status = "missing";
+    tampered.spec_analyze.result = validateStageSpecAnalyzeProfile({
+      stage: "build-spec",
+      packet: tampered.spec_analyze.packet,
+    });
+    const raw = `${JSON.stringify(tampered, null, 2)}\n`;
+    const hash = sha256(raw);
+    const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
+    state.kernel.publishCanonicalRecord(ref, raw);
+    const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
+    expect(result.status).toBe(0);
+    const output = JSON.parse(result.stdout);
+    expect(output.quality_status).toBe("incomplete");
+    expect(output.stage_outcome_summary.spec_analyze).toMatchObject({ status: "inconsistent" });
+    expect(output.quality_warnings).toContain("stage-end-spec-analyze:inconsistent");
+  });
+
+  it("rejects unavailable outcome cost that contains guessed numbers", () => {
+    const state = fixture("stage-outcome-cost-unavailable");
+    const original = stageOutcomeReceipt(state, "build-spec");
+    const tampered = structuredClone(original.value);
+    tampered.step_outcomes[0].cost = {
+      duration_ms: 1,
+      tokens: 1,
+      status: "unavailable",
+      reason: "fixture did not expose usage",
+    };
+    const raw = `${JSON.stringify(tampered, null, 2)}\n`;
+    const hash = sha256(raw);
+    const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
+    state.kernel.publishCanonicalRecord(ref, raw);
+    const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/unavailable cost|duration_ms|tokens/i);
+  });
+
+  it("publishes immutable stage outcomes with every declared step and skill", () => {
+    const state = fixture("stage-outcome-receipt-published");
+    const outcome = stageOutcomeReceipt(state, "build-spec");
+    expect(outcome.ref).toMatch(/^quality\/evidence\/stage-outcomes\/build-spec\/[a-f0-9]{64}\.json$/);
+    expect(outcome.value.step_outcomes).toHaveLength(JSON.parse(readFileSync(join(process.cwd(), "workflows/build-spec/steps.json"), "utf8")).steps.length);
+    expect(outcome.value.skill_outcomes).toHaveLength(yaml.load(readFileSync(join(process.cwd(), "workflows/build-spec/skill-deps.yaml"), "utf8")).skills.length);
+    expect(sha256(state.task.readRecord(outcome.ref))).toBe(outcome.sha256);
+    const replay = stageOutcomeReceipt(state, "build-spec", { attemptId: "attempt-stage-2" });
+    expect(replay.ref).not.toBe(outcome.ref);
+    expect(state.task.readRecord(outcome.ref)).toBe(`${JSON.stringify(outcome.value, null, 2)}\n`);
+  });
+
   it("records direction and detail review findings without a verdict gate", async () => {
     const state = fixture("make-decision-review-subjects");
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
@@ -356,6 +506,7 @@ describe("current vNext five-stage runtime", () => {
     state.kernel.publishCanonicalRecord(interactionRef, interactionRaw);
     const direction = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "direction" });
     const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
+    const stageOutcome = stageOutcomeReceipt(state, "make-decision");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const confirmationResult = spawnSync(process.execPath, [
       runtime, "confirm", "--action=decision", "--stage=make-decision", "--project=WorkflowHub",
@@ -371,7 +522,7 @@ describe("current vNext five-stage runtime", () => {
     const input = join(state.root, "make-decision-input.json");
     writeFileSync(input, `${JSON.stringify({ receipts: {
       interaction: interactionRef, direction_review: direction.resultRef, detail_review: detail.resultRef,
-      confirmation: confirmation.ref,
+      confirmation: confirmation.ref, stage_outcomes: stageOutcome.ref,
     } })}\n`);
     const result = spawnSync(process.execPath, [
       runtime, "run", "--action=execute", "--stage=make-decision", "--project=WorkflowHub",
@@ -500,7 +651,7 @@ describe("current vNext five-stage runtime", () => {
     expect(accepted.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
   });
 
-  it("uses the public run route from current materials without material receipts", () => {
+  it("rejects the public run route when the Stage Agent omits its outcome receipt", () => {
     const state = fixture("public-run-missing-receipt");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const result = spawnSync(process.execPath, [
@@ -511,8 +662,8 @@ describe("current vNext five-stage runtime", () => {
       env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.root },
       encoding: "utf8",
     });
-    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ stage: "build-spec", work_status: "ready", quality_status: "incomplete" });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/stage[_ -]outcome|stage outcome|receipt/i);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
 
@@ -553,6 +704,7 @@ describe("current vNext five-stage runtime", () => {
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });
     const specRun = publicRun(state, "build-spec", { receipts: { review: specReview.resultRef } });
     expect(specRun.status).toBe("completed");
+    expect(specRun.stage_outcome_summary.spec_analyze).toMatchObject({ status: "consistent" });
     expect(specRun.completion.missing).not.toContain("traceability");
     expect(publicStatus(state, "build-spec")).toMatchObject({ work_status: "ready", quality_status: "completed" });
 

@@ -47,6 +47,7 @@ const NAMESPACE = Object.freeze({
   direction_risk_acceptance: "quality/evidence/risk-acceptances/",
   detail_risk_acceptance: "quality/evidence/risk-acceptances/",
   quality_risk_acceptance: "quality/evidence/risk-acceptances/",
+  stage_outcomes: "quality/evidence/stage-outcomes/",
 });
 const EXPECTED_COMPONENT = Object.freeze({ decision: "decision", spec: "spec", plan: "plan", tasks: "tasks", implementation: "implementation", evidence: "evidence", verification: "verification" });
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[a-zA-Z0-9._-]+\.json$/;
@@ -61,11 +62,11 @@ const COMPLETION_COPY = Object.freeze({
   "verify-code": { objective: "独立验证最终实现是否满足验收条件", approach: "复用正式实现证据并执行独立质量检查", effect: "任务获得可关闭或返回修复的明确结论", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
-  "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit"]),
-  "build-spec": new Set(["spec", "review", "risk_acceptance", "audit"]),
-  "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit"]),
-  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit"]),
-  "verify-code": new Set(["tests", "review", "quality_review", "quality_risk_acceptance", "evidence", "verification", "risk_acceptance", "audit"]),
+  "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit", "stage_outcomes"]),
+  "build-spec": new Set(["spec", "review", "risk_acceptance", "audit", "stage_outcomes"]),
+  "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "stage_outcomes"]),
+  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes"]),
+  "verify-code": new Set(["tests", "review", "quality_review", "quality_risk_acceptance", "evidence", "verification", "risk_acceptance", "audit", "stage_outcomes"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
@@ -165,6 +166,7 @@ const reviewName = (name) => REVIEW_NAMES.has(name);
 function validReceiptRef(name, ref) {
   if (typeof ref !== "string" || ref.includes("..") || !ref.endsWith(".json")) return false;
   if (name === "interaction") return /^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(ref);
+  if (name === "stage_outcomes") return /^quality\/evidence\/stage-outcomes\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name === "audit") return /^quality\/evidence\/audits\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/[a-f0-9]{64}\.json$/.test(ref);
   if (name.endsWith("risk_acceptance")) return /^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/.test(ref);
   if (reviewName(name)) return REVIEW_RESULT_REF.test(ref) || REVIEW_ATTEMPT_REF.test(ref);

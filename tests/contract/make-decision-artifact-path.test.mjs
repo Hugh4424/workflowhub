@@ -17,6 +17,7 @@ import { createTask } from "../../runtime/task/task-handle.mjs";
 import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
+import { writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
 const roots = [];
 afterEach(() => {
@@ -74,6 +75,17 @@ function fixture(taskId, { prepare = true } = {}) {
     ? ArtifactDir.open(context.candidateWorkspace.worktreeRoot, task)
     : null;
   return { root, repo, storage, home, task, taskPath, context, artifacts };
+}
+
+function stageOutcome(state, attemptId) {
+  return writeStageOutcomeFixture({
+    task: state.task,
+    kernel: state.context.kernel,
+    artifacts: state.context.artifacts,
+    candidateWorkspace: state.context.candidateWorkspace,
+    stage: "make-decision",
+    attemptId,
+  });
 }
 
 describe("make-decision current artifact path contract", () => {
@@ -143,7 +155,7 @@ describe("make-decision current artifact path contract", () => {
       reviewTrack: "detail",
     });
     const result = await runOfficialStage("make-decision", state.context, {
-      receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef },
+      receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef, stage_outcomes: stageOutcome(state, "attempt-current").ref },
     });
     expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });
   });
@@ -170,7 +182,7 @@ describe("make-decision current artifact path contract", () => {
     const currentSnapshot = captureGitWorktreeSnapshot(state.context.candidateWorkspace.worktreeRoot);
     expect(currentSnapshot.tree).not.toBe(reviewedSnapshot.tree);
     const result = await runOfficialStage("make-decision", state.context, {
-      receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef },
+      receipts: { direction_review: direction.resultRef, detail_review: detail.resultRef, stage_outcomes: stageOutcome(state, "attempt-revised").ref },
     });
 
     expect(result).toMatchObject({ stage: "make-decision", work_status: "ready" });

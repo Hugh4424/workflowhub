@@ -112,6 +112,16 @@ Every completed Phase executes its recorded route, checks the real changed-file
 range, uses the applicable concrete testing skill, and records test, AC, review,
 finding-disposition, and plain-language stage facts.
 
+Before `publish-code-result`, execute the declared `stage-end-spec-analyze`
+step. It compares the original requirement and all four current materials with
+the actual implementation, tests, AC trace, review facts, and real user-result
+evidence. It checks actual semantics and evidence, not only IDs, paths, hashes,
+or files. Repair valid gaps in build-code when they belong to implementation or
+task facts; keep product/spec/plan ownership with its owning stage. Emit the
+shared six-part plain-language summary: current stage work, requirement
+coverage, upstream alignment, repairs made here, remaining risks, and the next
+stage boundary.
+
 After the phase facts are recorded, a phase may be committed only when the
 user has separately authorized the irreversible operation via
 `authorize --op=commit`. The phase

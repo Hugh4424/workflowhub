@@ -12,6 +12,11 @@ Ask one batch only when the remaining frontier questions are independent. Each
 question in that batch must be answerable without the answer to another question;
 dependent questions stay out of the batch and are re-ranked after the reply.
 
+每题使用和 Talk、Clarify 相同的大白话问题卡：`question_id`、一个 `axis`、
+`independent: true`、2～3 个带 `meaning`、`consequence`、`risk` 的选项、
+`recommended_option` 和 `recommendation_reason`。用户可以只回答其中一部分，未回答项
+必须保留并重新排序，直接回答选项编号；Grill 仍然只记录方向挑战，不产生 review 结论。
+
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
 发现会改变目标、方向、范围、方案、风险或长期规则的决策轴时，必须执行

@@ -16,6 +16,8 @@ import {
   validateBuildCodeAcceptanceMap,
   validateDiffIndexBundle,
   phaseDiffDeliveryForPath,
+  buildReviewMaterials,
+  reviewInstructionsFor,
 } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
 
@@ -43,7 +45,7 @@ function taskFixture() {
     },
   });
   const candidate = prepareTaskWorkspace(task);
-  return { task, workspace: openCurrentTaskWorkspace(task) };
+  return { root, task, workspace: openCurrentTaskWorkspace(task) };
 }
 
 afterEach(() => {
@@ -115,9 +117,15 @@ describe("current review material and capture contracts", () => {
     expect(phaseDiffDeliveryForPath("runtime/stage/stage-runner.mjs")).toBe("included");
     expect(phaseDiffDeliveryForPath("workflows/build-code/steps.json")).toBe("included");
     expect(phaseDiffDeliveryForPath("skills/spec-analyze/SKILL.md")).toBe("included");
-    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("included");
-    expect(phaseDiffDeliveryForPath("skills/catalog.yaml")).toBe("summary");
-    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/grill-with-docs/SKILL.md")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/spec-clarify/SKILL.md")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/talk-with-zhipeng/SKILL.md")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/mini-task/SKILL.md")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/grill-with-docs/skill-bundle.json")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/spec-clarify/skill-bundle.json")).toBe("included");
+    expect(phaseDiffDeliveryForPath("skills/catalog.yaml")).toBe("included");
+    expect(phaseDiffDeliveryForPath("core/__tests__/stage-skill-runtime.test.mjs")).toBe("summary");
+    expect(phaseDiffDeliveryForPath("tests/contract/example.test.mjs")).toBe("summary");
     expect(phaseDiffDeliveryForPath("specs/task/plan.md")).toBe("summary");
   });
 
@@ -131,6 +139,119 @@ describe("current review material and capture contracts", () => {
     });
     expect(build).toMatchObject({ exit_code: 0, stage: "build-code", source_digest: expect.any(String) });
     expect(verify).toMatchObject({ exit_code: 0, stage: "verify-code", source_digest: expect.any(String) });
+  });
+
+  it("defines distinct mini-task design and implementation packet contracts", async () => {
+    const { reviewRuleFor, minimumReviewersFor } = await import("../../runtime/review/review-policy.mjs");
+    expect(reviewRuleFor("mini_task.design").required).toEqual(expect.arrayContaining(["decision_log", "spec", "plan", "tasks"]));
+    expect(reviewRuleFor("mini_task.implementation").required).toEqual(expect.arrayContaining(["test_evidence", "ac_trace", "user_result"]));
+    expect(minimumReviewersFor("mini_task.design")).toBe(1);
+    expect(minimumReviewersFor("mini_task.implementation")).toBe(1);
+  });
+
+  it("constructs both mini-task packets and binds implementation evidence to the current snapshot", () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "mini-task.mjs"), "export const result = 'ok';\n");
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, includeDiff: true });
+    try {
+      const common = {
+        raw_requirement: "交付一个边界清楚的小功能。",
+        decision_log: "## 原始需求\n\n交付一个边界清楚的小功能。\n\n## 决定\n\n采用 mini-task。\n",
+        spec: "# Spec\n\n用户得到一个明确结果。\n",
+        plan: "# Plan\n\n先实现，再测试，再交付。\n",
+        tasks: "# Tasks\n\n- T-mini：实现并验证。\n",
+      };
+      const design = buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: "review-materials-contract",
+        stage: "build-code", reviewKind: "mini_task.design",
+        materials: { ...common, review_instructions: reviewInstructionsFor("build-code", null, false, null, "mini_task.design") },
+      });
+      expect(design.files).toEqual(expect.arrayContaining([
+        "contracts/mini-task-design.md",
+        "requirements/decision_log.md",
+        "requirements/spec.md",
+        "packet-plan.json",
+      ]));
+      expect(reviewInstructionsFor("build-code", null, false, null, "mini_task.design"))
+        .toMatch(/frozen four materials and the design risks/i);
+      expect(reviewInstructionsFor("build-code", null, false, null, "mini_task.design"))
+        .not.toMatch(/changes\.diff|diff-index\.json|diff-shards/i);
+      expect(reviewInstructionsFor("build-code", null, false, null, "mini_task.implementation"))
+        .toMatch(/actual repair or subject change[\s\S]*Do not mechanically retry/i);
+      expect(design.packetPlan.review_kind).toBe("mini_task.design");
+
+      const receipt = `${JSON.stringify({ command: "npx vitest run mini-task", exit_code: 0, snapshot_tree: source.snapshotTree })}\n`;
+      const receiptRef = "quality/tests/mini-task-implementation.json";
+      const evidence = `${JSON.stringify({ snapshot_tree: source.snapshotTree, user_visible_result: "ok" })}\n`;
+      const evidenceRef = "quality/evidence/mini-task-user-result.json";
+      task.createRecordAtomic(receiptRef, receipt);
+      task.createRecordAtomic(evidenceRef, evidence);
+      const receiptHash = sha256(receipt);
+      const evidenceHash = sha256(evidence);
+      const implementation = buildReviewMaterials({
+        reviewDataRoot: root, attachmentRoot: root, source, task, taskId: "review-materials-contract",
+        stage: "build-code", reviewKind: "mini_task.implementation",
+        materials: {
+          ...common,
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: receiptHash, suite_scope: "focused", coverage_classes: ["behavior"] },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-MINI-001"],
+            entries: [{
+              acceptance_criterion_id: "AC-MINI-001",
+              change: [{ task_id: "T-mini", summary: "实现明确结果" }],
+              test: [{ receipt_ref: receiptRef, receipt_hash: receiptHash }],
+              evidence: [{ ref: evidenceRef, sha256: evidenceHash }],
+              anchors: [{ id: "mini-result", path: "mini-task.mjs", start_line: 1, end_line: 1, role: "implementation", reason: "实现用户结果" }],
+            }],
+          },
+          user_result: { status: "verified", method: "cli", result: "ok", snapshot_tree: source.snapshotTree },
+          coverage_limits: ["仅覆盖 mini-task CLI 结果"],
+          skip_reasons: ["无"],
+          remaining_risks: ["真实 remote push 不在合同测试范围内"],
+          review_instructions: reviewInstructionsFor("build-code", null, false, null, "mini_task.implementation"),
+        },
+      });
+      expect(implementation.files).toEqual(expect.arrayContaining([
+        "source.json",
+        "changes.diff",
+        "contracts/mini-task-implementation.md",
+        "evidence/test-summary.json",
+        "requirements/ac_trace.json",
+        "context/mini-result.txt",
+      ]));
+      expect(implementation.packetPlan.review_kind).toBe("mini_task.implementation");
+      expect(readFileSync(join(implementation.bundleRoot, "contracts/mini-task-implementation.md"), "utf8"))
+        .toMatch(/变更文件.*anchor.*例外/s);
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("rejects a mini-task implementation test receipt from an older snapshot", () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "mini-task.mjs"), "export const result = 'ok';\n");
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, includeDiff: true });
+    try {
+      const receipt = `${JSON.stringify({ command: "npx vitest run mini-task", exit_code: 0, snapshot_tree: "old-snapshot" })}\n`;
+      const receiptRef = "quality/tests/mini-task-stale.json";
+      task.createRecordAtomic(receiptRef, receipt);
+      const common = {
+        raw_requirement: "交付一个小功能。", decision_log: "## 原始需求\n\n交付一个小功能。\n",
+        spec: "# Spec\n", plan: "# Plan\n", tasks: "# Tasks\n",
+        test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+        ac_trace: { schema_version: "ac-change-test-trace.v1", snapshot_tree: source.snapshotTree, acceptance_ids: ["AC-1"], entries: [{ acceptance_criterion_id: "AC-1", change: [{ task_id: "T-1", summary: "change" }], test: [{ receipt_ref: receiptRef, receipt_hash: sha256(receipt) }], evidence: [{ ref: receiptRef, sha256: sha256(receipt) }], anchors: [{ id: "a", path: "mini-task.mjs", start_line: 1, end_line: 1, role: "implementation", reason: "change" }] }] },
+        user_result: { status: "verified", result: "ok" },
+        coverage_limits: ["仅覆盖 mini-task CLI 结果"],
+        skip_reasons: ["无"],
+        remaining_risks: ["真实 remote push 不在合同测试范围内"],
+        review_instructions: reviewInstructionsFor("build-code", null, false, null, "mini_task.implementation"),
+      };
+      expect(() => buildReviewMaterials({ reviewDataRoot: root, attachmentRoot: root, source, task, taskId: "review-materials-contract", stage: "build-code", reviewKind: "mini_task.implementation", materials: common })).toThrow(/current[- ]snapshot/);
+    } finally {
+      source.dispose();
+    }
   });
 
   it("captures the complete changed file set without caller path filters", () => {
@@ -154,6 +275,34 @@ describe("current review material and capture contracts", () => {
       const diff = readFileSync(source.diffPath, "utf8");
       expect(diff).toContain("phase.mjs");
       expect(diff).toContain("other.mjs");
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("rejects a build-code phase test receipt from an older snapshot", () => {
+    const { root, task, workspace } = taskFixture();
+    writeFileSync(join(workspace.worktreeRoot, "phase.mjs"), "phase changed\n");
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, phaseId: "P4", includeDiff: true });
+    try {
+      const receipt = `${JSON.stringify({ command: "true", exit_code: 0, snapshot_tree: "old-snapshot" })}\n`;
+      const receiptRef = "quality/tests/phase-stale.json";
+      task.createRecordAtomic(receiptRef, receipt);
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId: "review-materials-contract",
+        stage: "build-code",
+        phaseId: "P4",
+        materials: {
+          approved_spec: "AC-1：阶段测试必须绑定当前 snapshot。",
+          acceptance_criteria: "AC-1：阶段测试必须绑定当前 snapshot。",
+          test_evidence: { receipt_ref: receiptRef, receipt_hash: sha256(receipt) },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
+        },
+      })).toThrow(/current[- ]snapshot/);
     } finally {
       source.dispose();
     }

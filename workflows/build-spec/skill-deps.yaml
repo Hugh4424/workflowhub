@@ -7,6 +7,7 @@ skills:
   - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: inline, trigger: product_direction_check, bundle: skills/plan-ceo-review/skill-bundle.json, owner: stage }
   - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json, owner: stage }
   - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, trigger: review, bundle: skills/wh-review/skill-bundle.json, owner: stage }
+  - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: inline, trigger: stage_end_consistency, bundle: skills/spec-analyze/skill-bundle.json, owner: stage }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: diagnostic }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: diagnostic }

@@ -6,6 +6,7 @@
   "required": ["interaction_type", "rounds", "grill", "workspace_tree"],
   "properties": {
     "interaction_type": { "enum": ["talk", "grill", "grill-revalidation", "spec-clarify", "aggregate"] },
+    "question_batch_version": { "const": "rich-v1" },
     "rounds": { "type": "array", "items": { "type": "object" } },
     "grill": { "type": ["object", "null"] },
     "previous_grill": {

@@ -15,7 +15,7 @@ import planTaskSchema from "../schemas/plan-task-contract.v1.json" with { type: 
 import planTaskV2Schema from "../schemas/plan-task-contract.v2.json" with { type: "json" };
 import completionSchema from "../schemas/stage-completion-facts.v1.json" with { type: "json" };
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
-import { validateAmbiguityLedgerV2 } from "../stage/stage-content-contracts.mjs";
+import { validateAmbiguityLedgerV2, validateInteractionQuestionBatch } from "../stage/stage-content-contracts.mjs";
 import { assertTaskHandle } from "../task/task-handle.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -92,6 +92,29 @@ function validateTalkQuestion(question, label) {
   }
 }
 
+function validatePersistedInteractionBatch(questions, interactionType, label, batchVersion = null) {
+  // Older immutable records only contain question ids/card bindings. Keep
+  // those records readable. New records must opt into the shared contract
+  // explicitly; content sniffing is not a compatibility discriminator.
+  if (batchVersion === undefined || batchVersion === null) return null;
+  if (batchVersion !== "rich-v1") throw new TypeError(`${label} question_batch_version is unsupported: ${batchVersion}`);
+  if (!Array.isArray(questions)) throw new TypeError(`${label} question batch is required for question_batch_version=rich-v1`);
+  const batch = validateInteractionQuestionBatch(questions, { interactionType });
+  if (!batch.ok) throw new TypeError(`${label} question batch is invalid: ${batch.errors.join("; ")}`);
+  return batch;
+}
+
+function hasRichQuestionBatch(payload) {
+  return payload?.question_batch_version === "rich-v1";
+}
+
+function validateQuestionBatchVersion(payload) {
+  if (Object.prototype.hasOwnProperty.call(payload ?? {}, "question_batch_version")
+      && payload.question_batch_version !== "rich-v1") {
+    throw new TypeError(`interaction question_batch_version is unsupported: ${payload.question_batch_version}`);
+  }
+}
+
 function validateGrillFacts(grill) {
   if (!grill || typeof grill !== "object" || Array.isArray(grill)) {
     throw new TypeError("grill interaction requires complete exit facts");
@@ -125,6 +148,7 @@ function validateGrillFacts(grill) {
 }
 
 function validateInteractionSemantics(payload) {
+  validateQuestionBatchVersion(payload);
   if (payload.interaction_type === "talk") {
     if (!Array.isArray(payload.rounds) || payload.rounds.length !== 1) {
       throw new TypeError("talk interaction must contain exactly one round");
@@ -155,6 +179,9 @@ function validateInteractionSemantics(payload) {
       }
     } else {
       if (round.zero_question_reason !== null) throw new TypeError("answered talk round cannot claim a zero-question reason");
+      if (hasRichQuestionBatch(payload)) {
+        validatePersistedInteractionBatch(round.questions, "Talk", `talk round ${round.round_number}`, payload.question_batch_version);
+      }
       round.questions.forEach((question, index) => validateTalkQuestion(question, `talk question ${index + 1}`));
       if (round.questions_already_asked !== round.questions.length
           || round.questions.some((question, index) => question.question_number !== index + 1)) {
@@ -175,6 +202,25 @@ function validateInteractionSemantics(payload) {
       if (payload.supersedes_revalidation !== undefined) {
         requireBinding(payload.supersedes_revalidation, "superseded grill revalidation");
       }
+    }
+    const questions = payload.grill?.questions ?? payload.grill?.frontier_questions;
+    if (hasRichQuestionBatch(payload) && questions === undefined) {
+      throw new TypeError("rich grill interaction requires a persisted question batch");
+    }
+    if (questions !== undefined && hasRichQuestionBatch(payload)) validatePersistedInteractionBatch(questions, "Grill", "grill", payload.question_batch_version);
+    return;
+  }
+  if (payload.interaction_type === "spec-clarify") {
+    if (!Array.isArray(payload.rounds)) throw new TypeError("spec-clarify interaction requires rounds");
+    for (const [index, round] of payload.rounds.entries()) {
+      if (!hasRichQuestionBatch(payload)) continue;
+      if (Array.isArray(round?.questions) && round.questions.length === 0) {
+        if (typeof round.zero_question_reason !== "string" || round.zero_question_reason.trim() === "") {
+          throw new TypeError(`spec-clarify round ${index + 1} zero-question terminal requires an explicit reason`);
+        }
+        continue;
+      }
+      validatePersistedInteractionBatch(round?.questions, "Clarify", `spec-clarify round ${index + 1}`, payload.question_batch_version);
     }
     return;
   }

@@ -12,11 +12,11 @@ description: Freeze current materials, ask the configured 3rd-review broker for 
 1. Read the current four materials and the review subject needed by this stage: relevant diff/code context, test facts, acceptance facts, or open risks. The stage matrix is the allowlist; do not add a whole repository or a historical review bundle.
 2. Add any applicable `simplicity-guard` and `plan-ceo-review` files as read-only advisory lenses in this same packet. Do not invoke either lens as a separate skill or create a second output path.
 3. Build one frozen, path-safe provider bundle. Include only bytes listed in its manifest.
-4. Resolve provider/model from trusted 3rd-review configuration. Call the broker once through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary.
+4. Resolve provider/model from trusted 3rd-review configuration. Call the broker through its public request contract and request findings only. The generated prompt names the stage's focus, exclusions, evidence expectations, and advice-only boundary. After the initial request, the outer recovery composition may issue at most three additional fresh public requests on the same snapshot/material, and only for terminal provider unavailability; material failures and semantic findings are not retried.
 5. Preserve the broker's real public result and provenance, including findings and transport status, as an immutable review fact.
 6. Report findings to the Stage Agent. The Stage Agent judges each finding, repairs valid findings, and records the disposition.
 
-WorkflowHub does not start models directly and does not implement provider polling, native coordination locks, session lifecycle, fallback routing, retry loops, or a second timeout. Those belong to the 3rd-review broker.
+WorkflowHub does not start models directly and does not implement provider polling, native coordination locks, session lifecycle, or a second timeout. After the initial request plus three terminal-unavailable recovery requests, the host may run one independent same-source subagent using the current provider; that fact is recorded as `SAME_SOURCE`/`incomplete`, never as heterologous quality or pass.
 
 ## Commands
 
@@ -54,9 +54,10 @@ Read `runtime/review/stage-materials.json` before building input. The common sha
 - Callers cannot select provider, model, effort, thinking, credentials, broker config or fallback. Each invocation is one fresh review request; trusted configuration owns routing.
 - The stage matrix is a strict material allowlist. Current `decision-log.md`, `spec.md`, `plan.md`, `tasks.md` are the authoritative design inputs.
 - `context_map` and `evidence_map` are optional packet optimizations. When supplied they must be well formed and path safe; when absent, the runner derives the minimum useful context from the supplied current materials. Their absence must not stop a provider call or same-task work.
+- `review_kind` is optional for the five formal stages. `mini_task.design` and `mini_task.implementation` are non-stage review kinds with separate trusted routes and contracts; they are not substitutes for a stage and must not be mixed with `review_track` or `review_scope`.
 - `review_instructions`, packet metadata and hashes are runner-generated. Caller-supplied generated fields fail before provider dispatch.
 
-There is no `scope_revision` review kind or state machine. A user-requested direction change updates the same four materials through the normal responsible stage, then the affected current stage reviews the new material through its ordinary review track.
+`scope_revision` remains a retired historical input. The supported replacement is an independent `mini-task` flow, whose design and implementation reviews use the two dedicated non-stage kinds above. A change that belongs to the main task still updates the same four materials through the responsible stage; it must not be hidden inside a stage review packet.
 
 The two ordinary lenses are packet-local advisory material. They do not write `*-facts`, invocation
 receipts, dispatch records, stage results, or independent runtime state. Their absence is a review
@@ -97,6 +98,7 @@ WorkflowHub does not inspect broker-private files or infer liveness. It awaits t
 - For build-code, the current review cycle is clean only when the trusted semantic result has no actionable `major` or `blocking` finding. After an actual repair or subject change, one focused review is allowed; a repeated finding, no real change, or no trusted terminal result stops automatic continuation and stays visible as `needs_human`, `unavailable`, or `incomplete`. This is a pure review fact, not a new state object or quality gate.
 - Same-adapter profiles are not multiple independent sources. Aggregation keeps actual adapter independence and concrete anchors visible.
 - A valid direct or machine anchor may support a major finding. Inferred evidence from one source remains uncorroborated rather than becoming blocking truth.
+- For `mini_task`, the design review consumes the frozen four materials and plan risks. The implementation review consumes those materials plus the current diff/snapshot, test receipt, AC trace, real user result, coverage limits, skipped reasons, and remaining risks. The two dedicated reviews replace a same-scope ordinary review; they do not create a sixth stage or a second completion record.
 
 ## Stage subjects
 

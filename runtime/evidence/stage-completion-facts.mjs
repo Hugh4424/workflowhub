@@ -330,3 +330,96 @@ export function buildStageCompletion(stage, input) {
   assertCompletionViewsConsistent(facts, user, system);
   return deepFreeze({ facts, user, system });
 }
+
+function outcomeCount(entries, label) {
+  if (!Array.isArray(entries)) throw new TypeError(`${label} must be an array`);
+  const counts = Object.fromEntries(["completed", "skipped", "incomplete", "unavailable"].map((status) => [status, 0]));
+  const nonCompleted = [];
+  for (const [index, entry] of entries.entries()) {
+    const item = object(entry, `${label}[${index}]`);
+    const status = text(item.status, `${label}[${index}].status`);
+    if (!Object.hasOwn(counts, status)) throw new TypeError(`${label}[${index}].status is invalid`);
+    counts[status] += 1;
+    if (!new Set(["completed", "skipped"]).has(status)) {
+      const id = item.step_slug ?? item.skill_id;
+      nonCompleted.push(text(id, `${label}[${index}].step_slug/skill_id`));
+    }
+  }
+  return { total: entries.length, ...counts, non_completed: nonCompleted };
+}
+
+function outcomeCost(entries, label) {
+  let duration = 0;
+  let tokens = 0;
+  let recorded = 0;
+  for (const [index, entry] of entries.entries()) {
+    const cost = object(entry.cost, `${label}[${index}].cost`);
+    if (cost.status === "recorded" && Number.isSafeInteger(cost.duration_ms) && Number.isSafeInteger(cost.tokens)) {
+      duration += cost.duration_ms;
+      tokens += cost.tokens;
+      recorded += 1;
+    }
+  }
+  if (recorded === entries.length && entries.length > 0) {
+    return { status: "recorded", duration_ms: duration, tokens, unavailable_count: 0 };
+  }
+  return {
+    status: "unavailable",
+    duration_ms: null,
+    tokens: null,
+    unavailable_count: entries.length - recorded,
+    reason: entries.length === 0 ? "no step or skill outcomes" : "one or more step or skill costs were unavailable",
+  };
+}
+
+/**
+ * Summarize authenticated Stage Agent execution facts for existing stage
+ * results. This is disclosure only: it does not change quality predicates,
+ * work readiness, or Git/close state.
+ */
+export function summarizeStageOutcome({
+  stage,
+  stageOutcomeRef,
+  stageOutcomeHash,
+  stageOutcomeStatus,
+  stepOutcomes,
+  skillOutcomes,
+  specAnalyze = null,
+}) {
+  const stageName = text(stage, "stage");
+  const refValue = text(stageOutcomeRef, "stage_outcome_ref");
+  if (!SHA256.test(stageOutcomeHash ?? "")) throw new TypeError("stage_outcome_hash must be sha256");
+  const declaredStatus = text(stageOutcomeStatus, "stage_outcome_status");
+  if (!["completed", "skipped", "incomplete", "unavailable", "failed"].includes(declaredStatus)) {
+    throw new TypeError("stage_outcome_status is invalid");
+  }
+  const steps = outcomeCount(stepOutcomes, "step_outcomes");
+  const skills = outcomeCount(skillOutcomes, "skill_outcomes");
+  const allOutcomes = [...stepOutcomes, ...skillOutcomes];
+  const executionStatus = declaredStatus === "unavailable" || declaredStatus === "failed"
+    ? "unavailable"
+    : (steps.incomplete + steps.unavailable + skills.incomplete + skills.unavailable > 0 ? "partial" : declaredStatus);
+  const analyzer = specAnalyze && typeof specAnalyze === "object" && !Array.isArray(specAnalyze)
+    ? {
+      status: text(specAnalyze.status, "spec_analyze.status"),
+      errors: Array.isArray(specAnalyze.errors) ? [...specAnalyze.errors] : [],
+      findings: Array.isArray(specAnalyze.findings) ? [...specAnalyze.findings] : [],
+      summary: specAnalyze.summary && typeof specAnalyze.summary === "object" ? { ...specAnalyze.summary } : {},
+      facts: specAnalyze.facts && typeof specAnalyze.facts === "object" ? { ...specAnalyze.facts } : {},
+      disclosure: "stage-end spec-analyze 是当前 stage 的语义/证据事实，不是推进门禁；问题在当前 stage 修复。",
+    }
+    : null;
+  return deepFreeze({
+    schema_version: "stage-outcome-summary.v1",
+    stage: stageName,
+    status: executionStatus,
+    declared_status: declaredStatus,
+    stage_outcome_ref: refValue,
+    stage_outcome_hash: stageOutcomeHash,
+    steps,
+    skills,
+    cost: outcomeCost(allOutcomes, "stage_outcomes"),
+    ...(analyzer ? { spec_analyze: analyzer } : {}),
+    disclosure: "执行事实摘要；不改变需求覆盖、质量完成、工作就绪或 Git/close 状态",
+  });
+}

@@ -122,6 +122,15 @@ review or test result never changes product scope automatically.
    `needs_human`. Repair valid findings in this same task and keep unresolved
    risk visible.
 
+9. Run the final declared `stage-end-spec-analyze` step before publishing. It
+   compares the original requirement and decision-log against the actual
+   `spec.md`, all product flows/states/boundaries/non-goals, and current
+   evidence. It checks semantics and evidence, not only IDs or file existence.
+   Repair specification gaps in this stage; do not leave them for build-plan.
+   Return the shared six-part plain-language summary: current stage work,
+   requirement coverage, upstream alignment, repairs made here, remaining
+   risks, and the next stage boundary.
+
 ## Completion and handoff
 
 Content work is complete when every confirmed decision has a stable product

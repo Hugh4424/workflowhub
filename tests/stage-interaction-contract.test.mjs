@@ -20,17 +20,29 @@ const HASH = "a".repeat(64);
 function lifecycle(interaction_type, overrides = {}) {
   const card = { card_ref: "conversation/card-1", card_hash: HASH, round: 1 };
   const reply = { ...card, source: "user", reply_ref: "host-message://reply-1", reply_hash: "b".repeat(64) };
-  const questions = interaction_type === "talk"
-    ? [{ axis: "scope" }]
-    : [{ frontier_id: "frontier-a", independent: true }, { frontier_id: "frontier-b", independent: true }];
+  const question = (id, axis = id) => ({
+    question_id: id,
+    frontier_id: interaction_type === "grill" ? id : undefined,
+    axis,
+    independent: true,
+    options: [
+      { number: 1, label: "保守", meaning: "先少做一点", consequence: "范围更小", risk: "收益延后" },
+      { number: 2, label: "推荐", meaning: "直接解决当前问题", consequence: "一次解决", risk: "改动面更大" },
+    ],
+    recommended_option: 2,
+    recommendation_reason: "当前事实支持这个选项",
+  });
+  const questions = interaction_type === "talk" || interaction_type === "spec-clarify"
+    ? [question("scope")]
+    : [question("frontier-a"), question("frontier-b")];
   return {
     interaction_type,
     events: [
       { event: "ask", ...card, questions },
       { event: "wait", ...card, status: "waiting-for-user" },
-      { event: "reply", ...reply, ...(interaction_type === "talk"
-        ? { answer: "保留当前范围", re_ranked: true }
-        : { answers: [{ frontier_id: "frontier-a", answer: "保留" }], remaining_frontier_ids: ["frontier-b"], re_ranked: true }) },
+      { event: "reply", ...reply, ...(interaction_type === "talk" || interaction_type === "spec-clarify"
+        ? { answers: [{ question_id: "scope", number: 2 }], remaining_question_ids: [], re_ranked: true }
+        : { answers: [{ frontier_id: "frontier-a", answer: "保留", number: 1 }], remaining_frontier_ids: ["frontier-b"], re_ranked: true }) },
       { event: "resume", ...reply, status: "resumed" },
     ],
     ...overrides,
@@ -93,11 +105,11 @@ describe("current interaction boundary", () => {
   it("asks only direction-changing questions and never invents user decisions", () => {
     expect(makeDecision).toMatch(/Ask only questions whose answers could change direction/i);
     expect(makeDecision).toMatch(/Do not invent user answers/i);
-    expect(talk).toMatch(/一次只问一个问题/);
+    expect(talk).toMatch(/一组互相独立|一组独立关键问题/);
     expect(talk).toMatch(/只把用户实际给出的回复当作回答/);
   });
 
-  it("executes the 12 steps in Talk -> direction advice -> Grill -> detail advice order", () => {
+  it("executes the 13 steps in Talk -> direction advice -> Grill -> detail advice -> consistency -> confirmation order", () => {
     expect(makeSteps.map(({ step_slug }) => step_slug)).toEqual([
       "load-context",
       "triage-scope",
@@ -109,6 +121,7 @@ describe("current interaction boundary", () => {
       "grill-with-docs",
       "write-decision-draft",
       "detail-advice",
+      "stage-end-spec-analyze",
       "approve-decision",
       "publish-decision",
     ]);
@@ -124,6 +137,7 @@ describe("current interaction boundary", () => {
   it("requires a real Talk and Grill ask -> wait -> reply -> resume lifecycle", () => {
     expect(validateInteractionLifecycleContract(lifecycle("talk"))).toMatchObject({ ok: true });
     expect(validateInteractionLifecycleContract(lifecycle("grill"))).toMatchObject({ ok: true });
+    expect(validateInteractionLifecycleContract(lifecycle("spec-clarify"))).toMatchObject({ ok: true });
 
     const fakeReply = lifecycle("talk");
     fakeReply.events[2].source = "agent";

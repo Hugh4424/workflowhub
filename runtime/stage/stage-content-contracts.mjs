@@ -185,8 +185,71 @@ function validInteractionRound(value) {
   return Number.isSafeInteger(value) && value >= 1;
 }
 
+function questionIdentity(question, interactionType = "interaction") {
+  return interactionType === "Grill"
+    ? question?.frontier_id ?? question?.question_id ?? question?.axis
+    : question?.question_id ?? question?.frontier_id ?? question?.axis;
+}
+
+export function validateInteractionQuestionBatch(questions, { interactionType = "interaction" } = {}) {
+  const errors = [];
+  if (!Array.isArray(questions) || questions.length === 0) {
+    errors.push(`${interactionType} ask must contain at least one independent question`);
+    return Object.freeze({ ok: false, errors: Object.freeze(errors), question_ids: Object.freeze([]), option_ids: Object.freeze(Object.create(null)) });
+  }
+  const ids = questions.map((question) => questionIdentity(question, interactionType));
+  const axes = questions.map((question) => question?.axis ?? question?.frontier_id ?? question?.question_id);
+  // Question ids are user/content supplied. A null-prototype map prevents a
+  // question named "constructor" or "__proto__" from resolving to an object
+  // prototype member during reply validation.
+  const optionIdsByQuestion = Object.create(null);
+  if (ids.some((id) => !nonEmptyString(id)) || new Set(ids).size !== ids.length) {
+    errors.push(`${interactionType} questions must have unique question ids or axes`);
+  }
+  if (axes.some((axis) => !nonEmptyString(axis)) || new Set(axes).size !== axes.length) {
+    errors.push(`${interactionType} questions must each contain one unique decision axis`);
+  }
+  for (const [index, question] of questions.entries()) {
+    if (question?.independent !== true) {
+      errors.push(`${interactionType} may batch only independent questions, never review work`);
+    }
+    if (question?.review === true) errors.push(`${interactionType} may not batch review work`);
+    const options = question?.options;
+    if (!Array.isArray(options) || options.length < 2 || options.length > 3) {
+      errors.push(`${interactionType} question ${index + 1} must provide 2 or 3 options`);
+      continue;
+    }
+    const optionIds = options.map((option) => option?.option_id ?? option?.number);
+    optionIdsByQuestion[ids[index]] = optionIds;
+    if (optionIds.some((id) => id === undefined || id === null) || new Set(optionIds).size !== optionIds.length) {
+      errors.push(`${interactionType} question ${index + 1} options must have unique numbers or ids`);
+    }
+    for (const [optionIndex, option] of options.entries()) {
+      for (const field of ["label", "meaning", "consequence", "risk"]) {
+        if (!nonEmptyString(option?.[field])) errors.push(`${interactionType} question ${index + 1} option ${optionIndex + 1} needs ${field}`);
+      }
+    }
+    const recommended = question?.recommended_option;
+    if (!optionIds.includes(recommended) || !nonEmptyString(question?.recommendation_reason)) {
+      errors.push(`${interactionType} question ${index + 1} needs a valid recommended option and reason`);
+    }
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+    question_ids: Object.freeze(ids),
+    option_ids: Object.freeze(optionIdsByQuestion),
+  });
+}
+
+function validateInteractionQuestions(questions, interactionType, errors) {
+  const batch = validateInteractionQuestionBatch(questions, { interactionType });
+  errors.push(...batch.errors);
+  return batch;
+}
+
 /**
- * Validate the host-visible lifecycle used by Talk and Grill.
+ * Validate the host-visible lifecycle used by Talk, Grill, and Clarify.
  *
  * The events are an in-memory interaction fact, not a new persisted object.
  * Both skills must expose a real ask -> wait -> user reply -> resume seam;
@@ -198,7 +261,7 @@ export function validateInteractionLifecycleContract(value) {
   if (!object(value)) return Object.freeze({ ok: false, errors: Object.freeze(["interaction lifecycle must be an object"]), facts: Object.freeze({}) });
 
   const interactionType = value.interaction_type ?? value.kind;
-  if (!new Set(["talk", "grill"]).has(interactionType)) errors.push("interaction lifecycle kind must be talk or grill");
+  if (!new Set(["talk", "grill", "spec-clarify"]).has(interactionType)) errors.push("interaction lifecycle kind must be talk, grill, or spec-clarify");
   if (!Array.isArray(value.events) || value.events.length !== INTERACTION_LIFECYCLE.length) {
     errors.push("interaction lifecycle must contain ask -> wait -> reply -> resume events");
   }
@@ -227,34 +290,50 @@ export function validateInteractionLifecycleContract(value) {
     errors.push("resume must bind the exact user reply, ask card, and round");
   }
 
-  if (interactionType === "talk") {
-    if (!Array.isArray(ask?.questions) || ask.questions.length !== 1) {
-      errors.push("Talk ask must contain exactly one decision axis");
+  if (interactionType === "talk" || interactionType === "spec-clarify") {
+    const batch = validateInteractionQuestions(ask?.questions, interactionType, errors);
+    const questionIds = batch.question_ids;
+    const hasBatchReply = Array.isArray(reply?.answers) && reply.answers.length > 0;
+    if (!hasBatchReply || reply?.re_ranked !== true) {
+      errors.push(`${interactionType} reply must contain the user answer(s) and re-rank the remaining questions`);
     }
-    if (!nonEmptyString(reply?.answer) || reply?.re_ranked !== true) {
-      errors.push("Talk reply must contain the user answer and re-rank the remaining questions");
+    const answeredIds = new Set();
+    if (hasBatchReply) for (const answer of reply.answers) {
+      const answerId = questionIdentity(answer, interactionType);
+      if (!questionIds.includes(answerId)) errors.push(`${interactionType} reply answers must bind to questions in the current batch`);
+      if (answeredIds.has(answerId)) errors.push(`${interactionType} reply must not answer one question twice`);
+      answeredIds.add(answerId);
+      const selectedOption = answer?.option_id ?? answer?.number;
+      if (!(batch.option_ids[answerId] ?? []).includes(selectedOption)) {
+        errors.push(`${interactionType} reply option must belong to its question`);
+      }
+    }
+    const remaining = reply?.remaining_question_ids;
+    if (!Array.isArray(remaining) || remaining.some((id) => !questionIds.includes(id))
+        || new Set(remaining).size !== remaining.length
+        || questionIds.some((id) => !answeredIds.has(id) && !remaining.includes(id))
+        || remaining.some((id) => answeredIds.has(id))) {
+      errors.push(`${interactionType} reply must preserve and re-rank remaining question ids`);
     }
   }
 
   if (interactionType === "grill") {
     const questions = ask?.questions;
-    if (!Array.isArray(questions) || questions.length === 0) {
-      errors.push("Grill ask must contain at least one frontier question");
-    } else {
-      const frontierIds = questions.map((question) => question?.frontier_id);
-      if (frontierIds.some((id) => !nonEmptyString(id)) || new Set(frontierIds).size !== frontierIds.length) {
-        errors.push("Grill frontier questions must have unique ids");
-      }
-      if (questions.some((question) => question?.independent !== true || question?.review === true)) {
-        errors.push("Grill may batch only independent frontier questions, never review work");
-      }
-    }
+    const batch = validateInteractionQuestions(questions, "Grill", errors);
+    const frontierIds = batch.question_ids;
     if (Object.prototype.hasOwnProperty.call(value, "review_fact") || value.produces_review_fact === true
         || Object.prototype.hasOwnProperty.call(reply ?? {}, "review_fact")) {
       errors.push("Grill must not produce a review fact");
     }
     if (!Array.isArray(reply?.answers) || reply.answers.length === 0 || reply?.re_ranked !== true
-        || !Array.isArray(reply?.remaining_frontier_ids)) {
+        || !Array.isArray(reply?.remaining_frontier_ids)
+        || reply.remaining_frontier_ids.some((id) => !frontierIds.includes(id))
+        || new Set(reply.remaining_frontier_ids).size !== reply.remaining_frontier_ids.length
+        || reply.answers.some((answer) => !frontierIds.includes(questionIdentity(answer, "Grill")))
+        || reply.answers.some((answer) => !(batch.option_ids[questionIdentity(answer, "Grill")] ?? []).includes(answer?.option_id ?? answer?.number))
+        || reply.answers.some((answer, index, all) => all.findIndex((candidate) => questionIdentity(candidate, "Grill") === questionIdentity(answer, "Grill")) !== index)
+        || frontierIds.some((id) => !reply.answers.some((answer) => questionIdentity(answer, "Grill") === id) && !reply.remaining_frontier_ids.includes(id))
+        || reply.answers.some((answer) => reply.remaining_frontier_ids.includes(questionIdentity(answer, "Grill")))) {
       errors.push("Grill reply must preserve the reply, partial answers, and re-rank remaining frontiers");
     }
   }
@@ -1830,6 +1909,330 @@ export function validateSpecAnalyzeCompleteness({
       }),
     }),
   });
+}
+
+/**
+ * Narrow, report-only consistency profiles used at the end of every stage.
+ * These profiles consume the current packet; they never create a material,
+ * writer, status gate, or fifth source of truth.
+ */
+export const STAGE_SPEC_ANALYZE_PROFILES = Object.freeze({
+  "make-decision": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log"]),
+    required_evidence: Object.freeze(["decision-log"]),
+    next_stage: "build-spec",
+  }),
+  "build-spec": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec"]),
+    required_evidence: Object.freeze(["decision-log", "spec"]),
+    next_stage: "build-plan",
+  }),
+  "build-plan": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks"]),
+    required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks"]),
+    next_stage: "build-code",
+  }),
+  "build-code": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"]),
+    required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace"]),
+    next_stage: "verify-code",
+  }),
+  "verify-code": Object.freeze({
+    required_materials: Object.freeze(["original_requirement", "decision_log", "spec", "plan", "tasks", "implementation"]),
+    required_evidence: Object.freeze(["decision-log", "spec", "plan", "tasks", "implementation", "tests", "review", "runtime", "delivery"]),
+    next_stage: "close",
+  }),
+});
+
+function stageAnalyzeFinding({
+  type,
+  requirementId,
+  artifact,
+  evidenceRef,
+  sourceArtifact = "original_requirement",
+  targetArtifact = artifact ?? "current-stage-output",
+  frOrTaskId = requirementId ?? "stage-packet",
+  lineOrAnchor = evidenceRef ?? artifact ?? "coverage",
+  rule = "semantic-and-evidence-coverage",
+  impact,
+  correction,
+}) {
+  return Object.freeze({
+    type,
+    requirement_id: requirementId ?? null,
+    artifact: artifact ?? null,
+    evidence_ref: evidenceRef ?? null,
+    source_artifact: sourceArtifact,
+    target_artifact: targetArtifact,
+    fr_or_task_id: frOrTaskId,
+    line_or_anchor: lineOrAnchor,
+    rule,
+    evidence: Object.freeze({ artifact_ref: artifact ?? null, evidence_ref: evidenceRef ?? null }),
+    impact,
+    suggested_correction: correction,
+    disposition: "pending_main_agent_review",
+  });
+}
+
+function stageAnalyzeSummary(stage, packet, status, findings, errors = []) {
+  const requirements = Array.isArray(packet.original_requirements) ? packet.original_requirements : [];
+  const coverage = Array.isArray(packet.coverage) ? packet.coverage : [];
+  const invalidRequirements = new Set(findings.map((item) => item.requirement_id).filter(nonEmptyString));
+  const covered = requirements.filter((requirement) => coverage.some((item) =>
+    item?.requirement_id === requirement?.id
+      && item.status === "covered"
+      && !invalidRequirements.has(requirement.id))).length;
+  const total = requirements.length;
+  const next = STAGE_SPEC_ANALYZE_PROFILES[stage]?.next_stage ?? "unknown";
+  const repairs = Array.isArray(packet.current_stage_repairs) ? packet.current_stage_repairs : [];
+  const dispositionCounts = coverage.reduce((counts, item) => {
+    const disposition = item?.status ?? "unknown";
+    if (disposition !== "covered") counts[disposition] = (counts[disposition] ?? 0) + 1;
+    return counts;
+  }, {});
+  const dispositionSummary = Object.entries(dispositionCounts)
+    .map(([disposition, count]) => `${disposition} ${count}`)
+    .join("、");
+  return Object.freeze({
+    stage_work: String(packet.work_summary ?? "当前 stage 已完成产物一致性检查。"),
+    requirement_coverage: `${covered}/${total} 条原始需求有语义和证据绑定（状态：${status}；以实际校验结果计数）${dispositionSummary ? `；非 covered 终态：${dispositionSummary}` : ""}。`,
+    upstream_alignment: `已按 ${stage} 的累计输入检查前序产物、实际语义和证据；发现 ${findings.filter((item) => item.type === "semantic_mismatch").length} 条语义偏差、${findings.filter((item) => item.type === "stale_evidence").length} 条证据问题。`,
+    current_stage_repairs: repairs.length > 0
+      ? `当前 stage 已记录 ${repairs.length} 项修复：${repairs.join("；")}`
+      : findings.length === 0 && errors.length === 0 ? "本次未发现需要修复的问题。" : `发现 ${findings.length + errors.length} 条输入、语义或证据问题，必须在当前 stage 修复后复查。`,
+    remaining_risks: findings.length === 0 && errors.length === 0 ? "当前没有发现已知一致性风险。" : `当前仍有 ${findings.length + errors.length} 条输入、语义或证据问题，不能由下游猜测或静默移交。`,
+    next_stage_boundary: `下一阶段：${next}；不得把当前问题静默移交或由下游猜测。`,
+  });
+}
+
+function semanticMeaningMatches(expected, actual) {
+  const normalize = (value) => String(value ?? "").toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+  const left = normalize(expected);
+  const right = normalize(actual);
+  if (left === "" || right === "") return false;
+  // Very short Chinese terms are ambiguous labels, not sufficient semantic
+  // proof when the actual statement adds a different operation or outcome.
+  if (left.length <= 2 && left !== right) return false;
+  // A document/path/identifier/test-result claim is metadata, not proof that
+  // the requested behavior exists. Only reject artifact-result phrases when
+  // they are the whole actual statement or a clearly prefixed artifact claim;
+  // a genuine behavior may still mention ordinary "存在" or "测试".
+  const artifactClaim = /^(?:(?:文件|文档|路径|编号|id|hash)(?:存在|一致|匹配|通过|正确|可用)|(?:绿色)?测试(?:通过|成功|通过了)|测试结果(?:为|是)?(?:通过|成功))$/u;
+  const compoundArtifactClaim = /^(?:文件|文档|路径|编号|id|hash)(?:已|且|有|为)?(?:检查|覆盖|存在|一致|匹配|通过|正确|可用)(?:且(?:检查|覆盖|存在|一致|匹配|通过|正确|可用))*$/u;
+  const verificationClaim = /^(?:(?:已|已经)?(?:检查|核验|验证|确认|审查|复核)(?:了)?|(?:已|已经)?完成)$/u;
+  const negativeClaim = /(?:不再|不支持|不能|不会|不要|不必|没法|没有|尚未|未(?:能|支持|实现|包含)?|无法|不满足|不完全|不具备|不符合|不允许|禁止|拒绝|取消|删除|移除|去掉|停止|不提供|not|no|without)/u;
+  if (artifactClaim.test(right) || compoundArtifactClaim.test(right) || verificationClaim.test(left) || verificationClaim.test(right)
+      || (negativeClaim.test(right) && !negativeClaim.test(left))) return false;
+  if (right.includes(left)) {
+    const negation = /(?:不|没|未|无|非|否|没有|尚未|不满足|不完全|不具备|不符合|未包含|not|no|without)$/u;
+    let offset = right.indexOf(left);
+    while (offset >= 0) {
+      if (!negation.test(right.slice(0, offset))) return true;
+      offset = right.indexOf(left, offset + left.length);
+    }
+    return false;
+  }
+  // Do not use fuzzy n-gram overlap as proof: short Chinese phrases can share
+  // most grams while changing the behavior (提问 vs 回答). A stage profile
+  // must provide an explicit semantic statement, not a lexical guess.
+  return false;
+}
+
+function hasEvidenceBinding(entry) {
+  return nonEmptyString(entry?.ref)
+    && HASH.test(entry?.hash ?? "")
+    && GIT_OID.test(entry?.snapshot_tree ?? "");
+}
+
+/**
+ * Check actual semantic coverage and evidence bindings, not just IDs or file
+ * existence. Missing packet input is explicitly material_incomplete.
+ */
+export function validateStageSpecAnalyzeProfile({ stage, packet } = {}) {
+  const profile = STAGE_SPEC_ANALYZE_PROFILES[stage];
+  if (!profile) throw new TypeError(`unknown stage spec-analyze profile: ${stage}`);
+  if (!object(packet)) return Object.freeze({ ok: false, status: "material_incomplete", stage, errors: Object.freeze(["MATERIAL_INCOMPLETE: packet is required"]), findings: Object.freeze([]), summary: stageAnalyzeSummary(stage, {}, "material_incomplete", [], ["MATERIAL_INCOMPLETE: packet is required"]) });
+
+  const errors = [];
+  const findings = [];
+  const materials = object(packet.materials) ? packet.materials : {};
+  const evidence = Array.isArray(packet.evidence) ? packet.evidence : [];
+  const evidenceByRef = new Map(evidence.map((entry) => [entry?.ref, entry]));
+  const requirements = Array.isArray(packet.original_requirements) ? packet.original_requirements : [];
+  const coverage = Array.isArray(packet.coverage) ? packet.coverage : [];
+
+  if (requirements.length === 0) errors.push("MATERIAL_INCOMPLETE: original_requirements is required");
+  if (coverage.length === 0) errors.push("MATERIAL_INCOMPLETE: semantic coverage is required");
+  for (const name of profile.required_materials) {
+    if (!nonEmptyString(materials[name])) errors.push(`MATERIAL_INCOMPLETE: ${name} material is required for ${stage}`);
+  }
+  for (const ref of profile.required_evidence) {
+    const entry = evidenceByRef.get(ref);
+    if (!entry) errors.push(`MATERIAL_INCOMPLETE: evidence ${ref} is required for ${stage}`);
+    else if (entry.status !== "fresh" || !hasEvidenceBinding(entry)) {
+      findings.push(stageAnalyzeFinding({
+        type: "stale_evidence",
+        artifact: entry.kind ?? ref,
+        evidenceRef: ref,
+        impact: "证据引用存在但不是当前快照的可用证据",
+        correction: `在 ${stage} 重新采集 ${ref} 的真实证据，或明确记录不可用原因`,
+      }));
+      errors.push(`stale evidence: ${ref}`);
+    }
+  }
+
+  const requirementIds = new Set(requirements.map((entry) => entry?.id).filter(nonEmptyString));
+  const coverageById = new Map();
+  for (const item of coverage) {
+    if (!nonEmptyString(item?.requirement_id)) {
+      errors.push("coverage entry requirement_id is required");
+      continue;
+    }
+    if (!requirementIds.has(item.requirement_id)) {
+      findings.push(stageAnalyzeFinding({
+        type: "requirement_gap",
+        requirementId: item.requirement_id,
+        artifact: Array.isArray(item.artifact_refs) ? item.artifact_refs.join(",") || null : null,
+        evidenceRef: Array.isArray(item.evidence_refs) ? item.evidence_refs.join(",") || null : null,
+        impact: "coverage 引用了不存在于原始需求索引的 requirement_id，不能证明任何真实需求",
+        correction: "在当前 stage 删除错误编号或补回原始需求索引中的真实条目；不能用新编号掩盖遗漏",
+      }));
+      errors.push(`unknown requirement coverage: ${item.requirement_id}`);
+      continue;
+    }
+    if (coverageById.has(item.requirement_id)) {
+      findings.push(stageAnalyzeFinding({
+        type: "requirement_gap",
+        requirementId: item.requirement_id,
+        artifact: Array.isArray(item.artifact_refs) ? item.artifact_refs.join(",") || null : null,
+        evidenceRef: Array.isArray(item.evidence_refs) ? item.evidence_refs.join(",") || null : null,
+        impact: "同一原始需求有重复 coverage，按顺序覆盖会造成结果不确定",
+        correction: "在当前 stage 合并为一个明确的语义和证据绑定条目",
+      }));
+      errors.push(`duplicate requirement coverage: ${item.requirement_id}`);
+      continue;
+    }
+    coverageById.set(item.requirement_id, item);
+    const artifactRefs = Array.isArray(item.artifact_refs) ? item.artifact_refs : [];
+    const evidenceRefs = Array.isArray(item.evidence_refs) ? item.evidence_refs : [];
+    const semanticOk = item.semantic_match !== false
+      && semanticMeaningMatches(item.expected_behavior, item.actual_behavior);
+    const artifactOk = artifactRefs.length > 0 && artifactRefs.every((ref) => nonEmptyString(materials[ref]));
+    const evidenceOk = evidenceRefs.length > 0 && evidenceRefs.every((ref) => {
+      const evidenceEntry = evidenceByRef.get(ref);
+      return evidenceEntry?.status === "fresh" && hasEvidenceBinding(evidenceEntry);
+    });
+    const scenarioOk = Array.isArray(item.scenario_refs) && item.scenario_refs.length > 0
+      && item.scenario_refs.every(nonEmptyString);
+    const oracleOk = Array.isArray(item.oracle_refs) && item.oracle_refs.length > 0
+      && item.oracle_refs.every(nonEmptyString);
+    if (item.status === "covered" && (!semanticOk || !scenarioOk || !oracleOk || !artifactOk || !evidenceOk)) {
+      const type = !semanticOk || !scenarioOk || !oracleOk
+        ? "semantic_mismatch" : !artifactOk ? "artifact_evidence_gap" : "stale_evidence";
+      findings.push(stageAnalyzeFinding({
+        type,
+        requirementId: item.requirement_id,
+        artifact: artifactRefs.join(",") || null,
+        evidenceRef: evidenceRefs.join(",") || null,
+        impact: "编号和引用存在，但没有证明实际语义与原始需求一致",
+        correction: "在当前 stage 修复实际产物或补充真实证据；不能只补编号或文档路径",
+      }));
+      errors.push(`${type}: ${item.requirement_id}`);
+    }
+    const knownCoverageStates = new Set(["partial", "missing", "changed", "expanded", "stale", "not_applicable", "unavailable", "deferred"]);
+    if (item.status !== "covered") {
+      if (!knownCoverageStates.has(item.status)) {
+        errors.push(`unknown coverage status: ${item.requirement_id}`);
+        findings.push(stageAnalyzeFinding({
+          type: "requirement_gap",
+          requirementId: item.requirement_id,
+          artifact: artifactRefs.join(",") || null,
+          evidenceRef: evidenceRefs.join(",") || null,
+          impact: `需求覆盖状态 ${String(item.status)} 未被当前 stage 合同识别，不能继续猜测`,
+          correction: "在当前 stage 明确合法 coverage status 及其真实语义和证据",
+        }));
+        continue;
+      }
+      if (item.status === "not_applicable" || item.status === "deferred") {
+        const requiredDispositionFields = item.status === "not_applicable"
+          ? ["reason"]
+          : ["owner", "trigger", "handoff", "close_condition"];
+        const missingDispositionFields = requiredDispositionFields.filter((field) => !nonEmptyString(item[field]));
+        if (missingDispositionFields.length > 0) {
+          const type = item.status === "deferred" ? "deferred_open_handoff_gap" : "requirement_gap";
+          findings.push(stageAnalyzeFinding({
+            type,
+            requirementId: item.requirement_id,
+            artifact: artifactRefs.join(",") || null,
+            evidenceRef: evidenceRefs.join(",") || null,
+            impact: `${item.status} 是合法的非 covered 终态，但缺少处置依据，后续阶段可能静默猜测或丢失它`,
+            correction: item.status === "deferred"
+              ? `在当前 stage 补齐延期项的 owner、trigger、handoff、close_condition：${missingDispositionFields.join(", ")}`
+              : "在当前 stage 补齐 not_applicable 的明确 reason；不能把不适用写成空白",
+          }));
+          errors.push(`${type}: ${item.requirement_id} status=${item.status} missing=${missingDispositionFields.join(",")}`);
+        }
+        continue;
+      }
+      const type = ["stale", "unavailable"].includes(item.status)
+        ? "stale_evidence"
+        : ["changed", "expanded"].includes(item.status) ? "semantic_mismatch" : "requirement_gap";
+      findings.push(stageAnalyzeFinding({
+        type,
+        requirementId: item.requirement_id,
+        artifact: artifactRefs.join(",") || null,
+        evidenceRef: evidenceRefs.join(",") || null,
+        impact: `当前需求覆盖状态为 ${item.status}，不能宣称已完整实现`,
+        correction: "在当前 stage 补齐实际语义、产物或真实证据，并重新分析",
+      }));
+      errors.push(`${type}: ${item.requirement_id} status=${item.status}`);
+    }
+  }
+  for (const requirementId of requirementIds) {
+    if (!coverageById.has(requirementId)) {
+      findings.push(stageAnalyzeFinding({
+        type: "requirement_gap",
+        requirementId,
+        impact: "原始需求没有当前 stage 的语义覆盖记录",
+        correction: "在当前 stage 补齐实际产物和证据映射，不能留给下游猜测",
+      }));
+      errors.push(`requirement coverage gap: ${requirementId}`);
+    }
+  }
+
+  const status = errors.some((error) => error.startsWith("MATERIAL_INCOMPLETE:"))
+    ? "material_incomplete"
+    : errors.length > 0 ? "inconsistent" : "consistent";
+  return Object.freeze({
+    ok: status === "consistent",
+    status,
+    stage,
+    errors: Object.freeze(errors),
+    findings: Object.freeze(findings),
+    summary: stageAnalyzeSummary(stage, packet, status, findings, errors),
+    facts: Object.freeze({
+      required_materials: Object.freeze([...profile.required_materials]),
+      required_evidence: Object.freeze([...profile.required_evidence]),
+      requirement_count: requirements.length,
+      covered_count: requirements.filter((requirement) => coverage.some((item) =>
+        item?.requirement_id === requirement?.id
+          && item.status === "covered"
+          && !findings.some((finding) => finding.requirement_id === requirement.id))).length,
+    }),
+  });
+}
+
+/**
+ * Single public entry point for every stage. The legacy planning call remains
+ * available for old build-plan callers, while stage packets use the same
+ * semantic/evidence validator instead of growing a second contract.
+ */
+export function validateSpecAnalyze({ profile, packet, ...legacy } = {}) {
+  if (profile !== undefined) {
+    if (packet === undefined) throw new TypeError("stage spec-analyze profile requires packet");
+    return validateStageSpecAnalyzeProfile({ stage: profile, packet });
+  }
+  return validateSpecAnalyzeCompleteness(legacy);
 }
 
 export function resolvePhaseTaskIds({ plan, tasks, phaseId } = {}) {

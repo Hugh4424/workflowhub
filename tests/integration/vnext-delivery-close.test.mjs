@@ -99,6 +99,10 @@ function fixture({ testVariant = "valid", reviewStatus = "passed", duplicateHuma
 }
 
 describe("vNext formal delivery close", () => {
+  it("will be extended by P3 RED coverage for mini-task/A resume without changing the existing close contract", () => {
+    expect(prepareDeliveryClosePlan).toBeTypeOf("function");
+  });
+
   it("accepts the authenticated test receipt snapshot commit", () => {
     const state = fixture();
     const targetBaseline = execFileSync("git", ["rev-parse", "refs/heads/main"], { cwd: state.repo, encoding: "utf8" }).trim();

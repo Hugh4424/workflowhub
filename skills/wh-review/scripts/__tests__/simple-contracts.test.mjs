@@ -84,6 +84,16 @@ describe("simple wh-review contracts", () => {
     ]) expect(bundlePaths).toContain(file);
   });
 
+  it("schema-enforces mini-task implementation evidence fields", () => {
+    const schema = readJson(join(schemaRoot, "stage-materials.schema.json"));
+    const matrix = readJson(join(runtimeReviewRoot, "stage-materials.json"));
+    const validate = new Ajv2020({ strict: false }).compile(schema);
+    expect(validate(matrix)).toBe(true);
+    const missingUserResult = structuredClone(matrix);
+    missingUserResult.mini_task.implementation.required = missingUserResult.mini_task.implementation.required.filter((key) => key !== "user_result");
+    expect(validate(missingUserResult)).toBe(false);
+  });
+
   it("documents the complete public review input instead of forcing callers to guess", () => {
     const skill = readFileSync(join(root, "wh-review", "SKILL.md"), "utf8");
     for (const field of ["task_path", "project_name", "task_id", "stage", "host_provider", "materials"]) {
@@ -157,7 +167,7 @@ describe("simple wh-review contracts", () => {
     expect(stageDependencies("build-spec").find(({ name }) => name === "spec-research"))
       .toMatchObject({ execution: "independent", trigger: "conditional_research", owner: "stage" });
     expect(stageDependencies("build-plan").find(({ name }) => name === "spec-analyze"))
-      .toMatchObject({ execution: "inline", trigger: "cross_material_analysis" });
+      .toMatchObject({ execution: "inline", trigger: "stage_end_consistency" });
     expect(stageDependencies("build-code").find(({ name }) => name === "review")).toBeUndefined();
     expect(stageDependencies("build-code").map(({ name }) => name)).not.toContain("test-strategy");
     expect(stageDependencies("verify-code").filter(({ name }) => ["test-strategy", "isolated-browser-qa"].includes(name)))
@@ -274,6 +284,21 @@ describe("simple wh-review contracts", () => {
     const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
     expect(plan.stages["make-decision"].tracks.direction.required_skills)
       .toEqual(expect.arrayContaining(["intake-decision-review"]));
+  });
+
+  it("keeps mini-task review kinds outside the five formal stages", () => {
+    const matrix = readJson(join(runtimeReviewRoot, "stage-materials.json"));
+    const validate = validator("stage-materials.schema.json");
+    expect(matrix.mini_task.design.required).toEqual(expect.arrayContaining(["decision_log", "spec", "plan", "tasks", "review_instructions"]));
+    expect(matrix.mini_task.implementation.required).toEqual(expect.arrayContaining(["decision_log", "spec", "plan", "tasks", "test_evidence", "ac_trace", "user_result", "review_instructions"]));
+    expect(validate(matrix), validate.errors).toBe(true);
+    expect(matrix.stages).not.toHaveProperty("mini-task");
+    const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
+    expect(plan.mini_task.design.review_kind).toBe("mini_task.design");
+    expect(plan.mini_task.implementation.review_kind).toBe("mini_task.implementation");
+    expect(plan.stages).not.toHaveProperty("mini-task");
+    expect(readFileSync(join(root, "wh-review", "contracts", "mini-task-design.md"), "utf8")).toMatch(/方案审查/);
+    expect(readFileSync(join(root, "wh-review", "contracts", "mini-task-implementation.md"), "utf8")).toMatch(/实施审查/);
   });
 
   it("accepts additive fields in workflowhub-result.v1", () => {

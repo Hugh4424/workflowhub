@@ -12,6 +12,7 @@ const stageSkills = Object.freeze({
     "grill-with-docs",
     "decision-log",
     "wh-review",
+    "spec-analyze",
   ],
   "build-spec": [
     "spec-research",
@@ -21,6 +22,7 @@ const stageSkills = Object.freeze({
     "plan-ceo-review",
     "plan-design-review",
     "wh-review",
+    "spec-analyze",
   ],
   "build-plan": [
     "spec-research",
@@ -39,8 +41,9 @@ const stageSkills = Object.freeze({
     "frontend-testing",
     "fullstack-slice-testing",
     "wh-review",
+    "spec-analyze",
   ],
-  "verify-code": ["wh-review"],
+  "verify-code": ["wh-review", "spec-analyze"],
 });
 
 describe("direct stage package contract", () => {

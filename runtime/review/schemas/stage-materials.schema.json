@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review stage material matrix",
   "type": "object",
-  "required": ["version", "stages"],
+  "required": ["version", "stages", "mini_task"],
   "properties": {
-    "version": { "const": "wh-review-stage-materials.v1" },
+    "version": { "const": "wh-review-stage-materials.v2" },
     "stages": {
       "type": "object",
       "required": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"],
@@ -29,6 +29,15 @@
         "build-plan": { "$ref": "#/$defs/buildPlanRule" },
         "build-code": { "$ref": "#/$defs/buildCodeProfiles" },
         "verify-code": { "$ref": "#/$defs/rule" }
+      },
+      "additionalProperties": false
+    },
+    "mini_task": {
+      "type": "object",
+      "required": ["design", "implementation"],
+      "properties": {
+        "design": { "$ref": "#/$defs/rule" },
+        "implementation": { "$ref": "#/$defs/miniImplementationRule" }
       },
       "additionalProperties": false
     }
@@ -120,6 +129,24 @@
               ]
             }
           }
+        }
+      ]
+    },
+    "miniImplementationRule": {
+      "allOf": [
+        { "$ref": "#/$defs/rule" },
+        {
+          "properties": {
+            "source_bundle": { "const": "diff" }
+          },
+          "allOf": [
+            { "properties": { "required": { "contains": { "const": "test_evidence" } } } },
+            { "properties": { "required": { "contains": { "const": "ac_trace" } } } },
+            { "properties": { "required": { "contains": { "const": "user_result" } } } },
+            { "properties": { "required": { "contains": { "const": "coverage_limits" } } } },
+            { "properties": { "required": { "contains": { "const": "skip_reasons" } } } },
+            { "properties": { "required": { "contains": { "const": "remaining_risks" } } } }
+          ]
         }
       ]
     }

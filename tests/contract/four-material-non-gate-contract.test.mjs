@@ -10,6 +10,48 @@ import { verifyStageContentEvidence } from "../../runtime/evidence/stage-content
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
+function richQuestion(id = "scope") {
+  return {
+    question_id: id,
+    axis: "范围",
+    independent: true,
+    options: [
+      { number: 1, label: "保守", meaning: "先少做一点", consequence: "范围更小", risk: "收益延后" },
+      { number: 2, label: "推荐", meaning: "直接解决当前问题", consequence: "一次解决", risk: "改动面更大" },
+    ],
+    recommended_option: 2,
+    recommendation_reason: "当前事实更支持这个选项",
+    question_number: 1,
+    card_hash: "a".repeat(64),
+    ask: { ref: "host-message://ask/contract", hash: "b".repeat(64) },
+    reply: { ref: "host-message://reply/contract", hash: "c".repeat(64) },
+    rerank: { ref: "host-message://rerank/contract", hash: "d".repeat(64) },
+  };
+}
+
+function writeInteractionRecord(task, payload, stage = "make-decision") {
+  const contentHash = sha256(JSON.stringify(payload));
+  const envelope = {
+    schema_version: "stage-content-evidence.v1",
+    task_id: task.identity.taskId,
+    stage,
+    workflow_run_id: `${stage}:rich-batch-contract`,
+    snapshot_tree: "e".repeat(40),
+    snapshot_head: "f".repeat(40),
+    producer: { stage, component: "stage-content-evidence", version: "1.0.0" },
+    created_at: "2026-08-10T00:00:00.000Z",
+    kind: "interaction-completion.v1",
+    content_hash: contentHash,
+    payload,
+  };
+  const raw = `${JSON.stringify(envelope)}\n`;
+  const ref = `evidence/stage-content/${contentHash}/interaction.json`;
+  const recordPath = task.recordPath(ref);
+  mkdirSync(dirname(recordPath), { recursive: true });
+  writeFileSync(recordPath, raw);
+  return { ref, hash: sha256(raw), tree: envelope.snapshot_tree };
+}
+
 const materials = Object.freeze({
   "decision-log.md": "decision",
   "spec.md": "spec",
@@ -86,6 +128,8 @@ describe("four-material non-gate contract", () => {
     expect(evidence).not.toMatch(/export function readLatestStageContentEvidence/);
     expect(evidence).not.toMatch(/publishCanonicalRecord/);
     expect(evidence).toMatch(/export function verifyStageContentEvidence/);
+    expect(evidence).toMatch(/validateInteractionQuestionBatch/);
+    expect(evidence).toMatch(/spec-clarify interaction requires rounds/);
     expect(evidence).toMatch(/explicit[\s\S]{0,80}immutable ref\/hash pair/i);
     expect(taskHandle).not.toMatch(/STAGE_CONTENT_POINTER_REPLACERS|replaceStageContentPointerFor/);
     expect(taskKernel).not.toMatch(/replaceStageContentLatestPointer|replaceStageContentPointerFor/);
@@ -132,6 +176,147 @@ describe("four-material non-gate contract", () => {
         expectedKind: "interaction-completion.v1",
       })).toMatchObject({ task_id: task.identity.taskId, kind: "interaction-completion.v1" });
       expect(() => verifyStageContentEvidence({ task, ref, hash: "0".repeat(64) })).toThrow(/integrity hash mismatch/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("validates rich persisted Talk and Clarify batches with the shared contract", () => {
+    const root = realpathSync(mkdtempSync(`${tmpdir()}/workflowhub-rich-interaction-`));
+    try {
+      const task = createTask({
+        storageRoot: root,
+        manifest: {
+          schema_version: "1.0.0", project_name: "WorkflowHub", task_id: "rich-interaction-contract",
+          created_at: "2026-08-10T00:00:00.000Z", target_repo_root: process.cwd(), issue_ids: [], inputs: {},
+        },
+      });
+      const question = richQuestion();
+      const talk = {
+        interaction_type: "talk",
+        question_batch_version: "rich-v1",
+        rounds: [{
+          round_number: 1,
+          candidate_queue: [{ item_id: "scope", impact: "high", status: "asked", reason: "范围会改变方向" }],
+          questions_already_asked: 1,
+          open_direction_changing_questions: 0,
+          current_total: 1,
+          end_reason: "本轮问题已回答",
+          zero_question_reason: null,
+          questions: [question],
+        }],
+        grill: null,
+        workspace_tree: "e".repeat(40),
+      };
+      const talkRecord = writeInteractionRecord(task, talk);
+      expect(verifyStageContentEvidence({
+        task, ...talkRecord, expectedStage: "make-decision", expectedKind: "interaction-completion.v1",
+      })).toMatchObject({ payload: { interaction_type: "talk" } });
+
+      const terminalTalk = structuredClone(talk);
+      terminalTalk.rounds[0].questions = [];
+      terminalTalk.rounds[0].questions_already_asked = 0;
+      terminalTalk.rounds[0].open_direction_changing_questions = 0;
+      terminalTalk.rounds[0].current_total = 0;
+      terminalTalk.rounds[0].zero_question_reason = "本轮没有剩余方向问题";
+      const terminalTalkRecord = writeInteractionRecord(task, terminalTalk);
+      expect(verifyStageContentEvidence({
+        task, ...terminalTalkRecord, expectedStage: "make-decision", expectedKind: "interaction-completion.v1",
+      })).toMatchObject({ payload: { interaction_type: "talk" } });
+
+      const clarify = {
+        interaction_type: "spec-clarify",
+        question_batch_version: "rich-v1",
+        rounds: [{ questions: [richQuestion("acceptance")] }],
+        grill: null,
+        workspace_tree: "e".repeat(40),
+      };
+      const clarifyRecord = writeInteractionRecord(task, clarify, "build-spec");
+      expect(verifyStageContentEvidence({
+        task, ...clarifyRecord, expectedStage: "build-spec", expectedKind: "interaction-completion.v1",
+      })).toMatchObject({ payload: { interaction_type: "spec-clarify" } });
+
+      const invalid = structuredClone(talk);
+      delete invalid.rounds[0].questions[0].options[1].risk;
+      const invalidRecord = writeInteractionRecord(task, invalid);
+      expect(() => verifyStageContentEvidence({ task, ...invalidRecord })).toThrow(/question batch is invalid|needs risk/);
+
+      const missingOptions = structuredClone(talk);
+      delete missingOptions.rounds[0].questions[0].options;
+      const missingOptionsRecord = writeInteractionRecord(task, missingOptions);
+      expect(() => verifyStageContentEvidence({ task, ...missingOptionsRecord })).toThrow(/question batch is invalid|must provide 2 or 3 options/);
+
+      const unsupportedVersion = structuredClone(talk);
+      unsupportedVersion.question_batch_version = "rich-v2";
+      const unsupportedVersionRecord = writeInteractionRecord(task, unsupportedVersion);
+      expect(() => verifyStageContentEvidence({ task, ...unsupportedVersionRecord })).toThrow(/question_batch_version is unsupported|payload does not match its schema/);
+
+      const emptyBatch = structuredClone(clarify);
+      emptyBatch.rounds[0].questions = [];
+      const emptyBatchRecord = writeInteractionRecord(task, emptyBatch, "build-spec");
+      expect(() => verifyStageContentEvidence({ task, ...emptyBatchRecord })).toThrow(/question batch is invalid|at least one independent question|zero-question terminal requires an explicit reason/);
+
+      const terminalClarify = structuredClone(clarify);
+      terminalClarify.rounds[0].questions = [];
+      terminalClarify.rounds[0].zero_question_reason = "当前没有剩余规格歧义";
+      const terminalClarifyRecord = writeInteractionRecord(task, terminalClarify, "build-spec");
+      expect(verifyStageContentEvidence({
+        task, ...terminalClarifyRecord, expectedStage: "build-spec", expectedKind: "interaction-completion.v1",
+      })).toMatchObject({ payload: { interaction_type: "spec-clarify" } });
+
+      const missingTerminalReason = structuredClone(terminalClarify);
+      delete missingTerminalReason.rounds[0].zero_question_reason;
+      const missingTerminalReasonRecord = writeInteractionRecord(task, missingTerminalReason, "build-spec");
+      expect(() => verifyStageContentEvidence({ task, ...missingTerminalReasonRecord })).toThrow(/zero-question terminal requires an explicit reason/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("validates rich persisted Grill batches and rejects incomplete ones", () => {
+    const root = realpathSync(mkdtempSync(`${tmpdir()}/workflowhub-rich-grill-`));
+    try {
+      const task = createTask({
+        storageRoot: root,
+        manifest: {
+          schema_version: "1.0.0", project_name: "WorkflowHub", task_id: "rich-grill-contract",
+          created_at: "2026-08-10T00:00:00.000Z", target_repo_root: process.cwd(), issue_ids: [], inputs: {},
+        },
+      });
+      const grill = {
+        interaction_type: "grill",
+        question_batch_version: "rich-v1",
+        rounds: [],
+        grill: {
+          context: { status: "no-change", reason: "当前上下文已经足够" },
+          adr: { status: "not-needed", reason: "没有新的架构决定" },
+          conflicts: { status: "none", reason: "没有发现冲突" },
+          file_references: [],
+          no_file_reason: "本轮没有新增文件引用",
+          exit_checks: {
+            context_checked: true,
+            adr_checked: true,
+            conflicts_checked: true,
+            file_references_checked: true,
+          },
+          questions: [richQuestion("frontier")],
+        },
+        workspace_tree: "e".repeat(40),
+      };
+      const record = writeInteractionRecord(task, grill);
+      expect(verifyStageContentEvidence({
+        task, ...record, expectedStage: "make-decision", expectedKind: "interaction-completion.v1",
+      })).toMatchObject({ payload: { interaction_type: "grill", question_batch_version: "rich-v1" } });
+
+      const incomplete = structuredClone(grill);
+      delete incomplete.grill.questions;
+      const incompleteRecord = writeInteractionRecord(task, incomplete);
+      expect(() => verifyStageContentEvidence({ task, ...incompleteRecord })).toThrow(/rich grill interaction requires a persisted question batch/);
+
+      const invalid = structuredClone(grill);
+      delete invalid.grill.questions[0].options[0].risk;
+      const invalidRecord = writeInteractionRecord(task, invalid);
+      expect(() => verifyStageContentEvidence({ task, ...invalidRecord })).toThrow(/question batch is invalid|needs risk/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

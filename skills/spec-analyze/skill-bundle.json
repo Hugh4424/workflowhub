@@ -2,8 +2,8 @@
   "schema_version": 1,
   "skill": "spec-analyze",
   "files": [
-    "SKILL.md",
-    "packet-lens.md",
+    { "path": "SKILL.md", "sha256": "fedfed24fb91438bacd72a1ae7469cfc07f60bab21f5a75eda3b2b941b4608cf" },
+    { "path": "packet-lens.md", "sha256": "113f06caf7c75f0e754632e17a6cb184067367bc6cd356858ef048628b1cc8a0" },
     "review-bundle.json"
   ]
 }

@@ -198,8 +198,9 @@ describe("spec and plan content artifact closure", () => {
       expect(closure.bundleHash, `${item.name} bundle hash`).toBe(item.local_bundle_hash);
     }
     const makeDecisionSteps = JSON.parse(read("workflows/make-decision/steps.json"));
-    expect(makeDecisionSteps.steps[10].observable_result).toMatch(/actual confirmation/i);
-    expect(makeDecisionSteps.steps[10].observable_result).toMatch(/no extra delivery-state object/i);
+    const approvalStep = makeDecisionSteps.steps.find(({ step_slug }) => step_slug === "approve-decision");
+    expect(approvalStep.observable_result).toMatch(/actual confirmation/i);
+    expect(approvalStep.observable_result).toMatch(/no extra delivery-state object/i);
     const specAnalyze = read("skills/spec-analyze/SKILL.md");
     expect(specAnalyze).toMatch(/same task may continue writing and repairing/i);
     expect(specAnalyze).toMatch(/before declaring the stage complete/i);

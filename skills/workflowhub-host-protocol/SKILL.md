@@ -51,6 +51,20 @@ description: 让 Multica 宿主按五阶段直接执行 WorkflowHub，并把调�
 3. `build-code` 和 `verify-code` 通过各自 workflow 的 capture 脚本生成测试/验证事实，再由 `runtime/evidence/canonical-receipt-writer.mjs` 写入官方组件记录；宿主不手写替代 receipt。
 4. 用 `tools/cli/stage-runtime.mjs run --action=execute` 发布当前阶段事实，用 `confirm` 记录明确的人类确认，用 `authorize` 执行另行授权的交付动作。它们只更新事实或执行已授权动作，不创建 successor、recovery、continuation 或额外控制面。
 
+### Stage Agent outcome producer
+
+每个 Stage Agent 在执行完本阶段的 manifest steps 和 skill dependencies 后，必须由宿主直接生成一份不可变的阶段 outcome 记录；WorkflowHub runtime 只认证和转发，不替 Agent 执行 skill。
+
+- 记录只能通过现有 `TaskKernel.publishCanonicalRecord` 写入
+  `quality/evidence/stage-outcomes/<stage>/<sha256>.json`，不得新增 ledger、receipt 系统或 writer。
+- 记录包含 `workflowhub-stage-outcomes.v1`、task/stage/attempt 身份、当前 snapshot tree、四份当前材料的 revision/hash、steps/skills manifest ref/hash，以及按 manifest 原顺序逐项列出的 step/skill outcome。
+- 每个 step/skill 的 `evidence_refs` 必须指向结构化的
+  `workflowhub-stage-outcome-evidence.v1` 记录，并绑定同一 task、stage、snapshot、material revision、具体 step/skill、状态和实际结果摘要；不能用一份通用 proof 冒充所有产物。
+- step 的状态只能是 `completed`、`skipped`、`incomplete`、`unavailable`；跳过/失败/未知必须保留原因，耗时/token 拿不到就写 `unavailable`，不补零。
+- 生成完成后把该内容寻址 ref 放进 `tools/cli/stage-runtime.mjs run` 的
+  `receipts.stage_outcomes`。缺失或不匹配时正式 run 明确失败，并由 monitoring 保留 missing/unknown 事实；不能把 caller 自报的 facts 当执行证明。
+- 阶段结果中的 outcome 摘要只披露实际执行、遗漏和可得成本，不改变质量 predicate、工作就绪、Git 或 close 状态。
+
 ## 评论
 
 评论是给人看的通知，不是第二套状态机。只发四类短卡：

@@ -148,6 +148,24 @@ describe("trusted third-review host configuration", () => {
       .toThrow(/wh_review\.review_kinds is not supported/);
   });
 
+  it("accepts the two explicit non-stage mini-task review routes", () => {
+    const { brokerConfig, hostConfig } = configuredRoot();
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, stages: {}, mini_task: {
+      design: { initial: ["kimi", "claude-code"], mode: "full_on_structural_rework", minimum_heterologous: 1 },
+      implementation: { initial: ["kimi", "claude-code"], mode: "full_only", minimum_heterologous: 1 },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.design"))
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_on_structural_rework" });
+    expect(resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.implementation"))
+      .toMatchObject({ initial: ["kimi", "claude-code"], mode: "full_only" });
+    expect(() => resolveTrustedReviewRoute(trusted.whReview, "build-code", null, "mini_task.unknown"))
+      .toThrow(/unsupported|unknown|mini_task/i);
+    expect(brokerConfig).toBeTruthy();
+  });
+
   it("preserves make-decision single_round routes without widening provider dispatch", () => {
     const { hostConfig } = configuredRoot();
     const host = JSON.parse(readFileSync(hostConfig, "utf8"));
