@@ -476,6 +476,16 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     }
     return context.kernel.publishMaterialRevision(input);
   }
+  if (command === "publish-quality-fact") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-quality-fact accepts only --stage, --project, --task, and --input");
+    return context.kernel.publishVNextQualityFact(values.stage, input);
+  }
+  if (command === "publish-publication") {
+    const allowed = new Set(["stage", "project", "task", "input"]);
+    if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("publish-publication accepts only --stage, --project, --task, and --input");
+    return context.kernel.publishVNextPublication(values.stage, input);
+  }
   if (command === "record-step-entry") {
     if (values.stage === "make-decision") throw new Error("make-decision journal entries are runtime-owned");
     const allowed = new Set(["stage", "project", "task", "input"]);

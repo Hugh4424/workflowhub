@@ -84,7 +84,7 @@
     },
     {
       "path": "scripts/__tests__/simple-contracts.test.mjs",
-      "sha256": "008d5802b0fcca4fe714989a3f4daab9563804eba888d968a596851e0a8c4608"
+      "sha256": "917f12aa82b9fcbcc1441274162a7f0dc0fc111f1b8cb40b523358298757ed2e"
     },
     {
       "path": "scripts/__tests__/simple-e2e-faults.test.mjs",

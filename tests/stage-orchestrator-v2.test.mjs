@@ -18,6 +18,8 @@ function fixture() {
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo }); execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
   const oid = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim(); execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/chain-task", worktree, oid], { cwd: repo });
   const taskPath = join(root, "Projects", "Demo", "tasks", "chain-task");
+  // Deliberately omit record_model: these tests cover the historical attempt
+  // orchestrator and its fail-loud boundaries, not vNext single-write records.
   const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "chain-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
   return { root, repo, task, taskPath, worktree, oid };
 }
@@ -32,6 +34,17 @@ function acceptanceCoverage(snapshotTree) {
   return { snapshot_tree: snapshotTree, accepted_criterion_ids: ["AC-1"], items: [{ acceptance_criterion_id: "AC-1", status: "unknown", evidence_refs: [] }] };
 }
 async function runStage(stage, context, handler, publication) {
+  if (stage === "build-spec" && context.kernel.activeStageRun(stage, { required: false }) === null) {
+    context.kernel.startStageRun(stage, { reason: "legacy stage orchestrator fixture publication" });
+  }
+  const runtimeContext = stage === "build-spec"
+    ? (await import("../core/stage-context.mjs")).bootstrapStage(stage, {
+        mode: "sidecar",
+        taskPath: context.task.taskPath,
+        projectName: context.identity.projectName,
+        taskId: context.identity.taskId,
+      })
+    : context;
   const wrapped = async (...args) => {
     const result = await handler(...args);
     if (stage !== "make-decision") {
@@ -69,16 +82,16 @@ async function runStage(stage, context, handler, publication) {
         const contentHash = createHash("sha256").update(contentRaw).digest("hex");
         const contentRef = `evidence/stage-content/${contentHash}/verify-code-fixture.json`;
         try {
-          context.kernel.publishCanonicalRecord(contentRef, contentRaw);
+      runtimeContext.kernel.publishCanonicalRecord(contentRef, contentRaw);
         } catch (error) {
-          if (error?.code !== "EEXIST" || context.task.readRecord(contentRef) !== contentRaw) throw error;
+          if (error?.code !== "EEXIST" || runtimeContext.task.readRecord(contentRef) !== contentRaw) throw error;
         }
         const contentEvidenceRefs = [{ kind: content.kind, ref: contentRef, hash: contentHash }];
         const unsigned = {
           schema_version: "stage-audit-summary.v1",
           task_id: context.identity.taskId,
           stage_slug: stage,
-          workflow_run_id: context.workflowRunId,
+          workflow_run_id: runtimeContext.workflowRunId,
           snapshot_tree: snapshot.tree,
           verdict: "pass",
           content_evidence_refs: contentEvidenceRefs,
@@ -87,9 +100,9 @@ async function runStage(stage, context, handler, publication) {
         const auditRef = `evidence/audits/${stage}/${auditHash}.json`;
         const auditRaw = `${JSON.stringify({ ...unsigned, summary_hash: auditHash }, null, 2)}\n`;
         try {
-          context.kernel.publishCanonicalRecord(auditRef, auditRaw);
+          runtimeContext.kernel.publishCanonicalRecord(auditRef, auditRaw);
         } catch (error) {
-          if (error?.code !== "EEXIST" || context.task.readRecord(auditRef) !== auditRaw) throw error;
+          if (error?.code !== "EEXIST" || runtimeContext.task.readRecord(auditRef) !== auditRaw) throw error;
         }
         facts = {
           ...facts,
@@ -107,13 +120,13 @@ async function runStage(stage, context, handler, publication) {
     const decisionHash = createHash("sha256").update(decisionRaw).digest("hex");
     const decisionRef = `receipts/decision-log/${decisionHash}.md`;
     try {
-      context.kernel.publishCanonicalRecord(decisionRef, decisionRaw);
+      runtimeContext.kernel.publishCanonicalRecord(decisionRef, decisionRaw);
     } catch (error) {
-      if (error?.code !== "EEXIST" || context.task.readRecord(decisionRef) !== decisionRaw) throw error;
+      if (error?.code !== "EEXIST" || runtimeContext.task.readRecord(decisionRef) !== decisionRaw) throw error;
     }
     const activeWorkspace = args[0].candidateWorkspace ?? args[0].workspace;
     const worktreeRoot = activeWorkspace?.worktreeRoot ?? result.facts?.worktree_root;
-    const artifactRoot = join(worktreeRoot, "specs", context.identity.taskId);
+    const artifactRoot = join(worktreeRoot, "specs", runtimeContext.identity.taskId);
     mkdirSync(artifactRoot, { recursive: true });
     writeFileSync(join(artifactRoot, "decision-log.md"), decisionRaw);
     return {
@@ -128,7 +141,7 @@ async function runStage(stage, context, handler, publication) {
     };
   };
   const runtime = await import("../core/stage-runner.mjs");
-  return runtime.runStage(stage, context, wrapped, publication);
+  return runtime.runStage(stage, runtimeContext, wrapped, publication);
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 describe("stage-runner capability unit", () => {

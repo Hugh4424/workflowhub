@@ -9,6 +9,39 @@ const OUTPUT = resolve(ROOT, "docs/architecture/repository-inventory.tsv");
 const INVENTORY_PATH = "docs/architecture/repository-inventory.tsv";
 const DISPOSITIONS = new Set(["keep", "move", "merge", "delete", "generate", "archive"]);
 
+const ZERO_GATES = Object.freeze({
+  "legacy-runtime": Object.freeze({
+    // Immutable migration evidence and its task-only verifier may mention legacy;
+    // every other delivery path and all runtime code must be legacy-free after T016.
+    allowedPaths: Object.freeze(new Set([
+      "docs/architecture/legacy-task-inventory.json",
+      "docs/architecture/legacy-import-proof.json",
+      "tools/architecture/verify-migration-proof.mjs",
+    ])),
+    runtimeRoots: ["core/", "scripts/", "schemas/", "skills/", "workflows/"],
+    forbiddenContent: /legacy-reader|legacy-import|normalizeLegacyTask|legacy-import-proof/,
+  }),
+});
+
+function zeroGateErrors(name, { root = ROOT, env = process.env } = {}) {
+  const gate = ZERO_GATES[name];
+  if (!gate) return [`unknown zero gate: ${name}`];
+  const errors = [];
+  const files = listDeliveryFiles({ root, env });
+  for (const path of files) {
+    if (/legacy/i.test(path) && !gate.allowedPaths.has(path) && !path.startsWith("specs/archive/")) {
+      errors.push(`legacy path still present in delivery tree: ${path}`);
+    }
+  }
+  for (const path of files) {
+    if (!gate.runtimeRoots.some((prefix) => path.startsWith(prefix))) continue;
+    if (gate.allowedPaths.has(path)) continue;
+    const text = readFileSync(resolve(root, path), "utf8");
+    if (gate.forbiddenContent.test(text)) errors.push(`legacy runtime reference still present: ${path}`);
+  }
+  return errors;
+}
+
 export function listDeliveryFiles({ root = ROOT, env = process.env } = {}) {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
     cwd: root,
@@ -87,6 +120,8 @@ function main() {
     const actual = readFileSync(OUTPUT, "utf8");
     const errors = validateInventory(actual);
     if (actual !== expected) errors.push("inventory bytes are stale for the current tracked tree");
+    const zeroArg = process.argv.find((value) => value.startsWith("--require-zero="));
+    if (zeroArg) errors.push(...zeroGateErrors(zeroArg.slice("--require-zero=".length)));
     if (errors.length) {
       for (const error of errors) console.error(error);
       process.exitCode = 1;

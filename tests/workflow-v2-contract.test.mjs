@@ -38,7 +38,7 @@ describe("five-stage v2 business contract", () => {
       expect(compact).toMatch(/recommended option[\s\S]{0,180}(?:every option's consequence and risk|consequence[\s\S]*risk)/i);
       expect(skill).not.toMatch(/docs\/human-brief-template\.md/);
     }
-    expect(readStage("verify-code")).toMatch(/stage-runtime\.mjs reopen --stage=build-code[\s\S]*--verify-attempt=<failed-verify-attempt-ref>[\s\S]*--failure-evidence=<failed-acceptance-evidence-ref>[\s\S]*immutable reopen\s+ref[\s\S]*upstream Code Builder/i);
+    expect(readStage("verify-code")).toMatch(/stage-runtime\.mjs status --action=repair --stage=build-code[\s\S]*--verify-attempt=<failed-verify-attempt-ref>[\s\S]*--failure-evidence=<failed-acceptance-evidence-ref>[\s\S]*immutable repair cycle\s+ref[\s\S]*upstream Code Builder/i);
   });
 
   it("maps host-visible interaction, component facts, and concise handoff without host coupling", () => {
@@ -120,7 +120,7 @@ describe("five-stage v2 business contract", () => {
     const skill = readStage("build-code");
     expect(skill).toMatch(/same-Phase repair[\s\S]*--revision=true --recover=<latest-implementation-receipt-ref>/i);
     expect(skill).toMatch(/repaired tests[\s\S]*new receipt\/output refs/i);
-    expect(skill).toMatch(/does not require or create a verify-code reopen authorization/i);
+    expect(skill).toMatch(/does not require or create a verify-code repair cycle authorization/i);
     expect(skill).toMatch(/After[\s\S]*accepted[\s\S]*only the controlled verification-failure path/i);
     expect(skill).toMatch(/<final implementation receipt ref>[\s\S]*<final fresh test receipt ref>/i);
     expect(skill).toMatch(/normal[^\n]*default[^\n]*receipts\/implementation\.json[^\n]*receipts\/build-tests\.json/i);
@@ -129,7 +129,7 @@ describe("five-stage v2 business contract", () => {
 
   it("reviews every build-code Phase and then the final worktree integration", () => {
     const skill = readStage("build-code");
-    expect(skill).toMatch(/publish-phase-evidence/);
+    expect(skill).toMatch(/stage-runtime\.mjs verify --action=phase/);
     expect(skill).toMatch(/current `phase_id`/i);
     expect(skill).toMatch(/Start the next Phase only after its Tasks are complete/i);
     expect(skill).toMatch(/`worktree \+ integration` `wh-review`[\s\S]{0,120}without historical or cumulative diff/i);
@@ -137,7 +137,7 @@ describe("five-stage v2 business contract", () => {
     expect(skill).toMatch(/canonical\s+implementation[\s\S]{0,180}canonical\s+tests[\s\S]{0,180}same snapshot tree/i);
     expect(skill).toMatch(/same-Phase repair[\s\S]*new receipt\/output refs/i);
     expect(skill).toMatch(/revise_required[\s\S]*original quality fact/i);
-    expect(skill).toMatch(/controlled `reopen`[\s\S]*last affected completed Phase[\s\S]*`reopen_ref`/i);
+    expect(skill).toMatch(/controlled repair flow[\s\S]*last affected completed Phase[\s\S]*`reopen_ref`/i);
     expect(skill).toMatch(/does not create[\s\S]*(?:Phase registry|Phase history)/i);
     const handlers = readFileSync(join(root, "core", "stage-handlers.mjs"), "utf8");
     expect(handlers).toMatch(/scope\.subject_kind !== "worktree"[\s\S]{0,160}scope\.review_scope !== "integration"[\s\S]{0,120}scope\.phase_id !== null/);

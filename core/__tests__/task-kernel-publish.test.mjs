@@ -1553,9 +1553,15 @@ describe("TaskKernel append-only publication", () => {
     const bound = createAuditedTestKernel(task, { workspace, artifacts });
 
     expect(() => bound.createCheckpoint("build-spec")).toThrow(/accepted|current material revision|ENOENT/i);
+    task.createRecordAtomic("requirements/checkpoint-ledger.json", "{\"ids\":[\"FR-1\"]}\n");
+    task.createRecordAtomic("requirements/checkpoint-coverage.json", "{\"FR-1\":\"AC-1\"}\n");
     const firstRevision = bound.publishMaterialRevision({
       change_summary: "authorize current four materials",
       source_refs: ["results/make-decision/accepted.json"],
+      requirements: {
+        ledger_ref: "requirements/checkpoint-ledger.json",
+        coverage_ref: "requirements/checkpoint-coverage.json",
+      },
     });
     const specCheckpoint = bound.createCheckpoint("build-spec");
     expect(specCheckpoint.parent_commit).toBe(integrationHead);
@@ -1580,6 +1586,10 @@ describe("TaskKernel append-only publication", () => {
       change_summary: "authorize revised current decision and spec",
       source_refs: ["results/make-decision/accepted.json"],
       expected_current_ref: firstRevision.revision_ref,
+      requirements: {
+        ledger_ref: "requirements/checkpoint-ledger.json",
+        coverage_ref: "requirements/checkpoint-coverage.json",
+      },
     });
     const planCheckpoint = bound.createCheckpoint("build-plan");
     const integrationParents = String(execFileSync("git", ["show", "-s", "--format=%P", planCheckpoint.parent_commit], {
@@ -2159,9 +2169,13 @@ describe("TaskKernel append-only publication", () => {
   });
 
   it("derives checkpoint trees from authenticated upstream facts and rejects upstream drift", () => {
-    const { task, kernel } = fixture();
+    const { repo, task } = fixture({}, { deferCandidate: true });
+    writeFileSync(join(repo, "decision-context.txt"), "accepted context\n");
+    seedCoreDecisionArtifact(repo);
+    execFileSync("git", ["add", "--", "decision-context.txt", "specs/task-one/decision-log.md"], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "accepted decision context"], { cwd: repo });
     const candidate = prepareTaskWorkspace(task);
-    writeFileSync(join(candidate.worktreeRoot, "decision-context.txt"), "accepted context\n");
+    const kernel = createAuditedTestKernel(task, { candidateWorkspace: candidate });
     const decision = kernel.publishAttempt("make-decision", { facts: {
       worktree_root: candidate.worktreeRoot,
       baseline_commit: candidate.baselineCommit,
@@ -2172,7 +2186,6 @@ describe("TaskKernel append-only publication", () => {
     const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
     const boundKernel = createAuditedTestKernel(task, { workspace, artifacts });
-    writeCoreDecisionArtifact(artifacts);
     artifacts.writeAtomic("spec.md", "# Spec\n");
     const specAttempt = boundKernel.publishAttempt("build-spec", {
       facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: boundKernel.createCheckpoint("build-spec") },

@@ -105,7 +105,10 @@ describe("WorkflowHub host independence", () => {
   it("keeps active runtime, CLI, Skills, CI, and contracts host-neutral", () => {
     const findings = activeSurfaceFiles().flatMap((repoPath) => {
       if (isSourceRecord(repoPath)) return [];
-      const isGenericHostGuard = repoPath === "scripts/check-anti-host.mjs";
+      const isGenericHostGuard = new Set([
+        "scripts/check-anti-host.mjs",
+        "scripts/check-task-record-paths.mjs",
+      ]).has(repoPath);
       return [
         ...lineFindings(
           repoPath,
@@ -122,11 +125,11 @@ describe("WorkflowHub host independence", () => {
           /(?:scripts\/agenthub-baseline\.mjs|tests\/agenthub-baseline\.test\.mjs)/u,
           "retired AgentHub bridge reference",
         ),
-        ...lineFindings(
+        ...(isGenericHostGuard ? [] : lineFindings(
           repoPath,
           /^(?!.*AgentHub historical import).*(?:\bmultica\b|\.multica\/)/iu,
           "host-specific active restriction",
-        ),
+        )),
       ];
     });
 

@@ -40,6 +40,7 @@ describe("simple wh-review contracts", () => {
     expect(e2e).toMatch(/active_runners/);
     expect(e2e).toMatch(/fresh_stage_runtime/);
     const bundle = readJson(join(root, "wh-review", "skill-bundle.json"));
+    const bundlePaths = bundle.files.map((file) => typeof file === "string" ? file : file.path);
     for (const file of [
       "contracts/workflowhub-result.v1.json",
       "contracts/workflowhub-result.v2.json",
@@ -60,7 +61,7 @@ describe("simple wh-review contracts", () => {
       "scripts/wh-review-cli.mjs",
       "stage-materials.json",
       "stage-skill-plan.json"
-    ]) expect(bundle.files).toContain(file);
+    ]) expect(bundlePaths).toContain(file);
   });
 
   it("documents the complete public review input instead of forcing callers to guess", () => {

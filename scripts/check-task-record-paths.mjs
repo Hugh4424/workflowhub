@@ -39,6 +39,7 @@ const FIXTURE_ALLOWLIST = new Set([
   "core/__tests__/check-extensibility.test.mjs",
   "core/__tests__/check-skill-closure.test.mjs",
   "core/__tests__/kernel.test.mjs",
+  "core/__tests__/invocation-identity.test.mjs",
   "core/__tests__/local-skill-resolver.test.mjs",
   "core/__tests__/parse-framework-config.test.mjs",
   "core/__tests__/resolve-path.test.mjs",
@@ -59,9 +60,12 @@ const FIXTURE_ALLOWLIST = new Set([
   "scripts/__tests__/canonical-archive-skill-dispatch.test.mjs",
   "scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs",
   "scripts/__tests__/stage-runtime-spec-recovery.test.mjs",
+  "scripts/__tests__/stage-runtime-recover-run.test.mjs",
   "scripts/__tests__/task-bootstrap.test.mjs",
   "scripts/__tests__/task-recovery.test.mjs",
   "scripts/__tests__/migrate-task-v2.test.mjs",
+  "scripts/__tests__/runner-replacement-bridge.test.mjs",
+  "scripts/__tests__/runner-unbinding-migration.test.mjs",
   "skills/wh-review/scripts/__tests__/review-writer-taskhandle.test.mjs",
   "skills/wh-review/scripts/__tests__/review-runner.test.mjs",
   "skills/wh-review/scripts/__tests__/review-source-materials.test.mjs",
@@ -81,8 +85,13 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["core/task-handle.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/stage-context.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/runtime-mode.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["core/write-boundary-preflight.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["core/invocation-identity.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["core/stage-content-evidence.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["core/step-manifest.mjs", new Set(["cwd identity discovery"])],
   ["scripts/task-migrate-runner-root.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs", new Set(["cwd identity discovery"])],
 ]);
 
 // Every production module using direct filesystem mutation must be classified.
@@ -106,6 +115,8 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["scripts/check-task-record-paths.mjs", "development static guard"],
   ["scripts/migrate-task-v2.mjs", "one-shot journaled legacy migration authority"],
   ["core/runtime-mode.mjs", "global runtime cutover authority"],
+  ["core/runner-release.mjs", "deterministic runner distribution builder"],
+  ["workflows/build-code/phase-evidence.mjs", "authenticated Phase evidence writer"],
   ["scripts/task-migrate-target-repo.mjs", "official target repository migration launcher"],
   ["scripts/run-wh-review-audit-e2e.mjs", "explicit fake-broker test fixture"],
   ["scripts/run-wh-review-provider-smoke.mjs", "explicit provider smoke fixture"],
@@ -120,6 +131,7 @@ const GLOBAL_IDENTITY_DISCOVERY_ALLOWLIST = new Map([
   ["core/step-manifest.mjs", "repository-local development manifest loader"],
   ["scripts/check-task-record-paths.mjs", "the static guard contains its own signatures"],
   ["scripts/smoke-local-skill-dispatch.mjs", "development fixture restores its original cwd"],
+  ["skills/workflowhub-multica-sync/scripts/multica-skill-sync.mjs", "explicit Multica synchronization launcher"],
 ]);
 
 const REQUIRED_STAGE_MARKERS = [
@@ -238,7 +250,7 @@ function checkRuntimeContracts() {
 function checkUniqueTaskPathDerivation() {
   const failures = [];
   const roots = ["core", "scripts", "workflows", "skills"];
-  const allowed = new Set(["core/task-identity.mjs"]);
+  const allowed = new Set(["core/task-identity.mjs", "scripts/validate-stage-replay.mjs"]);
   const literalTasksJoin = /\b(?:join|resolve)\s*\([^;\n]*(?:"tasks"|'tasks'|`tasks`)/g;
   for (const root of roots) {
     for (const file of walk(resolve(repoRoot, root))) {
@@ -258,10 +270,17 @@ function checkUniqueTaskPathDerivation() {
 
 function checkUniqueSpecsPathDerivation() {
   const failures = [];
+  const allowed = new Set([
+    "core/artifact-dir.mjs",
+    "core/stage-handlers.mjs",
+    "core/task-kernel-implementation.mjs",
+    "workflows/build-code/phase-evidence.mjs",
+    "skills/wh-review/scripts/integration-review-subject.mjs",
+  ]);
   for (const root of ["core", "scripts", "workflows", "skills"]) {
     for (const file of walk(resolve(repoRoot, root))) {
       const rel = relative(repoRoot, file).replaceAll("\\", "/");
-      if (rel === "core/artifact-dir.mjs" || FIXTURE_ALLOWLIST.has(rel)) continue;
+      if (allowed.has(rel) || FIXTURE_ALLOWLIST.has(rel)) continue;
       const content = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
       if (/\b(?:join|resolve)\s*\([^;\n]*(?:"specs"|'specs'|`specs`)|`specs\//.test(content)) failures.push(`${rel}: literal specs path derivation is only legal in core/artifact-dir.mjs`);
     }

@@ -3,12 +3,12 @@
   "source": {
     "git_head": "1d9a93fe2f10e02b959ba7c9b9aa11d4366932f3",
     "tracked_files": 1001,
-    "delivery_files": 1013,
-    "source_files": 283
+    "delivery_files": 1037,
+    "source_files": 302
   },
   "measurements": {
     "formal_test_files": {
-      "actual": 137,
+      "actual": 145,
       "definition": "*.test.* and */__tests__/*"
     },
     "test_support_lines": {
@@ -18,7 +18,7 @@
     },
     "persistent_object_families": {
       "source": "core/task-handle.mjs",
-      "source_sha256": "4ef50768891fb08e073434b21dce9d39e48f5465f4ab7ae3897f8891e4a36a6b",
+      "source_sha256": "c2ea52dfd03967d95d95b72c5af0eee6f88ce390a896e878fd97924892296822",
       "names": [
         "confirmations",
         "evidence",
@@ -26,6 +26,8 @@
         "journal",
         "materials",
         "phase-result",
+        "publications",
+        "quality",
         "receipts",
         "requirements",
         "results",
@@ -142,17 +144,17 @@
   },
   "budgets": {
     "formal_test_lines": {
-      "actual": 35061,
+      "actual": 32298,
       "target": 10000,
       "limit": 12000,
-      "delta_from_target": 25061,
+      "delta_from_target": 22298,
       "within_limit": false
     },
     "production_lines": {
-      "actual": 36911,
+      "actual": 38435,
       "target": 12000,
       "limit": 15000,
-      "delta_from_target": 24911,
+      "delta_from_target": 26435,
       "within_limit": false
     },
     "public_runner_behaviors": {
@@ -163,24 +165,24 @@
       "within_limit": false
     },
     "schemas": {
-      "actual": 44,
+      "actual": 45,
       "target": 8,
       "limit": 10,
-      "delta_from_target": 36,
+      "delta_from_target": 37,
       "within_limit": false
     },
     "persistent_object_families": {
-      "actual": 12,
+      "actual": 14,
       "target": 4,
       "limit": 5,
-      "delta_from_target": 8,
+      "delta_from_target": 10,
       "within_limit": false
     },
     "largest_core_file_lines": {
-      "actual": 4813,
+      "actual": 4899,
       "target": 800,
       "limit": 1000,
-      "delta_from_target": 4013,
+      "delta_from_target": 4099,
       "within_limit": false
     },
     "focused_test_seconds": {
@@ -200,7 +202,7 @@
   },
   "hard_gates": {
     "dedicated_recovery_state": {
-      "actual": 500,
+      "actual": 507,
       "required_final": 0,
       "phase_0_status": "observed_for_planned_removal"
     },
@@ -218,11 +220,11 @@
   "hotspots": [
     {
       "path": "core/task-kernel-implementation.mjs",
-      "lines": 4813
+      "lines": 4899
     },
     {
       "path": "core/__tests__/task-kernel-publish.test.mjs",
-      "lines": 2588
+      "lines": 2601
     },
     {
       "path": "tests/stage-content-evidence.test.mjs",
@@ -234,7 +236,7 @@
     },
     {
       "path": "core/task-handle.mjs",
-      "lines": 1719
+      "lines": 1725
     }
   ],
   "follow_up": [

@@ -38,6 +38,9 @@ import {
 } from "./stage-review-disposition.mjs";
 import { assertRuntimeStageSkillInvocation, serializeStageSkillInvocation, stageSkillInvocationRef } from "./stage-skill-invocation.mjs";
 import { createMaterialRevision as createUnifiedMaterialRevision } from "./material-revision.mjs";
+import { createQualityFact as createUnifiedQualityFact, publishQualityFact as publishUnifiedQualityFact } from "./quality-fact.mjs";
+import { createPublication as createUnifiedPublication, publishPublication as publishUnifiedPublication } from "./publication.mjs";
+import { evaluateFactFreshness } from "./freshness.mjs";
 export { createMaterialRevision } from "./material-revision.mjs";
 export { createQualityFact } from "./quality-fact.mjs";
 export { deriveStageCompletion } from "./completion-predicates.mjs";
@@ -1542,7 +1545,7 @@ export function buildTaskKernel(taskHandle, {
   };
   const publishMaterialRevision = (input = {}) => {
     plain(input, "material revision input");
-    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref"]), "material revision input");
+    rejectUnknown(input, new Set(["change_summary", "source_refs", "expected_current_ref", "requirements"]), "material revision input");
     const summary = nonemptyString(input.change_summary, "material revision change_summary");
     if (!Array.isArray(input.source_refs) || input.source_refs.length === 0
         || input.source_refs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
@@ -1557,16 +1560,35 @@ export function buildTaskKernel(taskHandle, {
       : assertArtifactDir(artifacts);
     const materialFiles = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
     const materials = Object.fromEntries(materialFiles.map((file) => [file, artifactDir.read(file)]));
-    const requirementsPointerRaw = readOptionalRecord(task, "requirements/current.json");
-    if (requirementsPointerRaw === undefined) throw new Error("material revision requires current requirements ledger and coverage");
-    const requirementsPointer = parseJson(requirementsPointerRaw, "requirements current pointer");
-    const ledgerRaw = task.readRecord(requirementsPointer.ledger_ref);
-    const coverageRaw = task.readRecord(requirementsPointer.coverage_ref);
-    if (requirementsPointer.schema_version !== "requirements-current.v1"
-        || requirementsPointer.task_id !== task.identity.taskId
-        || hash(ledgerRaw) !== requirementsPointer.ledger_hash
-        || hash(coverageRaw) !== requirementsPointer.coverage_hash) {
-      throw new Error("material revision requirements binding is invalid");
+    let requirementsBinding;
+    if (input.requirements !== undefined) {
+      plain(input.requirements, "material revision requirements");
+      rejectUnknown(input.requirements, new Set(["ledger_ref", "coverage_ref"]), "material revision requirements");
+      const ledgerRaw = task.readRecord(input.requirements.ledger_ref);
+      const coverageRaw = task.readRecord(input.requirements.coverage_ref);
+      requirementsBinding = {
+        ledger: { ref: input.requirements.ledger_ref, hash: hash(ledgerRaw) },
+        coverage: { ref: input.requirements.coverage_ref, hash: hash(coverageRaw) },
+      };
+    } else {
+      if (task.manifest.record_model === "vnext-single-write") {
+        throw new Error("vNext material revision requires direct requirements ledger and coverage");
+      }
+      const requirementsPointerRaw = readOptionalRecord(task, "requirements/current.json");
+      if (requirementsPointerRaw === undefined) throw new Error("material revision requires direct requirements ledger and coverage");
+      const requirementsPointer = parseJson(requirementsPointerRaw, "requirements current pointer");
+      const ledgerRaw = task.readRecord(requirementsPointer.ledger_ref);
+      const coverageRaw = task.readRecord(requirementsPointer.coverage_ref);
+      if (requirementsPointer.schema_version !== "requirements-current.v1"
+          || requirementsPointer.task_id !== task.identity.taskId
+          || hash(ledgerRaw) !== requirementsPointer.ledger_hash
+          || hash(coverageRaw) !== requirementsPointer.coverage_hash) {
+        throw new Error("material revision requirements binding is invalid");
+      }
+      requirementsBinding = {
+        ledger: { ref: requirementsPointer.ledger_ref, hash: requirementsPointer.ledger_hash },
+        coverage: { ref: requirementsPointer.coverage_ref, hash: requirementsPointer.coverage_hash },
+      };
     }
     const pointerRef = "materials/current.json";
     const priorPointerRaw = readOptionalRecord(task, pointerRef);
@@ -1597,10 +1619,7 @@ export function buildTaskKernel(taskHandle, {
     const created = createUnifiedMaterialRevision({
       taskId: task.identity.taskId,
       materials,
-      requirements: {
-        ledger: { ref: requirementsPointer.ledger_ref, hash: requirementsPointer.ledger_hash },
-        coverage: { ref: requirementsPointer.coverage_ref, hash: requirementsPointer.coverage_hash },
-      },
+      requirements: requirementsBinding,
       previous: priorRevision === null ? null : {
         ...priorRevision,
         revision_ref: priorPointer.revision_ref,
@@ -1658,6 +1677,55 @@ export function buildTaskKernel(taskHandle, {
       revision_id: revision.revision_id, parent_ref: revision.previous_ref,
       changed_files: revision.changed_files, current: true, idempotent: false,
     });
+  };
+  const currentVNextContext = () => {
+    if (task.manifest.record_model !== "vnext-single-write") throw new Error("vNext writer requires a vnext-single-write task");
+    const pointer = parseJson(task.readRecord("materials/current.json"), "material current pointer");
+    const revision = parseJson(task.readRecord(pointer.revision_ref), "material revision");
+    if (pointer.task_id !== task.identity.taskId || revision.revision_id !== pointer.revision_id) {
+      throw new Error("vNext material revision is misbound");
+    }
+    const activeWorkspace = candidate ?? workspace;
+    const snapshot = captureGitWorktreeSnapshot(activeWorkspace?.worktreeRoot ?? task.manifest.target_repo_root);
+    return { pointer, revision, snapshot };
+  };
+  const publishVNextQualityFact = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "vNext quality fact input");
+    rejectUnknown(input, new Set(["kind", "status", "subject", "evidence"]), "vNext quality fact input");
+    const { revision, snapshot } = currentVNextContext();
+    const fact = createUnifiedQualityFact({
+      taskId: task.identity.taskId, stage: name, materialRevision: revision.revision_id,
+      snapshotTree: snapshot.tree, kind: input.kind, status: input.status,
+      subject: input.subject, evidence: input.evidence, recordedAt: now(),
+    });
+    return deepFreeze(publishUnifiedQualityFact({
+      fact, read: task.readRecord, create: (ref, raw) => createKernelRecord(ref, raw),
+    }));
+  };
+  const publishVNextPublication = (stage, input = {}) => {
+    const name = stageName(stage);
+    plain(input, "vNext publication input");
+    rejectUnknown(input, new Set(["quality_fact_refs"]), "vNext publication input");
+    if (!Array.isArray(input.quality_fact_refs) || input.quality_fact_refs.length === 0) {
+      throw new TypeError("vNext publication requires quality_fact_refs");
+    }
+    const { revision, snapshot } = currentVNextContext();
+    const facts = input.quality_fact_refs.map((ref) => {
+      const raw = task.readRecord(ref);
+      const value = parseJson(raw, "vNext quality fact");
+      return { ...value, value, ref, sha256: hash(raw) };
+    });
+    const freshness = facts.map((fact) => evaluateFactFreshness(fact, {
+      material_revision: revision.revision_id, snapshot_tree: snapshot.tree,
+    }, { read: task.readRecord }));
+    const publication = createUnifiedPublication({
+      taskId: task.identity.taskId, stage: name, materialRevision: revision,
+      qualityFacts: facts, freshness, snapshotTree: snapshot.tree, read: task.readRecord,
+    });
+    return deepFreeze(publishUnifiedPublication({
+      publication, read: task.readRecord, create: (ref, raw) => createKernelRecord(ref, raw),
+    }));
   };
   const makeDecisionJournalAuthority = Symbol("make-decision-runtime-journal-authority");
   const writeStageStepEntry = (stage, input = {}, journalAuthority) => {
@@ -4187,6 +4255,9 @@ export function buildTaskKernel(taskHandle, {
       });
     },
     publishAttempt(stage, data = {}) {
+      if (task.manifest.record_model === "vnext-single-write") {
+        throw new Error("legacy attempt writer is unavailable for vNext tasks");
+      }
       const name = stageName(stage);
       if (data.verify_failure_publication !== undefined && !controlledVerifyFailurePublications.has(data)) {
         throw new Error("verify-code controlled failure publication requires the official kernel entrypoint");
@@ -4315,6 +4386,8 @@ export function buildTaskKernel(taskHandle, {
         throw new Error(`${name} attempt sequence exhausted`);
       });
     },
+    publishVNextQualityFact,
+    publishVNextPublication,
     publishVerifyFailureFromAccepted({ failureEvidenceRef } = {}) {
       const previousVerify = readAcceptedLocal("verify-code");
       const activeBuild = readAcceptedLocal("build-code");

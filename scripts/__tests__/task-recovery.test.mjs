@@ -41,6 +41,15 @@ function publishCoreDecision(kernel, decisionLog = "# Recovery decision\n\nProce
 }
 
 function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunId, data }) {
+  // Recovery fixtures intentionally exercise the readable legacy record model:
+  // no task manifest record_model means legacy.  Legacy build-spec publication
+  // still has to declare its execution boundary explicitly.
+  if (stage === "build-spec" && kernel.activeStageRun(stage, { required: false }) === null) {
+    kernel.startStageRun(stage, { reason: "legacy recovery fixture publication" });
+  }
+  const effectiveWorkflowRunId = stage === "build-spec"
+    ? kernel.activeStageRun(stage).run.workflow_run_id
+    : workflowRunId;
   const snapshot = captureGitWorktreeSnapshot(worktreeRoot);
   const kind = `${stage}-recovery-fixture`;
   const content = {
@@ -48,7 +57,7 @@ function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunI
     kind,
     task_id: task.identity.taskId,
     stage,
-    workflow_run_id: workflowRunId,
+    workflow_run_id: effectiveWorkflowRunId,
     snapshot_tree: snapshot.tree,
   };
   const contentRaw = `${JSON.stringify(content, null, 2)}\n`;
@@ -60,7 +69,7 @@ function publishAuditedAttempt({ kernel, task, stage, worktreeRoot, workflowRunI
     schema_version: "stage-audit-summary.v1",
     task_id: task.identity.taskId,
     stage_slug: stage,
-    workflow_run_id: workflowRunId,
+    workflow_run_id: effectiveWorkflowRunId,
     snapshot_tree: snapshot.tree,
     verdict: "pass",
     content_evidence_refs: contentEvidenceRefs,

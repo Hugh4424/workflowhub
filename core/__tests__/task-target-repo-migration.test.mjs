@@ -111,6 +111,12 @@ describe("target repository migration", () => {
     const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
     const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
     const publishAndAccept = async (stage, handler) => {
+      if (stage === "build-spec") {
+        const runKernel = createTaskKernel(migrated.task);
+        if (runKernel.activeStageRun(stage, { required: false }) === null) {
+          runKernel.startStageRun(stage, { reason: "legacy target migration fixture publication" });
+        }
+      }
       const stageContext = context(stage);
       const result = await runStage(stage, stageContext, async (...args) => {
         const value = await handler(...args);

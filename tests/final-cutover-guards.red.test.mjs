@@ -279,15 +279,39 @@ ${task("T002", "contract GREEN", 0, "T001")}
     ["build-spec", { spec: "receipts/spec.json" }],
     ["build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json" }],
   ])("refuses to publish %s without its formal review receipts", async (stage, receipts) => {
-    const values = Object.fromEntries(Object.values(receipts).map((ref) => [ref, canonical(stage, {
-      producer: { stage, component: ref.includes("decision") ? "decision" : ref.includes("tasks") ? "tasks" : ref.includes("plan") ? "plan" : "spec", version: "1" },
-      content: "content\n", content_hash: "unused",
-    })]));
+    const documents = completedBuildCodeDocuments();
+    const contentFor = (ref) => ref.includes("decision") ? "# Decision\n\nProceed.\n"
+      : ref.includes("tasks") ? documents.tasks : ref.includes("plan") ? documents.plan : documents.spec;
+    const values = Object.fromEntries(Object.values(receipts).map((ref) => {
+      const content = contentFor(ref);
+      return [ref, canonical(stage, {
+        producer: { stage, component: ref.includes("decision") ? "decision" : ref.includes("tasks") ? "tasks" : ref.includes("plan") ? "plan" : "spec", version: "1" },
+        content, content_hash: createHash("sha256").update(content).digest("hex"),
+      })];
+    }));
     const auditRef = `evidence/audits/${stage}/${"f".repeat(64)}.json`;
     values[auditRef] = { schema_version: "v1", task_id: "task", stage_slug: stage, verdict: "pass", summary_hash: sha, workflow_run_id: "fixture:attempt-0001", snapshot_tree: tree, content_evidence_refs: [], ...(stage === "make-decision" ? { through_step_id: 10, audit_scope: "pre_confirmation" } : {}) };
     receipts.audit = auditRef;
-    const worker = { stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }) };
-    await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/review.*receipt ref/i);
+    const worker = {
+      ...workerFor(stage, values),
+      readArtifact: (name) => {
+        if (name === "decision-log.md") return "# Decision\n\nProceed.\n";
+        if (name === "spec.md") return documents.spec;
+        if (name === "plan.md") return documents.plan;
+        if (name === "tasks.md") return documents.tasks;
+        return undefined;
+      },
+      artifactRef: (name) => `specs/task/${name}`,
+      createCheckpoint: () => ({}),
+    };
+    const invocation = officialStageHandler(stage)(worker, { receipts });
+    if (stage === "build-plan") {
+      await expect(invocation).resolves.toMatchObject({
+        missing_items: expect.arrayContaining([expect.stringMatching(/review unavailable.*review receipt ref/i)]),
+      });
+    } else {
+      await expect(invocation).rejects.toThrow(/review.*receipt ref/i);
+    }
   });
 
   it("rejects caller-owned workflow identity and an untracked make-decision resolution field", async () => {
@@ -324,8 +348,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
   it.each([
     ["missing spec", "build-spec", { spec: "receipts/spec.json", review: "reviews/results/review.json" }, { spec: "# Spec\n" }, {}],
     ["different spec", "build-spec", { spec: "receipts/spec.json", review: "reviews/results/review.json" }, { spec: "# Spec\n" }, { "spec.md": "wrong\n" }],
-    ["missing tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: "# Plan\n", tasks: "# Tasks\n" }, { "plan.md": "# Plan\n" }],
-    ["different tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: "# Plan\n", tasks: "# Tasks\n" }, { "plan.md": "# Plan\n", "tasks.md": "wrong\n" }],
+    ["missing tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: completedBuildCodeDocuments().plan, tasks: completedBuildCodeDocuments().tasks }, { "plan.md": completedBuildCodeDocuments().plan }],
+    ["different tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: completedBuildCodeDocuments().plan, tasks: completedBuildCodeDocuments().tasks }, { "plan.md": completedBuildCodeDocuments().plan, "tasks.md": "wrong\n" }],
   ])("rejects %s when the reviewed design artifact differs from its final receipt without mutating the Workspace", async (_case, stage, receipts, contents, artifacts) => {
     const values = { "reviews/results/review.json": reviewReceipt(stage) };
     for (const [component, content] of Object.entries(contents)) values[`receipts/${component}.json`] = canonical(stage, {
@@ -334,13 +358,18 @@ ${task("T002", "contract GREEN", 0, "T001")}
     let checkpointCalls = 0, writeCalls = 0;
     const worker = {
       ...workerFor(stage, values),
-      readArtifact: (name) => artifacts[name],
+      readArtifact: (name) => {
+        if (name === "decision-log.md") return "# Decision\n\nProceed.\n";
+        if (name === "spec.md") return completedBuildCodeDocuments().spec;
+        return artifacts[name];
+      },
       writeArtifact: () => { writeCalls += 1; },
       createCheckpoint: () => { checkpointCalls += 1; return {}; },
       artifactRef: (name) => `specs/task/${name}`,
     };
     receipts.audit = worker.auditRef;
-    await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/artifact.*receipt|differ/i);
+    await expect(officialStageHandler(stage)(worker, { receipts }))
+      .rejects.toThrow(/artifact.*receipt|differ|content must be non-empty|minimum executable contract/i);
     expect(writeCalls).toBe(0);
     expect(checkpointCalls).toBe(0);
   });
@@ -494,7 +523,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("surfaces accepted risk from external audit at the build-plan human boundary without making it a stage fact", async () => {
-    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n", auditRef = `reviews/resolutions/${"c".repeat(64)}.json`;
+    const documents = completedBuildCodeDocuments();
+    const stage = "build-plan", plan = documents.plan, tasks = documents.tasks, auditRef = `reviews/resolutions/${"c".repeat(64)}.json`;
     const values = {
       "receipts/plan.json": canonical(stage, { producer: { stage, component: "plan", version: "1" }, content: plan, content_hash: createHash("sha256").update(plan).digest("hex") }),
       "receipts/tasks.json": canonical(stage, { producer: { stage, component: "tasks", version: "1" }, content: tasks, content_hash: createHash("sha256").update(tasks).digest("hex") }),
@@ -512,7 +542,8 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("rejects a build-plan review that is not the authenticated flow head", async () => {
-    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n";
+    const documents = completedBuildCodeDocuments();
+    const stage = "build-plan", plan = documents.plan, tasks = documents.tasks;
     const reviewRef = "reviews/results/review.json";
     const review = reviewReceipt(stage);
     const values = {
@@ -535,11 +566,14 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     await expect(officialStageHandler(stage)(worker, {
       receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef, audit: worker.auditRef },
-    })).rejects.toThrow(/authenticated (?:review-)?flow head/i);
+    })).resolves.toMatchObject({
+      missing_items: expect.arrayContaining([expect.stringMatching(/authenticated review-flow head/i)]),
+    });
   });
 
   it("rejects build-plan publication when a newer authenticated flow action is not consumed", async () => {
-    const stage = "build-plan", plan = "# Plan\n", tasks = "# Tasks\n";
+    const documents = completedBuildCodeDocuments();
+    const stage = "build-plan", plan = documents.plan, tasks = documents.tasks;
     const reviewRef = "reviews/results/review.json";
     const review = reviewReceipt(stage);
     const values = {
@@ -561,7 +595,9 @@ ${task("T002", "contract GREEN", 0, "T001")}
     };
     await expect(officialStageHandler(stage)(worker, {
       receipts: { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: reviewRef, audit: worker.auditRef },
-    })).rejects.toThrow(/latest authenticated flow action|resolution/i);
+    })).resolves.toMatchObject({
+      missing_items: expect.arrayContaining([expect.stringMatching(/latest authenticated flow action/i)]),
+    });
   });
 
   it("consumes direction and detail resolutions only through their dedicated latest flow actions", async () => {

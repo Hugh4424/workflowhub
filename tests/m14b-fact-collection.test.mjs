@@ -59,6 +59,8 @@ async function createM14bFixture() {
   await exec("git", ["-C", repo, "-c", "user.name=fixture", "-c", "user.email=fixture@example.test", "commit", "--quiet", "-m", "fixture"]);
   const taskPath = join(root, "Projects", "Fixture", "tasks", "m14b-fixture");
   const task = createTask({ storageRoot: root, taskPath, manifest: {
+    // Deliberately omit record_model: this acceptance fixture reads and writes
+    // the legacy attempt family rather than exercising vNext publication.
     schema_version: "1.0.0", project_name: "Fixture", task_id: "m14b-fixture",
     created_at: "2026-07-18T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {},
   } });
@@ -84,6 +86,12 @@ async function createM14bFixture() {
     mode: "sidecar", projectName: task.identity.projectName, taskId: task.identity.taskId, taskPath: task.taskPath,
   });
   const execute = async (stage, handler) => {
+    if (stage === "build-spec") {
+      const kernel = createTaskKernel(task);
+      if (kernel.activeStageRun(stage, { required: false }) === null) {
+        kernel.startStageRun(stage, { reason: "legacy M14b fixture publication" });
+      }
+    }
     const context = contextFor(stage);
     const attempt = await runStage(stage, context, async (...args) => {
       const result = await handler(...args);

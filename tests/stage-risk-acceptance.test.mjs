@@ -330,7 +330,7 @@ describe("official serious-risk wiring", () => {
     const handlers = read("core/stage-handlers.mjs");
     expect(handlers).toMatch(/quality_review[\s\S]*quality_review_resolution[\s\S]*quality_risk_acceptance/);
     expect(handlers).toMatch(/reviewFacts\(worker,\s*input,\s*"quality_review",\s*undefined,\s*"verify-code"\)/);
-    expect(handlers).toMatch(/verify-code quality review does not bind the current verification snapshot/);
+    expect(handlers).toMatch(/bindFinalReview\(worker,\s*input,\s*qualityReview,\s*current\.tree[\s\S]*resolutionName:\s*"quality_review_resolution"/);
   });
 
   it("documents the same narrow exception in all five Stage Skills without adding normal confirmations", () => {
