@@ -451,14 +451,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：冻结 Phase 2 单一 MaterialRevision、append-only QualityFact、freshness/completion 谓词、派生 Publication 与正式 writer 原子写入合同。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/stage-completion.test.mjs tests/integration/material-revision.test.mjs tests/integration/derived-publication.test.mjs tests/integration/atomic-write-faults.test.mjs tests/stage-content-continuation.test.mjs`（Phase 2 final-v2，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/d32dee8169322a582ddf4dcf2df62da95c184bc5bcdf2bfa5d613c053c9003de.json","sha256":"446addf19ca37424f13a97c5ecc2e12792cecdf1c027996603ab9eecf37bb7c5"},{"ref":"receipts/build-tests-phase-2-final-v2.json","sha256":"37e721dbc95d226ed9c96c1b9332cf14fc2dc8f5d719aced5833403fc4aadb3b"},{"ref":"reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json","sha256":"d564602d4bf44e55f95b41069f065debfae392476babe5b7b51dd5612d67a407"}]`
+- **covered_ac**：AC-01、AC-02、AC-04、AC-05
+- **review_fact**：`reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json`
+- **completed_at**：2026-07-30T18:23:30Z
 
 #### T010 — 实现单一修订、质量事实和派生完成
 
@@ -489,14 +489,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：冻结 Phase 2 单一 MaterialRevision、append-only QualityFact、freshness/completion 谓词、派生 Publication 与正式 writer 原子写入合同。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/stage-completion.test.mjs tests/integration/material-revision.test.mjs tests/integration/derived-publication.test.mjs tests/integration/atomic-write-faults.test.mjs tests/stage-content-continuation.test.mjs`（Phase 2 final-v2，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/d32dee8169322a582ddf4dcf2df62da95c184bc5bcdf2bfa5d613c053c9003de.json","sha256":"446addf19ca37424f13a97c5ecc2e12792cecdf1c027996603ab9eecf37bb7c5"},{"ref":"receipts/build-tests-phase-2-final-v2.json","sha256":"37e721dbc95d226ed9c96c1b9332cf14fc2dc8f5d719aced5833403fc4aadb3b"},{"ref":"reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json","sha256":"d564602d4bf44e55f95b41069f065debfae392476babe5b7b51dd5612d67a407"}]`
+- **covered_ac**：AC-01、AC-02、AC-04、AC-05
+- **review_fact**：`reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json`
+- **completed_at**：2026-07-30T18:23:30Z
 
 #### T011 — 先注入全部正式 writer 的五类故障
 
@@ -527,14 +527,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：冻结 Phase 2 单一 MaterialRevision、append-only QualityFact、freshness/completion 谓词、派生 Publication 与正式 writer 原子写入合同。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/stage-completion.test.mjs tests/integration/material-revision.test.mjs tests/integration/derived-publication.test.mjs tests/integration/atomic-write-faults.test.mjs tests/stage-content-continuation.test.mjs`（Phase 2 final-v2，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/d32dee8169322a582ddf4dcf2df62da95c184bc5bcdf2bfa5d613c053c9003de.json","sha256":"446addf19ca37424f13a97c5ecc2e12792cecdf1c027996603ab9eecf37bb7c5"},{"ref":"receipts/build-tests-phase-2-final-v2.json","sha256":"37e721dbc95d226ed9c96c1b9332cf14fc2dc8f5d719aced5833403fc4aadb3b"},{"ref":"reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json","sha256":"d564602d4bf44e55f95b41069f065debfae392476babe5b7b51dd5612d67a407"}]`
+- **covered_ac**：AC-03、AC-12
+- **review_fact**：`reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json`
+- **completed_at**：2026-07-30T18:23:30Z
 
 #### T012 — 实现全部正式 writer 的原子、并发唯一胜者和幂等
 
@@ -565,14 +565,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：冻结 Phase 2 单一 MaterialRevision、append-only QualityFact、freshness/completion 谓词、派生 Publication 与正式 writer 原子写入合同。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/stage-completion.test.mjs tests/integration/material-revision.test.mjs tests/integration/derived-publication.test.mjs tests/integration/atomic-write-faults.test.mjs tests/stage-content-continuation.test.mjs`（Phase 2 final-v2，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/d32dee8169322a582ddf4dcf2df62da95c184bc5bcdf2bfa5d613c053c9003de.json","sha256":"446addf19ca37424f13a97c5ecc2e12792cecdf1c027996603ab9eecf37bb7c5"},{"ref":"receipts/build-tests-phase-2-final-v2.json","sha256":"37e721dbc95d226ed9c96c1b9332cf14fc2dc8f5d719aced5833403fc4aadb3b"},{"ref":"reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json","sha256":"d564602d4bf44e55f95b41069f065debfae392476babe5b7b51dd5612d67a407"}]`
+- **covered_ac**：AC-03、AC-12
+- **review_fact**：`reviews/results/build-code-default-ddab5f58f36b50d1c448d00f8f5ca75c1283bd37-cf8c62a3-7cfc-4d75-b4ab-ff8ace7ac3a6.json`
+- **completed_at**：2026-07-30T18:23:30Z
 
 ### Verify
 
