@@ -25,6 +25,7 @@ import { validateCanonicalTestReceipt } from "../../../runtime/evidence/canonica
 import { validateAcceptanceEvidence } from "../../../runtime/evidence/acceptance-evidence-validator.mjs";
 import { validateBrowserQaEvidence } from "../../../runtime/evidence/stage-content-evidence.mjs";
 import { qualityFactDigest } from "../../../runtime/evidence/quality-fact.mjs";
+import { reviewIdentityFromInput } from "../../../runtime/review/review-policy.mjs";
 import { recordSimpleReviewRequest, recordTaskBoundE2eReviewResult, recordTaskBoundE2eReviewUnavailable } from "../../../runtime/review/review-record-route.mjs";
 import {
   createSimpleReviewPacket,
@@ -57,17 +58,24 @@ function safeRecoveryError(error) {
 }
 
 function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => item === undefined ? "null" : stableJson(item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).filter((key) => value[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 function bareSinkMaterialId(request) {
   // Recovery requests may already carry the material identity. Use
   // it directly so a bare request cannot collide with another request that
   // has no material payload (for example, a stale unavailable recovery fact).
-  if (!request.materials && typeof request?.material_id === "string" && request.material_id !== "") return request.material_id;
-  if (!request.materials && typeof request?.materialId === "string" && request.materialId !== "") return request.materialId;
+  if (typeof request?.material_id === "string" && request.material_id !== "") return request.material_id;
+  if (typeof request?.materialId === "string" && request.materialId !== "") return request.materialId;
+  return bareSinkMaterialDigest(request);
+}
+
+function bareSinkMaterialDigest(request) {
+  if (request?.materials === undefined) return null;
   try {
     return createSimpleReviewPacket({
       stage: request.stage,
@@ -80,8 +88,18 @@ function bareSinkMaterialId(request) {
   }
 }
 
-function bareSinkKey(request) {
-  return createHash("sha256").update(stableJson({
+function bareSinkAuthContext(request) {
+  return {
+    task_id: request.task_id ?? request.taskId ?? null,
+    snapshot_tree: request.snapshot_tree ?? request.snapshotTree ?? null,
+    material_revision: request.material_revision ?? request.materialRevision ?? null,
+    material_id: bareSinkMaterialId(request),
+    material_digest: bareSinkMaterialDigest(request),
+  };
+}
+
+function bareSinkRequest(request) {
+  return {
     stage: request.stage ?? null,
     review_track: request.review_track ?? request.reviewTrack ?? null,
     review_kind: request.review_kind ?? request.reviewKind ?? null,
@@ -89,28 +107,41 @@ function bareSinkKey(request) {
     subject: request.subject ?? null,
     ...reviewSubjectFields(request),
     host_provider: request.host_provider ?? request.hostProvider ?? null,
-    material_id: bareSinkMaterialId(request),
+    ...bareSinkAuthContext(request),
+  };
+}
+
+function bareSinkKey(request) {
+  return createHash("sha256").update(stableJson({
+    ...bareSinkRequest(request),
   })).digest("hex");
 }
 
 function bareSinkRecord(request, result, key, routeIdentity = null) {
-  return {
+  const record = {
     version: "workflowhub-review-sink.v1",
     authoritative: false,
     request_key: key,
     route_identity: routeIdentity,
-    request: {
-      stage: request.stage ?? null,
-      review_track: request.review_track ?? request.reviewTrack ?? null,
-      review_kind: request.review_kind ?? request.reviewKind ?? null,
-      review_scope: request.review_scope ?? request.reviewScope ?? null,
-      subject: request.subject ?? null,
-      ...reviewSubjectFields(request),
-      host_provider: request.host_provider ?? request.hostProvider ?? null,
-      material_id: bareSinkMaterialId(request),
-    },
+    request: bareSinkRequest(request),
     result: structuredClone(result),
   };
+  record.sink_sha256 = bareSinkDigest(record);
+  return record;
+}
+
+function bareSinkDigest(record) {
+  const { sink_sha256: _sinkSha256, ...unsigned } = record;
+  return createHash("sha256").update(stableJson(unsigned), "utf8").digest("hex");
+}
+
+function bareSinkRequestMatches(stored, request) {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return false;
+  const expected = bareSinkRequest(request);
+  return Object.entries(expected).every(([field, value]) => {
+    if (!Object.hasOwn(stored, field)) return value === null;
+    return stableJson(stored[field]) === stableJson(value);
+  });
 }
 
 function bareSinkLocation(request) {
@@ -124,6 +155,9 @@ function readBareReviewSink(request) {
   try {
     const value = JSON.parse(readFileSync(ref, "utf8"));
     if (value?.version !== "workflowhub-review-sink.v1" || value.request_key !== bareSinkKey(request)) throw new Error("review sink identity is invalid");
+    if (!/^[a-f0-9]{64}$/.test(value.sink_sha256 ?? "") || value.sink_sha256 !== bareSinkDigest(value)) throw new Error("review sink integrity is invalid");
+    if (!bareSinkRequestMatches(value.request, request)) throw new Error("review sink authentication context is invalid");
+    if (value.route_identity !== null && !/^[a-f0-9]{64}$/.test(value.route_identity ?? "")) throw new Error("review sink route identity is invalid");
     return { ...value, sink_ref: ref };
   } catch (cause) {
     const error = new Error("review sink exists but cannot be authenticated", { cause });
@@ -151,7 +185,80 @@ function writeBareReviewSink(request, result, routeIdentity = null) {
   return { sink_ref: ref, authoritative: false, reused: false };
 }
 
-async function runBareReview(request, runRound, resolveRouteIdentity) {
+function hasReviewIdentity(input) {
+  return REVIEW_IDENTITY_FIELDS.some((field) => Object.hasOwn(input, field));
+}
+
+function hasMeaningfulReviewIdentity(input) {
+  return REVIEW_IDENTITY_FIELDS.some((field) => input?.[field] !== undefined && input?.[field] !== null);
+}
+
+function recoveryIdentityFields(identity) {
+  return identity === null ? {} : {
+    stage: identity.stage,
+    review_track: identity.reviewTrack,
+    review_scope: identity.reviewScope,
+    review_kind: identity.reviewKind,
+  };
+}
+
+function recoveryRequestIdentityFields(request, identity) {
+  if (identity !== null) return recoveryIdentityFields(identity);
+  return {
+    stage: request.stage ?? null,
+    review_track: request.review_track ?? request.reviewTrack ?? null,
+    review_scope: request.review_scope ?? request.reviewScope ?? null,
+    review_kind: request.review_kind ?? request.reviewKind ?? null,
+  };
+}
+
+function rejectBuildPrdRecoveryIdentity(identity, label = "review recovery") {
+  if (identity.stage === "build-prd" || identity.reviewKind === "build_prd") {
+    throw new TypeError(`BUILD_PRD_REPORT_ONLY_NOT_PERSISTED: ${label} cannot use the build_prd review surface`);
+  }
+}
+
+function normalizeBareRecoveryResult(request, requestIdentity, result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new TypeError("review recovery result must be an object");
+  }
+  if (!new Set(["available", "unavailable"]).has(result.status)) {
+    throw new TypeError("review recovery result status is invalid");
+  }
+  const authContext = bareSinkAuthContext(request);
+  for (const field of ["task_id", "snapshot_tree", "material_revision", "material_id"]) {
+    if (Object.hasOwn(result, field) && authContext[field] !== null && result[field] !== authContext[field]) {
+      throw new TypeError(`review recovery result ${field} does not match its request`);
+    }
+  }
+  if (requestIdentity === null) {
+    if (!hasMeaningfulReviewIdentity(result)) return result;
+    const resultIdentity = reviewIdentityFromInput(result);
+    rejectBuildPrdRecoveryIdentity(resultIdentity, "review recovery result");
+    throw new TypeError("identityless bare recovery cannot persist an identified result");
+  }
+  if (!hasMeaningfulReviewIdentity(result)) return { ...result, ...recoveryIdentityFields(requestIdentity) };
+  const resultIdentity = reviewIdentityFromInput(result);
+  rejectBuildPrdRecoveryIdentity(resultIdentity, "review recovery result");
+  if (resultIdentity.stage !== requestIdentity.stage
+      || resultIdentity.reviewTrack !== requestIdentity.reviewTrack
+      || resultIdentity.reviewScope !== requestIdentity.reviewScope
+      || resultIdentity.reviewKind !== requestIdentity.reviewKind) {
+    throw new TypeError("review result stage/track/scope/kind does not match its request");
+  }
+  const {
+    review_track: _reviewTrack,
+    reviewTrack: _reviewTrackAlias,
+    review_scope: _reviewScope,
+    reviewScope: _reviewScopeAlias,
+    review_kind: _reviewKind,
+    reviewKind: _reviewKindAlias,
+    ...rest
+  } = result;
+  return { ...rest, ...recoveryIdentityFields(resultIdentity) };
+}
+
+async function runBareReview(request, runRound, resolveRouteIdentity, requestIdentity) {
   const key = bareSinkKey(request);
   const previous = bareSinkLocks.get(key) ?? Promise.resolve();
   const current = previous.then(async () => {
@@ -159,6 +266,9 @@ async function runBareReview(request, runRound, resolveRouteIdentity) {
     // The bare sink has no authenticated retry budget. A changed route cannot
     // turn its saved result into permission to dispatch another review.
     const existing = readBareReviewSink(request);
+    const existingResult = existing
+      ? normalizeBareRecoveryResult(request, requestIdentity, existing.result)
+      : null;
     let routeIdentity = null;
     try {
       routeIdentity = request.stage && (request.host_provider ?? request.hostProvider)
@@ -167,14 +277,12 @@ async function runBareReview(request, runRound, resolveRouteIdentity) {
     } catch (error) {
       const diagnostic = { code: "ROUTE_UNAVAILABLE", message: safeRecoveryError(error).message };
       if (existing) return {
-        ...existing.result, route_error: diagnostic,
+        ...existingResult, route_error: diagnostic,
         sink_ref: existing.sink_ref, authoritative: false, reused: true,
       };
       const unavailable = {
-        status: "unavailable", stage: request.stage,
-        review_track: request.review_track ?? request.reviewTrack ?? null,
-        review_kind: request.review_kind ?? request.reviewKind ?? null,
-        ...reviewSubjectFields(request), material_id: bareSinkMaterialId(request),
+        status: "unavailable", ...recoveryRequestIdentityFields(request, requestIdentity),
+        ...bareSinkAuthContext(request), ...reviewSubjectFields(request),
         runtime_id: null, outcome: "unavailable", dispatch_state: "blocked_before_dispatch",
         provider_results: [], findings: [], error: diagnostic,
       };
@@ -182,11 +290,12 @@ async function runBareReview(request, runRound, resolveRouteIdentity) {
     }
     if (existing) {
       if ((existing.route_identity ?? null) !== routeIdentity) return {
-        status: "unavailable", ...reviewSubjectFields(request),
+        status: "unavailable", ...recoveryRequestIdentityFields(request, requestIdentity),
+        ...bareSinkAuthContext(request), ...reviewSubjectFields(request),
         error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN", message: "trusted review route changed but bare review has no authenticated retry budget" },
-        prior_result: existing.result, sink_ref: existing.sink_ref, authoritative: false, reused: true,
+        prior_result: existingResult, sink_ref: existing.sink_ref, authoritative: false, reused: true,
       };
-      return { ...existing.result, sink_ref: existing.sink_ref, authoritative: false, reused: true };
+      return { ...existingResult, sink_ref: existing.sink_ref, authoritative: false, reused: true };
     }
     let result;
     try {
@@ -204,6 +313,7 @@ async function runBareReview(request, runRound, resolveRouteIdentity) {
         ...(review?.reportRef ? { report_ref: review.reportRef } : {}),
       };
     }
+    result = normalizeBareRecoveryResult(request, requestIdentity, result);
     const subject = reviewSubjectFields(request);
     for (const [field, value] of Object.entries(subject)) {
       if (result[field] !== undefined && result[field] !== value) throw new TypeError(`review result ${field} conflicts with the request`);
@@ -590,7 +700,7 @@ function publishTaskBoundUnavailable({ trusted, reviewTrack, reviewKind, snapsho
   });
   return Object.freeze({
     ...published,
-    review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewKind, result: published }),
+    review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewTrack, reviewScope: null, reviewKind, result: published }),
   });
 }
 
@@ -677,7 +787,8 @@ function reusableTaskBoundE2eReview({ trusted, materialId, execution, subjectBin
       if (JSON.stringify(parsed.subject_binding) !== JSON.stringify(subjectBinding)) continue;
       if (JSON.stringify(parsed.review_policy) !== JSON.stringify(reviewPolicy)) continue;
       return Object.freeze({
-        status: "available", resultRef: ref, attemptRef: value.attempt_ref,
+        status: "available", stage: "verify-code", review_track: reviewTrack, review_kind: reviewKind,
+        resultRef: ref, attemptRef: value.attempt_ref,
         snapshotTree: subjectBinding.snapshot_tree, materialId,
         subjectKind: "worktree", phaseId: null, reviewScope: null, reused: true,
       });
@@ -700,7 +811,8 @@ function reusableTaskBoundE2eReview({ trusted, materialId, execution, subjectBin
           || JSON.stringify(attempt.review_policy) !== JSON.stringify(reviewPolicy)
           || !Array.isArray(attempt.provider_attempts) || attempt.provider_attempts.length !== 0) continue;
       return Object.freeze({
-        status: "unavailable", resultRef: null, attemptRef: ref,
+        status: "unavailable", stage: "verify-code", review_track: reviewTrack, review_kind: reviewKind,
+        resultRef: null, attemptRef: ref,
         snapshotTree: subjectBinding.snapshot_tree, materialId,
         subjectKind: "worktree", phaseId: null, reviewScope: null,
         reused: true, error: attempt.error,
@@ -771,7 +883,7 @@ export async function runTaskBoundE2eReview(input, dependencies = {}) {
     if (reusable) {
       return Object.freeze({
         ...reusable,
-        review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewKind, result: reusable }),
+        review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewTrack, reviewScope: null, reviewKind, result: reusable }),
       });
     }
     const frozen = freezeReviewMaterial({ task: trusted.task, bytes: providerInput });
@@ -803,7 +915,7 @@ export async function runTaskBoundE2eReview(input, dependencies = {}) {
         snapshotTree, materialId: frozen.provider_input_sha256,
         subjectKind: "worktree", phaseId: null, reviewScope: null,
       });
-      return Object.freeze({ ...published, review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewKind, result: published }) });
+      return Object.freeze({ ...published, review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewTrack, reviewScope: null, reviewKind, result: published }) });
     }
     const provider = result.provider_results[0];
     const reviewerSourceId = selection.provider_identities?.[provider.provider]?.source_id;
@@ -835,11 +947,43 @@ export async function runTaskBoundE2eReview(input, dependencies = {}) {
       phaseId: null,
       reviewScope: null,
     });
-    return Object.freeze({ ...published, review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewKind, result: published }) });
+    return Object.freeze({ ...published, review_fact_intent: publishStageReviewFact({ trusted, stage: "verify-code", reviewTrack, reviewScope: null, reviewKind, result: published }) });
   });
 }
 
 const RETIRED_RECOVERY_FIELDS = ["previous_result_ref", "previousResultRef", "review_round", "reviewRound", "review_delta", "reviewDelta", "request_id", "requestId", "prior_attempt_refs", "priorAttemptRefs", "dispatch_sequence", "dispatchSequence"];
+const REVIEW_IDENTITY_FIELDS = ["stage", "review_track", "reviewTrack", "review_scope", "reviewScope", "review_kind", "reviewKind"];
+const FORMAL_REVIEW_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const RECOVERY_REVIEW_KINDS = new Set(["mini_task.design", "mini_task.implementation"]);
+
+function validateBareRecoveryIdentity(request) {
+  if (!hasReviewIdentity(request)) return null;
+  const identity = reviewIdentityFromInput(request);
+  // build-prd is report-only. Reject it before formal-stage and mini-task
+  // recovery checks so no unreachable branch suggests canonical recovery.
+  if (identity.stage === "build-prd" || identity.reviewKind === "build_prd") {
+    rejectBuildPrdRecoveryIdentity(identity, "review recovery request");
+  }
+  if (!FORMAL_REVIEW_STAGES.has(identity.stage) && identity.stage !== "build-prd") {
+    throw new TypeError(`unsupported recovery review stage: ${identity.stage}`);
+  }
+  if (identity.reviewKind !== null && !RECOVERY_REVIEW_KINDS.has(identity.reviewKind)) {
+    throw new TypeError(`unsupported recovery review kind: ${identity.reviewKind}`);
+  }
+  if (identity.reviewKind?.startsWith("mini_task.") && identity.stage !== "build-code") {
+    throw new TypeError(`${identity.reviewKind} recovery requires stage build-code`);
+  }
+  if (identity.stage === "make-decision"
+      && identity.reviewTrack !== null
+      && !["direction", "detail"].includes(identity.reviewTrack)) {
+    throw new TypeError(`unsupported recovery review track: ${identity.reviewTrack}`);
+  }
+  if (identity.stage !== "make-decision" && identity.reviewTrack !== null) {
+    throw new TypeError(`${identity.stage} recovery does not use review_track`);
+  }
+  return identity;
+}
+
 /** One WorkflowHub call. Provider recovery and lifecycle belong to 3rd-review. */
 
 const REVIEW_RESULT_REF = /^quality\/reviews\/results\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
@@ -857,13 +1001,34 @@ function publishReviewFactOrThrow(args) {
   }
 }
 
-export function publishStageReviewFact({ trusted, stage, reviewKind, result }) {
+export function publishStageReviewFact({ trusted, stage, reviewTrack = null, reviewScope = null, reviewKind = null, result }) {
+  // Authenticate both sides of the publication boundary before deciding
+  // whether this surface emits a quality-fact intent.  The caller-selected
+  // identity is not an authority for the broker result: both identities must
+  // be valid, canonical, and exactly equal.  This also rejects build_prd and
+  // alias conflicts before any canonical evidence is read or published.
+  const requestIdentity = reviewIdentityFromInput({
+    stage,
+    review_track: reviewTrack,
+    review_scope: reviewScope,
+    review_kind: reviewKind,
+  });
+  const resultIdentity = reviewIdentityFromInput({
+    ...recoveryIdentityFields(requestIdentity),
+    ...result,
+  });
+  if (resultIdentity.stage !== requestIdentity.stage
+      || resultIdentity.reviewTrack !== requestIdentity.reviewTrack
+      || resultIdentity.reviewScope !== requestIdentity.reviewScope
+      || resultIdentity.reviewKind !== requestIdentity.reviewKind) {
+    throw new TypeError("review result stage/track/scope/kind does not match the publication request");
+  }
   // The broker result is the review fact.  Bind it to the vNext stage quality
   // predicate at the same write boundary so a direct wh-review invocation
   // cannot leave an immutable result that stage-runtime status/close cannot
   // discover.  Mini-task reviews are deliberately excluded: they have their
   // own acceptance-evidence contract and must not masquerade as verify-code.
-  if (stage !== "verify-code" || reviewKind !== null) return null;
+  if (requestIdentity.stage !== "verify-code" || requestIdentity.reviewKind !== null) return null;
   if (!new Set(["available", "unavailable"]).has(result?.status)) {
     throw new Error("verify-code review status must be available or unavailable");
   }
@@ -956,6 +1121,16 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, reco
   if (typeof resolveRouteIdentity !== "function") throw new TypeError("resolveRouteIdentity must be a host function");
   if (sameSourceFallback !== null) throw new TypeError("sameSourceFallback is retired; 3rd-review owns heterologous recovery");
   const request = structuredClone(input);
+  const identity = validateBareRecoveryIdentity(request);
+  if (identity) {
+    request.stage = identity.stage;
+    request.review_track = identity.reviewTrack;
+    request.review_scope = identity.reviewScope;
+    request.review_kind = identity.reviewKind;
+    delete request.reviewTrack;
+    delete request.reviewScope;
+    delete request.reviewKind;
+  }
   for (const field of RETIRED_RECOVERY_FIELDS) delete request[field];
   if (recordContext !== null) {
     if (!recordContext || typeof recordContext !== "object" || !recordContext.task || !recordContext.kernel) {
@@ -963,7 +1138,7 @@ export async function runReviewRecovery(input, { runRound = runReviewRound, reco
     }
     return recordSimpleReviewRequest({ task: recordContext.task, kernel: recordContext.kernel, request, runRound, resolveRouteIdentity });
   }
-  return runBareReview(request, runRound, resolveRouteIdentity);
+  return runBareReview(request, runRound, resolveRouteIdentity, identity);
 }
 
 export async function runReviewRound(input) {

@@ -3748,6 +3748,16 @@ HANDLERS.set("build-code", async (worker, input) => {
       ...(uiQa ? { ui_qa: uiQa.facts } : {}),
       completion_subjects: {
         acceptance_criteria: subjectFact(acceptanceComplete ? "passed" : "missing", coverage.items.flatMap((entry) => entry.evidence_refs), "current acceptance coverage"),
+        ...(acceptanceExecution.requires_execution ? {
+          acceptance_execution: subjectFact(
+            acceptanceExecution.status === "executed" ? "passed" : "missing",
+            acceptanceExecution.evidence_refs,
+            acceptanceExecution.status === "executed"
+              ? "all declared acceptance scenarios executed with canonical evidence"
+              : `declared acceptance execution is ${acceptanceExecution.status}`,
+            { execution_items: acceptanceExecution.items },
+          ),
+        } : {}),
       },
       ...(audit?.facts ?? {}),
     },

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { assertTaskHandle } from "../runtime/task/task-handle.mjs";
@@ -44,6 +44,8 @@ const PHYSICAL_DELIVERY_STATE_KEYS = Object.freeze([
   "worktree_cleanup_scan",
   "cleanup",
 ]);
+const PLANNING_MATERIAL_FILES = Object.freeze(["decision-log.md", "prd.md"]);
+const CLOSE_MODES = Object.freeze(new Set(["ordinary", "mini-task", "planning", "manual-risk-close"]));
 
 function plain(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -897,6 +899,174 @@ function currentMaterialRevision(task, worktreeRoot) {
   return materialRevisionFromValues(values);
 }
 
+function normalizeCloseMode(value, label = "close mode") {
+  if (value === undefined || value === null || value === "") return "ordinary";
+  if (typeof value !== "string" || !CLOSE_MODES.has(value)) {
+    throw new TypeError(`${label} must be ordinary, mini-task, planning, or manual-risk-close`);
+  }
+  return value;
+}
+
+function normalizePlanningAttachments(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError("planning required_attachments must be an array");
+  const normalized = value.map((entry, index) => {
+    const item = plain(entry, `planning required_attachments[${index}]`);
+    const path = repositoryPath(item.path, `planning required_attachments[${index}].path`);
+    if (!HASH.test(item.sha256 ?? "")) throw new TypeError(`planning required_attachments[${index}].sha256 must be a SHA-256 hash`);
+    return Object.freeze({ path, sha256: item.sha256.toLowerCase() });
+  });
+  const paths = new Set();
+  for (const item of normalized) {
+    if (paths.has(item.path)) throw new Error(`planning required_attachments contains duplicate path: ${item.path}`);
+    paths.add(item.path);
+  }
+  return normalized;
+}
+
+function declaredPlanningAttachments(prdRaw) {
+  if (typeof prdRaw !== "string") throw new TypeError("planning PRD must be text");
+  const declarations = prdRaw.split(/\r?\n/).flatMap((line) => {
+    const match = /^\s*-\s*\*\*必要附件与版本\*\*\s*[:：]\s*(.*?)\s*$/u.exec(line);
+    return match ? [match[1]] : [];
+  });
+  if (declarations.length !== 1) {
+    throw new Error("PLANNING_MATERIAL_INCOMPLETE: prd.md must declare exactly one 必要附件与版本 JSON array");
+  }
+  const payload = declarations[0].replace(/^`+|`+$/g, "").trim();
+  let parsed;
+  try { parsed = JSON.parse(payload); }
+  catch (error) {
+    throw new Error(`PLANNING_MATERIAL_INCOMPLETE: prd.md 必要附件与版本 is not valid JSON: ${error.message}`);
+  }
+  return normalizePlanningAttachments(parsed);
+}
+
+function planningAttachmentsEqual(left, right) {
+  const sort = (items) => normalizePlanningAttachments(items)
+    .map((item) => ({ ...item }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  return canonical(sort(left)) === canonical(sort(right));
+}
+
+function safeWorktreeFile(worktreeRoot, relativePath, label) {
+  const path = resolve(worktreeRoot, relativePath);
+  if (!inside(resolve(worktreeRoot), path)) throw new Error(`${label} escapes the authenticated Workspace: ${relativePath}`);
+  const segments = relative(resolve(worktreeRoot), path).split(sep).filter(Boolean);
+  let cursor = resolve(worktreeRoot);
+  for (const segment of segments) {
+    cursor = join(cursor, segment);
+    const stat = lstatSync(cursor);
+    if (stat.isSymbolicLink()) throw new Error(`${label} must not traverse symbolic links: ${relativePath}`);
+    if (cursor !== path && !stat.isDirectory()) throw new Error(`${label} ancestor must be a directory: ${relativePath}`);
+  }
+  const stat = lstatSync(path);
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${label} must be a regular non-symlink file: ${relativePath}`);
+  return path;
+}
+
+function planningArchivePath(sourcePath, archivePath, attachmentPath) {
+  if (attachmentPath === sourcePath) return archivePath;
+  if (attachmentPath.startsWith(`${sourcePath}/`)) return `${archivePath}/${attachmentPath.slice(sourcePath.length + 1)}`;
+  return attachmentPath;
+}
+
+function inspectPlanningAttachments(worktreeRoot, sourcePath, archivePath, requiredAttachments) {
+  const attachments = requiredAttachments.map((expected) => {
+    try {
+      const file = safeWorktreeFile(worktreeRoot, expected.path, `planning attachment ${expected.path}`);
+      const observed = sha256(readFileSync(file));
+      return Object.freeze({
+        path: expected.path,
+        sha256: expected.sha256,
+        archive_path: planningArchivePath(sourcePath, archivePath, expected.path),
+        status: observed === expected.sha256 ? "available" : "hash_mismatch",
+        ...(observed === expected.sha256 ? {} : { observed_sha256: observed }),
+      });
+    } catch (error) {
+      return Object.freeze({
+        path: expected.path,
+        sha256: expected.sha256,
+        archive_path: planningArchivePath(sourcePath, archivePath, expected.path),
+        status: error?.code === "ENOENT" ? "missing" : "unavailable",
+        reason: error.message,
+      });
+    }
+  });
+  const missing = attachments
+    .filter((attachment) => attachment.status !== "available")
+    .map((attachment) => `${attachment.path}: ${attachment.status}${attachment.reason ? ` (${attachment.reason})` : ""}`);
+  return Object.freeze({
+    status: missing.length === 0 ? "complete" : "incomplete",
+    attachments: Object.freeze(attachments),
+    gaps: Object.freeze(missing),
+  });
+}
+
+function planningMaterialContext({ task, worktreeRoot, snapshot, sourcePath, archivePath, requiredAttachments }) {
+  const expectedSource = `specs/${task.identity.taskId}`;
+  if (sourcePath !== expectedSource) {
+    throw new Error(`PLANNING_MATERIAL_INCOMPLETE: planning source must be ${expectedSource}`);
+  }
+  const artifacts = ArtifactDir.open(worktreeRoot, task);
+  const values = [];
+  for (const file of PLANNING_MATERIAL_FILES) {
+    try {
+      values.push([file, artifacts.read(file)]);
+    } catch (error) {
+      const missing = new Error(`PLANNING_MATERIAL_INCOMPLETE: ${file} is unavailable: ${error.message}`);
+      missing.code = "PLANNING_MATERIAL_INCOMPLETE";
+      throw missing;
+    }
+  }
+  const declaredAttachments = declaredPlanningAttachments(values.find(([file]) => file === "prd.md")[1]);
+  const suppliedAttachments = requiredAttachments === undefined
+    ? declaredAttachments
+    : normalizePlanningAttachments(requiredAttachments);
+  if (!planningAttachmentsEqual(declaredAttachments, suppliedAttachments)) {
+    throw new Error("PLANNING_MATERIAL_INCOMPLETE: required_attachments do not exactly match prd.md 必要附件与版本");
+  }
+  const materialRevision = materialRevisionFromValues(values);
+  const materials = Object.fromEntries(values.map(([file, raw]) => [file, sha256(raw)]));
+  const attachmentState = inspectPlanningAttachments(worktreeRoot, sourcePath, archivePath, declaredAttachments);
+  const planning = Object.freeze({
+    source_path: sourcePath,
+    material_files: PLANNING_MATERIAL_FILES,
+    materials: Object.freeze(materials),
+    material_revision: materialRevision,
+    snapshot_tree: snapshot.tree,
+    snapshot_commit: snapshot.commit,
+    required_attachments: Object.freeze(declaredAttachments.map((item) => ({ ...item }))),
+    attachments: attachmentState.attachments,
+    attachment_status: attachmentState.status,
+    attachment_gaps: attachmentState.gaps,
+    status: attachmentState.status === "complete" ? "complete" : "incomplete",
+  });
+  return Object.freeze({
+    planning,
+    materialRevision,
+    materialStatus: attachmentState.status,
+    qualityGaps: attachmentState.gaps.map((gap) => `planning attachment: ${gap}`),
+  });
+}
+
+function isPlanningDelivery(plan) {
+  return plan?.delivery?.close_mode === "planning";
+}
+
+function assertPlanningPlanExecutable(delivery) {
+  if (!isPlanningDelivery({ delivery })) return;
+  if (delivery.material_status !== "complete"
+      || delivery.planning?.status !== "complete"
+      || delivery.planning?.attachment_status !== "complete") {
+    const gaps = [
+      ...(Array.isArray(delivery.quality_gaps) ? delivery.quality_gaps : []),
+      ...(Array.isArray(delivery.planning?.attachment_gaps) ? delivery.planning.attachment_gaps : []),
+    ];
+    throw new Error(`planning close cannot execute with incomplete material/attachments${gaps.length ? `: ${[...new Set(gaps)].join("; ")}` : ""}`);
+  }
+}
+
 function currentDeliverySnapshotCommit(worktreeRoot, snapshot) {
   const headTree = gitResult(worktreeRoot, ["rev-parse", `${snapshot.head}^{tree}`]);
   return headTree.ok && headTree.stdout.toLowerCase() === snapshot.tree.toLowerCase()
@@ -1116,12 +1286,22 @@ export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, o
   const ref = `operations/close/confirmations/${planHash}/${randomUUID()}.json`;
   const human = outcome === "timeout"
     ? null
-    : kernel.publishHumanConfirmation("verify-code", {
-      decision: outcome === "confirmed" ? "accepted" : "rejected",
-      subject_ref: `operations/close/plans/${planHash}/plan.json`,
-      reply_text: replyText,
-      step_slug: stepSlug,
-    });
+    : isPlanningDelivery(plan)
+      ? publishPlanningHumanConfirmation({
+        task,
+        kernel,
+        plan,
+        decision: outcome === "confirmed" ? "accepted" : "rejected",
+        replyText,
+        stepSlug,
+        now,
+      })
+      : kernel.publishHumanConfirmation("verify-code", {
+        decision: outcome === "confirmed" ? "accepted" : "rejected",
+        subject_ref: `operations/close/plans/${planHash}/plan.json`,
+        reply_text: replyText,
+        step_slug: stepSlug,
+      });
   const confirmation = {
     schema_version: "task-close-confirmation.v1",
     task_id: task.identity.taskId,
@@ -1146,6 +1326,8 @@ function deriveCurrentDeliveryInput(task, kernel, {
   targetBranch,
   specSourcePath,
   specArchivePath,
+  closeMode,
+  requiredAttachments,
 } = {}) {
   const workspace = openCurrentTaskWorkspace(task);
   const worktree = resolve(workspace.worktreeRoot);
@@ -1159,6 +1341,8 @@ function deriveCurrentDeliveryInput(task, kernel, {
     task_commit: currentDeliverySnapshotCommit(worktree, snapshot),
     spec_source_path: specSourcePath ?? defaults.sourcePath,
     spec_archive_path: specArchivePath ?? defaults.archivePath,
+    ...(closeMode === undefined ? {} : { close_mode: closeMode }),
+    ...(requiredAttachments === undefined ? {} : { required_attachments: requiredAttachments }),
   });
 }
 
@@ -1177,6 +1361,8 @@ export async function closeDelivery({
   targetBranch,
   specSourcePath,
   specArchivePath,
+  closeMode,
+  requiredAttachments,
   replyText,
   stepSlug,
   now = () => new Date().toISOString(),
@@ -1198,18 +1384,35 @@ export async function closeDelivery({
     targetBranch,
     specSourcePath,
     specArchivePath,
+    closeMode,
+    requiredAttachments,
   });
   const prepared = prepareDeliveryClosePlan({
     task,
     kernel,
     delivery: requested,
+    closeMode,
+    requiredAttachments,
     // Close is the single physical-delivery path. Quality gaps are recorded as
     // facts but never block the five actions.
   });
   const confirmed = confirmClosePlan({ task, kernel, plan: prepared.plan, outcome: "confirmed", replyText, stepSlug, now });
   const operations = new Set(DELIVERY_STEPS.map(([, operation]) => DELIVERY_AUTHORIZATIONS[operation]));
   for (const operation of operations) {
-    kernel.publishIrreversibleAuthorization({ operation, subject_ref: confirmed.confirmation.human_confirmation_ref });
+    if (prepared.plan.delivery.close_mode === "planning") {
+      publishPlanningIrreversibleAuthorization({
+        task,
+        kernel,
+        plan: prepared.plan,
+        operation,
+        confirmation: {
+          ref: confirmed.confirmation.human_confirmation_ref,
+          hash: confirmed.confirmation.human_confirmation_hash,
+        },
+      });
+    } else {
+      kernel.publishIrreversibleAuthorization({ operation, subject_ref: confirmed.confirmation.human_confirmation_ref });
+    }
   }
   const executed = await executeClosePlan({
     task,
@@ -1225,7 +1428,14 @@ export async function closeDelivery({
     task_id: task.identity.taskId,
     plan_hash: prepared.plan_hash,
     status: "completed",
-    close_mode: "normal",
+    close_mode: prepared.plan.delivery.close_mode === "planning" ? "planning" : "normal",
+    ...(prepared.plan.delivery.close_mode === "planning" ? {
+      planning_status: prepared.plan.delivery.planning.status,
+      material_status: prepared.plan.delivery.material_status,
+      development_status: "not_executed",
+      quality_status: "not_run",
+      quality_gaps: structuredClone(prepared.plan.delivery.quality_gaps),
+    } : {}),
     physical_state: structuredClone(executed.physical_state),
     completed_at: now(),
   };
@@ -1393,6 +1603,51 @@ function archiveFacts(root, ref, delivery) {
   return { commit, tree_preserved: treePreserved, only_renames: onlyRenames };
 }
 
+function gitBlobBytes(root, commit, path) {
+  const result = spawnSync("git", ["cat-file", "blob", `${commit}:${path}`], {
+    cwd: root,
+    encoding: null,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return result.status === 0 ? Buffer.from(result.stdout ?? "") : null;
+}
+
+function inspectPlanningArchive(root, delivery, targetRef) {
+  const planning = delivery.planning;
+  if (!planning || !targetRef) return Object.freeze({ status: "incomplete", gaps: Object.freeze(["planning archive target is unavailable"]), materials: Object.freeze({}), attachments: Object.freeze([]) });
+  const materialGaps = [];
+  const materials = {};
+  for (const file of PLANNING_MATERIAL_FILES) {
+    const bytes = gitBlobBytes(root, targetRef, `${delivery.spec_archive_path}/${file}`);
+    const observed = bytes === null ? null : sha256(bytes);
+    materials[file] = observed;
+    if (observed !== planning.materials[file]) {
+      materialGaps.push(`${file}: archived hash ${observed ?? "missing"} does not match planned ${planning.materials[file]}`);
+    }
+  }
+  const attachments = (planning.attachments ?? []).map((expected) => {
+    const bytes = gitBlobBytes(root, targetRef, expected.archive_path);
+    const observed = bytes === null ? null : sha256(bytes);
+    return Object.freeze({
+      path: expected.path,
+      archive_path: expected.archive_path,
+      sha256: expected.sha256,
+      status: observed === expected.sha256 ? "available" : observed === null ? "missing" : "hash_mismatch",
+      ...(observed === null || observed === expected.sha256 ? {} : { observed_sha256: observed }),
+    });
+  });
+  const attachmentGaps = attachments
+    .filter((attachment) => attachment.status !== "available")
+    .map((attachment) => `${attachment.path}: archived ${attachment.status}`);
+  const gaps = [...materialGaps, ...attachmentGaps];
+  return Object.freeze({
+    status: gaps.length === 0 ? "complete" : "incomplete",
+    gaps: Object.freeze(gaps),
+    materials: Object.freeze(materials),
+    attachments: Object.freeze(attachments),
+  });
+}
+
 function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { checkRemote = true } = {}) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
@@ -1437,6 +1692,55 @@ function validateDeliveryPlan(plan, task, kernel) {
   }
   if (delivery.task_branch === delivery.target_branch) throw new Error("task branch and target branch must differ");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(delivery.remote)) throw new TypeError("delivery remote must be an explicit remote name");
+  const closeMode = normalizeCloseMode(delivery.close_mode);
+  if (closeMode === "planning") {
+    if (delivery.risk_close !== undefined) throw new Error("planning close cannot be combined with manual risk close");
+    if (delivery.material_status !== "complete" && delivery.material_status !== "incomplete") {
+      throw new TypeError("planning close material_status must be complete or incomplete");
+    }
+    if (delivery.development_status !== "not_executed") throw new Error("planning close development_status must remain not_executed");
+    if (delivery.quality_status !== "not_run") throw new Error("planning close quality_status must remain not_run");
+    if (!Array.isArray(delivery.quality_gaps)) throw new TypeError("planning close quality_gaps must be an array");
+    const planning = plain(delivery.planning, "planning close material");
+    if (planning.source_path !== delivery.spec_source_path
+        || planning.source_path !== `specs/${task.identity.taskId}`
+        || !Array.isArray(planning.material_files)
+        || planning.material_files.join(",") !== PLANNING_MATERIAL_FILES.join(",")
+        || !/^revision-[a-f0-9]{64}$/.test(planning.material_revision ?? "")
+        || !/^[a-f0-9]{40,64}$/i.test(planning.snapshot_tree ?? "")
+        || !/^[a-f0-9]{40}$/i.test(planning.snapshot_commit ?? "")) {
+      throw new Error("planning close material identity is invalid");
+    }
+    if (!planning.materials || typeof planning.materials !== "object" || Array.isArray(planning.materials)
+        || PLANNING_MATERIAL_FILES.some((file) => !HASH.test(planning.materials[file] ?? ""))) {
+      throw new Error("planning close material hashes are invalid");
+    }
+    const expectedAttachments = normalizePlanningAttachments(planning.required_attachments);
+    const prdBytes = gitBlobBytes(delivery.target_repo_root, delivery.task_commit, `${delivery.spec_source_path}/prd.md`);
+    if (prdBytes === null) throw new Error("planning close PRD declaration is unavailable from the task snapshot");
+    const declaredAttachments = declaredPlanningAttachments(prdBytes.toString("utf8"));
+    if (!planningAttachmentsEqual(declaredAttachments, expectedAttachments)) {
+      throw new Error("planning close attachments are not bound to prd.md 必要附件与版本");
+    }
+    if (!Array.isArray(planning.attachments)
+        || planning.attachments.length !== expectedAttachments.length
+        || planning.attachments.some((item, index) => item?.path !== expectedAttachments[index].path
+          || item?.sha256 !== expectedAttachments[index].sha256
+          || typeof item.archive_path !== "string"
+          || !new Set(["available", "missing", "hash_mismatch", "unavailable"]).has(item.status))) {
+      throw new Error("planning close attachment observations are invalid");
+    }
+    if (!new Set(["complete", "incomplete"]).has(planning.attachment_status)
+        || !new Set(["complete", "incomplete"]).has(planning.status)
+        || planning.status !== planning.attachment_status
+        || !Array.isArray(planning.attachment_gaps)) {
+      throw new Error("planning close attachment status is invalid");
+    }
+    if (delivery.material_status !== planning.status) throw new Error("planning close material_status must match planning.status");
+  } else if (delivery.planning !== undefined || delivery.material_status !== undefined
+      || delivery.development_status !== undefined || delivery.quality_status === "not_run") {
+    throw new Error("planning close fields are only valid with close_mode=planning");
+  }
   return delivery;
 }
 
@@ -1491,6 +1795,53 @@ function closeConfirmation(task, planHash, ref) {
   return confirmation;
 }
 
+function publishPlanningHumanConfirmation({ task, kernel, plan, decision, replyText, stepSlug, now }) {
+  const planning = plan.delivery?.planning;
+  if (typeof planning?.material_revision !== "string" || typeof planning?.snapshot_tree !== "string") {
+    throw new Error("planning close plan is missing its material/snapshot identity");
+  }
+  const value = {
+    schema_version: "human-confirmation.v3",
+    task_id: task.identity.taskId,
+    stage: "planning-close",
+    decision,
+    subject_ref: `operations/close/plans/${closePlanHash(plan)}/plan.json`,
+    material_revision: planning.material_revision,
+    snapshot_tree: planning.snapshot_tree,
+    confirmed_at: now(),
+    reply_text: replyText,
+    step_slug: stepSlug,
+  };
+  validateHumanConfirmation(value, {
+    taskId: task.identity.taskId,
+    stage: "planning-close",
+    requireSubjectRef: true,
+  });
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const record = kernel.publishCanonicalRecord(`quality/confirmations/${sha256(raw)}.json`, raw);
+  return Object.freeze({ ref: record.ref, hash: record.sha256, value: Object.freeze(value) });
+}
+
+function publishPlanningIrreversibleAuthorization({ task, kernel, plan, operation, confirmation }) {
+  const planning = plan.delivery?.planning;
+  if (typeof planning?.material_revision !== "string" || typeof planning?.snapshot_tree !== "string") {
+    throw new Error("planning close plan is missing its material/snapshot identity");
+  }
+  const value = {
+    schema_version: "irreversible-authorization.v1",
+    task_id: task.identity.taskId,
+    operation,
+    subject_ref: confirmation.ref,
+    subject_hash: confirmation.hash,
+    material_revision: planning.material_revision,
+    snapshot_tree: planning.snapshot_tree,
+    authorized_at: new Date().toISOString(),
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const record = kernel.publishCanonicalRecord(`quality/authorizations/${sha256(raw)}.json`, raw);
+  return Object.freeze({ ref: record.ref, hash: record.sha256, value: Object.freeze(value) });
+}
+
 const DELIVERY_STEPS = Object.freeze([
   ["commit-delivery", "commit-delivery"],
   ["merge-task-branch", "merge-task-branch"],
@@ -1513,12 +1864,23 @@ export function prepareDeliveryClosePlan({
   kernel: taskKernel,
   delivery: requested,
   allowMiniTaskFocused = false,
+  closeMode,
+  requiredAttachments,
 } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const input = plain(requested, "delivery close input");
   const riskClose = input.risk_close === undefined ? undefined : validateRiskClose(input.risk_close);
+  const selectedCloseMode = normalizeCloseMode(
+    closeMode ?? input.close_mode ?? input.closeMode ?? (riskClose ? "manual-risk-close" : allowMiniTaskFocused ? "mini-task" : "ordinary"),
+  );
+  if (riskClose !== undefined && selectedCloseMode !== "manual-risk-close") throw new Error("risk close requires close_mode=manual-risk-close");
+  if (selectedCloseMode === "manual-risk-close" && riskClose === undefined) throw new Error("manual-risk-close requires delivery.risk_close");
+  if (allowMiniTaskFocused && selectedCloseMode !== "mini-task") throw new Error("allowMiniTaskFocused requires close_mode=mini-task");
+  if (selectedCloseMode === "mini-task" && !allowMiniTaskFocused) {
+    throw new Error("mini-task close must use the mini-task delivery route");
+  }
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
@@ -1530,73 +1892,97 @@ export function prepareDeliveryClosePlan({
   const currentSnapshot = captureExecutionSnapshot(worktree, task.identity.taskId);
   const deliverySnapshotCommit = currentDeliverySnapshotCommit(worktree, currentSnapshot);
   if (deliverySnapshotCommit === currentSnapshot.commit) materializeGitSnapshot(root, currentSnapshot);
-  const materialRevision = currentMaterialRevision(task, worktree);
-  const materialArtifacts = ArtifactDir.open(worktree, task);
-  const materialValues = Object.fromEntries(CURRENT_MATERIAL_FILES.map((name) => [name, materialArtifacts.read(name)]));
-  const qualityReasons = [];
+  const sourcePath = repositoryPath(input.spec_source_path, "delivery spec_source_path");
+  const archivePath = repositoryPath(input.spec_archive_path, "delivery spec_archive_path");
+  const requestedPlanningAttachments = requiredAttachments ?? input.required_attachments ?? input.planning?.required_attachments;
+  const planningAttachments = requestedPlanningAttachments === undefined
+    ? undefined
+    : normalizePlanningAttachments(requestedPlanningAttachments);
+  let planningContext = null;
+  let materialRevision;
+  let materialArtifacts = null;
+  let materialValues = {};
+  let qualityReasons = [];
   let acceptedVerify;
-  try {
-    acceptedVerify = currentVerifyFacts(task, {
-      snapshotTree: currentSnapshot.tree,
-      materialRevision,
-      snapshotCommit: deliverySnapshotCommit,
-      sourceDigest: currentSnapshot.source_digest,
-      worktreeRoot: worktree,
-      allowMiniTaskFocused,
-    });
-  } catch (error) {
-    qualityReasons.push(`verify-code: ${error.message}`);
-  }
   let productRelease = null;
-  if (!allowMiniTaskFocused) {
+  let verifyFreshness = { current: false, reason: "verify-code facts are unavailable" };
+  if (selectedCloseMode === "planning") {
+    planningContext = planningMaterialContext({
+      task,
+      worktreeRoot: worktree,
+      snapshot: currentSnapshot,
+      sourcePath,
+      archivePath,
+      requiredAttachments: planningAttachments,
+    });
+    materialRevision = planningContext.materialRevision;
+    qualityReasons = planningContext.qualityGaps;
+    verifyFreshness = { current: false, reason: "planning close does not execute verify-code or product-release checks" };
+  } else {
+    materialRevision = currentMaterialRevision(task, worktree);
+    materialArtifacts = ArtifactDir.open(worktree, task);
+    materialValues = Object.fromEntries(CURRENT_MATERIAL_FILES.map((name) => [name, materialArtifacts.read(name)]));
     try {
-      const stageOutcomeStatuses = deriveStageOutcomeStatuses({
-        task_id: task.identity.taskId,
-        read: task.readRecord,
-        stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, task.listCanonicalStageOutcomeRefs(stage)])),
-        snapshot_tree: currentSnapshot.tree,
-        material_revision: materialRevision,
-        material_scope_revisions: stageMaterialScopeRevisions(materialValues),
-        snapshot_root: worktree,
-        authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({
-          task,
-          kernel,
-          identity: task.identity,
-          workspace,
-          artifacts: materialArtifacts,
-          stage,
-        }, stage, ref),
-      });
-      productRelease = deriveCurrentProductRelease({
-        task_id: task.identity.taskId,
-        read: task.readRecord,
-        refs: task.listCanonicalQualityFactRefs(),
-        snapshot_tree: currentSnapshot.tree,
-        material_revision: materialRevision,
-        material_scope_revisions: stageMaterialScopeRevisions(materialValues),
-        snapshot_root: worktree,
-        expected_acceptance_ids: activeAcceptanceCriterionIds(materialArtifacts.read("spec.md")),
-        evaluate_freshness: evaluateFactFreshness,
-        stage_outcome_statuses: stageOutcomeStatuses,
+      acceptedVerify = currentVerifyFacts(task, {
+        snapshotTree: currentSnapshot.tree,
+        materialRevision,
+        snapshotCommit: deliverySnapshotCommit,
+        sourceDigest: currentSnapshot.source_digest,
+        worktreeRoot: worktree,
+        allowMiniTaskFocused,
       });
     } catch (error) {
-      qualityReasons.push(`product-release: ${error.message}`);
+      qualityReasons.push(`verify-code: ${error.message}`);
     }
-  }
-  if (productRelease && productRelease.status !== "released") {
-    qualityReasons.push(`product-release: ${productRelease.reasons.join(", ")}`);
-  }
-  let verifyFreshness = { current: false, reason: "verify-code facts are unavailable" };
-  if (acceptedVerify) verifyFreshness = verifyFactsFreshForClose(
-    acceptedVerify,
-    worktree,
-    task.identity.taskId,
-    currentSnapshot.tree,
-    null,
-    allowMiniTaskFocused ? "mini-task" : "ordinary",
-  );
-  if (!verifyFreshness.current) {
-    qualityReasons.push(`verify-code freshness: ${verifyFreshness.reason}`);
+    if (!allowMiniTaskFocused) {
+      try {
+        const stageOutcomeStatuses = deriveStageOutcomeStatuses({
+          task_id: task.identity.taskId,
+          read: task.readRecord,
+          stage_outcome_refs: Object.fromEntries(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].map((stage) => [stage, task.listCanonicalStageOutcomeRefs(stage)])),
+          snapshot_tree: currentSnapshot.tree,
+          material_revision: materialRevision,
+          material_scope_revisions: stageMaterialScopeRevisions(materialValues),
+          snapshot_root: worktree,
+          authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({
+            task,
+            kernel,
+            identity: task.identity,
+            workspace,
+            artifacts: materialArtifacts,
+            stage,
+          }, stage, ref),
+        });
+        productRelease = deriveCurrentProductRelease({
+          task_id: task.identity.taskId,
+          read: task.readRecord,
+          refs: task.listCanonicalQualityFactRefs(),
+          snapshot_tree: currentSnapshot.tree,
+          material_revision: materialRevision,
+          material_scope_revisions: stageMaterialScopeRevisions(materialValues),
+          snapshot_root: worktree,
+          expected_acceptance_ids: activeAcceptanceCriterionIds(materialArtifacts.read("spec.md")),
+          evaluate_freshness: evaluateFactFreshness,
+          stage_outcome_statuses: stageOutcomeStatuses,
+        });
+      } catch (error) {
+        qualityReasons.push(`product-release: ${error.message}`);
+      }
+    }
+    if (productRelease && productRelease.status !== "released") {
+      qualityReasons.push(`product-release: ${productRelease.reasons.join(", ")}`);
+    }
+    if (acceptedVerify) verifyFreshness = verifyFactsFreshForClose(
+      acceptedVerify,
+      worktree,
+      task.identity.taskId,
+      currentSnapshot.tree,
+      null,
+      allowMiniTaskFocused ? "mini-task" : "ordinary",
+    );
+    if (!verifyFreshness.current) {
+      qualityReasons.push(`verify-code freshness: ${verifyFreshness.reason}`);
+    }
   }
   if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
@@ -1634,15 +2020,21 @@ export function prepareDeliveryClosePlan({
       target_branch: input.target_branch,
       remote: input.remote,
       task_commit: taskCommit,
-      spec_source_path: repositoryPath(input.spec_source_path, "delivery spec_source_path"),
-      spec_archive_path: repositoryPath(input.spec_archive_path, "delivery spec_archive_path"),
+      spec_source_path: sourcePath,
+      spec_archive_path: archivePath,
       target_baseline: targetBaseline,
       remote_target_baseline: remoteTargetBaseline,
       merge_strategy: "--no-ff --no-edit",
-      close_mode: riskClose ? "manual-risk-close" : allowMiniTaskFocused ? "mini-task" : "ordinary",
+      close_mode: selectedCloseMode,
       ...(riskClose ? { risk_close: structuredClone(riskClose) } : {}),
+      ...(planningContext ? {
+        planning: structuredClone(planningContext.planning),
+        material_status: planningContext.materialStatus,
+        development_status: "not_executed",
+        quality_status: "not_run",
+      } : {}),
       ...(productRelease ? { product_release: productRelease } : {}),
-      quality_status: qualityReasons.length === 0 ? "observed" : "incomplete",
+      ...(planningContext ? {} : { quality_status: qualityReasons.length === 0 ? "observed" : "incomplete" }),
       quality_gaps: [...new Set(qualityReasons)],
     },
     steps: DELIVERY_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
@@ -1672,26 +2064,31 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   if (task.manifest.record_model !== "vnext-single-write") throw new Error("legacy delivery close is retired; use a vnext-single-write task");
   let acceptedVerify;
   let verifyError;
-  try {
-    acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? {
-      snapshotTree: taskSnapshotTree.stdout,
-      snapshotCommit: delivery.task_commit,
-      worktreeRoot: delivery.target_repo_root,
-      allowMiniTaskFocused: delivery.close_mode === "mini-task",
-    } : {});
-  } catch (error) {
-    verifyError = error;
+  const planningMode = delivery.close_mode === "planning";
+  if (!planningMode) {
+    try {
+      acceptedVerify = currentVerifyFacts(task, taskSnapshotTree.ok ? {
+        snapshotTree: taskSnapshotTree.stdout,
+        snapshotCommit: delivery.task_commit,
+        worktreeRoot: delivery.target_repo_root,
+        allowMiniTaskFocused: delivery.close_mode === "mini-task",
+      } : {});
+    } catch (error) {
+      verifyError = error;
+    }
   }
-  const verifyFreshness = acceptedVerify
-    ? verifyFactsFreshForClose(
-      acceptedVerify,
-      delivery.worktree_root,
-      task.identity.taskId,
-      taskSnapshotTree.ok ? taskSnapshotTree.stdout : null,
-      root,
-      delivery.close_mode,
-    )
-    : { current: false, reason: verifyError?.message ?? "verify-code facts are unavailable" };
+  const verifyFreshness = planningMode
+    ? { current: false, reason: "planning close does not execute verify-code or product-release checks" }
+    : acceptedVerify
+      ? verifyFactsFreshForClose(
+        acceptedVerify,
+        delivery.worktree_root,
+        task.identity.taskId,
+        taskSnapshotTree.ok ? taskSnapshotTree.stdout : null,
+        root,
+        delivery.close_mode,
+      )
+      : { current: false, reason: verifyError?.message ?? "verify-code facts are unavailable" };
   const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
   const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
   const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
@@ -1699,6 +2096,9 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const sourcePathAbsent = localTarget.ok && !gitResult(root, ["cat-file", "-e", `${delivery.target_branch}:${delivery.spec_source_path}`]).ok;
   const archive = archiveFacts(root, localTarget.ok ? delivery.target_branch : null, delivery);
   const archiveCommitIncluded = archive.commit !== null && gitResult(root, ["merge-base", "--is-ancestor", archive.commit, localTarget.stdout]).ok;
+  const planningArchive = planningMode
+    ? inspectPlanningArchive(root, delivery, localTarget.ok ? delivery.target_branch : null)
+    : null;
   const remoteTarget = remoteOid(root, delivery.remote, delivery.target_branch);
   const pushed = merged && localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
   const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => resolve(line.slice(9)));
@@ -1730,12 +2130,43 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   };
   facts.verify_facts_fresh = verifyFreshness.current;
   if (!verifyFreshness.current) facts.verify_facts_fresh_reason = verifyFreshness.reason;
-  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["formal_cleanup_safe", facts.formal_cleanup_safe], ["branch_cleanup", facts.branch_cleanup], ["verify_facts_fresh", verifyFreshness.current]].filter(([, done]) => !done).map(([name]) => name);
+  if (planningMode) {
+    facts.verify_facts_fresh = false;
+    delete facts.verify_facts_fresh_reason;
+  }
+  const missing = [
+    ["delivery", facts.delivery_committed],
+    ["archive", facts.archive],
+    ["merge", facts.merge],
+    ["push", facts.push],
+    ["worktree_cleanup", facts.worktree_cleanup],
+    ["formal_cleanup_safe", facts.formal_cleanup_safe],
+    ["branch_cleanup", facts.branch_cleanup],
+    ...(planningMode ? [["planning_material", planningArchive?.status === "complete" && delivery.material_status === "complete"]] : [["verify_facts_fresh", verifyFreshness.current]]),
+  ].filter(([, done]) => !done).map(([name]) => name);
   const physicalMissing = physicalDeliveryMissing(facts);
   return Object.freeze({
     schema_version: "task-close-delivery-state.v1",
     status: missing.length === 0 ? "ready" : "incomplete",
     physical_status: physicalMissing.length === 0 ? "ready" : "incomplete",
+    close_mode: delivery.close_mode,
+    ...(planningMode ? {
+      planning_status: delivery.planning.status,
+      material_status: delivery.material_status,
+      development_status: "not_executed",
+      quality_status: "not_run",
+      quality_gaps: Object.freeze([...new Set([
+        ...(delivery.quality_gaps ?? []),
+        ...(planningArchive?.gaps ?? []),
+      ])]),
+      planning: Object.freeze({
+        ...structuredClone(delivery.planning),
+        archived_status: planningArchive?.status ?? "incomplete",
+        archived_materials: planningArchive?.materials ?? {},
+        archived_attachments: planningArchive?.attachments ?? [],
+        archived_gaps: planningArchive?.gaps ?? [],
+      }),
+    } : {}),
     missing: Object.freeze(missing),
     physical_missing: Object.freeze(physicalMissing),
     facts: Object.freeze(facts),
@@ -1748,6 +2179,7 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
   const kernel = assertTaskKernel(taskKernel);
   const delivery = validateDeliveryPlan(plan, task, kernel);
   if (delivery.risk_close !== undefined) throw new Error("risk close plans must be recorded through recordManualDeliveryClose");
+  assertPlanningPlanExecutable(delivery);
   const planHash = closePlanHash(plan);
   const prepared = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
   if (prepared.schema_version !== "task-close-plan-record.v1" || prepared.task_id !== task.identity.taskId || prepared.plan_hash !== planHash || canonical(prepared.plan) !== canonical(plan)) throw new Error("prepared close plan record is invalid");
@@ -1775,7 +2207,25 @@ export async function completeDeliveryClosePlan({ task: taskHandle, kernel: task
     }
     const state = inspectDeliveryCloseState({ task, kernel, plan });
     if (state.physical_missing.length > 0) throw new Error(`delivery close is incomplete: ${state.physical_missing.join(", ")}`);
-    const completion = { schema_version: "task-close-completed.v1", task_id: task.identity.taskId, plan_hash: planHash, status: "completed", physical_state: physicalStateForRecord(state), completed_at: now() };
+    if (delivery.close_mode === "planning" && state.missing.includes("planning_material")) {
+      throw new Error("planning close is incomplete: archived planning material does not match its bound revision");
+    }
+    const completion = {
+      schema_version: "task-close-completed.v1",
+      task_id: task.identity.taskId,
+      plan_hash: planHash,
+      status: "completed",
+      ...(delivery.close_mode === "planning" ? {
+        close_mode: "planning",
+        planning_status: delivery.planning.status,
+        material_status: delivery.material_status,
+        development_status: "not_executed",
+        quality_status: "not_run",
+        quality_gaps: structuredClone(delivery.quality_gaps),
+      } : {}),
+      physical_state: physicalStateForRecord(state),
+      completed_at: now(),
+    };
     createOrVerify(task, "operations/close/completed.json", completion, "close completion");
     return Object.freeze(completion);
   });
@@ -2025,6 +2475,7 @@ export async function executeClosePlan(options = {}) {
   const kernel = assertTaskKernel(options.kernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
   const plan = validatePlan(options.plan, task);
+  const delivery = plan.delivery ? validateDeliveryPlan(plan, task, kernel) : null;
   const manualRiskClose = plan.delivery?.risk_close !== undefined;
   if (manualRiskClose !== (options.manualRiskClose === true)) {
     throw new Error(manualRiskClose
@@ -2053,6 +2504,7 @@ export async function executeClosePlan(options = {}) {
   }
   const confirmation = closeConfirmation(task, planHash, confirmationRef);
   if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
+  assertPlanningPlanExecutable(delivery);
   const executors = options.executors;
   // Validate every executable boundary before creating a record or performing a
   // physical probe. A malformed later step must have zero side effects.
@@ -2123,6 +2575,9 @@ export async function executeClosePlan(options = {}) {
     if (deliveryState) {
       const missing = deliveryState.physical_missing;
       if (missing.length > 0) throw new Error(`delivery close is incomplete: ${missing.join(", ")}`);
+      if (delivery?.close_mode === "planning" && deliveryState.missing.includes("planning_material")) {
+        throw new Error("planning close is incomplete: archived planning material does not match its bound revision");
+      }
     }
     if (manualRiskClose) {
       if (acceptedCompletion) throw new Error("manual risk close conflicts with a normal completion record");
@@ -2138,6 +2593,14 @@ export async function executeClosePlan(options = {}) {
       task_id: task.identity.taskId,
       plan_hash: planHash,
       status: "completed",
+      ...(delivery?.close_mode === "planning" ? {
+        close_mode: "planning",
+        planning_status: delivery.planning.status,
+        material_status: delivery.material_status,
+        development_status: "not_executed",
+        quality_status: "not_run",
+        quality_gaps: structuredClone(delivery.quality_gaps),
+      } : {}),
       ...(deliveryState ? { physical_state: physicalStateForRecord(deliveryState) } : {}),
       completed_at: now(),
     };

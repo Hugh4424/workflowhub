@@ -41,6 +41,29 @@
         ]
       }
     },
+    "portable_workflows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["component_id", "workflow", "kind", "path", "files"],
+        "properties": {
+          "component_id": { "const": "build-prd" },
+          "workflow": { "const": "build-prd" },
+          "kind": { "const": "portable_workflow" },
+          "path": { "const": "workflows/build-prd/SKILL.md" },
+          "files": {
+            "const": [
+              "workflows/build-prd/SKILL.md",
+              "workflows/build-prd/skill-deps.yaml",
+              "workflows/build-prd/steps.json"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
     "sources": {
       "type": "array",
       "items": { "oneOf": [
@@ -76,7 +99,9 @@
   "allOf": [
     {
       "if": { "properties": { "skill": { "const": "workflowhub" } }, "required": ["skill"] },
-      "then": { "required": ["runner_contract_major", "runner_contract_min_minor"] }
+      "then": {
+        "required": ["runner_contract_major", "runner_contract_min_minor", "portable_workflows"]
+      }
     }
   ]
 }

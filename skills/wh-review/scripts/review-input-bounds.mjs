@@ -136,10 +136,29 @@ export function compactVerifyCodeMaterials(materials) {
   const totalBytes = Object.values(projected).reduce((sum, value) => sum + byteSize(value), 0);
   if (totalBytes <= TASK_BOUND_PROVIDER_INPUT_MAX_BYTES) return { materials: projected, diff };
   const contextKeys = ["decision-log.md", "spec.md", "plan.md", "tasks.md"];
-  const available = contextKeys.filter((key) => typeof projected[key] === "string");
-  if (available.length === 0) throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code provider input exceeds the bounded budget"), { code: "MATERIAL_TOO_LARGE" });
-  const perMaterial = Math.max(8 * 1024, Math.floor(TASK_BOUND_CONTEXT_BUDGET_BYTES / available.length));
-  const compactText = (key, value) => {
+  const targets = [];
+  for (const key of contextKeys) {
+    if (typeof projected[key] === "string") targets.push({ scope: "top", key, label: key });
+  }
+  if (projected.runtime_current_materials && typeof projected.runtime_current_materials === "object"
+      && !Array.isArray(projected.runtime_current_materials)) {
+    for (const key of contextKeys) {
+      if (typeof projected.runtime_current_materials[key] === "string") {
+        targets.push({ scope: "runtime_current_materials", key, label: `runtime_current_materials/${key}` });
+      }
+    }
+  }
+  if (targets.length === 0) throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code provider input exceeds the bounded budget"), { code: "MATERIAL_TOO_LARGE" });
+  const contextBytes = targets.reduce((sum, target) => sum + byteSize(
+    target.scope === "top" ? projected[target.key] : projected.runtime_current_materials[target.key],
+  ), 0);
+  const nonContextBytes = totalBytes - contextBytes;
+  const contextBudget = Math.min(TASK_BOUND_CONTEXT_BUDGET_BYTES, TASK_BOUND_PROVIDER_INPUT_MAX_BYTES - nonContextBytes);
+  if (contextBudget < targets.length * 1024) {
+    throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code provider input exceeds the bounded budget"), { code: "MATERIAL_TOO_LARGE" });
+  }
+  const initialPerMaterial = Math.floor(contextBudget / targets.length);
+  const compactText = (key, value, perMaterial) => {
     const bytes = Buffer.byteLength(value, "utf8");
     if (bytes <= perMaterial) return value;
     const sourceHash = createHash("sha256").update(value, "utf8").digest("hex");
@@ -148,9 +167,43 @@ export function compactVerifyCodeMaterials(materials) {
     const tail = Math.max(0, perMaterial - head);
     return `# Bounded verify-code context: ${key}\n# full_bytes=${bytes} full_sha256=${sourceHash}\n# host retains full material; provider receives context excerpts only.\n\n${source.subarray(0, head).toString("utf8")}\n\n[... omitted middle ...]\n\n${source.subarray(Math.max(0, source.length - tail)).toString("utf8")}\n`;
   };
-  projected = { ...projected };
-  for (const key of available) projected[key] = compactText(key, projected[key]);
-  const projectedBytes = Object.values(projected).reduce((sum, value) => sum + byteSize(value), 0);
-  if (projectedBytes > TASK_BOUND_PROVIDER_INPUT_MAX_BYTES) throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code provider input exceeds the bounded budget"), { code: "MATERIAL_TOO_LARGE" });
-  return { materials: projected, diff };
+  const sourceValues = targets.map((target) => ({
+    ...target,
+    value: target.scope === "top" ? projected[target.key] : projected.runtime_current_materials[target.key],
+  }));
+  const projectAt = (perMaterial) => {
+    const value = { ...projected };
+    if (value.runtime_current_materials && typeof value.runtime_current_materials === "object"
+        && !Array.isArray(value.runtime_current_materials)) {
+      value.runtime_current_materials = { ...value.runtime_current_materials };
+    }
+    for (const target of sourceValues) {
+      const container = target.scope === "top" ? value : value.runtime_current_materials;
+      container[target.key] = compactText(target.label, target.value, perMaterial);
+    }
+    return value;
+  };
+  const projectedBytes = (value) => Object.values(value).reduce((sum, entry) => sum + byteSize(entry), 0);
+  let bounded = projectAt(initialPerMaterial);
+  if (projectedBytes(bounded) > TASK_BOUND_PROVIDER_INPUT_MAX_BYTES) {
+    const minimumPerMaterial = 1024;
+    const minimum = projectAt(minimumPerMaterial);
+    if (projectedBytes(minimum) > TASK_BOUND_PROVIDER_INPUT_MAX_BYTES) {
+      throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code provider input exceeds the bounded budget"), { code: "MATERIAL_TOO_LARGE" });
+    }
+    let low = minimumPerMaterial;
+    let high = initialPerMaterial;
+    bounded = minimum;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const candidate = projectAt(middle);
+      if (projectedBytes(candidate) <= TASK_BOUND_PROVIDER_INPUT_MAX_BYTES) {
+        bounded = candidate;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+  }
+  return { materials: bounded, diff };
 }

@@ -381,7 +381,7 @@ describe("wh-review production CLI", () => {
       },
       stage: "verify-code",
       reviewKind: null,
-        result: { status: "available", resultRef: ref, attemptRef: reviewResultRecord.attempt_ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null },
+        result: { status: "available", stage: "verify-code", review_track: null, review_kind: null, resultRef: ref, attemptRef: reviewResultRecord.attempt_ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null },
     });
     expect(factIntent).toMatchObject({
       schema_version: "workflowhub-quality-fact-intent.v1",
@@ -409,7 +409,7 @@ describe("wh-review production CLI", () => {
       },
     };
     const intent = publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "unavailable", resultRef: null, attemptRef: ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
+      status: "unavailable", stage: "verify-code", review_track: null, review_kind: null, resultRef: null, attemptRef: ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
     } });
     expect(intent).toMatchObject({ schema_version: "workflowhub-quality-fact-intent.v1", status: "unavailable" });
     expect(published).toHaveLength(0);
@@ -431,11 +431,11 @@ describe("wh-review production CLI", () => {
       kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}` },
     };
     expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
+      status: "available", stage: "verify-code", review_track: null, review_kind: null, resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
     } })).toThrow(/semantic terminal attempt|current review request/);
     expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "phase", phaseId: "P1", reviewScope: "phase",
-    } })).toThrow(/worktree-scoped final review/);
+      status: "available", stage: "verify-code", review_track: null, review_kind: null, resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "phase", phaseId: "P1", reviewScope: "phase",
+    } })).toThrow(/worktree-scoped final review|does not use review_scope|identity aliases .*disagree/);
   });
 
   it("ignores retired response-ledger and round inputs", async () => {
@@ -562,6 +562,26 @@ describe("wh-review production CLI", () => {
     }
   });
 
+  it("blocks malformed build-prd recovery identity before runRound and sink writes", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const sinkRoot = process.env.WORKFLOWHUB_REVIEW_SINK_ROOT;
+    const calls = [];
+    const runRound = async () => { calls.push(true); return { status: "available" }; };
+    for (const request of [
+      { stage: "build-code", review_kind: "build_prd", host_provider: "codex", materials: { prd: "forged" } },
+      { stage: "build-code", reviewKind: "build_prd", host_provider: "codex", materials: { prd: "camel forged" } },
+      { stage: "build-prd", host_provider: "codex", materials: { prd: "missing sentinel" } },
+      { stage: "build-prd", review_kind: "build_prd", reviewKind: "mini_task.design", host_provider: "codex", materials: { prd: "alias conflict" } },
+      { stage: "not-a-formal-stage", host_provider: "codex", materials: { prd: "arbitrary stage" } },
+      { stage: "build-code", review_kind: "arbitrary.kind", host_provider: "codex", materials: { prd: "arbitrary kind" } },
+      { stage: "build-code", review_kind: "mini_task.design", reviewKind: "mini_task.implementation", host_provider: "codex", materials: { prd: "formal alias conflict" } },
+    ]) {
+      await expect(runReviewRecovery(request, { runRound })).rejects.toThrow(/build_prd|build-prd|identity aliases|unknown review_kind|unknown (?:recovery )?review stage/i);
+    }
+    expect(calls).toHaveLength(0);
+    expect(readdirSync(sinkRoot)).toHaveLength(0);
+  });
+
   it("makes one broker request and preserves terminal provider unavailability", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const calls = [];
@@ -628,6 +648,98 @@ describe("wh-review production CLI", () => {
     }
   });
 
+  it("does not reuse a bare sink record when material bytes change", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    let calls = 0;
+    const request = { stage: "build-code", host_provider: "codex", material_id: "caller-claimed-id" };
+    const runRound = async () => {
+      calls += 1;
+      return { status: "unavailable", error_code: "AUTH" };
+    };
+    const first = await runReviewRecovery({ ...request, materials: { raw: "first" } }, { runRound });
+    const second = await runReviewRecovery({ ...request, materials: { raw: "second" } }, { runRound });
+    expect(calls).toBe(2);
+    expect(first.reused).toBe(false);
+    expect(second.reused).toBe(false);
+    expect(second.sink_ref).not.toBe(first.sink_ref);
+  });
+
+  it("rejects bare sink tampering before status, identity, or reference recovery", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const route = () => ({ route_identity: "1".repeat(64) });
+    const baseRequest = {
+      stage: "build-code", review_scope: "phase", host_provider: "codex",
+      task_id: "task-a", snapshot_tree: "tree-a", material_revision: "revision-a", material_id: "material-a",
+    };
+    for (const [label, mutate] of [
+      ["status", (result) => { result.status = "available"; }],
+      ["identity", (result) => { result.stage = "verify-code"; }],
+      ["reference", (result) => { result.attempt_ref = "forged-reference"; }],
+    ]) {
+      const request = { ...baseRequest, subject: { ref: `tamper-${label}` } };
+      const first = await runReviewRecovery(request, {
+        resolveRouteIdentity: route,
+        runRound: async () => ({ status: "unavailable", error_code: "AUTH" }),
+      });
+      const record = JSON.parse(readFileSync(first.sink_ref, "utf8"));
+      expect(record.sink_sha256).toMatch(/^[a-f0-9]{64}$/);
+      mutate(record.result);
+      writeFileSync(first.sink_ref, `${JSON.stringify(record)}\n`);
+      await expect(runReviewRecovery(request, {
+        resolveRouteIdentity: route,
+        runRound: async () => ({ status: "available" }),
+      })).rejects.toMatchObject({ code: "REVIEW_SINK_INVALID" });
+    }
+  });
+
+  it("does not reuse a material result across snapshot, revision, or task changes", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const route = () => ({ route_identity: "2".repeat(64) });
+    let calls = 0;
+    const runRound = async (input) => {
+      calls += 1;
+      return {
+        status: "unavailable", error_code: "AUTH", task_id: input.task_id,
+        snapshot_tree: input.snapshot_tree, material_revision: input.material_revision, material_id: input.material_id,
+      };
+    };
+    const first = await runReviewRecovery({
+      stage: "build-code", review_scope: "phase", host_provider: "codex",
+      task_id: "task-a", snapshot_tree: "tree-a", material_revision: "revision-a", material_id: "same-material",
+    }, { resolveRouteIdentity: route, runRound });
+    const second = await runReviewRecovery({
+      stage: "build-code", review_scope: "phase", host_provider: "codex",
+      task_id: "task-b", snapshot_tree: "tree-b", material_revision: "revision-b", material_id: "same-material",
+    }, { resolveRouteIdentity: route, runRound });
+    expect(calls).toBe(2);
+    expect(first.reused).toBe(false);
+    expect(second.reused).toBe(false);
+    expect(second.sink_ref).not.toBe(first.sink_ref);
+  });
+
+  it("returns a route-change unavailable envelope with the complete canonical request identity", async () => {
+    const { runReviewRecovery } = await import(cli.href);
+    const request = {
+      stage: "build-code", review_scope: "integration", host_provider: "codex",
+      task_id: "task-route", snapshot_tree: "tree-route", material_revision: "revision-route", material_id: "material-route",
+    };
+    const first = await runReviewRecovery(request, {
+      resolveRouteIdentity: () => ({ route_identity: "3".repeat(64) }),
+      runRound: async (input) => ({ status: "unavailable", error_code: "AUTH", ...input }),
+    });
+    const changed = await runReviewRecovery(request, {
+      resolveRouteIdentity: () => ({ route_identity: "4".repeat(64) }),
+      runRound: async () => { throw new Error("route change must not dispatch"); },
+    });
+    expect(first.status).toBe("unavailable");
+    expect(changed).toMatchObject({
+      status: "unavailable", stage: "build-code", review_track: null, review_kind: null,
+      review_scope: "integration", material_id: "material-route", task_id: "task-route",
+      snapshot_tree: "tree-route", material_revision: "revision-route",
+      error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN" },
+    });
+  });
+
   it("preserves review refs when stage-fact publication fails", async () => {
     const { runReviewRecovery } = await import(cli.href);
     const review = { status: "available", attemptRef: "quality/reviews/attempts/one/attempt.json", resultRef: "quality/reviews/results/one.json", reportRef: "quality/reviews/reports/one.md" };
@@ -660,7 +772,7 @@ describe("wh-review production CLI", () => {
       { status: "available", result_ref: "semantic", findings: [{ severity: "minor" }], snapshot_tree: "tree-1", material_id: "material-1" },
     ]) {
       const calls = [];
-      const result = await runReviewRecovery({ task_path: "/tmp/task", stage: "build-code", reason: envelope.error_code ?? "semantic-findings", snapshot_tree: "tree-1", material_id: "material-1" }, {
+      const result = await runReviewRecovery({ task_path: "/tmp/task", stage: "build-code", reason: envelope.error_code ?? "semantic-findings", snapshot_tree: "tree-1", material_id: "material-1", subject: { ref: envelope.error_code ?? "semantic-findings" } }, {
         runRound: async () => { calls.push(true); return envelope; },
       });
       expect(calls).toHaveLength(1);
@@ -678,7 +790,7 @@ describe("wh-review production CLI", () => {
     expect(routeResult).toMatchObject({ status: "unavailable", error_code: "REVIEW_ROUTE_UNAVAILABLE" });
 
     const identityCalls = [];
-    const identityResult = await runReviewRecovery({ stage: "build-code", reason: "provider-identity", snapshot_tree: "tree-1", material_id: "material-1" }, {
+    const identityResult = await runReviewRecovery({ stage: "build-code", reason: "provider-identity", snapshot_tree: "tree-1", material_id: "material-1", subject: { ref: "provider-identity" } }, {
       runRound: async () => { identityCalls.push(true); return { status: "unavailable", error_code: "AUTH", attempt_ref: `attempt-${identityCalls.length}`, snapshot_tree: "tree-1" }; },
     });
     expect(identityCalls).toHaveLength(1);
@@ -689,7 +801,7 @@ describe("wh-review production CLI", () => {
     const { runReviewRecovery } = await import(cli.href);
     for (const error_code of ["PROTOCOL_INCOMPATIBLE", "PUBLIC_RESULT_INVALID", "PROFILE_MISMATCH", "OUTPUT_INVALID", "PROVIDER_OUTPUT_INVALID"]) {
       const calls = [];
-      const result = await runReviewRecovery({ stage: "build-code", reason: error_code, snapshot_tree: "tree-1", material_id: "material-1" }, {
+      const result = await runReviewRecovery({ stage: "build-code", reason: error_code, snapshot_tree: "tree-1", material_id: "material-1", subject: { ref: error_code } }, {
         runRound: async () => {
           calls.push(true);
           return { status: "unavailable", attempt_ref: `attempt-${error_code}`, error_code, snapshot_tree: "tree-1", material_id: "material-1" };
