@@ -1,0 +1,62 @@
+{
+  "project_name": "WorkflowHub",
+  "task_id": "claude-outcome-fixture",
+  "stage": "build-code",
+  "task_path": "/absolute/path/to/task",
+  "attempt_id": "attempt-claude-outcome-fixture",
+  "agent_run_id": "agent-claude-outcome-fixture",
+  "session": {
+    "task_id": "claude-outcome-fixture",
+    "host": "claude-code",
+    "source_id": "claude-code/fixture",
+    "source_family": "claude-code",
+    "source_ref": "claude-outcome-fixture",
+    "status": "incomplete",
+    "events": [
+      {
+        "subject_kind": "step",
+        "subject_id": "stage-end-spec-analyze",
+        "task_id": "claude-outcome-fixture",
+        "stage": "build-code",
+        "started_at_ms": 1,
+        "ended_at_ms": 4,
+        "status": "incomplete",
+        "result_summary": "Claude fixture recorded the stage-end analyzer boundary",
+        "reason": "Claude fixture is intentionally incomplete"
+      },
+      {
+        "subject_kind": "skill",
+        "subject_id": "spec-analyze",
+        "task_id": "claude-outcome-fixture",
+        "stage": "build-code",
+        "started_at_ms": 2,
+        "ended_at_ms": 3,
+        "status": "incomplete",
+        "trigger": true,
+        "executed": true,
+        "version": "claude-fixture-1.0.0",
+        "result_summary": "Claude fixture recorded the analyzer skill boundary",
+        "reason": "Claude fixture is intentionally incomplete"
+      }
+    ],
+    "spec_analyze": {
+      "packet": {
+        "original_requirements": [],
+        "coverage": [],
+        "current_stage_repairs": [],
+        "work_summary": "Claude structured outcome packet fixture"
+      },
+      "evidence_subjects": {
+        "decision-log": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" },
+        "spec": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" },
+        "plan": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" },
+        "tasks": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" },
+        "implementation": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" },
+        "tests": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" },
+        "ac-trace": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" }
+      },
+      "implementation_material": "unavailable: Claude fixture is intentionally incomplete",
+      "implementation_evidence_subject": { "subject_kind": "step", "subject_id": "stage-end-spec-analyze" }
+    }
+  }
+}

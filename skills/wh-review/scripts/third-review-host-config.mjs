@@ -46,6 +46,38 @@ function realDirectory(path, label) {
 }
 
 function hostConfigPath() { return join(process.env.HOME || homedir(), ".config", "workflowhub", "config.json"); }
+export const THIRD_REVIEW_BROKER_ENGINE = ">=1.2.0";
+
+function parseSemver(value) {
+  const match = typeof value === "string" && /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function compareSemver(left, right) {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+}
+
+export function probeThirdReviewBroker(config) {
+  const detectedVersion = config?.engine_version;
+  const detected = parseSemver(detectedVersion);
+  if (!detected) {
+    return {
+      status: "unknown",
+      required_engine: THIRD_REVIEW_BROKER_ENGINE,
+      reason: "3rd-review broker does not expose a semver engine_version",
+    };
+  }
+  const required = parseSemver(THIRD_REVIEW_BROKER_ENGINE.slice(2));
+  return {
+    status: compareSemver(detected, required) >= 0 ? "compatible" : "incompatible",
+    required_engine: THIRD_REVIEW_BROKER_ENGINE,
+    detected_version: detectedVersion,
+  };
+}
+
 function readJson(path, label) {
   try { return JSON.parse(readFileSync(path, "utf8")); }
   catch (error) { throw new Error(`${label} is invalid JSON: ${error.message}`); }
@@ -363,7 +395,15 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
       catch (error) { return [{ stage, ...(track ? { track } : {}), message: error.message }]; }
     })
     : [];
-  return { command: command(thirdReview.command), config: configPath, attachmentRoot, attachmentSource: PACKET_SOURCE_PREFIX, ...(whReview ? { whReview } : {}), ...(requestedStage !== null ? { routeWarnings } : {}) };
+  return {
+    command: command(thirdReview.command),
+    config: configPath,
+    attachmentRoot,
+    attachmentSource: PACKET_SOURCE_PREFIX,
+    brokerProbe: probeThirdReviewBroker(broker),
+    ...(whReview ? { whReview } : {}),
+    ...(requestedStage !== null ? { routeWarnings } : {}),
+  };
 }
 
 function routeWithProfilePriorities(route, profiles) {

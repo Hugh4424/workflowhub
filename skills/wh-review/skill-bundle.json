@@ -1,10 +1,17 @@
 {
   "schema_version": 1,
   "skill": "wh-review",
+  "runtime_dependencies": [
+    {
+      "name": "3rd-review-broker",
+      "version": ">=1.2.0",
+      "source": "host-provided broker; runtime compatibility probe reports unknown when semver is unavailable"
+    }
+  ],
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "b56adfc2ee42ff92607bd1dad60029e8f1f780373f9af94d7c1a1791ac12d76c"
+      "sha256": "41af779bfebcbd579dfcf1294606ebf9c5dd948c65c3bacd6e6d5cc18357fd53"
     },
     {
       "path": "contracts/build-code.md",
@@ -76,7 +83,7 @@
     },
     {
       "path": "scripts/review-provider-client.mjs",
-      "sha256": "0abbfe1dd2d1f1446aada0d5495a7f190a8287e63935e795c0f25cab30bae591"
+      "sha256": "ae82ce43cdd62d3a0a75326fba8c4816b16f713f2ee3de8024152459dd82110e"
     },
     {
       "path": "scripts/review-result.mjs",
@@ -100,7 +107,7 @@
     },
     {
       "path": "scripts/third-review-host-config.mjs",
-      "sha256": "3b02690db85ef6dff94797c8f048f98ba9049dcd00f275081a1b01bcac7009f3"
+      "sha256": "db00dbb5b32f00c9c1801084697851400a93c368b074fe53e1c50cf47f6b5643"
     },
     {
       "path": "scripts/wh-review-cli.mjs",
@@ -108,7 +115,7 @@
     },
     {
       "path": "scripts/simple-review-runner.mjs",
-      "sha256": "af14c18c10c5234855ca0b0247eea7d8cd8bb4922d9949a7ff1d4b50a5b39ac9"
+      "sha256": "b843eabfd3311546a859e34f15f1e4c8a3be0077476d75906bdb2bec6bb140da"
     },
     {
       "path": "stage-skill-plan.json",

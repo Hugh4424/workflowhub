@@ -362,8 +362,9 @@
       "status": "move",
       "sha256_before": "5075b07e15b095fa2b904db2c1622f7d5b3580e56fe08547edd99b1545962ca5",
       "bytes": 78035,
-      "sha256_after": "c30638b352f85552c3139d181bfd84ad14319ebd0e7522879920b33171209563",
-      "content_change": "import/path-only"
+      "sha256_after": "e545626b1007d4a6520a78b3b2a24a092c906616cdacde5a1db12baa847a267f",
+      "bytes_after": 301581,
+      "content_change": "main baseline already contains the current runtime contract implementation; this task validates the final path and does not create a second schema module"
     },
     {
       "source": "core/stage-review-disposition.mjs",
@@ -1222,8 +1223,13 @@
     {
       "source": "core/fact-indexes.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T4",
+      "consumer": "none after production/test reverse-reference scan; historical docs and archived specs are not current consumers",
+      "delete_condition": "restore only with a new decision and current consumer proof",
+      "content_change": "removed dead legacy fact-index module after zero current consumer proof",
+      "bytes_before": 46727,
+      "sha256_before": "fa87acad548fdd0b9d6b1873c18cd7a24525f3098135a02f8284e6863dc604e4"
     },
     {
       "source": "core/journal-appender.mjs",
@@ -1268,8 +1274,11 @@
     {
       "source": "core/parse-framework-config.mjs",
       "destination": null,
-      "status": "excluded-not-in-T052",
-      "reason": "existing source outside T052 exact file boundary; left in place"
+      "status": "retain",
+      "owner": "framework configuration parser contract",
+      "consumer": "core/__tests__/parse-framework-config.test.mjs current contract coverage; no production consumer found",
+      "delete_condition": "remove only after the parser contract and its test consumer are explicitly retired by a new decision",
+      "content_change": "retained; current implementation is covered by an existing contract test and is not part of T4 deletion"
     },
     {
       "source": "core/receipt-schema.mjs",
@@ -2299,8 +2308,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
       "sha256_before": null,
-      "bytes": 43038,
-      "sha256_after": "3b1defb291855ffebe3e47c13ce77d31c06f802dcc71107ad0a727e1b5a5f89c"
+      "bytes": 43846,
+      "sha256_after": "7d0787140fde2ad5d6e04813c6522c5b622a641381a1e400a8cf94aecaa28df6"
     },
     {
       "source": "tools/cli/build-reflection-page-template.html",
@@ -2311,8 +2320,8 @@
       "delete_condition": "remove when the stage-reflection page is retired",
       "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
       "sha256_before": null,
-      "bytes": 40646,
-      "sha256_after": "7255c62f1e58b259d5224edae7a8de27b607a37154b8a2f44819cbf99c894425"
+      "bytes": 41278,
+      "sha256_after": "1668c50ac68828136c9dcff236ec417eba6c68f796e16290367a6dbebd727c67"
     },
     {
       "source": "runtime/evidence/workflow-evolution.mjs",
@@ -2457,6 +2466,426 @@
       "consumer": "stage-runner publication diagnostics and private preflight validation",
       "delete_condition": "remove when protocol-error classification is retired and its consumers are removed",
       "content_change": "immutable conservative protocol-error classifier with one explicit retryable publication-fault class"
+    },
+    {
+      "source": "skills/qa-only/SKILL.md",
+      "destination": "skills/qa-only/SKILL.md",
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T1",
+      "consumer": "none; superseded by verify-code and wh-review contracts",
+      "delete_condition": "restore only with a new decision and consumer proof",
+      "content_change": "removed orphan skill per G-003; historical provenance retained in Git",
+      "bytes_before": 649,
+      "sha256_before": "e5d30737038b2b146846674b2c7299ca7eccfa95c8c2752b593d9c00346de8b4"
+    },
+    {
+      "source": "skills/qa-only/review-bundle.json",
+      "destination": "skills/qa-only/review-bundle.json",
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T1",
+      "consumer": "none; bundle belonged to deleted qa-only skill",
+      "delete_condition": "restore only with a new decision and consumer proof",
+      "content_change": "removed orphan review bundle with its parent skill",
+      "bytes_before": 131,
+      "sha256_before": "3a709e0a703f68d8d7255e4aea97a87a82ff3c380ad8f46eabb696a6f2b768cc"
+    },
+    {
+      "source": "skills/qa-only/skill-bundle.json",
+      "destination": "skills/qa-only/skill-bundle.json",
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T1",
+      "consumer": "none; bundle belonged to deleted qa-only skill",
+      "delete_condition": "restore only with a new decision and consumer proof",
+      "content_change": "removed orphan skill bundle with its parent skill",
+      "bytes_before": 262,
+      "sha256_before": "560fc53ea3049883677a3d6b62e0187b7222309a47e8515a303c0f1"
+    },
+    {
+      "source": "skills/verify-change/SKILL.md",
+      "destination": "skills/verify-change/SKILL.md",
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T1",
+      "consumer": "none; superseded by verify-code and wh-review contracts",
+      "delete_condition": "restore only with a new decision and consumer proof",
+      "content_change": "removed orphan skill per G-003; historical provenance retained in Git",
+      "bytes_before": 969,
+      "sha256_before": "b3c7f110636a1645a2300fe26e343e75e5ef65216c41fc01908a6f9bdafb8737"
+    },
+    {
+      "source": "skills/verify-change/review-bundle.json",
+      "destination": "skills/verify-change/review-bundle.json",
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T1",
+      "consumer": "none; bundle belonged to deleted verify-change skill",
+      "delete_condition": "restore only with a new decision and consumer proof",
+      "content_change": "removed orphan review bundle with its parent skill",
+      "bytes_before": 137,
+      "sha256_before": "dd5a15af7ab342fbe387a12dcb05ff3c380ad8f46eabb696a6f2b768cc"
+    },
+    {
+      "source": "skills/verify-change/skill-bundle.json",
+      "destination": "skills/verify-change/skill-bundle.json",
+      "status": "delete",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T1",
+      "consumer": "none; bundle belonged to deleted verify-change skill",
+      "delete_condition": "restore only with a new decision and consumer proof",
+      "content_change": "removed orphan skill bundle with its parent skill",
+      "bytes_before": 306,
+      "sha256_before": "0cd4e37f7d1b6dfb5cc198bd6e2d478ff3f5acd210c2bb6e9dd171e67d47d1a5"
+    },
+    {
+      "source": "docs/operations/deferred-tasks-m17.md",
+      "destination": "docs/operations/deferred-tasks-m17.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T3",
+      "consumer": "future M17 deferred-task owners",
+      "delete_condition": "archive when F1/F2/F3 are separately accepted or retired",
+      "content_change": "archived M17 deferred task handoff from Downloads",
+      "bytes_after": 10427,
+      "sha256_after": "b0c58cf2952ae871169a08916a8137d1e7af1470a5e926c79c5f5f2136c7800c"
+    },
+    {
+      "source": "docs/research/ai-cli-host-skill-distribution.md",
+      "destination": "docs/research/ai-cli-host-skill-distribution.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T3",
+      "consumer": "M17/M18 maintainers researching host skill distribution",
+      "delete_condition": "archive only when its research is superseded and provenance is retained",
+      "content_change": "archived host skill distribution research",
+      "bytes_after": 15122,
+      "sha256_after": "ff889902274903471400067e5a6121baf42f56302eab3067c6bed69977ef9763"
+    },
+    {
+      "source": "docs/research/claude-code-plugin-system-research-2026-09-05.md",
+      "destination": "docs/research/claude-code-plugin-system-research-2026-09-05.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T3",
+      "consumer": "M18 skill/plugin distribution planning",
+      "delete_condition": "archive only when superseded by a newer source-pinned research record",
+      "content_change": "archived Claude plugin system research",
+      "bytes_after": 22454,
+      "sha256_after": "a87e66497f956ad3e12c49c1e545e38fe2d29bbdd1911ef29a9fca5c9eb65097"
+    },
+    {
+      "source": "docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md",
+      "destination": "docs/research/m18-skill-plugin-distribution-ecosystem-research-2026-09-03.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T3",
+      "consumer": "M18 skill/plugin distribution planning",
+      "delete_condition": "archive only when superseded by a newer source-pinned research record",
+      "content_change": "archived M18 distribution ecosystem research",
+      "bytes_after": 30489,
+      "sha256_after": "ded110184f74fb1daf84a01a9963f46035f332673d6a2007b80b90b90db68cb9"
+    },
+    {
+      "source": "core/task-capability.mjs",
+      "destination": "runtime/task/task-capability.mjs",
+      "status": "move",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T7",
+      "consumer": "runtime/task/task-handle.mjs, runtime/task/workspace.mjs, runtime/review/review-record-route.mjs, runtime/evidence/audit-summary-carrier.mjs, core/artifact-dir.mjs",
+      "delete_condition": "restore old path only with a new decision and current consumer proof",
+      "content_change": "path-only move; all current imports now use runtime/task/task-capability.mjs",
+      "bytes_before": 1268,
+      "sha256_before": "47d7eb6c7f3cd2a9bba49dd77de502bb3d6647b75f1e21b636afc01e6b5dbe60",
+      "bytes_after": 1268,
+      "sha256_after": "47d7eb6c7f3cd2a9bba49dd77de502bb3d6647b75f1e21b636afc01e6b5dbe60"
+    },
+    {
+      "source": "tests/contract/host-outcome-bridge.test.mjs",
+      "destination": "tests/contract/host-outcome-bridge.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T9",
+      "consumer": "build-code contract regression for explicit identity and host outcome bridge",
+      "delete_condition": "remove only when the explicit identity and outcome bridge contract is retired with its consumers",
+      "content_change": "contract coverage for explicit project/task identity, authenticated worktree binding, and fail-closed host outcomes",
+      "bytes_after": 5331,
+      "sha256_after": "b9c298ddcba799ad3d86854fad38d09a2a0421bbd637bf3b1610d24429c1d22e"
+    },
+    {
+      "source": "tests/fixtures/host-outcome/valid-unavailable.json",
+      "destination": "tests/fixtures/host-outcome/valid-unavailable.json",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T9",
+      "consumer": "tests/contract/host-outcome-bridge.test.mjs",
+      "delete_condition": "remove with the host outcome bridge contract fixture",
+      "content_change": "portable explicit unavailable outcome packet fixture",
+      "bytes_after": 406,
+      "sha256_after": "2516dd228527f2c8004a1ade399bfd17ddd8827a32b413e56eb1743cc8965503"
+    },
+    {
+      "source": "tests/fixtures/host-outcome/legacy-execution.json",
+      "destination": "tests/fixtures/host-outcome/legacy-execution.json",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T9",
+      "consumer": "tests/contract/host-outcome-bridge.test.mjs",
+      "delete_condition": "remove with the legacy bridge rejection contract",
+      "content_change": "historical execution packet used only for fail-closed rejection coverage",
+      "bytes_after": 206,
+      "sha256_after": "839aee441e1924425af4d0fca49b00e1cfe6000950057d243acb834397ca9a5f"
+    },
+    {
+      "source": "tests/contract/claude-outcome-packet.test.mjs",
+      "destination": "tests/contract/claude-outcome-packet.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T11",
+      "consumer": "build-code contract regression for Claude/host explicit outcome packets",
+      "delete_condition": "remove only when the shared host outcome bridge contract is retired with its consumers",
+      "content_change": "contract coverage for explicit Claude source identity, missing-result failure, and task binding",
+      "bytes_after": 5889,
+      "sha256_after": "0a23940e16e8e524a8bdc7057d955f85d67dba0242531aacad9294d32f5c7b7e"
+    },
+    {
+      "source": "tests/fixtures/claude-outcome/valid-session.json",
+      "destination": "tests/fixtures/claude-outcome/valid-session.json",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T11",
+      "consumer": "tests/contract/claude-outcome-packet.test.mjs",
+      "delete_condition": "remove with the shared Claude outcome packet contract fixture",
+      "content_change": "portable explicit Claude session outcome packet fixture",
+      "bytes_after": 2463,
+      "sha256_after": "8eafdae60dfd06d104736ab4b6a5b72d744cbacb2900a8f49248ada57197548a"
+    },
+    {
+      "source": "tests/contract/metrics-enabled-report.test.mjs",
+      "destination": "tests/contract/metrics-enabled-report.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T14",
+      "consumer": "runtime/evidence/check-skill-closure.mjs metrics report contract",
+      "delete_condition": "remove only with the metrics_enabled report contract and its checker consumer",
+      "content_change": "RED contract coverage for disabled and missing core metric declarations",
+      "bytes_after": 2080,
+      "sha256_after": "ec01fa1ab7ddf0ff67b3e0f0790625210b6861408c592290e68450a294a76974"
+    },
+    {
+      "source": "tests/fixtures/metrics-scan/catalog.json",
+      "destination": "tests/fixtures/metrics-scan/catalog.json",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T14",
+      "consumer": "tests/contract/metrics-enabled-report.test.mjs",
+      "delete_condition": "remove with the metrics_enabled report contract fixture",
+      "content_change": "catalog fixture with disabled core, disabled non-core, and enabled core entries",
+      "bytes_after": 618,
+      "sha256_after": "cc8700b3bbe7a52f1ddd338b4f8a9afcee8a99d5c73d336a504c7527e0a303c3"
+    },
+    {
+      "source": "tests/contract/repo-skills-manifest.test.mjs",
+      "destination": "tests/contract/repo-skills-manifest.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T16",
+      "consumer": "repo-skills manifest generator contract",
+      "delete_condition": "remove only with the catalog-to-manifest generator and its drift checker",
+      "content_change": "RED coverage for fixed manifest fields, catalog mapping, and field-level drift exit",
+      "bytes_after": 2622,
+      "sha256_after": "1cdf9ea751b90a7c413fec059ce2c7fc396e4ef4f25cd8c04ceab66b11782609"
+    },
+    {
+      "source": "tests/fixtures/catalog-drift/catalog.yaml",
+      "destination": "tests/fixtures/catalog-drift/catalog.yaml",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T16",
+      "consumer": "tests/contract/repo-skills-manifest.test.mjs",
+      "delete_condition": "remove with the catalog-to-manifest contract fixture",
+      "content_change": "minimal catalog fixture for deterministic field mapping and drift mutation",
+      "bytes_after": 1001,
+      "sha256_after": "933e8e7afc18402aca49e77aea5264f118b4a5d7bec16d9ff1ac28c01eece1fd"
+    },
+    {
+      "source": "runtime/evidence/check-skill-closure.mjs",
+      "destination": "runtime/evidence/check-skill-closure.mjs",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T15",
+      "consumer": "metrics_enabled core-skill report and existing skill closure checks",
+      "delete_condition": "remove metrics report only with the catalog metric contract and its consumer",
+      "content_change": "add core dependency-closure derivation, metrics_enabled report helpers, and the real catalog checker report entrypoint",
+      "bytes_after": 22334,
+      "sha256_after": "035ab473147a10c3305323a4faf00f242c8f3e866dba50201e24b388e29153e2"
+    },
+    {
+      "source": "skills/catalog.yaml",
+      "destination": "skills/catalog.yaml",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T15",
+      "consumer": "metrics report, repo-skills manifest generator, and skill closure checker",
+      "delete_condition": "remove metrics_enabled only when the metric report and manifest fields are retired together",
+      "content_change": "add metrics_enabled to all 40 skill entries; true for stage consumers and false for non-core entries",
+      "bytes_after": 58475,
+      "sha256_after": "1ad3f26e4abfdf985030c365fc1285c93dd1cd9d3665c932a242d1ed757fdcd0"
+    },
+    {
+      "source": "tools/cli/repo-skills-manifest.mjs",
+      "destination": "tools/cli/repo-skills-manifest.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T17",
+      "consumer": "maintainers generating and checking repo-skills.manifest.json",
+      "delete_condition": "remove only when catalog remains the source and an approved replacement generator is adopted",
+      "content_change": "deterministic catalog-to-manifest generator with field-level drift check",
+      "bytes_after": 4841,
+      "sha256_after": "c7f94df7a9292693ee13b25a5bc3432a592506e228701754006caecaabc933cc"
+    },
+    {
+      "source": "repo-skills.manifest.json",
+      "destination": "repo-skills.manifest.json",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T17",
+      "consumer": "M18 packaging and manifest drift review",
+      "delete_condition": "regenerate or archive only when the catalog-to-manifest contract is replaced with retained provenance",
+      "content_change": "generated all 40 catalog skill entries as the repository skill packaging manifest",
+      "bytes_after": 21365,
+      "sha256_after": "6996830d4f7ea9c13c3362842522827fe3bc9ee9bd8f408cae13f87af5c37768"
+    },
+    {
+      "source": "skills/wh-review/skill-bundle.json",
+      "destination": "skills/wh-review/skill-bundle.json",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T18",
+      "consumer": "wh-review skill closure and M18 distribution metadata",
+      "delete_condition": "remove broker dependency metadata only when the external broker boundary is retired or replaced",
+      "content_change": "declare host-provided 3rd-review-broker engines-style dependency and refresh current file hashes",
+      "bytes_after": 4256,
+      "sha256_after": "90ca1fc860163569f68d20801ac8e996ecf38c98113efaccb2c1c346ed368cab"
+    },
+    {
+      "source": "skills/wh-review/scripts/third-review-host-config.mjs",
+      "destination": "skills/wh-review/scripts/third-review-host-config.mjs",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T18",
+      "consumer": "trusted 3rd-review host config loader",
+      "delete_condition": "remove probe only when broker compatibility is provided by an approved replacement boundary",
+      "content_change": "report unknown compatibility without semver and compatible or incompatible when broker semver is available",
+      "bytes_after": 29538,
+      "sha256_after": "db00dbb5b32f00c9c1801084697851400a93c368b074fe53e1c50cf47f6b5643"
+    },
+    {
+      "source": "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
+      "destination": "skills/wh-review/scripts/__tests__/third-review-host-config.test.mjs",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T18",
+      "consumer": "trusted host config and broker probe regression suite",
+      "delete_condition": "remove with the broker probe contract",
+      "content_change": "assert broker probe unknown, compatible, and incompatible semver semantics plus trusted config projection",
+      "bytes_after": 27084,
+      "sha256_after": "bdac4d5f2c11c9dfa024e7b6c11e934aa18fe3f7844781c837a8e53f23b6892f"
+    },
+    {
+      "source": "skills/reuse-registry.md",
+      "destination": "skills/reuse-registry.md",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T18",
+      "consumer": "maintainers reviewing X2/X3/X4 reuse dispositions",
+      "delete_condition": "remove X disposition record only when its decision is superseded with retained provenance",
+      "content_change": "record X2 not introduced, X3 broker boundary, and X4 adopted",
+      "bytes_after": 19834,
+      "sha256_after": "af2c4b82658552738ba4192fe2688889b02f2bbaec8fa07c73ca17031775e333"
+    },
+    {
+      "source": "docs/reuse-registry.md",
+      "destination": "docs/reuse-registry.md",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T18",
+      "consumer": "maintainers reviewing the human reuse projection",
+      "delete_condition": "remove X disposition projection only with its source registry decision",
+      "content_change": "mirror X2/X3/X4 disposition record in the human registry projection",
+      "bytes_after": 9525,
+      "sha256_after": "9afc0606223359ba72f1666bfb2d928be6a366ac8e275733b549d2efb13fdac6"
+    },
+    {
+      "source": "skills/catalog.yaml",
+      "destination": "skills/catalog.yaml",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T18",
+      "consumer": "wh-review bundle closure hash",
+      "delete_condition": "revert only when the T18 bundle metadata is removed",
+      "content_change": "refresh wh-review local_bundle_hash after broker metadata, cross-project diff delivery, and file hash updates",
+      "bytes_after": 58475,
+      "sha256_after": "bbd9e4352b946de8c60c4fecdec8c8f6d90ee294e3ec923a025d6ae0cdc09600"
+    },
+    {
+      "source": "docs/cli-tool-mapping.md",
+      "destination": "docs/cli-tool-mapping.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T19",
+      "consumer": "multi-CLI maintainers and host adapters",
+      "delete_condition": "archive only when the explicit identity/outcome mapping is superseded with retained provenance",
+      "content_change": "map public tools, permissions, identity/outcome fields, stage capabilities, and missing semantics",
+      "bytes_after": 2829,
+      "sha256_after": "f8faf53c7f91864fc2cece12e8f926e8fbe81fa88f655c98e4b2aea7d6ef44ac"
+    },
+    {
+      "source": "docs/operations/codex-support-verification.md",
+      "destination": "docs/operations/codex-support-verification.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T19",
+      "consumer": "Codex host support and acceptance reviewers",
+      "delete_condition": "archive when a newer source-pinned Codex verification record supersedes it",
+      "content_change": "field-level Codex support conclusions with current dependency, review limits, and synchronized main baseline",
+      "bytes_after": 2301,
+      "sha256_after": "5b277f9574ef8dd50376e0176ee0daeb910501ccd2801b2d4a7c021b0fcaf2f3"
+    },
+    {
+      "source": "docs/operations/claude-e2e-sample.md",
+      "destination": "docs/operations/claude-e2e-sample.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T19",
+      "consumer": "Claude host adapter and M17/M18 maintainers",
+      "delete_condition": "archive when a newer real-session sample supersedes it and retains the failed/incomplete receipt",
+      "content_change": "replayable Claude session outcome sample with explicit incomplete boundary",
+      "bytes_after": 2737,
+      "sha256_after": "90c71469b07e9cd6fcde69962a08ed554bb2a3ee88f4dc3069dd116403cb0818"
+    },
+    {
+      "source": "tests/contract/cli-parity.test.mjs",
+      "destination": "tests/contract/cli-parity.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T20",
+      "consumer": "T20 Codex/DSH parity contract and adapter branch scan",
+      "delete_condition": "remove only when the shared bridge parity contract is replaced with retained equivalent coverage",
+      "content_change": "assert equivalent canonical fields for Codex and DSH host packets and reject CLI-specific bridge branching",
+      "bytes_after": 5488,
+      "sha256_after": "174da6b476ff3c3d9f1d9bad82f07326c5173d4a7df506d6b3b5be5094f7428e"
+    },
+    {
+      "source": "tests/e2e/claude-outcome-packet.test.mjs",
+      "destination": "tests/e2e/claude-outcome-packet.test.mjs",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T20",
+      "consumer": "T20 Claude structured outcome packet replay and official build-code consumer",
+      "delete_condition": "remove only when a newer real-host outcome-packet e2e retains the same identity and incomplete semantics",
+      "content_change": "replay explicit Claude packet through the shared bridge and consume its canonical outcome in build-code",
+      "bytes_after": 6105,
+      "sha256_after": "6ccc8fea4f6e5de2a28d2b833d4cd3e4e8580af90e5e06ae8998cc4e01bc8b7c"
+    },
+    {
+      "source": "tools/architecture/clean-install.mjs",
+      "destination": "tools/architecture/clean-install.mjs",
+      "status": "modify",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T21",
+      "consumer": "T21 clean-install acceptance gate",
+      "delete_condition": "revert only when the no-argument clean-install gate is replaced with an equally complete default check",
+      "content_change": "make the exact no-argument gate execute runner, skill bundle, layout, five-stage task, and current-tree checks",
+      "bytes_after": 16748,
+      "sha256_after": "57460a7601010bbc901e93222f0d92147aae4095d52ed39bb2161ef784866adf"
+    },
+    {
+      "source": "docs/operations/clean-install-archive.md",
+      "destination": "docs/operations/clean-install-archive.md",
+      "status": "add",
+      "owner": "workflowhub-m17-repo-skills-multicli-20260903 T21",
+      "consumer": "T21 clean-install reproducer and acceptance reviewers",
+      "delete_condition": "archive only when a newer source-pinned clean-install record supersedes it and retains failure provenance",
+      "content_change": "record prerequisites, exact command, installed-runner five-stage task output, receipt references, and ten-criterion status",
+      "bytes_after": 4676,
+      "sha256_after": "e132eff651f3de5ed1a0223564ca759d0877cd5168cd6b6b1a557c84116684ae"
+    },
+    {
+      "source": "tests/fixtures/stage-reflection/ac-mapping.md",
+      "destination": "tests/fixtures/stage-reflection/ac-mapping.md",
+      "status": "add",
+      "owner": "stage-reflection constructed contract test",
+      "consumer": "tests/contract/stage-reflection-e2e-constructed.test.mjs",
+      "delete_condition": "remove when the constructed stage-reflection mapping contract is retired",
+      "content_change": "repository fixture keeps twelve AC-to-anchor rows after runtime quality artifacts moved to the external task store",
+      "bytes_after": 1191,
+      "sha256_after": "1778a568e6084e98fb96e41c991b4b909164903d8d50fcb1431134e9fd1a9ef9"
     }
   ]
 }

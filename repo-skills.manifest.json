@@ -1,0 +1,593 @@
+{
+  "schema_version": 1,
+  "source": "skills/catalog.yaml",
+  "skills": [
+    {
+      "id": "stage-reflection",
+      "path": "skills/stage-reflection/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生技能；由各 authoring stage 显式挂载；仅写当前 task 复盘与仓外 lessons，不建立第二控制面",
+      "owner_stage": [
+        "make-decision",
+        "build-spec",
+        "build-plan",
+        "build-code",
+        "verify-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "anysearch",
+      "path": "skills/anysearch/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "SKILL.md"
+      ],
+      "origin_framework": [
+        "anysearch-ai/anysearch-skill"
+      ],
+      "local_changes": "仓内打包；通过 stage manifest 按需加载；不做全局安装",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "decision-log",
+      "path": "skills/decision-log/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生实现；interaction aggregate 的唯一当前 consumer 是 make-decision detail-review/quality-fact contract，owner 是 make-decision，测试是 tests/stage-interaction-contract.test.mjs；consumer 被移除或替换且无其他引用时可删除该事实，不新增独立 runtime",
+      "owner_stage": [
+        "make-decision"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "grill-with-docs",
+      "path": "skills/grill-with-docs/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "skills/engineering/grill-with-docs/SKILL.md",
+        "skills/engineering/domain-modeling/SKILL.md",
+        "skills/productivity/grilling/SKILL.md"
+      ],
+      "origin_framework": [
+        "mattpocock/skills",
+        "mattpocock/skills",
+        "mattpocock/skills"
+      ],
+      "local_changes": "保留四项退出记录和可批量的大白话问题卡；先自行诊断和安全重试，只把方向问题交给用户，未完成不得跳过",
+      "owner_stage": [
+        "make-decision"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "intake-decision-review",
+      "path": "skills/intake-decision-review/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "裁为 wh-review direction 纯 lens；禁止候选方案、交互确认和第二 provider 路径",
+      "owner_stage": [
+        "make-decision"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "simplicity-guard",
+      "path": "skills/simplicity-guard/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生 review-only lens；不参与 stage 生成",
+      "owner_stage": [
+        "make-decision",
+        "build-spec",
+        "build-plan",
+        "build-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "talk-with-zhipeng",
+      "path": "skills/talk-with-zhipeng/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生实现；问题卡支持一组独立问题、编号选项、后果和风险，用户可部分回答后重新排序",
+      "owner_stage": [
+        "make-decision"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "spec-research",
+      "path": "skills/spec-research/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生实现",
+      "owner_stage": [
+        "build-spec",
+        "build-plan"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "spec-specify",
+      "path": "skills/spec-specify/SKILL.md",
+      "version": "1.2.0",
+      "origin_path": [
+        "templates/commands/specify.md"
+      ],
+      "origin_framework": [
+        "github/spec-kit"
+      ],
+      "local_changes": "恢复为可搬运的内容合同和模板；编排仍由 build-spec 负责，不新增第二 runtime",
+      "owner_stage": [
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "spec-clarify",
+      "path": "skills/spec-clarify/SKILL.md",
+      "version": "1.1.0",
+      "origin_path": [
+        "templates/commands/clarify.md"
+      ],
+      "origin_framework": [
+        "github/spec-kit"
+      ],
+      "local_changes": "保留可独立搬运的十维歧义扫描合同和批量问题卡；由 build-spec 唯一消费，不能在 make-decision 再接入第二套 Clarify；closure test 校验唯一归属",
+      "owner_stage": [
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "spec-plan",
+      "path": "skills/spec-plan/SKILL.md",
+      "version": "1.3.0",
+      "origin_path": [
+        "templates/commands/plan.md",
+        "skills/writing-plans/SKILL.md"
+      ],
+      "origin_framework": [
+        "github/spec-kit",
+        "obra/superpowers"
+      ],
+      "local_changes": "恢复速读卡、技术锚点、reuse-extend-new、阶段交接、RED/GREEN、追溯映射和 F10 约束；不新增运行时状态或宿主交接字段；plan 字节幂等由 ArtifactDir.writeAtomic 和 core/__tests__/artifact-dir.test.mjs 负责，不恢复 retry_contract；若正式 writer 与该测试都移除时一并删除本说明",
+      "owner_stage": [
+        "build-plan"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "spec-tasks",
+      "path": "skills/spec-tasks/SKILL.md",
+      "version": "2.2.0",
+      "origin_path": [
+        "templates/commands/tasks.md",
+        "skills/writing-plans/SKILL.md"
+      ],
+      "origin_framework": [
+        "github/spec-kit",
+        "obra/superpowers"
+      ],
+      "local_changes": "恢复任务卡、阶段 Goal/Files/STOP/Done、RED/GREEN、最终聚合卡和双向追溯；状态仍只是 tasks.md 描述事实，不承载 runtime 状态机",
+      "owner_stage": [
+        "build-plan"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "spec-analyze",
+      "path": "skills/spec-analyze/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "workflowhub 原生 report-only validator/lens；spec-analyze 是前四个产物 stage 收尾唯一的 stage-end 语义检查与质量事实契约 owner，verify-code 改用 dsh-code-review；现有 stage publication 是唯一写入路径，原子写入 quality/facts 与 acceptance evidence；当前 build-plan consumer 仍使用 planning_artifacts packet projection 和 contract tests，runtime 在既有 stage outcome 中认证 packet/result 与当前快照、材料、analyzer step、spec-analyze skill 的绑定；检查实际语义、场景、oracle、产物和 fresh evidence，不把编号或文件存在当作证明；结果复用既有 quality-fact 路径；DEFER/OPEN 按条目上下文检查 handoff；不直接改四份材料、不创建第二 store、projection 或门禁；six-part summary 随现有 stage outcome 交接；finding 先在当前 stage 修复并重跑；unavailable 不等于 pass；没有 runtime work gate、provider pass predicate 或新质量 gate，但缺失或不一致会如实降低当前 stage quality；当现有 consumer 移除且无历史材料引用时删除",
+      "owner_stage": [
+        "make-decision",
+        "build-spec",
+        "build-plan",
+        "build-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "dsh-code-review",
+      "path": "skills/dsh-code-review/SKILL.md",
+      "version": "1.1.0",
+      "origin_path": [
+        ".agents/skills/dsh-code-review/SKILL.md",
+        ".agents/skills/dsh-find-simplifications/SKILL.md",
+        ".agents/skills/dsh-doc-standards/SKILL.md",
+        ".agents/skills/dsh-prose-standard/SKILL.md",
+        ".agents/skills/dsh-trim-cot-leakage/SKILL.md"
+      ],
+      "origin_framework": [
+        "deepseek-ai/deepseek-harness",
+        "deepseek-ai/deepseek-harness",
+        "deepseek-ai/deepseek-harness",
+        "deepseek-ai/deepseek-harness",
+        "deepseek-ai/deepseek-harness"
+      ],
+      "local_changes": "将代码审查、简化、文档、prose 和过程叙述检查合并进一次 dsh-code-review 调用；删除宿主绑定，不新增 dispatch/provider/receipt/control-plane；不检查材料、AC、receipt 或证据完整性",
+      "owner_stage": [
+        "verify-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "stage-step-receipts",
+      "path": "skills/stage-step-receipts/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "仅保留历史合同 provenance；当前阶段不依赖该 absorbed skill，不恢复独立 receipt runtime；closure test 只确认它没有被重新接入；当历史审计与 provenance 不再需要该条目时移除",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "audit-summary-carrier",
+      "path": "skills/audit-summary-carrier/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "已吸收到 runtime evidence facts；当前没有阶段 consumer，不保留独立 runtime skill；catalog 与 closure test 只保留其历史 provenance；当历史审计与 provenance 不再需要该条目时移除",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "requirement-lineage",
+      "path": "skills/requirement-lineage/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "make-decision audit P0 原生合同；由 canonical requirements artifacts 消费",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "workflowhub-host-protocol",
+      "path": "skills/workflowhub-host-protocol/SKILL.md",
+      "version": "0.1.1",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "宿主直接调度五阶段 portable package；删除 host bridge、receipt 门禁和评论状态机，保留 worktree 隔离与真实通知",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "workflowhub-multica-sync",
+      "path": "skills/workflowhub-multica-sync/SKILL.md",
+      "version": "1.3.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "只读审计和显式确认后的 Multica CLI 同步；阶段只认 SKILL.md、skill-deps.yaml、steps.json；不改运行时",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "wh-review",
+      "path": "skills/wh-review/SKILL.md",
+      "version": "4.1.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "只冻结材料并调用一次新的 3rd-review 公共 run；不发起 continuation/session 恢复，删除 scope_revision、本地协调锁、provider polling 和第二 timeout，保留路径安全与 broker 返回的原始 provenance",
+      "owner_stage": [
+        "make-decision",
+        "build-spec",
+        "build-plan",
+        "build-code",
+        "verify-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "mini-task",
+      "path": "skills/mini-task/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "薄 runner；不新增第六 stage、第五材料、关系对象或公共 runtime；mini-task Git close 复用 task-close，A 恢复使用认证 workspace 和普通 merge",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "plan-ceo-review",
+      "path": "skills/plan-ceo-review/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "plan-ceo-review"
+      ],
+      "origin_framework": [
+        "garrytan/gstack"
+      ],
+      "local_changes": "裁为 report-only lens；去 runtime/gbrain/telemetry",
+      "owner_stage": [
+        "make-decision",
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "plan-design-review",
+      "path": "skills/plan-design-review/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "plan-design-review"
+      ],
+      "origin_framework": [
+        "garrytan/gstack"
+      ],
+      "local_changes": "裁为 report-only lens；去浏览器 daemon 和宿主命令",
+      "owner_stage": [
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "plan-eng-review",
+      "path": "skills/plan-eng-review/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "plan-eng-review"
+      ],
+      "origin_framework": [
+        "garrytan/gstack"
+      ],
+      "local_changes": "裁为 report-only lens；去 gstack 编排依赖",
+      "owner_stage": [
+        "build-plan"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "review",
+      "path": "skills/review/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "review"
+      ],
+      "origin_framework": [
+        "garrytan/gstack"
+      ],
+      "local_changes": "裁为 wh-review lens；禁止自动修复和第二 review flow",
+      "owner_stage": [
+        "make-decision",
+        "build-spec",
+        "build-plan",
+        "build-code",
+        "verify-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "resolving-merge-conflicts",
+      "path": "skills/resolving-merge-conflicts/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "WorkflowHub close 冲突恢复约束；唯一消费者=core/task-close.mjs:1411 合并冲突报错路径",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "test-strategy",
+      "path": "skills/test-strategy/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "skills/engineering/tdd/SKILL.md",
+        "skills/test-driven-development/testing-anti-patterns.md"
+      ],
+      "origin_framework": [
+        "mattpocock/skills",
+        "obra/superpowers"
+      ],
+      "local_changes": "已吸收到 build-code/verify-code 当前测试与 fresh-evidence 合同；保留 provenance，不保留独立 runtime skill",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "debate",
+      "path": "skills/debate/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "SKILL.md"
+      ],
+      "origin_framework": [
+        "Hugh4424/debate"
+      ],
+      "local_changes": "保留仓内 provenance；仅作可选诊断，不进入核心 Bundle 或生产扫描",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "diagnosing-bugs",
+      "path": "skills/diagnosing-bugs/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "skills/engineering/diagnosing-bugs",
+        "skills/systematic-debugging",
+        "investigate"
+      ],
+      "origin_framework": [
+        "mattpocock/skills",
+        "obra/superpowers",
+        "garrytan/gstack"
+      ],
+      "local_changes": "保留仓内 provenance；根因事实由当前 build-code 直接记录，不进入核心 Bundle 或生产扫描",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "review-response",
+      "path": "skills/review-response/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "skills/receiving-code-review"
+      ],
+      "origin_framework": [
+        "obra/superpowers"
+      ],
+      "local_changes": "最小 disposition fact 已合并到 wh-review；删除独立 flow/resolution validator",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "test-routing-advisor",
+      "path": "skills/test-routing-advisor/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "packages/core/agenthub/skills/test-routing-advisor/SKILL.md"
+      ],
+      "origin_framework": [
+        "Hugh4424/AgentHub"
+      ],
+      "local_changes": "保留三档路由判断；build-plan 写入预判，build-code 按真实 changed files 必要时重判",
+      "owner_stage": [
+        "build-plan",
+        "build-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "testing-system-blueprint",
+      "path": "skills/testing-system-blueprint/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "packages/core/agenthub/skills/testing-system-blueprint/SKILL.md"
+      ],
+      "origin_framework": [
+        "Hugh4424/AgentHub"
+      ],
+      "local_changes": "作为 build-plan 的 advisory 测试设计输入，并由 build-code 消费；不新增 AgentHub release gate 或执行器控制面",
+      "owner_stage": [
+        "build-plan"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "backend-testing",
+      "path": "skills/backend-testing/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "packages/core/agenthub/skills/backend-testing/SKILL.md"
+      ],
+      "origin_framework": [
+        "Hugh4424/AgentHub"
+      ],
+      "local_changes": "只保留测试方法和证据字段；失败是质量事实，不是推进 gate",
+      "owner_stage": [
+        "build-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "frontend-testing",
+      "path": "skills/frontend-testing/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "packages/core/agenthub/skills/frontend-testing/SKILL.md"
+      ],
+      "origin_framework": [
+        "Hugh4424/AgentHub"
+      ],
+      "local_changes": "保留状态/交互维度、UI phase/task 字段和失败证据；owner 是 build-code 前端测试路由，consumer 是真实 UI changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience、service/API/DTO identity 和 cleanup；截图或 browser pass 不变成普遍 gate；不新增 Runner；delete-condition 为 frontend-testing 退役且无阶段引用",
+      "owner_stage": [
+        "build-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "fullstack-slice-testing",
+      "path": "skills/fullstack-slice-testing/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "packages/core/agenthub/skills/fullstack-slice-testing/SKILL.md"
+      ],
+      "origin_framework": [
+        "Hugh4424/AgentHub"
+      ],
+      "local_changes": "适配为风险证据技能；不恢复强制 commit/worktree/release gate",
+      "owner_stage": [
+        "build-code"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "isolated-browser-qa",
+      "path": "skills/isolated-browser-qa/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "isolated-browser-qa"
+      ],
+      "origin_framework": [
+        "workflowhub"
+      ],
+      "local_changes": "搬入完整闭包；去个人绝对路径；owner 是 isolated browser QA，consumer 是官方 build-code controlled QA seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，blocked/unknown 保留 failure_reason，取消和 cleanup 必须可见；不新增 Runner；delete-condition 为 browser QA 路由退役或被唯一替代",
+      "owner_stage": [],
+      "metrics_enabled": false
+    },
+    {
+      "id": "ui-project-init",
+      "path": "skills/ui-project-init/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "WorkflowHub 原生可搬运入口；owner 是 UI 交付合同，consumer 是 build-spec 的 UI 分支；delete-condition 所有 UI consumer 迁移后",
+      "owner_stage": [
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "design-source-readiness",
+      "path": "skills/design-source-readiness/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "WorkflowHub 原生只读 lens；owner 是 UI 交付合同，consumer 是 build-spec 的现有 plan-design-review；delete-condition consumer 迁移后",
+      "owner_stage": [
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "frontend-prototype-render",
+      "path": "skills/frontend-prototype-render/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [],
+      "origin_framework": [],
+      "local_changes": "WorkflowHub 原生渲染入口；owner 是 build-spec，唯一 consumer 是 build-spec UI path；test=tests/contract/frontend-prototype-render-skill.test.mjs；不改产品源码；delete-condition build-spec UI consumer 迁移后",
+      "owner_stage": [
+        "build-spec"
+      ],
+      "metrics_enabled": true
+    },
+    {
+      "id": "frontend-component-quality",
+      "path": "skills/frontend-component-quality/SKILL.md",
+      "version": "1.0.0",
+      "origin_path": [
+        "skills/react-best-practices/AGENTS.md"
+      ],
+      "origin_framework": [
+        "vercel-labs/agent-skills"
+      ],
+      "local_changes": "公开唯一组件质量入口；Vercel 只读为 React/Next 内部 lens；owner 是 UI 交付合同；delete-condition consumer 迁移后",
+      "owner_stage": [
+        "build-plan",
+        "build-code",
+        "verify-code"
+      ],
+      "metrics_enabled": true
+    }
+  ]
+}

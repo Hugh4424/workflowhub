@@ -1,10 +1,14 @@
 ---
 name: wh-review
 description: Send current-stage materials to configured heterologous reviewers and return their real findings.
-version: 4.0.0
+version: 4.1.0
 ---
 
 # wh-review
+
+## Change notes
+
+- 4.1.0 (minor): declare the host-provided 3rd-review broker range and preserve an explicit `unknown` compatibility result when the broker does not expose semver metadata.
 
 ## Purpose
 

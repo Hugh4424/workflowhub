@@ -111,6 +111,12 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 make-decision 的完整决策记录；逐题保存问题、最终选择、推荐理由、后果、风险和大白话说明，下游只通过 accepted make-decision facts 中的 `decision_ref` 定位当前版本。
 vNext 的当前文件位于认证 worktree 根目录 `decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
 
+**显式任务身份（explicit task identity）**：
+公共入口使用成对的 `--project` 与 `--task`，或从已认证 task worktree 取得当前身份。宿主桥接还必须提交匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 和 `agent_run_id`；旧 session/env、cwd 猜测和 transcript 扫描不构成身份来源。
+
+**Stage Agent outcome**：
+外部宿主对当前阶段已执行结果的显式提交，只能是 `session` 或 `unavailable`。现有 bridge 将其绑定到当前 task、stage、attempt、snapshot 和材料 revision 后，由 `TaskKernel` 写入 `workflowhub-stage-outcomes.v1`；它不是质量 receipt、第二套控制面或阶段推进门禁。
+
 **工作继续（work continuation）**：
 同一 task 在质量事实缺失、不一致或不可用时仍可继续编辑、补证据和修复；它不表示 stage 已完成。
 

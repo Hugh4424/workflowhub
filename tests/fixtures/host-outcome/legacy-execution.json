@@ -1,0 +1,8 @@
+{
+  "project_name": "WorkflowHub",
+  "task_id": "host-outcome-fixture",
+  "stage": "build-code",
+  "task_path": "/absolute/path/to/task",
+  "attempt_id": "attempt-host-outcome-fixture",
+  "execution": {}
+}

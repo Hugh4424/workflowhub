@@ -4,6 +4,14 @@ UI governance records include an explicit owner, consumer, and delete condition.
 
 机器真相：[`catalog.yaml`](catalog.yaml)。本文件是人读投影。固定版本、完整 `upstream`、依赖闭包和更新策略以 catalog 为准；禁止用 `main/latest` 代替固定 commit。`unresolved-*-snapshot` 表示历史导入未保存 commit，更新前必须先补齐，不能假装已固定。
 
+## 状态词表与 M17 审计
+
+复用状态只使用 catalog 当前词表：`native`（仓内实现）、`adopted`（外部原样采用）、`adapted`（外部改造）、`absorbed`（规则已吸收，不保留独立 skill）、`rejected`（明确拒绝）和 `watch`（观察中）。`docs/reuse-registry.md` 记录同一词表和审计结论，不另立状态名。
+
+2026-09-05 `_spike` 审计：扫描当前 `skills/` 路径未发现 `_spike` 目录或文件；本结论只证明当前仓内扫描范围，不推断仓外历史目录已删除。
+
+2026-09-05 M17 X 处置：X2 委派不引入；X3 保持独立 3rd-review broker，通过 `wh-review` 薄入口声明运行依赖 `>=1.2.0`，当前 host adapter 探针因 broker 未暴露 semver 而报告 `unknown`；X4 `debate` 状态为 `adopted`，仅作可选诊断，不进入核心 Bundle。
+
 ## 兼容索引
 
 下表保留旧合同依赖的三列格式；不作为完整 provenance 真相。
@@ -67,8 +75,6 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `plan-design-review` — adapted；build-spec UI 条件。来源 gstack [`plan-design-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-design-review)，MIT。去浏览器 daemon。
 - `plan-eng-review` — adapted；build-plan。来源 gstack [`plan-eng-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review)，MIT。裁为 report-only lens。
 - `review` — adapted；make-decision/build-spec/build-plan。来源 gstack [`review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/review)，MIT。只作为 wh-review lens。
-- `qa-only` — adapted；verify-code。来源 gstack [`qa-only`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/qa-only)，MIT。去浏览器 daemon，只消费 sealed packet。
-- `verify-change` — adapted；verify-code。来源 AgentHub [`verify-change`](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/verify-change)，MIT。裁为 lens；full/close 由 verify-code 承接。
 - `resolving-merge-conflicts` — native；verify-code close 冲突恢复。只在 task 分支解决冲突，不接管 target 合并、推送或清理。
 - `test-strategy` — adapted；verify-code。来源 AgentHub 固定快照，MIT。适配 workflowhub AC-to-test-route 和 L2/L3 证据合同。
 - `debate` — adopted；make-decision 条件增强。来源 [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/blob/af121a1e24ae3af48f5e132d3de1342d16eccf31/SKILL.md)，MIT。仓内路径；失败记录 diagnostic 后继续。

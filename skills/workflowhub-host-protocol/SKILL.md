@@ -15,6 +15,8 @@ description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任�
 
 不得把 `doctor → invoke → receipt → publication → status`、Runner、TaskHandle、receipt、snapshot、invocation outcome、comment 或 handoff proof 变成开始或继续工作的许可证。
 
+每次阶段调用都必须有可验证的显式任务身份：公共入口接受成对的 `--project` 与 `--task`，或从已认证 task worktree 取得身份；宿主桥接则必须提交匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 与 `agent_run_id`。旧 session/env 字段、cwd 猜测和 transcript 扫描都不是身份来源。
+
 ## 任务与 worktree
 
 - WorkflowHub 运行仓与业务仓分开。只使用项目登记资源或宿主明确注入的绝对路径，不扫描目录、不猜路径、不从旧记录回退。
@@ -71,11 +73,9 @@ description: 让外部宿主按五阶段接线 WorkflowHub，并把调度、任�
 
 这不是“测试里调用一下 adapter”就算接通。只有确实采用外部宿主时，生产宿主才需要在同一个真实任务上做到下面几件事。WorkflowHub 标准流程不要求 Multica，也不从当前任务启动或推断任何外部宿主：
 
-1. 用一份显式绑定文件按宿主自己的任务 ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用宿主 claim ID 替代；`attempt_id` 可留空并由宿主生成当前 claim 的稳定标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
-2. 启动 Stage Agent 前，把当前绑定、宿主专用的 outcome 文件路径和正式 run 输入文件路径注入它：`WORKFLOWHUB_STAGE_OUTCOME_PATH` 写 Stage Agent 的 `execution`，`WORKFLOWHUB_STAGE_RUN_INPUT_PATH` 写正式 run 所需的真实 receipts、AC 覆盖和 finding 处置。Agent 执行完后，必须自己写出这两份结构化结果，不能由宿主根据最终评论反推步骤、技能或质量事实。
-3. 宿主在启动 Agent 前记录本次 Agent 执行开始时间，并在正式 run 时通过 `WORKFLOWHUB_CODEX_ROLLOUT_STARTED_AT` 传入 Unix 毫秒或 RFC3339 时间。这样正式入口能读取 Agent 已经产生、但早于 delivery command 的真实 transcript/token/tool 事件；没有这个边界时不得用历史会话回填。
-4. Agent 结束后，宿主用 WorkflowHub 私有桥接入口把这个真实结果交给现有 `TaskKernel` adapter；桥接成功后，宿主把返回的 `outcome_ref` 写入正式 run 输入并调用公共 `stage-runtime run --action=execute`。缺文件、身份不符、桥接失败或正式 run 失败，宿主任务必须失败并保留原始错误。Agent 不得把自己写文件当成阶段完成；正式 run 由宿主负责调用。
-5. 宿主绑定属于配置事实，不属于四份当前材料，也不创建第二套 WorkflowHub 状态机。桥接入口只转发一个已经执行的结果，不启动 Agent、不解析 session、不扫描目录、不补零成本；正式 run 仍由 WorkflowHub 公共入口完成。
+1. 用一份显式绑定文件按宿主自己的任务 ID 找到 WorkflowHub 的 `project_name`、固定 `task_id`、`task_path`、当前 `stage`、WorkflowHub runtime 根目录和存储根目录；`task_id` 必须是任务目录的真实 ID，不能用宿主 claim ID 替代；`attempt_id` 与 `agent_run_id` 都必须是当前尝试的稳定非空标识；找不到、缺少固定 `task_id` 或匹配多个就停止，不能从 issue 标题、cwd、session 目录或时间猜。
+2. Agent 结束后，宿主用 WorkflowHub 私有桥接入口提交一个显式 `session` 或 `unavailable` 结果，并交给现有 `TaskKernel` adapter；桥接成功后，宿主把返回的 `outcome_ref` 写入正式 run 输入并调用公共 `stage-runtime run --action=execute`。桥接不接受历史 `execution` 或质量 receipt；缺文件、身份不符、缺 `agent_run_id`、桥接失败或正式 run 失败，宿主任务必须失败并保留原始错误。Agent 不得把自己写文件当成阶段完成；正式 run 由宿主负责调用。
+3. 宿主绑定属于配置事实，不属于四份当前材料，也不创建第二套 WorkflowHub 状态机。桥接入口只校验并转发已提交的结构化结果，不启动 Agent、不读取 transcript、不扫描目录、不补零成本；正式 run 仍由 WorkflowHub 公共入口完成。
 
 ## 评论
 

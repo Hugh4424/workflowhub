@@ -111,6 +111,55 @@ export function checkReleaseClosure({ skillRelease, runnerRelease } = {}) {
   return { ok: errors.length === 0, errors };
 }
 
+function skillNameFromLocator(locator) {
+  if (typeof locator !== "string" || locator.trim() === "") return null;
+  const parts = locator.split("/").filter(Boolean);
+  return parts.at(-1) ?? null;
+}
+
+export function coreSkillNamesFromCatalog(catalog) {
+  const entries = Array.isArray(catalog?.skills) ? catalog.skills : [];
+  const byName = new Map(entries.filter(entry => typeof entry?.name === "string").map(entry => [entry.name, entry]));
+  const core = new Set(entries
+    .filter(entry => Array.isArray(entry?.used_by_stages) && entry.used_by_stages.length > 0)
+    .map(entry => entry.name));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const name of [...core]) {
+      for (const locator of byName.get(name)?.dependency_closure ?? []) {
+        const dependencyName = skillNameFromLocator(locator);
+        if (dependencyName && byName.has(dependencyName) && !core.has(dependencyName)) {
+          core.add(dependencyName);
+          changed = true;
+        }
+      }
+    }
+  }
+  return [...core].sort();
+}
+
+export function buildMetricsEnabledReport({ catalog, coreSkillNames } = {}) {
+  const entries = Array.isArray(catalog?.skills) ? catalog.skills : [];
+  const byName = new Map(entries.filter(entry => typeof entry?.name === "string").map(entry => [entry.name, entry]));
+  const names = (coreSkillNames ?? coreSkillNamesFromCatalog(catalog))
+    .filter(name => typeof name === "string" && name.trim() !== "")
+    .filter((name, index, all) => all.indexOf(name) === index)
+    .sort();
+  const disabledCoreSkills = names.filter(name => byName.get(name)?.metrics_enabled === false);
+  const missingCoreSkills = names.filter(name => {
+    const value = byName.get(name)?.metrics_enabled;
+    return value !== true && value !== false;
+  });
+  return {
+    core_skills: names,
+    disabled_core_skills: disabledCoreSkills,
+    missing_core_skills: missingCoreSkills,
+    ok: disabledCoreSkills.length === 0 && missingCoreSkills.length === 0,
+  };
+}
+
 export function checkSkillClosure(packageRoot) {
   const root = fs.realpathSync(packageRoot);
   const errors = [];
@@ -310,6 +359,25 @@ export function checkSkillClosure(packageRoot) {
   return { ok: errors.length === 0, errors };
 }
 
+export function checkSkillClosureReport(packageRoot) {
+  const result = checkSkillClosure(packageRoot);
+  let metricsEnabledReport;
+  try {
+    const root = fs.realpathSync(packageRoot);
+    const catalog = readYaml(path.join(root, "skills/catalog.yaml"));
+    metricsEnabledReport = buildMetricsEnabledReport({ catalog });
+  } catch (error) {
+    metricsEnabledReport = {
+      core_skills: [],
+      disabled_core_skills: [],
+      missing_core_skills: [],
+      ok: false,
+      error: error.message,
+    };
+  }
+  return { ...result, metrics_enabled_report: metricsEnabledReport };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // This module now lives two levels below the package root.  Keep the CLI
   // default rooted at the installed/source package, otherwise it resolves
@@ -317,9 +385,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = process.argv[2]
     ? path.resolve(process.argv[2])
     : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const result = checkSkillClosure(root);
+  const result = checkSkillClosureReport(root);
   if (!result.ok) {
     console.error(result.errors.map(error => `- ${error}`).join("\n"));
     process.exitCode = 1;
-  } else console.log("skill closure: ok");
+  } else console.log(JSON.stringify(result, null, 2));
 }

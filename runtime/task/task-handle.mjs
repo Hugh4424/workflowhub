@@ -29,8 +29,8 @@ import {
   assertTaskKernel,
   brandTaskHandle,
   brandTaskKernel,
-} from "../../core/task-capability.mjs";
-export { assertTaskHandle, assertTaskKernel } from "../../core/task-capability.mjs";
+} from "./task-capability.mjs";
+export { assertTaskHandle, assertTaskKernel } from "./task-capability.mjs";
 
 const FORBIDDEN_MANIFEST_FIELDS = new Set([
   "status", "stage_map", "updated_at", "lock", "worktree", "worktree_root",

@@ -1,0 +1,25 @@
+{
+  "skills": [
+    {
+      "name": "core-runtime",
+      "path": "skills/core-runtime/SKILL.md",
+      "used_by_stages": ["build-code"],
+      "dependency_closure": ["skills/core-runtime"],
+      "metrics_enabled": false
+    },
+    {
+      "name": "optional-doc",
+      "path": "skills/optional-doc/SKILL.md",
+      "used_by_stages": [],
+      "dependency_closure": ["skills/optional-doc"],
+      "metrics_enabled": false
+    },
+    {
+      "name": "core-dependent",
+      "path": "skills/core-dependent/SKILL.md",
+      "used_by_stages": [],
+      "dependency_closure": [],
+      "metrics_enabled": true
+    }
+  ]
+}

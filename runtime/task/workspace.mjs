@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { assertTaskHandle } from "../../core/task-capability.mjs";
+import { assertTaskHandle } from "./task-capability.mjs";
 import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES } from "../task/git-worktree-snapshot.mjs";
 
 const WORKSPACES = new WeakSet();

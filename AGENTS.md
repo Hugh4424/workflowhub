@@ -39,6 +39,7 @@
 - 测试、审查、历史和 inventory/complexity 只产生事实证据，不是推进许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不能伪造通过。
 - provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
 - 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。
+- 外部 Stage Agent 只能通过现有 bridge 提交显式 `project_name/task_id/task_path/stage/attempt_id/agent_run_id` 与 `session` 或 `unavailable`；不读取旧 session/env、不扫描 transcript、不提交质量 receipt。
 
 ## vNext 永久实施边界
 
