@@ -4,9 +4,14 @@ import { createCanonicalReviewWriter } from "../../runtime/evidence/canonical-re
 import { aggregateProviderResults } from "../../skills/wh-review/scripts/review-result.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
 
 /** Write a complete create-only wh-review attempt/provider/result chain for tests. */
-export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", findingSeverity = "major", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain } = {}) {
+export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrack = null, verdict = "pass", findingSeverity = "major", provider = "fixture-provider", subjectKind = "worktree", phaseId = null, reviewScope = stage === "build-code" ? (subjectKind === "phase" ? "phase" : "integration") : null, reviewChain, materialRevision = null } = {}) {
   const attemptId = randomUUID();
   const writer = createCanonicalReviewWriter({ task, taskId: task.identity.taskId, stage });
   const reviewRoot = task.manifest.record_model === "vnext-single-write" ? "quality/reviews" : "reviews";
@@ -24,13 +29,22 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
     evidence: "fixture evidence is intentionally anchored to the fixture path",
   };
   const providerOutput = { findings: verdict === "pass" ? [] : [finding] };
-  writer.writeProviderOutput(outputRef, JSON.stringify(providerOutput), 1);
+  writer.writeProviderOutput(outputRef, JSON.stringify(providerOutput), {
+    provider,
+    evidence_anchor_valid: providerOutput.findings.map(() => true),
+  });
   const materialId = sha256(`${stage}:${reviewTrack}:${snapshotTree}:${attemptId}`);
   const subject = { subject_kind: subjectKind, phase_id: phaseId, review_scope: reviewScope, base_tree: snapshotTree, candidate_tree: snapshotTree };
   const identity = { provider, adapter: provider.split("/", 1)[0], source_id: `${provider}-source`, config_id: `${provider}-config`, model: null };
+  const reviewPolicy = {
+    source: "wh_review.v2", mode: "single_round", minimum_heterologous: 1,
+    requested_profiles: [provider], eligible_profiles: [provider], same_source_exclusions: [],
+    effective_profiles: [{ provider, adapter: provider.split("/", 1)[0], model: null, effort: null, thinking: null }],
+  };
   writer.writeAttempt(attemptRef, {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: task.identity.taskId, stage,
-    review_track: reviewTrack, source, snapshot_tree: snapshotTree, material_id: materialId, ...subject,
+    review_track: reviewTrack, source, snapshot_tree: snapshotTree, material_id: materialId, ...(materialRevision ? { material_revision: materialRevision } : {}), ...subject,
+    review_policy: reviewPolicy, policy_snapshot_hash: sha256(canonicalJson(reviewPolicy)),
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
     provider_attempts: [{ provider, identity, status: "completed", session_id: "fixture-session", runtime_id: "fixture-runtime", output_ref: outputRef, error: null }],
     terminal_status: "semantic", error: null,
@@ -39,7 +53,7 @@ export function writeFormalReviewFixture({ task, stage, snapshotTree, reviewTrac
   const findings = aggregation.findings.map((item) => ({ provider: item.providers[0], ...item }));
   writer.writeResult(resultRef, {
     version: "wh-review-result.v1", task_id: task.identity.taskId, stage, review_track: reviewTrack,
-    source, snapshot_tree: snapshotTree, material_id: materialId, attempt_ref: attemptRef, ...subject,
+    source, snapshot_tree: snapshotTree, material_id: materialId, ...(materialRevision ? { material_revision: materialRevision } : {}), attempt_ref: attemptRef, ...subject,
     ...(reviewChain === undefined ? {} : { review_chain: reviewChain }),
     provider_results: [{ provider, output: providerOutput }],
     findings, adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters },

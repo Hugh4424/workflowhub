@@ -524,8 +524,30 @@ export function publishStageAgentOutcome({
   const raw = canonicalJson(value);
   const digest = sha256(raw);
   const ref = `quality/evidence/stage-outcomes/${stage}/${digest}.json`;
-  safeKernel.publishCanonicalRecord(ref, raw);
-  return Object.freeze({ ref, sha256: digest, value: Object.freeze(value) });
+  const lockRef = `quality/evidence/stage-outcomes/${stage}/.attempt-${sha256(`${safeTask.identity.taskId}\0${stage}\0${attemptId}`)}.lock`;
+  return safeTask.withRecordLock(lockRef, () => {
+    let idempotentMatch = null;
+    for (const existingRef of safeTask.listCanonicalStageOutcomeRefs(stage)) {
+      let existing;
+      try { existing = JSON.parse(safeTask.readRecord(existingRef)); } catch { continue; }
+      if (existing?.task_id !== safeTask.identity.taskId || existing?.stage !== stage || existing?.attempt_id !== attemptId) continue;
+      const existingRaw = safeTask.readRecord(existingRef);
+      if (existingRaw !== raw) {
+        const error = new Error(`BRIDGE_REPLAY_CONFLICT: attempt ${attemptId} already has a different stage outcome`);
+        error.code = "BRIDGE_REPLAY_CONFLICT";
+        throw error;
+      }
+      // Do not return early: another immutable record for the same attempt
+      // may still carry conflicting bytes.  The complete set must be scanned
+      // before an idempotent replay is accepted.
+      idempotentMatch ??= { ref: existingRef, value: Object.freeze(existing) };
+    }
+    if (idempotentMatch) {
+      return Object.freeze({ ref: idempotentMatch.ref, sha256: digest, value: idempotentMatch.value, idempotent: true });
+    }
+    safeKernel.publishCanonicalRecord(ref, raw);
+    return Object.freeze({ ref, sha256: digest, value: Object.freeze(value), idempotent: false });
+  });
 }
 
 function clockValue(now, label) {
@@ -614,7 +636,14 @@ export function createWorkflowHubSessionRecorder({
   text(attemptId, "attemptId");
   const subjects = sessionManifest(stage);
   const stepBySlug = new Map(subjects.steps.map((entry) => [entry.step_slug, entry]));
-  const skillById = new Map(subjects.skills.map((entry) => [entry.name, entry]));
+  const skillIdentity = (entry) => entry.skill_id ?? entry.name;
+  const skillById = new Map(subjects.skills.flatMap((entry) => {
+    const canonical = skillIdentity(entry);
+    return [
+      [canonical, entry],
+      ...(entry.name && entry.name !== canonical ? [[entry.name, entry]] : []),
+    ];
+  }));
   const activeSubjects = new Map();
   const finishedSteps = new Map();
   const finishedSkills = new Map();
@@ -624,9 +653,12 @@ export function createWorkflowHubSessionRecorder({
     if (closed) throw new Error("WorkflowHub session recorder is already closed");
     const expected = subjectKind === "step" ? stepBySlug.get(subjectId) : skillById.get(subjectId);
     if (!expected) throw new Error(`${stage} ${subjectKind} is not declared: ${subjectId}`);
-    const key = `${subjectKind}:${subjectId}`;
-    if (activeSubjects.has(key) || (subjectKind === "step" ? finishedSteps : finishedSkills).has(subjectId)) {
-      throw new Error(`${stage} ${subjectKind} was started more than once in the same attempt: ${subjectId}`);
+    const key = `${subjectKind}:${subjectKind === "skill" ? skillIdentity(expected) : subjectId}`;
+    const finishedId = subjectKind === "skill" ? skillIdentity(expected) : subjectId;
+    if (activeSubjects.has(key) || (subjectKind === "step" ? finishedSteps : finishedSkills).has(finishedId)) {
+      const error = new Error(`${stage} ${subjectKind} was started more than once in the same attempt: ${subjectId}`);
+      error.code = "BRIDGE_SUBJECT_DUPLICATE";
+      throw error;
     }
     const startedAt = clockValue(now, "session clock");
     activeSubjects.set(key, { expected, startedAt });
@@ -670,7 +702,7 @@ export function createWorkflowHubSessionRecorder({
             cost: costValue,
           };
       if (subjectKind === "step") finishedSteps.set(subjectId, output);
-      else finishedSkills.set(subjectId, output);
+      else finishedSkills.set(skillIdentity(current.expected), output);
       return output;
     };
   }
@@ -709,7 +741,10 @@ export function createWorkflowHubSessionRecorder({
       if (closed) throw new Error("WorkflowHub session recorder is already closed");
       if (activeSubjects.size) throw new Error("WorkflowHub session recorder has unfinished step/skill lifecycles");
       const steps = subjects.steps.map((entry) => finishedSteps.get(entry.step_slug) ?? missingOutcome("step", entry.step_slug));
-      const skills = subjects.skills.map((entry) => finishedSkills.get(entry.name) ?? missingOutcome("skill", entry.name));
+      const skills = subjects.skills.map((entry) => {
+        const subjectId = skillIdentity(entry);
+        return finishedSkills.get(subjectId) ?? missingOutcome("skill", subjectId);
+      });
       const resolvedStatus = stageStatus ?? (steps.every((entry) => entry.status === "completed") && skills.every((entry) => entry.status === "completed") ? "completed" : "incomplete");
       if (resolvedStatus === "completed" && [...steps, ...skills].some((entry) => entry.status !== "completed")) {
         throw new Error("completed WorkflowHub session outcome cannot contain incomplete step/skill rows");

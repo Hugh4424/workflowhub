@@ -14,7 +14,7 @@ import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { materialRevisionFromValues } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { validateCanonicalFullTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
+import { validateCanonicalTestReceipt } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { authenticateCanonicalReviewResult } from "../review/canonical-review-result.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
@@ -420,9 +420,10 @@ function authenticateStageOutcome(ctx, stage, input, expectedBinding = null) {
 
 /**
  * An external Stage Agent outcome is diagnostic execution evidence, not a
- * permission to run the current WorkflowHub handler. Missing, unreadable, or
- * invalid external evidence stays visible as unavailable; the handler still
- * runs and its own material/quality/publication errors remain fail-loud.
+ * permission to run the current WorkflowHub handler. A missing optional
+ * handoff remains visible as unavailable so the normal stage can continue;
+ * an explicitly supplied but unreadable/invalid required handoff fails before
+ * any current quality writer runs.
  */
 function readOptionalStageOutcome(ctx, stage, input, expectedBinding = null) {
   const supplied = input?.receipts?.stage_outcomes;
@@ -1130,17 +1131,128 @@ function verifyEvidenceReference(ctx, entry, label = "evidence") {
   return entry;
 }
 
-function verifyOfficialEvidence(ctx, result) {
+export function verifyOfficialEvidence(ctx, result) {
   for (const [index, entry] of (result.evidence_refs ?? []).entries()) verifyEvidenceReference(ctx, entry, `evidence_refs[${index}]`);
   const tests = result.facts?.tests;
-  if (tests && typeof tests.output_ref === "string" && typeof tests.output_hash === "string") {
-    // output_ref is independently re-read; a valid receipt cannot vouch for a
-    // missing or subsequently replaced command output.
-    const output_ref = tests.output_ref;
-    const raw = ctx.task.readRecord(output_ref);
-    if (createHash("sha256").update(raw).digest("hex") !== tests.output_hash) throw new Error(`test output_ref hash mismatch: ${output_ref}`);
+  const hasReceiptRef = tests && Object.prototype.hasOwnProperty.call(tests, "receipt_ref");
+  const hasReceiptHash = tests && Object.prototype.hasOwnProperty.call(tests, "receipt_hash");
+  const hasOutputRef = tests && Object.prototype.hasOwnProperty.call(tests, "output_ref");
+  const hasOutputHash = tests && Object.prototype.hasOwnProperty.call(tests, "output_hash");
+  if (hasReceiptRef !== hasReceiptHash || hasOutputRef !== hasOutputHash) {
+    throw new Error("test receipt and output bindings must be provided in pairs");
+  }
+  const hasAnyTestBinding = hasReceiptRef || hasOutputRef;
+  if (tests?.status === "passed" && !hasAnyTestBinding) {
+    throw new Error("passed tests fact requires a canonical test receipt and output binding");
+  }
+  if (hasAnyTestBinding && !(hasReceiptRef && hasOutputRef)) {
+    throw new Error("test receipt and output bindings are incomplete");
+  }
+  if (hasAnyTestBinding) {
+    if (typeof tests.receipt_ref !== "string"
+        || !/^quality\/tests\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(tests.receipt_ref)
+        || !/^[a-f0-9]{64}$/.test(tests.receipt_hash ?? "")) {
+      throw new Error("test receipt_ref/receipt_hash binding is invalid");
+    }
+    if (typeof tests.output_ref !== "string"
+        || !/^[a-f0-9]{64}$/.test(tests.output_hash ?? "")) {
+      throw new Error("test output_ref/output_hash binding is invalid");
+    }
+    const receiptRaw = ctx.task.readRecord(tests.receipt_ref);
+    if (createHash("sha256").update(receiptRaw).digest("hex") !== tests.receipt_hash) throw new Error(`test receipt hash mismatch: ${tests.receipt_ref}`);
+    let receiptValue;
+    try { receiptValue = JSON.parse(receiptRaw); } catch { throw new Error(`test receipt is not valid JSON: ${tests.receipt_ref}`); }
+    validateCanonicalTestReceipt(receiptValue, {
+      taskId: ctx.identity.taskId,
+      stage: ctx.stage,
+      snapshotTree: tests.snapshot_tree,
+    });
+    for (const key of ["command", "command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash"]) {
+      if (receiptValue[key] !== tests[key]) throw new Error(`test receipt and facts.${key} are not bound`);
+    }
+    if ((tests.status === "passed" && receiptValue.exit_code !== 0)
+        || (tests.status === "failed" && receiptValue.exit_code === 0)) {
+      throw new Error("test fact status is not bound to the canonical receipt exit_code");
+    }
+    const outputRaw = ctx.task.readRecord(receiptValue.output_ref);
+    if (createHash("sha256").update(outputRaw).digest("hex") !== receiptValue.output_hash) throw new Error(`test output hash mismatch: ${receiptValue.output_ref}`);
   }
   return result;
+}
+
+/**
+ * Consume the narrow result returned by broker-backed wh-review.  The review
+ * CLI only creates this intent; this authenticated stage-runtime boundary is
+ * the only place that may turn it into a current quality fact.
+ */
+function validateReviewFactIntent({ context, intent, receiptRef = null } = {}) {
+  const ctx = assertContext(context, "verify-code");
+  if (!intent || typeof intent !== "object" || Array.isArray(intent)) throw new TypeError("review fact intent is required");
+  const allowed = new Set(["schema_version", "stage", "kind", "status", "subject", "material_id", "material_revision", "evidence"]);
+  const unknown = Object.keys(intent).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`review fact intent contains unsupported fields: ${unknown.join(", ")}`);
+  if (intent.schema_version !== "workflowhub-quality-fact-intent.v1"
+      || intent.stage !== "verify-code"
+      || intent.kind !== "review"
+      || !["recorded", "unavailable"].includes(intent.status)
+      || intent.subject !== "code_review"
+      || !/^[a-f0-9]{64}$/.test(intent.material_id ?? "")
+      || !/^revision-[a-f0-9]{64}$/.test(intent.material_revision ?? "")
+      || !Array.isArray(intent.evidence)
+      || intent.evidence.length !== 1) {
+    throw new Error("review fact intent is not a verify-code code_review intent");
+  }
+  const evidence = intent.evidence[0];
+  if (!evidence || typeof evidence.ref !== "string" || !/^quality\/reviews\/(?:results\/[^/]+\.json|attempts\/[^/]+\/attempt\.json)$/.test(evidence.ref)
+      || !/^[a-f0-9]{64}$/.test(evidence.sha256 ?? "")
+      || evidence.evidence_type !== "review_result") {
+    throw new Error("review fact intent evidence is invalid");
+  }
+  if (receiptRef !== null && receiptRef !== evidence.ref) throw new Error("review fact intent does not match receipts.quality_review");
+  const raw = ctx.task.readRecord(evidence.ref);
+  if (createHash("sha256").update(raw).digest("hex") !== evidence.sha256) throw new Error("review fact intent evidence hash mismatch");
+  let value;
+  try { value = JSON.parse(raw); } catch { throw new Error("review fact intent evidence must be valid JSON"); }
+  const snapshot = ctx.kernel.currentVNextSnapshot();
+  if (value?.task_id !== ctx.identity.taskId || value.stage !== "verify-code" || value.subject_kind !== "worktree"
+      || value.phase_id !== null || value.review_scope !== null || value.snapshot_tree !== snapshot.tree) {
+    throw new Error("review fact intent evidence is not bound to the current verify-code snapshot");
+  }
+  if (value.material_id !== intent.material_id
+      || value.material_revision !== intent.material_revision
+      || intent.material_revision !== ctx.kernel.currentVNextMaterialRevision()) {
+    throw new Error("review fact intent evidence is not bound to the current review materials");
+  }
+  const observed = reviewEvidenceStatus(ctx.task, evidence, { stage: "verify-code", subject: "code_review" });
+  const validRecorded = observed.status === "recorded";
+  if (intent.status === "recorded" && !validRecorded) throw new Error("review fact intent recorded status is not authenticated");
+  if (intent.status === "unavailable" && observed.status !== "unavailable") throw new Error("review fact intent unavailable status is not authenticated");
+  return Object.freeze({ status: intent.status, evidence: Object.freeze({ ref: evidence.ref, sha256: evidence.sha256 }) });
+}
+
+/** Publish an already authenticated broker intent through the official writer. */
+export function publishReviewFactIntent({ context, intent, receiptRef = null } = {}) {
+  const ctx = assertContext(context, "verify-code");
+  const validated = validateReviewFactIntent({ context: ctx, intent, receiptRef });
+  return ctx.kernel.publishVNextQualityFact("verify-code", {
+    kind: "review",
+    status: validated.status,
+    subject: "code_review",
+    evidence: [{ ref: validated.evidence.ref, sha256: validated.evidence.sha256, evidence_type: "review_result" }],
+  });
+}
+
+/** Official stage-runtime handoff for a previously recorded stage outcome. */
+export async function publishOfficialStageOutcome({ context, outcome, stage, attemptId, receipts = {} } = {}) {
+  if (!context || typeof context !== "object") throw new TypeError("WorkflowHub session context is required");
+  if (!outcome || typeof outcome.ref !== "string") throw new TypeError("stage outcome is required");
+  if (!receipts || typeof receipts !== "object" || Array.isArray(receipts)) throw new TypeError("host quality receipts must be an object");
+  if (Object.hasOwn(receipts, "stage_outcomes")) throw new Error("host quality receipts cannot override the bridge stage outcome");
+  const quality = await runOfficialStage(stage, context, {
+    attempt_id: attemptId,
+    receipts: { ...receipts, stage_outcomes: outcome.ref },
+  });
+  return Object.freeze({ outcome, quality });
 }
 
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
@@ -1158,6 +1270,11 @@ export function runOfficialStage(stage, context, invocation, publication) {
     ctx,
     async (_worker, _upstream, preflight) => {
       const stageOutcome = readOptionalStageOutcome(ctx, stage, input, preflight);
+      if (stageOutcome.diagnostic && Object.hasOwn(input.receipts ?? {}, "stage_outcomes")) {
+        const error = new Error(`${stage} required stage outcome is unavailable: ${stageOutcome.diagnostic.reason}`);
+        error.code = "STAGE_OUTCOME_UNAVAILABLE";
+        throw error;
+      }
       if (stage === "build-code"
           && handlerInput.acceptance_coverage === undefined
           && Array.isArray(stageOutcome.value?.spec_analyze?.packet?.acceptance_coverage)
@@ -1177,7 +1294,40 @@ export function runOfficialStage(stage, context, invocation, publication) {
       if (handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)) {
         delete handlerInput.receipts.stage_outcomes;
       }
-      const result = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), handlerInput));
+      const reviewFactIntent = handlerInput.review_fact_intent;
+      delete handlerInput.review_fact_intent;
+      // Authenticate the broker intent before invoking the stage handler. The
+      // handler is allowed to publish other current facts through the later
+      // stage transaction, so a malformed or cross-bound review intent must
+      // fail before any handler work can begin.
+      let validatedReviewFactIntent = null;
+      if (reviewFactIntent !== undefined) {
+        if (stage !== "verify-code") throw new Error("review fact intent is only valid for verify-code");
+        validatedReviewFactIntent = validateReviewFactIntent({
+          context: ctx,
+          intent: reviewFactIntent,
+          receiptRef: handlerInput.receipts?.quality_review ?? null,
+        });
+      }
+      const handlerResult = verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx, publication), handlerInput));
+      let result = handlerResult;
+      if (validatedReviewFactIntent !== null) {
+        // Keep the intent in memory until the official stage publication has
+        // passed handler/evidence validation. publishVNextStage then becomes
+        // the single writer and can publish the review fact with the rest of
+        // the current stage facts; a failed handler leaves no review fact.
+        result = {
+          ...handlerResult,
+          facts: {
+            ...(handlerResult.facts ?? {}),
+            code_review: {
+              status: validatedReviewFactIntent.status,
+              result_ref: validatedReviewFactIntent.evidence.ref,
+              result_hash: validatedReviewFactIntent.evidence.sha256,
+            },
+          },
+        };
+      }
       return {
         ...result,
         ...(stageOutcome.value ? {

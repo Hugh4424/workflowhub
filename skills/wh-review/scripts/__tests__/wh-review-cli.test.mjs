@@ -12,6 +12,7 @@ const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
 const reviewTree = "a".repeat(40);
 const reviewMaterialId = "b".repeat(64);
+const reviewMaterialRevision = `revision-${"d".repeat(64)}`;
 const reviewSource = {
   target_commit: reviewTree,
   base_commit: reviewTree,
@@ -21,7 +22,7 @@ const reviewSource = {
 const reviewResultRecord = {
   version: "wh-review-result.v1", task_id: "task", stage: "verify-code", review_track: null, review_kind: null,
   subject_kind: "worktree", phase_id: null, review_scope: null, source: reviewSource,
-  snapshot_tree: reviewTree, material_id: reviewMaterialId,
+  snapshot_tree: reviewTree, material_id: reviewMaterialId, material_revision: reviewMaterialRevision,
   attempt_ref: "quality/reviews/attempts/one/attempt.json",
   provider_results: [{ provider: "codex", output: { findings: [] } }], findings: [],
   adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
@@ -29,7 +30,7 @@ const reviewResultRecord = {
 const reviewAttemptRecord = {
   version: "wh-review-attempt.v1", attempt_id: "one", task_id: "task", stage: "verify-code", review_track: null, review_kind: null,
   subject_kind: "worktree", phase_id: null, review_scope: null, source: reviewSource,
-  snapshot_tree: reviewTree, material_id: reviewMaterialId, provider_attempts: [],
+  snapshot_tree: reviewTree, material_id: reviewMaterialId, material_revision: reviewMaterialRevision, provider_attempts: [],
   terminal_status: "unavailable", error: { code: "AUTH", message: "provider unavailable" },
 };
 const reviewSemanticAttemptRecord = { ...reviewAttemptRecord, terminal_status: "semantic", error: null };
@@ -109,24 +110,25 @@ describe("wh-review production CLI", () => {
     const published = [];
     const ref = "quality/reviews/results/one.json";
     const attemptRef = reviewResultRecord.attempt_ref;
-    const factRef = publishStageReviewFact({
+    const factIntent = publishStageReviewFact({
       trusted: {
         task: { readRecord: (candidate) => candidate === ref ? raw : candidate === attemptRef ? attemptRaw : (() => { throw new Error("unexpected ref"); })() },
         taskId: "task",
-        kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/code_review-one.json" }; } },
+        kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}`, publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/code_review-one.json" }; } },
       },
       stage: "verify-code",
       reviewKind: null,
-      result: { status: "available", resultRef: ref, attemptRef: reviewResultRecord.attempt_ref, snapshotTree: reviewTree, subjectKind: "worktree", phaseId: null, reviewScope: null },
+        result: { status: "available", resultRef: ref, attemptRef: reviewResultRecord.attempt_ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null },
     });
-    expect(factRef).toBe("quality/facts/verify-code/code_review-one.json");
-    expect(published).toEqual([{
+    expect(factIntent).toMatchObject({
+      schema_version: "workflowhub-quality-fact-intent.v1",
       stage: "verify-code",
-      value: {
-        kind: "review", status: "recorded", subject: "code_review",
-        evidence: [{ ref, sha256: expect.any(String), evidence_type: "review_result" }],
-      },
-    }]);
+      kind: "review", status: "recorded", subject: "code_review",
+      evidence: [{ ref, sha256: expect.any(String), evidence_type: "review_result" }],
+      material_id: reviewMaterialId,
+      material_revision: `revision-${"d".repeat(64)}`,
+    });
+    expect(published).toEqual([]);
   });
 
   it("keeps unavailable terminal facts honest and excludes mini-task reviews", async () => {
@@ -139,17 +141,19 @@ describe("wh-review production CLI", () => {
       taskId: "task",
       kernel: {
         currentVNextSnapshot: () => ({ tree: reviewTree }),
+        currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}`,
         publishVNextQualityFact: (stage, value) => { published.push({ stage, value }); return { ref: "quality/facts/verify-code/unavailable.json" }; },
       },
     };
-    publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "unavailable", resultRef: null, attemptRef: ref, snapshotTree: reviewTree, subjectKind: "worktree", phaseId: null, reviewScope: null,
+    const intent = publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
+      status: "unavailable", resultRef: null, attemptRef: ref, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
     } });
-    expect(published[0].value.status).toBe("unavailable");
+    expect(intent).toMatchObject({ schema_version: "workflowhub-quality-fact-intent.v1", status: "unavailable" });
+    expect(published).toHaveLength(0);
     expect(publishStageReviewFact({ trusted, stage: "build-code", reviewKind: "mini_task.implementation", result: {
       status: "available", resultRef: "quality/reviews/results/mini.json", attemptRef: null,
     } })).toBeNull();
-    expect(published).toHaveLength(1);
+    expect(published).toHaveLength(0);
   });
 
   it("rejects a standard fact when its attempt is unavailable or mini-task scoped", async () => {
@@ -161,13 +165,13 @@ describe("wh-review production CLI", () => {
     const trusted = {
       task: { readRecord: (candidate) => candidate === ref ? resultRaw : miniAttemptRaw },
       taskId: "task",
-      kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }) },
+      kernel: { currentVNextSnapshot: () => ({ tree: reviewTree }), currentVNextMaterialRevision: () => `revision-${"d".repeat(64)}` },
     };
     expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, subjectKind: "worktree", phaseId: null, reviewScope: null,
+      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "worktree", phaseId: null, reviewScope: null,
     } })).toThrow(/semantic terminal attempt|current review request/);
     expect(() => publishStageReviewFact({ trusted, stage: "verify-code", reviewKind: null, result: {
-      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, subjectKind: "phase", phaseId: "P1", reviewScope: "phase",
+      status: "available", resultRef: ref, attemptRef, snapshotTree: reviewTree, materialId: reviewMaterialId, subjectKind: "phase", phaseId: "P1", reviewScope: "phase",
     } })).toThrow(/worktree-scoped final review/);
   });
 

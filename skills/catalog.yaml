@@ -272,7 +272,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 3f2b062246db6efda0e1cd3a125307a391a05cef47ca6bcb20a13ebeb8f16833
+    local_bundle_hash: 60dea1ca3b9a50d1a86961f037ecb010471aeff72fae9614911f3e41110d64a3
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -285,7 +285,7 @@ skills:
   - name: mini-task
     path: skills/mini-task/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5f942380c0e4a61d51e0ca64b3714740ef8411160e510a08485870bcd4304952
+    local_bundle_hash: 3bd6d6ab7e8e2f700374b5e0931b389800cfe4bfe7a593e41a9040b2ae11fd16
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 在独立 task 中紧凑交付小功能并恢复被阻塞的 A

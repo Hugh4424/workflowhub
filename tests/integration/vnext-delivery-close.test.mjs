@@ -378,7 +378,7 @@ describe("vNext formal delivery close", () => {
     expect(result.plan.delivery.task_commit).toBe(state.snapshot.head);
   });
 
-  it("accepts a material-only writeback after the test receipt without rerunning or invalidating the test", () => {
+  it("does not reuse a quality fact after a material-only writeback", () => {
     const state = fixture({ materialOnlyWriteback: true });
     expect(state.snapshot.tree).not.toBe(state.receiptSnapshot.tree);
     expect(() => prepareDeliveryClosePlan({
@@ -389,7 +389,7 @@ describe("vNext formal delivery close", () => {
         task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
-    })).not.toThrow();
+    })).toThrow(/current verify-code quality facts are incomplete|material/i);
   });
 
   it("rejects duplicate current quality facts instead of selecting by timestamp", () => {
@@ -594,5 +594,38 @@ describe("vNext formal delivery close", () => {
         spec_archive_path: `specs/archive/${state.taskId}`,
       },
     })).not.toThrow();
+  });
+
+  it("rejects a mini-task quality intent whose kind does not match its subject", () => {
+    const state = fixture();
+    const nestedRef = "quality/evidence/mini-task-quality/nested.json";
+    const nestedRaw = "nested evidence\n";
+    state.kernel.publishCanonicalRecord(nestedRef, nestedRaw);
+    const materialRevision = materialRevisionFromValues(
+      ["decision-log.md", "spec.md", "plan.md", "tasks.md"].map((name) => [name, state.artifacts.read(name)]),
+    );
+    const value = {
+      schema_version: "workflowhub-mini-task-quality-evidence.v1",
+      task_id: state.task.identity.taskId,
+      stage: "verify-code",
+      material_revision: materialRevision,
+      snapshot_tree: state.snapshot.tree,
+      kind: "confirmation",
+      status: "passed",
+      subject: "full_tests_fresh",
+      evidence: [{ ref: nestedRef, sha256: sha256(nestedRaw), evidence_type: "test_receipt" }],
+    };
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    state.kernel.publishCanonicalRecord(`quality/evidence/mini-task-quality/${sha256(raw)}.json`, raw);
+    expect(() => prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      allowMiniTaskFocused: true,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    })).toThrow(/MINI_TASK_QUALITY_INVALID/);
   });
 });

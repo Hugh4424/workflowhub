@@ -412,4 +412,24 @@ describe("trusted third-review host configuration", () => {
     const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" });
     expect(trusted.whReview.stages["build-code"].initial).toEqual(["kimi", "opencode"]);
   });
+
+  it("accepts versioned profile identifiers and ignores unrelated malformed profiles for a focused route", () => {
+    const { brokerConfig, hostConfig } = configuredRoot();
+    const broker = JSON.parse(readFileSync(brokerConfig, "utf8"));
+    broker.providers["opencode/pax3.8"] = { enabled: true, source_id: "source-pax", model: "pax/qwen3.8", effort: "max", thinking: true };
+    writeFileSync(brokerConfig, JSON.stringify(broker));
+    const host = JSON.parse(readFileSync(hostConfig, "utf8"));
+    host.wh_review = { version: 2, profiles: {
+      kimi: { model: null, effort: null, thinking: null, priority: 1 },
+      "opencode/pax3.8": { model: "pax/qwen3.8", effort: "max", thinking: true, priority: 24 },
+      "opencode/bad..profile": { model: null, effort: null, thinking: null, priority: 25 },
+    }, stages: {
+      "build-code": { initial: ["opencode/pax3.8"], mode: "full_only", minimum_heterologous: 1 },
+      "build-plan": { initial: ["opencode/bad..profile"], mode: "single_round", minimum_heterologous: 1 },
+    } };
+    writeFileSync(hostConfig, JSON.stringify(host));
+    expect(loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig, requestedStage: "build-code" }).whReview.profiles)
+      .toEqual({ "opencode/pax3.8": { model: "pax/qwen3.8", effort: "max", thinking: true, priority: 24 } });
+    expect(() => loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig })).toThrow(/opencode\/bad\.\.profile.*provider id/i);
+  });
 });

@@ -14,6 +14,10 @@
 - `review-instructions.md`；
 - `manifest.json`。
 
+正式 `verify-code` review attempt/result 还记录 `material_revision`：它由当前四份 WorkflowHub
+材料计算，并由 stage-runtime 在写入 `code_review` 前重新校验。`material_id` 仍只表示
+provider 可见 packet 的 manifest；两者缺一不可，旧 evidence 不能只靠同一个 snapshot 重新包装。
+
 这些材料只保留能影响代码判断的事实。禁止发送或要求完整 evidence tree、AC coverage、
 requirement replay、task completion、receipt、旧 review ledger、provider session 或本机绝对路径。
 必要的实现锚点由代码 diff 和架构报告给出；没有锚点就报告代码风险，不能假设通过。

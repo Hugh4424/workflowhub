@@ -5,8 +5,8 @@
  *
  * The current session host submits lifecycle events on stdin. This bridge
  * measures and binds those events to the existing TaskKernel adapter, then
- * prints the immutable outcome reference. The legacy execution shape remains
- * accepted for compatibility. This bridge never starts an agent, resolves a
+ * prints the immutable outcome reference. The bridge accepts only the narrow
+ * session/unavailable handoff; legacy execution input is historical-only. This bridge never starts an agent, resolves a
  * skill, scans sessions, or guesses a source.
  */
 
@@ -15,11 +15,9 @@ import { pathToFileURL } from "node:url";
 
 import {
   createWorkflowHubSessionRecorder,
-  publishStageAgentOutcome,
   publishUnavailableStageAgentOutcome,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
-import { runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 
@@ -41,7 +39,21 @@ function requiredTimestamp(value, label) {
   return value;
 }
 
-export function publishCurrentWorkflowHubSession({ context, input, stage, attemptId, requirementAuthentication = null }) {
+function normalizeBridgeError(error) {
+  if (error && typeof error.code === "string" && error.code.startsWith("BRIDGE_")) return error;
+  const message = String(error?.message ?? error);
+  const code = /overlap|ended before|clock backward|timestamp|time/i.test(message)
+    ? "BRIDGE_TIME_INVALID"
+    : /task|stage|snapshot|material|identity|workspace/i.test(message)
+      ? "BRIDGE_IDENTITY_MISMATCH"
+      : "BRIDGE_INVALID_INPUT";
+  const normalized = new Error(message);
+  normalized.code = code;
+  normalized.cause = error;
+  return normalized;
+}
+
+function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId, requirementAuthentication = null }) {
   const session = input.session;
   if (!session || typeof session !== "object" || Array.isArray(session)) throw new TypeError("session must be an object");
   if (!Array.isArray(session.events)) throw new TypeError("session.events must be an array");
@@ -62,15 +74,20 @@ export function publishCurrentWorkflowHubSession({ context, input, stage, attemp
     now: () => clock,
     requirementAuthentication,
   });
+  let previousEndedAt = null;
   for (const [index, event] of session.events.entries()) {
     if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError(`session.events[${index}] must be an object`);
     const subjectKind = requiredText(event.subject_kind, `session.events[${index}].subject_kind`);
     const subjectId = requiredText(event.subject_id, `session.events[${index}].subject_id`);
-    if (requiredText(event.task_id, `session.events[${index}].task_id`) !== session.task_id) throw new Error(`session.events[${index}] task_id does not match session.task_id`);
+    if (requiredText(event.task_id, `session.events[${index}].task_id`) !== context.task.identity.taskId) throw new Error(`session.events[${index}] task_id does not match the current WorkflowHub task`);
     if (requiredText(event.stage, `session.events[${index}].stage`) !== stage) throw new Error(`session.events[${index}] stage does not match the current stage`);
     const startedAt = requiredTimestamp(event.started_at_ms, `session.events[${index}].started_at_ms`);
     const endedAt = requiredTimestamp(event.ended_at_ms, `session.events[${index}].ended_at_ms`);
-    if (endedAt < startedAt) throw new Error(`session.events[${index}] ended before it started`);
+    if (endedAt < startedAt) throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] ended before it started`);
+    if (previousEndedAt !== null && startedAt < previousEndedAt) {
+      throw new Error(`BRIDGE_TIME_INVALID: session.events[${index}] overlaps or moves the lifecycle clock backward`);
+    }
+    previousEndedAt = endedAt;
     clock = startedAt;
     const finish = subjectKind === "step" ? recorder.startStep(subjectId) : subjectKind === "skill" ? recorder.startSkill(subjectId) : null;
     if (!finish) throw new Error(`unsupported session subject_kind: ${subjectKind}`);
@@ -80,32 +97,24 @@ export function publishCurrentWorkflowHubSession({ context, input, stage, attemp
   return recorder.finish({ status: session.status, spec_analyze: session.spec_analyze });
 }
 
-export async function publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId, receipts = {} }) {
-  if (!context || typeof context !== "object") throw new TypeError("WorkflowHub session context is required");
-  if (!outcome || typeof outcome.ref !== "string") throw new TypeError("stage outcome is required");
-  if (!receipts || typeof receipts !== "object" || Array.isArray(receipts)) throw new TypeError("host quality receipts must be an object");
-  if (Object.hasOwn(receipts, "stage_outcomes")) throw new Error("host quality receipts cannot override the bridge stage outcome");
-  const quality = await runOfficialStage(stage, context, {
-    attempt_id: attemptId,
-    receipts: { ...receipts, stage_outcomes: outcome.ref },
-  });
-  return Object.freeze({ outcome, quality });
+export function publishCurrentWorkflowHubSession(args) {
+  try { return publishCurrentWorkflowHubSessionImpl(args); }
+  catch (error) { throw normalizeBridgeError(error); }
 }
 
-async function main(input) {
+async function runBridge(input) {
   const projectName = requiredText(input.project_name, "project_name");
   const taskId = requiredText(input.task_id, "task_id");
   const stage = requiredText(input.stage, "stage");
   if (!STAGES.has(stage)) throw new Error(`unsupported stage: ${stage}`);
   const taskPath = requiredText(input.task_path, "task_path");
   const attemptId = requiredText(input.attempt_id, "attempt_id");
-  if (input.project_name !== projectName || input.task_id !== taskId || input.stage !== stage || input.attempt_id !== attemptId) {
-    throw new Error("WorkflowHub host bridge request identity does not match its explicit fields");
-  }
-  const hasExecution = input.execution && typeof input.execution === "object" && !Array.isArray(input.execution);
+  const hasExecution = input.execution !== undefined;
   const hasSession = input.session && typeof input.session === "object" && !Array.isArray(input.session);
   const hasUnavailable = input.unavailable && typeof input.unavailable === "object" && !Array.isArray(input.unavailable);
-  if ([hasExecution, hasSession, hasUnavailable].filter(Boolean).length !== 1) throw new TypeError("session, execution or unavailable host result is required exactly once");
+  if (hasExecution) throw new TypeError("bridge accepts only the narrow session or unavailable outcome; execution is historical-only");
+  if ([hasSession, hasUnavailable].filter(Boolean).length !== 1) throw new TypeError("session or unavailable host result is required exactly once");
+  if (Object.hasOwn(input, "receipts")) throw new TypeError("bridge accepts no quality receipts; stage-runtime owns current quality publication");
 
   let context = bootstrapStage(stage, {
     mode: "sidecar",
@@ -114,13 +123,15 @@ async function main(input) {
     taskPath,
     readOnly: false,
   });
+  if (context.task.identity.taskId !== taskId) {
+    throw new Error("bridge task_id does not match the task loaded from task_path");
+  }
   if (stage === "make-decision" && !context.candidateWorkspace) {
     context = prepareMakeDecisionWorkspace(context);
   }
   const outcome = hasSession
     ? publishCurrentWorkflowHubSession({ context, input, stage, attemptId })
-    : hasUnavailable
-    ? publishUnavailableStageAgentOutcome({
+    : publishUnavailableStageAgentOutcome({
         task: context.task,
         kernel: context.kernel,
         artifacts: context.artifacts,
@@ -132,41 +143,22 @@ async function main(input) {
         host: requiredText(input.unavailable.host, "unavailable.host"),
         agentRunId: requiredText(input.unavailable.agent_run_id, "unavailable.agent_run_id"),
         reason: requiredText(input.unavailable.reason, "unavailable.reason"),
-      })
-    : publishStageAgentOutcome({
-        task: context.task,
-        kernel: context.kernel,
-        artifacts: context.artifacts,
-        workspace: context.workspace,
-        candidateWorkspace: context.candidateWorkspace,
-        stage,
-        attemptId,
-        workflowRunId: context.workflowRunId,
-        execution: input.execution,
       });
-  // The host bridge is the normal session boundary. Publish the same outcome
-  // through the existing official writer before returning, so a successful
-  // host handoff cannot leave only a diagnostic stage outcome behind. The
-  // writer remains the sole quality-fact authority and preserves every
-  // missing/unavailable result instead of inferring a pass.
-  // A host may pass already-authenticated canonical implementation/test/review
-  // receipt refs as `receipts`. The bridge never derives a green receipt from
-  // lifecycle text; absent refs remain unavailable/incomplete.
-  const receipts = input.receipts === undefined ? {} : input.receipts;
-  const { quality } = await publishWorkflowHubSessionAndQuality({ context, outcome, stage, attemptId, receipts });
-  return {
+  return Object.freeze({
     schema_version: "workflowhub-stage-agent-bridge-result.v1",
-    task_id: taskId,
+    task_id: context.task.identity.taskId,
     stage,
     attempt_id: attemptId,
     outcome_ref: outcome.ref,
     outcome_sha256: outcome.sha256,
     outcome_status: outcome.value.status,
     producer: outcome.value.producer,
-    quality_status: quality.quality_status,
-    quality_fact_refs: quality.quality_fact_refs,
-    quality_result: quality,
-  };
+  });
+}
+
+export async function main(input) {
+  try { return await runBridge(input); }
+  catch (error) { throw normalizeBridgeError(error); }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

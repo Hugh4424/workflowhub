@@ -2,8 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { createCanonicalReceiptWriter } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
-import { captureExecutionSnapshot, isExecutionRecordOnlyMaterialDelta, isMaterialOnlySnapshotDelta, materialRevisionFromValues } from "../../../runtime/task/git-worktree-snapshot.mjs";
-import { qualityFactDigest } from "../../../runtime/evidence/quality-fact.mjs";
+import { captureExecutionSnapshot, materialRevisionFromValues } from "../../../runtime/task/git-worktree-snapshot.mjs";
 import { assertTaskHandle, assertTaskKernel } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
 import { validateCanonicalFullTestReceipt, validateMiniTaskAcTrace } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
@@ -158,6 +157,27 @@ function readQualityFact(task, ref) {
   try {
     const raw = task.readRecord(ref);
     const value = JSON.parse(raw);
+    if (value?.schema_version === "workflowhub-mini-task-quality-evidence.v1") {
+      if (ref !== `quality/evidence/mini-task-quality/${hash(raw)}.json`
+          || value.task_id !== task.identity.taskId
+          || !OID.test(value.snapshot_tree ?? "")
+          || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
+          || !["build-code", "verify-code"].includes(value.stage)
+          || typeof value.kind !== "string"
+          || typeof value.subject !== "string"
+          || !Array.isArray(value.evidence)
+          || value.evidence.length === 0) {
+        const invalid = new Error(`MINI_TASK_QUALITY_INVALID: ${ref} has invalid mini-task quality intent fields`);
+        invalid.code = "MINI_TASK_QUALITY_INVALID";
+        throw invalid;
+      }
+      if (!MINI_REVIEW_STATUSES.has(value.status)) {
+        const invalid = new Error(`MINI_TASK_QUALITY_INVALID: ${ref} has an invalid mini-task quality status`);
+        invalid.code = "MINI_TASK_QUALITY_INVALID";
+        throw invalid;
+      }
+      return value;
+    }
     if (!value || typeof value !== "object" || Array.isArray(value) || value.schema_version !== "quality-fact.v1") {
       const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} is not a quality-fact.v1 record`);
       invalid.code = "QUALITY_FACT_INVALID";
@@ -172,8 +192,19 @@ function readQualityFact(task, ref) {
         || !Array.isArray(value.evidence)
         || value.evidence.length === 0
         || !Number.isFinite(Date.parse(value.recorded_at))
-        || ref !== `quality/facts/${qualityFactDigest(value)}.json`
-        || value.fact_id !== `quality-${qualityFactDigest(value)}`) {
+        || ref !== `quality/facts/${hash(JSON.stringify({
+          task_id: value.task_id,
+          stage: value.stage,
+          material_revision: value.material_revision,
+          ...(value.material_scope === undefined ? {} : { material_scope: value.material_scope }),
+          ...(value.material_scope_revision === undefined ? {} : { material_scope_revision: value.material_scope_revision }),
+          snapshot_tree: value.snapshot_tree,
+          kind: value.kind,
+          status: value.status,
+          subject: value.subject,
+          evidence: value.evidence,
+        }))}.json`
+        || value.fact_id !== `quality-${ref.slice("quality/facts/".length, -".json".length)}`) {
       const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} has invalid quality fact fields`);
       invalid.code = "QUALITY_FACT_INVALID";
       throw invalid;
@@ -191,27 +222,50 @@ function readQualityFact(task, ref) {
     return value;
   } catch (error) {
     if (error?.code === "ENOENT") return null;
-    if (error?.code === "QUALITY_FACT_INVALID") throw error;
+    if (error?.code === "QUALITY_FACT_INVALID" || error?.code === "MINI_TASK_QUALITY_INVALID") throw error;
     const invalid = new Error(`QUALITY_FACT_INVALID: ${ref} is unreadable: ${error?.message ?? error}`);
     invalid.code = "QUALITY_FACT_INVALID";
     throw invalid;
   }
 }
 
+/**
+ * Mini-task quality is a delivery-local intent, not a vNext stage quality
+ * fact.  The official stage-runtime remains the only owner of
+ * `quality/facts/*.json`; this record is only consumed by the mini-task close
+ * path and cannot satisfy a stage completion predicate.
+ */
+function publishMiniTaskQualityIntent({ task, kernel, stage, kind, status, subject, evidence } = {}) {
+  const workspace = openCurrentTaskWorkspace(task);
+  const snapshot = kernel.currentVNextSnapshot();
+  if (!snapshot?.tree || !OID.test(snapshot.tree)) throw new Error("mini-task quality intent requires a current snapshot");
+  if (!Array.isArray(evidence) || evidence.length === 0) throw new TypeError("mini-task quality intent evidence is required");
+  const value = {
+    schema_version: "workflowhub-mini-task-quality-evidence.v1",
+    task_id: task.identity.taskId,
+    stage,
+    material_revision: currentMaterialRevision(task, workspace.worktreeRoot),
+    snapshot_tree: snapshot.tree,
+    kind,
+    status,
+    subject,
+    evidence: structuredClone(evidence),
+  };
+  const raw = `${JSON.stringify(value, null, 2)}\n`;
+  const record = kernel.publishCanonicalRecord(`quality/evidence/mini-task-quality/${hash(raw)}.json`, raw);
+  return Object.freeze({ ref: record.ref, sha256: record.sha256, status, value: Object.freeze(value), intent: true });
+}
+
 function latestMiniQualityFacts(task, { worktreeRoot, snapshotTree, materialRevision, snapshotMode = "required", subjects = ["mini_task_design_review", "mini_task_implementation_review"] } = {}) {
-  const facts = task.listCanonicalQualityFactRefs()
+  const facts = task.listCanonicalMiniTaskQualityEvidenceRefs()
     .map((ref) => ({ ref, value: readQualityFact(task, ref) }))
     .filter(({ value }) => subjects.includes(value?.subject))
     .filter(({ value }) => {
       if (!value || typeof materialRevision !== "string") return true;
-      if (value.material_revision === materialRevision && snapshotMode === "material") return true;
-      if (typeof worktreeRoot !== "string" || typeof snapshotTree !== "string") return value.material_revision === materialRevision;
-      const recordOnlyDelta = value.snapshot_tree !== snapshotTree && (
-        isExecutionRecordOnlyMaterialDelta(worktreeRoot, value.snapshot_tree, snapshotTree, task.identity.taskId)
-        || isMaterialOnlySnapshotDelta(worktreeRoot, value.snapshot_tree, snapshotTree, task.identity.taskId)
-      );
-      return (snapshotMode === "material" || value.snapshot_tree === snapshotTree || recordOnlyDelta)
-        && (value.material_revision === materialRevision || recordOnlyDelta);
+      if (value.material_revision !== materialRevision) return false;
+      if (snapshotMode === "material") return true;
+      if (typeof snapshotTree !== "string") return false;
+      return value.snapshot_tree === snapshotTree;
     });
   const current = new Map();
   for (const item of facts) {
@@ -493,10 +547,8 @@ function assertMiniTaskQualityForDelivery(task) {
   if (designFact === null) throw new Error("mini-task design review facts conflict for the current materials");
   const design = designFact?.value;
   if (!design || !MINI_REVIEW_CLOSE_STATUSES.has(design.status)) throw new Error("mini-task design review is incomplete for the current materials");
-  const designSnapshotReusable = design.snapshot_tree === snapshot.tree
-    || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, design.snapshot_tree, snapshot.tree, task.identity.taskId)
-    || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, design.snapshot_tree, snapshot.tree, task.identity.taskId);
-  if (design.material_revision !== materialRevision && !designSnapshotReusable) {
+  const designSnapshotReusable = design.material_revision === materialRevision;
+  if (design.material_revision !== materialRevision || !designSnapshotReusable) {
     throw new Error("mini-task design review is stale for the current materials");
   }
   const designResult = readBoundJson(task, design.evidence[0], "mini-task design review");
@@ -523,9 +575,7 @@ function assertMiniTaskQualityForDelivery(task) {
   const implementation = implementationFact?.value;
   if (!implementation || !MINI_REVIEW_CLOSE_STATUSES.has(implementation.status)) throw new Error("mini-task implementation review is incomplete for the current snapshot");
   const packet = readBoundJson(task, implementation.evidence[0], "mini-task implementation evidence");
-  const implementationSnapshotReusable = packet.snapshot_tree === snapshot.tree
-    || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, packet.snapshot_tree, snapshot.tree, task.identity.taskId)
-    || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, packet.snapshot_tree, snapshot.tree, task.identity.taskId);
+  const implementationSnapshotReusable = packet.snapshot_tree === snapshot.tree;
   if (packet.schema_version !== "workflowhub-mini-task-implementation-evidence.v1"
       || packet.task_id !== task.identity.taskId
       || !implementationSnapshotReusable
@@ -534,9 +584,7 @@ function assertMiniTaskQualityForDelivery(task) {
       || !Array.isArray(packet.remaining_risks)) throw new Error("mini-task implementation evidence is incomplete or stale");
   if (!MINI_REVIEW_CLOSE_STATUSES.has(packet.implementation_review?.status ?? implementation.status)) throw new Error("mini-task implementation review is incomplete");
   const implementationResult = readBoundJson(task, packet.implementation_review, "mini-task implementation review");
-  const implementationReviewReusable = implementationResult.snapshot_tree === snapshot.tree
-    || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, implementationResult.snapshot_tree, snapshot.tree, task.identity.taskId)
-    || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, implementationResult.snapshot_tree, snapshot.tree, task.identity.taskId);
+  const implementationReviewReusable = implementationResult.snapshot_tree === snapshot.tree;
   if (implementationResult.task_id !== task.identity.taskId
       || implementationResult.review_kind !== "mini_task.implementation"
       || !implementationReviewReusable) throw new Error("mini-task implementation review is not bound to the current snapshot");
@@ -554,9 +602,7 @@ function assertMiniTaskQualityForDelivery(task) {
     requirePassed: false,
     allowMiniTaskFocused: true,
   });
-  if (!(testReceipt.snapshot_tree === snapshot.tree
-      || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, testReceipt.snapshot_tree, snapshot.tree, task.identity.taskId)
-      || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, testReceipt.snapshot_tree, snapshot.tree, task.identity.taskId))) throw new Error("mini-task focused test evidence is incomplete or stale");
+  if (testReceipt.snapshot_tree !== snapshot.tree) throw new Error("mini-task focused test evidence is incomplete or stale");
   const testOutput = task.readRecord(testReceipt.output_ref);
   if (hash(testOutput) !== testReceipt.output_hash) throw new Error("mini-task focused test output hash mismatch");
   if (testReceipt.exit_code !== 0) {
@@ -566,9 +612,7 @@ function assertMiniTaskQualityForDelivery(task) {
   if (userResult.schema_version !== "workflowhub-mini-task-user-result.v1"
       || userResult.task_id !== task.identity.taskId
         || userResult.status !== "verified"
-      || !(userResult.snapshot_tree === snapshot.tree
-        || isExecutionRecordOnlyMaterialDelta(workspace.worktreeRoot, userResult.snapshot_tree, snapshot.tree, task.identity.taskId)
-        || isMaterialOnlySnapshotDelta(workspace.worktreeRoot, userResult.snapshot_tree, snapshot.tree, task.identity.taskId))) throw new Error("mini-task real user result is incomplete or stale");
+      || userResult.snapshot_tree !== snapshot.tree) throw new Error("mini-task real user result is incomplete or stale");
   assertMiniTaskUserResult(task, packet.user_result, testReceipt.snapshot_tree, {
     receipt_ref: packet.test_receipt.ref,
     receipt_hash: packet.test_receipt.sha256,
@@ -869,13 +913,10 @@ export function recordMiniTaskDesignReview({ task: taskHandle, kernel: taskKerne
     task, kernel, reviewResult: binding.value, dispositions: findingDispositions,
     reviewBinding: binding, label: "mini-task design review",
   });
-  return kernel.publishVNextQualityFact("build-code", {
-    kind: "review", status: binding.status, subject: "mini_task_design_review",
-    evidence: [
-      { ref: binding.ref, sha256: binding.sha256, evidence_type: "review_result" },
-      ...(dispositionEvidence.evidence ? [dispositionEvidence.evidence] : []),
-    ],
-  });
+  return publishMiniTaskQualityIntent({ task, kernel, stage: "build-code", kind: "review", status: binding.status, subject: "mini_task_design_review", evidence: [
+    { ref: binding.ref, sha256: binding.sha256, evidence_type: "review_result" },
+    ...(dispositionEvidence.evidence ? [dispositionEvidence.evidence] : []),
+  ] });
 }
 
 export async function runMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, reviewRunner, runReview, hostProvider, findingDispositions } = {}) {
@@ -971,10 +1012,9 @@ function recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implem
     task, kernel, reviewResult: reviewBinding.value, dispositions: findingDispositions,
     reviewBinding, label: "mini-task implementation review",
   });
-  const reviewFact = kernel.publishVNextQualityFact("verify-code", {
-    kind: "review", status: reviewBinding.status, subject: "independent_review",
-    evidence: [{ ref: reviewBinding.ref, sha256: reviewBinding.sha256, evidence_type: "review_result" }],
-  });
+  const reviewFact = publishMiniTaskQualityIntent({ task, kernel, stage: "verify-code", kind: "review", status: reviewBinding.status, subject: "independent_review", evidence: [
+    { ref: reviewBinding.ref, sha256: reviewBinding.sha256, evidence_type: "review_result" },
+  ] });
   const packet = {
     schema_version: "workflowhub-mini-task-implementation-evidence.v1",
     task_id: task.identity.taskId,
@@ -995,8 +1035,8 @@ function recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implem
     || (facts.status === "recorded" && facts.items.every((item) => item.status !== "needs_human"))
     ? "passed"
     : "missing";
-  const publishMiniAcceptanceFact = (subject, status) => kernel.publishVNextQualityFact("verify-code", {
-    kind: "acceptance_criterion", status, subject,
+  const publishMiniAcceptanceFact = (subject, status) => publishMiniTaskQualityIntent({
+    task, kernel, stage: "verify-code", kind: "acceptance_criterion", status, subject,
     evidence: [{ ref: packetRecord.ref, sha256: packetRecord.sha256, evidence_type: "acceptance_evidence" }],
   });
   let humanConfirmationStatus = "missing";
@@ -1015,10 +1055,19 @@ function recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implem
     const confirmation = object(humanConfirmation, "mini-task human confirmation");
     if (!["accepted", "rejected"].includes(confirmation.decision)) throw new TypeError("mini-task human confirmation decision is invalid");
     text(confirmation.subject_ref, "mini-task human confirmation subject_ref");
-    kernel.publishHumanConfirmation("verify-code", {
+    const confirmationValue = {
+      schema_version: "workflowhub-mini-task-human-confirmation.v1",
+      task_id: task.identity.taskId,
+      stage: "verify-code",
       decision: confirmation.decision,
       subject_ref: confirmation.subject_ref,
-    });
+      snapshot_tree: receipt.snapshot_tree,
+    };
+    const confirmationRaw = `${JSON.stringify(confirmationValue, null, 2)}\n`;
+    const confirmationRecord = kernel.publishCanonicalRecord(`quality/evidence/mini-task-human-confirmation/${hash(confirmationRaw)}.json`, confirmationRaw);
+    publishMiniTaskQualityIntent({ task, kernel, stage: "verify-code", kind: "confirmation", status: confirmation.decision === "accepted" ? "passed" : "failed", subject: "human_confirmation", evidence: [
+      { ref: confirmationRecord.ref, sha256: confirmationRecord.sha256, evidence_type: "human_confirmation" },
+    ] });
     humanConfirmationStatus = confirmation.decision === "accepted" ? "passed" : "failed";
   } else {
     const missingRaw = `${JSON.stringify({
@@ -1029,15 +1078,13 @@ function recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implem
       reason: "explicit human confirmation is required before mini-task delivery close",
     }, null, 2)}\n`;
     const missingRecord = kernel.publishCanonicalRecord(`quality/evidence/mini-task-human-confirmation-missing/${hash(missingRaw)}.json`, missingRaw);
-    kernel.publishVNextQualityFact("verify-code", {
-      kind: "confirmation", status: "missing", subject: "human_confirmation",
-      evidence: [{ ref: missingRecord.ref, sha256: missingRecord.sha256, evidence_type: "human_confirmation" }],
-    });
+    publishMiniTaskQualityIntent({ task, kernel, stage: "verify-code", kind: "confirmation", status: "missing", subject: "human_confirmation", evidence: [
+      { ref: missingRecord.ref, sha256: missingRecord.sha256, evidence_type: "human_confirmation" },
+    ] });
   }
-  const implementationFact = kernel.publishVNextQualityFact("build-code", {
-    kind: "review", status: reviewBinding.status, subject: "mini_task_implementation_review",
-    evidence: [{ ref: packetRecord.ref, sha256: packetRecord.sha256, evidence_type: "review_result" }],
-  });
+  const implementationFact = publishMiniTaskQualityIntent({ task, kernel, stage: "build-code", kind: "review", status: reviewBinding.status, subject: "mini_task_implementation_review", evidence: [
+    { ref: packetRecord.ref, sha256: packetRecord.sha256, evidence_type: "review_result" },
+  ] });
   const qualityReady = reviewBinding.status === "recorded"
     && receipt.exit_code === 0
     && acceptanceStatus(dispositionEvidence.facts) === "passed"
@@ -1067,10 +1114,9 @@ export function recordMiniTaskQuality({ task: taskHandle, kernel: taskKernel, wo
   const trace = assertAcTraceForMiniTask(acTrace, { task, receipt });
   const userRecord = capturedUserResult ?? publishMiniTaskUserResult({ task, kernel, receipt, userResult });
   assertMiniTaskUserResult(task, userRecord, receipt.snapshot_tree);
-  const testFact = kernel.publishVNextQualityFact("verify-code", {
-    kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh",
-    evidence: [{ ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" }],
-  });
+  const testFact = publishMiniTaskQualityIntent({ task, kernel, stage: "verify-code", kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh", evidence: [
+    { ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" },
+  ] });
   return recordCapturedMiniTaskQuality({ task, kernel, receipt, testFact, implementationReview, userRecord, acTrace: trace, coverageLimits, skipReasons, remainingRisks, findingDispositions, humanConfirmation });
 }
 
@@ -1084,10 +1130,9 @@ export async function runMiniTaskImplementationReview({ task: taskHandle, kernel
   const receipt = createCanonicalReceiptWriter({ task, workspace: safeWorkspace, stage: "verify-code", component: "mini-task-focused-tests" }).captureTests({ command: testCommand, receiptRef, outputRef });
   const trace = assertAcTraceForMiniTask(acTrace, { task, receipt });
   const userRecord = publishMiniTaskUserResult({ task, kernel, receipt, userResult });
-  const testFact = kernel.publishVNextQualityFact("verify-code", {
-    kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh",
-    evidence: [{ ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" }],
-  });
+  const testFact = publishMiniTaskQualityIntent({ task, kernel, stage: "verify-code", kind: "test", status: receipt.exit_code === 0 ? "passed" : "failed", subject: "full_tests_fresh", evidence: [
+    { ref: receipt.receipt_ref, sha256: receipt.receipt_hash, evidence_type: "test_receipt" },
+  ] });
   let outcome;
   if (receipt.exit_code !== 0) {
     outcome = { status: "unavailable", error_code: "FOCUSED_TEST_FAILED", recovery: "review_not_dispatched" };

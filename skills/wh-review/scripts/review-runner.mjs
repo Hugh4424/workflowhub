@@ -326,7 +326,7 @@ function materialOnlyTreeTransition(sourceRoot, beforeTree, afterTree, taskId) {
  * semantic projection. The caller may then publish a current-tree alias; no
  * provider is invoked and the original result remains the provenance source.
  */
-export function findReusableReviewResult({ task, source, subject, integrationSubject = null, stage, reviewTrack = null, reviewKind = null, semanticProjection, reviewPolicy = null } = {}) {
+export function findReusableReviewResult({ task, source, subject, integrationSubject = null, stage, reviewTrack = null, reviewKind = null, semanticProjection, reviewPolicy = null, materialRevision = null } = {}) {
   if (!task || typeof task.listCanonicalReviewResultRefs !== "function" || !source || !subject || !semanticProjection) return null;
   const currentPolicyHash = reviewPolicy?.source === "wh_review.v2" ? hashCanonical(reviewPolicy) : null;
   const refs = task.listCanonicalReviewResultRefs();
@@ -358,6 +358,7 @@ export function findReusableReviewResult({ task, source, subject, integrationSub
         || result.semantic_projection?.contract_id !== semanticProjection.contract_id
         || result.semantic_projection?.contract_hash !== semanticProjection.contract_hash
         || !Array.isArray(result.provider_results) || result.provider_results.length === 0) continue;
+    if (stage === "verify-code" && result.material_revision !== materialRevision) continue;
     if (!reuseSatisfiesCurrentPolicy({ result, attempt, reviewPolicy })) continue;
     if (currentPolicyHash !== null && attempt.policy_snapshot_hash !== currentPolicyHash) continue;
     if (reviewPolicy?.source === "wh_review.v2" && !providerOutputCarriesAnchors(task, attempt)) continue;
@@ -379,7 +380,7 @@ export function findReusableReviewResult({ task, source, subject, integrationSub
   return null;
 }
 
-function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKind, source, subject, integrationSubject, bundle, semanticProjection, reusable, reviewPolicy = null }) {
+function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKind, source, subject, integrationSubject, bundle, semanticProjection, reusable, reviewPolicy = null, materialRevision = null }) {
   const reuseId = `reuse-${randomUUID()}`;
   const refs = reviewRefs({ attemptId: reuseId, stage, reviewTrack, snapshotTree: source.snapshotTree, root: reviewRootFor(task) });
   const sourceAttempt = JSON.parse(task.readRecord(reusable.result.attempt_ref));
@@ -394,6 +395,7 @@ function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKin
     source: sourceRecord(source, integrationSubject),
     snapshot_tree: source.snapshotTree,
     material_id: bundle.materialId,
+    ...(materialRevision ? { material_revision: materialRevision } : {}),
     semantic_projection: semanticProjectionIdentity(semanticProjection),
     reuse: {
       source_result_ref: reusable.resultRef,
@@ -410,6 +412,7 @@ function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKin
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: reuseId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    ...(materialRevision ? { material_revision: materialRevision } : {}),
     semantic_projection: semanticProjectionIdentity(semanticProjection), report_ref: refs.reportRef,
     provider_attempts: (sourceAttempt?.provider_attempts ?? []).map((providerAttempt, index) => {
       if (!providerAttempt?.output_ref) return { ...providerAttempt };
@@ -452,6 +455,7 @@ function publishReusedReviewResult({ task, taskId, stage, reviewTrack, reviewKin
   return {
     status: "available", reused: true, attemptRef: refs.attemptRef, resultRef: refs.resultRef,
     reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId,
+    ...(materialRevision ? { materialRevision } : {}),
     runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
     reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
   };
@@ -527,14 +531,14 @@ function materialPreflightDiagnostic(error) {
     : { code, message };
 }
 
-function undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null }) {
+function undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint = null, materialRevision = null }) {
   return hashCanonical(kind === "material-preflight"
-    ? { version: "wh-review-material-preflight.v1", stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint }
-    : { version: "wh-review-undispatched-unavailable.v1", kind, stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint });
+    ? { version: "wh-review-material-preflight.v1", stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint, material_revision: materialRevision }
+    : { version: "wh-review-undispatched-unavailable.v1", kind, stage, review_track: reviewTrack, subject, source, snapshot_tree: source.snapshotTree, review_policy: policy, diagnostic, material_fingerprint: materialFingerprint, material_revision: materialRevision });
 }
 
-async function recordUndispatchedUnavailable({ kind = "material-preflight", task, taskId, stage, reviewTrack, reviewKind = null, subject, source, policy, diagnostic, materialFingerprint = null }) {
-  const materialId = undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint });
+async function recordUndispatchedUnavailable({ kind = "material-preflight", task, taskId, stage, reviewTrack, reviewKind = null, subject, source, policy, diagnostic, materialFingerprint = null, materialRevision = null }) {
+  const materialId = undispatchedUnavailableId({ kind, stage, reviewTrack, subject, source, policy, diagnostic, materialFingerprint, materialRevision });
   const policyFingerprint = policy === null ? null : hashCanonical(policy);
   const minimumReviewers = minimumReviewersForPolicy(policy, stage, reviewTrack, subject.review_scope);
   const managedIdentity = policy?.source === "wh_review.v2";
@@ -548,6 +552,7 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: materialId,
+    ...(materialRevision ? { material_revision: materialRevision } : {}),
     report_ref: refs.reportRef, provider_attempts: [], terminal_status: "unavailable", error: diagnostic,
     ...(policy ? { review_policy: policy, policy_snapshot_hash: policyFingerprint } : {}),
     coverage: reviewCoverageRecord({ stage, policy, minimumReviewers, aggregation, requestedProfiles: policy?.requested_profiles ?? [] }),
@@ -557,7 +562,7 @@ async function recordUndispatchedUnavailable({ kind = "material-preflight", task
   writeReviewReport(task, refs.reportRef, { attempt });
   return {
     status: "unavailable", attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef,
-    snapshotTree: source.snapshotTree, materialId, runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
+    snapshotTree: source.snapshotTree, materialId, ...(materialRevision ? { materialRevision } : {}), runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
     reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
   };
 }
@@ -672,7 +677,7 @@ async function reviewGroup({ providerClient, providers, hostProvider, materials,
   return providers.map((provider) => reviewedByProvider.get(provider));
 }
 
-async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, directionSelection = null, hostProvider, providers, reviewPolicy = null, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
+async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, reviewScope = undefined, uiScope = false, materials = {}, current_receipts = {}, directionSelection = null, hostProvider, providers, reviewPolicy = null, providerClient, materialRevision = null, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, buildIntegrationSubject = undefined, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (reviewScope !== undefined) throw new TypeError("review_scope is derived from phase_id and cannot be supplied by a caller");
@@ -765,7 +770,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const preflightSubject = subject ?? subjectRecord(source, stage, phaseId);
     return await recordUndispatchedUnavailable({
       task: taskHandle, taskId, stage, reviewTrack, reviewKind, subject: preflightSubject, source, policy, diagnostic,
-      materialFingerprint: hashCanonical(materials ?? null),
+      materialFingerprint: hashCanonical(materials ?? null), materialRevision,
     });
   }
   const stabilityDiagnostic = sourceStabilityDiagnostic(source, taskId);
@@ -773,7 +778,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const unavailableResult = await recordUndispatchedUnavailable({
       kind: "source-stability", task: taskHandle, taskId, stage, reviewTrack, reviewKind,
       subject: subject ?? subjectRecord(source, stage, phaseId), source, policy,
-      diagnostic: stabilityDiagnostic, materialFingerprint: hashCanonical(materials ?? null),
+      diagnostic: stabilityDiagnostic, materialFingerprint: hashCanonical(materials ?? null), materialRevision,
     });
     source.dispose?.();
     return unavailableResult;
@@ -815,6 +820,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
     const reusable = findReusableReviewResult({
       task: taskHandle, source, subject, integrationSubject, stage, reviewTrack, reviewKind, semanticProjection,
       reviewPolicy: policy,
+      materialRevision,
     });
     if (reusable) {
       if (reusable.exact) {
@@ -822,13 +828,14 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
         return {
           status: "available", reused: true, attemptRef: reusable.result.attempt_ref, resultRef: reusable.resultRef,
           reportRef: reusable.result.report_ref ?? null, snapshotTree: source.snapshotTree, materialId: bundle.materialId,
+          ...(materialRevision ? { materialRevision } : {}),
           runtimeIds: {}, subjectKind: subject.subject_kind, phaseId: subject.phase_id,
           reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree,
         };
       }
       const reusedResult = publishReusedReviewResult({
         task: taskHandle, taskId, stage, reviewTrack, reviewKind, source, subject, integrationSubject,
-        bundle, semanticProjection, reusable, reviewPolicy: policy,
+        bundle, semanticProjection, reusable, reviewPolicy: policy, materialRevision,
       });
       source.dispose?.();
       return reusedResult;
@@ -873,6 +880,7 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind,
     ...subject, source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    ...(materialRevision ? { material_revision: materialRevision } : {}),
     semantic_projection: semanticProjectionIdentity(semanticProjection),
     report_ref: refs.reportRef, provider_attempts: providerAttempts,
     terminal_status: aggregation.status === "available" ? "semantic" : "unavailable",
@@ -884,13 +892,14 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   writeAttempt(taskHandle, refs.attemptRef, attempt);
   if (aggregation.status !== "available") {
     writeReviewReport(taskHandle, refs.reportRef, { attempt });
-    return { status: "unavailable", attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+    return { status: "unavailable", attemptRef: refs.attemptRef, resultRef: null, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, ...(materialRevision ? { materialRevision } : {}), runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
   }
   const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   const findings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
   const result = {
     version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, review_kind: reviewKind, ...subject,
     source: sourceRecord(source, integrationSubject), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    ...(materialRevision ? { material_revision: materialRevision } : {}),
     semantic_projection: semanticProjectionIdentity(semanticProjection),
     attempt_ref: refs.attemptRef, report_ref: refs.reportRef, provider_results: providerResults,
     findings,
@@ -899,14 +908,14 @@ async function runReviewOnce({ sourceRoot, targetRepoRoot, workspace, candidateW
   validateSchema("result", result);
   writeSemanticResult(taskHandle, refs.resultRef, result);
   writeReviewReport(taskHandle, refs.reportRef, { attempt, result });
-  return { status: "available", attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
+  return { status: "available", attemptRef: refs.attemptRef, resultRef: refs.resultRef, reportRef: refs.reportRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, ...(materialRevision ? { materialRevision } : {}), runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, reviewScope: subject.review_scope, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
 }
 
 export async function runReview(options = {}) {
   return runReviewOnce(options);
 }
 
-export async function recordMissingRouteUnavailable({ task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, workspace, candidateWorkspace, captureSource = captureSourceDefault } = {}) {
+export async function recordMissingRouteUnavailable({ task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, reviewKind = null, workspace, candidateWorkspace, materialRevision = null, captureSource = captureSourceDefault } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage)) throw new TypeError("missing-route unavailable review inputs are required");
   const diagnostic = { code: "REVIEW_ROUTE_UNAVAILABLE", message: `workflowhub host wh_review route is unavailable for ${stage}${reviewTrack ? `.${reviewTrack}` : ""}` };
@@ -920,7 +929,7 @@ export async function recordMissingRouteUnavailable({ task, attachmentRoot, task
     }
   } else source = captureSource({ workspace: assertWorkspace(workspace), reviewDataRoot: attachmentRoot, includeDiff: false, taskId });
   try {
-    return await recordUndispatchedUnavailable({ kind: "route-resolution", task: taskHandle, taskId, stage, reviewTrack, reviewKind, subject: subjectRecord(source, stage, phaseId), source, policy: null, diagnostic });
+    return await recordUndispatchedUnavailable({ kind: "route-resolution", task: taskHandle, taskId, stage, reviewTrack, reviewKind, materialRevision, subject: subjectRecord(source, stage, phaseId), source, policy: null, diagnostic });
   } finally { source.dispose?.(); }
 }
 

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { captureBefore, verifyUnchanged } from "../../tools/architecture/history-inventory.mjs";
+import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
@@ -50,5 +51,51 @@ describe("history inventory is read-only", () => {
       baseline_commit: first.baseline_commit,
       file_count: first.file_count,
     });
+  });
+
+  it("does not let a historical review ref satisfy current quality", () => {
+    const review = {
+      version: "wh-review-result.v1",
+      task_id: "task",
+      stage: "verify-code",
+      review_track: null,
+      subject_kind: "worktree",
+      phase_id: null,
+      review_scope: null,
+      base_tree: "a".repeat(40),
+      candidate_tree: "a".repeat(40),
+      source: { target_commit: "b".repeat(40), base_commit: "b".repeat(40), base_tree: "a".repeat(40), captured_head: "b".repeat(40) },
+      snapshot_tree: "a".repeat(40),
+      material_id: "c".repeat(64),
+      attempt_ref: "reviews/attempts/legacy.json",
+      provider_results: [{ provider: "fixture", output: { findings: [] } }],
+      findings: [],
+      adjudication: { version: "wh-review-adjudication.v1", clusters: [] },
+    };
+    const reviewRaw = JSON.stringify(review);
+    const fact = {
+      schema_version: "quality-fact.v1",
+      fact_id: "historical-review-fact",
+      task_id: "task",
+      stage: "verify-code",
+      material_revision: "revision",
+      snapshot_tree: "a".repeat(40),
+      kind: "review",
+      subject: "code_review",
+      status: "recorded",
+      ref: "fact.json",
+      sha256: "",
+      evidence: [{ ref: "reviews/results/legacy.json", sha256: sha256(reviewRaw), evidence_type: "review_result" }],
+    };
+    const factRaw = JSON.stringify(fact);
+    const records = new Map([["fact.json", factRaw], ["reviews/results/legacy.json", reviewRaw]]);
+    const read = (ref) => {
+      if (!records.has(ref)) { const error = new Error("missing"); error.code = "ENOENT"; throw error; }
+      return records.get(ref);
+    };
+    expect(evaluateFactFreshness({ ...fact, sha256: sha256(factRaw) }, {
+      material_revision: fact.material_revision,
+      snapshot_tree: fact.snapshot_tree,
+    }, { read })).toMatchObject({ status: "stale", authenticated: false });
   });
 });

@@ -62,7 +62,7 @@ const MINI_TASK_REVIEW_KINDS = new Set(["mini_task.design", "mini_task.implement
 const REVIEW_MODES = new Set(["single_round", "adaptive", "full_only", "full_on_structural_rework"]);
 
 function adapterOf(provider, label) {
-  if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)?$/.test(provider)) throw new Error(label + " must be a provider id");
+  if (typeof provider !== "string" || !/^[a-z][a-z0-9-]*(?:\/[a-z0-9](?:[a-z0-9-]|\.(?=[a-z0-9]))*)?$/.test(provider)) throw new Error(label + " must be a provider id");
   return provider.split("/", 1)[0];
 }
 
@@ -78,10 +78,12 @@ function profileList(value, label) {
   return [...value];
 }
 
-function profileDeclarations(value, label) {
+function profileDeclarations(value, label, allowedProfiles = null) {
   if (value === undefined) return {};
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(label + " must be an object");
-  return Object.fromEntries(Object.entries(value).map(([provider, profile]) => {
+  return Object.fromEntries(Object.entries(value)
+    .filter(([provider]) => allowedProfiles === null || allowedProfiles.has(provider))
+    .map(([provider, profile]) => {
     adapterOf(provider, `${label}.${provider}`);
     if (!profile || typeof profile !== "object" || Array.isArray(profile)) throw new Error(`${label}.${provider} must be an object`);
     const keys = Object.keys(profile).sort(); const expected = ["effort", "model", "priority", "thinking"];
@@ -94,7 +96,60 @@ function profileDeclarations(value, label) {
       thinking: profile.thinking,
       priority: profile.priority,
     }];
-  }));
+    }));
+}
+
+function referencedProfileNames(value) {
+  const names = new Set();
+  const routes = [
+    ...routeEntries(value?.stages ?? {}).map(({ route }) => route),
+    ...miniTaskRouteEntries(value?.mini_task).map(({ route }) => route),
+  ];
+  for (const routeValue of routes) {
+    for (const provider of [...(routeValue?.initial ?? []), ...(routeValue?.closure ?? [])]) names.add(provider);
+  }
+  return names;
+}
+
+function augmentFocusedProfiles(value, profiles, allowedProfiles) {
+  if (allowedProfiles === null) return profiles;
+  // Keep valid declarations available for diagnostics of other routes, but do
+  // not let a malformed unrelated declaration break the focused route.
+  const referenced = referencedProfileNames(value);
+  for (const [provider, declaration] of Object.entries(value?.profiles ?? {})) {
+    if (!referenced.has(provider)) continue;
+    if (Object.hasOwn(profiles, provider)) continue;
+    try {
+      Object.assign(profiles, profileDeclarations({ [provider]: declaration }, "workflowhub host wh_review.profiles", new Set([provider])));
+    } catch {
+      // The route that actually selects this profile will report its own
+      // missing/invalid declaration when it is requested.
+    }
+  }
+  return profiles;
+}
+
+function requestedProfileNames(value, { requestedStage = null, requestedTrack = null, requestedReviewKind = null } = {}) {
+  if (requestedStage === null && requestedReviewKind === null) return null;
+  const routes = [];
+  if (requestedReviewKind !== null) {
+    const configured = value.mini_task?.[miniTaskConfigKey(requestedReviewKind)]
+      ?? value.stages?.mini_task?.[miniTaskConfigKey(requestedReviewKind)]
+      ?? value.stages?.["mini-task"]?.[miniTaskConfigKey(requestedReviewKind)];
+    if (configured) routes.push(configured);
+  } else {
+    const configured = value.stages?.[requestedStage];
+    if (requestedStage === "make-decision") {
+      if (configured && typeof configured === "object" && !Array.isArray(configured)) {
+        for (const [track, route] of Object.entries(configured)) {
+          if (requestedTrack === null || requestedTrack === track) routes.push(route);
+        }
+      }
+    } else if (configured) {
+      routes.push(configured);
+    }
+  }
+  return new Set(routes.flatMap((route) => [ ...(Array.isArray(route?.initial) ? route.initial : []), ...(Array.isArray(route?.closure) ? route.closure : []) ]));
 }
 
 function route(value, label) {
@@ -140,6 +195,16 @@ function routeEntries(stages) {
     : [{ stage, track: null, route: configured }]);
 }
 
+function validateRouteWarning(value, stage, track) {
+  const configured = value.stages?.[stage];
+  const routeValue = stage === "make-decision" ? configured?.[track] : configured;
+  const label = `workflowhub host wh_review.stages.${stage}${track ? `.${track}` : ""}`;
+  const normalized = route(routeValue, label);
+  const referencedProfiles = new Set([...(normalized.initial ?? []), ...(normalized.closure ?? [])]);
+  const profiles = profileDeclarations(value.profiles, "workflowhub host wh_review.profiles", referencedProfiles);
+  validateRouteProfiles(normalized, profiles, label);
+}
+
 function miniTaskRouteEntries(miniTask) {
   return Object.entries(miniTask ?? {}).map(([key, route]) => ({ reviewKind: key.startsWith("mini_task.") ? key : `mini_task.${key}`, route }));
 }
@@ -180,7 +245,8 @@ function whReviewPolicy(value, { requestedStage = null, requestedTrack = null, r
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 2 || !value.stages || typeof value.stages !== "object" || Array.isArray(value.stages)) throw new Error("workflowhub host wh_review must be version 2 with stages");
   for (const key of Object.keys(value)) if (!["version", "profiles", "stages", "mini_task"].includes(key)) throw new Error("workflowhub host wh_review." + key + " is not supported");
-  const profiles = profileDeclarations(value.profiles, "workflowhub host wh_review.profiles");
+  const allowedProfiles = requestedProfileNames(value, { requestedStage, requestedTrack, requestedReviewKind });
+  const profiles = augmentFocusedProfiles(value, profileDeclarations(value.profiles, "workflowhub host wh_review.profiles", allowedProfiles), allowedProfiles);
   const embeddedMiniTask = value.stages.mini_task ?? value.stages["mini-task"];
   if (embeddedMiniTask !== undefined && value.mini_task !== undefined) throw new Error("workflowhub host wh_review mini-task routes must have one config location");
   const configuredStages = { ...value.stages };
@@ -290,9 +356,9 @@ export function loadTrustedThirdReviewConfig({ hostConfigPath: configuredPath = 
   const whReview = whReviewPolicy(config.wh_review, { requestedStage, requestedTrack, requestedReviewKind });
   validateWhReviewProfileDeclarations(whReview, broker, { requestedStage, requestedTrack, requestedReviewKind });
   const routeWarnings = whReview && requestedStage !== null
-    ? routeEntries(whReview.stages).flatMap(({ stage, track }) => {
+    ? routeEntries(config.wh_review.stages).filter(({ stage }) => REVIEW_STAGES.has(stage)).flatMap(({ stage, track }) => {
       if (stage === requestedStage && track === requestedTrack) return [];
-      try { validateWhReviewRoute(whReview, stage, track); return []; }
+      try { validateRouteWarning(config.wh_review, stage, track); return []; }
       catch (error) { return [{ stage, ...(track ? { track } : {}), message: error.message }]; }
     })
     : [];

@@ -9,7 +9,7 @@ function observations(stage) {
     },
     freshness: { status: "current" },
     authenticated: true,
-    ...(stage === "verify-code" && subject === "code_review" ? { review_status: "clean" } : {}),
+    ...((stage === "verify-code" && subject === "code_review") || (stage === "build-code" && subject === "integration_review") ? { review_status: "clean" } : {}),
   }));
 }
 
@@ -181,6 +181,17 @@ describe("five-stage completion predicates derive only from quality facts", () =
     const facts = observations("build-code");
     const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
     review.fact.value.status = "passed";
+    expect(deriveStageCompletion("build-code", facts)).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["integration_review"]),
+    });
+  });
+
+  it("does not satisfy build-code integration review while actionable findings remain", () => {
+    const facts = observations("build-code");
+    const review = facts.find(({ fact }) => fact.value.subject === "integration_review");
+    review.review_status = "findings";
+    review.fact.value.findings = [{ severity: "major", disposition: "open" }];
     expect(deriveStageCompletion("build-code", facts)).toMatchObject({
       status: "in_progress",
       missing: expect.arrayContaining(["integration_review"]),
