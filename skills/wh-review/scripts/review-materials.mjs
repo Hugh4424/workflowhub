@@ -1481,7 +1481,9 @@ function packetEntries(bundleRoot, rule, { reviewScope = null } = {}) {
     // spends transport budget without adding a review angle. Keep the file in
     // the bundle for the inline spec-analyze consumer, but exclude it from the
     // provider packet.
-    .filter((path) => !isSummaryDiffShard(bundleRoot, path) && path !== "requirements/planning_artifacts.json")
+    .filter((path) => !isSummaryDiffShard(bundleRoot, path)
+      && path !== "requirements/planning_artifacts.json"
+      && path !== "canonical-evidence.json")
     .map((path) => {
     const filePath = join(bundleRoot, ...path.split("/"));
     const bytes = statSync(filePath).size;
@@ -1894,7 +1896,10 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     return { path, bytes: statSync(filePath).size, sha256: sha256File(filePath) };
   });
   const providerPaths = new Set(Object.values(packetPlan.included).flat());
-  const entries = fullEntries.filter(({ path }) => providerPaths.has(path));
+  // canonical-evidence.json remains a local authenticated audit index. It is
+  // not provider material, so remove it at the packet boundary and derive the
+  // public identity from the same one canonical manifest used for delivery.
+  const entries = fullEntries.filter(({ path }) => providerPaths.has(path) && path !== "canonical-evidence.json");
   const manifest = canonicalMaterialManifest(entries);
   const materialId = sha256(Buffer.from(manifest, "utf8"));
   write(bundleRoot, "manifest.json", Buffer.from(manifest, "utf8"));
@@ -1902,7 +1907,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
   if (deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
-    const error = new Error("MATERIAL_TOO_LARGE: review packet exceeds 330 KiB after content deduplication and semantic slicing; canonical material is retained");
+    const error = new Error("MATERIAL_TOO_LARGE: review packet exceeds 330 KiB after content deduplication and semantic slicing");
     error.code = "MATERIAL_TOO_LARGE";
     throw error;
   }

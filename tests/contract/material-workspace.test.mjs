@@ -8,6 +8,8 @@ import {
   inspectMaterialWorkspace,
   replaceMaterialAtomic,
 } from "../../runtime/task/material-workspace.mjs";
+import { ArtifactDir } from "../../core/artifact-dir.mjs";
+import { createTask } from "../../runtime/task/task-handle.mjs";
 import * as completionPredicates from "../../runtime/stage/completion-predicates.mjs";
 
 function workspace() {
@@ -60,6 +62,31 @@ describe("material workspace contract", () => {
     expect(publication.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(readFileSync(join(root, "spec.md"), "utf8")).toBe("new spec\n");
     expect(inspectMaterialWorkspace(root).status).toBe("working");
+  });
+
+  it("uses the existing ArtifactDir owner for root current materials", () => {
+    const root = workspace();
+    for (const file of CURRENT_MATERIAL_FILES) writeFileSync(join(root, file), `old ${file}\n`);
+    const task = createTask({
+      storageRoot: root,
+      taskPath: join(root, "Projects", "Demo", "tasks", "root-materials"),
+      manifest: {
+        schema_version: "1.0.0",
+        project_name: "Demo",
+        task_id: "root-materials",
+        created_at: "2026-08-25T00:00:00.000Z",
+        target_repo_root: root,
+        issue_ids: [],
+        inputs: {},
+      },
+    });
+    const artifacts = ArtifactDir.open(root, task);
+
+    artifacts.writeAtomic("spec.md", "new spec\n");
+
+    expect(artifacts.root).toBe(root);
+    expect(artifacts.reference("spec.md")).toBe("spec.md");
+    expect(readFileSync(join(root, "spec.md"), "utf8")).toBe("new spec\n");
   });
 
   it("rejects path traversal and non-material files", () => {

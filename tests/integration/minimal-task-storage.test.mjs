@@ -13,10 +13,10 @@ function taskRoot() {
   const taskId = "minimal-task";
   const task = createTask({
     storageRoot,
-    taskPath: join(storageRoot, "Projects", "workflowhub", "tasks", taskId),
+    taskPath: join(storageRoot, "Projects", "legacy", "tasks", taskId),
     manifest: {
       schema_version: "1.0.0",
-      project_name: "workflowhub",
+      project_name: "legacy",
       task_id: taskId,
       created_at: new Date().toISOString(),
       target_repo_root: targetRepo,

@@ -109,6 +109,10 @@ WorkflowHub does not inspect broker-private files or infer liveness. It awaits t
 - `build-code`: current diff, risk-relevant tests and acceptance trace.
 - `verify-code`: current code diff, real consumers, implementation assessment, relevant test context and open code risks.
 
+For `verify-code`, wh-review publishes the existing `independent_review` advisory subject. The
+canonical completion subject `code_review` belongs to the existing `dsh-code-review` execution
+outcome and must remain bound to its current review result/attempt reference and bytes hash.
+
 Phase build-code review 的 subject 由宿主从 `phase_id` 和 Git 工作树推导。调用方只提供
 `phase_id`，不得从 `tasks.md` 传入 `execution_file_paths`、`phasePaths` 或其他路径选择器。
 宿主记录已提交 Phase 的直接父提交与候选提交树；未提交 Phase 记录真实的

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { assertTaskHandle } from "../../core/task-capability.mjs";
 import { captureExecutionSnapshot, EXECUTION_SNAPSHOT_EXCLUDED_PREFIXES } from "../task/git-worktree-snapshot.mjs";
 
@@ -162,7 +162,7 @@ function deterministicWorkspace(task) {
   const targetRepoRoot = realGitToplevel(task.manifest.target_repo_root, "target repository");
   const branch = `task/${task.identity.projectName}/${task.identity.taskId}`;
   const worktreeRoot = resolve(dirname(targetRepoRoot), `${basename(targetRepoRoot)}-${task.identity.taskId}`);
-  return { targetRepoRoot, branch, worktreeRoot };
+  return { targetRepoRoot, branch, worktreeRoot, mode: "deterministic", requireBranch: true };
 }
 
 function inspectTargetStatus(targetRepoRoot) {
@@ -217,7 +217,7 @@ function inspectTargetStatus(targetRepoRoot) {
 }
 
 function acceptedWorkspaceExpectation(task) {
-  return deterministicWorkspace(task);
+  return workspaceExpectation(task);
 }
 
 function workspaceForCreation(task) {
@@ -238,10 +238,72 @@ function registeredWorktree(targetRepoRoot, worktreeRoot) {
   return entries.find((entry) => typeof entry.worktree === "string" && resolve(entry.worktree) === worktreeRoot);
 }
 
+function symbolicBranchOrNull(root, label) {
+  try {
+    return gitValue(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], label);
+  } catch (error) {
+    if (/not a symbolic ref|detached HEAD|HEAD is detached/i.test(String(error?.message ?? ""))) return null;
+    throw error;
+  }
+}
+
+/**
+ * Validate a user-supplied existing trusted worktree once, before it is
+ * persisted in a new task manifest. The returned paths are real, registered
+ * Git worktrees that share one common directory; no branch name is required.
+ */
+export function validateExistingWorkspaceBinding({ targetRepoRoot, workspaceRoot } = {}) {
+  const target = realGitToplevel(targetRepoRoot, "target repository");
+  const worktree = realGitToplevel(workspaceRoot, "workspace root");
+  const dotGit = lstatSync(join(worktree, ".git"));
+  if (!dotGit.isFile() || dotGit.isSymbolicLink()) {
+    throw new Error("workspace root must be a registered linked Git worktree");
+  }
+  const registration = registeredWorktree(target, worktree);
+  if (!registration) throw new Error("workspace root is not registered in the target repository");
+  if (gitCommonDir(worktree) !== gitCommonDir(target)) {
+    throw new Error("workspace root and target repository must share a Git common directory");
+  }
+  return Object.freeze({
+    targetRepoRoot: target,
+    worktreeRoot: worktree,
+    branch: symbolicBranchOrNull(worktree, "workspace branch"),
+    mode: "existing",
+    requireBranch: false,
+  });
+}
+
+function existingLegacyWorkspace(task) {
+  const target = realGitToplevel(task.manifest.target_repo_root, "target repository");
+  try {
+    return validateExistingWorkspaceBinding({ targetRepoRoot: target, workspaceRoot: target });
+  } catch (error) {
+    // A normal repository has a .git directory and is therefore not an
+    // existing linked worktree. Preserve the deterministic creation default;
+    // surface all other validation errors when an explicit binding exists.
+    const dotGit = join(target, ".git");
+    let stat;
+    try { stat = lstatSync(dotGit); } catch { return null; }
+    if (stat.isDirectory() && !stat.isSymbolicLink()) return null;
+    if (stat.isFile() && !stat.isSymbolicLink()) throw error;
+    return null;
+  }
+}
+
+function workspaceExpectation(task) {
+  const manifest = task.manifest;
+  const hasExplicitBinding = Object.prototype.hasOwnProperty.call(manifest, "workspace_mode")
+    || Object.prototype.hasOwnProperty.call(manifest, "workspace_root");
+  if (hasExplicitBinding) {
+    return validateExistingWorkspaceBinding({ targetRepoRoot: manifest.target_repo_root, workspaceRoot: manifest.workspace_root });
+  }
+  return existingLegacyWorkspace(task) ?? deterministicWorkspace(task);
+}
+
 function assertWorktreeRegistration(expected, label) {
   const registration = registeredWorktree(expected.targetRepoRoot, expected.worktreeRoot);
-  if (!registration) throw new Error(`${label} is not registered at the deterministic task worktree path`);
-  if (registration.branch !== `refs/heads/${expected.branch}`) {
+  if (!registration) throw new Error(`${label} is not registered at the authenticated task worktree path`);
+  if (expected.requireBranch && registration.branch !== `refs/heads/${expected.branch}`) {
     throw new Error(`${label} registration does not use deterministic branch ${expected.branch}`);
   }
 }
@@ -277,7 +339,7 @@ function validateCandidate(task, expected, facts = {
   baseline_commit: expected.baselineCommit,
 }) {
   if (typeof facts?.worktree_root !== "string" || resolve(facts.worktree_root) !== expected.worktreeRoot) {
-    throw new Error(`make-decision worktree_root does not match the deterministic task worktree: ${facts?.worktree_root}`);
+    throw new Error(`make-decision worktree_root does not match the authenticated task workspace: ${facts?.worktree_root}`);
   }
   if (facts?.baseline_commit !== expected.baselineCommit) {
     throw new Error("make-decision baseline_commit does not match task worktree HEAD");
@@ -286,7 +348,7 @@ function validateCandidate(task, expected, facts = {
   if (realWorktree !== expected.worktreeRoot) throw new Error("task worktree realpath changed");
   assertWorktreeRegistration(expected, "task worktree");
   if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("task worktree and target repo must share a Git common directory");
-  if (gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "task worktree branch") !== expected.branch) {
+  if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "task worktree branch") !== expected.branch) {
     throw new Error(`task worktree must use deterministic branch ${expected.branch}`);
   }
   if (gitValue(realWorktree, ["rev-parse", "HEAD"], "task worktree HEAD") !== expected.baselineCommit) {
@@ -304,7 +366,7 @@ function validateCandidate(task, expected, facts = {
     }
     assertWorktreeRegistration(expected, "CandidateWorkspace");
     if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("CandidateWorkspace Git common directory changed");
-    if (gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "CandidateWorkspace branch") !== expected.branch) throw new Error("CandidateWorkspace branch changed");
+    if (expected.requireBranch && gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "CandidateWorkspace branch") !== expected.branch) throw new Error("CandidateWorkspace branch changed");
     if (gitValue(realWorktree, ["rev-parse", "HEAD"], "CandidateWorkspace HEAD") !== expected.baselineCommit) throw new Error("CandidateWorkspace HEAD changed");
     if (expected.requireClean
         && gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "CandidateWorkspace status") !== "") {
@@ -316,7 +378,7 @@ function validateCandidate(task, expected, facts = {
     baselineCommit: expected.baselineCommit,
     targetRepoRoot: expected.targetRepoRoot,
     branch: expected.branch,
-    targetStatus: expected.targetStatus ?? inspectTargetStatus(expected.targetRepoRoot),
+    targetStatus: expected.targetStatus ?? (expected.mode === "deterministic" ? inspectTargetStatus(expected.targetRepoRoot) : null),
   };
   Object.defineProperty(candidate, "worktreeRoot", { enumerable: true, get() { validate(); return realWorktree; } });
   Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
@@ -352,7 +414,12 @@ export function assertCandidateWorkspace(value) {
 export function prepareTaskWorkspace(taskHandle) {
   if (arguments.length !== 1) throw new TypeError("prepareTaskWorkspace accepts only a TaskHandle; caller-supplied workspace paths are forbidden");
   const task = assertTaskHandle(taskHandle);
-  const deterministic = deterministicWorkspace(task);
+  const deterministic = acceptedWorkspaceExpectation(task);
+  if (deterministic.mode === "existing") {
+    const baselineCommit = gitValue(deterministic.worktreeRoot, ["rev-parse", "--verify", "HEAD^{commit}"], "existing task workspace HEAD");
+    if (!/^[a-f0-9]{40}$/i.test(baselineCommit)) throw new Error("existing task workspace HEAD must be a full Git commit OID");
+    return validateCandidate(task, { ...deterministic, baselineCommit });
+  }
   const pathExists = existsSync(deterministic.worktreeRoot);
   const refExists = branchExists(deterministic.targetRepoRoot, deterministic.branch);
   if (pathExists !== refExists) throw new Error("deterministic task worktree path/branch conflict; refusing fallback or automatic repair");
@@ -383,7 +450,7 @@ export function validateTaskWorkspaceAttempt(taskHandle, facts) {
   if (arguments.length !== 2) throw new TypeError("validateTaskWorkspaceAttempt requires TaskHandle and attempt facts");
   const task = assertTaskHandle(taskHandle);
   if (typeof facts?.baseline_commit !== "string" || !/^[a-f0-9]{40}$/i.test(facts.baseline_commit)) throw new Error("make-decision attempt baseline_commit must be a full Git commit OID");
-  return validateCandidate(task, { ...deterministicWorkspace(task), baselineCommit: facts.baseline_commit }, facts);
+  return validateCandidate(task, { ...acceptedWorkspaceExpectation(task), baselineCommit: facts.baseline_commit }, facts);
 }
 
 /** Open the Workspace named only by the accepted make-decision result. */
@@ -401,7 +468,7 @@ export function openAcceptedWorkspace(taskHandle, accepted) {
   if (worktreeRoot !== expected.worktreeRoot) throw new Error("accepted task worktree realpath changed");
   assertWorktreeRegistration(expected, "accepted Workspace");
   if (gitCommonDir(worktreeRoot) !== gitCommonDir(targetRepoRoot)) throw new Error("accepted worktree and target repo must share a Git common directory");
-  if (gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "accepted Workspace branch") !== expected.branch) {
+  if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "accepted Workspace branch") !== expected.branch) {
     throw new Error(`accepted Workspace must use deterministic branch ${expected.branch}`);
   }
   gitValue(worktreeRoot, ["cat-file", "-e", `${facts.baseline_commit.trim()}^{commit}`], "baseline commit");
@@ -413,7 +480,7 @@ export function openAcceptedWorkspace(taskHandle, accepted) {
     }
     assertWorktreeRegistration(expected, "Workspace");
     if (gitCommonDir(worktreeRoot) !== gitCommonDir(targetRepoRoot)) throw new Error("Workspace Git common directory changed");
-    if (gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "Workspace branch") !== expected.branch) {
+    if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "Workspace branch") !== expected.branch) {
       throw new Error(`Workspace branch changed from deterministic branch ${expected.branch}`);
     }
     return true;
@@ -439,7 +506,7 @@ export function openCurrentTaskWorkspace(taskHandle) {
   if (gitCommonDir(worktreeRoot) !== gitCommonDir(expected.targetRepoRoot)) {
     throw new Error("current task Workspace and target repo must share a Git common directory");
   }
-  if (gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "current task Workspace branch") !== expected.branch) {
+  if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "current task Workspace branch") !== expected.branch) {
     throw new Error(`current task Workspace must use deterministic branch ${expected.branch}`);
   }
   const identityStat = lstatSync(worktreeRoot);
@@ -452,7 +519,7 @@ export function openCurrentTaskWorkspace(taskHandle) {
     if (gitCommonDir(worktreeRoot) !== gitCommonDir(expected.targetRepoRoot)) {
       throw new Error("current task Workspace Git common directory changed");
     }
-    if (gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "current task Workspace branch") !== expected.branch) {
+    if (expected.requireBranch && gitValue(worktreeRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"], "current task Workspace branch") !== expected.branch) {
       throw new Error(`current task Workspace branch changed from deterministic branch ${expected.branch}`);
     }
     return true;
@@ -470,6 +537,9 @@ export function createTaskWorktreeRemoval(taskHandle, acceptedBinding) {
   if (arguments.length !== 2) throw new TypeError("createTaskWorktreeRemoval requires TaskHandle and authenticated accepted binding");
   const task = assertTaskHandle(taskHandle);
   const expected = acceptedWorkspaceExpectation(task);
+  if (expected.mode === "existing") {
+    throw new Error("authenticated existing Workspace is not task-owned; task worktree removal is forbidden");
+  }
   if (acceptedBinding?.taskId !== task.identity.taskId || acceptedBinding?.stage !== "make-decision") {
     throw new Error("authenticated accepted make-decision identity mismatch for worktree removal");
   }

@@ -14,9 +14,11 @@
 - `review-instructions.md`；
 - `manifest.json`。
 
-正式 `verify-code` review attempt/result 还记录 `material_revision`：它由当前四份 WorkflowHub
-材料计算，并由 stage-runtime 在写入 `code_review` 前重新校验。`material_id` 仍只表示
-provider 可见 packet 的 manifest；两者缺一不可，旧 evidence 不能只靠同一个 snapshot 重新包装。
+正式 `verify-code` 的 wh-review attempt/result 还记录 `material_revision`：它由当前四份
+WorkflowHub 材料计算，并由 stage-runtime 在写入 `independent_review` 前重新校验。
+`material_id` 仍只表示 provider 可见 packet 的 manifest；两者缺一不可，旧 evidence 不能只靠
+同一个 snapshot 重新包装。`dsh-code-review` 才是完成语义上的 canonical `code_review`；stage
+runtime 要求它绑定当前的 review result/attempt 引用和字节哈希，wh-review 只保留异源建议与原始发现。
 
 这些材料只保留能影响代码判断的事实。禁止发送或要求完整 evidence tree、AC coverage、
 requirement replay、task completion、receipt、旧 review ledger、provider session 或本机绝对路径。

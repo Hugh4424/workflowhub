@@ -13,7 +13,7 @@ function task() {
   const repo = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-projection-repo-")));
   execFileSync("git", ["init", "-q"], { cwd: repo });
   const value = createTask({ storageRoot: storage, manifest: {
-    schema_version: "1.0.0", project_name: "workflowhub", task_id: "projection-replacement",
+    schema_version: "1.0.0", project_name: "legacy", task_id: "projection-replacement",
     created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
   } });
   initializeTaskStore(value.taskPath, { taskId: value.identity.taskId });

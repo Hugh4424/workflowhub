@@ -72,7 +72,10 @@ const RECEIPT_KEYS = Object.freeze({
   "build-spec": new Set(["spec", "review", "risk_acceptance", "audit", "stage_outcomes"]),
   "build-plan": new Set(["plan", "tasks", "review", "risk_acceptance", "audit", "confirmation", "stage_outcomes"]),
   "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes"]),
-  "verify-code": new Set(["quality_review", "stage_outcomes"]),
+  // quality_review is the dsh-code-review result bound by the stage outcome;
+  // review is the existing wh-review advisory receipt and never feeds the
+  // canonical completion subject.
+  "verify-code": new Set(["quality_review", "review", "stage_outcomes"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };

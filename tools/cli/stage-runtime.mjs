@@ -56,7 +56,10 @@ function resolveWorkflowHubIdentity(values, cwd = process.cwd()) {
   const binding = current.status === "present" ? current.task_binding : null;
   if (binding) {
     if (hasProject && (values.project !== binding.project_name || values.task !== binding.task_id)) {
-      throw new Error("explicit project/task does not match the current WorkflowHub session binding");
+      // Explicit task identity is authenticated by TaskHandle/workspace at
+      // the normal write boundary. Session handoff is supporting provenance;
+      // a stale binding becomes unavailable evidence, not a public blocker.
+      return Object.freeze({ project: values.project, task: values.task, taskPath: undefined, source: "explicit-over-session-binding" });
     }
     // Older handoffs predate the requirement snapshot. Refreshing the same
     // binding is safe: it only freezes transcript identities at the original

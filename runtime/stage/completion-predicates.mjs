@@ -93,7 +93,9 @@ export const STAGE_ADVISORY_PREDICATES = Object.freeze({
   "build-spec": Object.freeze({ independent_review: "review" }),
   "build-plan": Object.freeze({ independent_review: "review" }),
   "build-code": Object.freeze({}),
-  "verify-code": Object.freeze({}),
+  // wh-review's verify-code result is advice only. The required code_review
+  // remains owned by the dsh stage outcome and its bound quality_review ref.
+  "verify-code": Object.freeze({ independent_review: "review" }),
 });
 
 export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, subject = fact?.subject, review_status: reviewStatus, review_source: reviewSource } = {}) {

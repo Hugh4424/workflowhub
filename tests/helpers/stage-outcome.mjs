@@ -102,7 +102,7 @@ function lifecycleEvents(prefix = "fixture-confirmation") {
 }
 
 /** Test-only Stage Agent producer fixture; runtime authenticates every byte. */
-export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed" } = {}) {
+export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-stage-1", status = "completed", qualityReview = null } = {}) {
   if (!task?.identity?.taskId || !kernel?.publishCanonicalRecord || !artifacts?.read) throw new TypeError("stage outcome fixture requires task, kernel, and ArtifactDir");
   const active = workspace ?? candidateWorkspace;
   if (!active?.worktreeRoot) throw new TypeError("stage outcome fixture requires an authenticated workspace");
@@ -285,6 +285,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
     input_refs: step.entry_conditions.map(({ uri_or_path }) => uri_or_path),
     result_summary: resultSummary,
     evidence_refs: makeEvidence({ subjectKind: "step", subjectId: step.step_slug, outcomeStatus: status, resultSummary }),
+    ...(status === "completed" ? {} : { reason: "fixture stage outcome is incomplete for the unavailable review" }),
     cost: { duration_ms: null, tokens: null, status: "unavailable", reason: "fixture host did not expose usage" },
     };
   });
@@ -294,6 +295,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
       skill_id: name, status, trigger: true, executed: name === "spec-analyze" || name === "dsh-code-review" || status === "completed", version: "fixture-1.0.0",
       result_summary: resultSummary,
       evidence_refs: makeEvidence({ subjectKind: "skill", subjectId: name, outcomeStatus: status, resultSummary }),
+      ...(status === "completed" ? {} : { reason: "fixture stage outcome is incomplete for the unavailable review" }),
       cost: { duration_ms: null, tokens: null, status: "unavailable", reason: "fixture host did not expose usage" },
     };
   });
@@ -312,8 +314,12 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
         material_revision: revision,
         step_slug: "approve-verification",
         skill_id: "dsh-code-review",
+        ...(qualityReview ? {
+          quality_review_ref: qualityReview.ref ?? qualityReview.resultRef,
+        quality_review_hash: qualityReview.sha256 ?? sha256(task.readRecord(qualityReview.ref ?? qualityReview.resultRef)),
+        } : {}),
         result: {
-          status: "clean",
+          status: String(qualityReview?.ref ?? qualityReview?.resultRef ?? "").includes("/attempts/") ? "unavailable" : "clean",
           findings: [],
           summary: "fixture current implementation code review completed",
           focus: ["correctness", "lifecycle", "security", "consumer_fit", "test_strength"],

@@ -497,7 +497,7 @@ describe("current review material and capture contracts", () => {
     const after = captureReviewSource({ workspace, reviewDataRoot: root, taskId, phaseId: "P4", includeDiff: true });
     try {
       expect(after.snapshotTree).not.toBe(before.snapshotTree);
-      expect(() => buildReviewMaterials({
+      const bundle = buildReviewMaterials({
         reviewDataRoot: root,
         attachmentRoot: root,
         source: after,
@@ -511,7 +511,12 @@ describe("current review material and capture contracts", () => {
           test_evidence: { receipt_ref: receiptRef, receipt_hash: receipt.receipt_hash },
           review_instructions: reviewInstructionsFor("build-code", null, false, "phase"),
         },
-      })).not.toThrow();
+      });
+      expect(existsSync(join(bundle.bundleRoot, "canonical-evidence.json"))).toBe(true);
+      expect(bundle.files).not.toContain("canonical-evidence.json");
+      expect(bundle.manifest.some(({ path }) => path === "canonical-evidence.json")).toBe(false);
+      expect(Object.values(bundle.packetPlan.included).flat()).not.toContain("canonical-evidence.json");
+      expect(bundle.materialId).toBe(sha256(Buffer.from(canonicalMaterialManifest(bundle.manifest), "utf8")));
     } finally {
       before.dispose();
       after.dispose();

@@ -68,6 +68,15 @@ describe("TaskHandle", () => {
       .not.toThrow();
   });
 
+  it("keeps content-addressed quality facts kernel-owned", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const ref = `quality/facts/${"a".repeat(64)}.json`;
+
+    expect(() => task.writeRecordAtomic(ref, "{}\n")).toThrow(/quality facts are kernel-owned/i);
+    expect(() => task.createRecordAtomic(ref, "{}\n")).toThrow(/quality facts are kernel-owned/i);
+  });
+
   it("enumerates only sorted regular canonical stage attempts", () => {
     const { storageRoot, taskPath } = fixture();
     const task = createTask({ storageRoot, taskPath, manifest: manifest() });

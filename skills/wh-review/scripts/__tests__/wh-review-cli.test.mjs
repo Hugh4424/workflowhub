@@ -103,7 +103,7 @@ describe("wh-review production CLI", () => {
     expect(findExistingOrdinaryReview({ task, taskId: "task", stage: "build-plan" })).toBeNull();
   });
 
-  it("binds one verify-code review result to the vNext code_review fact", async () => {
+  it("binds one verify-code review result to the vNext advisory fact", async () => {
     const { publishStageReviewFact } = await import(cli.href);
     const raw = `${JSON.stringify(reviewResultRecord)}\n`;
     const attemptRaw = `${JSON.stringify(reviewSemanticAttemptRecord)}\n`;
@@ -123,7 +123,7 @@ describe("wh-review production CLI", () => {
     expect(factIntent).toMatchObject({
       schema_version: "workflowhub-quality-fact-intent.v1",
       stage: "verify-code",
-      kind: "review", status: "recorded", subject: "code_review",
+      kind: "review", status: "recorded", subject: "independent_review",
       evidence: [{ ref, sha256: expect.any(String), evidence_type: "review_result" }],
       material_id: reviewMaterialId,
       material_revision: `revision-${"d".repeat(64)}`,
