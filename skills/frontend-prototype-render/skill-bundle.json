@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "skill": "frontend-prototype-render",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "7f262c0f887459188f05e64376974403a3d79ea55dd199ee5be3842944214aa9"
+    }
+  ],
+  "sources": []
+}

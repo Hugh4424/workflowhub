@@ -525,6 +525,14 @@ export function deriveStatusGroups({ stage = null, quality, productRelease, obse
   }
   const quality_gaps = [...new Set(productRelease?.reasons ?? [])];
   const close_supported = stage === "verify-code";
+  // Read-only preflight for physical close. These are facts to surface to the
+  // operator, never a new gate or a replacement for verify-code quality.
+  const close_preparation_gaps = close_supported
+    ? [...new Set([
+      ...missing.map((subject) => `verify-code prerequisite missing: ${subject}`),
+      ...quality_gaps,
+    ])]
+    : [];
   return Object.freeze({
     actionable_now: Object.freeze(actionable_now),
     external_unavailable: Object.freeze(external_unavailable),
@@ -532,6 +540,7 @@ export function deriveStatusGroups({ stage = null, quality, productRelease, obse
     quality_gaps: Object.freeze(quality_gaps),
     release_gaps: Object.freeze(quality_gaps),
     close_supported,
+    close_preparation_gaps: Object.freeze(close_preparation_gaps),
     next_action: actionable_now[0] ?? (external_unavailable[0] ?? null),
   });
 }

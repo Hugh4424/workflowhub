@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTask } from "../../../../runtime/task/task-handle.mjs";
+import { createTask, createTaskKernel } from "../../../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
+import { ArtifactDir } from "../../../../core/artifact-dir.mjs";
 import { reviewInstructionsFor } from "../review-materials.mjs";
+import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../../../../tests/helpers/stage-outcome.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
@@ -38,6 +41,285 @@ function git(cwd, args) { return String(execFileSync("git", args, { cwd, encodin
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("wh-review production CLI", () => {
+  it("records current unavailable evidence when the build-code outcome is missing", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-no-execution-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    git(repo, ["init", "-q"]); git(repo, ["config", "user.name", "Test"]); git(repo, ["config", "user.email", "test@example.com"]);
+    writeFileSync(join(repo, "README.md"), "base\n"); git(repo, ["add", "."]); git(repo, ["commit", "-qm", "base"]);
+    const task = createTask({ storageRoot: root, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "missing-execution", created_at: "2026-08-30T00:00:00Z",
+      target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+    } });
+    const workspace = prepareTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    for (const [name, value] of [["decision-log.md", "# D\n"], ["spec.md", "# S\n"], ["plan.md", "# P\n"], ["tasks.md", "# T\n"]]) artifacts.writeAtomic(name, value);
+    const kernel = createTaskKernel(task, { candidateWorkspace: workspace });
+    const { runTaskBoundE2eReview } = await import(cli.href);
+    const result = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+    });
+    expect(result).toMatchObject({ status: "unavailable", review_fact_intent: { status: "unavailable" }, error: { message: "verify-code E2E review requires one current completed build-code outcome" } });
+  });
+
+  it("rejects a content-addressed but semantically incomplete build-code outcome", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-forged-outcome-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    git(repo, ["init", "-q"]); git(repo, ["config", "user.name", "Test"]); git(repo, ["config", "user.email", "test@example.com"]);
+    writeFileSync(join(repo, "README.md"), "base\n"); git(repo, ["add", "."]); git(repo, ["commit", "-qm", "base"]);
+    const task = createTask({ storageRoot: root, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "forged-outcome", created_at: "2026-08-30T00:00:00Z",
+      target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+    } });
+    const workspace = prepareTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    for (const [name, value] of [["decision-log.md", "# D\n"], ["spec.md", "# S\n"], ["plan.md", "# P\n"], ["tasks.md", "# T\n"]]) artifacts.writeAtomic(name, value);
+    const kernel = createTaskKernel(task, { candidateWorkspace: workspace });
+    const snapshot = kernel.currentVNextSnapshot();
+    const materialRevision = kernel.currentVNextMaterialRevision();
+    const forged = {
+      schema_version: "workflowhub-stage-outcomes.v1", task_id: task.identity.taskId, stage: "build-code", status: "completed",
+      attempt_id: "forged-1", snapshot_tree: snapshot.tree, material_revision: materialRevision,
+      producer: { kind: "stage-agent", host: "host-machine", source_id: "fixture/executor", source_family: "fixture", agent_run_id: "forged-1" },
+      step_outcomes: [], skill_outcomes: [],
+    };
+    const raw = `${JSON.stringify(forged)}\n`;
+    const hash = createHash("sha256").update(raw).digest("hex");
+    kernel.publishCanonicalRecord(`quality/evidence/stage-outcomes/build-code/${hash}.json`, raw);
+    const { runTaskBoundE2eReview } = await import(cli.href);
+    const result = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+    });
+    expect(result).toMatchObject({ status: "unavailable", error: { message: "verify-code E2E review requires one current completed build-code outcome" } });
+  });
+
+  it("uses an explicit one-profile route, freezes implementation evidence, and reuses the current E2E review", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-e2e-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    git(repo, ["init", "-q"]); git(repo, ["config", "user.name", "Test"]); git(repo, ["config", "user.email", "test@example.com"]);
+    writeFileSync(join(repo, "README.md"), "base\n"); git(repo, ["add", "."]); git(repo, ["commit", "-qm", "base"]);
+    const task = createTask({ storageRoot: root, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "e2e-review", created_at: "2026-08-30T00:00:00Z",
+      target_repo_root: repo, issue_ids: [], inputs: {}, record_model: "vnext-single-write",
+    } });
+    const workspace = prepareTaskWorkspace(task);
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    writeCanonicalStageMaterials(artifacts);
+    const kernel = createTaskKernel(task, { candidateWorkspace: workspace });
+    const snapshot = kernel.currentVNextSnapshot();
+    const materialRevision = kernel.currentVNextMaterialRevision();
+    const outcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace, stage: "build-code", attemptId: "build-1" });
+    const outcomeRaw = `${JSON.stringify(outcome.value, null, 2)}\n`;
+    const outcomeHash = outcome.sha256;
+    const testOutput = "focused test passed\n";
+    const testOutputRef = "quality/tests/output/build-code-e2e";
+    kernel.publishCanonicalRecord(testOutputRef, testOutput);
+    const testReceipt = {
+      schema_version: "workflowhub-receipt.v1", task_id: task.identity.taskId, stage: "build-code",
+      producer: { stage: "build-code", component: "build-code-test-capture", version: "1.0.0" },
+      command: "true", command_hash: createHash("sha256").update("true").digest("hex"), exit_code: 0,
+      output_ref: testOutputRef, output_hash: createHash("sha256").update(testOutput).digest("hex"), snapshot_tree: snapshot.tree,
+    };
+    kernel.publishCanonicalRecord("quality/tests/build-code-e2e.json", `${JSON.stringify(testReceipt)}\n`);
+    const screenshotBytes = Buffer.from("PNG-BYTES");
+    const screenshotContentHash = createHash("sha256").update(screenshotBytes).digest("hex");
+    const screenshotRef = `quality/evidence/browser-qa/${screenshotContentHash}.json`;
+    const screenshotPublicationRaw = `${JSON.stringify({ schema_version: "workflowhub-evidence-publication.v1", source_path: "dogfood.png", content_sha256: screenshotContentHash,
+      content_encoding: "base64", content_base64: screenshotBytes.toString("base64"), publisher: "build-code", recorded_at: "2026-08-30T00:00:00.000Z" })}\n`;
+    const screenshotHash = createHash("sha256").update(screenshotPublicationRaw).digest("hex");
+    kernel.publishCanonicalRecord(screenshotRef, screenshotPublicationRaw);
+    const browserRaw = `${JSON.stringify({
+      applicability: "ui", result: "pass", task_id: task.identity.taskId, stage: "build-code", attempt_id: "build-1",
+      invocation_id: "acceptance-browser-1", material_revision: materialRevision, snapshot_tree: snapshot.tree,
+      acceptance_criterion_id: "AC-001", acceptance_scenario: { source: "demo/source", sample: "demo/sample", scenario: "demo/scenario", tier: "browser" },
+      route: "/dogfood", page: "Dogfood", scenario: "demo scenario", tool: "isolated-browser-qa", engine: "agent-browser", session: "acceptance-fixture",
+      state: { name: "ready" }, viewport: { name: "desktop", width: 1440, height: 900 }, fixture: { name: "real-page", fixture_only: false },
+      component: { name: "Dogfood", path: "src/Dogfood.tsx" }, design_revision: "Design.md@v1",
+      design_identity: { document_kind: "design", path: "Design.md", content_sha256: "a".repeat(64), revision: "design-v1", anchor_id: "dogfood", anchor_title: "Dogfood", anchor_source: "explicit" },
+      experience_identity: { document_kind: "experience", path: "Experience.md", content_sha256: "b".repeat(64), revision: "experience-v1", anchor_id: "dogfood", anchor_title: "Dogfood", anchor_source: "explicit" },
+      service_identity: { name: "dogfood-web", revision: "service-v1" }, api_identity: { name: "dogfood-api", revision: "api-v1" }, dto_identity: { name: "DogfoodDto", revision: "dto-v1" },
+      browser_profile: { name: "isolated", revision: "profile-v1" }, environment_identity: { kind: "local", name: "dogfood-web", revision: "service-v1", endpoint: "http://127.0.0.1:4173", runtime_id: "dogfood-runtime-1" },
+      data_identity: { kind: "seeded", name: "demo-data", revision: "data-v1", source: "demo/source", dataset_id: "demo/sample", fixture_only: false },
+      cancellation: { status: "not_cancelled" },
+      observations: { console: { status: "clean" }, network: { status: "clean" }, focus: { status: "checked" }, overflow: { status: "none" } },
+      visual: { status: "observed", screenshot_refs: [screenshotRef] }, a11y: { status: "not_checked", reason: "fixture" }, auth: { mode: "none", login_state_reused: false },
+      performance: { status: "not_measured", reason: "fixture" }, screenshots: [{ ref: screenshotRef, hash: screenshotHash }],
+      test: { command: "true", file: "dogfood.test.mjs", output_ref: testOutputRef, output_hash: createHash("sha256").update(testOutput).digest("hex"), exit_code: 0 },
+      cleanup: { status: "completed", app_service_running: true }, engine_switch: "no",
+    })}\n`;
+    const browserHash = createHash("sha256").update(browserRaw).digest("hex");
+    const browserRef = `quality/evidence/browser-qa/${browserHash}.json`;
+    kernel.publishCanonicalRecord(browserRef, browserRaw);
+    const stageEvidenceRaw = `${JSON.stringify({
+      schema_version: "stage-quality-evidence.v1", task_id: task.identity.taskId, stage: "build-code", subject: "acceptance_execution", status: "passed",
+      material_revision: materialRevision, snapshot_tree: snapshot.tree,
+      subject_fact: { status: "passed", execution_binding: { stage_outcome_ref: outcome.ref, stage_outcome_hash: outcomeHash }, execution_items: [{
+        task_id: "T002", source: "demo/source", sample: "demo/sample", scenario: "demo/scenario", tier: "browser", status: "executed",
+        evidence_refs: [{ ref: browserRef, sha256: browserHash }],
+      }] },
+    })}\n`;
+    const stageEvidenceHash = createHash("sha256").update(stageEvidenceRaw).digest("hex");
+    const stageEvidenceRef = `quality/evidence/stage-quality/build-code/acceptance_execution-${stageEvidenceHash}.json`;
+    kernel.publishCanonicalRecord(stageEvidenceRef, stageEvidenceRaw);
+    const acceptanceValue = { schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "acceptance_execution", result: "pass",
+      refs: [{ ref: stageEvidenceRef, sha256: stageEvidenceHash }], snapshot_tree: snapshot.tree,
+      summary: { actual_outcome: "passed", evidence_type: "stage quality fact" }, freshness: { status: "current", evaluated_at: "2026-08-30T00:00:00.000Z", snapshot_tree: snapshot.tree,
+        material_revision: materialRevision, evidence_freshness: [{ ref: stageEvidenceRef, sha256: stageEvidenceHash, status: "current" }] } };
+    const acceptanceRaw = `${JSON.stringify(acceptanceValue)}\n`;
+    const acceptanceHash = createHash("sha256").update(acceptanceRaw).digest("hex");
+    const acceptanceRef = `quality/evidence/acceptance/build-code/acceptance_execution-${acceptanceHash}.json`;
+    kernel.publishCanonicalRecord(acceptanceRef, acceptanceRaw);
+    kernel.publishVNextQualityFact("build-code", { kind: "acceptance_criterion", status: "passed", subject: "acceptance_execution",
+      evidence: [{ ref: acceptanceRef, sha256: acceptanceHash, evidence_type: "acceptance_evidence" }] });
+    const attachmentRoot = join(root, "attachments"); mkdirSync(attachmentRoot);
+    const brokerConfig = join(root, "3rd-review.json");
+    writeFileSync(brokerConfig, JSON.stringify({
+      version: 4,
+      tiers: [],
+      providers: {
+        "kimi/coding": { enabled: true, source_id: "kimi/coding" },
+        "kimi/k3": { enabled: true, source_id: "kimi/k3" },
+        "opencode/v4flash": { enabled: true, source_id: "opencode/v4flash" },
+        "codex/luna": { enabled: true, source_id: "codex/luna" },
+      },
+    }));
+    const opencodeConfigId = createHash("sha256").update(JSON.stringify({ id: "opencode/v4flash", source_id: "opencode/v4flash", model: null, effort: null, thinking: null, deadline_ms: null }), "utf8").digest("hex");
+    const { runTaskBoundE2eReview } = await import(cli.href);
+
+    let unavailableDispatches = 0;
+    const firstUnavailable = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["codex/luna"], minimum_heterologous: 1 }),
+      client: { async runGroup() {
+        unavailableDispatches += 1;
+        throw new Error("provider transport unavailable");
+      } },
+    });
+    expect(firstUnavailable).toMatchObject({ status: "unavailable", error: { message: "provider transport unavailable" } });
+    expect(firstUnavailable.reused).toBeUndefined();
+    const reusedUnavailable = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["codex/luna"], minimum_heterologous: 1 }),
+      client: { async runGroup() { throw new Error("same unavailable input must be reused"); } },
+    });
+    expect(reusedUnavailable).toMatchObject({ status: "unavailable", reused: true, attemptRef: firstUnavailable.attemptRef, resultRef: null });
+    expect(unavailableDispatches).toBe(1);
+
+    const seen = [];
+    const runConcurrent = () => runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({
+        mode: "single_round",
+        initial: ["opencode/v4flash"],
+        minimum_heterologous: 1,
+      }),
+      client: { async runGroup(request) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        const materialFiles = readdirSync(join(request.materials.bundleRoot, "materials"));
+        const readMaterial = (suffix) => readFileSync(join(request.materials.bundleRoot, "materials", materialFiles.find((name) => name.endsWith(suffix))), "utf8");
+        seen.push({
+          providers: request.providers, strict: request.strictProtocol, materialId: request.materials.materialId,
+          decision: readMaterial("decision-log.md.md"), outcome: readMaterial("build-code-outcome.json.md"),
+          diff: readMaterial("implementation-diff.patch.md"), tests: readMaterial("test-1-receipt.json.md"), testOutput: readMaterial("test-1-output.txt.md"),
+          browser: readMaterial("browser-evidence-1.json.md"),
+          screenshot: readMaterial("browser-1-screenshot-1.bin.md"), browserTestOutput: readMaterial("browser-1-test-output.txt.md"),
+          binding: JSON.parse(readMaterial("review-subject-binding.json.json")),
+        });
+        return { runtimeId: "review-runtime", outcome: "completed", providers: [{
+          provider: "opencode/v4flash", status: "completed", error: null, identity: { provider: "opencode/v4flash", adapter: "opencode", source_id: "opencode/v4flash", config_id: opencodeConfigId, model: "model" },
+          output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+        }] };
+      } },
+    });
+    const [firstConcurrent, secondConcurrent] = await Promise.all([runConcurrent(), runConcurrent()]);
+    const result = firstConcurrent.reused === true ? secondConcurrent : firstConcurrent;
+    expect([firstConcurrent, secondConcurrent].filter((entry) => entry.status === "available")).toHaveLength(2);
+    expect([firstConcurrent, secondConcurrent].filter((entry) => entry.reused === true)).toHaveLength(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].providers).toEqual(["opencode/v4flash"]);
+    expect(seen[0].strict).toBe(true);
+    expect(seen[0].materialId).toEqual(expect.any(String));
+    expect(seen[0].decision).toContain("# Decision log");
+    expect(seen[0].outcome).toContain('"attempt_id": "build-1"');
+    expect(seen[0].diff).toContain("diff --git");
+    expect(seen[0].tests).toContain(testOutputRef);
+    expect(seen[0].testOutput).toContain("focused test passed");
+    expect(seen[0].browser).toContain('"page":"Dogfood"');
+    expect(seen[0].screenshot).toContain(screenshotContentHash);
+    expect(seen[0].browserTestOutput).toContain("focused test passed");
+    expect(seen[0].binding).toMatchObject({ execution_ref: `quality/evidence/stage-outcomes/build-code/${outcomeHash}.json`, executor_actor: { source_id: "fixture/executor", source_kind: "stage-agent", run_id: "build-1" } });
+    expect(result).toMatchObject({ status: "available", review_fact_intent: { status: "recorded", subject: "independent_review" } });
+    const stored = JSON.parse(task.readRecord(result.result_ref));
+    expect(stored.e2e_binding).toMatchObject({
+      reviewer_actor: { source_id: "opencode/v4flash" },
+      reviewed_execution: { ref: `quality/evidence/stage-outcomes/build-code/${outcomeHash}.json`, actor: { source_id: "fixture/executor" } },
+    });
+    expect(stored.review_policy).toMatchObject({
+      mode: "single_round", minimum_heterologous: 1,
+      broker_identity: { provider: "opencode/v4flash", source_id: "opencode/v4flash", config_id: opencodeConfigId },
+      requested_profile_specs: [{ provider: "opencode/v4flash", model: null, effort: null, thinking: null, priority: 0 }],
+    });
+
+    const reused = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["opencode/v4flash"], minimum_heterologous: 1 }),
+      client: { async runGroup() { throw new Error("current bound result must be reused"); } },
+    });
+    expect(reused).toMatchObject({ status: "available", reused: true, resultRef: result.resultRef, attemptRef: result.attemptRef });
+    expect(seen).toHaveLength(1);
+
+    const stricterPolicy = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({
+        mode: "single_round",
+        initial: ["opencode/v4flash", "codex/luna"],
+        minimum_heterologous: 1,
+      }),
+      client: { async runGroup() { throw new Error("provider must not be called"); } },
+    });
+    expect(stricterPolicy).toMatchObject({
+      status: "unavailable",
+      error: { message: "verify-code E2E review requires an explicit one-profile route with minimum_heterologous=1" },
+    });
+
+    const sameSourceIdentity = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["fixture/executor"], minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["fixture/executor"], provider_identities: { "fixture/executor": { source_id: "fixture/executor", config_id: "a".repeat(64) } } }),
+      client: { async runGroup() { throw new Error("same source identity must not be dispatched"); } },
+    });
+    expect(sameSourceIdentity).toMatchObject({
+      status: "unavailable",
+      error: { message: "verify-code E2E review requires one configured heterologous reviewer source identity" },
+    });
+
+    const mismatchedIdentity = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
+      resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
+      loadConfig: () => ({ whReview: {}, config: "/unused", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["review/provider"], minimum_heterologous: 1 }),
+      selectProviders: () => ({
+        providers: ["review/provider"],
+        provider_identities: { "review/provider": { source_id: "review-host", config_id: "a".repeat(64) } },
+      }),
+      client: { async runGroup() {
+        return { runtimeId: "review-runtime-mismatch", outcome: "completed", providers: [{
+          provider: "review/provider", status: "completed", error: null,
+          identity: { provider: "review/provider", adapter: "review", source_id: "broker-self-report", config_id: "config", model: "model" },
+          output: JSON.stringify({ findings: [] }), timing: null, usage: null,
+        }] };
+      } },
+    });
+    expect(mismatchedIdentity).toMatchObject({
+      status: "unavailable",
+      review_fact_intent: { status: "unavailable", subject: "independent_review" },
+    });
+  }, 30000);
+
   it("can be imported from a stdin/eval entrypoint without argv[1]", () => {
     const script = `import(${JSON.stringify(cli.href)}).then((mod) => { if (typeof mod.runReviewRound !== "function") process.exit(1); })`;
     expect(() => execFileSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8" })).not.toThrow();

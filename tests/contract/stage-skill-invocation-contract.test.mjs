@@ -23,6 +23,7 @@ const stageSkills = Object.freeze({
     "plan-ceo-review",
     "ui-project-init",
     "design-source-readiness",
+    "frontend-prototype-render",
     "plan-design-review",
     "wh-review",
     "spec-analyze",

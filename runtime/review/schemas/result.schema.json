@@ -18,6 +18,8 @@
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+    "e2e_binding": { "$ref": "attempt.schema.json#/properties/e2e_binding" },
+    "review_policy": { "$ref": "attempt.schema.json#/properties/review_policy" },
     "semantic_projection": {
       "type": "object",
       "required": ["projection_version", "surface", "contract_id", "contract_hash", "semantic_hash"],

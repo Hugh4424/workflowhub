@@ -570,7 +570,7 @@ describe("plan-task.v3 structural contract", () => {
   });
 
   it("keeps the current 30-source map closed in spec, plan, and tasks", () => {
-    const material = (name) => readFileSync(new URL(`../specs/review-flow-reset/${name}`, import.meta.url), "utf8");
+    const material = (name) => readFileSync(new URL(`../specs/archive/review-flow-reset/${name}`, import.meta.url), "utf8");
     const result = validatePlanTaskContract({
       spec: material("spec.md"),
       plan: material("plan.md"),
@@ -688,9 +688,15 @@ describe("plan-task.v3 structural contract", () => {
       .replace("- **paired_task**：T002", "- **paired_task**：N/A") });
     expect(bypass.errors.join("\n")).toMatch(/N\/A — non-behavior change/);
 
-    const unknownVersion = validate({
+    const v4 = validate({
       plan: plan.replace("plan-task.v3", "plan-task.v4"),
       tasks: tasks.replace("plan-task.v3", "plan-task.v4"),
+    });
+    expect(v4).toMatchObject({ ok: true, errors: [], facts: { template_version: "plan-task.v4" } });
+
+    const unknownVersion = validate({
+      plan: plan.replace("plan-task.v3", "plan-task.v5"),
+      tasks: tasks.replace("plan-task.v3", "plan-task.v5"),
     });
     expect(unknownVersion.errors.join("\n")).toMatch(/unsupported explicit template version/);
 

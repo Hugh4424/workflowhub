@@ -48,6 +48,37 @@
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "material_revision": { "type": "string", "pattern": "^revision-[a-f0-9]{64}$" },
+    "e2e_binding": {
+      "type": "object",
+      "required": ["frozen_material", "reviewed_execution", "reviewer_actor"],
+      "properties": {
+        "frozen_material": {
+          "type": "object", "required": ["ref", "sha256", "provider_input_sha256"],
+          "properties": {
+            "ref": { "type": "string", "pattern": "^quality/evidence/review-materials/[a-f0-9]{64}\\.json$" },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "provider_input_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }, "additionalProperties": false
+        },
+        "reviewed_execution": {
+          "type": "object", "required": ["ref", "sha256", "actor"],
+          "properties": {
+            "ref": { "type": "string", "pattern": "^quality/evidence/stage-outcomes/build-code/[a-f0-9]{64}\\.json$" },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "actor": {
+              "type": "object", "required": ["source_kind", "source_id", "run_id"],
+              "properties": { "source_kind": { "type": "string", "minLength": 1 }, "source_id": { "type": "string", "minLength": 1 }, "run_id": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          }, "additionalProperties": false
+        },
+        "reviewer_actor": {
+          "type": "object", "required": ["source_kind", "source_id", "run_id"],
+          "properties": { "source_kind": { "type": "string", "minLength": 1 }, "source_id": { "type": "string", "minLength": 1 }, "run_id": { "type": "string", "minLength": 1 } },
+          "additionalProperties": false
+        }
+      }, "additionalProperties": false
+    },
     "semantic_projection": {
       "type": "object",
       "required": ["projection_version", "surface", "contract_id", "contract_hash", "semantic_hash"],
@@ -99,6 +130,16 @@
             },
             "additionalProperties": false
           }
+        },
+        "broker_identity": {
+          "type": "object",
+          "required": ["provider", "source_id", "config_id"],
+          "properties": {
+            "provider": { "type": "string", "minLength": 1 },
+            "source_id": { "type": "string", "minLength": 1 },
+            "config_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

@@ -117,6 +117,20 @@ function canonicalQaRaw(value) {
   return JSON.stringify(canonicalQaPayload(value));
 }
 
+function uiApplicabilityDecisionLog(result = "ui") {
+  const reason = result === "ui"
+    ? "controlled contract fixture has a page and interaction consumer"
+    : "controlled contract fixture has no page or frontend consumer";
+  return `# 当前决策\n\n## UI applicability\n\`\`\`json\n${JSON.stringify({
+    result,
+    sources: {
+      raw_requirement: { conclusion: result, reason },
+      project_inventory: { conclusion: result, reason },
+      planned_or_changed_frontend_fact: { conclusion: result, reason },
+    },
+  }, null, 2)}\n\`\`\`\n`;
+}
+
 function qaPayload({ taskId = "qa-contract", snapshotTree = "b".repeat(40), materialRevision = `revision-${"a".repeat(64)}`, result = "pass", cancellation = { status: "not_cancelled" }, cleanup = { status: "completed", app_service_running: true }, invocationId = "invocation-1", evidence = true, fixtureOnly = false } = {}) {
   const payload = {
     applicability: "ui", result, task_id: taskId, stage: "build-code",
@@ -144,7 +158,7 @@ function qaPayload({ taskId = "qa-contract", snapshotTree = "b".repeat(40), mate
     : payload;
 }
 
-function qaWorker({ taskId = "qa-contract", impact = "ui", payload = qaPayload({ taskId }), withAdapter = true, withEvidenceReader = true, previousUiQaRef = null, omitAttempt = false } = {}) {
+function qaWorker({ taskId = "qa-contract", impact = "ui", loggedImpact = impact === "backend" || impact === "non_ui" ? "non_ui" : "ui", payload = qaPayload({ taskId }), withAdapter = true, withEvidenceReader = true, previousUiQaRef = null, omitAttempt = false } = {}) {
   let calls = 0;
   let currentPayload = payload;
   const qaBinding = {
@@ -164,7 +178,9 @@ function qaWorker({ taskId = "qa-contract", impact = "ui", payload = qaPayload({
   const worker = {
     stage: "build-code", identity: { taskId }, workflowRunId: "qa-run", manifest: { record_model: "vnext-single-write" },
     ...(omitAttempt ? {} : { currentAttemptId: "attempt-1" }), currentMaterialRevision: payload.material_revision,
-    readArtifact: (name) => name === "spec.md" ? "# spec\nAC-UI-001\n" : "# tasks\n",
+    readArtifact: (name) => name === "decision-log.md"
+      ? (loggedImpact ? uiApplicabilityDecisionLog(loggedImpact) : "# 当前决策\n")
+      : name === "spec.md" ? "# spec\nAC-UI-001\n" : "# tasks\n",
     artifactRef: (name) => `specs/${taskId}/${name}`, snapshotWorkspace: () => ({ tree: payload.snapshot_tree }),
     ...(withEvidenceReader ? { readEvidence: (ref) => {
       const raw = canonicalQaRaw(currentPayload);
@@ -300,7 +316,7 @@ describe("P2 formal wiring contract", () => {
       manifest: { record_model: "vnext-single-write" },
       currentAttemptId: "attempt-1",
       currentMaterialRevision: materialRevision,
-      readArtifact: (name) => name === "spec.md" ? "# spec\nAC-UI-001\n" : "# tasks\n",
+      readArtifact: (name) => name === "decision-log.md" ? uiApplicabilityDecisionLog("ui") : name === "spec.md" ? "# spec\nAC-UI-001\n" : "# tasks\n",
       artifactRef: (name) => `specs/${taskId}/${name}`,
       snapshotWorkspace: () => ({ tree: snapshotTree }),
       readEvidence: (ref) => {
@@ -429,11 +445,11 @@ describe("P2 formal wiring contract", () => {
   });
 
   it("does not let an unverified non-UI label skip browser QA", async () => {
-    const workerState = qaWorker({ impact: "non_ui" });
+    const workerState = qaWorker({ impact: "non_ui", loggedImpact: null });
     const handler = (await import("../../runtime/stage/stage-handlers.mjs")).officialStageHandler("build-code");
     const result = await handler(workerState.worker, workerState.invocation);
     expect(result.facts.ui_qa.status).toBe("unknown");
-    expect(result.facts.ui_qa.reason).toMatch(/authenticated implementation consumer classification/i);
+    expect(result.facts.ui_qa.reason).toMatch(/decision-log.*missing|authenticated implementation consumer classification/i);
     expect(workerState.calls()).toBe(0);
   });
 

@@ -84,7 +84,7 @@ function writeTemplate(argv) {
   const value = {
     schema_version: "workflowhub-stage-agent-execution-template.v1",
     status: "incomplete",
-    provenance: { kind: "stage-agent", host: "replace-with-bound-host", agent_run_id: "replace-with-current-agent-run" },
+    provenance: { kind: "stage-agent", host: "replace-with-bound-host", source_id: "replace-with-provider/profile", source_family: "replace-with-provider", agent_run_id: "replace-with-current-agent-run" },
     steps: steps.map((step) => ({
       step_id: step.step_id,
       step_slug: step.step_slug,
@@ -170,12 +170,16 @@ function main(argv) {
   const outputPath = text(process.env.WORKFLOWHUB_STAGE_OUTCOME_PATH, "WORKFLOWHUB_STAGE_OUTCOME_PATH");
   const stage = text(process.env.WORKFLOWHUB_STAGE, "WORKFLOWHUB_STAGE");
   const host = text(process.env.WORKFLOWHUB_HOST, "WORKFLOWHUB_HOST");
+  const sourceId = text(process.env.WORKFLOWHUB_SOURCE_ID, "WORKFLOWHUB_SOURCE_ID");
+  const sourceFamily = text(process.env.WORKFLOWHUB_SOURCE_FAMILY, "WORKFLOWHUB_SOURCE_FAMILY");
   const agentRunId = text(process.env.CODEX_THREAD_ID ?? `stage-agent-${process.pid}`, "agent run id");
   const value = {
     schema_version: "workflowhub-stage-agent-unavailable.v1",
     stage,
     status: "unavailable",
     host,
+    source_id: sourceId,
+    source_family: sourceFamily,
     agent_run_id: agentRunId,
     reason,
   };

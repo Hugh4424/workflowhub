@@ -25,7 +25,7 @@ const skillSpecs = {
       "no stage",
       "no gate",
     ],
-    forbidden: ["SHA-256", "sha256", "quality score"],
+    forbidden: ["quality score"],
   },
   "design-source-readiness": {
     path: "skills/design-source-readiness/SKILL.md",
@@ -41,7 +41,7 @@ const skillSpecs = {
       "no gate",
       "Design.md",
     ],
-    forbidden: ["SHA-256", "sha256", "quality score"],
+    forbidden: ["quality score"],
   },
   "frontend-component-quality": {
     path: "skills/frontend-component-quality/SKILL.md",
@@ -107,7 +107,7 @@ test("P1 skill contracts are explicit before implementation", () => {
   }
 });
 
-test("P1 catalog and provenance declare unique ownership without stage wiring", () => {
+test("UI support skills declare their real stage consumers without a parallel UI workflow", () => {
   const catalog = yaml.load(read("skills/catalog.yaml"));
   const entries = new Map((catalog.skills ?? []).map((entry) => [entry.name, entry]));
   for (const skillName of Object.keys(skillSpecs)) {
@@ -115,7 +115,6 @@ test("P1 catalog and provenance declare unique ownership without stage wiring", 
     assert.ok(entry, `${skillName}: catalog entry is missing`);
     assert.equal(entry.path, skillSpecs[skillName].path);
     assert.equal(entry.standalone, true, `${skillName}: must be portable`);
-    assert.deepEqual(entry.used_by_stages, [], `${skillName}: P1 must not add stage wiring`);
     assert.ok(entry.purpose && entry.design_idea, `${skillName}: purpose/design idea missing`);
     assert.match(entry.local_changes, /owner|consumer/i, `${skillName}: owner/consumer metadata missing`);
     assert.match(entry.local_changes, /delete|remove/i, `${skillName}: deletion condition missing`);
@@ -123,7 +122,17 @@ test("P1 catalog and provenance declare unique ownership without stage wiring", 
     assert.ok(typeof entry.update_policy === "string" && entry.update_policy.length > 0, `${skillName}: update policy missing`);
   }
 
+  const buildSpecDependencies = yaml.load(read("workflows/build-spec/skill-deps.yaml"));
+  for (const skillName of ["ui-project-init", "design-source-readiness"]) {
+    const entry = entries.get(skillName);
+    assert.deepEqual(entry.used_by_stages, ["build-spec"], `${skillName}: UI scope must declare build-spec as its consumer`);
+    const dependency = (buildSpecDependencies.skills ?? []).find((item) => item.name === skillName);
+    assert.ok(dependency, `${skillName}: build-spec dependency is missing`);
+    assert.equal(dependency.trigger, "ui_scope", `${skillName}: must only run for UI scope`);
+  }
+
   const quality = entries.get("frontend-component-quality");
+  assert.deepEqual(quality.used_by_stages, ["build-plan", "build-code", "verify-code"]);
   assert.deepEqual(quality.upstream, [
     {
       github_url: "https://github.com/vercel-labs/agent-skills",

@@ -14,7 +14,7 @@ describe("non-code review policy", () => {
     expect(buildSpec.skills.map((entry) => entry.name)).toEqual([
       "spec-research", "spec-clarify",
       "spec-specify", "simplicity-guard", "plan-ceo-review",
-      "ui-project-init", "design-source-readiness",
+      "ui-project-init", "design-source-readiness", "frontend-prototype-render",
       "plan-design-review", "wh-review", "spec-analyze", "stage-reflection",
     ]);
     expect(buildPlan.skills.map((entry) => entry.name)).toEqual([

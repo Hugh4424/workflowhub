@@ -54,7 +54,11 @@ if (!chk) fail("constitution-checklist.md 不存在");
 else {
   // 按 checklist item 行逐条解析：每条恰好 1 个 CONSTITUTION.md 锚点，
   // 且该锚点 === 该条标题的 ghSlug（逐条身份绑定，防 F1↔F2 互链仍集合相等的假绿）
-  const lines = chk.split(/\r?\n/);
+  // Only the primary 22-item checklist is identity-checked here. The close
+  // interpretation section intentionally repeats four constitutional items
+  // as explanatory bullets and must not be counted as additional bindings.
+  const primaryChecklist = chk.split(/^## close 三义判据/m, 1)[0];
+  const lines = primaryChecklist.split(/\r?\n/);
   const itemLines = lines.filter((l) => /^- \[[ x]\] \*\*[FQS]\d+ /.test(l));
   if (itemLines.length !== EXPECTED_ARTICLES)
     fail(`checklist 条目数=${itemLines.length}，应为 ${EXPECTED_ARTICLES}`);

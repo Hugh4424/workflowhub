@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "82900220553f044df2dad0e9fd98e9b026825e5190a07cddd25e4c5b312fd0ef"
+      "sha256": "5ea87615a10799a390f20feb501cb816d096f00f61bb3b995bc69da612dc27f5"
     },
     {
       "path": "references/agent-browser.md",
@@ -48,7 +48,7 @@
       "kind": "user-provided-local-source",
       "path": "isolated-browser-qa",
       "license": "user-owned",
-      "snapshot_sha256": "25fc15c19529d9c79759f6067f95e065c53ec108ced6d5f9e4b78ff96ed5d39e",
+      "snapshot_sha256": "a6bc203bddc596bc8dc2464bbc01cdeb5f1cf75972381927371d17b84b394a68",
       "authorization_basis": "user explicitly supplied local source and authorized migration into workflowhub",
       "reviewed_at": "2026-07-14",
       "review_outcome": "accepted"

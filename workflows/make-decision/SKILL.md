@@ -44,6 +44,8 @@ No new stage or no gate is introduced by this applicability check.
 
 阶段入口收到明确的 project/task context 时，会自动把当前已登记会话绑定到这个 task；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一绑定。绑定后下面的命令自动使用这个 task，不再手填 task id。一个会话只允许绑定一个 task，换 task 必须开新会话。
 
+新项目或新任务首次准备仓库时，可把 [`docs/templates/project-gitignore.md`](../../docs/templates/project-gitignore.md) 作为 `.gitignore` 起点，排除仅用于执行的侧车目录。它只适用于新建场景；不得借此改写存量项目的 `.gitignore`，也不得把设计材料或源代码目录当作侧车排除。
+
 ```sh
 node tools/host/workflowhub-codex-session-event.mjs start --stage=<本阶段> --subject-kind=step --subject-id=<step_slug>
 node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> --subject-kind=step --subject-id=<step_slug> --status=<completed|failed|skipped|not_applicable> --summary="<真实结果>" --evidence=<真实证据引用>
@@ -107,6 +109,31 @@ decision and questions to the user.
    dimensions: business goal, flow/surface, data/state, success/failure/
    acceptance, and constraints/non-goals/deferrals. End with a plain-language
    card containing the core requirement, core goal, and selected direction.
+   Before claiming completion, add these two sections to the same
+   `decision-log.md`:
+
+   - `## UI applicability` contains one fenced JSON fact with
+     `result` and the three named sources. Recompute it with the existing
+     three-input rule. If it is `unknown` or conflicted, record the real user
+     question, wait for the reply, update the source fact it resolves, and
+     recompute; a caller label or unanswered question never becomes `non_ui`.
+   - `## 收敛检查` contains one four-row table: target, scope, solution, and
+     acceptance. Every row records the actual user answer or `无新需求` plus a
+     concrete fact/material reference. The solution row also records the
+     tradeoff, rejected option, and open-item disposition. The acceptance row
+     names its scenario, data source, pass condition, and fail condition.
+     Older decision logs without this section remain readable; new records use
+     this structure before a completion claim.
+   - When the user declares the current task high-risk and user-visible, or the
+     three inputs establish that classification, write the owning `### D<n>`
+     section with exactly one Markdown source line in this form (the JSON is
+     inline code, not bare text):
+     ```md
+     - **high_risk_fact**：`{"classification":"high_risk_user_visible","basis":"user_declaration"}`
+     ```
+     The only alternative `basis` is `three_inputs`.
+     This is the sole decision-log fact a later acceptance card may reference;
+     do not substitute policy IDs, task prose, or provider identity.
 2. Execute the manifest in order. Every step completion first
    uses the existing make-decision writer to append one update to the same
    `decision-log.md` ref/hash. The update records the step outcome, the actual

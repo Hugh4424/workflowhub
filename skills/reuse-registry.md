@@ -36,6 +36,7 @@ UI governance records include an explicit owner, consumer, and delete condition.
 | workflowhub-multica-sync | 自研 | skills/workflowhub-multica-sync/SKILL.md | 固定 main 快照并做 Git 连通性预检，按阶段三件套审计 Multica 技能、依赖绑定和 agent 提示词；确认后才同步 |
 | ui-project-init | 自研 | skills/ui-project-init/SKILL.md | new/legacy 最小 UI 基线；owner/consumer/deletion 条件见 catalog |
 | design-source-readiness | 自研 | skills/design-source-readiness/SKILL.md | Design.md → Screen Read Map；不打分、不设 gate |
+| frontend-prototype-render | 自研 | skills/frontend-prototype-render/SKILL.md | 真实组件渲染→任务预览/截图；降级须用户明确同意 |
 | frontend-component-quality | 外部改造适配 | skills/frontend-component-quality/SKILL.md + Vercel pinned guide | Component Quality Map；React/Next 只读内部 lens |
 
 ## 仓内运行技能
@@ -79,8 +80,9 @@ UI governance records include an explicit owner, consumer, and delete condition.
 - `frontend-testing` — adapted；build-code 真实 UI 改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/frontend-testing)，MIT。保留状态/交互/UI 证据，owner 是 build-code 前端测试路由，consumer 是真实 changed files；适用 UI attempt 经官方 build-code seam 一次调用 isolated-browser-qa，绑定 Design/Experience 与 service/API/DTO identity、取消和 cleanup；不把 browser pass 当推进 gate，不新增 Runner；无阶段引用时可删除。
 - `fullstack-slice-testing` — adapted；build-code 真实跨边界改动后调用。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/fullstack-slice-testing)，MIT。保留真实 seam slice 和报告，不恢复强制 worktree/commit/release gate。
 - `isolated-browser-qa` — adopted；build-code controlled QA 与 verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。owner 是 browser QA 路由，consumer 是官方 build-code seam 与 verify-code；一次 invocation 绑定 task/material/snapshot/Design/Experience/service/API/DTO identity，取消、cleanup、blocked/unknown 必须保留；无 browser QA consumer 时可删除。
-- `ui-project-init` — native；暂不直接接入阶段。为新项目/历史项目建立最小设计源、组件边界、fixture 和 Preview 事实；owner 是 UI 交付合同，唯一预期 consumer 是 build-spec UI 分支；所有 consumer 迁移后才删除。
-- `design-source-readiness` — native；暂不直接接入阶段。只读项目级 `Design.md`，派生 Screen Read Map 和 bindable/not_bindable/unknown 事实；不打分、不设 gate、不复制设计源；唯一预期 consumer 是现有 `plan-design-review` 输入。
+- `ui-project-init` — native；build-spec 的 UI 分支强制消费。为新项目/历史项目建立最小设计源、组件边界、fixture 和 Preview 事实；owner 是 UI 交付合同，唯一 consumer 是 build-spec UI 分支；所有 consumer 迁移后才删除。
+- `design-source-readiness` — native；build-spec 的 UI 分支强制消费。只读项目级 `Design.md`，派生 Screen Read Map 和 bindable/not_bindable/unknown 事实；不打分、不设 gate、不复制设计源；唯一 consumer 是现有 `plan-design-review` 输入。
+- `frontend-prototype-render` — native；build-spec 的 UI 分支强制消费。只从真实组件输入生成任务级预览和截图，写入 `quality/evidence/`；降级为提示词包前必须取得用户明确同意。owner 是 build-spec，唯一 consumer 是 build-spec UI path；宿主原生能力替代且 consumer 迁移后删除。
 - `frontend-component-quality` — adapted；暂不直接接入阶段。Component Quality Map 支持 reuse/modify/extend-state-or-variant/add-local/extract-shared/remove-after-no-consumers；React/Next 只读 Vercel MIT 固定 commit `dd089a8c752c966dee8bf0f27cb625ba193ffd9e`；不替代 frontend-testing，不创建第二 workflow 或 gate。
 
 ## 已吸收

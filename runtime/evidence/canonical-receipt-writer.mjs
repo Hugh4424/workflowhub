@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, sep } from "node:path";
 
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { createTaskKernel } from "../task/task-kernel.mjs";
@@ -98,6 +100,129 @@ function publishIdempotently({ task, write, ref, raw, label }) {
     return;
   }
   if (existing !== raw) throw new Error(`${label} already exists with different content`);
+}
+
+/**
+ * Publish task-owned evidence bytes exactly once. The caller supplies a source
+ * under its authenticated worktree; the task store receives a content-addressed
+ * immutable record rather than a host path or a second evidence projection.
+ */
+export function publishEvidence({ task, sourcePath, sourceRoot, evidenceType, publisher, recordedAt } = {}) {
+  const safeTask = assertTaskHandle(task);
+  if (typeof sourcePath !== "string" || sourcePath.trim() === "" || !isAbsolute(sourcePath)) {
+    throw new TypeError("evidence sourcePath must be an absolute worktree path");
+  }
+  if (typeof sourceRoot !== "string" || sourceRoot.trim() === "" || !isAbsolute(sourceRoot)) {
+    throw new TypeError("evidence sourceRoot must be an absolute worktree root");
+  }
+  if (typeof evidenceType !== "string" || !/^[a-z][a-z0-9-]*$/.test(evidenceType)) {
+    throw new TypeError("evidenceType must be a lowercase evidence namespace");
+  }
+  if (typeof publisher !== "string" || publisher.trim() === "") throw new TypeError("evidence publisher is required");
+  if (typeof recordedAt !== "string" || recordedAt.trim() === "") throw new TypeError("evidence recordedAt is required");
+  const root = realpathSync(sourceRoot);
+  const source = realpathSync(sourcePath);
+  const sourceRelativePath = relative(root, source);
+  if (sourceRelativePath === "" || sourceRelativePath === ".."
+      || sourceRelativePath.startsWith(`..${sep}`) || isAbsolute(sourceRelativePath)) {
+    throw new Error("evidence source is outside the declared worktree root");
+  }
+  const bytes = readFileSync(source);
+  const contentHash = sha256(bytes);
+  const ref = `quality/evidence/${evidenceType}/${contentHash}.json`;
+  const value = Object.freeze({
+    schema_version: "workflowhub-evidence-publication.v1",
+    source_path: sourceRelativePath,
+    content_sha256: contentHash,
+    content_encoding: "base64",
+    content_base64: bytes.toString("base64"),
+    publisher,
+    recorded_at: recordedAt,
+  });
+  const raw = canonicalJson(value);
+  const existing = readCanonicalRecord(safeTask, ref);
+  if (existing !== undefined && existing !== raw) {
+    let prior;
+    try { prior = JSON.parse(existing); } catch { throw new Error("evidence publication already exists with different content"); }
+    if (prior?.schema_version !== "workflowhub-evidence-publication.v1"
+        || Object.keys(prior).some((key) => !new Set([
+          "schema_version", "source_path", "content_sha256", "content_encoding", "content_base64", "publisher", "recorded_at",
+        ]).has(key))
+        || typeof prior.source_path !== "string" || prior.source_path.trim() === ""
+        || prior.content_sha256 !== contentHash
+        || prior.content_encoding !== "base64"
+        || prior.content_base64 !== bytes.toString("base64")
+        || typeof prior.publisher !== "string" || prior.publisher.trim() === ""
+        || typeof prior.recorded_at !== "string" || prior.recorded_at.trim() === "") {
+      throw new Error("evidence publication already exists with different content");
+    }
+    return Object.freeze({
+      store_ref: ref,
+      source_path: prior.source_path,
+      publisher: prior.publisher,
+      recorded_at: prior.recorded_at,
+    });
+  }
+  publishIdempotently({
+    task: safeTask,
+    write: createTaskKernel(safeTask).publishCanonicalRecord,
+    ref,
+    raw,
+    label: "evidence publication",
+  });
+  return Object.freeze({ store_ref: ref, source_path: sourceRelativePath, publisher, recorded_at: recordedAt });
+}
+
+/**
+ * Persist the exact review packet bytes before a provider sees them.  The
+ * packet's scratch directory is transport only; this content-addressed record
+ * is the only evidence a later reader may authenticate.
+ */
+export function freezeReviewMaterial({ task, bytes } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const content = Buffer.isBuffer(bytes) ? bytes : typeof bytes === "string" ? Buffer.from(bytes, "utf8") : null;
+  if (!content || content.length === 0) throw new TypeError("review material bytes are required");
+  const providerInputSha256 = sha256(content);
+  const raw = canonicalJson({
+    schema_version: "workflowhub-frozen-review-material.v1",
+    content_encoding: "base64",
+    content_sha256: providerInputSha256,
+    content_base64: content.toString("base64"),
+  });
+  const recordSha256 = sha256(raw);
+  const ref = `quality/evidence/review-materials/${recordSha256}.json`;
+  publishIdempotently({
+    task: safeTask,
+    write: createTaskKernel(safeTask).publishCanonicalRecord,
+    ref,
+    raw,
+    label: "frozen review material",
+  });
+  return Object.freeze({ ref, sha256: recordSha256, provider_input_sha256: providerInputSha256 });
+}
+
+/** Re-read the content-addressed provider packet; never dispatch initial bytes. */
+export function readFrozenReviewMaterial({ task, ref, sha256: expectedSha256 } = {}) {
+  const safeTask = assertTaskHandle(task);
+  if (typeof ref !== "string" || !/^quality\/evidence\/review-materials\/[a-f0-9]{64}\.json$/.test(ref)
+      || !/^[a-f0-9]{64}$/.test(expectedSha256 ?? "")) {
+    throw new TypeError("frozen review material ref/hash is invalid");
+  }
+  const raw = safeTask.readRecord(ref);
+  if (sha256(raw) !== expectedSha256) throw new Error("frozen review material hash mismatch");
+  let value;
+  try { value = JSON.parse(raw); } catch { throw new Error("frozen review material is not JSON"); }
+  if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).some((key) => !new Set(["schema_version", "content_encoding", "content_sha256", "content_base64"]).has(key))
+      || value.schema_version !== "workflowhub-frozen-review-material.v1"
+      || value.content_encoding !== "base64"
+      || !/^[a-f0-9]{64}$/.test(value.content_sha256 ?? "")
+      || typeof value.content_base64 !== "string") {
+    throw new Error("frozen review material record is invalid");
+  }
+  const bytes = Buffer.from(value.content_base64, "base64");
+  if (sha256(bytes) !== value.content_sha256) throw new Error("frozen review material content hash mismatch");
+  return Object.freeze({ bytes, provider_input_sha256: value.content_sha256 });
 }
 
 function reusableTestCapture({ task, workspace, stage, component, command, receiptRef, outputRef }) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
 import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
@@ -152,6 +153,21 @@ describe("authoring-stage spec-analyze profiles", () => {
     expect(result.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "pfact_contract_gap", line_or_anchor: "PFACT-001" }),
     ]));
+  });
+
+  it("accepts compact decision ids and a PFACT state declared on its status line", () => {
+    const result = contracts.validateStageSpecAnalyzeProfile({
+      stage: "build-spec",
+      packet: packet({
+        materials: {
+          ...MATERIALS,
+          decision_log: "R-001 用户要求完整覆盖；D1 采用五阶段检查",
+          spec: readFileSync(new URL("../../specs/ui-e2e-delivery-contract-20260830/spec.md", import.meta.url), "utf8"),
+        },
+      }),
+      strict_material_contracts: true,
+    });
+    expect(result).toMatchObject({ ok: true, status: "consistent" });
   });
 
   it("returns a six-part plain-language summary only after semantic and evidence checks", () => {

@@ -71,21 +71,28 @@ it does not block same-task drafting or repair. An unavailable review is never
 
 ## Conditional UI design path
 
-When the make-decision applicability fact is `ui`, consume the declared
-dependencies in this order: `ui-project-init` first, then
-`design-source-readiness`, then the existing `plan-design-review`. The init
-result establishes the new/legacy project boundary; the readiness result is a
-derived **Screen Read Map**; the existing review consumes that map before this
-stage records the UI Contract. No step may silently skip the readiness result
-or treat a caller label as UI proof.
+When the latest `## UI applicability` JSON in `decision-log.md` is `ui`, consume
+the declared dependencies in this order: `ui-project-init`,
+`design-source-readiness`, `frontend-prototype-render`, then
+`plan-design-review`. The init result establishes the new/legacy project
+boundary; readiness derives the **Screen Read Map**; the renderer uses real
+component/fixture inputs to produce a task-scoped preview, screenshot and
+command output. Component and fixture hashes must match bytes read from the
+current Workspace. Its authenticated stage proof must bind `exit_code: 0`,
+source hashes, viewport, material revision and the current Workspace snapshot. The
+user must confirm the displayed result before the existing review records the
+UI Contract. The confirmation must be an authenticated current-task
+`quality/confirmations/<sha256>.json` bound to the displayed preview, current
+material revision and current snapshot. No step may silently skip readiness,
+rendering, or user confirmation, or treat a caller label as UI proof.
 
-If the applicability fact is `non_ui`, record the reason and keep the existing
-non-UI path. If it is `unknown`, or the upstream page/flow/state facts conflict,
+If the logged applicability is `non_ui`, record the reason and keep the existing
+non-UI path. If it is `unknown`, missing, or conflicts with caller facts,
 preserve the conflict and hand it back to make-decision; do not invent product
-scope in build-spec. A missing `Design.md`, preview, fixture, or version can
-produce `unknown`/`not_bindable`, `unavailable`, or `N/A + reason`; this is a
-quality fact and rework risk, not a gate or no gate. There is no new stage, public command,
-fifth material, or no-design gate.
+scope in build-spec. A missing `Design.md`, real component input, preview,
+fixture, or version can produce `unknown`/`not_bindable`, `unavailable`, or
+`N/A + reason`; this is a quality fact and rework risk, not a gate or no gate.
+There is no new stage, public command, fifth material, or no-design gate.
 No new stage or no gate is introduced by this conditional path.
 
 The UI Contract keeps a required `page_or_region`, its interaction flow,
@@ -120,12 +127,17 @@ to call them but are not the implementation:
   Every recovery path preserves the current UI Contract and `gate` is rejected;
   no new stage, material, or independent state machine is created.
 
-When preview is unavailable or not accepted, record the corresponding fact and
-visible action labels (`重新读取`, `生成设计提示词`, `取消`, `未返回`, or
-`重新读取并确认`). A returned design is usable only when its Design.md
-revision matches the expected revision. `human_acknowledged` and
-`human_not_approved` retain risk but may continue to build-plan; they are not
-silently rewritten as design success.
+External design is a single explicit handoff, not a second workflow: the user
+must first明确同意 a four-line prompt package; retain the authenticated prompt
+and downgrade confirmation, receive a design bound to the current Design.md
+revision, show that returned design, then collect a second authenticated final
+confirmation whose subject is the returned design. This branch does not need a
+local renderer or require `preview_unavailable`, but it shares init/readiness,
+source identity, current snapshot, display-before-reply and `human_approved`.
+The authenticated `prompt_ref` bytes must exactly equal the displayed four-line
+prompt text. Preserve visible action labels (`重新读取`, `生成设计提示词`, `取消`, `未返回`, or
+`重新读取并确认`). `human_acknowledged` and `human_not_approved` retain risk but
+do not satisfy the UI confirmation.
 
 ### Project source boundary
 

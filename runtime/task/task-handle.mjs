@@ -239,6 +239,17 @@ function readRegularFileNoFollow(path, label, trustedRoot = dirname(path)) {
   }
 }
 
+function readRegularFileBytesNoFollow(path, label, trustedRoot = dirname(path)) {
+  const trustedRootReal = realpathSync(trustedRoot);
+  const fd = openSync(path, constants.O_RDONLY | NOFOLLOW);
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) throw new Error(`${label} must be a regular file: ${path}`);
+    assertOpenedPath(fd, path, trustedRootReal, label);
+    return readFileSync(fd);
+  } finally { closeSync(fd); }
+}
+
 function directorySnapshot(root, parent) {
   const realRoot = realpathSync(root);
   assertInside(realRoot, realpathSync(parent), "record parent");
@@ -560,6 +571,14 @@ function makeTaskHandle(taskPath, manifest) {
       verifyManifest();
       const { candidate } = resolveRecord(realTaskPath, relativePath);
       const value = readRegularFileNoFollow(candidate, "record", taskRootIdentity.real);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return value;
+    },
+    readRecordBytes(relativePath) {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      const { candidate } = resolveRecord(realTaskPath, relativePath);
+      const value = readRegularFileBytesNoFollow(candidate, "record", taskRootIdentity.real);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return value;
     },
