@@ -1,0 +1,17 @@
+{
+  "phase": "P2",
+  "planned_route": "feature",
+  "actual_route": "fullstack",
+  "reason": "P2 crosses the BR provider protocol and broker lifecycle boundary; no UI/API service is involved, so the concrete gate remains direct BR node:test suites.",
+  "concrete_skill": "fullstack-slice-testing",
+  "changed_files": [
+    "/Users/Hugh/Hugh/Project/3rd-review/lib/workflowhub-result-v3.mjs",
+    "/Users/Hugh/Hugh/Project/3rd-review/lib/broker.mjs",
+    "/Users/Hugh/Hugh/Project/3rd-review/lib/recovery-policy.mjs",
+    "/Users/Hugh/Hugh/Project/3rd-review/test/workflowhub-result-v3.test.mjs",
+    "/Users/Hugh/Hugh/Project/3rd-review/test/recovery-policy.test.mjs",
+    "/Users/Hugh/Hugh/Project/3rd-review/test/broker.test.mjs",
+    "/Users/Hugh/Hugh/Project/3rd-review/test/attachments-protocol.test.mjs"
+  ],
+  "scope_limit": "direct targeted BR tests only; no full repository regression"
+}

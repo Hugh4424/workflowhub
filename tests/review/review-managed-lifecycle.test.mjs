@@ -302,6 +302,73 @@ describe("managed review lifecycle boundary", () => {
     expect(result.status).toBe("recorded");
   });
 
+  it("RED: cancels the managed runtime on source drift and only on that fact", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-source-drift-cancel-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const client = {
+      async startManaged(value) {
+        calls.push("start");
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "running", material_id: value.materials.materialId };
+      },
+      async statusManaged() {
+        calls.push("status");
+        throw Object.assign(new Error("source/material revision drifted"), { code: "REVIEW_SOURCE_DRIFT" });
+      },
+      async cancelManaged(value) { calls.push({ command: "cancel", runtimeId: value.runtimeId }); return { cancelled: true }; },
+    };
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed source drift bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      }, provider_models: { [managedProvider]: "review-model" } }),
+      client,
+      managedStatusPollMs: 0,
+    });
+    expect(result).toMatchObject({ status: "unavailable", error: { code: "REVIEW_SOURCE_DRIFT" } });
+    expect(calls).toEqual(["start", "status", { command: "cancel", runtimeId: managedRuntime }]);
+  });
+
+  it("retains a failed source-drift cancellation in the public error", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-source-drift-cancel-failed-")));
+    roots.push(attachmentRoot);
+    const client = {
+      async startManaged(value) {
+        return { version: "workflowhub-run.v1", request_id: value.requestId, runtime_id: managedRuntime,
+          state: "running", material_id: value.materials.materialId };
+      },
+      async statusManaged() {
+        throw Object.assign(new Error("source/material revision drifted"), { code: "REVIEW_SOURCE_DRIFT" });
+      },
+      async cancelManaged() {
+        throw Object.assign(new Error("broker still owns runtime"), { code: "CANCEL_FAILED" });
+      },
+    };
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex", materials: { implementation: "managed source drift bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: [managedProvider], provider_identities: {
+        [managedProvider]: { source_id: "review/source", config_id: "review-config" },
+      }, provider_models: { [managedProvider]: "review-model" } }),
+      client,
+      managedStatusPollMs: 0,
+    });
+    expect(result).toMatchObject({
+      status: "unavailable",
+      error: {
+        code: "REVIEW_SOURCE_DRIFT",
+        cause_code: "CANCEL_FAILED",
+        message: expect.stringContaining("CANCEL_FAILED"),
+      },
+    });
+  });
+
   it("starts one managed runtime and consumes an explicit terminal event without polling", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "managed-review-runner-")));
     roots.push(attachmentRoot);
@@ -414,6 +481,36 @@ describe("managed review lifecycle boundary", () => {
       },
     });
     expect(status.ignored_fact).toBeUndefined();
+  });
+
+  it("tolerates pending, additive, or missing managed health providers while validating present members", async () => {
+    const extra = managedHealthEnvelope();
+    extra.providers["review/unknown"] = {
+      status: "running", error: null, last_progress_at_ms: 2_000,
+    };
+    const extraClient = new ReviewProviderClient({
+      invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(extra)}\n`, stderr: "" }),
+    });
+    const withExtra = await extraClient.statusManaged(managedContext());
+    expect(withExtra.providers).toEqual({
+      [managedProvider]: expect.objectContaining({ status: "failed" }),
+    });
+
+    const missing = managedHealthEnvelope();
+    delete missing.providers[managedProvider];
+    const missingClient = new ReviewProviderClient({
+      invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(missing)}\n`, stderr: "" }),
+    });
+    await expect(missingClient.statusManaged(managedContext())).resolves.toMatchObject({ providers: {} });
+
+    const pending = managedHealthEnvelope();
+    pending.providers[managedProvider] = { status: "pending", last_progress_at_ms: null };
+    const pendingClient = new ReviewProviderClient({
+      invoke: async () => ({ exitCode: 0, stdout: `${JSON.stringify(pending)}\n`, stderr: "" }),
+    });
+    await expect(pendingClient.statusManaged(managedContext())).resolves.toMatchObject({
+      providers: { [managedProvider]: { status: "pending", error: null, last_progress_at_ms: null } },
+    });
   });
 
   it("consumes a failed non-terminal member immediately without waiting or cancelling", async () => {

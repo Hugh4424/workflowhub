@@ -150,7 +150,7 @@ export function reviewPacketMaterialId(input, { instructionText = null, compactM
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
   entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
   const canonicalEntries = entries
-    .filter((entry) => !["manifest.json", "canonical-evidence.json", AUTHENTICATED_EVIDENCE_PATH].includes(entry.path))
+    .filter((entry) => !["manifest.json", "canonical-evidence.json", AUTHENTICATED_EVIDENCE_PATH, "review-instructions.md"].includes(entry.path))
     .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
     .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
   return hash(Buffer.from(JSON.stringify(canonicalEntries), "utf8"));

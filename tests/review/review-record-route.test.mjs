@@ -15,6 +15,7 @@ import {
 } from "../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../runtime/review/schema-validator.mjs";
 import { resolveReviewRouteIdentity } from "../../runtime/review/review-route-identity.mjs";
+import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-content-contracts.mjs";
 import { createSimpleReviewPacket, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 
 // Only the fixture dependency is simulated; production defaults still resolve host configuration.
@@ -70,7 +71,7 @@ function baseResult() {
     review_kind: null,
     material_id: "8192849eab3a861772ed1e409e72ff43eae462b16bc6437193483fc905d8260d",
     runtime_id: "runtime-123",
-    outcome: "partial",
+    outcome: "completed",
     provider_results: [
       {
         provider: "codex/luna",
@@ -103,6 +104,21 @@ function contentHash(text) {
 }
 
 describe("review record route", () => {
+  it("RED: keeps a spec-analyze skip in both facts and the error ledger", () => {
+    const result = validateStageSpecAnalyzeProfile({
+      stage: "make-decision",
+      packet: {
+        materials: { original_requirement: "requirement", decision_log: "plain decision text without headings" },
+        original_requirements: [{ id: "R-1" }],
+        coverage: [{ requirement_id: "R-1", status: "covered" }],
+      },
+    });
+    expect(result.facts.spec_analyze).toMatchObject({ status: "skipped" });
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.stringMatching(/spec-analyze skipped.*no Markdown headings/i),
+    ]));
+  });
+
   it("writes provider process and parse outcomes through the canonical attempt readback", () => {
     const { task, kernel } = makeTask();
     const result = {
@@ -189,6 +205,109 @@ describe("review record route", () => {
     const providerOutput = JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref));
     expect(providerOutput.schema_version).toBe("wh-review-provider-output.v1");
     expect(providerOutput.content_hash).toBe(contentHash(providerOutput.content));
+  });
+
+  it("derives phase review scope from phase_id when the producer omits the scope", () => {
+    const { task, kernel } = makeTask();
+    const result = { ...baseResult(), outcome: "completed", subject_kind: "phase", phase_id: "P1" };
+    delete result.review_scope;
+
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    const canonical = JSON.parse(task.readRecord(refs.result_ref));
+
+    expect(attempt).toMatchObject({ subject_kind: "phase", phase_id: "P1", review_scope: "phase" });
+    expect(canonical).toMatchObject({ subject_kind: "phase", phase_id: "P1", review_scope: "phase" });
+  });
+
+  it("does not publish a partial review group as a covered canonical result", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(),
+      status: "available-with-failures",
+      outcome: "partial",
+      provider_results: [
+        ...baseResult().provider_results,
+        {
+          provider: "opencode/pax3.8",
+          status: "failed",
+          identity: { provider: "opencode/pax3.8", adapter: "opencode", source_id: "opencode/pax3.8", config_id: "cfg-pax", model: "pax/qwen3.8" },
+          error: { code: "PROCESS_DEAD", message: "partial provider failure" },
+          evidence_anchor_valid: [],
+          timing: { started_at_ms: 3, completed_at_ms: 4, duration_ms: 1 },
+          usage: null,
+        },
+      ],
+    };
+
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    expect(refs.result_ref).toBeNull();
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.terminal_status).toBe("unavailable");
+    expect(task.readRecord(refs.report_ref)).toContain('"coverage": "incomplete"');
+  });
+
+  it("rejects a semantic result whose findings field is missing instead of treating it as clean", () => {
+    const { task, kernel } = makeTask();
+    const result = baseResult();
+    result.findings = null;
+    result.provider_results[0].evidence_anchor_valid = [];
+
+    expect(() => recordSimpleReviewResult({ task, kernel, result })).toThrow(/review findings must be an array/);
+  });
+
+  it("does not publish a semantic result while any provider is still running", () => {
+    const { task, kernel } = makeTask();
+    const result = {
+      ...baseResult(),
+      status: "available-with-failures",
+      outcome: "partial",
+      provider_results: [
+        ...baseResult().provider_results,
+        {
+          provider: "opencode/pax3.8",
+          status: "running",
+          error: null,
+          timing: { started_at_ms: 3, completed_at_ms: null, duration_ms: null },
+          usage: null,
+        },
+      ],
+    };
+
+    const refs = recordSimpleReviewResult({ task, kernel, result });
+    expect(refs.result_ref).toBeNull();
+
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.terminal_status).toBe("unavailable");
+    expect(attempt.provider_attempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: "opencode/pax3.8", status: "running" }),
+    ]));
+    const report = task.readRecord(refs.report_ref);
+    expect(report).toContain('"coverage": "incomplete"');
+  });
+
+  it("persists provider discard facts without counting them as findings", () => {
+    const { task, kernel } = makeTask();
+    const result = baseResult();
+    const discarded = { fact_kind: "unknown_severity_finding_dropped", finding_excerpt: "{}", reason: "unknown_severity" };
+    const materialDiscarded = {
+      fact_kind: "material_unknown_key_dropped",
+      dropped_key: "typo_context",
+      finding_excerpt: JSON.stringify({ dropped_key: "typo_context" }),
+      reason: "not_in_stage_material_allowlist",
+    };
+    result.discarded_facts = [materialDiscarded];
+    result.provider_results[0].discarded_facts = [discarded];
+    const refs = recordSimpleReviewResult({ task, result, kernel });
+    const resultRecord = JSON.parse(task.readRecord(refs.result_ref));
+    validateSchema("result", resultRecord);
+    expect(resultRecord.findings).toHaveLength(1);
+    expect(resultRecord.discarded_facts).toEqual([materialDiscarded]);
+    expect(resultRecord.provider_results[0].output.discarded_facts).toEqual([discarded]);
+    const attempt = JSON.parse(task.readRecord(refs.attempt_ref));
+    expect(attempt.discarded_facts).toEqual([materialDiscarded]);
+    const providerOutput = JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref));
+    expect(JSON.parse(providerOutput.content).discarded_facts).toEqual([discarded]);
   });
 
   it("persists an unavailable simple review result", async () => {
@@ -651,6 +770,51 @@ describe("review flow task record", () => {
     expect(attempt.error).toEqual(result.error);
   });
 
+  it("consumes a provider-preflight quorum shortfall before dispatch", async () => {
+    const { task, kernel } = makeTask();
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "review-record-post-filter-quorum-current-")));
+    roots.push(attachmentRoot);
+    let brokerCalls = 0;
+    const request = {
+      stage: "build-spec",
+      host_provider: "codex",
+      materials: { raw_requirement: "requirement", approved_decision: "decision", draft_spec: "spec" },
+    };
+    const recorded = await recordSimpleReviewRequest({
+      task,
+      kernel,
+      request,
+      runRound: async (input) => runSimpleReview(input, {
+        loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+        resolveRoute: () => ({ initial: ["blocked/model", "surviving/model"], mode: "single_round", minimum_heterologous: 2 }),
+        selectProviders: () => ({
+          providers: ["blocked/model", "surviving/model"],
+          eligible_profiles: ["surviving/model"],
+          provider_models: { "blocked/model": "model-a", "surviving/model": "model-b" },
+          provider_identities: {
+            "blocked/model": { source_id: "blocked-source", config_id: "blocked-config" },
+            "surviving/model": { source_id: "surviving-source", config_id: "surviving-config" },
+          },
+        }),
+        client: { async runGroup() {
+          brokerCalls += 1;
+          throw new Error("provider dispatch must not run after quorum preflight");
+        } },
+      }),
+    });
+    const attempt = JSON.parse(task.readRecord(recorded.attempt_ref));
+
+    expect(recorded).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch", result_ref: null });
+    expect(recorded.error).toMatchObject({ code: "REVIEW_THRESHOLD_INVALID" });
+    expect(attempt).toMatchObject({
+      terminal_status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      provider_attempts: [],
+    });
+    expect(brokerCalls).toBe(0);
+    validateSchema("attempt", attempt);
+  });
+
   it("persists all-provider failure as unavailable while retaining provider facts", () => {
     const { task, kernel } = makeTask();
     const result = baseResult();
@@ -832,16 +996,12 @@ describe("T005 paired canonical role consumption", () => {
     }
   });
 
-  it("does not infer over an explicitly null paired review_scope", () => {
+  it("rejects an explicitly null paired review_scope for a phase result", () => {
     const { task, kernel } = makeTask();
     const raw = phasePairedResult();
     Object.assign(raw, { review_scope: null });
     for (const member of Object.values(raw.role_results)) Object.assign(member, { review_scope: null });
-    const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
-    for (const role of ["red", "blue"]) {
-      const attempt = JSON.parse(task.readRecord(recorded.role_results[role].attempt_ref));
-      expect(attempt.review_scope).toBeNull();
-    }
+    expect(() => recordSimpleReviewResult({ task, kernel, result: raw })).toThrow(/review_scope does not match phase_id|review identity tuple is invalid/);
   });
 
   it("still rejects an explicitly invalid integration scope for a phase tuple", () => {
@@ -946,9 +1106,11 @@ describe("T005 paired canonical role consumption", () => {
     const { task, kernel } = makeTask();
     const raw = baseResult();
     raw.status = "available-with-failures";
+    raw.outcome = "partial";
     raw.provider_results.push({ provider: "opencode/pax3.8", status: "failed", identity: { provider: "opencode/pax3.8", adapter: "opencode", source_id: "opencode/pax3.8", config_id: "pax", model: "pax" }, error: { code: "PROCESS_DEAD", message: "partial failure" }, evidence_anchor_valid: [], usage: null });
     const recorded = recordSimpleReviewResult({ task, kernel, result: raw });
-    expect(JSON.parse(task.readRecord(recorded.result_ref)).findings).toHaveLength(1);
+    expect(recorded.result_ref).toBeNull();
+    expect(task.readRecord(recorded.report_ref)).toContain('"coverage": "incomplete"');
     expect(JSON.parse(task.readRecord(recorded.attempt_ref)).provider_attempts[1].error.code).toBe("PROCESS_DEAD");
   });
 
@@ -970,11 +1132,11 @@ describe("T005 paired canonical role consumption", () => {
       ],
     };
     const recorded = recordSimpleReviewResult({ task, kernel, result });
-    expect(recorded.result_ref).not.toBeNull();
+    expect(recorded.result_ref).toBeNull();
 
     const attempt = JSON.parse(task.readRecord(recorded.attempt_ref));
     validateSchema("attempt", attempt);
-    expect(attempt.terminal_status).toBe("semantic");
+    expect(attempt.terminal_status).toBe("unavailable");
     expect(attempt.provider_attempts).toHaveLength(2);
     expect(attempt.provider_attempts[1]).toMatchObject({
       provider: "opencode/pax3.8",
@@ -982,11 +1144,6 @@ describe("T005 paired canonical role consumption", () => {
       error: { code: "PROVIDER_NO_TERMINAL_RESULT" },
     });
     expect(attempt.provider_attempts[1]).not.toHaveProperty("identity");
-
-    const canonical = JSON.parse(task.readRecord(recorded.result_ref));
-    validateSchema("result", canonical);
-    expect(canonical.provider_results.map((item) => item.provider)).toEqual(["codex/luna"]);
-    expect(canonical.findings).toHaveLength(1);
 
     const report = task.readRecord(recorded.report_ref);
     expect(report).toContain("# WorkflowHub review record");

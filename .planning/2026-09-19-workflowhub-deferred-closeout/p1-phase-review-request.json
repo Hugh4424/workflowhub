@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "codex",
+    "subject_kind": "phase",
+    "phase_id": "P1",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "FR-IDENTITY-001/002: align WorkflowHub reviewPacketMaterialId to the frozen 3rd-review v3 semantic material algorithm; exclude transport/audit wrappers review-instructions.md, authenticated-evidence.json, canonical-evidence.json, and manifest.json; preserve strict material comparison.",
+      "acceptance_criteria": "AC-IDENTITY-001/002: the same semantic material vector produces the same id as 3rd-review; changing a semantic file changes the id; existing review material reuse and source-drift behavior remains intact.",
+      "test_evidence": "T001 RED public capture quality/tests/build-code-p1-t001-red.json exit 1 with the target frozen-vector assertion failing and six existing tests passing; T002 GREEN public capture quality/tests/build-code-p1-t002-green-v2.json exit 0 with 1 file / 7 tests passed."
+    }
+  }
+}

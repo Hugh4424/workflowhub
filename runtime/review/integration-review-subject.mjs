@@ -6,6 +6,7 @@ import { assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { validateCanonicalImplementationReceipt, validateCanonicalTestReceipt } from "../../runtime/evidence/canonical-evidence-validators.mjs";
 import { activeAcceptanceCriterionIds } from "../../runtime/stage/stage-content-contracts.mjs";
 import { isExecutionRecordOnlyMaterialDelta } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { materialDigestAxes } from "../../runtime/task/material-workspace.mjs";
 
 const OID = /^[a-f0-9]{40,64}$/;
 const MATERIAL_NAMES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
@@ -46,11 +47,14 @@ function currentMaterials(_task, artifacts) {
     }
     texts[name] = raw;
   }
-  const materialDigest = sha256(JSON.stringify(MATERIAL_NAMES.map((name) => [name, texts[name]])));
+  const digests = materialDigestAxes(texts);
   return Object.freeze({
     ref: "current-four-materials",
-    sha256: materialDigest,
-    material_digest: materialDigest,
+    // Existing field names remain stable: integration review's material
+    // revision follows the behavior axis, while governance/history keeps the
+    // original raw-byte digest in material_digest.
+    sha256: digests.behavior,
+    material_digest: digests.governance,
     texts: Object.freeze(texts),
     spec_ref: safeArtifacts.reference("spec.md"),
     tasks_ref: safeArtifacts.reference("tasks.md"),
@@ -73,10 +77,9 @@ function binding(task, item, label) {
 
 function ids(text) {
   const found = new Set([
-    ...(text.match(/\bAC-\d+\b/g) ?? []),
-    ...(text.match(/\bAC-[A-Z][A-Z0-9-]*-\d+\b/g) ?? []),
+    ...(text.match(/(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/g) ?? []),
   ]);
-  for (const match of text.matchAll(/\bAC-(\d+)\s*[—–-]\s*(?:AC-)?(\d+)\b/g)) {
+  for (const match of text.matchAll(/(?<![A-Za-z0-9_.-])AC-(\d+)\s*[—–-]\s*(?:AC-)?(\d+)(?![A-Za-z0-9_.-])/g)) {
     const start = Number(match[1]);
     const end = Number(match[2]);
     if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start || end - start > 100) continue;

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "codex",
+    "subject_kind": "phase",
+    "phase_id": "P4",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "P4 T031-T032: source drift invokes the existing managed cancel path using runtime identity; wall-clock wait and unrelated lifecycle errors never cancel the broker.",
+      "acceptance_criteria": "AC-CANCEL-001/002: source-drift positive path calls cancelManaged; all wall-clock and non-drift negative paths remain no-cancel.",
+      "test_evidence": "WH managed lifecycle targeted suite 31/31 pass; source-drift focused RED was repaired; wall-clock block remained unchanged."
+    }
+  }
+}

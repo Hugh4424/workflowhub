@@ -10,6 +10,7 @@ import {
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
 import { materialAllowlistForRule, materialForbiddenMessage, redactProviderHostPaths, reviewInstructionsFor as canonicalReviewInstructionsFor,
+  validateMaterialAllowlist,
   REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
@@ -776,7 +777,20 @@ function runMaterialAllowlistPreflight(input, rule, pair = null, { rejectGenerat
       nextAction: "remove the unknown, generated, or forbidden material and retry",
     }), pair);
   }
-  const missing = required.find((key) => !Object.hasOwn(materials, key) || !preflightMaterialPresent(materials[key]));
+  const missing = required.find((key) => {
+    // The task-bound integration bundle owns the honest fallback for missing
+    // test evidence: buildReviewMaterials adds an unavailable, current-snapshot
+    // fact so the provider can still review implementation behavior. The
+    // static caller preflight must not reject that path before the bundle
+    // builder gets a chance to publish the fallback. A caller-supplied but
+    // malformed/empty test_evidence still fails closed below.
+    const canDegradeMissingIntegrationTests = input.stage === "build-code"
+      && (input.review_scope === "integration" || input.reviewScope === "integration")
+      && key === "test_evidence"
+      && !Object.hasOwn(materials, key);
+    if (canDegradeMissingIntegrationTests) return false;
+    return !Object.hasOwn(materials, key) || !preflightMaterialPresent(materials[key]);
+  });
   if (missing) {
     return blockedPreflight(input, "MATERIAL_INCOMPLETE", `required material ${missing} is missing or empty`, preflightDiagnostic({
       field: missing,
@@ -811,6 +825,21 @@ function staticReviewRule(input) {
   return reviewRuleFor(stage, track, scope);
 }
 
+function projectRunnerMaterials(input) {
+  if (input.stage === "build-prd") return { input, discardedFacts: [] };
+  const rule = staticReviewRule(input);
+  const allowlist = materialAllowlistForRule(rule);
+  const hasKnownMaterial = Object.keys(input.materials ?? {}).some((key) => allowlist.known.includes(key));
+  const formalMaterialCheck = input.preflight === true
+    || input.review_scope === "integration" || input.reviewScope === "integration";
+  if (!hasKnownMaterial && !formalMaterialCheck) return { input, discardedFacts: [] };
+  const projection = validateMaterialAllowlist(rule, input.materials ?? {});
+  if (Object.keys(projection.materials).length === 0 && Object.keys(input.materials ?? {}).length > 0) {
+    return { input, discardedFacts: projection.discarded_facts };
+  }
+  return { input: { ...input, materials: projection.materials }, discardedFacts: projection.discarded_facts };
+}
+
 function shouldRunMaterialPreflight(input, rule) {
   if (input.preflight === true) return true;
   // Integration review requests have a closed material contract. Run the
@@ -820,7 +849,8 @@ function shouldRunMaterialPreflight(input, rule) {
   const materials = input.materials;
   if (!materials || typeof materials !== "object" || Array.isArray(materials)) return false;
   const allowlist = materialAllowlistForRule(rule);
-  return Object.keys(materials).some((key) => allowlist.known.includes(key));
+  const hasKnownMaterial = Object.keys(materials).some((key) => allowlist.known.includes(key));
+  return hasKnownMaterial;
 }
 
 // A caller may not author the provider instruction source for a formal stage.
@@ -1157,13 +1187,26 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       next_action: "use the non-stage build-prd sentinel or a formal stage review kind",
     }, pair, { material_id: null });
   }
-  const canonicalInput = {
+  let canonicalInput = {
     ...input,
     stage: identity.stage,
     review_track: identity.reviewTrack,
     review_scope: identity.reviewScope,
     review_kind: identity.reviewKind,
   };
+  let materialDiscardedFacts = [];
+  try {
+    const projected = projectRunnerMaterials(canonicalInput);
+    canonicalInput = projected.input;
+    materialDiscardedFacts = projected.discardedFacts;
+  } catch (error) {
+    return blockedPreflight(canonicalInput, "MATERIAL_FORBIDDEN", error?.message ?? "review material is forbidden", preflightDiagnostic({
+      field: "materials",
+      expected: "current stage material allowlist",
+      actual: "forbidden or retired material key",
+      nextAction: "remove the forbidden material and retry",
+    }), pair);
+  }
   if (identity.stage === "build-prd") {
     let rule;
     try {
@@ -1350,6 +1393,26 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         if (lifecycle?.state !== "terminal") throw Object.assign(new Error("managed review terminal event is invalid"), { code: "PROTOCOL_INCOMPATIBLE" });
         group = normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels, pair);
       } catch (error) {
+        if (error?.code === "REVIEW_SOURCE_DRIFT"
+            && lifecycle?.runtime_id
+            && typeof client.cancelManaged === "function") {
+          try {
+            await client.cancelManaged({
+              runtimeId: lifecycle.runtime_id,
+              requestId,
+              hostProvider,
+              providers: dispatchProviders,
+              materials: bundle,
+            });
+          } catch (cancelError) {
+            if (error && typeof error === "object") {
+            const normalizedCancelError = normalizeProviderError(cancelError);
+            error.message = `${error.message}; broker cancellation failed: ${normalizedCancelError.code} (${normalizedCancelError.message})`;
+            error.cause_code ??= normalizedCancelError.code;
+            error.cancel_error = normalizedCancelError;
+            }
+          }
+        }
         const observation = error?.managed_observation;
         const source = observation?.providers;
         const entries = Array.isArray(source)
@@ -1406,6 +1469,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       });
     }
     const findings = [];
+    const discardedFacts = [];
     const semanticModels = new Set();
     const receivedProviders = Array.isArray(group?.providers) ? group.providers : [];
     const seenProviders = new Set();
@@ -1467,17 +1531,27 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
             },
           };
         }
+        const providerDiscardedFacts = [...(parsed.discarded_facts ?? [])];
+        discardedFacts.push(...providerDiscardedFacts);
         const evidenceAnchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings, bundle.deliveryManifest);
-        if (!evidenceAnchors.every(Boolean)) {
-          return {
-            ...publicProviderResult(item, evidenceAnchors, pair),
-            status: "failed",
-            error: { code: "EVIDENCE_ANCHOR_INVALID", message: "provider finding evidence does not anchor to submitted material" },
+        const anchoredFindings = parsed.findings.filter((_finding, index) => evidenceAnchors[index]);
+        const anchoredEvidence = evidenceAnchors.filter(Boolean);
+        parsed.findings.forEach((finding, index) => {
+          if (evidenceAnchors[index]) return;
+          const discarded = {
+            fact_kind: "unanchored_finding_dropped",
+            finding_excerpt: JSON.stringify({ path: finding.path ?? null, line: finding.line ?? null, issue: finding.issue ?? null }),
+            reason: "evidence_anchor_invalid",
           };
-        }
+          providerDiscardedFacts.push(discarded);
+          discardedFacts.push(discarded);
+        });
         if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
-        for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
-        return publicProviderResult(item, evidenceAnchors, pair);
+        for (const finding of anchoredFindings) findings.push({ ...finding, provider: item.provider });
+        const providerResult = publicProviderResult(item, anchoredEvidence, pair);
+        return providerDiscardedFacts.length > 0
+          ? { ...providerResult, discarded_facts: providerDiscardedFacts }
+          : providerResult;
       }
       return publicProviderResult(item, undefined, pair);
     });
@@ -1557,6 +1631,9 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       provider_selection: providerSelectionOutput(providerSelection),
       provider_results: providers,
       findings,
+      ...((materialDiscardedFacts.length > 0 || discardedFacts.length > 0)
+        ? { discarded_facts: [...materialDiscardedFacts, ...discardedFacts] }
+        : {}),
       ...(available ? {} : { error: unavailableReason(providers) }),
     };
     if (!Array.isArray(group.supplements) || group.supplements.length === 0) {

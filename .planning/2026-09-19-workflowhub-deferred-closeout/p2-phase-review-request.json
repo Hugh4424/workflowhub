@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "codex",
+    "subject_kind": "phase",
+    "phase_id": "P2",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "P2 T003-T014: preserve structured-path and protocol red lines while reducing provider-result false failures: member-level partial results, no secret/data body token, review_mode-independent recovery, structured-only private-path scan, original provider error plus cause_code, and unknown provider allowlist extras tolerated while an all-unknown candidate group remains incompatible.",
+      "acceptance_criteria": "AC-STRICT-001/002/004/007/008/009; BR direct targeted tests pass. T003/T004 pre-existing member-level behavior is recorded without destructive rollback. The WH health-map exact-set seam is located for P3, not silently claimed fixed in P2.",
+      "test_evidence": "BR direct targeted evidence: v3 contract/hardening/output-sanitization 27/27; recovery-policy 5/5; broker 36/36; attachments-protocol 47/47. T003/T004 red unavailable due pre-existing behavior; health exact-set seam remains P3 T023/T024."
+    }
+  }
+}

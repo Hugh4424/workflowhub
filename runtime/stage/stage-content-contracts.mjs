@@ -5991,6 +5991,7 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
         status: "skipped",
         reason: "decision-log has no Markdown headings; make-decision convergence analysis threshold was not met",
       };
+      errors.push(`spec-analyze skipped: ${specAnalyzeSkip.reason}`);
     }
   }
 
@@ -6012,6 +6013,7 @@ export function validateStageSpecAnalyzeProfile({ stage, packet, strict_material
         status: "skipped",
         reason: "spec and decision-log have no Markdown headings; build-spec fidelity analysis threshold was not met",
       };
+      errors.push(`spec-analyze skipped: ${specAnalyzeSkip.reason}`);
     }
   }
 

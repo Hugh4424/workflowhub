@@ -1,0 +1,18 @@
+{
+  "phase": "P3",
+  "planned_route": "feature",
+  "actual_route": "feature",
+  "concrete_skill": "backend-testing",
+  "reason": "WH-only parser/material/stage facts with direct Vitest contract consumers; no UI, network, database, or external service.",
+  "changed_files": [
+    "skills/wh-review/scripts/review-materials.mjs",
+    "skills/wh-review/scripts/simple-review-runner.mjs",
+    "skills/wh-review/scripts/review-provider-client.mjs",
+    "skills/wh-review/scripts/review-input-bounds.mjs",
+    "runtime/stage/stage-content-contracts.mjs",
+    "runtime/review/review-output.mjs",
+    "skills/wh-review/skill-bundle.json",
+    "skills/catalog.yaml"
+  ],
+  "scope_limit": "targeted Vitest contracts only; no full npm test or all-suite regression"
+}

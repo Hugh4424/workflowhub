@@ -6,7 +6,7 @@
 
 - provider 只能读取 3rd-review 为本次调用准备的只读附件 workspace。
 - provider 不得访问真实仓库、运行 Git、读取宿主绝对路径或自行补取材料。
-- `material_id` 由 WorkflowHub 根据 canonical manifest 计算，绑定全部 provider 可见文件的相对路径、byte size 和 SHA-256；它不包含宿主路径、provider、session、runtime 或时间。
+- `material_id` 由 WorkflowHub 根据 canonical manifest 计算，绑定全部**语义** provider 可见文件的相对路径、byte size 和 SHA-256；固定的传输/控制文件 `manifest.json`、`canonical-evidence.json`、`authenticated-evidence.json`、`review-instructions.md` 不属于语义材料，按冻结的 v3 算法排除。它不包含宿主路径、provider、session、runtime 或时间。不要把这些固定排除项报告为 material identity 缺陷。
 - 3rd-review 负责附件复制和文件完整性。WorkflowHub 不读取 3rd-review 的 private workspace、`state.json`、raw 文件或内部 attestation。
 - 材料缺失、不可读、传输失败或 hash 不符都不是 findings 结果。
 - Phase 大 diff 可使用 `diff-index.v1`。provider 只能读取 manifest 内的 index、已选

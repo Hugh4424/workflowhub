@@ -1,0 +1,70 @@
+{
+  "receipts": {
+    "quality_review": "quality/reviews/results/verify-code-simple-a7162e03-8754-5adf-a160-d8cd7a2c8fa9.json"
+  },
+  "code_review_repairs": [
+    {
+      "finding_id": "F-0a813a363270",
+      "status": "rejected_invalid",
+      "reason": "The task contract explicitly aligns the portable skill bounds path to the loose runtime behavior and removes this skill-only fail-closed test omission guard; the targeted portability contract asserts that guard is absent.",
+      "source_refs": [{"path":"skills/wh-review/scripts/review-input-bounds.mjs","sha256":"829529355db805212c8b60c36c2396402f3d9aae65c23215c4e5befa3dca45d5"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-11add9b1ab4f",
+      "status": "rejected_invalid",
+      "reason": "Same governed bounds contract as F-0a813a363270: this review recommendation would reintroduce the explicitly removed skill-only fail-closed guard.",
+      "source_refs": [{"path":"skills/wh-review/scripts/review-input-bounds.mjs","sha256":"829529355db805212c8b60c36c2396402f3d9aae65c23215c4e5befa3dca45d5"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-6f764ac5566b",
+      "status": "rejected_invalid",
+      "reason": "Pending health is parsed only on starting/running lifecycle envelopes; terminal envelopes require a group and go through validateManagedGroup, so a terminal health payload with pending members is rejected by the enclosing protocol shape.",
+      "source_refs": [{"path":"skills/wh-review/scripts/review-provider-client.mjs","sha256":"3cfaf3b9e7a4df2d392b5b37f18bf08893d9b9ea4b247ec61b09f4dbea3d7e32"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-97bdc207aeab",
+      "status": "fixed",
+      "reason": "Behavior normalization now preserves Markdown hard breaks and indented code bytes while still normalizing surrounding prose; current targeted material-workspace tests cover formatting stability and semantic changes.",
+      "source_refs": [{"path":"runtime/task/material-workspace.mjs","sha256":"51b087b2531d36faa4a4b402e165aac73df5a42634c932b4994f5ca0907405c8"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-c61e32233f0b",
+      "status": "fixed",
+      "reason": "Removed the unreachable duplicate preflight condition; the formal preflight behavior remains covered by the current simple-review-runner targeted tests.",
+      "source_refs": [{"path":"skills/wh-review/scripts/simple-review-runner.mjs","sha256":"4d275d11d432d9f102b920ba8cfb9db544cea6547e12d1e811c434daa1d18fac"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-c68828b4ca6e",
+      "status": "rejected_invalid",
+      "reason": "The current task contract explicitly requires unknown severity findings to be excluded from conclusions but retained as an explicit discarded fact; converting this to provider failure would violate FR-CANDIDATE-003/004 and its existing contract test.",
+      "source_refs": [{"path":"runtime/review/review-output.mjs","sha256":"3a81cb7d814385893d6bb49887b9ed4d5826baeb7c5749a2e37f26a734f4be30"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-cc9494b9fafd",
+      "status": "rejected_invalid",
+      "reason": "The frozen material identity contract explicitly excludes review-instructions.md as a runner-generated transport wrapper; changing material_id to include it would break the cross-repository identity contract.",
+      "source_refs": [{"path":"runtime/review/review-packet-identity.mjs","sha256":"d59be478aaab112ba5b121ba93c016c9db15e255dfc712182a70ad14203afd48"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-86551990f4bf",
+      "status": "fixed",
+      "reason": "Material discard facts now use the canonical fact shape with finding_excerpt and are persisted through attempt/result readback; current record-route tests cover the path.",
+      "source_refs": [{"path":"skills/wh-review/scripts/review-materials.mjs","sha256":"4363c67f1b9634bc4234f73f982eb2a1c272db736680a7784f666198c11e8ab0"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    },
+    {
+      "finding_id": "F-bbe3cebb6436",
+      "status": "rejected_invalid",
+      "reason": "The task decision explicitly requires the analyzer skip to enter the errors ledger so the tolerated skip is visible in the stage consistency result; this is the intended AC-CANDIDATE-006 behavior, not a silent failure.",
+      "source_refs": [{"path":"runtime/stage/stage-content-contracts.mjs","sha256":"cf563f446763fdb95ad3748fa752af5b00a82336c1fc39d1f03ad9b1c40189a0"}],
+      "check_refs": [{"ref":"quality/tests/verify-code-repair-targeted.json","sha256":"033a5b9a2645c26f5877d97e43dda99a48c4d183b4767f22089e95cafc1fa5df"}]
+    }
+  ]
+}

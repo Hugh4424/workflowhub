@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   CURRENT_MATERIAL_FILES,
   inspectMaterialWorkspace,
+  materialDigestAxes,
   replaceMaterialAtomic,
 } from "../../runtime/task/material-workspace.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
@@ -51,6 +52,44 @@ describe("material workspace contract", () => {
     expect(result.material_digest).toMatch(/^[a-f0-9]{64}$/);
     expect(result.files).not.toHaveProperty("materials-current.json");
   });
+
+  it("keeps behavior digest stable for formatting noise while retaining raw governance identity", () => {
+    const original = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `# ${file}\n\ncontent\n`]));
+    const formatted = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `\r\n# ${file}  \r\n\r\n\r\ncontent\t\r\n`]));
+    const before = materialDigestAxes(original);
+    const after = materialDigestAxes(formatted);
+    expect(after.behavior).toBe(before.behavior);
+    expect(after.governance).not.toBe(before.governance);
+  });
+
+  it("changes behavior digest when semantic structure changes", () => {
+    const original = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `# ${file}\ncontent\n`]));
+    const changed = { ...original, "spec.md": "## spec\ncontent\n" };
+    expect(materialDigestAxes(changed).behavior).not.toBe(materialDigestAxes(original).behavior);
+  });
+
+  it("keeps fenced code bytes stable while normalizing surrounding prose", () => {
+    const original = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `# ${file}\n\nprose\n\n\n\`\`\`js\nconst value = 1;  \n\n\n\`\`\`\n` ]));
+    const formatted = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `\r\n# ${file}  \r\n\r\nprose\t\r\n\r\n\r\n\`\`\`js\r\nconst value = 1;  \r\n\r\n\r\n\`\`\`\r\n` ]));
+    expect(materialDigestAxes(formatted).behavior).toBe(materialDigestAxes(original).behavior);
+  });
+
+  it("changes behavior digest when fenced code content changes", () => {
+    const original = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `# ${file}\n\`\`\`js\nconst value = 1;\n\`\`\`\n` ]));
+    const changed = { ...original, "spec.md": "# spec.md\n```js\nconst value = 2;\n```\n" };
+    expect(materialDigestAxes(changed).behavior).not.toBe(materialDigestAxes(original).behavior);
+  });
+
+  it("preserves Markdown hard breaks and indented code semantics", () => {
+    const original = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `# ${file}\n\n- first  \n  continued\n\n    code  \n\n    next\n` ]));
+    const formatted = Object.fromEntries(CURRENT_MATERIAL_FILES.map((file) => [file, `# ${file}\n\n- first   \n  continued\n\n    code  \n\n    next\n` ]));
+    const hardBreakRemoved = { ...original, "spec.md": "# spec.md\n\n- first\n  continued\n\n    code  \n\n    next\n" };
+    const indentedCodeChanged = { ...original, "spec.md": "# spec.md\n\n- first  \n  continued\n\n    code\n\n    next\n" };
+    expect(materialDigestAxes(formatted).behavior).toBe(materialDigestAxes(original).behavior);
+    expect(materialDigestAxes(hardBreakRemoved).behavior).not.toBe(materialDigestAxes(original).behavior);
+    expect(materialDigestAxes(indentedCodeChanged).behavior).not.toBe(materialDigestAxes(original).behavior);
+  });
+
 
   it("replaces only one of the four materials atomically", () => {
     const root = workspace();

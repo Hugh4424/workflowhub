@@ -18,7 +18,7 @@ afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, fo
 
 function canonicalMaterialId(entries) {
   const normalized = entries
-    .filter((entry) => !["manifest.json", "canonical-evidence.json"].includes(entry.path))
+    .filter((entry) => !["manifest.json", "canonical-evidence.json", "authenticated-evidence.json", "review-instructions.md"].includes(entry.path))
     .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256: sha256.toLowerCase() }))
     .sort((left, right) => Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8")));
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
@@ -354,6 +354,37 @@ describe("simple material-only review", () => {
     }), attachmentRoot);
     expect(restored.materials.materialId).toBe(packet.material_id);
     restored.materials.dispose();
+  });
+
+  it("drops an unknown key only after recognizing the formal verify-code material contract", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-unknown-material-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "verify-code", host_provider: "codex",
+      materials: {
+        changed_files: "runtime/review/integration-review-subject.mjs",
+        implementation_assessment: "current implementation",
+        test_context: "focused test passed",
+        open_risks: "none",
+        typo_context: "drop me",
+      },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
+      client: {
+        async runGroup(request) {
+          return { runtimeId: "runtime-unknown-material", outcome: "completed", material_id: request.materials.materialId, providers: [{
+            provider: "other/model", status: "completed", identity: { provider: "other/model", model: "other-model" }, error: null,
+            output: JSON.stringify({ findings: [] }),
+          }] };
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      status: "available",
+      discarded_facts: [{ fact_kind: "material_unknown_key_dropped", dropped_key: "typo_context", finding_excerpt: expect.any(String) }],
+    });
   });
 
   it("rejects a broker material identity that differs from the submitted bundle", async () => {
@@ -710,7 +741,7 @@ describe("simple material-only review", () => {
     expect(result).not.toHaveProperty("attempt_ref");
   });
 
-  it("does not treat findings with invalid evidence anchors as semantic", async () => {
+  it("drops findings with invalid evidence anchors without degrading the provider", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-anchor-invalid-")));
     roots.push(attachmentRoot);
     const result = await runSimpleReview({
@@ -736,10 +767,79 @@ describe("simple material-only review", () => {
       },
     });
     expect(result).toMatchObject({
-      status: "unavailable",
-      error: { code: "EVIDENCE_ANCHOR_INVALID" },
+      status: "available",
       findings: [],
-      provider_results: [{ status: "failed", error: { code: "EVIDENCE_ANCHOR_INVALID" }, evidence_anchor_valid: [false] }],
+      provider_results: [{ status: "completed", error: null, evidence_anchor_valid: [] }],
+      discarded_facts: [{
+        fact_kind: "unanchored_finding_dropped",
+        finding_excerpt: expect.stringContaining("missing.md"),
+        reason: "evidence_anchor_invalid",
+      }],
+    });
+  });
+
+  it("keeps parser discard facts on the real provider result without counting them as findings", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-discard-fact-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
+      client: {
+        async runGroup() {
+          return {
+            runtimeId: "runtime-discard-fact", outcome: "completed",
+            providers: [{
+              provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
+              output: JSON.stringify({ findings: [{ severity: "unknown", path: "materials/implementation.md", issue: "discard me", recommendation: "none" }] }),
+            }],
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [],
+      discarded_facts: [{ fact_kind: "unknown_severity_finding_dropped", reason: "unknown_severity" }],
+      provider_results: [{ status: "completed", discarded_facts: [{ fact_kind: "unknown_severity_finding_dropped" }] }],
+    });
+  });
+
+  it("RED: drops only an unanchored finding, keeps anchored findings, and records a discard fact", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-anchor-drop-")));
+    roots.push(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-code", host_provider: "codex", materials: { implementation: "current bytes" },
+    }, {
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["model-a"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["model-a"], provider_models: { "model-a": "model-a-model" } }),
+      client: {
+        async runGroup() {
+          return {
+            runtimeId: "runtime-anchor-drop", outcome: "completed",
+            providers: [{
+              provider: "model-a", status: "completed", identity: { provider: "model-a", model: "model-a-model" }, error: null,
+              output: JSON.stringify({ findings: [
+                p4Finding({ issue: "anchored finding" }),
+                p4Finding({ path: "materials/missing.md", issue: "unanchored finding" }),
+              ] }), timing: null, usage: null,
+            }],
+          };
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      status: "available",
+      findings: [expect.objectContaining({ issue: "anchored finding" })],
+      provider_results: [{ status: "completed", evidence_anchor_valid: [true] }],
+      discarded_facts: [{
+        fact_kind: "unanchored_finding_dropped",
+        finding_excerpt: expect.stringContaining("unanchored finding"),
+        reason: "evidence_anchor_invalid",
+      }],
     });
   });
 
@@ -1167,7 +1267,7 @@ describe("review flow static preflight", () => {
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
   });
 
-  it("rejects an unknown material alongside valid build-spec materials before provider dispatch", async () => {
+  it("drops an unknown material alongside valid build-spec materials before provider dispatch", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-valid-unknown-")));
     roots.push(attachmentRoot);
     const { dependencies, calls } = trustedDependencies(attachmentRoot);
@@ -1184,10 +1284,30 @@ describe("review flow static preflight", () => {
 
     expect(result).toMatchObject({
       status: "unavailable",
-      dispatch_state: "blocked_before_dispatch",
-      provider_results: [],
+      outcome: "unavailable",
+      provider_results: [{ provider: "other/model", status: "failed", error: { code: "PROVIDER_RESULT_MISSING" } }],
       findings: [],
-      error: { code: "MATERIAL_FORBIDDEN", diagnostic: { field: "junk_material", actual: "unknown" } },
+      discarded_facts: [{ fact_kind: "material_unknown_key_dropped", dropped_key: "junk_material", finding_excerpt: expect.any(String) }],
+    });
+    expect(calls()).toBe(1);
+    expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(true);
+  });
+
+  it("fails closed for unknown-only formal materials before provider dispatch", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-static-preflight-unknown-only-")));
+    roots.push(attachmentRoot);
+    const { dependencies, calls } = trustedDependencies(attachmentRoot);
+    const result = await runSimpleReview({
+      stage: "build-spec",
+      host_provider: "codex",
+      preflight: true,
+      materials: { mystery_material: "unrecognized" },
+    }, dependencies);
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "MATERIAL_FORBIDDEN" },
     });
     expect(calls()).toBe(0);
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
@@ -1694,7 +1814,9 @@ describe("neutral review instruction identity and trusted selection", () => {
     const detail = reviewPacketMaterialId({ stage: "make-decision", review_track: "detail", materials: { decision: "same bytes" } });
     const phase = reviewPacketMaterialId({ stage: "build-code", review_scope: "phase", materials: { implementation: "same bytes" } });
     const integration = reviewPacketMaterialId({ stage: "build-code", review_scope: "integration", materials: { implementation: "same bytes" } });
-    expect(new Set([direction, detail, phase, integration]).size).toBe(4);
+    expect(direction).toBe(detail);
+    expect(phase).toBe(integration);
+    expect(direction).not.toBe(phase);
   });
 
   it("fails closed instead of inventing an instruction source for build_prd", async () => {
@@ -1730,6 +1852,38 @@ describe("neutral review instruction identity and trusted selection", () => {
     expect(calls()).toBe(0);
     expect(() => createSimpleReviewPacket({ stage: "build-spec", materials })).toThrow(/MATERIAL_FORBIDDEN/);
     expect(existsSync(join(attachmentRoot, ".wh-review-packets"))).toBe(false);
+  });
+
+  it("lets integration review reach the bundle when test evidence is absent", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-integration-test-evidence-")));
+    roots.push(attachmentRoot);
+    const calls = [];
+    const result = await runSimpleReview({
+      stage: "build-code",
+      review_scope: "integration",
+      host_provider: "codex",
+      materials: {
+        approved_spec: "current integration scope",
+        acceptance_criteria: "AC-1 remains explicitly unknown",
+        ac_trace: { schema_version: "ac-change-test-trace.v1", entries: [{ acceptance_criterion_id: "AC-1" }] },
+      },
+    }, {
+      ...trustedDependencies(attachmentRoot),
+      buildBundle: () => {
+        calls.push("buildBundle");
+        return preparedBundle(attachmentRoot);
+      },
+      client: {
+        async runGroup() {
+          calls.push("runGroup");
+          return { runtimeId: "runtime-integration-test-evidence", outcome: "unavailable", providers: [] };
+        },
+      },
+    });
+
+    expect(result).toMatchObject({ status: "unavailable", dispatch_state: "dispatched" });
+    expect(result.error?.code).not.toBe("MATERIAL_INCOMPLETE");
+    expect(calls).toEqual(["buildBundle", "runGroup"]);
   });
 
   it("generates the instruction source itself and never exposes it as a packet material", () => {

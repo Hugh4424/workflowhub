@@ -167,6 +167,17 @@ describe("integration review subject current-material boundary", () => {
     expect(subject.ac_trace.entries[0].test).toEqual([{ receipt_ref: "quality/tests/T002.json", receipt_hash: expect.any(String) }]);
   });
 
+  it("uses the behavior axis for integration material revision while preserving history readability", () => {
+    const f = fixture();
+    const before = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.tree, current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" } });
+    const originalRead = f.artifacts.read;
+    f.artifacts.read = (name) => name === "spec.md" ? "\r\n# spec  \r\n\r\n\r\nAC-01\t\r\n" : originalRead(name);
+    const formatted = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.tree, current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" } });
+    expect(formatted.material_revision.sha256).toBe(before.material_revision.sha256);
+    expect(formatted.ac_trace.entries[0].acceptance_criterion_id).toBe("AC-01");
+  });
+
+
   it("does not bind the one global GREEN receipt to every acceptance criterion", () => {
     const f = fixture({
       tasks: "# tasks\n\n### T002 — GREEN\n- **status**：`completed`\n- **covered_ac**：AC-01\n- **evidence_refs**：`quality/evidence/task-fact.json`\n- **执行事实**：GREEN receipt recorded.\n",
@@ -204,6 +215,22 @@ describe("integration review subject current-material boundary", () => {
     }[name]);
     const subject = buildIntegrationReviewSubject({ task: f.task, sourceRoot: f.root, artifacts: f.artifacts, finalTree: f.tree, current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" } });
     expect(subject.ac_trace.acceptance_ids).toEqual(expect.arrayContaining(["AC-001", "AC-SOURCE-001", "AC-E2E-001"]));
+  });
+
+  it("does not turn ASCII range prose into a phantom task AC", () => {
+    const f = fixture({
+      tasks: "# tasks\n\n### T001 — range prose\n- **status**：`completed`\n- **covered_ac**：AC-01..32\n- **evidence_refs**：`quality/evidence/task-fact.json`\n- **执行事实**：range prose only.\n",
+    });
+    const subject = buildIntegrationReviewSubject({
+      task: f.task,
+      sourceRoot: f.root,
+      artifacts: f.artifacts,
+      finalTree: f.tree,
+      current_receipts: { implementation_ref: "receipts/implementation.json", green_ref: "receipts/green.json" },
+    });
+
+    expect(subject.ac_trace.entries[0].change[0].task_id).toBeNull();
+    expect(subject.ac_trace.entries[0].coverage_status).toBe("unknown");
   });
 
   it("uses only the formal acceptance section when source prose names an upstream alias", () => {

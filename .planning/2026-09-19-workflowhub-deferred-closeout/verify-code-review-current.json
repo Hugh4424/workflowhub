@@ -1,0 +1,21 @@
+{
+  "request": {
+    "stage": "verify-code",
+    "host_provider": "dsh",
+    "subject_kind": "worktree",
+    "phase_id": null,
+    "review_scope": null,
+    "retry": {
+      "requested": true,
+      "basis": "material_changed",
+      "reason": "Current review includes the pending-health and canonical-discard-fact repairs after the prior older-snapshot attempt."
+    },
+    "materials": {
+      "changed_files": "Current authenticated worktree diff files: runtime/review/canonical-review-result.mjs; runtime/review/integration-review-subject.mjs; runtime/review/review-output.mjs; runtime/review/review-packet-identity.mjs; runtime/review/review-record-route.mjs; runtime/review/schemas/attempt.schema.json; runtime/review/schemas/result.schema.json; runtime/stage/stage-content-contracts.mjs; runtime/task/material-workspace.mjs; skills/catalog.yaml; skills/wh-review/scripts/__tests__/simple-review-runner.test.mjs; skills/wh-review/scripts/review-input-bounds.mjs; skills/wh-review/scripts/review-materials.mjs; skills/wh-review/scripts/review-provider-client.mjs; skills/wh-review/scripts/simple-review-runner.mjs; skills/wh-review/skill-bundle.json; tests/contract/integration-review-subject.test.mjs; tests/contract/material-workspace.test.mjs; tests/contract/review-input-bounds-portability.test.mjs; tests/contract/review-layering.test.mjs; tests/contract/review-material-change-redispatch.test.mjs; tests/contract/review-materials-contract.test.mjs; tests/review/review-managed-lifecycle.test.mjs; tests/review/review-record-route.test.mjs.",
+      "implementation_assessment": "Review the current implementation changes through their real consumers. Verify that the shared material allowlist is the only projection owner; unknown-only formal requests fail before provider dispatch; host-level and provider-level discarded facts survive canonical attempt/result readback; managed pending health is accepted only for non-terminal status; source-drift cancellation failures retain structured cause_code; digest identity, provider identity binding, historical read compatibility, and no duplicate review/control plane remain correct.",
+      "test_context": "Targeted checks passed: simple-review-runner 100/100; managed lifecycle focused 4/4; record readback focused 2/2; provider health/lifecycle focused 33/33; final build-code aggregate 9 files, 345/345 before this verify-only repair. Full unscoped regression was not run.",
+      "open_risks": "Build-code stage quality remains incomplete because current AC coverage is unknown and the prior same-snapshot integration review was unavailable. The prior verify review was blocked before provider dispatch by managed health validation; this request is a new current-material review after the client health and canonical-fact repairs. Inspect only behavior that causes or conceals a user-visible failure.",
+      "architect_assessment": "Review the current worktree diff for correctness, lifecycle, security, consumer fit, simplification, documentation/prose, and real test strength. Focus on discarded-fact persistence, partial/pending health maps, source-drift cancellation, material identity and replay, and whether the new fixes introduce an unnecessary control plane."
+    }
+  }
+}

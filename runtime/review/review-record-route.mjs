@@ -998,7 +998,9 @@ function readCanonicalReviewHistory(task, scope = null) {
     const context = saved.budget_context ?? null;
     const prepared = prepareSimpleReviewRecord(task, saved.public_result, identity, attempt.request_key ?? null,
       { paired: Boolean(attempt.pair_id), legacyReviewContext: context, executionContext: saved.execution_context ?? null,
-        allowHistoricalPreDispatchMaterialFailure: true, closureManifest: attempt.closure_manifest ?? null });
+        allowHistoricalPreDispatchMaterialFailure: true,
+        allowHistoricalPartialCoverage: scope !== null && attempt.snapshot_tree !== scope.snapshotTree,
+        closureManifest: attempt.closure_manifest ?? null });
     if (prepared.refs.attempt_ref !== ref || prepared.refs.report_ref !== attempt.report_ref
         || prepared.semantic_status !== saved.semantic_status || prepared.coverage !== saved.coverage) throw new Error("canonical review report binding is invalid");
     for (const [recordRef, expected] of prepared.records) {
@@ -1372,6 +1374,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   legacyReviewContext = null,
   executionContext = null,
   allowHistoricalPreDispatchMaterialFailure = false,
+  allowHistoricalPartialCoverage = false,
   closureManifest = null,
 } = {}) {
   rejectBuildPrdCanonicalPersistence(result, "review result");
@@ -1427,8 +1430,8 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
       && (new Set(selection.providers).size !== selection.providers.length || selection.providers.length !== providers.size)) {
     throw new TypeError("review role provider selection does not match attempted providers");
   }
-  if (!Array.isArray(result.findings ?? [])) throw new TypeError("review findings must be an array");
-  if ((result.findings ?? []).some((finding) => !completed.some((item) => item.provider === finding.provider))) throw new TypeError("review finding provider has no completed semantic output");
+  if (!Array.isArray(result.findings)) throw new TypeError("review findings must be an array");
+  if (result.findings.some((finding) => !completed.some((item) => item.provider === finding.provider))) throw new TypeError("review finding provider has no completed semantic output");
   const e2eBinding = executionBindingForResult(task, result, identity, executionContext, { allowHistoricalPreDispatchMaterialFailure });
   const taskId = task.identity.taskId, stage = result.stage;
   const attemptId = stableReviewId([taskId, identity, requestKey, result, ...(context ? [context] : []), ...(executionContext ? [executionContext] : []), ...(closureManifest ? [closureManifest] : [])]);
@@ -1438,9 +1441,13 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   const records = [];
   const outputRefs = new Map();
   const outputs = completed.map((item, index) => {
-    const findings = (result.findings ?? []).filter((finding) => finding.provider === item.provider);
+    const findings = result.findings.filter((finding) => finding.provider === item.provider);
     if (!Array.isArray(item.evidence_anchor_valid) || item.evidence_anchor_valid.length !== findings.length || item.evidence_anchor_valid.some((entry) => typeof entry !== "boolean")) throw new TypeError(`review result provider_results[${index}].evidence_anchor_valid must match provider findings`);
-    const content = JSON.stringify({ findings: findings.map(({ provider, ...rest }) => rest) });
+    const discardedFacts = Array.isArray(item.discarded_facts) ? item.discarded_facts : [];
+    const content = JSON.stringify({
+      findings: findings.map(({ provider, ...rest }) => rest),
+      ...(discardedFacts.length > 0 ? { discarded_facts: discardedFacts } : {}),
+    });
     const outputRef = `quality/reviews/attempts/${attemptId}/providers/${providerFileName(item.provider, index)}`;
     outputRefs.set(item.provider, outputRef);
     records.push([outputRef, JSON.stringify({ schema_version: "wh-review-provider-output.v1", task_id: taskId, stage, attempt_id: attemptId, provider: item.provider, content, content_hash: textHash(content), evidence_anchor_valid: item.evidence_anchor_valid })]);
@@ -1454,12 +1461,29 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   const allIdentified = completed.every((item) => item.identity?.provider === item.provider
     && item.identity?.adapter === providerAdapter(item.provider) && typeof item.identity?.source_id === "string" && item.identity.source_id.trim()
     && typeof item.identity?.config_id === "string" && item.identity.config_id.trim());
-  const covered = result.status !== "unavailable" && aggregation.status === "available" && allIdentified;
+  // A quorum of completed members is not enough while another dispatched
+  // member is still running. Keep the transport/progress fact, but do not
+  // publish a canonical semantic result until the whole round is terminal.
+  const hasRunningProvider = result.provider_results.some((item) => item.status === "running");
+  const covered = result.status !== "unavailable"
+    && (result.outcome === "completed" || (allowHistoricalPartialCoverage && result.outcome === "partial"))
+    && !hasRunningProvider
+    && aggregation.status === "available"
+    && allIdentified;
   const semanticStatus = result.status !== "unavailable" && completed.length ? "available" : "unavailable";
+  const hostDiscardedFacts = Array.isArray(result.discarded_facts) ? result.discarded_facts : [];
+  const phaseId = result.phase_id ?? null;
+  const expectedReviewScope = stage === "build-code"
+    ? (phaseId === null ? "integration" : "phase")
+    : null;
+  const suppliedReviewScope = Object.hasOwn(result, "review_scope") ? result.review_scope : undefined;
+  if (phaseId !== null && suppliedReviewScope !== undefined && suppliedReviewScope !== expectedReviewScope) {
+    throw new TypeError("review result review_scope does not match phase_id");
+  }
   const sharedTuple = assertSharedReviewTuple(stage, {
     subject_kind: result.subject_kind ?? "worktree",
-    phase_id: result.phase_id ?? null,
-    review_scope: result.review_scope !== undefined ? result.review_scope : (stage === "build-code" ? "integration" : null),
+    phase_id: phaseId,
+    review_scope: expectedReviewScope,
   });
   const subject = {
     subject_kind: sharedTuple.subject_kind, phase_id: sharedTuple.phase_id,
@@ -1480,6 +1504,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   };
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, ...binding,
+    ...(hostDiscardedFacts.length > 0 ? { discarded_facts: hostDiscardedFacts } : {}),
     ...(requestKey ? { request_key: requestKey } : {}),
     ...(closureManifest ? { closure_manifest: closureManifest } : {}),
     provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, outputRefs.get(item.provider) ?? null)),
@@ -1490,6 +1515,7 @@ function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   };
   const canonical = covered ? {
     version: "wh-review-result.v1", ...binding, attempt_ref: attemptRef,
+    ...(hostDiscardedFacts.length > 0 ? { discarded_facts: hostDiscardedFacts } : {}),
     provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
     findings: aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding })),
     adjudication: { version: aggregation.adjudication.version, clusters: aggregation.adjudication.clusters }, report_ref: reportRef,

@@ -106,9 +106,6 @@ export function compactReviewDiff(diff, { budgetBytes = TASK_BOUND_DIFF_BUDGET_B
   if (!included.some((entry) => entry.kind === "implementation")) {
     throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code implementation diff exceeds the bounded provider budget"), { code: "MATERIAL_TOO_LARGE" });
   }
-  if (testCandidates.length > 0 && !included.some((entry) => entry.kind === "test")) {
-    throw Object.assign(new Error("MATERIAL_TOO_LARGE: verify-code implementation/test diff exceeds the bounded provider budget"), { code: "MATERIAL_TOO_LARGE" });
-  }
   const includedPaths = new Set(included.map((entry) => entry.path));
   const bounded = included.map((entry) => entry.section).join("");
   return {

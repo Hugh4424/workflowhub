@@ -178,6 +178,7 @@ const managedStates = new Set(["starting", "running", "terminal"]);
 const managedGroupFields = ["host_provider", "outcome", "providers", "round", "runtime_id", "selected_tier", "version"];
 const managedMemberFields = ["adapter", "continuable", "effort", "error", "material_id", "model", "output", "provider", "raw_output_ref", "result_protocol", "retry", "runtime_id", "session_file_path", "session_id", "status", "thinking", "timing", "unavailable_diagnostics", "usage"];
 const managedHealthMemberFields = ["status", "error", "last_progress_at_ms"];
+const managedHealthStates = new Set(["pending", ...v3MemberStates]);
 const managedOutcomes = new Set(["completed", "unavailable", "cancelled", "stalled", "unverifiable", "invalid_output"]);
 // workflowhub-result.v3 has its own terminal outcome set (3rd-review
 // lib/workflowhub-result-v3.mjs `outcomes`). It is not a superset of the v2 set:
@@ -622,24 +623,23 @@ function validateManagedHealthProviders(value, providers) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed health providers map is invalid");
   }
-  const providerIds = Object.keys(value);
-  if (providerIds.length !== providers.size || providerIds.some((provider) => !providers.has(provider))) {
-    throw failure("PROTOCOL_INCOMPATIBLE", "3rd-review managed health providers map does not match the configured providers");
-  }
-  const normalized = Object.fromEntries([...providers].map((provider) => {
+  // Health is a point-in-time partial map. Ignore additive provider entries
+  // from a newer broker and retain only configured members that are present;
+  // a missing member remains absent health, not a protocol-shape failure.
+  const normalized = Object.fromEntries([...providers].filter((provider) => Object.hasOwn(value, provider)).map((provider) => {
     const member = value[provider];
     if (!member || typeof member !== "object" || Array.isArray(member)
-        || managedHealthMemberFields.some((field) => !Object.hasOwn(member, field))) {
+        || !Object.hasOwn(member, "status") || !Object.hasOwn(member, "last_progress_at_ms")) {
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} is invalid`);
     }
     if (Object.hasOwn(member, "provider") && member.provider !== provider) {
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} is invalid`);
     }
-    if (!v3MemberStates.has(member.status)) {
+    if (!managedHealthStates.has(member.status)) {
       throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} status is invalid`);
     }
     let error = null;
-    if (member.error !== null) {
+    if (Object.hasOwn(member, "error") && member.error !== null) {
       if (!member.error || typeof member.error !== "object" || Array.isArray(member.error)) {
         throw failure("PROTOCOL_INCOMPATIBLE", `3rd-review managed health provider ${provider} error is invalid`);
       }

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "host_provider": "codex",
+    "subject_kind": "phase",
+    "phase_id": "P5",
+    "review_scope": "phase",
+    "preflight": true,
+    "materials": {
+      "approved_spec": "P5 T033-T042: preserve the no-new-control-plane boundary when digest/circuit/preflight consumers cannot be located; unify BR outward print timeout as PROCESS_TIMEOUT with cause_code; verify candidate landing items and retain incomplete final aggregate facts.",
+      "acceptance_criteria": "AC-CANDIDATE-002 and AC-CANDIDATE-005 are evidenced by BR tests; AC-CANDIDATE-007/008 are evidenced by existing WH reuse/route consumers; AC-CANDIDATE-001 remains PENDING under PLAN-RISK-002 because digest producer/consumer/history semantics are not defined; T042 all-26-AC claim is not authorized.",
+      "test_evidence": "T035/T036 focused reuse contract 1/1; T037/T038 focused preflight route-consumer contract 1/1; T039 RED exit 1; T039/T040 GREEN provider-failure 3/3 and managed lifecycle 19/19; T041 candidate protocol suite 79/79. T033/T034 remain pending without invented digest semantics."
+    }
+  }
+}

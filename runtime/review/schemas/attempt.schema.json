@@ -47,6 +47,21 @@
     },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "discarded_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact_kind", "reason"],
+        "properties": {
+          "fact_kind": { "type": "string", "minLength": 1 },
+          "finding_excerpt": { "type": "string" },
+          "dropped_key": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        },
+        "anyOf": [{ "required": ["finding_excerpt"] }, { "required": ["dropped_key"] }],
+        "additionalProperties": false
+      }
+    },
     "authenticated_evidence_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "pair_id": { "type": "string", "minLength": 1 },
     "role": { "enum": ["red", "blue"] },

@@ -1,0 +1,12 @@
+{
+  "routing_tier": "feature",
+  "routing_rationale": "实际生产改动 runtime/review/review-packet-identity.mjs 与其跨仓契约测试 tests/contract/review-material-change-redispatch.test.mjs，改变审查材料身份行为，需目标单测和相邻 review seam 检查；无 UI、服务、数据库或部署链路。",
+  "planned_route": "feature",
+  "actual_changed_files": [
+    "runtime/review/review-packet-identity.mjs",
+    "tests/contract/review-material-change-redispatch.test.mjs"
+  ],
+  "reroute": false,
+  "result": "pass",
+  "ts": "2026-09-19T08:09:10Z"
+}

@@ -24,6 +24,7 @@ const HASH = /^[0-9a-f]{64}$/i;
 const ACCEPTANCE_ID = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/;
 const ACCEPTANCE_IDS = /(?<![A-Za-z0-9_.-])AC-[A-Za-z0-9][A-Za-z0-9_-]*(?![A-Za-z0-9_.-])/g;
 const ANCHOR_PATH = /^(?:[A-Za-z0-9_][A-Za-z0-9._-]*)(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
+export const RETIRED_MATERIAL_KEYS = new Set(["phase_coverage", "seam_index", "phase_map_trace", "integration_map"]);
 
 // The full provider protocol remains the source contract for WorkflowHub's
 // broker and ordinary stage reviews. A mini-task provider only needs the
@@ -37,7 +38,6 @@ const BUILD_PRD_PROVIDER_PROTOCOL = `# Provider Protocol (build-prd report-only)
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
 // Shared ceiling for the provider delivery bundle.
-//
 // Raised from 330 KiB to 2 MiB (user decision 2026-09-11, option 2). Measured
 // reason: the real build-prd packet is 707,698 bytes (decision_log 239,459 +
 // prd 456,130 + task_map 11,062 + facts 1,047), and the `prd` material alone is
@@ -50,11 +50,6 @@ const STREAM_CHUNK_BYTES = 64 * 1024;
 // projection, and the phase bound below deliberately stays at 330 KiB so that
 // build-code packets do not grow just because this ceiling moved.
 export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 2 * 1024 * 1024;
-// Kept as a named compatibility export for phase-packet callers. The bound
-// is a build-code packet bound, not a license to let integration packets grow
-// without limit. Pinned explicitly (not aliased) so raising the shared ceiling
-// above does not silently enlarge build-code phase packets.
-export const PHASE_DIFF_MAX_DELIVERY_BYTES = 330 * 1024;
 // Leave room for the fixed contract, prompt, manifest, and selected-context
 // overhead before choosing the inline path. The final cap remains enforced
 // after the complete packet is measured.
@@ -820,11 +815,26 @@ function validateV2AuthorityMaps(_rule, materials, _strictV2Maps, changeMap = nu
   }
 }
 
-function validateMaterialAllowlist(rule, materials) {
+export function validateMaterialAllowlist(rule, materials) {
   const allowlist = materialAllowlistForRule(rule);
+  const filtered = {};
+  const discarded_facts = [];
   for (const key of Object.keys(materials)) {
-    if (!allowlist.legal.includes(key)) throw new Error(materialForbiddenMessage(key, rule));
+    if (allowlist.legal.includes(key)) {
+      filtered[key] = materials[key];
+      continue;
+    }
+    if (allowlist.forbidden.includes(key) || RETIRED_MATERIAL_KEYS.has(key)) throw new Error(materialForbiddenMessage(key, rule));
+    const fact = {
+      fact_kind: "material_unknown_key_dropped",
+      dropped_key: key,
+      finding_excerpt: JSON.stringify({ dropped_key: key }),
+      reason: "not_in_stage_material_allowlist",
+    };
+    console.warn(`MATERIAL_UNKNOWN_KEY_DROPPED: ${key} is not in the ${rule.stage ?? "stage"} material allowlist`);
+    discarded_facts.push(fact);
   }
+  return { materials: filtered, discarded_facts };
 }
 
 function filesUnder(root, current = root) {
@@ -1985,7 +1995,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   const missingRequired = rule.required.filter((key) => !Object.prototype.hasOwnProperty.call(materials, key) || !materialPresent(materials[key]));
   if (missingRequired.length > 0) throw new Error(`MATERIAL_INCOMPLETE: missing or empty ${missingRequired.join(", ")}`);
-  validateMaterialAllowlist(rule, materials);
+  const materialAllowlist = validateMaterialAllowlist(rule, materials);
+  materials = materialAllowlist.materials;
+  const discarded_facts = materialAllowlist.discarded_facts;
   if (stage === "make-decision" && reviewTrack === "direction") {
     const allowlist = materialAllowlistForRule(rule);
     const allowed = new Set(allowlist.legal);
@@ -2231,6 +2243,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
     files: Object.freeze([...entries.map(({ path }) => path), "manifest.json"]),
     manifest: Object.freeze(entries),
     deliveryManifest: Object.freeze(deliveryManifest),
+    ...(discarded_facts.length > 0 ? { discarded_facts: Object.freeze(discarded_facts) } : {}),
     packetPlan: Object.freeze({ ...packetPlan, delivery_bytes: deliveryBytes, delivery_ref_count: deliveryManifest.length }),
   });
 }
