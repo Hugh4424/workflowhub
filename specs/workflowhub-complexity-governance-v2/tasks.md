@@ -258,14 +258,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增七行为 facade 与 Runner 版本错配 RED，证明缺失行为、额外行为和不兼容 Runner 必须 fail loud。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs`（RED exit 1；GREEN exit 0）；`./node_modules/.bin/vitest run tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs tests/contract/stage-skill-runtime.test.mjs`（19/19 passed，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/09a9a2592c5a5e14fb2f8414063ab2bf27168a34b3443a5a04f711fb5871cb42.json","sha256":"3ad9c8451c2f123fbd39526ce9652caf786fac7d2dcbb09f64b086cdb4c0d51d"},{"ref":"receipts/build-tests-phase-1-reviewed-fix.json","sha256":"696f7f36fc4cc064115db06ee895c5c306dd5721281e0b30499d3c858d1101b6"},{"ref":"reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json","sha256":"91904387efe5e0a81d949320d868eee5ca0c0d737a374db3dfdf12f8845d01ce"}]`
+- **covered_ac**：AC-01、AC-11、AC-14
+- **review_fact**：`reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json`
+- **completed_at**：2026-07-30T17:29:45Z
 
 #### T006 — 实现七行为 facade 和 Runner 兼容函数
 
@@ -296,14 +296,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：实现仅含七个公共行为的 Runtime facade、Runner 版本兼容校验，并让 Stage/Skill 合同统一经 facade 调用旧实现。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs`（RED exit 1；GREEN exit 0）；`./node_modules/.bin/vitest run tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs tests/contract/stage-skill-runtime.test.mjs`（19/19 passed，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/09a9a2592c5a5e14fb2f8414063ab2bf27168a34b3443a5a04f711fb5871cb42.json","sha256":"3ad9c8451c2f123fbd39526ce9652caf786fac7d2dcbb09f64b086cdb4c0d51d"},{"ref":"receipts/build-tests-phase-1-reviewed-fix.json","sha256":"696f7f36fc4cc064115db06ee895c5c306dd5721281e0b30499d3c858d1101b6"},{"ref":"reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json","sha256":"91904387efe5e0a81d949320d868eee5ca0c0d737a374db3dfdf12f8845d01ce"}]`
+- **covered_ac**：AC-01、AC-11、AC-14
+- **review_fact**：`reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json`
+- **completed_at**：2026-07-30T17:29:45Z
 
 #### T007 — 先证明 Bundle/Runner 夹带内容和隐式依赖会失败
 
@@ -334,14 +334,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增 Bundle 禁止内容与 Runner 隐式依赖 RED，证明发布闭包夹带源码历史或缺运行依赖时必须失败。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs`（RED exit 1；GREEN exit 0）；`./node_modules/.bin/vitest run tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs tests/contract/stage-skill-runtime.test.mjs`（19/19 passed，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/09a9a2592c5a5e14fb2f8414063ab2bf27168a34b3443a5a04f711fb5871cb42.json","sha256":"3ad9c8451c2f123fbd39526ce9652caf786fac7d2dcbb09f64b086cdb4c0d51d"},{"ref":"receipts/build-tests-phase-1-reviewed-fix.json","sha256":"696f7f36fc4cc064115db06ee895c5c306dd5721281e0b30499d3c858d1101b6"},{"ref":"reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json","sha256":"91904387efe5e0a81d949320d868eee5ca0c0d737a374db3dfdf12f8845d01ce"}]`
+- **covered_ac**：AC-10、AC-11
+- **review_fact**：`reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json`
+- **completed_at**：2026-07-30T17:29:45Z
 
 #### T008 — 实现洁净 Skill Bundle 与 Local Runner Release
 
@@ -372,14 +372,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：实现洁净 Skill Bundle 与 Local Runner Release 生成、闭包校验和空目录安装验证，保持两个独立发布单元。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs`（RED exit 1；GREEN exit 0）；`./node_modules/.bin/vitest run tests/contract/runtime-facade.test.mjs tests/contract/runner-contract.test.mjs tests/integration/distribution-closure.test.mjs tests/integration/runner-clean-install.test.mjs tests/contract/stage-skill-runtime.test.mjs`（19/19 passed，exit 0）
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/09a9a2592c5a5e14fb2f8414063ab2bf27168a34b3443a5a04f711fb5871cb42.json","sha256":"3ad9c8451c2f123fbd39526ce9652caf786fac7d2dcbb09f64b086cdb4c0d51d"},{"ref":"receipts/build-tests-phase-1-reviewed-fix.json","sha256":"696f7f36fc4cc064115db06ee895c5c306dd5721281e0b30499d3c858d1101b6"},{"ref":"reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json","sha256":"91904387efe5e0a81d949320d868eee5ca0c0d737a374db3dfdf12f8845d01ce"}]`
+- **covered_ac**：AC-10、AC-11
+- **review_fact**：`reviews/results/build-code-default-1fd88f0b629b14449e1abcfc7b84235c3f9a47c0-1a629669-c776-4445-9eaf-c33a91fc9504.json`
+- **completed_at**：2026-07-30T17:29:45Z
 
 ### Verify
 
