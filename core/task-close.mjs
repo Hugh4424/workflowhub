@@ -1393,14 +1393,14 @@ function archiveFacts(root, ref, delivery) {
   return { commit, tree_preserved: treePreserved, only_renames: onlyRenames };
 }
 
-function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
+function targetPreflight(delivery, expectedLocal = delivery.target_baseline, { checkRemote = true } = {}) {
   const root = delivery.target_repo_root;
   if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
   const dirtySource = sourceWorktreeStatus(root);
   if (dirtySource !== "") throw new Error("target repository has uncommitted source changes; preserve them under their owning task before the authorized close merge");
   if (gitResult(root, ["rev-parse", "--verify", "MERGE_HEAD"]).ok) throw new Error("target repository has an unfinished merge");
   if (expectedLocal !== null && branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
-  if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
+  if (checkRemote && remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
 }
 
 function plannedMergePreflight(delivery) {
@@ -1860,7 +1860,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "commit-delivery") return {
         probe: published,
         execute: async () => {
-          targetPreflight(delivery);
+          targetPreflight(delivery, undefined, { checkRemote: false });
           assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
           const tip = branchOid(root, delivery.task_branch);
           if (tip !== delivery.task_commit) {
@@ -1889,7 +1889,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "archive-spec") return {
         probe: archived,
         execute: async () => {
-          targetPreflight(delivery, null);
+          targetPreflight(delivery, null, { checkRemote: false });
           if (!mergeState().satisfied) throw new Error("target branch is not merged before archive");
           const staged = gitResult(root, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(root, delivery.spec_source_path))) {
@@ -1912,9 +1912,9 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
       if (step.operation === "merge-task-branch") return {
         probe: mergeState,
         execute: async () => {
-          targetPreflight(delivery);
+          targetPreflight(delivery, undefined, { checkRemote: false });
           plannedMergePreflight(delivery);
-          targetPreflight(delivery);
+          targetPreflight(delivery, undefined, { checkRemote: false });
           try {
             git(root, ["merge", "--no-ff", "--no-edit", delivery.task_branch]);
           } catch (error) {
@@ -1930,7 +1930,6 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           targetPreflight(delivery, null);
           const merged = mergeState();
           if (!merged.satisfied) throw new Error("target branch is not the planned no-ff merge");
-          if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed before push");
           git(root, ["push", delivery.remote, `refs/heads/${delivery.target_branch}:refs/heads/${delivery.target_branch}`]);
         },
         verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
