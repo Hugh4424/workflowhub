@@ -61,7 +61,7 @@ describe("decision-log minimum content contract", () => {
       expect(step.observable_result).toMatch(/existing writer|same decision-log\.md/i);
     }
     const skill = read("workflows/make-decision/SKILL.md");
-    expect(skill).toMatch(/same[\s\S]{0,40}`decision-log\.md` ref\/hash/);
+    expect(skill).toMatch(/current[\s\S]{0,60}`decision-log\.md`|same[\s\S]{0,60}`decision-log\.md`/i);
     expect(skill).toMatch(/actual[\s\S]{0,20}user reply or `no_new_requirement`/);
     expect(skill).toMatch(/write failure stays incomplete/);
   });
@@ -94,5 +94,25 @@ describe("decision-log minimum content contract", () => {
     expect(contract).toMatch(/non-placeholder|非占位|不能只写.*none|bare.*none/i);
     expect(contract).toMatch(/questions-only/);
     expect(contract).toMatch(/direction[\s\S]{0,500}detail[\s\S]{0,500}approve-decision/i);
+  });
+
+  it("RED: requires decision-log to carry the append-only ADR authority, not only a decision index", () => {
+    const template = read("skills/decision-log/templates/decision-log-template.md");
+    const skill = read("skills/decision-log/SKILL.md");
+    const contract = `${skill}\n${template}`;
+
+    expect(template).toMatch(/^### ADR-[0-9]+/m);
+    expect(contract).toMatch(/原始声明层|raw declaration/i);
+    expect(contract).toMatch(/三级追溯|three[- ]level trace/i);
+    expect(contract).toMatch(/三档结论|three[- ]tier conclusion/i);
+    expect(contract).toMatch(/append-only correction|append-only 更正/i);
+
+    const adrStart = template.indexOf("### ADR-001");
+    const afterAdr = template.slice(adrStart);
+    const nextSection = afterAdr.search(/\n## /);
+    const adrBlock = adrStart < 0 ? "" : (nextSection < 0 ? afterAdr : afterAdr.slice(0, nextSection));
+    for (const field of ["source", "decision", "rationale", "consequence", "supersedes"]) {
+      expect(adrBlock, `ADR field ${field}`).toMatch(new RegExp(`\\*\\*${field}\\*\\*|${field}：`, "i"));
+    }
   });
 });

@@ -57,8 +57,7 @@ describe("current interaction boundary", () => {
     for (const stage of WORKFLOW_STAGES) {
       const manifest = readJson("workflows", stage, "steps.json");
       const text = JSON.stringify(manifest);
-      expect(text).toMatch(/current WorkflowHub session/i);
-      expect(text).not.toMatch(/Stage Agent|stage agent/);
+      expect(text).not.toMatch(/require(?:s|d)?[^.]{0,100}Stage Agent/i);
     }
   });
 
@@ -90,20 +89,18 @@ describe("current interaction boundary", () => {
 
   it("keeps stage-end communication informative without making it a work gate", () => {
     expect(hostProtocol).toMatch(/评论是给人看的通知，不是第二套状态机/);
-    expect(hostProtocol).toMatch(/不要求 receipt、评论模板或过程索引/);
+    expect(hostProtocol).toMatch(/不得把[^。]*comment 或 handoff proof[^。]*许可证/);
     expect(hostProtocol).toMatch(/comment 或 handoff proof 变成开始或继续工作的许可证/);
-    expect(hostProtocol).toMatch(/不要要求下游评论重复或证明上游的 Talk、Grill、调研与 review 过程/);
+    expect(hostProtocol).toMatch(/不要\s*要求评论重复或证明 Talk、Grill、调研、review、session 或 stage outcome 过程/);
     expect(buildSpec).toMatch(/human alignment, not a machine work permit/i);
     for (const skill of [buildSpec, buildPlan]) expect(skill).not.toMatch(/handoff proof/i);
     expect(buildPlan).toMatch(/does not turn confirmation into a machine work permit/i);
   });
 
   it("keeps user-reply append seams informational and append-only", () => {
-    const buildPlanHandoff = readJson("workflows", "build-plan", "steps.json").steps.find((step) => step.step_slug === "publish-plan-result");
+    const buildPlanHandoff = readJson("workflows", "build-plan", "steps.json").steps.find((step) => step.step_slug === "publish-result-and-confirm");
     for (const observable of [buildPlanHandoff?.observable_result]) {
-      expect(observable).toMatch(/(?:actual reply|实际验收回复)[\s\S]*(?:执行事实|human-alignment)/i);
-      expect(observable).toMatch(/(?:does not|without changing|不改变)[\s\S]*(?:status|completion|完成)/i);
-      expect(observable).toMatch(/(?:not|不)[\s\S]*(?:work gate|工作许可证|授权 close)/i);
+      expect(observable).toMatch(/actual user reply[\s\S]*existing confirmation record/i);
     }
     expect(buildPlan).toMatch(/append that reply to the final[\s\S]*(?:execution fact|执行事实)[\s\S]*(?:append-only|带标签)[\s\S]*(?:does not change|changes neither|不改变) `status`/i);
     expect(read("workflows", "verify-code", "SKILL.md")).toMatch(/不要求用户补交 verify-code 证据|不把交接确认当作代码 review 的证据门禁/i);
@@ -134,7 +131,9 @@ describe("current interaction boundary", () => {
     expect(makeDecision).toMatch(/red\/blue direction-review finding dispute list[\s\S]{0,260}unresolved items from the debate decision/i);
     expect(makeDecision).toMatch(/conditional Talk round 4[\s\S]{0,260}direction-level[\s\S]{0,180}acceptance/i);
     expect(makeDecision).toMatch(/If no[\s\S]{0,120}Talk round 4[\s\S]{0,220}repairs[\s\S]{0,160}implementation-level findings/i);
-    expect(makeDecision).toMatch(/round_count[\s\S]{0,180}actual number[\s\S]{0,180}3[\s\S]{0,120}4/);
+    expect(makeDecision).toMatch(/Talk round 3[\s\S]{0,180}same real lifecycle/i);
+    expect(makeDecision).toMatch(/conditional Talk round 4[\s\S]{0,420}ask -> wait -> user reply -> resume/i);
+    expect(makeDecision).toMatch(/Each round must publish its own `ask`[\s\S]{0,160}`resume` and re-rank/i);
     expect(makeSteps.find((step) => step.step_slug === "talk-round-3").observable_result)
       .toMatch(/red\/blue[\s\S]*debate unresolved items/i);
     expect(makeSteps.find((step) => step.step_slug === "detail-advice").observable_result)
@@ -171,8 +170,9 @@ describe("current interaction boundary", () => {
       .toBeLessThan(makeSteps.find((step) => step.step_slug === "grill-with-docs").order);
     expect(makeSteps.find((step) => step.step_slug === "grill-with-docs").order)
       .toBeLessThan(makeSteps.find((step) => step.step_slug === "detail-advice").order);
-    expect(makeSteps.filter((step) => step.step_slug !== "stage-reflection")
-      .every((step) => step.observable_result.includes("same decision-log.md"))).toBe(true);
+    const approval = makeSteps.find((step) => step.step_slug === "approve-decision");
+    expect(approval.observable_result).toMatch(/actual confirmation[\s\S]*decision-log/i);
+    expect(approval.observable_result).not.toMatch(/aggregate/i);
   });
 
   it("requires a real Talk and Grill ask -> wait -> reply -> resume lifecycle", () => {
@@ -193,7 +193,7 @@ describe("current interaction boundary", () => {
     expect(validateInteractionLifecycleContract(wrongRound).errors.join("\n")).toMatch(/round/i);
   });
 
-  it("returns only minimal interaction facts and lets the stage write one aggregate", () => {
+  it("keeps interaction facts direct and does not instruct make-decision to publish an aggregate", () => {
     expect(talk).toMatch(/architecture_direction_covered: true/);
     expect(talk).toMatch(/user_outcome_covered: true/);
     expect(talk).not.toMatch(/^clarify:/m);
@@ -204,8 +204,9 @@ describe("current interaction boundary", () => {
     expect(grill).toMatch(/不向下游重复传递/);
     expect(grill).not.toMatch(/interaction-completion\.v1/);
     expect(grill).not.toMatch(/受控 writer 发布/);
-    expect(makeDecision).toMatch(/workflowhub-interaction-aggregate\.v1/);
-    expect(makeDecision).toMatch(/quality\/evidence\/interactions\/<sha256>\.json/);
+    expect(makeDecision).not.toMatch(/workflowhub-interaction-aggregate\.v1/);
+    expect(makeDecision).not.toMatch(/quality\/evidence\/interactions\/<sha256>\.json/);
+    expect(makeDecision).toMatch(/human confirmation|confirmation|确认/i);
     expect(makeDecision).toMatch(/Do not create a run, revision, latest pointer,[\s\S]{0,120}ledger/);
   });
 
@@ -282,8 +283,8 @@ describe("current ambiguity handling", () => {
     expect(buildSpec).toMatch(/returned to `make-decision` as an upstream decision gap/i);
   });
 
-  it("keeps build-plan limited to plan and task design without executing tests", () => {
-    expect(buildPlan).toMatch(/This stage owns only `plan\.md` and `tasks\.md`/i);
+  it("keeps build-plan authoring cohort-aware without executing tests", () => {
+    expect(buildPlan).toMatch(/For pre-cohort tasks[\s\S]{0,120}`plan\.md` and `tasks\.md`[\s\S]{0,180}For post-cohort tasks[\s\S]{0,180}`spec\.md`, `plan\.md`, and `tasks\.md`/i);
     expect(buildPlan).toMatch(/Do not implement code or execute RED\/GREEN/i);
     expect(buildPlan).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
   });

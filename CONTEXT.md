@@ -3,22 +3,24 @@
 > 本项目自己的领域术语表骨架，统一术语避免后续设计漂移。
 > 随项目演进逐步补充；不照搬其它项目的特有术语，只列本项目自己的概念。
 
-## 五个正式阶段
+## 正式 stage 集合与 cohort 路线
+
+正式 stage 集合有五项。普通任务的 `activation_cohort` 在创建时冻结：`pre` 使用五阶段路线；`post` 跳过 build-spec，使用四阶段路线。缺少该字段的历史任务按 `pre` 读取。`build-spec` 因此仍是 pre/history 的正式入口，不是可直接删除的死代码。
 
 **make-decision**：
 第一阶段。收敛方向、范围和风险，产出 accepted decision。概念别名：需求确认（intake）。
 
 **build-spec**：
-第二阶段。把“做什么、怎么验收”写成 accepted spec。概念别名：设计（design）。
+仅 pre/history 的第二阶段。把“做什么、怎么验收”写成 accepted spec。post 的当前 spec 作者是 build-plan。概念别名：设计（design）。
 
 **build-plan**：
-第三阶段。把 accepted spec 拆成可执行 plan 与 tasks。概念别名：计划（plan）。
+pre 的第三阶段、post 的第二阶段。pre 把 accepted spec 拆成可执行 plan 与 tasks；post 同时负责当前 spec、plan 与 tasks。概念别名：计划（plan）。
 
 **build-code**：
-第四阶段。按计划逐项实现，完成针对性测试、每 Phase 独立审查，并执行前期确定的完整功能验收方案。概念别名：实现（apply）。
+pre 的第四阶段、post 的第三阶段。按计划逐项实现，完成针对性测试、每 Phase 独立审查，并执行前期确定的完整功能验收方案。概念别名：实现（apply）。
 
 **verify-code**：
-第五阶段。独立审查实现及已有验证结果，发现疑点时补充针对性验证，形成验证结论。完整功能验收的实跑由 build-code 负责；verify-code 不替上游补需求或设计验收方案。概念别名：独立代码审查（code-review）；验收（test-acceptance）。
+pre 的第五阶段、post 的第四阶段。独立审查实现及已有验证结果，发现疑点时补充针对性验证，形成验证结论。完整功能验收的实跑由 build-code 负责；verify-code 不替上游补需求或设计验收方案。概念别名：独立代码审查（code-review）；验收（test-acceptance）。
 
 ## 核心概念术语
 
@@ -416,7 +418,6 @@ stage-end `spec-analyze` lens 对 `make-decision` 执行收敛检查，对 `buil
 
 **用户未收敛项分组确认**：
 收口前，未收敛项按主题分组、一组一组提交用户确认；影响目标/范围/验收的条目必须单独成组并逐项列出。该确认**并入 `make-decision` 既有的 approve-decision 确认**，不新增第五处正常确认点（宪法 F7）。
-
 
 ## 目标重构术语（2026-09-19，方向已选，尚未实施）
 

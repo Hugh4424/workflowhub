@@ -6,18 +6,41 @@ version: 4.1.0
 
 # Build Plan
 
+## Post-cohort 13-step contract
+
+For post-cohort work, this stage is the sole current authoring chain. It writes
+the product spec, one single phase engineering authority, and a pure pointer execution index;
+`build-spec` remains readable only for pre-cohort and history. The
+ordered steps are `read-current-materials`, `conditional-spec-research`,
+`spec-clarify`, `spec-specify`, `conditional-ui-readiness`, `spec-plan`,
+`testing-system-blueprint`, `test-routing-advisor`, `merged-review`,
+`main-agent-disposes-findings`, `final-spec-analyze`,
+`publish-result-and-confirm`, and `stage-reflection`.
+
+K1 source-to-FR/AC translation; K2 requirement coverage; K3 four-part AC;
+K4 state coverage; K5 one clarify owner; K6 one review and disposition; K7
+five-input analysis; K8 packet lenses; K9 frozen RED/GREEN and oracle; K10
+routing and test blueprint; K11 explicit omissions/reflection; K12 structured
+questions and actual confirmation. Each K has the named step as consumer and
+the corresponding observable result as oracle. No K creates a new stage, skill,
+public command, store, or compatibility dual writer.
+
 ## 统一回退协议
 
 五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
 `validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义走
-`spec-clarify` 并回到 `build-spec`；方向级问题回 `make-decision` 做增量
-决策；材料缺口回对应 owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
+`spec-clarify`：pre-cohort 回 `build-spec`，post-cohort 回本 stage 的
+`spec-specify`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
 
 ## Responsibility and authority
 
-Turn the current `decision-log.md` and `spec.md` into the current `plan.md`
-and `tasks.md`. This stage owns only `plan.md` and `tasks.md`. It does
-not change product direction, rewrite the specification, or execute code.
+For pre-cohort tasks, turn the current `decision-log.md` and `spec.md` into
+the current `plan.md` and `tasks.md`. For post-cohort tasks, this stage owns
+the current `spec.md`, `plan.md`, and `tasks.md`: `spec-specify` writes the
+specification first, then `spec-plan` writes the phase authority and
+`spec-tasks` renders its pointer index. In either cohort it does not change
+product direction or execute code.
 The four materials are the only current work truth. Old reviews, provider
 state, execution history, and audit facts may explain quality, but they do not
 replace the current decision/spec or freeze same-task planning and repair. A
@@ -136,7 +159,8 @@ facts stay `unknown`/`unavailable` and become handoff risks. Build-plan designs
 the facts and does not execute frontend-testing (the `frontend-testing` skill);
 build-code owns execution
 and verify-code checks the real consumer. The map records component facts,
-unknowns, and rework risks within the existing stage.
+unknowns, and rework risks within the existing stage; it is no gate for planning
+or same-task repair and creates no new stage.
 
 The plan consumes the project-level Design.md and Experience.md identities and
 any explicitly supplied `consumer-census.v1` bound to its source snapshot.
@@ -159,9 +183,11 @@ not new workflow stages and not gates.
 
 ## Work sequence
 
-1. Read the current decision, spec, existing plan, and existing tasks. Extract
-   requirements, FR/AC, constraints, non-goals, risks, deferred items, and
-   open questions.
+1. Read the current decision and every already-present material. For a
+   pre-cohort task, `spec.md` is required upstream input; for a post-cohort
+   task, draft `spec.md` from the decision at `spec-specify` before using it
+   for phase planning. Extract requirements, FR/AC, constraints, non-goals,
+   risks, deferred items, and open questions.
 2. Research only in proportion to implementation risk. Verify code anchors,
    existing consumers, interfaces, data changes, failure paths, ownership,
    testing conventions, and rollback options. Put durable conclusions in
@@ -204,6 +230,9 @@ not new workflow stages and not gates.
    unavailable when missing; a reused request adds no new provider execution. Dispose findings as
    `fixed`, `rejected_invalid`, `accepted_risk`, or `needs_human`; repair valid
    findings in this same task.
+   Only concrete failure that has changed in the frozen material, provider
+   route, or authenticated source may trigger a retry; never retry an
+   unchanged request merely to obtain a cleaner label.
 8. After findings disposition and the last authored plan/tasks revision, actually
    invoke the existing `spec-analyze` lens once as the strict final
    cross-document check before `publish-plan-result` (the user may call this

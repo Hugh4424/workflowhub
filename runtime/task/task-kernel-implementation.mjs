@@ -19,7 +19,7 @@ import {
   isActionableSeriousFinding,
   validateRiskAcceptance,
 } from "../review/stage-review-disposition.mjs";
-import { validateInteractionAggregateContract } from "../stage/stage-content-contracts.mjs";
+import { buildDecisionCoverageAudit } from "../stage/stage-content-contracts.mjs";
 import { authenticateCodeReviewRepairs } from "../evidence/freshness.mjs";
 import { publishResearchReport } from "../evidence/research-report.mjs";
 // Both forms below are deliberately narrower than the shared reflection grammar:
@@ -525,35 +525,6 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
   }
 }
 
-function interactionAggregateIdentity(value) {
-  return {
-    task_id: value?.task_id,
-    stage: value?.stage,
-    snapshot_tree: value?.snapshot_tree,
-    original_requirement: value?.original_requirement,
-    decision: value?.decision,
-    confirmation: value?.confirmation,
-  };
-}
-
-function interactionAggregateContent(value) {
-  const { generated_at: _generatedAt, ...content } = value ?? {};
-  return content;
-}
-
-// Content-addressed replay must not depend on object-property insertion order.
-// Arrays retain their declared order because Talk/Clarify lifecycle order is
-// semantic; plain object keys are sorted before identity/content comparison.
-function canonicalizeAggregate(value) {
-  if (Array.isArray(value)) return value.map((entry) => canonicalizeAggregate(entry));
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalizeAggregate(value[key])]));
-}
-
-function aggregateJson(value) {
-  return JSON.stringify(canonicalizeAggregate(value));
-}
-
 export function validatePhaseCompletion(value, label = "phase_completion", { allowLegacyBoolean = true } = {}) {
   if (typeof value === "boolean") {
     if (allowLegacyBoolean) return value;
@@ -664,6 +635,100 @@ export function buildTaskKernel(taskHandle, {
     }
     return structuredClone(input);
   };
+  const incompleteCoverageAudit = (code, message, source = null) => Object.freeze({
+    decision_log_ref: source?.decisionLogRef ?? null,
+    decision_log_hash: source?.decisionLogHash ?? null,
+    items: Object.freeze([]),
+    summary: Object.freeze({ covered: 0, accepted_omission: 0, missing: 0 }),
+    status: "incomplete",
+    failures: Object.freeze([Object.freeze({ code, source_item_ref: null, source_anchor: null, message })]),
+    authority: Object.freeze({ scope: "known_inventory", duplicate_authorities: 0, findings: Object.freeze([]), samples: Object.freeze([]) }),
+  });
+  const decisionCoverageAudit = (stage, confirmation) => {
+    const dir = artifactDir();
+    const decisionLog = dir.read("decision-log.md");
+    const decisionLogRef = dir.reference("decision-log.md");
+    const decisionLogHash = hash(decisionLog);
+    // The confirmation caller cannot supply coverage data. A passed audit is
+    // accepted only from a content-addressed raw-requirement record named by
+    // the immutable task manifest, with every source byte and decision anchor
+    // read back from its declared canonical location.
+    const descriptor = task.manifest.inputs?.raw_requirement;
+    let source;
+    try {
+      if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)
+          || typeof descriptor.ref !== "string" || !SHA256_HEX.test(descriptor.sha256 ?? "")) {
+        source = null;
+      } else {
+        const raw = task.readRecord(descriptor.ref);
+        if (hash(raw) !== descriptor.sha256) throw new Error("raw requirement inventory hash mismatch");
+        source = JSON.parse(raw);
+      }
+    } catch (error) {
+      const audit = incompleteCoverageAudit("source_inventory_invalid", `authenticated raw requirement inventory is invalid: ${error.message}`, { decisionLogRef, decisionLogHash });
+      const evidenceValue = { schema_version: "decision-coverage-audit.v1", task_id: task.identity.taskId, stage,
+        material_revision: confirmation.material_revision, snapshot_tree: confirmation.snapshot_tree, audit };
+      const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
+      return Object.freeze({ audit, evidence: createImmutable(`quality/evidence/coverage-audits/${hash(evidenceRaw)}.json`, evidenceRaw) });
+    }
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      const audit = incompleteCoverageAudit("source_inventory_unavailable", "authenticated raw requirement inventory is unavailable", { decisionLogRef, decisionLogHash });
+      const evidenceValue = { schema_version: "decision-coverage-audit.v1", task_id: task.identity.taskId, stage,
+        material_revision: confirmation.material_revision, snapshot_tree: confirmation.snapshot_tree, audit };
+      const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
+      return Object.freeze({ audit, evidence: createImmutable(`quality/evidence/coverage-audits/${hash(evidenceRaw)}.json`, evidenceRaw) });
+    }
+    const sourceItems = Array.isArray(source.source_items) ? source.source_items
+      : Array.isArray(source.sourceItems) ? source.sourceItems : [];
+    const mappings = Array.isArray(source.mappings) ? source.mappings : [];
+    const mappingByRef = new Map(mappings.map((mapping) => [mapping?.source_item_ref, mapping]));
+    try {
+      for (const item of sourceItems) {
+        const raw = task.readRecord(item.source_item_ref);
+        if (hash(raw) !== item.source_item_hash) throw new Error(`source item hash mismatch: ${item.source_item_ref}`);
+        if (typeof item.exact_excerpt !== "string" || !raw.includes(item.exact_excerpt)) {
+          throw new Error(`source item excerpt is not bound to its source: ${item.source_item_ref}`);
+        }
+        const mapping = mappingByRef.get(item.source_item_ref);
+        if (mapping?.decision_location?.ref !== decisionLogRef
+            || !Number.isSafeInteger(mapping?.decision_location?.entry_index)
+            || mapping.decision_location.entry_index < 0
+            || !decisionLog.includes(item.exact_excerpt)) {
+          throw new Error(`decision location is not bound to the current decision log: ${item.source_item_ref}`);
+        }
+      }
+    } catch (error) {
+      const audit = incompleteCoverageAudit("source_binding_invalid", error.message, { decisionLogRef, decisionLogHash });
+      const evidenceValue = { schema_version: "decision-coverage-audit.v1", task_id: task.identity.taskId, stage,
+        material_revision: confirmation.material_revision, snapshot_tree: confirmation.snapshot_tree, audit };
+      const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
+      return Object.freeze({ audit, evidence: createImmutable(`quality/evidence/coverage-audits/${hash(evidenceRaw)}.json`, evidenceRaw) });
+    }
+    let audit;
+    try {
+      audit = buildDecisionCoverageAudit({
+        decisionLogRef,
+        decisionLogHash,
+        sourceItems,
+        mappings,
+        declared_counts: source.declared_counts ?? null,
+        known_inventory: source.known_inventory ?? null,
+      });
+    } catch (error) {
+      audit = incompleteCoverageAudit("coverage_audit_invalid", error.message, { decisionLogRef, decisionLogHash });
+    }
+    const evidenceValue = {
+      schema_version: "decision-coverage-audit.v1",
+      task_id: task.identity.taskId,
+      stage,
+      material_revision: confirmation.material_revision,
+      snapshot_tree: confirmation.snapshot_tree,
+      audit,
+    };
+    const evidenceRaw = `${JSON.stringify(evidenceValue, null, 2)}\n`;
+    const evidence = createImmutable(`quality/evidence/coverage-audits/${hash(evidenceRaw)}.json`, evidenceRaw);
+    return Object.freeze({ audit, evidence });
+  };
   const currentVNextSnapshot = (options = {}) => currentContext(options).snapshot;
   const createImmutable = (relativePath, raw) => {
     try { createRecord(relativePath, raw); }
@@ -673,151 +738,6 @@ export function buildTaskKernel(taskHandle, {
         : task.readRecord(relativePath) !== raw)) throw error;
     }
     return { ref: relativePath, sha256: hash(raw) };
-  };
-  const readBoundRecord = (relativePath, label) => {
-    const decisionRef = artifactDir().reference("decision-log.md");
-    if (relativePath === decisionRef) return artifactDir().read("decision-log.md");
-    try { return task.readRecord(relativePath); }
-    catch (error) {
-      if (error?.code === "ENOENT") throw new Error(`${label} is missing: ${relativePath}`);
-      throw error;
-    }
-  };
-  const machineGateError = (id, message) => {
-    const error = new Error(message);
-    Object.defineProperty(error, "machine_gate_diagnostic_id", {
-      value: id,
-      enumerable: false,
-      configurable: false,
-      writable: false,
-    });
-    return error;
-  };
-  const prepareInteractionPublication = (input = {}) => {
-    object(input, "make-decision interaction publication input");
-    const candidateInput = input.aggregate && !input.schema_version ? input.aggregate : input;
-    try {
-      object(candidateInput, "make-decision interaction aggregate");
-    } catch (error) {
-      throw machineGateError("interaction_aggregate_unbound", `MATERIAL_INCOMPLETE: ${error.message}`);
-    }
-    const { revision, snapshot } = currentContext();
-    if (candidateInput.snapshot_tree !== undefined && candidateInput.snapshot_tree !== snapshot.tree) {
-      throw machineGateError("aggregate_snapshot_stale", "make-decision interaction aggregate is stale relative to the current Workspace snapshot");
-    }
-    let decision;
-    try {
-      decision = object(candidateInput.decision, "interaction aggregate decision");
-    } catch (error) {
-      throw machineGateError("interaction_aggregate_unbound", `MATERIAL_INCOMPLETE: ${error.message}`);
-    }
-    const currentDecisionRef = artifactDir().reference("decision-log.md");
-    const currentDecisionRaw = artifactDir().read("decision-log.md");
-    if (decision.ref !== currentDecisionRef || decision.hash !== hash(currentDecisionRaw)) {
-      throw machineGateError("aggregate_decision_unbound", "make-decision interaction aggregate decision is not bound to the current decision-log.md");
-    }
-    if (decision.revision !== revision.revision_id) {
-      throw machineGateError("aggregate_decision_revision_stale", "make-decision interaction aggregate decision revision is stale");
-    }
-    let confirmation;
-    try {
-      confirmation = readAcceptedHumanConfirmation(task, candidateInput.confirmation?.ref, "interaction aggregate confirmation");
-    } catch (error) {
-      // A supplied confirmation binding is a machine fact, not an implicit
-      // work permit. Preserve ordinary storage/I/O failures for the caller,
-      // but project malformed, missing, or tampered confirmation bytes as the
-      // declared non-blocking diagnostic.
-      if (error?.code && error.code !== "ENOENT") throw error;
-      throw machineGateError("human_confirmation_hash_mismatch", `MATERIAL_INCOMPLETE: ${error.message}`);
-    }
-    if (candidateInput.confirmation?.hash !== confirmation.sha256
-        || candidateInput.confirmation?.result !== "accepted"
-        || confirmation.value.stage !== "make-decision"
-        || confirmation.value.subject_ref !== currentDecisionRef
-        || confirmation.value.material_revision !== revision.revision_id
-        || confirmation.value.snapshot_tree !== snapshot.tree) {
-      throw machineGateError("human_confirmation_hash_mismatch", "make-decision interaction aggregate confirmation does not bind the current decision and snapshot");
-    }
-    const requirement = object(candidateInput.original_requirement, "interaction aggregate original_requirement");
-    const requirementRaw = readBoundRecord(requirement.ref, "interaction aggregate original_requirement");
-    if (hash(requirementRaw) !== requirement.hash) throw new Error("interaction aggregate original_requirement hash does not bind canonical bytes");
-    const normalized = {
-      ...structuredClone(candidateInput),
-      schema_version: "workflowhub-interaction-aggregate.v1",
-      task_id: task.identity.taskId,
-      stage: "make-decision",
-      snapshot_tree: snapshot.tree,
-      decision: { ref: currentDecisionRef, hash: hash(currentDecisionRaw), revision: revision.revision_id },
-      decision_ref: currentDecisionRef,
-      decision_hash: hash(currentDecisionRaw),
-      confirmation: { ref: confirmation.ref, hash: confirmation.sha256, result: "accepted" },
-      generated_at: candidateInput.generated_at ?? now(),
-    };
-    const validation = validateInteractionAggregateContract(normalized);
-    if (!validation.ok) throw machineGateError("interaction_aggregate_unbound", `MATERIAL_INCOMPLETE: interaction aggregate is invalid: ${validation.errors.join("; ")}`);
-    return deepFreeze(normalized);
-  };
-  const completeInteractionPublication = (input = {}) => {
-    const prepared = prepareInteractionPublication(input);
-    const identity = aggregateJson(interactionAggregateIdentity(prepared));
-    const content = aggregateJson(interactionAggregateContent(prepared));
-    for (const qualityRef of task.listCanonicalQualityFactRefs()) {
-      let qualityRaw;
-      try { qualityRaw = task.readRecord(qualityRef); } catch { continue; }
-      let quality;
-      try { quality = JSON.parse(qualityRaw); } catch { continue; }
-      if (quality?.task_id !== task.identity.taskId || quality.stage !== "make-decision"
-          || quality.kind !== "acceptance_criterion" || quality.subject !== "talk_clarify") continue;
-      const evidence = quality.evidence?.[0];
-      if (!evidence?.ref || !/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/.test(evidence.ref)) continue;
-      let aggregateRaw;
-      try { aggregateRaw = task.readRecord(evidence.ref); } catch { continue; }
-      if (hash(aggregateRaw) !== evidence.sha256) continue;
-      let aggregate;
-      try { aggregate = JSON.parse(aggregateRaw); } catch { continue; }
-      if (aggregateJson(interactionAggregateIdentity(aggregate)) !== identity) continue;
-      if (aggregateJson(interactionAggregateContent(aggregate)) !== content) {
-        throw new Error("INTERACTION_AGGREGATE_CONFLICT: bound interaction content changed; obtain a new confirmation");
-      }
-      return Object.freeze({
-        ref: evidence.ref,
-        hash: evidence.sha256,
-        value: Object.freeze(aggregate),
-        quality_fact_ref: qualityRef,
-        quality_fact_hash: hash(qualityRaw),
-        idempotent: true,
-      });
-    }
-    const raw = `${JSON.stringify(prepared, null, 2)}\n`;
-    const record = createImmutable(`quality/evidence/interactions/${hash(raw)}.json`, raw);
-    const qualityFact = kernel.publishVNextQualityFact("make-decision", {
-      kind: "acceptance_criterion",
-      status: "passed",
-      subject: "talk_clarify",
-      evidence: [{ ref: record.ref, sha256: record.sha256, evidence_type: "acceptance_evidence" }],
-    });
-    return Object.freeze({
-      ref: record.ref,
-      hash: record.sha256,
-      value: prepared,
-      quality_fact_ref: qualityFact.ref,
-      quality_fact_hash: qualityFact.sha256,
-      idempotent: false,
-    });
-  };
-  const observeInteractionPublication = (input = {}) => {
-    try {
-      return Object.freeze({ status: "recorded", value: prepareInteractionPublication(input), diagnostic: null });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      const id = error?.machine_gate_diagnostic_id;
-      if (typeof id !== "string" || id.trim() === "") throw error;
-      return Object.freeze({
-        status: "unavailable",
-        value: null,
-        diagnostic: Object.freeze({ id, status: "invalid", reason }),
-      });
-    }
   };
   const kernel = {
     task,
@@ -1008,6 +928,27 @@ export function buildTaskKernel(taskHandle, {
         const value = winner?.value ?? candidateValue;
         const raw = `${JSON.stringify(value, null, 2)}\n`;
         const record = winner ?? createImmutable(`quality/confirmations/${hash(raw)}.json`, raw);
+        const coverage = name === "make-decision" ? decisionCoverageAudit(name, value) : null;
+        const coverageQuality = coverage === null ? null : publishQualityFact({
+          fact: createQualityFact({
+            taskId: task.identity.taskId,
+            stage: name,
+            materialRevision: value.material_revision,
+            materialScope: STAGE_FACT_MATERIALS[name],
+            materialScopeRevision: materialRevisionFromValues(STAGE_FACT_MATERIALS[name].map((file) => {
+              try { return [file, artifactDir().read(file)]; }
+              catch (error) { if (error?.code === "ENOENT") return [file, null]; throw error; }
+            })),
+            snapshotTree: value.snapshot_tree,
+            kind: "coverage",
+            status: coverage.audit.status,
+            subject: "decision_coverage",
+            evidence: [{ ref: coverage.evidence.ref, sha256: coverage.evidence.sha256, evidence_type: "coverage_audit" }],
+            recordedAt: value.confirmed_at,
+          }),
+          read: task.readRecord,
+          create: (recordRef, qualityRaw) => createRecord(recordRef, qualityRaw),
+        });
         // A close confirmation retains its operation-specific meaning and full
         // material/snapshot binding; it cannot substitute for stage approval.
         const qualitySubject = CLOSE_PLAN_REF.test(subjectRef ?? "") ? "close_confirmation" : "human_confirmation";
@@ -1031,7 +972,19 @@ export function buildTaskKernel(taskHandle, {
           read: task.readRecord,
           create: (recordRef, qualityRaw) => createRecord(recordRef, qualityRaw),
         });
-        return { ref: record.ref, hash: record.sha256, value, quality_fact_ref: quality.ref, quality_fact_hash: quality.sha256, ...(winner ? { idempotent: true } : {}), ...(historicalErrors.length ? { historical_record_errors: historicalErrors } : {}) };
+        return {
+          ref: record.ref,
+          hash: record.sha256,
+          value,
+          quality_fact_ref: quality.ref,
+          quality_fact_hash: quality.sha256,
+          ...(coverageQuality === null ? {} : {
+            coverage_quality_fact_ref: coverageQuality.ref,
+            coverage_quality_fact_hash: coverageQuality.sha256,
+          }),
+          ...(winner ? { idempotent: true } : {}),
+          ...(historicalErrors.length ? { historical_record_errors: historicalErrors } : {}),
+        };
       });
     },
     publishIrreversibleAuthorization(input = {}) {
@@ -1129,9 +1082,6 @@ export function buildTaskKernel(taskHandle, {
       }
       return Object.freeze({ ref: consumptionRef, hash: hash(raw), value: consumed });
     },
-    prepareMakeDecisionInteractionPublication: prepareInteractionPublication,
-    observeMakeDecisionInteractionPublication: observeInteractionPublication,
-    completeMakeDecisionInteractionPublication: completeInteractionPublication,
     completeMakeDecisionResearch(input = {}) {
       object(input, "make-decision research publication input");
       const report = input.report ?? (input.raw === undefined ? input : null);

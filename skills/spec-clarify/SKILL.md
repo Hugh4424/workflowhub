@@ -6,7 +6,7 @@ description: Resolve material ambiguity in supplied specification content.
 # Spec Clarify
 
 Receive the current `spec.md`, accepted upstream decision material, and
-controlled named-artifact callbacks from build-spec. Never derive or accept
+controlled named-artifact callbacks from build-plan. Never derive or accept
 task, root, repository, or product paths.
 
 ### 问答工具 IO 契约
@@ -27,7 +27,7 @@ Before asking anything, classify every relevant statement as:
 Compare the current draft and every candidate option with the locked decisions.
 Discard candidates that conflict with a locked decision. If all candidates
 conflict, do not show a fake choice: report the upstream/spec contradiction and
-the exact completion condition back to build-spec for repair. Do not ask the
+the exact completion condition back to build-plan for repair. Do not ask the
 user to invent a fourth option.
 
 Identify only unresolved ambiguities that materially change scope, acceptance,
@@ -78,14 +78,14 @@ drift leaves the receipt missing instead of rebinding the old conversation.
 
 ## 十个维度（Ten-dimension）completeness check
 
-Before handing a clarified direction to `build-spec`, the main agent checks
-these ten dimensions against the original requirement and current facts: user
+Before the owning spec-authoring step continues, the main agent checks these
+ten dimensions against the original requirement and current facts: user
 journey, page/surface scope, data and state transitions, success boundary,
 failure boundary, permissions/actors, integrations and external effects,
 non-goals, deferred handoff, and acceptance/observable evidence. This is an
 index of unresolved decisions, not a second specification. A missing dimension
 is recorded as `unknown`, `deferred`, or a real user question; it is never
-silently filled in by `build-spec` or a sub-agent.
+silently invented by the authoring step or a sub-agent.
 
 Talk, Grill, and Clarify are communication work owned by the main agent. A
 sub-agent may supply facts or an independent critique, but may not ask the user,

@@ -222,17 +222,10 @@ describe("P2 formal wiring contract", () => {
     });
   });
 
-  it("publishes one immutable make-decision interaction aggregate through the kernel", () => {
+  it("does not expose an active make-decision aggregate writer", () => {
     const state = fixture();
-    expect(typeof state.kernel.prepareMakeDecisionInteractionPublication).toBe("function");
-    expect(typeof state.kernel.completeMakeDecisionInteractionPublication).toBe("function");
-    if (typeof state.kernel.prepareMakeDecisionInteractionPublication !== "function"
-        || typeof state.kernel.completeMakeDecisionInteractionPublication !== "function") return;
-    const prepared = state.kernel.prepareMakeDecisionInteractionPublication(draft(state));
-    const published = state.kernel.completeMakeDecisionInteractionPublication(prepared);
-    expect(published.ref).toMatch(/^quality\/evidence\/interactions\/[a-f0-9]{64}\.json$/);
-    expect(published.value.schema_version).toBe("workflowhub-interaction-aggregate.v1");
-    expect(state.task.readRecord(published.ref)).toContain("workflowhub-interaction-aggregate.v1");
+    expect(state.kernel.prepareMakeDecisionInteractionPublication).toBeUndefined();
+    expect(state.kernel.completeMakeDecisionInteractionPublication).toBeUndefined();
   });
 
   it("keeps findings dialogue on spec-clarify without widening make-decision closure", () => {
@@ -259,24 +252,10 @@ describe("P2 formal wiring contract", () => {
     })).toThrow(/resolved review authorization/i);
   });
 
-  it("replays by identity and rejects content changes or missing confirmation", () => {
+  it("keeps legacy aggregate construction out of the current writer surface", () => {
     const state = fixture("interaction-publication-replay");
-    if (typeof state.kernel.completeMakeDecisionInteractionPublication !== "function") return;
-    const first = state.kernel.completeMakeDecisionInteractionPublication(draft(state));
-    const replay = state.kernel.completeMakeDecisionInteractionPublication(draft(state));
-    expect(replay.ref).toBe(first.ref);
-    expect(replay.idempotent).toBe(true);
-    const reordered = draft(state);
-    reordered.grill = { lifecycle_rounds: reordered.grill.lifecycle_rounds, summary: reordered.grill.summary, status: reordered.grill.status };
-    const reorderedReplay = state.kernel.completeMakeDecisionInteractionPublication(reordered);
-    expect(reorderedReplay.ref).toBe(first.ref);
-    expect(reorderedReplay.idempotent).toBe(true);
-    expect(() => state.kernel.completeMakeDecisionInteractionPublication({
-      ...draft(state),
-      advice: { status: "completed", result_ref: "quality/reviews/results/advice.json", result_hash: hash("advice") },
-    })).toThrow(/conflict|identity/i);
-    expect(() => state.kernel.prepareMakeDecisionInteractionPublication({ ...draft(state), confirmation: undefined }))
-      .toThrow(/MATERIAL_INCOMPLETE|confirmation/i);
+    expect(state.kernel.prepareMakeDecisionInteractionPublication).toBeUndefined();
+    expect(state.kernel.completeMakeDecisionInteractionPublication).toBeUndefined();
   });
 
   it("exposes a browser evidence validator and requires execution identity fields", () => {
@@ -304,10 +283,10 @@ describe("P2 formal wiring contract", () => {
     expect(() => stageEvidence.validateBrowserQaEvidence({ ...evidence, api_identity: undefined })).toThrow(/api_identity|invalid|required/i);
   });
 
-  it("rejects the old detail-advice objective_facts field before provider dispatch", () => {
+  it("drops the old detail-advice objective_facts field and preserves the discard fact before provider dispatch", () => {
     const state = fixture("detail-material-contract");
     const source = { targetCommit: "1".repeat(40), baseCommit: "2".repeat(40), baseTree: "3".repeat(40), capturedHead: "4".repeat(40), snapshotTree: "5".repeat(40), changedFiles: [] };
-    expect(() => buildReviewMaterials({
+    const packet = buildReviewMaterials({
       reviewDataRoot: state.root,
       attachmentRoot: state.root,
       source,
@@ -322,7 +301,12 @@ describe("P2 formal wiring contract", () => {
         objective_facts: "不应进入 detail packet",
         review_instructions: reviewInstructionsFor("make-decision", "detail"),
       },
-    })).toThrow(/MATERIAL_FORBIDDEN|objective_facts/i);
+    });
+    expect(packet.discarded_facts).toContainEqual(expect.objectContaining({
+      fact_kind: "material_unknown_key_dropped",
+      dropped_key: "objective_facts",
+      reason: "not_in_stage_material_allowlist",
+    }));
   });
 
   it("keeps controlled QA private to the official build-code seam and does not add a public runner", async () => {

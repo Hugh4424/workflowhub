@@ -6,6 +6,10 @@ version: 5.2.0
 
 # Verify Code：代码审查
 
+This verification creates no new stage, material, or gate; it is no gate for
+same-task repair and records quality
+facts and keeps same-task repair available.
+
 ## 统一回退协议
 
 五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的

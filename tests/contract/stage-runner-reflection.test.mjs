@@ -14,7 +14,7 @@ import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
 import { publishStageHandoff } from "../../runtime/stage/stage-handoff.mjs";
 import { deriveExecutionOutcomes } from "../../runtime/stage/completion-predicates.mjs";
 
-import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
+import { recordSimpleReviewRequest, recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
 
 import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
@@ -296,7 +296,7 @@ describe("stage-runner reflection transfer matrix", () => {
       attemptId: attempt,
       now: NOW,
     });
-    expect(result.stage_handoff.status, JSON.stringify(result.stage_handoff)).toBe("published");
+    expect(result.stage_handoff, JSON.stringify(result)).toMatchObject({ status: "published" });
     expect(result).toMatchObject({ status: "completed", persisted: true, reflection_status: "ok" });
     expect(result.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
     expect(JSON.parse(state.task.readRecord(result.ref))).toMatchObject({
@@ -483,7 +483,7 @@ function usageProvider(provider, status, usage, timing) {
 function publishUsageReview(state, providers, runtimeId = "usage-runtime", materialId = "a".repeat(64)) {
   return recordSimpleReviewResult({ task: state.task, kernel: state.context.kernel, result: {
     status: "available-with-failures", stage: "verify-code", review_track: null, review_kind: null,
-    material_id: materialId, runtime_id: runtimeId, outcome: "partial", findings: [], provider_results: providers,
+    material_id: materialId, runtime_id: runtimeId, outcome: "completed", minimum_heterologous: 1, findings: [], provider_results: providers,
   } });
 }
 
@@ -559,6 +559,34 @@ describe("T011 authenticated canonical review usage consumer", () => {
       usage: [expect.objectContaining({ provider: "opencode/failed", status: "recorded", usage: { input_tokens: 23 } })],
       timing: [expect.objectContaining({ provider: "opencode/failed", status: "recorded", timing })],
     } });
+  });
+
+  it("consumes a canonical reviewed-execution preparation failure without inventing a provider attempt", async () => {
+    const state = fixture("usage-execution-preparation", { stage: "verify-code" });
+    const digest = "a".repeat(64);
+    let dispatches = 0;
+    const refs = await recordSimpleReviewRequest({
+      task: state.task,
+      kernel: state.context.kernel,
+      request: {
+        stage: "verify-code",
+        host_provider: "codex/luna",
+        materials: { implementation: "current verify review bytes" },
+        reviewed_execution: {
+          quality_fact_ref: `quality/facts/${digest}.json`,
+          ref: `quality/evidence/stage-quality/build-code/acceptance_execution-${digest}.json`,
+          sha256: digest,
+        },
+      },
+      runRound: async () => { dispatches += 1; throw new Error("preparation failure must not dispatch"); },
+    });
+    expect(refs).toMatchObject({ status: "recorded", dispatch_state: "blocked_before_dispatch", result_ref: null });
+    expect(dispatches).toBe(0);
+    const result = await consumeUsageReview(state, refs.attempt_ref);
+    expect(result.facts.code_review).toMatchObject({
+      status: "unavailable",
+      error: { code: "REVIEW_EXECUTION_PREPARATION_FAILED" },
+    });
   });
 
   it("rejects a result bound to another attempt instead of borrowing its usage", async () => {

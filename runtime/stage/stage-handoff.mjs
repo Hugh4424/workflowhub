@@ -6,6 +6,7 @@ import yaml from "js-yaml";
 
 import { assertTaskHandle } from "../task/task-handle.mjs";
 import { assertTaskKernel } from "../task/task-kernel.mjs";
+import { readCurrentStageFindingDispositionSummary } from "../task/task-store.mjs";
 
 export const STAGE_HANDOFF_STAGES = Object.freeze([
   "make-decision",
@@ -98,6 +99,23 @@ function deriveProgressLines(outcomeValue) {
     `- step: ${counts.steps.length} 项，completed ${counts.completedSteps} 项，其它 ${counts.steps.length - counts.completedSteps} 项`,
     `- skill: ${counts.skills.length} 项，completed ${counts.completedSkills} 项，其它 ${counts.skills.length - counts.completedSkills} 项`,
     ...(counts.unsettled.length ? ["- 非完成行：", ...counts.unsettled.map((line) => `  ${line}`)] : ["- 非完成行：无"]),
+  ];
+}
+
+function findingDispositionLines(summary) {
+  if (summary === null) return ["- finding disposition: 当前 stage row 尚未写入；不补造 review 指标。"];
+  const elapsed = summary.elapsed_ms === null ? "unknown（未记录）" : String(summary.elapsed_ms);
+  return [
+    `- raw_finding_denominator: ${summary.raw_finding_denominator}`,
+    `- valid_finding_numerator: ${summary.valid_finding_numerator}`,
+    `- valid_anchor_numerator: ${summary.valid_anchor_numerator}`,
+    `- elapsed_ms: ${elapsed}`,
+    ...summary.items.map((item) => {
+      const owner = item.disposition === "needs_human" ? `; owner=${item.owner}; deadline=${item.deadline}` : "";
+      const reply = item.disposition === "user_decided" ? `; user reply=${item.reply_ref}` : "";
+      const retry = item.retry === true ? `; changed-cause retry=${item.previous_cause} -> ${item.cause}` : "";
+      return `- finding ${item.finding}: ${item.disposition}${owner}${reply}${retry}`;
+    }),
   ];
 }
 
@@ -240,6 +258,7 @@ function sectionBody(index, {
   solution = null,
   pitfalls = null,
   riskLines = null,
+  findingDispositionSummary = null,
 } = {}) {
   const refs = sources.length ? sources.map((value) => `\`${value.ref}#${value.sha256}\``).join(", ") : "（当前没有可引用的正式原件）";
   const failure = diagnostic?.error_summary ?? diagnostic?.reason ?? "没有观察到额外失败";
@@ -251,7 +270,7 @@ function sectionBody(index, {
     4: solution ?? ["- 当前实现沿用既有 WorkflowHub TaskHandle、stage runner 和 canonical evidence 边界。"],
     5: pitfalls ?? [`- 本次阶段末事实：${failure}`],
     6: [`- 当前正式来源指针：${refs}`],
-    7: [`- current snapshot/material binding：${refs}`],
+    7: [`- current snapshot/material binding：${refs}`, ...findingDispositionLines(findingDispositionSummary)],
     8: ["- 成功：只表示本阶段或本 hook 的实际记录已写入。", "- 失败、unavailable、unknown 和 stale 不得改写为完成。"],
     9: risks ?? riskLines ?? ["- 未决项和风险必须以当前四材料与正式质量原件回读为准。"],
     10: [`- ${nextAction}`],
@@ -278,6 +297,7 @@ export function renderStageHandoff({
   risks = null,
   stageOutcomeValue = null,
   reflectionJudgment = null,
+  findingDispositionSummary = null,
 } = {}) {
   stageHandoffRef(stage);
   nonEmpty(taskId, "taskId");
@@ -317,6 +337,7 @@ export function renderStageHandoff({
       solution: reflectionBlockLines(reflectionJudgment, "what_helped", "实际帮助"),
       pitfalls: pitfallLines,
       riskLines,
+      findingDispositionSummary,
     }),
   ].join("\n"));
   return `${frontMatter}\n\n> ${BANNER}\n\n${sections.join("\n\n")}\n`;
@@ -569,11 +590,6 @@ export function publishStageHandoff({
       }
     }
   }
-  const raw = renderStageHandoff({
-    taskId, stage, snapshotTree, materialScopeRevision, reflectionStatus, stageStatus,
-    observation, diagnostic, sourceRefs: sources, materials, artifacts, nextAction, decisionSummary, risks,
-    stageOutcomeValue: outcomeValue, reflectionJudgment: reflectionJudgmentValue,
-  });
   const writeHandoff = () => {
     // The fixed current-view ref is a replaceable projection. Serialize the
     // identity check and write so an older stage run cannot pass a pre-lock
@@ -617,6 +633,12 @@ export function publishStageHandoff({
         fail("stage handoff candidate is older than the current handoff outcome or has no authenticated ordering", "STAGE_HANDOFF_STALE_WRITER");
       }
     }
+    const raw = renderStageHandoff({
+      taskId, stage, snapshotTree, materialScopeRevision, reflectionStatus, stageStatus,
+      observation, diagnostic, sourceRefs: sources, materials, artifacts, nextAction, decisionSummary, risks,
+      stageOutcomeValue: outcomeValue, reflectionJudgment: reflectionJudgmentValue,
+      findingDispositionSummary: readCurrentStageFindingDispositionSummary(task.taskPath, { taskId, stage }),
+    });
     task.writeRecordAtomic(ref, raw);
     const readback = task.readRecord(ref);
     assertReadback(readback, { taskId, stage, snapshotTree, materialScopeRevision, reflectionStatus });

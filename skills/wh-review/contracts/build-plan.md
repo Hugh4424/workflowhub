@@ -6,8 +6,8 @@ provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读
 
 - `review-instructions.md`：stage、审查问题和输出格式。
 - 已批准 spec 和验收标准。
-- 待审 plan，至少包含 phase、任务、依赖和验证方式。
-- 与 plan 一一对应的 `draft_tasks`；它是独立冻结材料，审查任务拆分、依赖和验收能否真正执行。
+- 待审 phase engineering authority，至少包含 L0/L1/L2、精确写集、依赖、禁改边界和验证方式。
+- 与 phase authority 对应的 `draft_tasks` 纯指针执行索引；它只交付 authority ref、语义锚点、写集、依赖和 consumer，不能成为第二份任务正文。
 - 可选的 `context_map` / `evidence_map` 优化；提供时仅交付 map 明确选择的模块边界、依赖、接口或测试约定片段。本阶段不得默认附带 diff 或完整当前文件，maps 缺失仍须调用 provider。
 - 与本次审查有关的 reviewer 技能文件。
 - `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
@@ -48,8 +48,8 @@ build-plan 只消费可信异源 advice，不要求 provider `pass` 或 findings
 
 ## 审查重点
 
-- 每项需求是否落到具体任务和可判断的验证。
-- phase、依赖和生产者/消费者顺序是否可执行。
+- 每项需求是否落到 phase authority 中的可判断验证。
+- phase、依赖、写集和真实 consumer 顺序是否可执行，且 execution index 没有复制工程正文。
 - 接口、状态、失败路径、并发和回退是否遗漏。
 - 验证是否能在行为错误时失败，而不是只检查文件存在。
 - 是否引入 spec 未要求的抽象、兼容层或范围。

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { expect, test } from "vitest";
 import { compactReviewDiff, compactVerifyCodeMaterials } from "../review-input-bounds.mjs";
 
@@ -10,85 +12,41 @@ function section(path, bytes) {
     + "+" + "x".repeat(bytes) + "\n";
 }
 
-test("compactReviewDiff keeps provider diff below budget and preserves implementation/test coverage", () => {
-  const full = section("runtime/review.mjs", 120 * 1024) + section("tests/review.test.mjs", 120 * 1024) + section("README.md", 80 * 1024);
-  const result = compactReviewDiff(full);
-  expect(result.index.mode).toBe("bounded");
-  expect(Buffer.byteLength(result.diff, "utf8")).toBeLessThanOrEqual(180 * 1024);
-  expect(result.diff).toContain("diff --git a/runtime/review.mjs b/runtime/review.mjs");
-  expect(result.diff).toContain("WH_REVIEW_TRUNCATED_SECTION");
-  expect(result.index.full_diff_bytes).toBe(Buffer.byteLength(full, "utf8"));
-  expect(result.index.omitted_paths).toEqual(expect.arrayContaining([
-    expect.objectContaining({ path: "README.md", kind: "summary" }),
-  ]));
-});
+test("keeps a provider diff above 486777B byte-identical without a local truncation marker", () => {
+  const full = section("runtime/review.mjs", 260 * 1024)
+    + section("tests/review.test.mjs", 260 * 1024)
+    + section("README.md", 80 * 1024);
+  expect(Buffer.byteLength(full, "utf8")).toBeGreaterThan(486777);
 
-test("compactReviewDiff leaves a small diff byte-identical", () => {
-  const full = section("runtime/review.mjs", 10);
   const result = compactReviewDiff(full);
-  expect(result.index.mode).toBe("full");
+
   expect(result.diff).toBe(full);
-});
-
-test("compactVerifyCodeMaterials projects an oversized implementation diff and records its full hash", () => {
-  const full = section("runtime/review.mjs", 200 * 1024);
-  const result = compactVerifyCodeMaterials({ "implementation-diff.patch": full, "review-scope": "current code" });
-  expect(result.diff.mode).toBe("bounded");
-  expect(result.materials["implementation-diff.patch"]).toContain("diff --git a/runtime/review.mjs");
-  expect(result.materials["implementation-index"].delivery.full_diff_sha256).toBe(result.diff.full_diff_sha256);
-  expect(Buffer.byteLength(result.materials["implementation-diff.patch"], "utf8")).toBeLessThanOrEqual(180 * 1024);
-});
-
-test("compactVerifyCodeMaterials bounds nested current materials alongside execution evidence", () => {
-  const full = section("runtime/review.mjs", 200 * 1024);
-  const current = Object.fromEntries([
-    ["decision-log.md", "d".repeat(40 * 1024)],
-    ["spec.md", "s".repeat(40 * 1024)],
-    ["plan.md", "p".repeat(40 * 1024)],
-    ["tasks.md", "t".repeat(40 * 1024)],
-  ]);
-  const result = compactVerifyCodeMaterials({
-    runtime_implementation_diff: full,
-    runtime_current_materials: current,
-    runtime_execution_records: [{ raw: "r".repeat(32 * 1024) }],
-    runtime_execution_outputs: [{ text: "o".repeat(32 * 1024) }],
+  expect(result.index).toEqual({
+    mode: "full",
+    full_diff_bytes: Buffer.byteLength(full, "utf8"),
+    full_diff_sha256: createHash("sha256").update(full).digest("hex"),
   });
-  const bytes = Object.values(result.materials).reduce((sum, value) => sum + Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value), "utf8"), 0);
-  expect(bytes).toBeLessThanOrEqual(300 * 1024);
-  expect(result.materials.runtime_current_materials["decision-log.md"]).toContain("full_sha256=");
-  expect(result.materials.runtime_current_materials["tasks.md"]).toContain("full_sha256=");
+  expect(result.diff).not.toContain("WH_REVIEW_TRUNCATED_SECTION");
 });
 
-test("compactReviewDiff retains implementation and test sections under the truncation budget", () => {
-  const full = section("runtime/review.mjs", 200 * 1024)
-    + section("tests/review.test.mjs", 200 * 1024)
-    + section("README.md", 80 * 1024);
-  const result = compactReviewDiff(full);
+test("keeps oversized verify-code materials byte-identical without a local size failure", () => {
+  const full = section("runtime/review.mjs", 260 * 1024)
+    + section("tests/review.test.mjs", 260 * 1024);
+  const materials = {
+    "implementation-diff.patch": full,
+    runtime_current_materials: {
+      "decision-log.md": "d".repeat(64 * 1024),
+      "spec.md": "s".repeat(64 * 1024),
+      "plan.md": "p".repeat(64 * 1024),
+      "tasks.md": "t".repeat(64 * 1024),
+    },
+  };
+  expect(Buffer.byteLength(JSON.stringify(materials), "utf8")).toBeGreaterThan(486777);
 
-  expect(result.index.mode).toBe("bounded");
-  expect(result.index.included_paths).toEqual(expect.arrayContaining([
-    "runtime/review.mjs",
-    "tests/review.test.mjs",
-  ]));
-  expect(result.diff).toContain("diff --git a/runtime/review.mjs b/runtime/review.mjs");
-  expect(result.diff).toContain("diff --git a/tests/review.test.mjs b/tests/review.test.mjs");
-  expect(result.diff).toContain("WH_REVIEW_TRUNCATED_SECTION");
-  expect(Buffer.byteLength(result.diff, "utf8")).toBeLessThanOrEqual(150 * 1024);
-});
+  const result = compactVerifyCodeMaterials(materials);
 
-test("compactVerifyCodeMaterials carries both implementation and test coverage into the bounded diff", () => {
-  const full = section("runtime/review.mjs", 200 * 1024)
-    + section("tests/review.test.mjs", 200 * 1024)
-    + section("README.md", 80 * 1024);
-  const result = compactVerifyCodeMaterials({ "implementation-diff.patch": full });
-  const bounded = result.materials["implementation-diff.patch"];
-
-  expect(result.diff).toMatchObject({ mode: "bounded" });
-  expect(result.diff.included_paths).toEqual(expect.arrayContaining([
-    "runtime/review.mjs",
-    "tests/review.test.mjs",
-  ]));
-  expect(bounded).toContain("diff --git a/runtime/review.mjs b/runtime/review.mjs");
-  expect(bounded).toContain("diff --git a/tests/review.test.mjs b/tests/review.test.mjs");
-  expect(Buffer.byteLength(bounded, "utf8")).toBeLessThanOrEqual(150 * 1024);
+  expect(result).toEqual({ materials, diff: null });
+  expect(result.materials).toBe(materials);
+  expect(JSON.stringify(result.materials)).not.toContain("WH_REVIEW_TRUNCATED_SECTION");
+  expect(JSON.stringify(result.materials)).not.toContain("Bounded verify-code context:");
 });

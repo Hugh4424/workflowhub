@@ -1,0 +1,22 @@
+{
+  "schema_version": "workflowhub-spec-analyze-local-evidence.v1",
+  "stage": "build-plan",
+  "status": "consistent",
+  "publication_status": "unavailable",
+  "publication_reason": "current public run route does not accept or publish a caller-supplied current spec-analyze result",
+  "profile": "build-plan",
+  "strict_material_contracts": true,
+  "requirement_groups": 9,
+  "covered_groups": 9,
+  "findings": [],
+  "errors": [],
+  "summary": {
+    "stage_work": "build-plan 计划与任务已按独立审查 findings 修复",
+    "requirement_coverage": "当前需求、22 条 AC、13 步 build-plan、K1-K12、8 个 skill 责任和三阶段任务均有显式映射",
+    "upstream_alignment": "认证分支已 fast-forward 到 main b39f34b；本卡保持 pre 五阶段 bootstrap，严格只读复用 CARD-01 已提交的 post/pre topology owner",
+    "current_stage_repairs": "按 main 更新 CARD-01 committed preflight；移除第二 topology 写责任；补齐 direct diagnostic replacement、无重复契约 owner、RED/GREEN 边界、超限 review 失败路径、延期 AC 状态与单一文件写边界",
+    "remaining_risks": "AC-TEST-004 与 CARD-05 真实实验仍按决定延期；正式 analyzer publication route unavailable",
+    "next_stage_boundary": "build-code 必须先复核 CARD-01 蓝图 hash；不得把 deferred 或 unavailable 写成 achieved"
+  },
+  "review_ref": "quality/reviews/results/build-plan-simple-9caff97a-b0b0-5b65-ac14-12bee4f79c24.json"
+}

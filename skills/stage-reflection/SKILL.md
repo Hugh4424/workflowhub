@@ -8,6 +8,12 @@ version: 1.0.0
 
 ## 目的与边界
 
+For post-cohort build-plan, read the current 13-step manifest in order and
+report every step/skill independently as completed, not_started, skipped,
+unavailable, unknown, or incomplete with its real artifact and criterion. One
+stage conclusion never fills another row, and a pointer execution index is
+navigation rather than a second engineering authority.
+
 本技能在当前正式 stage 的步骤结束时由当前主会话执行一次。它回答：哪些
 step/skill 帮助了工作、需要改进、造成阻塞、引发人工介入、应该简化，以及现在
 就能简化什么。输出是 judgment layer，永远 `judgment != fact`；它不是质量分数、

@@ -3,14 +3,15 @@ import { STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 import { SHA256_HEX } from "./canonical-utils.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
-const KINDS = new Set(["test", "review", "acceptance_criterion", "confirmation"]);
-const STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded"]);
+const KINDS = new Set(["test", "review", "acceptance_criterion", "confirmation", "coverage"]);
+const STATUSES = new Set(["passed", "failed", "unavailable", "missing", "recorded", "incomplete"]);
 const REVIEW_STATUSES = new Set(["clean", "findings", "resolved", "unavailable"]);
 const EVIDENCE_TYPES = Object.freeze({
   test: "test_receipt",
   review: "review_result",
   acceptance_criterion: "acceptance_evidence",
   confirmation: "human_confirmation",
+  coverage: "coverage_audit",
 });
 
 /** Fields that define an immutable quality fact's content identity. */
@@ -49,6 +50,7 @@ export function createQualityFact({ taskId, stage, materialRevision, materialSco
   if (!KINDS.has(kind) || typeof subject !== "string" || subject.trim() === "") throw new TypeError("quality fact kind and subject are required");
   if (!STATUSES.has(status)) throw new TypeError("quality fact status is invalid");
   if (status === "recorded" && kind !== "review") throw new TypeError("recorded quality fact status is only valid for review facts");
+  if (status === "incomplete" && kind !== "coverage") throw new TypeError("incomplete quality fact status is only valid for coverage facts");
   if (reviewStatus !== undefined && (kind !== "review" || !REVIEW_STATUSES.has(reviewStatus))) throw new TypeError("quality fact reviewStatus is invalid");
   if (reviewStatus !== undefined && reviewStatus === "resolved"
       && (stage !== "verify-code" || subject !== "code_review")) {

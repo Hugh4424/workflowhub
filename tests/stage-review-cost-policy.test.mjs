@@ -6,23 +6,18 @@ const readStage = (stage) => readFileSync(new URL(`../workflows/${stage}/SKILL.m
 const hasAny = (text, patterns) => patterns.some((pattern) => pattern.test(text));
 
 describe("non-code review policy", () => {
-  it("keeps planning advisories stage-owned and wh-review as the provider review", () => {
+  it("keeps the post-cohort authoring chain stage-owned and wh-review as the provider review", () => {
     const buildSpec = yaml.load(readFileSync(new URL("../workflows/build-spec/skill-deps.yaml", import.meta.url), "utf8"));
     const buildPlan = yaml.load(readFileSync(new URL("../workflows/build-plan/skill-deps.yaml", import.meta.url), "utf8"));
     const buildCode = yaml.load(readFileSync(new URL("../workflows/build-code/skill-deps.yaml", import.meta.url), "utf8"));
     const verifyCode = yaml.load(readFileSync(new URL("../workflows/verify-code/skill-deps.yaml", import.meta.url), "utf8"));
-    expect(buildSpec.skills.map((entry) => entry.name)).toEqual([
-      "spec-research", "spec-clarify",
-      "spec-specify", "simplicity-guard", "plan-ceo-review",
-      "ui-project-init", "design-source-readiness", "frontend-prototype-render",
-      "plan-design-review", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
-    ]);
-    expect(buildPlan.skills.map((entry) => entry.name)).toEqual([
-      "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
-      "testing-system-blueprint",
-      "frontend-component-quality",
-      "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review", "stage-reflection", "stage-handoff",
-    ]);
+    const buildPlanNames = buildPlan.skills.map((entry) => entry.name);
+    expect(buildPlanNames).toEqual(expect.arrayContaining([
+      "spec-research", "spec-clarify", "spec-specify", "spec-plan", "spec-tasks",
+      "testing-system-blueprint", "test-routing-advisor", "wh-review", "spec-analyze", "stage-reflection",
+    ]));
+    expect(buildPlanNames.filter((name) => name === "wh-review")).toHaveLength(1);
+    expect(readStage("build-spec")).toMatch(/pre[- ]cohort|historical[\s\S]{0,80}read-only|历史[\s\S]{0,80}只读/i);
     expect(buildCode.skills.map((entry) => entry.name)).toEqual([
       "test-routing-advisor", "backend-testing", "frontend-testing",
       "frontend-component-quality", "fullstack-slice-testing", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
@@ -35,6 +30,34 @@ describe("non-code review policy", () => {
       expect([...manifest.runtime_capabilities, ...manifest.external_capabilities]
         .every((entry) => entry.absence_semantics === "diagnostic")).toBe(true);
     }
+  });
+
+  it("RED: replaces the old 15 + 13 authoring chain with the authoritative 13 build-plan steps", () => {
+    const steps = JSON.parse(readFileSync(new URL("../workflows/build-plan/steps.json", import.meta.url), "utf8")).steps;
+    const expected = [
+      "read-current-materials",
+      "conditional-spec-research",
+      "spec-clarify",
+      "spec-specify",
+      "conditional-ui-readiness",
+      "spec-plan",
+      "testing-system-blueprint",
+      "test-routing-advisor",
+      "merged-review",
+      "main-agent-disposes-findings",
+      "final-spec-analyze",
+      "publish-result-and-confirm",
+      "stage-reflection",
+    ];
+    expect(steps.map(({ step_slug }) => step_slug)).toEqual(expected);
+    expect(new Set(expected)).toHaveLength(13);
+
+    const workflow = readStage("build-plan");
+    for (const key of Array.from({ length: 12 }, (_, index) => `K${index + 1}`)) {
+      expect(workflow, `${key} consumer/oracle mapping`).toContain(key);
+    }
+    expect(workflow).toMatch(/single phase engineering authority|单一 phase 工程权威/i);
+    expect(workflow).toMatch(/pure pointer (?:execution )?index|纯指针.*索引/i);
   });
 
   it.each(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"])("%s keeps review as quality evidence, not work permission", (stage) => {

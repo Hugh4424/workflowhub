@@ -24,7 +24,7 @@ function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
-function fixture(now = () => "2026-08-30T00:00:01.000Z") {
+function fixture(now = () => "2026-08-30T00:00:01.000Z", inputs = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-confirmation-v3-")));
   roots.push(root);
   const repo = join(root, "repo");
@@ -46,7 +46,7 @@ function fixture(now = () => "2026-08-30T00:00:01.000Z") {
       created_at: "2026-08-30T00:00:00.000Z",
       target_repo_root: repo,
       issue_ids: [],
-      inputs: {},
+      inputs,
       record_model: "vnext-single-write",
     },
   });
@@ -63,6 +63,85 @@ afterEach(() => {
 });
 
 describe("human confirmation v3", () => {
+  it("T005 keeps a real confirmation while publishing the authenticated incomplete coverage fact", () => {
+    const { task, kernel } = fixture();
+    const confirmation = kernel.publishHumanConfirmation("make-decision", directionInput);
+
+    expect(confirmation.ref).toMatch(/^quality\/confirmations\//);
+    expect(confirmation.coverage_quality_fact_ref).toMatch(/^quality\/facts\/[a-f0-9]{64}\.json$/);
+    const coverage = JSON.parse(task.readRecord(confirmation.coverage_quality_fact_ref));
+    expect(coverage).toMatchObject({
+      kind: "coverage",
+      status: "incomplete",
+      subject: "decision_coverage",
+    });
+    expect(coverage.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ evidence_type: "coverage_audit" }),
+    ]));
+    expect(confirmation.quality_fact_ref).toMatch(/^quality\/facts\/[a-f0-9]{64}\.json$/);
+  });
+
+  it("T006 keeps confirmation when the authenticated raw inventory is malformed", () => {
+    const { task, kernel } = fixture(undefined, {
+      raw_requirement: { ref: "quality/evidence/raw-requirements/missing.json", sha256: "f".repeat(64) },
+    });
+    const confirmation = kernel.publishHumanConfirmation("make-decision", directionInput);
+    expect(confirmation.ref).toMatch(/^quality\/confirmations\//);
+    const coverage = JSON.parse(task.readRecord(confirmation.coverage_quality_fact_ref));
+    expect(coverage).toMatchObject({ kind: "coverage", status: "incomplete" });
+    const audit = JSON.parse(task.readRecord(coverage.evidence[0].ref));
+    expect(audit.audit.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "source_inventory_invalid" }),
+    ]));
+  });
+
+  it("T006 publishes passed coverage only from the authenticated task raw-requirement inventory", () => {
+    const sourceBytes = "The system must preserve the original requirement.";
+    const sourceRef = `quality/evidence/raw-requirements/${hash(sourceBytes)}.txt`;
+    const sourceItem = {
+      source_item_ref: sourceRef,
+      source_item_hash: hash(sourceBytes),
+      source_anchor: "raw-requirement.md#L1",
+      exact_excerpt: sourceBytes,
+      requirement_strength: "must",
+    };
+    const inventory = {
+      schema_version: "raw-requirement-index.v1",
+      source_items: [sourceItem],
+      mappings: [{
+        source_item_ref: sourceItem.source_item_ref,
+        source_item_hash: sourceItem.source_item_hash,
+        coverage_status: "covered",
+        disposition: "covered",
+        decision_location: { kind: "main", ref: "specs/task-confirm-v3/decision-log.md", entry_index: 0 },
+      }],
+      declared_counts: { source_items: 1, covered: 1, accepted_omission: 0, missing: 0 },
+      known_inventory: {
+        stable_ids: [{ id: "R-COVER-001", authority_file: "raw-requirement.md", position: "raw-requirement.md#L1" }],
+        fact_samples: [
+          { fact_type: "product_goal", sample: "preserve requirements", authority_file: "spec.md", conclusion: "one owner", evidence: "spec.md#L1" },
+          { fact_type: "user_flow", sample: "confirmation stays available", authority_file: "plan.md", conclusion: "one owner", evidence: "plan.md#L1" },
+          { fact_type: "cross_task_requirement", sample: "topology is read-only", authority_file: "tasks.md", conclusion: "one owner", evidence: "tasks.md#L1" },
+          { fact_type: "acceptance", sample: "coverage is traceable", authority_file: "spec.md", conclusion: "one owner", evidence: "spec.md#L2" },
+        ],
+      },
+    };
+    const inventoryRaw = `${JSON.stringify(inventory, null, 2)}\n`;
+    const inventoryRef = `quality/evidence/raw-requirements/${hash(inventoryRaw)}.json`;
+    const { task, kernel, artifacts } = fixture(undefined, {
+      raw_requirement: { ref: inventoryRef, sha256: hash(inventoryRaw) },
+    });
+    task.writeRecordAtomic(sourceRef, sourceBytes);
+    task.writeRecordAtomic(inventoryRef, inventoryRaw);
+    artifacts.writeAtomic("decision-log.md", `${artifacts.read("decision-log.md")}\n${sourceBytes}\n`);
+    const confirmation = kernel.publishHumanConfirmation("make-decision", directionInput);
+    const coverage = JSON.parse(task.readRecord(confirmation.coverage_quality_fact_ref));
+    expect(coverage).toMatchObject({ kind: "coverage", status: "passed", subject: "decision_coverage" });
+    const audit = JSON.parse(task.readRecord(coverage.evidence[0].ref));
+    expect(audit.audit).toMatchObject({ status: "passed", authority: { scope: "known_inventory", duplicate_authorities: 0 } });
+    expect(audit.audit.authority.samples).toHaveLength(4);
+  });
+
   it("writer writes reply_text and step_slug in the single confirmation record and keeps authorize compatible", () => {
     const { task, kernel } = fixture();
     const confirmation = kernel.publishHumanConfirmation("build-code", {
@@ -81,6 +160,7 @@ describe("human confirmation v3", () => {
       reply_text: "我确认继续执行这个阶段。",
       step_slug: "confirm-stage-reflection",
     });
+    expect(confirmation).not.toHaveProperty("coverage_quality_fact_ref");
     expect(() => validateHumanConfirmation(confirmation.value, {
       taskId: task.identity.taskId,
       stage: "build-code",

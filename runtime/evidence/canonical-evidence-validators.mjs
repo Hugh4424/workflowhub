@@ -95,6 +95,14 @@ export function validateStageOutcomeProof(raw, reference, binding, label = "stag
   return evidence;
 }
 
+const ACCEPTANCE_EXECUTION_OUTCOMES = new Set(["achieved", "deferred", "unavailable", "incomplete"]);
+
+/** Map the child-reported business outcome to the per-AC evidence status. */
+export function acceptanceExecutionOutcomeStatus(outcome) {
+  if (!ACCEPTANCE_EXECUTION_OUTCOMES.has(outcome)) throw new Error("acceptance execution outcome is invalid");
+  return Object.freeze({ achieved: "passed", deferred: "deferred", unavailable: "unavailable", incomplete: "missing" })[outcome];
+}
+
 /** Derive assertions from actual child JSON; its claimed verdict is never consumed. */
 export function deriveAcceptanceExecutionAssertions(raw, criterionIds) {
   let value;
@@ -109,15 +117,26 @@ export function deriveAcceptanceExecutionAssertions(raw, criterionIds) {
     const id = entry?.acceptance_criterion_id;
     if (!criterionIds.includes(id) || seen.has(id) || !Array.isArray(entry.assertions) || entry.assertions.length === 0) throw new Error("acceptance execution has unknown, duplicate, missing AC or empty assertions");
     seen.add(id);
+    const outcome = entry.outcome ?? "achieved";
+    if (!ACCEPTANCE_EXECUTION_OUTCOMES.has(outcome)) throw new Error("acceptance execution outcome is invalid");
+    if (outcome !== "achieved" && (typeof entry.owner !== "string" || !entry.owner.trim()
+        || typeof entry.reason !== "string" || !entry.reason.trim())) {
+      throw new Error("non-achieved acceptance execution outcome requires owner and reason");
+    }
     const assertions = new Set();
-    return { acceptance_criterion_id: id, assertions: entry.assertions.map((assertion) => {
+    return {
+      acceptance_criterion_id: id,
+      outcome,
+      ...(outcome === "achieved" ? {} : { owner: entry.owner.trim(), reason: entry.reason.trim() }),
+      assertions: entry.assertions.map((assertion) => {
       if (!assertion || typeof assertion !== "object" || Array.isArray(assertion)
           || typeof assertion.id !== "string" || assertion.id.trim() === "" || assertions.has(assertion.id)
           || !Object.hasOwn(assertion, "expected") || !Object.hasOwn(assertion, "actual")) throw new Error("acceptance execution assertion is incomplete or duplicate");
       assertions.add(assertion.id);
       return { id: assertion.id, expected: assertion.expected, actual: assertion.actual,
         result: acceptanceAssertionMatches(assertion.expected, assertion.actual) ? "passed" : "failed" };
-    }) };
+      }),
+    };
   });
 }
 
@@ -127,7 +146,7 @@ export function validateAcceptanceExecutionEvidence(value) {
   if (value?.schema_version !== "stage-quality-evidence.v1" || value.stage !== "build-code"
       || typeof value.task_id !== "string" || !value.task_id || !/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "")
       || !OID.test(value.snapshot_tree ?? "") || typeof value.subject !== "string" || !value.subject.startsWith("AC-")
-      || !subject || !new Set(["passed", "failed", "missing"]).has(subject.status) || value.status !== subject.status
+      || !subject || !new Set(["passed", "failed", "missing", "deferred", "unavailable"]).has(subject.status) || value.status !== subject.status
       || !execution || !new Set(["command", "service"]).has(execution.tier)
       || !(execution.exit_code === null || Number.isInteger(execution.exit_code))
       || !(execution.signal === null || (typeof execution.signal === "string" && execution.signal.trim() !== ""))
@@ -178,9 +197,20 @@ export function validateAcceptanceExecutionEvidence(value) {
         || assertion.result !== (acceptanceAssertionMatches(assertion.expected, assertion.actual) ? "passed" : "failed")) throw new Error("acceptance assertion result is not runtime-derived");
     seen.add(assertion.id);
   }
-  if (subject.status === "passed" && (execution.exit_code !== 0 || execution.signal !== null
+  const outcome = subject.outcome ?? (subject.status === "passed" ? "achieved" : null);
+  if (outcome !== null && !ACCEPTANCE_EXECUTION_OUTCOMES.has(outcome)) throw new Error("acceptance execution outcome is invalid");
+  if (outcome !== null && subject.status !== "failed" && subject.status !== acceptanceExecutionOutcomeStatus(outcome)) {
+    throw new Error("acceptance execution status does not match its reported outcome");
+  }
+  if (outcome !== null && outcome !== "achieved" && (typeof subject.outcome_owner !== "string" || !subject.outcome_owner.trim()
+      || typeof subject.outcome_reason !== "string" || !subject.outcome_reason.trim())) {
+    throw new Error("non-achieved acceptance execution evidence requires owner and reason");
+  }
+  if (["passed", "deferred", "unavailable"].includes(subject.status) && (execution.exit_code !== 0 || execution.signal !== null
       || execution.timed_out || execution.cancelled || execution.cleanup.status !== "completed"
-      || subject.assertions.length === 0 || subject.assertions.some((assertion) => assertion.result !== "passed"))) throw new Error("acceptance execution cannot pass without successful process and assertions");
+      || subject.assertions.length === 0 || subject.assertions.some((assertion) => assertion.result !== "passed"))) {
+    throw new Error("settled acceptance execution outcome requires successful process and assertions");
+  }
   return value;
 }
 

@@ -4,11 +4,11 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "b098df33ff3027f15aec827053be619d464ba034d2ad1b9e67a1fe9db357ec0b"
+      "sha256": "86e43e73d3024bb64c34bb8f4054179f417d901fdea675c5822b8de07df14d33"
     },
     {
       "path": "templates/tasks-template.md",
-      "sha256": "042746123d141bd1b88a9c75445b69a17b229c2074f744f9a20a2ce55ac6a804"
+      "sha256": "643abfdf82a633108ec82cd96d2e6a340be450fdc21897749e124f08b8084719"
     }
   ],
   "sources": [

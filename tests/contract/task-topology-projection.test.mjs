@@ -226,6 +226,20 @@ describe("CARD-01 task type and topology projection", () => {
     });
   });
 
+  it("makes the authenticated ordinary cohort route visible in public status", async () => {
+    const ordinary = routeFixture("普通任务");
+    await withRuntimeEnvironment(ordinary, async () => {
+      const status = await stageRuntimeMain([
+        "status", "--stage=build-spec", "--project=workflowhub", `--task=${ordinary.identity.task}`,
+      ], { cwd: ordinary.worktree });
+      expect(status).toMatchObject({
+        task_type: "普通任务",
+        activation_cohort: "pre",
+        topology: ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"],
+      });
+    });
+  });
+
   it("leaves parent and sibling fixture bytes untouched while a planning journey runs", async () => {
     const planning = routeFixture("规划任务");
     const parent = join(planning.root, "parent-prd.md");

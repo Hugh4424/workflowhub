@@ -14,6 +14,9 @@ const FINDING_DISPOSITION_OPTIONAL_FIELDS = new Set([
   "classification", "kind", "impact_dimensions", "dimensions", "evidence_refs",
   "reply_ref", "incremental_decision_ref", "decision_ref", "gap", "reasons",
   "card_hash", "risk_acceptance_ref", "risk_ref", "completion_status", "formally_complete",
+  // These fields are not a second disposition record. They are the exact
+  // values the stage-end writer projects into the existing handoff stage row.
+  "deadline", "anchor", "previous_cause", "cause", "retry", "elapsed_ms",
 ]);
 
 function object(value, label) {

@@ -10,8 +10,7 @@ import {
   selectTrustedReviewProviderSelection,
 } from "./third-review-host-config.mjs";
 import { materialAllowlistForRule, materialForbiddenMessage, reviewInstructionsFor as canonicalReviewInstructionsFor,
-  validateMaterialAllowlist,
-  REVIEW_PACKET_MAX_DELIVERY_BYTES } from "./review-materials.mjs";
+  validateMaterialAllowlist } from "./review-materials.mjs";
 import { providerAdapter } from "../../../runtime/review/canonical-review-result.mjs";
 import { reviewIdentityFromInput, reviewRuleFor } from "../../../runtime/review/review-policy.mjs";
 import { AUTHENTICATED_EVIDENCE_PATH, providerMaterialPath, redactProviderHostPaths } from "../../../runtime/review/provider-material-projection.mjs";
@@ -47,6 +46,46 @@ const DEFAULT_MANAGED_TERMINAL_WAIT_MS = 1_200_000;
 // churn ~5x. Callers can still override it per call via
 // `dependencies.managedStatusPollMs`.
 const DEFAULT_MANAGED_STATUS_POLL_MS = 5000;
+
+function assertReviewAbortSignal(signal) {
+  if (signal === null || signal === undefined) return null;
+  if (typeof signal !== "object" || typeof signal.aborted !== "boolean"
+      || typeof signal.addEventListener !== "function" || typeof signal.removeEventListener !== "function") {
+    throw new TypeError("review signal must be an AbortSignal");
+  }
+  return signal;
+}
+
+function reviewCancelledError(signal) {
+  const reason = signal?.reason;
+  const message = typeof reason?.message === "string" && reason.message.trim() !== ""
+    ? reason.message
+    : "review wait was interrupted";
+  const error = new Error(message);
+  error.code = "REVIEW_CANCELLED";
+  return error;
+}
+
+function throwIfReviewAborted(signal) {
+  if (signal?.aborted) throw reviewCancelledError(signal);
+}
+
+function waitForManagedPoll(delayMs, signal) {
+  if (delayMs <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(reviewCancelledError(signal));
+    };
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 function redactHostPaths(value) {
   if (typeof value !== "string") return value;
@@ -497,11 +536,6 @@ function buildBundle(attachmentRoot, input) {
     write(AUTHENTICATED_EVIDENCE_PATH, authenticatedEvidenceBytes(input.authenticated_evidence));
   }
   const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
-  const deliveryBytes = entries.reduce((total, entry) => total + entry.bytes, 0) + manifest.length;
-  if (deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
-    rmSync(bundleRoot, { recursive: true, force: true });
-    throw Object.assign(new Error(`MATERIAL_TOO_LARGE: review bundle exceeds the ${Math.round(REVIEW_PACKET_MAX_DELIVERY_BYTES / 1024)} KiB provider delivery budget`), { code: "MATERIAL_TOO_LARGE" });
-  }
   write("manifest.json", manifest);
   // Single material identity over the delivered bundle. reviewPacketMaterialId and
   // deliveredMaterialId share one canonicalBundleEntries rule, so the declared
@@ -536,6 +570,7 @@ function buildBundle(attachmentRoot, input) {
 }
 
 async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvider, providers, materials, minimumHeterologous, providerModels }, dependencies) {
+  const signal = assertReviewAbortSignal(dependencies.signal ?? null);
   const maxWaitMs = dependencies.managedTerminalWaitMs ?? DEFAULT_MANAGED_TERMINAL_WAIT_MS;
   const pollMs = dependencies.managedStatusPollMs ?? DEFAULT_MANAGED_STATUS_POLL_MS;
   if (maxWaitMs !== null && (!Number.isSafeInteger(maxWaitMs) || maxWaitMs < 0)) {
@@ -585,8 +620,9 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvid
   // deadline is observed, preserving the existing immediate-zero semantics.
   let boundaryRecheckDone = maxWaitMs === null || maxWaitMs === 0;
   while (current.state !== "terminal") {
+    throwIfReviewAborted(signal);
     try {
-      current = await client.statusManaged(context);
+      current = await client.statusManaged({ ...context, ...(signal === null ? {} : { signal }) });
       lastObservation = current;
     } catch (error) {
       if (error && typeof error === "object") error.managed_observation = lastObservation;
@@ -608,7 +644,7 @@ async function waitForManagedTerminal({ lifecycle, client, requestId, hostProvid
       error.managed_observation = lastObservation;
       throw error;
     }
-    if (pollMs > 0) await new Promise((resolve) => setTimeout(resolve, pollMs));
+    await waitForManagedPoll(pollMs, signal);
   }
   return current;
 }
@@ -1203,6 +1239,8 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels = n
 }
 
 async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
+  const signal = assertReviewAbortSignal(dependencies.signal ?? null);
+  throwIfReviewAborted(signal);
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("review request must be an object");
   if (typeof input.stage !== "string" || input.stage.trim() === "") throw new TypeError("stage is required");
   const hostProvider = input.host_provider ?? input.hostProvider;
@@ -1275,17 +1313,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
   }
   let reviewInput = canonicalInput;
   if (canonicalInput.stage === "verify-code") {
-    try {
-      const projection = compactVerifyCodeMaterials(canonicalInput.materials);
-      reviewInput = projection.diff === null ? canonicalInput : { ...canonicalInput, materials: projection.materials };
-    } catch (error) {
-      return blockedPreflight(canonicalInput, "REVIEW_INPUT_TOO_LARGE", error?.message ?? "verify-code provider input exceeds the bounded budget", preflightDiagnostic({
-        field: "provider_input",
-        expected: "within the bounded provider input budget",
-        actual: "oversized",
-        nextAction: "shrink the review closure and retry",
-      }), pair);
-    }
+    const projection = compactVerifyCodeMaterials(canonicalInput.materials);
+    reviewInput = projection.diff === null ? canonicalInput : { ...canonicalInput, materials: projection.materials };
   }
 
   const reviewTrack = identity.reviewTrack;
@@ -1415,6 +1444,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           minimumHeterologous: minimum,
           reviewMode: route.mode,
           reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
+          ...(signal === null ? {} : { signal }),
         });
         if (lifecycle.state !== "terminal") {
           const consumeTerminal = dependencies.onManagedTerminal
@@ -1506,9 +1536,14 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
           strictProtocol: true,
           ...pairFields(pair),
+          ...(signal === null ? {} : { signal }),
         });
       } catch (error) {
         return unavailableResult(input, normalizeProviderError(error), pair, {
+          // The provider client was called. Preserve that transport boundary so
+          // an external input-limit response cannot be mistaken for the
+          // retired local byte-cap preflight.
+          dispatch_state: "dispatched",
           minimum_heterologous: minimum,
           provider_selection: providerSelectionOutput(providerSelection),
         });

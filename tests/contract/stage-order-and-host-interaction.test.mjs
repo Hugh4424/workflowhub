@@ -93,4 +93,17 @@ describe("P1 stage order and real host interaction contract", () => {
     expect(grill).toMatch(/(?:must not call wh-review|绝不调用 wh-review)[\s\S]{0,80}(?:review fact|review finding|review 结论)/i);
     expect(clarify).toMatch(/Publishing a batch card ends the current invocation/i);
   });
+
+  it("T003 makes the build-plan review/analyze journey one merged packet with four fail-loud self-checks", () => {
+    const steps = readJson("workflows", "build-plan", "steps.json").steps;
+    const review = steps.find((step) => step.step_slug === "merged-review");
+    const dispose = steps.find((step) => step.step_slug === "main-agent-disposes-findings");
+    const analyze = steps.find((step) => step.step_slug === "final-spec-analyze");
+    expect(review).toMatchObject({ owner: "wh-review" });
+    expect(review.observable_result).toMatch(/single[ -]packet[\s\S]*review[\s\S]*analyze/i);
+    expect(dispose.observable_result).toMatch(/owner[\s\S]*(?:deadline|due)[\s\S]*finding/i);
+    expect(analyze.observable_result).toMatch(/no oracle[\s\S]*no provenance[\s\S]*prewritten test[\s\S]*irreversible/i);
+    expect(review.order).toBeLessThan(dispose.order);
+    expect(dispose.order).toBeLessThan(analyze.order);
+  });
 });

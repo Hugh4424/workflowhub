@@ -5,6 +5,15 @@ description: Turn the current decision and specification into a minimal, executa
 
 # Spec Plan
 
+## Post-cohort phase authority
+
+For post-cohort tasks, this skill is the single phase engineering authority and sole phase engineering author. It
+writes the phase body with L0 outcome, L1 machine-checkable contract, and L2
+removable reference; each phase owns its exact write set, dependency, DO NOT
+TOUCH boundary, RED/GREEN command, oracle, STOP condition, and rollback. It
+also supplies the rows consumed by `spec-tasks`, but no second phase body may
+be rendered there. The post-cohort execution index is pure pointers only.
+
 Read the current `decision-log.md`, `spec.md`, and verified repository facts.
 Write only `plan.md`. Product direction and user-visible behavior remain owned
 by the current decision and specification; this skill chooses the smallest
@@ -38,8 +47,9 @@ second `Phases` section or add a progress index.
   acceptance criteria, and product boundaries.
 - `plan.md` supplies engineering choices, exact boundaries, dependencies,
   phases, risks, rollback, and verification design.
-- `tasks.md` is the downstream projection of this plan. Do not copy task
-  procedures or execution output into the plan.
+- `tasks.md` is the downstream pure-pointer execution index. It may name the
+  phase anchor, write set, dependency, and consumer, but cannot copy a task
+  procedure, command, oracle, or execution output from the phase authority.
 
 Facts that are missing, stale, or unavailable remain explicit facts. They do
 not justify guessing a product choice. A direction-changing gap is returned to

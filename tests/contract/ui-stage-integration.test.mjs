@@ -425,6 +425,46 @@ test("UI alignment requires current sources and census, while non-UI and update-
   assert.ok(stale.gaps.some((entry) => entry.reason === "consumer_census_stale_snapshot"));
 });
 
+test("T009 RED / T010 GREEN: dual-phase fixture retains deferred gaps and accepts explicit non-UI/Luna handoff", () => {
+  const deferredErrors = (fixture) => {
+    const errors = [];
+    const p1 = fixture.phases.find(({ phase_id }) => phase_id === "P1");
+    const p2 = fixture.phases.find(({ phase_id }) => phase_id === "P2");
+    if (p1?.ui?.impact !== "non_ui" || p1.ui.design_status !== "not_applicable") errors.push("P1 non_ui must remain explicit");
+    const deferred = p2?.real_luna_e2e;
+    if (deferred?.status === "passed") errors.push("real-luna E2E must not be passed by a fixture");
+    for (const field of ["owner", "trigger", "reason_or_limit", "stop_condition"]) {
+      if (typeof deferred?.[field] !== "string" || deferred[field].trim() === "") {
+        errors.push(`real-luna E2E deferred requires ${field}`);
+      }
+    }
+    return errors;
+  };
+  const incomplete = {
+    phases: [
+      { phase_id: "P1", ui: { impact: "non_ui", design_status: "not_applicable" } },
+      { phase_id: "P2", real_luna_e2e: { status: "deferred" } },
+    ],
+  };
+  assert.deepEqual(deferredErrors(incomplete), [
+    "real-luna E2E deferred requires owner",
+    "real-luna E2E deferred requires trigger",
+    "real-luna E2E deferred requires reason_or_limit",
+    "real-luna E2E deferred requires stop_condition",
+  ]);
+  const fixture = {
+    phases: [
+      { phase_id: "P1", ui: { impact: "non_ui", design_status: "not_applicable" } },
+      { phase_id: "P2", real_luna_e2e: {
+        status: "deferred", owner: "CARD-10", trigger: "a real Luna task executes the declared slice",
+        reason_or_limit: "fixture smoke cannot prove real Luna behavior", stop_condition: "do not mark achieved from fixture-only evidence",
+      } },
+    ],
+  };
+  assert.deepEqual(deferredErrors(fixture), []);
+  assert.notEqual(fixture.phases[1].real_luna_e2e.status, "passed");
+});
+
 test("UI validators require state evidence, confirmation consistency, and component ownership facts", () => {
   const state = Object.fromEntries([
     ["name", "default"],

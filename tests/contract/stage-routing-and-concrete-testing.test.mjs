@@ -35,21 +35,13 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps build-spec direct order and wh-review as the only provider reviewer", () => {
     expect(names("build-spec")).toEqual([
-      "spec-research", "spec-clarify", "spec-specify", "simplicity-guard", "plan-ceo-review",
+      "spec-research", "simplicity-guard", "plan-ceo-review",
       "ui-project-init", "design-source-readiness", "frontend-prototype-render",
       "plan-design-review", "wh-review", "spec-analyze", "stage-reflection", "stage-handoff",
     ]);
-    expect(stepSlugs("build-spec")).toEqual(expect.arrayContaining([
-      "conditional-spec-research", "spec-clarify", "spec-specify",
-    ]));
-    expect(stepSlugs("build-spec").indexOf("conditional-spec-research"))
-      .toBeLessThan(stepSlugs("build-spec").indexOf("spec-clarify"));
-    expect(stepSlugs("build-spec").indexOf("spec-clarify"))
-      .toBeLessThan(stepSlugs("build-spec").indexOf("spec-specify"));
+    expect(names("build-spec")).not.toEqual(expect.arrayContaining(["spec-clarify", "spec-specify"]));
     expect(deps("build-spec").find(({ name }) => name === "spec-research"))
       .toMatchObject({ execution: "independent", trigger: "conditional_research", owner: "stage" });
-    expect(deps("build-spec").find(({ name }) => name === "spec-clarify"))
-      .toMatchObject({ execution: "inline", trigger: "spec_ambiguity", owner: "stage" });
     expect(deps("build-spec").find(({ name }) => name === "plan-design-review"))
       .toMatchObject({ execution: "independent", trigger: "ui_scope", owner: "stage" });
     expect(names("build-spec")).toContain("spec-analyze");
@@ -77,7 +69,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
 
   it("keeps build-plan design-only and excludes concrete test execution", () => {
     expect(names("build-plan")).toEqual([
-      "spec-research", "spec-plan", "simplicity-guard", "plan-eng-review",
+      "spec-research", "spec-clarify", "spec-specify", "spec-plan", "simplicity-guard", "plan-eng-review",
       "testing-system-blueprint",
       "frontend-component-quality",
       "test-routing-advisor", "spec-tasks", "spec-analyze", "wh-review", "stage-reflection", "stage-handoff",
@@ -90,7 +82,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(evidenceKinds("build-plan")).not.toContain("skill_invocation");
     expect(JSON.stringify(steps("build-plan"))).not.toContain("test_strategy");
     const skill = read("workflows/build-plan/SKILL.md");
-    expect(skill).toMatch(/This stage owns only `plan\.md` and\s+`tasks\.md`/i);
+    expect(skill).toMatch(/For pre-cohort tasks[\s\S]{0,120}`plan\.md` and `tasks\.md`[\s\S]{0,180}For post-cohort tasks[\s\S]{0,180}`spec\.md`, `plan\.md`, and `tasks\.md`/i);
     expect(skill).toMatch(/Do not implement code or execute RED\/GREEN/i);
     expect(skill).toMatch(/plan the test scenarios, commands,[\s\S]*for `build-code` to execute later/i);
     expect(read("workflows/build-spec/SKILL.md")).toMatch(/Do not run Talk or Grill in this stage/i);
@@ -167,7 +159,7 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(skill).toMatch(/findings\s+and\s+transport status are not a progression gate/i);
     expect(skill).toMatch(/limits the completion claim[\s\S]*allows same-task repair/i);
     expect(skill).toMatch(/final tests[\s\S]*AC trace[\s\S]*integration review/i);
-    expect(skill).toMatch(/no important findings/i);
+    expect(skill).toMatch(/Completion:\s*no finding is unexplained/i);
     expect(skill).toMatch(/never.*provider.*pass/i);
     const finalReview = buildCodeSteps.find((step) => step.step_slug === "final-integration-review");
     expect(finalReview).toBeDefined();
@@ -204,5 +196,15 @@ describe("D-015 stage routing and concrete testing contract", () => {
     expect(protocol).toContain("`verify-code`：四材料可读即可审查当前实现");
     expect(protocol).toContain("材料存在只证明可以工作，不证明质量完成");
     expect(protocol).toMatch(/不阻止同一 task\s+修复/);
+  });
+
+  it("T003 routes build-plan through exactly one merged review and rejects old split review/analyze consumers", () => {
+    const planned = names("build-plan");
+    expect(planned.filter((name) => name === "wh-review")).toEqual(["wh-review"]);
+    expect(stepSlugs("build-plan")).toContain("merged-review");
+    expect(stepSlugs("build-plan")).not.toContain("plan-design-review");
+    expect(stepSlugs("build-plan")).not.toContain("plan-eng-review");
+    expect(read("workflows/build-plan/SKILL.md"))
+      .toMatch(/only concrete failure[\s\S]*changed[\s\S]*retry/i);
   });
 });

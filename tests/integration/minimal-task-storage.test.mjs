@@ -186,9 +186,19 @@ describe("minimal task storage", () => {
     expect(closeRow.close_action).toMatchObject({ action: "push", result: "pushed", ref: "origin/main" });
     expect(closeRow.stage).toBe("close");
 
-    // The four finding dispositions are the only accepted machine values.
+    // The five terminal-or-paused finding dispositions are the only accepted machine values.
+    expect(writeStageRow(root, {
+      ...stageRow,
+      stage: "verify-code",
+      finding_dispositions: [{ finding: "F-user", disposition: "user_decided", reply_ref: "quality/confirmations/user-decision.json" }],
+    }).action).toBe("inserted");
+    expect(() => writeStageRow(root, {
+      ...stageRow,
+      stage: "build-spec",
+      finding_dispositions: [{ finding: "F-user-missing-reply", disposition: "user_decided" }],
+    })).toThrow(/user_decided_requires_reply_ref/);
     expect(() => writeStageRow(root, { ...stageRow, stage: "build-plan", finding_dispositions: [{ finding: "F-2", disposition: "looks_fine" }] }))
-      .toThrow(/disposition must be one of the four frozen values/);
+      .toThrow(/finding_disposition_is_invalid/);
     expect(() => writeStageRow(root, { ...stageRow, stage: "build-spec", review_origin: "conducted", review_result_ref: { value: null, reason: "forgot the ref" } }))
       .toThrow(/conducted reviews require a named review_result_ref/);
 

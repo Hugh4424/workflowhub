@@ -19,14 +19,16 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-describe("wh-review bounded-input bundle portability", () => {
-  it("RED: does not add a skill-only fail-closed guard for an omitted test candidate", async () => {
+describe("wh-review unbounded-input bundle portability", () => {
+  it("ships no skill-local input-size limit", async () => {
     const isolated = mkdtempSync(join(tmpdir(), "workflowhub-wh-review-bounds-guard-"));
     temporaryRoots.push(isolated);
     const release = await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: join(isolated, "release") });
     const skillPath = join(isolated, "release/skills/wh-review/scripts/review-input-bounds.mjs");
     expect(release.files.some(({ path }) => path === "skills/wh-review/scripts/review-input-bounds.mjs")).toBe(true);
-    expect(readFileSync(skillPath, "utf8")).not.toContain("implementation/test diff exceeds the bounded provider budget");
+    const source = readFileSync(skillPath, "utf8").toString("utf8");
+    expect(source).not.toContain("TASK_BOUND_PROVIDER_INPUT_MAX_BYTES");
+    expect(source).not.toContain("WH_REVIEW_TRUNCATED_SECTION");
   }, 60_000);
 
   it("ships a self-contained skill-local bounds implementation", async () => {
@@ -45,10 +47,12 @@ describe("wh-review bounded-input bundle portability", () => {
       "--- a/runtime/example.mjs",
       "+++ b/runtime/example.mjs",
       "@@ -1 +1 @@",
-      "+const current = true;",
+      `+${"x".repeat(486778)}`,
     ].join("\n");
     expect(imported.compactReviewDiff(diff)).toEqual(runtimeBounds.compactReviewDiff(diff));
     expect(imported.compactVerifyCodeMaterials({ changed_files: diff })).toEqual(runtimeBounds.compactVerifyCodeMaterials({ changed_files: diff }));
+    expect(imported.compactReviewDiff(diff).diff).toBe(diff);
+    expect(imported.compactVerifyCodeMaterials({ changed_files: diff }).materials.changed_files).toBe(diff);
 
     const manifest = JSON.parse(readFileSync(join(releaseRoot, "skill-bundle.json"), "utf8"));
     const entry = manifest.files.find(({ path }) => path === "skills/wh-review/scripts/review-input-bounds.mjs");

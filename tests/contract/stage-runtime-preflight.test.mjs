@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +14,7 @@ import {
   validateAcceptanceCoverageShape,
   validateStageInvocation,
 } from "../../runtime/stage/stage-handlers.mjs";
-import { stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
+import { reviewRecordTimeoutForRunner, runReviewRecordWithSignalHandling, stageRuntimeCliMain, stageRuntimeMain } from "../../tools/cli/stage-runtime.mjs";
 
 const ROOT = realpathSync(join(fileURLToPath(new URL("../..", import.meta.url))));
 const RUNTIME = join(ROOT, "tools", "cli", "stage-runtime.mjs");
@@ -77,6 +78,90 @@ afterEach(() => {
 });
 
 describe("stage-runtime private run:preflight", () => {
+  it("leaves the managed review wait to the managed runner while injected rounds keep the recorder default", () => {
+    expect(reviewRecordTimeoutForRunner({ managed: true })).toBeNull();
+    expect(reviewRecordTimeoutForRunner({ managed: false })).toBeUndefined();
+  });
+
+  it("keeps a review-record invocation alive through SIGTERM until its canonical record flushes", async () => {
+    const signals = new EventEmitter();
+    let receivedSignal = null;
+    const result = await runReviewRecordWithSignalHandling(async (signal) => {
+      receivedSignal = signal;
+      signals.emit("SIGTERM");
+      signals.emit("SIGINT");
+      signals.emit("SIGTERM");
+      await new Promise((resolve) => queueMicrotask(resolve));
+      expect(signal.aborted).toBe(true);
+      return { status: "recorded" };
+    }, { signalProcess: signals });
+
+    expect(result).toEqual({ status: "recorded" });
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal.reason).toMatchObject({ code: "REVIEW_CANCELLED" });
+    expect(signals.exitCode).toBe(143);
+    expect(signals.listenerCount("SIGTERM")).toBe(0);
+    expect(signals.listenerCount("SIGINT")).toBe(0);
+  });
+
+  it("passes the CLI SIGINT cancellation signal into the private review-record delegate", async () => {
+    const signals = new EventEmitter();
+    let receivedSignal = null;
+    const result = await stageRuntimeCliMain([
+      "review", "--action=record", "--stage=build-code", "--project=workflowhub", "--task=fixture", "--input=request.json",
+    ], {
+      delegate: async (_argv, { services }) => {
+        receivedSignal = services.reviewSignal;
+        signals.emit("SIGINT");
+        await new Promise((resolve) => queueMicrotask(resolve));
+        return { status: "recorded" };
+      },
+      services: { signalProcess: signals },
+    });
+
+    expect(result).toEqual({ status: "recorded" });
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal.aborted).toBe(true);
+    expect(signals.exitCode).toBe(130);
+  });
+
+  it("handles a real SIGTERM without exiting before the review-record delegate settles", async () => {
+    const state = fixture();
+    const marker = join(state.root, "review-record-ready");
+    const harness = join(state.root, "review-record-signal-harness.mjs");
+    writeFileSync(harness, [
+      `import { writeFileSync } from "node:fs";`,
+      `import { stageRuntimeCliMain } from ${JSON.stringify(new URL("../../tools/cli/stage-runtime.mjs", import.meta.url).href)};`,
+      `const marker = ${JSON.stringify(marker)};`,
+      `await stageRuntimeCliMain(["review", "--action=record", "--stage=build-code", "--project=workflowhub", "--task=fixture", "--input=request.json"], {`,
+      `  delegate: async (_argv, { services }) => {`,
+      `    writeFileSync(marker, "ready");`,
+      `    const hold = setInterval(() => {}, 1000);`,
+      `    try { await new Promise((resolve) => services.reviewSignal.aborted ? resolve() : services.reviewSignal.addEventListener("abort", resolve, { once: true })); await new Promise((resolve) => setTimeout(resolve, 25)); } finally { clearInterval(hold); }`,
+      `    return { status: "recorded" };`,
+      `  },`,
+      `});`,
+    ].join("\n"));
+    const child = spawn(process.execPath, [harness], { stdio: "ignore" });
+    try {
+      const deadline = Date.now() + 2_000;
+      while (!existsSync(marker) && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(existsSync(marker)).toBe(true);
+      const closed = new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (code, signal) => resolve({ code, signal }));
+      });
+      expect(child.kill("SIGTERM")).toBe(true);
+      expect(child.kill("SIGINT")).toBe(true);
+      const exit = await closed;
+      expect(exit).toEqual({ code: 143, signal: null });
+    } finally {
+      try { child.kill("SIGKILL"); } catch { /* child has already exited */ }
+    }
+  });
+
   it("keeps the seven public behaviors while routing run:preflight to a private delegate", async () => {
     const delegate = vi.fn(async (argv) => argv);
 
@@ -208,11 +293,10 @@ describe("stage-runtime private run:preflight", () => {
     })).toThrow(/attempt_id.*non-empty string/i);
   });
 
-  it("rejects command/path, packet-budget, and missing capability facts before dispatch and retries after repair", async () => {
+  it("rejects command/path and missing capability facts before dispatch and retries after repair", async () => {
     const cases = [
       ["command", preflightPayload(), preflightServices({ command: [join(ROOT, "missing-command")] }), "command"],
       ["path", preflightPayload(), preflightServices({ paths: [join(ROOT, "missing-path")] }), "paths"],
-      ["packet", preflightPayload(), preflightServices({ packet: { bytes: 2 * 1024 * 1024 + 1, limit_bytes: 2 * 1024 * 1024 } }), "packet.bytes"],
       ["capability", preflightPayload(), preflightServices({ capabilities: {} }), "capabilities"],
     ];
     for (const [label, payload, services, expectedPath] of cases) {
@@ -236,6 +320,14 @@ describe("stage-runtime private run:preflight", () => {
     writePayload(retry.input, preflightPayload());
     await expect(stageRuntimeMain(["preflight", "--stage=build-code", `--input=${retry.input}`], {
       services: { preflight: preflightServices() },
+    })).resolves.toMatchObject({ status: "valid", diagnostics: [] });
+  });
+
+  it("keeps preflight valid when a declared packet limit is lower than its complete byte count", async () => {
+    const state = fixture();
+    writePayload(state.input, preflightPayload());
+    await expect(stageRuntimeMain(["preflight", "--stage=build-code", `--input=${state.input}`], {
+      services: { preflight: preflightServices({ packet: { bytes: 486778, limit_bytes: 1 } }) },
     })).resolves.toMatchObject({ status: "valid", diagnostics: [] });
   });
 

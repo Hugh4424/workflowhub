@@ -311,6 +311,32 @@ describe("simple material-only review", () => {
     })).rejects.toThrow("materials are required");
   });
 
+  it("forwards an abort signal to the local broker boundary and retains review cancellation", async () => {
+    const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-abort-")));
+    roots.push(attachmentRoot);
+    const controller = new AbortController();
+    let receivedSignal = null;
+    const result = await runSimpleReview({
+      stage: "build-code",
+      host_provider: "codex",
+      materials: { implementation: "interruptible review bytes" },
+    }, {
+      signal: controller.signal,
+      loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot, command: ["unused"] }),
+      resolveRoute: () => ({ initial: ["other/model"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other/model"], provider_models: { "other/model": "other-model" } }),
+      client: {
+        async runGroup(request) {
+          receivedSignal = request.signal;
+          throw Object.assign(new Error("local broker cancelled"), { code: "PROCESS_CANCELLED" });
+        },
+      },
+    });
+
+    expect(receivedSignal).toBe(controller.signal);
+    expect(result).toMatchObject({ status: "unavailable", error: { code: "REVIEW_CANCELLED" } });
+  });
+
   it("uses one material identity for a bounded verify-code diff", async () => {
     const attachmentRoot = realpathSync(mkdtempSync(join(tmpdir(), "simple-wh-review-bounded-identity-")));
     roots.push(attachmentRoot);

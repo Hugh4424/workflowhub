@@ -38,22 +38,9 @@ const MINI_TASK_PROVIDER_PROTOCOL = `# Provider Protocol (mini-task)\n\n本文�
 const BUILD_PRD_PROVIDER_PROTOCOL = `# Provider Protocol (build-prd report-only)\n\nThis packet is for the build-prd non-stage report-only surface. It is not a formal stage, does not create a canonical stage attempt/result, and does not grant completion or release permission. The host owns transport, manifest, snapshot, public result, retry, and review facts; the provider reads only this bundle and returns findings.\n\n## Material boundary\n\n- Read only the submitted build-prd bundle: review-instructions.md, contracts/, requirements/, and declared skills/.\n- Review only decision_log, prd, task_map, design_facts, quality_facts, and explicitly declared confirmation/source/delivery/analyze/reflection facts.\n- Do not substitute approved_spec, draft_plan, draft_tasks, plan, tasks, changes_diff, changed_files, test_evidence, ac_trace, or any material outside the bundle.\n- Preserve missing, unreadable, transport-failure, provider-failure, partial, and unavailable facts; never rewrite them as pass.\n\n## Reviewer output\n\nReturn exactly one JSON object with a findings array. Do not emit a verdict, summary, pass/fail label, checklist, process explanation, or second JSON object. Findings must be concrete and anchored to submitted bundle bytes. An empty findings array is advice only; it does not approve, complete, or release the PRD.\n`;
 
 const STREAM_CHUNK_BYTES = 64 * 1024;
-// Shared ceiling for the provider delivery bundle.
-// Raised from 330 KiB to 2 MiB (user decision 2026-09-11, option 2). Measured
-// reason: the real build-prd packet is 707,698 bytes (decision_log 239,459 +
-// prd 456,130 + task_map 11,062 + facts 1,047), and the `prd` material alone is
-// 1.35x the old bound — so a complete build-prd review could not be dispatched
-// at all: it failed closed with MATERIAL_TOO_LARGE before any provider saw a
-// byte. The build-prd contract requires "complete PRD coverage", which a
-// truncated packet cannot satisfy.
-//
-// This is a ceiling, not a target: each surface still assembles its own bounded
-// projection, and the phase bound below deliberately stays at 330 KiB so that
-// build-code packets do not grow just because this ceiling moved.
-export const REVIEW_PACKET_MAX_DELIVERY_BYTES = 2 * 1024 * 1024;
-// Leave room for the fixed contract, prompt, manifest, and selected-context
-// overhead before choosing the inline path. The final cap remains enforced
-// after the complete packet is measured.
+// The inline threshold selects a compact diff projection; it is not a provider
+// delivery ceiling. The complete manifest remains the authority for every
+// attachment file sent to a provider.
 export const PHASE_DIFF_INLINE_LIMIT_BYTES = 288 * 1024;
 const PHASE_DIFF_SHARD_TARGET_BYTES = 96 * 1024;
 const FULL_PHASE_DIFF_PREFIXES = [
@@ -130,35 +117,6 @@ const VERIFY_CODE_RELEVANT_TEST_FILES = new Set([
   "tests/stage-review-cost-policy.test.mjs",
   "tests/verify-code-facts.test.mjs",
 ]);
-// The broker packet has a hard transport ceiling. For a large final diff,
-// retain the complete canonical archive but send a deterministic, production-
-// first selected context. This budget leaves room for the review contract,
-// source/index, and the actual implementation assessment.
-const VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES = 200 * 1024;
-const VERIFY_CODE_PACKET_METADATA_RESERVE_BYTES = 128 * 1024;
-const VERIFY_CODE_FULL_INLINE_LIMIT_BYTES = 160 * 1024;
-const VERIFY_CODE_DIFF_PRIORITY = [
-  "skills/wh-review/scripts/wh-review-cli.mjs",
-  "skills/wh-review/scripts/review-runner.mjs",
-  "skills/wh-review/scripts/review-materials.mjs",
-  "skills/wh-review/scripts/review-provider-client.mjs",
-  "skills/wh-review/scripts/third-review-host-config.mjs",
-  "runtime/stage/stage-handlers.mjs",
-  "runtime/stage/stage-runner.mjs",
-  "runtime/stage/stage-agent-outcome-adapter.mjs",
-  "runtime/stage/stage-content-contracts.mjs",
-  "runtime/stage/completion-predicates.mjs",
-  "core/task-close.mjs",
-  "runtime/evidence/quality-store.mjs",
-  "runtime/evidence/freshness.mjs",
-  "runtime/evidence/canonical-evidence-validators.mjs",
-  "runtime/review/integration-review-subject.mjs",
-  "tools/host/workflowhub-stage-agent-protocol.mjs",
-  "tools/cli/stage-runtime.mjs",
-  ...[...VERIFY_CODE_RELEVANT_TEST_FILES].sort(),
-];
-const VERIFY_CODE_DIFF_PRIORITY_INDEX = new Map(VERIFY_CODE_DIFF_PRIORITY.map((path, index) => [path, index]));
-
 /**
  * Large Phase packets keep the implementation and workflow boundaries that
  * directly own the current contract complete. Configuration, generic skill
@@ -207,58 +165,11 @@ export function verifyCodeDiffDeliveryForPath(path) {
     : "summary";
 }
 
-function verifyCodeCandidateSort(left, right) {
-  const leftKind = classifyReviewableCodePath(left.path) === "implementation" ? 0 : 1;
-  const rightKind = classifyReviewableCodePath(right.path) === "implementation" ? 0 : 1;
-  const leftPriority = VERIFY_CODE_DIFF_PRIORITY_INDEX.get(left.path) ?? Number.MAX_SAFE_INTEGER;
-  const rightPriority = VERIFY_CODE_DIFF_PRIORITY_INDEX.get(right.path) ?? Number.MAX_SAFE_INTEGER;
-  return leftPriority - rightPriority
-    || leftKind - rightKind
-    || Buffer.compare(Buffer.from(left.path, "utf8"), Buffer.from(right.path, "utf8"));
-}
-
-export function selectBoundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, sourceDiffBytes, budgetBytes = VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES) {
-  if (stage !== "verify-code" || selectedChangeIds.size > 0 || sourceDiffBytes <= VERIFY_CODE_FULL_INLINE_LIMIT_BYTES) return null;
-  if (!Number.isSafeInteger(budgetBytes) || budgetBytes < 0) throw new Error("MATERIAL_INCOMPLETE: verify-code included diff budget is invalid");
-  const included = new Set();
-  const candidates = sections
+export function selectVerifyCodeDiffPaths(sections, stage) {
+  if (stage !== "verify-code") return null;
+  return new Set(sections
     .filter((section) => classifyReviewableCodePath(section.path) !== null)
-    .sort(verifyCodeCandidateSort);
-  const byKind = (kind) => candidates.filter((section) => classifyReviewableCodePath(section.path) === kind);
-  const requiredKinds = ["implementation", "test"].filter((kind) => byKind(kind).length > 0);
-  const mandatory = [];
-  if (requiredKinds.length === 2) {
-    for (const implementation of byKind("implementation")) {
-      for (const test of byKind("test")) {
-        if (implementation.bytes.length + test.bytes.length <= budgetBytes) {
-          mandatory.push(implementation, test);
-          break;
-        }
-      }
-      if (mandatory.length > 0) break;
-    }
-    if (mandatory.length === 0) {
-      throw new Error("MATERIAL_INCOMPLETE: verify-code implementation and test diff fallbacks exceed the included diff budget");
-    }
-  } else if (requiredKinds.length === 1) {
-    const fallback = byKind(requiredKinds[0]).find((section) => section.bytes.length <= budgetBytes);
-    if (!fallback) throw new Error(`MATERIAL_INCOMPLETE: verify-code ${requiredKinds[0]} diff fallback exceeds the included diff budget`);
-    mandatory.push(fallback);
-  }
-  const mandatoryPaths = new Set(mandatory.map((section) => section.path));
-  let remaining = budgetBytes;
-  for (const section of candidates) {
-    if (!mandatoryPaths.has(section.path)) continue;
-    included.add(section.path);
-    remaining -= section.bytes.length;
-  }
-  for (const section of candidates) {
-    if (!included.has(section.path) && section.bytes.length <= remaining) {
-      included.add(section.path);
-      remaining -= section.bytes.length;
-    }
-  }
-  return included;
+    .map((section) => section.path));
 }
 
 
@@ -1518,12 +1429,12 @@ function selectedPhaseChangeIds(materials) {
   return selected;
 }
 
-function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage = "build-code", includedDiffBudgetBytes = VERIFY_CODE_INCLUDED_DIFF_BUDGET_BYTES }) {
+function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage = "build-code" }) {
   const archive = canonicalDiffArchive({ reviewDataRoot, source });
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
   const selectedChangeIds = selectedPhaseChangeIds(materials);
   const sections = diffSections(source);
-  const boundedIncludedPaths = selectBoundedVerifyCodeDiffPaths(sections, selectedChangeIds, stage, source.diffBytes, includedDiffBudgetBytes);
+  const includedVerifyCodePaths = selectVerifyCodeDiffPaths(sections, stage);
   const shards = [];
   let ordinal = 0;
   for (const section of sections) {
@@ -1538,10 +1449,11 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     const defaultDelivery = stage === "verify-code"
       ? verifyCodeDiffDeliveryForPath(section.path)
       : phaseDiffDeliveryForPath(section.path);
-    let delivery = selectedChangeIds.size > 0
-      ? (selectedChangeIds.has(change.change_id) ? "included" : "summary")
-      : defaultDelivery;
-    if (boundedIncludedPaths !== null && delivery === "included" && !boundedIncludedPaths.has(section.path)) delivery = "summary";
+    const delivery = stage === "verify-code" && includedVerifyCodePaths.has(section.path)
+      ? "included"
+      : selectedChangeIds.size > 0
+        ? (selectedChangeIds.has(change.change_id) ? "included" : "summary")
+        : defaultDelivery;
     const bodies = delivery === "included"
       ? Array.from({ length: Math.ceil(section.bytes.length / PHASE_DIFF_SHARD_TARGET_BYTES) }, (_value, index) => {
         const offset = index * PHASE_DIFF_SHARD_TARGET_BYTES;
@@ -1596,8 +1508,8 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     anchors: selectedAnchors(materials).map((anchor) => {
       const change = compactChanges.find(({ path }) => path === anchor.path);
       if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
-      const anchorHasIncludedDiff = boundedIncludedPaths !== null
-        ? boundedIncludedPaths.has(anchor.path)
+      const anchorHasIncludedDiff = includedVerifyCodePaths !== null
+        ? includedVerifyCodePaths.has(anchor.path)
         : (stage === "verify-code" ? verifyCodeDiffDeliveryForPath(anchor.path) : phaseDiffDeliveryForPath(anchor.path)) === "included";
       if (selectedChangeIds.size > 0 ? !selectedChangeIds.has(change.change_id) : !anchorHasIncludedDiff) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
       const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
@@ -2127,7 +2039,6 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   mkdirSync(packetRoot, { recursive: true });
   const bundleRoot = mkdtempSync(join(packetRoot, "bundle-"));
   let bundleDiffIndex = null;
-  const boundedVerifyCodeDiff = stage === "verify-code" && source.diffBytes > VERIFY_CODE_FULL_INLINE_LIMIT_BYTES;
   if (rule.source_bundle === "diff") {
     write(bundleRoot, "source.json", Buffer.from(`${JSON.stringify({
       target_commit: source.targetCommit,
@@ -2137,7 +2048,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
       snapshot_tree: source.snapshotTree,
       ...(source.phaseEvidenceBinding === undefined ? {} : { phase_evidence: source.phaseEvidenceBinding }),
     })}\n`));
-    if (source.diffBytes <= PHASE_DIFF_INLINE_LIMIT_BYTES && !boundedVerifyCodeDiff) {
+    if (source.diffBytes <= PHASE_DIFF_INLINE_LIMIT_BYTES) {
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(changeMap, null, 2)}\n`));
       const copiedDiff = source.copyDiffTo(join(bundleRoot, "changes.diff"));
       if (copiedDiff.bytes !== source.diffBytes || copiedDiff.sha256 !== source.diffSha256) {
@@ -2159,7 +2070,7 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         })),
       };
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
-      if (!boundedVerifyCodeDiff) bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage });
+      bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage });
     }
   }
   const stagePlan = stagePlanFor(stage, reviewTrack, reviewKind);
@@ -2185,11 +2096,6 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   }
   freezeCanonicalEvidence({ bundleRoot, task, stage, materials, integration: stage === "build-code" && effectiveScope === "integration" });
   writeTestSummary({ bundleRoot, task, materials, sourceSnapshotTree: source.snapshotTree, reviewKind, integration: stage === "build-code" && effectiveScope === "integration" });
-  if (boundedVerifyCodeDiff) {
-    const fixedDeliveryBytes = filesUnder(bundleRoot).reduce((total, path) => total + statSync(join(bundleRoot, ...path.split("/"))).size, 0);
-    const includedDiffBudgetBytes = Math.max(0, REVIEW_PACKET_MAX_DELIVERY_BYTES - fixedDeliveryBytes - VERIFY_CODE_PACKET_METADATA_RESERVE_BYTES);
-    bundleDiffIndex = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, stage, includedDiffBudgetBytes });
-  }
   // Context is never inferred from repository size or file membership. Every
   // provider-visible source excerpt is named by a validated stage map anchor.
   // Deferred verify-code packets build the diff index first so a shard-backed
@@ -2222,11 +2128,6 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   const manifestBytes = Buffer.from(manifest, "utf8");
   const deliveryManifest = [...entries, { path: "manifest.json", bytes: manifestBytes.length, sha256: sha256(manifestBytes) }];
   const deliveryBytes = deliveryManifest.reduce((total, entry) => total + entry.bytes, 0);
-  if (deliveryBytes > REVIEW_PACKET_MAX_DELIVERY_BYTES) {
-    const error = new Error(`MATERIAL_TOO_LARGE: review packet exceeds ${Math.round(REVIEW_PACKET_MAX_DELIVERY_BYTES / 1024)} KiB after content deduplication and semantic slicing`);
-    error.code = "MATERIAL_TOO_LARGE";
-    throw error;
-  }
   const sourcePrefix = relative(resolve(attachmentRoot), bundleRoot).replaceAll("\\", "/");
   return Object.freeze({
     bundleRoot,

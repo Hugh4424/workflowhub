@@ -2,8 +2,8 @@
   "schema_version": 1,
   "skill": "spec-specify",
   "files": [
-    { "path": "SKILL.md", "sha256": "90d75bf7a371b334e4fe362ad08a04d669b1a0368c3b9fbeedb8f046c0beb4fd" },
-    { "path": "templates/spec-template.md", "sha256": "556f99ec82e77129a43dca9438cf9c76fa425848c24df773f76624d49d19248e" }
+    { "path": "SKILL.md", "sha256": "453b4e5ad35b48ab75dc55329217d94eb9032cd5539a71cfd7ffe25c4c52c724" },
+    { "path": "templates/spec-template.md", "sha256": "c32dc40e5d6b9e795b1094e364809fb6978b6f4b441a22b54978e32966ab9f73" }
   ],
   "sources": [
     {

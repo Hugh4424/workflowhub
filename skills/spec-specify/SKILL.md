@@ -5,10 +5,21 @@ description: Draft a specification from frozen decision material using controlle
 
 # Spec Specify
 
+## Post-cohort specification contract
+
+For post-cohort authoring, `build-plan` invokes this skill. The output has a
+readable narrative spine and one `Appendix A` contract appendix. Appendix A is
+the exclusive authority for AC condition, behavior, measurable pass criterion,
+failure condition, and expected evidence; the narrative may point to it but
+must not duplicate those criteria. The four discoverable translations are
+requirement explanation, acceptance flow, test standard, and architecture
+boundary. This changes no pre-cohort material reader.
+
 Input is decision/scope content plus controlled `readArtifact(name)` and
-`writeArtifact(name, content)` callbacks supplied by build-spec. This component
-does not receive task identity, storage configuration, workspace paths, or an
-ambient shell location.
+`writeArtifact(name, content)` callbacks supplied by the owning author stage:
+`build-plan` for post-cohort tasks and `build-spec` only for authenticated
+pre-cohort records. This component does not receive task identity, storage
+configuration, workspace paths, or an ambient shell location.
 
 When the host provides a stage-input packet, consume only that frozen packet:
 retain its `task_id`, stage, `material_revision`, `snapshot_tree`, source

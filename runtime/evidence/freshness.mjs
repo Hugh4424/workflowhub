@@ -4,7 +4,7 @@ import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
+import { CLOSE_PLAN_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalFullTestReceipt, validateCanonicalQualityFact, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateSchema } from "../review/schema-validator.mjs";
@@ -467,14 +467,19 @@ function authenticateExecutionLeaf(value, fact, read, dependencies, key, scenari
     if (stream === "stdout") stdout = raw;
     dependencies[outputKey] = "current";
   }
-  if (subject.status === "passed") {
+  if (["passed", "deferred", "unavailable"].includes(subject.status)) {
     const ids = scenario?.acceptance_criterion_ids ?? (() => {
       const parsed = JSON.parse(Buffer.isBuffer(stdout) ? new TextDecoder("utf-8", { fatal: true }).decode(stdout) : stdout);
       return parsed.entries.map((entry) => entry.acceptance_criterion_id);
     })();
     const rows = deriveAcceptanceExecutionAssertions(stdout, ids);
     const actual = rows.find((row) => row.acceptance_criterion_id === value.subject);
-    if (!actual || JSON.stringify(actual.assertions) !== JSON.stringify(subject.assertions)) throw new Error("nested assertions do not match the actual child output");
+    const declaredOutcome = subject.outcome ?? (subject.status === "passed" ? "achieved" : null);
+    if (!actual || JSON.stringify(actual.assertions) !== JSON.stringify(subject.assertions)
+        || declaredOutcome === null || actual.outcome !== declaredOutcome
+        || acceptanceExecutionOutcomeStatus(actual.outcome) !== subject.status) {
+      throw new Error("nested assertions or outcome do not match the actual child output");
+    }
   }
   return actor;
 }
@@ -512,7 +517,7 @@ function authenticateE2eExecutionStageQuality(value, fact, read, dependencies, k
         if (criterionIds.has(nested.subject)) throw new Error("nested execution has duplicate AC evidence");
         criterionIds.add(nested.subject);
         const leafActor = authenticateExecutionLeaf(nested, fact, read, dependencies, nestedKey, item, binding);
-        if (!sameActor(actor, leafActor) || (value.status === "passed" && nested.status !== "passed")) throw new Error("nested execution AC did not pass under the aggregate actor");
+        if (!sameActor(actor, leafActor)) throw new Error("nested execution AC actor does not match the aggregate actor");
       }
       dependencies[nestedKey] = "current";
     }

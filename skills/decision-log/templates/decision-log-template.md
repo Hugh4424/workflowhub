@@ -15,6 +15,15 @@
 | --- | --- | --- | --- |
 | R-001 |  |  |  |
 
+## 原始声明层
+
+原始用户声明、调研原文和已确认事实只在此处保留可回读引用；后续 ADR 只引用它们，
+不得用摘要替换原文，也不得复制成第二份方向正文。
+
+## 三级追溯链
+
+`原始用户故事/初始需求 → 原始需求或调研 → ADR 决定`。每个 ADR 都必须能沿此链回读。
+
 ### 需求框架（先选一类，再逐步回填）
 
 - **framework**：`functional`（背景→问题→目标→方案→验收→扩展） / `research`（问题→论断→证据→裁决）
@@ -128,19 +137,17 @@ artifacts: [spec.md#FR-001]
 一句话或一个来源引用，不复制 spec：
 
 ```text
-### D-001
-- question/final_option:
-- recommendation/plain_language:
-- decision:
-- source_type/reference/exact_excerpt:
-- approval_binding:
-- facts_and_constraints:
-- Logic: source fact -> constraint -> chosen option -> expected result
-- choice_reason/impact:
-- consequences_and_risks:
-- rejected_alternatives:
-- unresolved_items/owner:
-- Supersedes:
+### ADR-001
+- **source**：[填写：原始声明或调研引用]
+- **decision**：[填写：已确认的选择]
+- **rationale**：[填写：事实、约束和取舍]
+- **consequence**：[填写：影响、风险和后果]
+- **supersedes**：[填写：被替代 ADR / N/A]
+- **原始声明层**：[填写：R-/事实锚点，不复制原文]
+- **三级追溯**：[填写：story/requirement → research → ADR]
+- **三档结论**：`confirmed` / `deferred` / `rejected`
+- **approval_binding**：[填写：真实用户确认或 N/A]
+- **owner/next_action**：[填写：延期或未决的 owner 与触发条件]
 module:
 requirement_ids: []
 derived_from: []
@@ -203,6 +210,10 @@ artifacts: []
 | OPEN-001 |  |  |  |
 
 ## Supersedes
+
+## Append-only 更正
+
+只追加更正记录；不得重写已确认 ADR。每条更正引用被替代 ADR、原因和新的 ADR。
 
 ## 文档结果
 

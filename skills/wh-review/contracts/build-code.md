@@ -60,7 +60,7 @@ candidate 行区间不得与任何 unified diff hunk 相交；否则 runner 直�
 截断；`packet-plan.delivery_mode` 必须诚实写 `inline_complete` 或 `selected_context`。
 完整 provider 可见文件 byte/hash 清单由 `manifest.json` 提供。`selected_context` 包含
 Phase 相关 FR/AC/合同摘录、compact maps、测试摘要和 anchors；全文 spec/maps 仅保留
-canonical ref/hash/bytes。总交付超过 330 KiB 时必须在 dispatch 前失败。
+canonical ref/hash/bytes。完整 manifest 是 provider 可见附件的唯一 byte/hash 边界；本地不设总交付 byte cap，也不因大小在 dispatch 前失败。provider 自身的能力或 context 限制必须保留为真实 transport/provider 事实，不能截断或伪造本地拒绝。
 大 Phase 的 full change-map 也只存 canonical audit；provider 版本只保留
 change ID、path、status 和 hunk IDs。`selected_context` 对已经由 included
 diff shard 覆盖的 anchor 不再重复交付 `context/<anchor>.txt`；只有未被 shard

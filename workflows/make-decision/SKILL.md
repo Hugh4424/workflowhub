@@ -298,76 +298,18 @@ decision and questions to the user.
    A rejection leads to a bounded revision of the same task; it does not create
    a successor task.
 
-The old interaction aggregate still has a compatibility `clarify` slot because
-its existing runtime validator is owned by the later build-spec handoff. In
-this stage that slot is not a make-decision Clarify execution or confirmation;
-Only the current build-spec Clarify outcome proves that activity; this compatibility slot does not.
-
-After the user confirms the final current decision, the current WorkflowHub session assembles
-exactly one interaction aggregate with these fields and submits it through the existing
-`stage-runtime run --action=execute` make-decision path as `interaction_aggregate`. The official
-stage handler and existing `TaskKernel` interaction publisher are the sole product writer: the
-session must not write `quality/evidence/interactions/<sha256>.json` directly. This aggregate is
-an existing quality fact consumed by the declared make-decision detail-review/quality-fact
-contract; its owner is make-decision. The consumer, owner, test, and retirement condition are
-recorded in the existing `decision-log` catalog entry. It is not one of the four materials, not a
-status machine, and not a permission to start or continue work. If it is missing or unavailable,
-the formal completion claim stays incomplete while the same task can continue to repair the
-decision and its facts.
-
-```json
-{
-  "schema_version": "workflowhub-interaction-aggregate.v1",
-  "task_id": "<current task>",
-  "stage": "make-decision",
-  "snapshot_tree": "<current snapshot tree>",
-  "talk": {
-    "status": "completed",
-    "round_count": 3,
-    "architecture_direction_covered": true,
-    "user_outcome_covered": true,
-    "lifecycle_rounds": [
-      {
-        "interaction_type": "talk",
-        "events": [
-          { "event": "ask", "round": 1, "card_ref": "...", "card_hash": "...", "questions": [] },
-          { "event": "wait", "round": 1, "card_ref": "...", "card_hash": "..." },
-          { "event": "reply", "round": 1, "card_ref": "...", "card_hash": "...", "reply_ref": "...", "reply_hash": "...", "source": "user", "answers": [] },
-          { "event": "resume", "round": 1, "card_ref": "...", "card_hash": "...", "reply_ref": "...", "reply_hash": "...", "status": "resumed" }
-        ]
-      }
-    ]
-  },
-  "clarify": {
-    "status": "resolved",
-    "open_direction_changing_questions": 0,
-    "resolved_by": "user_reply"
-  },
-  "decision_ref": "<current decision-log ref>",
-  "decision_hash": "<current decision-log hash>"
-}
-```
-
-`round_count` is the actual number of completed Talk rounds: it is `3` when
-the conditional Talk round 4 is not triggered and `4` when a direction-level
-or acceptance-impacting dispute requires it. Serialize the aggregate once and
-pass the exact bytes through the official publisher, which hashes them and
-writes the immutable record to `quality/evidence/interactions/<sha256>.json`.
-The path hash must match the stored bytes. Bind only the current task,
-`make-decision` stage,
-current material context, and user-confirmed decision. `lifecycle_rounds` 只保留
-当前会话用于验证 round、card、reply 和顺序的最小结构化事实；正式 handler 会在
-接受 aggregate 前逐轮调用现有 lifecycle validator。它仍是 aggregate 内的一部分，
-不是独立 per-round writer、历史 ledger 或新的状态机。`snapshot_tree`
-field binds the current source tree for evidence integrity only; it is not
-snapshot lineage, a selector, or a delivery gate. Do not create a run,
-revision, latest pointer,
+Current make-decision records real Talk/Grill replies, selected OI dispositions,
+the current decision-log, independent review facts, and the accepted human
+confirmation through their existing owners. Do not submit an
+`interaction_aggregate`, write `quality/evidence/interactions/**`, or create a
+replacement receipt, per-round ledger, latest pointer, or state machine.
+Historical aggregate bytes remain read-only compatibility material only. The
+current completion claim derives from the direct decision-log fields, current
+review facts, and human confirmation; missing quality facts remain explicit and
+do not stop same-task repair. Do not create a run, revision, latest pointer,
 ledger, controlled-writer protocol, per-round writer, question-card archive, or
-Grill history. If the accepted decision changes before completion, assemble a
-new aggregate from the new final decision; never mutate an existing hash path.
-Retire this fact only when the named current consumers are removed or replaced
-by a separately reviewed constitutional change; do not add a replacement state
-object.
+Grill history. These direct facts add no new stage and are no gate for same-task
+repair.
 
 ## Execution model (M/S/B/P)
 
@@ -389,7 +331,7 @@ object.
 | 10 detail-advice | B+S | B 后台执行红/蓝审查；S 归纳并保留原始 ref |
 | 10b debate-detail | S 并行+M | 四角色 S 产细节裁决书；M 按分级规则登记 |
 | 第4轮 talk（detail findings） | M | 仅在方向级或影响验收的争议触发；M 独占问题卡与真实用户回复 |
-| 11 approve-decision | B+M | B 组装 interaction aggregate；M 签发用户确认 |
+| 11 approve-decision | B+M | B 汇总直接的 review/finding 事实；M 签发用户确认 |
 | 12 stage-end-spec-analyze | S+B | S/B 产语义 gap；M 处置，改变决策时重新确认 |
 | 13 publish-decision | M | M 发布决策与阶段末披露 |
 | 14 stage-reflection | M | M 产 judgment JSON；S 只提供统计事实 |
@@ -411,9 +353,9 @@ Do not claim this stage complete until Talk is resolved, any conditional Talk
 round 4 trigger is evaluated and handled, necessary research ran
 or has a truthful outcome, Grill ran, `decision-log.md` is current,
 independent review findings and transport facts are recorded, every finding has a
-disposition, the user explicitly confirmed the decision, and the content-addressed
-interaction aggregate binds that accepted decision. The aggregate is a completion
-fact, not a permit to continue working.
+disposition, and the user explicitly confirmed the decision through the existing
+confirmation record. Confirmation is a completion fact, not a permit to continue
+working.
 
 Missing or unavailable quality facts limit only the completion claim and do not
 prevent continued Talk, drafting, decision-log revision, or finding repair in
@@ -435,15 +377,15 @@ user to repeat Talk or Grill, and they need no index of the decision process.
 
 ## Stage-end consistency
 
-Ask for the user's final confirmation, assemble the immutable interaction
-aggregate, and then run `stage-end-spec-analyze` before `publish-decision`.
+Ask for the user's final confirmation and then run `stage-end-spec-analyze`
+before `publish-decision`.
 Invoke the existing `spec-analyze` skill on the original requirement, the
 current `decision-log.md`, the authenticated requirement projection, the
-complete Grill and review facts, the aggregate, the final confirmation, and
+complete Grill and review facts, the final confirmation, and
 all evidence actually produced in this stage. Check semantic coverage and real
 outcome evidence, not IDs, paths, hashes, or document existence alone. Repair
 any finding in make-decision; if a repair changes the decision, ask for
-confirmation again and rebuild the aggregate from the new decision. Do not
+confirmation again. Do not
 move the gap to build-spec. End with the shared six-part plain-language
 summary: current stage work, requirement coverage, upstream alignment,
 repairs made here, remaining risks, and the next stage boundary.

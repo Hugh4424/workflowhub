@@ -17,7 +17,7 @@ const stageReviewSteps = {
     skillRule: /editing `spec\.md` here does not[\s\S]{0,100}dispatch that completed review step again/i,
   },
   "build-plan": {
-    reviews: ["review-plan"],
+    reviews: ["merged-review"],
     successors: ["main-agent-disposes-findings"],
     skillRule: /advances to finding disposition and final analysis[\s\S]{0,120}do not dispatch that completed review step again/i,
   },
@@ -86,7 +86,7 @@ describe("review manifest and active-prose forward-progress contract", () => {
     expect(skill).toMatch(/editing `spec\.md` here does not[\s\S]{0,100}dispatch that completed review step again/i);
   });
 
-  it("keeps every existing formal-stage review scope as an independent forward-only step", () => {
+  it("keeps one current stage or phase review per declared scope and advances without task-level replay", () => {
     for (const [stage, contract] of Object.entries(stageReviewSteps)) {
       const manifest = loadManifest(stage);
       const bySlug = new Map(manifest.steps.map((step) => [step.step_slug, step]));

@@ -3038,7 +3038,6 @@ function normalizeOutlineReview(review) {
 export function analyzeDecisionOutline(decisionLogMarkdown, {
   taskId = null,
   directionReview = null,
-  interactionAggregate = null,
 } = {}) {
   const text = String(decisionLogMarkdown ?? "");
   const errors = [];
@@ -3104,15 +3103,7 @@ export function analyzeDecisionOutline(decisionLogMarkdown, {
     if (record.task_id !== recordTaskId) errors.push(`OI ${id} task_id is inconsistent with the current outline`);
     if (version !== outlineVersion) errors.push(`OI ${id} outline_version is inconsistent with the current outline`);
   }
-  const terminal = [];
   let openCount = 0;
-  let coreProofCount = 0;
-  const aggregateValue = interactionAggregate?.value ?? interactionAggregate;
-  const aggregateOiBindings = new Map(
-    (Array.isArray(aggregateValue?.oi_dispositions) ? aggregateValue.oi_dispositions : [])
-      .filter((binding) => object(binding) && typeof binding.oi_id === "string")
-      .map((binding) => [binding.oi_id, binding]),
-  );
   for (const [id, record] of byId.entries()) {
     const status = String(record.status ?? "").trim().toLowerCase();
     const category = String(record.category ?? "").trim().toLowerCase();
@@ -3140,37 +3131,6 @@ export function analyzeDecisionOutline(decisionLogMarkdown, {
       if (!outlineTerminalField(record, "reason")) errors.push(`OI ${id} not_applicable reason is missing`);
       if (!outlineTerminalField(record, "counterexample_boundary", "counterexample")) errors.push(`OI ${id} not_applicable counterexample boundary is missing`);
     }
-    if (core) {
-      // Core confirmation proof is carried by the aggregate's own
-      // `oi_dispositions` binding: the content-addressed aggregate names the
-      // task, outline version, OI, group, and selected disposition.  The OI
-      // record deliberately does NOT embed the aggregate ref/hash, because the
-      // record lives inside decision-log.md and embedding the address of the
-      // aggregate that must bind that same file's post-write bytes is a content
-      // self-reference with no fixed point.  Legacy records that still carry
-      // `interaction_ref`/`interaction_hash` stay readable; those fields are
-      // simply no longer the proof source.
-      if (!interactionAggregate) {
-        // The authenticated aggregate must be present: a self-reported ref/hash
-        // is not a Talk proof.  Keep the gap explicit when callers omit it.
-        errors.push(`OI ${id} core interaction proof is unavailable`);
-      } else {
-        const binding = aggregateOiBindings.get(id);
-        const expectedGroup = record.visible_group_id ?? record.batch_id;
-        const actualGroup = binding?.visible_group_id ?? binding?.batch_id;
-        const bindingCurrent = binding?.task_id === (taskId ?? recordTaskId)
-          && binding?.outline_version === outlineVersion
-          && binding?.oi_id === id
-          && actualGroup === expectedGroup
-          && binding?.selected_disposition === record.selected_disposition;
-        if (!bindingCurrent
-            || aggregateValue.task_id !== (taskId ?? recordTaskId)
-            || aggregateValue.stage !== "make-decision") {
-          errors.push(`OI ${id} core interaction proof is not current or does not bind its OI/group/disposition`);
-        } else coreProofCount += 1;
-      }
-    }
-    terminal.push(record);
   }
   const direction = normalizeOutlineReview(directionReview) ?? deriveQuestionsOnlyOutline(byId, outlineVersion, taskId ?? recordTaskId);
   let directionCurrent = false;
@@ -3217,7 +3177,6 @@ export function analyzeDecisionOutline(decisionLogMarkdown, {
     direction_snapshot: directionCurrent ? "passed" : "missing",
     no_open_items: openCount === 0 && byId.size > 0 ? "passed" : "missing",
     terminal_fields: errors.every((error) => !/confirmed|deferred|not_applicable|status is invalid|impact_dimensions/i.test(error)) ? "passed" : "missing",
-    interaction_proof: coreProofCount === terminal.filter((record) => (record.impact_dimensions ?? []).some((item) => ["goal", "scope", "acceptance"].includes(item))).length ? "passed" : "missing",
   };
   const ok = Object.values(components).every((status) => status === "passed") && errors.length === 0;
   return Object.freeze({
@@ -3364,7 +3323,6 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   requirementCoverageOutputs = [],
   taskId = null,
   directionReview = null,
-  interactionAggregate = null,
   requireOutline = false,
 } = {}) {
   const errors = [];
@@ -3382,7 +3340,7 @@ export function analyzeDecisionConvergence(decisionLogMarkdown, {
   const riskBody = meaningfulSectionBody(text, /^(?:开放问题|风险|延期|未决|风险与延期交接|open questions|risks|deferred)$/i);
   const coreRequirementBody = meaningfulSectionBody(text, /^(?:核心需求|core requirement)$/i);
   const structuredConvergence = structuredConvergenceFacts(text);
-  const outline = analyzeDecisionOutline(text, { taskId, directionReview, interactionAggregate });
+  const outline = analyzeDecisionOutline(text, { taskId, directionReview });
 
   const requirementCoverage = hasSection(/^#{1,3}\s*(?:原始需求|requirement|来源与决策映射|需求→决定|需求矩阵)/im)
     || /(?:R-001|原始需求|requirement).*(?:D-001|决定|decision)/i.test(text);
@@ -3584,11 +3542,20 @@ export function buildDecisionCoverageAudit({
   decisionLogHash,
   sourceItems = [],
   mappings = [],
+  declared_counts = null,
+  known_inventory = null,
 } = {}) {
   if (typeof decisionLogRef !== "string" || !SHA256_HEX.test(decisionLogHash ?? "")) {
     throw new TypeError("decision log ref/hash is required");
   }
   if (!Array.isArray(sourceItems) || !Array.isArray(mappings)) throw new TypeError("sourceItems and mappings must be arrays");
+  const failures = [];
+  const failure = (code, source, message) => failures.push(Object.freeze({
+    code,
+    source_item_ref: typeof source?.source_item_ref === "string" ? source.source_item_ref : null,
+    source_anchor: typeof source?.source_anchor === "string" ? source.source_anchor : null,
+    message,
+  }));
   const mappingBySource = new Map();
   for (const mapping of mappings) {
     if (mappingBySource.has(mapping?.source_item_ref)) throw new Error(`duplicate decision coverage mapping: ${mapping?.source_item_ref}`);
@@ -3601,11 +3568,31 @@ export function buildDecisionCoverageAudit({
     }
     if (seenSources.has(source.source_item_ref)) throw new Error(`duplicate decision source item: ${source.source_item_ref}`);
     seenSources.add(source.source_item_ref);
+    if (typeof source.source_anchor !== "string" || source.source_anchor.trim() === "") {
+      failure("missing_source_anchor", source, "source item has no authenticated source_anchor");
+    }
+    if (typeof source.exact_excerpt !== "string" || source.exact_excerpt.trim() === "") {
+      failure("missing_exact_excerpt", source, "source item has no exact requirement excerpt");
+    }
+    if (source.requirement_strength !== "must") {
+      failure("requirement_strength_weakened", source, "source item requirement_strength must remain must");
+    }
     const mapping = mappingBySource.get(source.source_item_ref);
-    if (!mapping) return { ...source, coverage_status: "missing", decision_location: null };
+    if (!mapping) {
+      failure("missing_disposition", source, "source item has no explicit coverage disposition");
+      return { ...source, coverage_status: "missing", decision_location: null };
+    }
     if (mapping.source_item_hash !== source.source_item_hash) throw new Error(`decision source hash mismatch: ${source.source_item_ref}`);
     if (!new Set(["covered", "accepted_omission"]).has(mapping.coverage_status)) {
       throw new Error(`invalid decision coverage status: ${source.source_item_ref}`);
+    }
+    if (typeof mapping.disposition !== "string" || mapping.disposition.trim() === "") {
+      failure("missing_disposition", source, "coverage mapping has no explicit disposition");
+    }
+    if (mapping.coverage_status === "accepted_omission"
+        && (typeof mapping.owner !== "string" || mapping.owner.trim() === ""
+          || typeof mapping.exclusion_reason !== "string" || mapping.exclusion_reason.trim() === "")) {
+      failure("accepted_omission_missing_owner_or_reason", source, "accepted omission requires owner and exclusion_reason");
     }
     return {
       ...source,
@@ -3619,11 +3606,83 @@ export function buildDecisionCoverageAudit({
     counts[item.coverage_status] += 1;
     return counts;
   }, { covered: 0, accepted_omission: 0, missing: 0 });
+  if (sourceItems.length === 0) {
+    failure("source_inventory_unavailable", null, "authenticated raw requirement inventory is unavailable");
+  }
+  const expectedCounts = {
+    source_items: items.length,
+    covered: summary.covered,
+    accepted_omission: summary.accepted_omission,
+    missing: summary.missing,
+  };
+  const countSource = items[0] ?? null;
+  if (!declared_counts || typeof declared_counts !== "object"
+      || Object.entries(expectedCounts).some(([key, value]) => declared_counts[key] !== value)) {
+    failure("declared_counts_do_not_close", countSource, "declared coverage counts do not equal the observed item counts");
+  }
+  const inventoryPresent = known_inventory && typeof known_inventory === "object" && !Array.isArray(known_inventory);
+  if (!inventoryPresent) {
+    failure("known_inventory_unavailable", countSource, "known inventory is unavailable; this audit makes no global authority claim");
+  }
+  const stableIds = Array.isArray(known_inventory?.stable_ids) ? known_inventory.stable_ids : [];
+  const groupedIds = new Map();
+  for (const entry of stableIds) {
+    if (typeof entry?.id !== "string" || entry.id.trim() === "" || typeof entry.position !== "string" || entry.position.trim() === "") continue;
+    const positions = groupedIds.get(entry.id) ?? [];
+    positions.push(entry.position);
+    groupedIds.set(entry.id, positions);
+  }
+  const authorityFindings = [...groupedIds.entries()]
+    .filter(([, positions]) => positions.length > 1)
+    .map(([id, positions]) => Object.freeze({ code: "duplicate_stable_id", id, positions: Object.freeze([...positions]) }));
+  for (const entry of authorityFindings) {
+    failure("duplicate_stable_id", countSource, `known inventory duplicates ${entry.id}: ${entry.positions.join(", ")}`);
+  }
+  const samples = Array.isArray(known_inventory?.fact_samples)
+    ? known_inventory.fact_samples.map((entry) => Object.freeze({ ...entry }))
+    : [];
+  const requiredFactTypes = ["product_goal", "user_flow", "cross_task_requirement", "acceptance"];
+  const factAuthorityFindings = [];
+  for (const factType of requiredFactTypes) {
+    const typed = samples.filter((entry) => entry?.fact_type === factType);
+    if (typed.length !== 1) {
+      failure("authority_sample_cardinality", countSource, `known inventory requires exactly one ${factType} sample`);
+      continue;
+    }
+    const sample = typed[0];
+    if (["sample", "authority_file", "conclusion", "evidence"].some((field) => typeof sample[field] !== "string" || sample[field].trim() === "")) {
+      failure("authority_sample_incomplete", countSource, `${factType} sample must include sample, authority_file, conclusion, and evidence`);
+    }
+  }
+  const authorityByFact = new Map();
+  for (const sample of samples) {
+    if (typeof sample?.fact_type !== "string" || typeof sample?.sample !== "string" || typeof sample?.authority_file !== "string") continue;
+    const key = `${sample.fact_type}\0${sample.sample}`;
+    const files = authorityByFact.get(key) ?? new Set();
+    files.add(sample.authority_file);
+    authorityByFact.set(key, files);
+  }
+  for (const [key, files] of authorityByFact) {
+    if (files.size < 2) continue;
+    const [fact_type, sample] = key.split("\0");
+    const finding = Object.freeze({ code: "duplicate_fact_authority", fact_type, sample, authority_files: Object.freeze([...files].sort()) });
+    factAuthorityFindings.push(finding);
+    failure("duplicate_fact_authority", countSource, `${fact_type} sample declares multiple authorities: ${finding.authority_files.join(", ")}`);
+  }
+  const authority = Object.freeze({
+    scope: "known_inventory",
+    duplicate_authorities: authorityFindings.length + factAuthorityFindings.length,
+    findings: Object.freeze([...authorityFindings, ...factAuthorityFindings]),
+    samples: Object.freeze(samples),
+  });
   return Object.freeze({
     decision_log_ref: decisionLogRef,
     decision_log_hash: decisionLogHash,
     items: Object.freeze(items),
     summary: Object.freeze(summary),
+    status: failures.length === 0 && summary.missing === 0 ? "passed" : "incomplete",
+    failures: Object.freeze(failures),
+    authority,
   });
 }
 

@@ -6,6 +6,14 @@ version: 4.1.0
 
 # Build Spec
 
+## Cohort status
+
+For the post-cohort workflow, `build-spec` is historical read-only: it preserves
+pre-cohort records and performs no active authoring. `build-plan` owns current
+specification, clarification, phase, and execution-index authoring. The legacy
+instructions below apply only while replaying or reading an authenticated
+pre-cohort record; they do not re-register a post-cohort dependency.
+
 ## 统一回退协议
 
 五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
@@ -94,6 +102,9 @@ Review is a quality fact, not a progression gate or permission to continue
 working. Missing or unavailable quality evidence lowers the completion claim;
 it does not block same-task drafting or repair. An unavailable review is never
 `pass`.
+
+UI initialization, readiness, and the existing plan-design-review are advisory
+facts, no gate for same-task drafting or repair.
 
 ### Stage-input packet and context facts
 

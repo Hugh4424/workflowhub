@@ -9,6 +9,7 @@ let validateDecisionEntry;
 let validateDecisionLogContract;
 let validateDecisionCorrectionAppendix;
 let buildDecisionCorrectionAppendix;
+let buildDecisionCoverageAudit;
 let validateDecisionLogStepUpdateContract;
 let moduleLoadError;
 
@@ -19,6 +20,7 @@ beforeAll(async () => {
       validateDecisionLogContract,
       validateDecisionCorrectionAppendix,
       buildDecisionCorrectionAppendix,
+      buildDecisionCoverageAudit,
       validateDecisionLogStepUpdateContract,
     } = await import("../runtime/stage/stage-content-contracts.mjs"));
   } catch (error) {
@@ -35,6 +37,7 @@ function requireApi() {
   expect(validateDecisionLogContract).toBeTypeOf("function");
   expect(validateDecisionCorrectionAppendix).toBeTypeOf("function");
   expect(buildDecisionCorrectionAppendix).toBeTypeOf("function");
+  expect(buildDecisionCoverageAudit).toBeTypeOf("function");
   expect(validateDecisionLogStepUpdateContract).toBeTypeOf("function");
 }
 
@@ -256,6 +259,75 @@ describe("accepted decision coverage is exact and hash-bound", () => {
     };
     input.coverage.summary = { covered: 0, accepted_omission: 1, missing: 0 };
     expectRejected(validateDecisionLogContract(input), /risk-acceptance|omission|schema|专用/i);
+  });
+});
+
+function auditedCoverageInput() {
+  const item = {
+    source_item_ref: "source://requirement/coverage-1",
+    source_item_hash: HASH_B,
+    source_anchor: "decision-log.md#L24",
+    exact_excerpt: "The system must preserve every source requirement.",
+    requirement_strength: "must",
+  };
+  return {
+    decisionLogRef: "artifacts/decision-log.md",
+    decisionLogHash: HASH_A,
+    sourceItems: [item],
+    mappings: [{
+      source_item_ref: item.source_item_ref,
+      source_item_hash: item.source_item_hash,
+      coverage_status: "covered",
+      disposition: "covered",
+      decision_location: { kind: "main", ref: "artifacts/decision-log.md", entry_index: 0 },
+    }],
+    declared_counts: { source_items: 1, covered: 1, accepted_omission: 0, missing: 0 },
+  };
+}
+
+describe("T005 decision coverage and authority RED contract", () => {
+  it.each([
+    ["source anchor", (input) => { delete input.sourceItems[0].source_anchor; }, "missing_source_anchor"],
+    ["explicit disposition", (input) => { delete input.mappings[0].disposition; }, "missing_disposition"],
+    ["requirement strength", (input) => { input.sourceItems[0].requirement_strength = "should"; }, "requirement_strength_weakened"],
+    ["accepted omission owner/reason", (input) => {
+      input.mappings[0].coverage_status = "accepted_omission";
+      input.mappings[0].disposition = "accepted_omission";
+      input.declared_counts = { source_items: 1, covered: 0, accepted_omission: 1, missing: 0 };
+    }, "accepted_omission_missing_owner_or_reason"],
+    ["declared count closure", (input) => { input.declared_counts.covered = 2; }, "declared_counts_do_not_close"],
+  ])("rejects %s with an item id and source position", (_label, mutate, expectedCode) => {
+    requireApi();
+    const input = auditedCoverageInput();
+    mutate(input);
+    const audit = buildDecisionCoverageAudit(input);
+    expect(audit).toMatchObject({ status: "incomplete" });
+    expect(audit.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: expectedCode, source_item_ref: "source://requirement/coverage-1" }),
+    ]));
+  });
+
+  it("reports duplicate stable IDs and limited four-class authority samples without claiming a global result", () => {
+    requireApi();
+    const input = auditedCoverageInput();
+    input.known_inventory = {
+      stable_ids: [
+        { id: "FR-COVER-001", authority_file: "spec.md", position: "spec.md#L1" },
+        { id: "FR-COVER-001", authority_file: "plan.md", position: "plan.md#L2" },
+      ],
+      fact_samples: [
+        { fact_type: "product_goal", sample: "preserve every source requirement", authority_file: "spec.md", conclusion: "one owner", evidence: "spec.md#L1" },
+        { fact_type: "user_flow", sample: "confirmation remains available", authority_file: "plan.md", conclusion: "one owner", evidence: "plan.md#L2" },
+        { fact_type: "cross_task_requirement", sample: "CARD-01 topology remains read-only", authority_file: "tasks.md", conclusion: "one owner", evidence: "tasks.md#L3" },
+        { fact_type: "acceptance", sample: "coverage fact remains incomplete", authority_file: "spec.md", conclusion: "one owner", evidence: "spec.md#L4" },
+      ],
+    };
+    const audit = buildDecisionCoverageAudit(input);
+    expect(audit.authority).toMatchObject({ scope: "known_inventory", duplicate_authorities: 1 });
+    expect(audit.authority.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate_stable_id", id: "FR-COVER-001", positions: ["spec.md#L1", "plan.md#L2"] }),
+    ]));
+    expect(audit.authority.samples).toHaveLength(4);
   });
 });
 

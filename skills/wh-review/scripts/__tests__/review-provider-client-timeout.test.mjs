@@ -1,4 +1,7 @@
 import { expect, test } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 
 const materials = {
@@ -9,7 +12,7 @@ const materials = {
   deliveryManifest: [],
 };
 
-test("default broker wait is owned by the 3rd-review runtime", () => {
+test("managed broker CLI has no implicit local deadline", () => {
   const client = new ReviewProviderClient({ command: [process.execPath], config: "fixture-config" });
   expect(client.timeoutMs).toBeNull();
 });
@@ -27,6 +30,46 @@ test("client bounds a hanging broker and returns a typed timeout", async () => {
     prompt: "review",
     minimumHeterologous: 1,
   })).rejects.toMatchObject({ code: "PROCESS_TIMEOUT" });
+});
+
+test("client abort kills its local broker process group and returns a typed cancellation", async () => {
+  const root = mkdtempSync(join(tmpdir(), "review-client-abort-"));
+  const marker = join(root, "broker.pid");
+  const controller = new AbortController();
+  let childPid = null;
+  try {
+    const client = new ReviewProviderClient({
+      command: [process.execPath, "-e", `require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000);`, marker],
+      config: "fixture-config",
+      timeoutMs: 1_000,
+    });
+    const pending = client.runGroup({
+      hostProvider: "codex/terra",
+      providers: ["codex/luna"],
+      materials,
+      prompt: "review",
+      minimumHeterologous: 1,
+      signal: controller.signal,
+    });
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      try {
+        childPid = Number(readFileSync(marker, "utf8"));
+        if (Number.isInteger(childPid) && childPid > 0) break;
+      } catch { /* child has not published its local pid marker yet */ }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(childPid).toEqual(expect.any(Number));
+    controller.abort(Object.assign(new Error("test cancellation"), { code: "REVIEW_CANCELLED" }));
+    await expect(pending).rejects.toMatchObject({ code: "PROCESS_CANCELLED" });
+    expect(() => process.kill(childPid, 0)).toThrow(/ESRCH/);
+  } finally {
+    controller.abort();
+    if (Number.isInteger(childPid) && childPid > 0) {
+      try { process.kill(childPid, "SIGKILL"); } catch { /* expected after abort */ }
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 const member = (provider, adapter = provider.split("/", 1)[0], status = "completed") => ({

@@ -16,7 +16,7 @@ import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { isExecutionRecordOnlyMaterialDelta, isStageMaterialOnlySnapshotDelta, materialRevisionFromValues, taskExecutionRecordOnly } from "../task/git-worktree-snapshot.mjs";
 import { loadStageManifest } from "./step-manifest.mjs";
 import { STAGE_SPEC_ANALYZE_PROFILES, projectAcceptanceExecutionData, validateStageSpecAnalyzeProfile } from "./stage-content-contracts.mjs";
-import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
+import { STAGE_OUTCOME_REF, STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, acceptanceExecutionOutcomeStatus, deriveAcceptanceExecutionAssertions, isHumanConfirmationVersion, validateAcceptanceExecutionEvidence, validateCanonicalTestReceipt, validateHumanConfirmation, validateStageOutcomeProducerIdentity, validateStageOutcomeProof } from "../evidence/canonical-evidence-validators.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { canonicalReviewFindings, isActionableSeriousFinding } from "../review/stage-review-disposition.mjs";
 import { loadStageSkillManifest, validateSkillConsumerBinding, validateSkillOutcomeLifecycle } from "./stage-skill-runtime.mjs";
@@ -24,7 +24,7 @@ import { isDateTime, normalizeStageReflectionAvailability, publishStageReflectio
 import { STAGE_HANDOFF_STAGES, publishStageHandoff, stageHandoffFailure } from "./stage-handoff.mjs";
 import { validateBrowserQaEvidence } from "../evidence/stage-content-evidence.mjs";
 import { classifyProtocolError } from "./protocol-error-whitelist.mjs";
-import { writeStageRow } from "../task/task-store.mjs";
+import { initializeTaskStore, writeStageRow } from "../task/task-store.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
 import { runWorkspaceCommand, runCandidateWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { authenticateOrdinaryExecutionReview, authenticateExecutionConfirmation, authenticateCodeReviewRepairs, authenticateStageReviewResult } from "../evidence/freshness.mjs";
@@ -1088,6 +1088,7 @@ export async function runStageEndReflection(context, {
   execute,
   judgment = null,
   attemptId = null,
+  handlerResult = null,
   observation = null,
   stageOutcome = null,
   failureStageOutcome = null,
@@ -1121,7 +1122,7 @@ export async function runStageEndReflection(context, {
    * facts. A row write failure is surfaced as `stage_row_error` and is never
    * reported as a successful stage end.
    */
-  const withStageRow = (reflectionResultValue, handoffFacts = null) => {
+  const withStageRow = (reflectionResultValue, handoffFacts = null, { handoffPending = false } = {}) => {
     const handoff = handoffFacts === null ? null : handoffFacts.handoff;
     const stageResult = (rowError = null) => Object.freeze({
       ...reflectionResultValue,
@@ -1129,6 +1130,12 @@ export async function runStageEndReflection(context, {
       ...(rowError === null ? {} : { stage_row_error: rowError }),
     });
     try {
+      // CLI bootstrap initializes the store first, but this runtime entry point
+      // is also the canonical writer for a directly constructed task context.
+      // Re-enter the same idempotent store owner before reading or replacing
+      // the one stage row; otherwise a valid current-session reflection fails
+      // only because facts.jsonl has not been materialized yet.
+      initializeTaskStore(ctx.task.taskPath, { taskId: ctx.identity.taskId });
       // A handoff stage's snapshot was already resolved by the handoff
       // transaction; `null` keeps the previous re-resolution for both paths.
       let snapshot = handoffFacts === null ? null : handoffFacts.snapshot;
@@ -1138,7 +1145,9 @@ export async function runStageEndReflection(context, {
       // `handoff` field stays empty-with-reason instead of carrying another
       // task's facts. verify-code declares no handoff item at all, so it never
       // parses the declaration and states why it hands nothing over.
-      const handoffItems = handoffFacts === null
+      const handoffItems = handoffPending
+        ? { value: null, reason: "the current stage handoff is pending publication" }
+        : handoffFacts === null
         ? { value: null, reason: `${stage} declares no handoff item and publishes no current stage handoff` }
         : handoffDeclaration(handoffFacts.materials);
       const materialScopeRevision = handoffFacts === null
@@ -1181,7 +1190,10 @@ export async function runStageEndReflection(context, {
       // row records that conducted review with its named reference instead of
       // the not_run placeholder; a later stage end never erases a fact the row
       // already records (FR-C6-009 / AC-C6-007).
-      const reviewFacts = mergeStageReviewFacts(authenticatedStageReviewFacts(stage, handoffStageOutcome), existingStageRow);
+      const reviewFacts = mergeStageReviewFacts(
+        handlerStageReviewFacts(stage, handlerResult) ?? authenticatedStageReviewFacts(stage, handoffStageOutcome),
+        existingStageRow,
+      );
       const stageRow = mergeProtocolErrorTraceStageRow({
         record_kind: "stage",
         stage,
@@ -1205,7 +1217,9 @@ export async function runStageEndReflection(context, {
           // completed implementation. A handoff stage is complete only when its
           // canonical current handoff publication succeeded; an unavailable or
           // stale handoff is an incomplete execution fact, not a delivered stage.
-          implementation_completion: handoffFacts === null
+          implementation_completion: handoffPending
+            ? "incomplete"
+            : handoffFacts === null
             ? stageStatus !== "completed" ? "incomplete" : "completed"
             : stageStatus === "completed" && handoff.status === "published" && handoff.current === true ? "completed" : "incomplete",
           stage_quality: "incomplete",
@@ -1235,6 +1249,11 @@ export async function runStageEndReflection(context, {
     let materialScopeRevision = null;
     let materials = null;
     let handoff;
+    // The handoff renderer reads the current stage row. Write this same row
+    // first (explicitly pending), then replace it with the handoff result.
+    // This does not introduce another disposition store or writer.
+    const provisional = withStageRow(reflectionResultValue, null, { handoffPending: true });
+    if (provisional.stage_row_error) return provisional;
     try {
       snapshot = ctx.kernel.currentVNextSnapshot();
       materials = ctx.artifacts && typeof ctx.artifacts.read === "function"
@@ -2092,6 +2111,56 @@ function authenticatedStageReviewFacts(stage, stageOutcome) {
   return null;
 }
 
+const STAGE_ROW_DISPOSITION_FIELDS = Object.freeze([
+  "owner", "deadline", "anchor", "previous_cause", "cause", "retry", "elapsed_ms", "reply_ref",
+]);
+const STAGE_ROW_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "accepted_risk", "needs_human", "user_decided"]);
+
+/**
+ * Project the authenticated build-plan handler result into the one stage-row
+ * carrier. Routing provenance stays in the quality fact; only stable fields
+ * the handoff reader owns are copied here. `user_decided` retains its bound
+ * reply reference, so the row remains a faithful projection of the terminal
+ * disposition rather than turning a completed user decision into a failure.
+ */
+function handlerStageReviewFacts(stage, handlerResult) {
+  if (stage !== "build-plan" || !handlerResult || typeof handlerResult !== "object") return null;
+  const review = handlerResult.facts?.review;
+  if (!review || typeof review !== "object") return null;
+  const items = handlerResult.facts?.finding_dispositions?.items;
+  if (!Array.isArray(items)) throw new Error("build-plan handler result has no finding disposition items for the stage row");
+  const projected = items.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`build-plan finding disposition ${index} cannot be projected to the stage row`);
+    }
+    if (typeof item.finding_id !== "string" || item.finding_id.trim() === "") {
+      throw new Error(`build-plan finding disposition ${index} has no finding_id for the stage row`);
+    }
+    if (!STAGE_ROW_DISPOSITION_STATUSES.has(item.status)) {
+      throw new Error(`build-plan finding disposition ${item.finding_id} status ${String(item.status)} has no stage-row equivalent`);
+    }
+    const row = { finding: item.finding_id, disposition: item.status };
+    for (const field of STAGE_ROW_DISPOSITION_FIELDS) {
+      if (item[field] !== undefined) row[field] = item[field];
+    }
+    return row;
+  });
+  if (review.status === "recorded") {
+    if (typeof review.result_ref !== "string" || review.result_ref.trim() === "") {
+      throw new Error("recorded build-plan review has no result_ref for the stage row");
+    }
+    return { review_origin: "conducted", review_result_ref: { value: review.result_ref }, finding_dispositions: projected };
+  }
+  if (review.status === "unavailable") {
+    return {
+      review_origin: "unavailable",
+      review_result_ref: { value: null, reason: review.error?.message ?? "the build-plan review is unavailable" },
+      finding_dispositions: projected,
+    };
+  }
+  throw new Error(`build-plan review status ${String(review.status)} cannot be projected to the stage row`);
+}
+
 /**
  * The review fact group already recorded on a stage row. `not_run` is the
  * placeholder a stage end writes when it has no review fact of its own, so it is
@@ -2442,12 +2511,23 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     ...(result.error ? { error: { code: result.error.code ?? "ACCEPTANCE_PROCESS_ERROR", message: result.error.message } } : {}),
   };
   const evidenceRefs = ids.map((id) => {
-    const assertions = rows.find((row) => row.acceptance_criterion_id === id)?.assertions ?? [];
-    const status = inconclusive ? "missing" : !processPassed || assertions.some((assertion) => assertion.result === "failed") ? "failed" : "passed";
+    const row = rows.find((candidate) => candidate.acceptance_criterion_id === id);
+    const assertions = row?.assertions ?? [];
+    const outcome = row?.outcome ?? "incomplete";
+    // A malformed or incomplete producer must still yield one complete,
+    // readable failure fact for every declared AC.  Do not let a missing child
+    // row turn into an unpublishable non-achieved evidence object.
+    const fallbackReason = reason ?? `acceptance execution omitted declared criterion ${id}`;
+    const outcomeOwner = row?.owner ?? scenario.task_id;
+    const outcomeReason = row?.reason ?? fallbackReason;
+    const status = inconclusive ? "missing" : !processPassed || assertions.some((assertion) => assertion.result === "failed")
+      ? "failed"
+      : acceptanceExecutionOutcomeStatus(outcome);
     const value = {
       schema_version: "stage-quality-evidence.v1", task_id: binding.task_id, stage: "build-code",
       material_revision: binding.material_revision, snapshot_tree: binding.snapshot_tree, subject: id, status,
-      subject_fact: { status, detail: reason ?? (status === "passed" ? "runtime assertions match" : "runtime assertion failed"),
+      subject_fact: { status, outcome, detail: reason ?? (status === "passed" ? "runtime assertions match" : status === "failed" ? "runtime assertion failed" : `runtime observed ${outcome}`),
+        ...(outcome === "achieved" ? {} : { outcome_owner: outcomeOwner, outcome_reason: outcomeReason }),
         evidence_refs: ["stdout", "stderr"].map((stream) => ({ ref: execution[`${stream}_ref`], sha256: execution[`${stream}_hash`] })),
         assertions, execution, executor_actor: executorActor, execution_binding: executionBinding },
     };
@@ -2458,10 +2538,10 @@ async function executeAcceptanceCommandOrService(ctx, scenario, binding, executi
     publishVNextEvidence(ctx, ref, raw);
     return { ref, sha256 };
   });
-  const passed = !inconclusive && processPassed && rows.length === ids.length
+  const executed = !inconclusive && processPassed && rows.length === ids.length
     && rows.every((row) => row.assertions.every((assertion) => assertion.result === "passed"));
-  return Object.freeze({ status: passed ? "executed" : "failed", tier: scenario.tier,
-    executor: "workspace-command", ...(passed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
+  return Object.freeze({ status: executed ? "executed" : "failed", tier: scenario.tier,
+    executor: "workspace-command", ...(executed ? {} : { reason: reason ?? "runtime assertion failed" }), evidence_refs: Object.freeze(evidenceRefs) });
 }
 
 async function privateAcceptanceScenario(ctx, publication, scenario, attemptId = null, signal = undefined, authenticatedStageOutcome = null) {
@@ -2823,9 +2903,6 @@ function publishVNextStage(ctx, result, preflightSnapshot, preflightMaterials, p
     ...(machineGateDiagnosticRefs.length ? { machine_gate_diagnostic_refs: Object.freeze(machineGateDiagnosticRefs) } : {}),
     ...(qualityAdvisories.length ? { quality_advisories: Object.freeze(qualityAdvisories) } : {}),
     ...(Array.isArray(result.skill_consumer_bindings) ? { skill_consumer_bindings: Object.freeze([...result.skill_consumer_bindings]) } : {}),
-    ...(result.interaction_publication ? {
-      interaction_publication: Object.freeze({ ...result.interaction_publication }),
-    } : {}),
     ...(typeof result.stage_outcome_ref === "string" ? {
       stage_outcome_ref: result.stage_outcome_ref,
       stage_outcome_hash: result.stage_outcome_hash,
@@ -2876,7 +2953,11 @@ export async function runStage(stage, context, handler, publication = {}, intern
       && (!reflectionInput || typeof reflectionInput !== "object" || Array.isArray(reflectionInput))) {
     throw new TypeError("stageReflectionInput must be an object");
   }
-  const currentReflectionInput = () => reflectionInput ? { ...reflectionInput } : {};
+  let handlerResultForReflection = null;
+  const currentReflectionInput = () => ({
+    ...(reflectionInput ? { ...reflectionInput } : {}),
+    ...(handlerResultForReflection === null ? {} : { handlerResult: handlerResultForReflection }),
+  });
   const scheduleReflection = reflectionOptions === null
     ? null
     : (options = {}) => {
@@ -2941,6 +3022,11 @@ export async function runStage(stage, context, handler, publication = {}, intern
     }
     throw error;
   }
+
+  // This is the just-verified handler result, retained only through the
+  // current publication/reflection call. It is never caller input or a new
+  // persisted stage-outcome object.
+  handlerResultForReflection = result;
 
   // Capture publication time once. If a publisher fails after writing some
   // create-only records, the retry must reuse the same immutable bytes rather
@@ -3466,8 +3552,6 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
   const input = Object.freeze(structuredClone(invocation));
   const handlerInput = structuredClone(input);
   const stageReflectionInput = {};
-  let interactionPublication = null;
-  let interactionPublicationDiagnostic = null;
   // Direct callers of this low-level export may still replay an explicitly
   // supplied historical outcome. The public CLI rejects that field before it
   // reaches this function, so this compatibility branch cannot become the
@@ -3530,24 +3614,6 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
               : [],
           })),
         };
-      }
-      if (stage === "make-decision" && Object.hasOwn(handlerInput, "interaction_aggregate")) {
-        const receipts = handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)
-          ? handlerInput.receipts
-          : {};
-        if (receipts.interaction !== undefined) {
-          throw new Error("interaction_aggregate cannot be combined with caller-supplied receipts.interaction");
-        }
-        const aggregateInput = { aggregate: handlerInput.interaction_aggregate };
-        const observation = ctx.kernel.observeMakeDecisionInteractionPublication(aggregateInput);
-        if (observation.status === "recorded") {
-          interactionPublication = ctx.kernel.completeMakeDecisionInteractionPublication(aggregateInput);
-          handlerInput.receipts = { ...receipts, interaction: interactionPublication.ref };
-        } else {
-          interactionPublicationDiagnostic = observation.diagnostic;
-          handlerInput.receipts = receipts;
-        }
-        delete handlerInput.interaction_aggregate;
       }
       if (stage === "verify-code") {
         const receipts = handlerInput.receipts && typeof handlerInput.receipts === "object" && !Array.isArray(handlerInput.receipts)
@@ -3644,23 +3710,7 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
       const officialWorker = officialWorkerContext(ctx, publication, input, authenticatedRequirementContext, stageOutcome, worker.runStageEndReflection, signal);
       officialWorker.recordConsumerInvocation("stage-runner#runStageEndReflection");
       const verifiedHandlerResult = verifyOfficialEvidence(ctx, await handler(officialWorker, handlerInput));
-      let disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome, currentReviewRepair);
-      if (interactionPublicationDiagnostic !== null) {
-        disclosedHandlerResult = {
-          ...disclosedHandlerResult,
-          facts: {
-            ...(disclosedHandlerResult.facts ?? {}),
-            machine_gate_diagnostics: [
-              ...((disclosedHandlerResult.facts?.machine_gate_diagnostics ?? [])),
-              interactionPublicationDiagnostic,
-            ],
-          },
-          missing_items: [
-            ...(disclosedHandlerResult.missing_items ?? []),
-            `machine fact ${interactionPublicationDiagnostic.id} is ${interactionPublicationDiagnostic.status}: ${interactionPublicationDiagnostic.reason}`,
-          ],
-        };
-      }
+      const disclosedHandlerResult = discloseResolvedCodeReview(verifiedHandlerResult, stageOutcome, currentReviewRepair);
       // The concrete reflection is published only after the stage result has
       // crossed the single write boundary. Keep an internal result marker so
       // the authenticated stage-outcome consumer binding can observe that the
@@ -3713,13 +3763,6 @@ export function runOfficialStage(stage, context, invocation, publication, { sign
           code_review_resolution: stageOutcome.value.code_review_resolution ?? null,
         } : {}),
         ...(stageOutcome.diagnostic ? { stage_outcome_diagnostic: stageOutcome.diagnostic } : {}),
-        ...(interactionPublication ? {
-          interaction_publication: {
-            ref: interactionPublication.ref,
-            hash: interactionPublication.hash,
-            idempotent: interactionPublication.idempotent === true,
-          },
-        } : {}),
       };
     },
     publication,

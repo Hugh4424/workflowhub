@@ -233,8 +233,8 @@ describe("make-decision convergence depth", () => {
 describe("make-decision OI outline close", () => {
   const withConvergence = (markdown) => `${decisionLog(completeRows)}\n\n${markdown}`;
 
-  it("requires the current OI authority, questions-only direction snapshot, terminal fields, no open items, and core interaction proof", () => {
-    const fixture = outlineLog();
+  it("closes the current OI authority from questions-only direction, terminal fields, and no open items without an aggregate", () => {
+    const fixture = outlineLog({ interactionAggregate: false });
     const result = analyzeDecisionConvergence(withConvergence(fixture.markdown), {
       taskId: "task-1",
       directionReview: fixture.direction,
@@ -249,9 +249,9 @@ describe("make-decision OI outline close", () => {
         direction_snapshot: "passed",
         no_open_items: "passed",
         terminal_fields: "passed",
-        interaction_proof: "passed",
       } },
     });
+    expect(result.outline.components).not.toHaveProperty("interaction_proof");
   });
 
   it("keeps outline_closed missing when any close conjunct is absent", () => {
@@ -301,7 +301,7 @@ describe("make-decision OI outline close", () => {
     expect(result.errors.join("; ")).toMatch(/contains unsupported fields: selected_answer/);
   });
 
-  it("does not accept a core OI's self-reported interaction ref without the current aggregate", () => {
+  it("does not require a current aggregate when direct OI fields and direction evidence are complete", () => {
     const fixture = outlineLog({ interactionAggregate: false });
     const result = analyzeDecisionConvergence(withConvergence(fixture.markdown), {
       taskId: "task-1",
@@ -309,11 +309,11 @@ describe("make-decision OI outline close", () => {
       interactionAggregate: fixture.interaction,
       requireOutline: true,
     });
-    expect(result).toMatchObject({ ok: false, facts: { outline_closed: "missing" }, outline: { components: { interaction_proof: "missing" } } });
-    expect(result.errors.join("; ")).toMatch(/interaction proof is unavailable/);
+    expect(result).toMatchObject({ ok: true, facts: { outline_closed: "passed" } });
+    expect(result.outline.components).not.toHaveProperty("interaction_proof");
   });
 
-  it("does not accept an aggregate that omits or relabels the core OI group/disposition", () => {
+  it("does not let a malformed legacy aggregate alter current OI closure", () => {
     const fixture = outlineLog();
     const tampered = {
       ...fixture.interaction,
@@ -331,17 +331,12 @@ describe("make-decision OI outline close", () => {
       interactionAggregate: tampered,
       requireOutline: true,
     });
-    expect(result).toMatchObject({ ok: false, facts: { outline_closed: "missing" }, outline: { components: { interaction_proof: "missing" } } });
-    expect(result.errors.join("; ")).toMatch(/does not bind its OI\/group\/disposition/);
+    expect(result).toMatchObject({ ok: true, facts: { outline_closed: "passed" } });
+    expect(result.outline.components).not.toHaveProperty("interaction_proof");
   });
 
-  it("expects no interaction ref/hash inside the OI record itself", () => {
-    // Contract regression (D-024): core-OI proof MUST flow one way, from the
-    // content-addressed aggregate's oi_dispositions to the OI.  If the record
-    // also embedded the aggregate's ref/hash, decision-log.md's bytes would
-    // depend on the address of the aggregate that must bind those same bytes,
-    // which has no fixed point — the OI could never be closed.
-    const fixture = outlineLog();
+  it("does not put an interaction ref/hash into current OI closure", () => {
+    const fixture = outlineLog({ interactionAggregate: false });
     expect(fixture.markdown).not.toMatch(/interaction_ref|interaction_hash/);
     const result = analyzeDecisionConvergence(withConvergence(fixture.markdown), {
       taskId: "task-1",
@@ -352,9 +347,9 @@ describe("make-decision OI outline close", () => {
     expect(result).toMatchObject({
       ok: true,
       facts: { outline_closed: "passed" },
-      outline: { components: { interaction_proof: "passed" } },
+      outline: { components: { terminal_fields: "passed" } },
     });
-    expect(result.errors.join("; ")).not.toMatch(/core interaction proof is missing or invalid/);
+    expect(result.outline.components).not.toHaveProperty("interaction_proof");
   });
 
   it("still reads a legacy OI record that carries interaction ref/hash", () => {
@@ -375,11 +370,12 @@ describe("make-decision OI outline close", () => {
     const result = analyzeDecisionConvergence(withConvergence(fixture.markdown), {
       taskId: "task-1",
       directionReview: fixture.direction,
-      interactionAggregate: fixture.interaction,
+      interactionAggregate: null,
       requireOutline: true,
     });
     // The legacy fields are retained reading material, not the proof source.
     expect(result).toMatchObject({ ok: true, facts: { outline_closed: "passed" } });
+    expect(result.outline.components).not.toHaveProperty("interaction_proof");
   });
 });
 
