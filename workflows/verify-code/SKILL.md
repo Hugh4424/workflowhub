@@ -18,16 +18,15 @@ owner；环境不可用只记录 attempt。错配只让正式完成事实保持 
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
-manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
-`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
-“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
 产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
 `unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
 不得用一条阶段结论均摊到所有 step/skill。
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 必须显式引用本阶段唯一真实 `quality/evidence/stage-outcomes/<stage>/<sha256>.json`；writer 重读并完整认证来源，核对 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree，run/executor 来自认证 outcome。缺来源、executor 或 judgment 保持 `unavailable`，保留实际错误，不借用旧复盘。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 必须引用本阶段当前可复核的质量事实、测试、review 或阶段行；不要求也不读取外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree。缺 judgment 或 reflection executor 时保持 `unavailable(executor_absent)`，保留实际错误且不阻断 stage、repair 或 close，不借用旧复盘。
 
 JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。
 
@@ -103,7 +102,7 @@ review 结果只是质量事实，不是继续工作的许可证。缺质量事�
 
 通过现有公共 `review --action=record` 提交 `input.request`，其中 `stage=verify-code`、真实 host provider、当前 materials 和 `reviewed_execution={ref,sha256,quality_fact_ref}` 指向本次 build-code 的 `acceptance_execution` 聚合与实际质量事实。host 在派发前认证 actor、逐项原件、材料及 snapshot，将真实 bytes 放入同一 provider bundle；该次常规审查记录既有 E2E binding，不补绑旧结果。
 
-`dsh-code-review` 的结果继续经 `receipts.quality_review` 绑定当前 code_review outcome；`wh-review` 的 advisory 结果经 `receipts.review` 消费，两者不互相冒充。验收确认沿已有 `confirm` 记录实际用户回复，在 review 之后通过 `receipts.confirmation` 交给 verify；不代答、不补造或重复请求同一确认。`readCurrentE2eAcceptanceEvidence` 核对同次 review、confirmation 和 nested freshness。缺 review、确认或执行原件时相应事实保持 missing/incomplete，不从代码审查结束推断验收或 release。
+`dsh-code-review` 的结果经 `receipts.quality_review` 绑定当前 code_review 事实；`wh-review` 的 advisory 结果经 `receipts.review` 消费，两者不互相冒充。验收确认沿已有 `confirm` 记录实际用户回复，在 review 之后通过 `receipts.confirmation` 交给 verify；不代答、不补造或重复请求同一确认。`readCurrentE2eAcceptanceEvidence` 核对同次 review、confirmation 和 nested freshness。缺 review、确认或执行原件时相应事实保持 missing/incomplete，不从代码审查结束推断验收或 release；这些事实缺失不阻止当前会话继续修复。若同一 task 的旧 review 已逐条修复，当前 session 可在 `receipts.quality_review` 之外提交 `code_review_repairs`；runtime 校验每条 finding 的当前源码 hash、受影响的通过测试和完整覆盖后，将当前事实标记为 `resolved`，不要求外部 Stage Agent、bridge 或 stage outcome。
 
 当前 WorkflowHub session 发布绑定当前 task、stage、材料和快照的代码审查结果。真实修复可为 resolved，原 review 仍保留其旧身份；未修复 finding 或 unavailable 限制完成声明，保留同 task 修复。commit、push、merge、archive、cleanup 和 close 仍由已有独立授权流程处理。
 

@@ -46,7 +46,7 @@ function damagedAttempt({ kernel }, value, ref) {
   kernel.publishCanonicalRecord(ref, `${JSON.stringify(value)}\n`);
 }
 
-describe("review budget namespace classification", () => {
+describe("review history namespace classification", () => {
   it("ignores a damaged attempt from another stage and dispatches exactly once", async () => {
     const state = fixture();
     const identity = { tree: state.kernel.currentVNextSnapshot().tree, materialRevision: state.kernel.currentVNextMaterialRevision() };
@@ -105,17 +105,17 @@ describe("review budget namespace classification", () => {
     expect(dispatches).toBe(0);
   });
 
-  it("keeps an unclassifiable damaged attempt as unknown and does not dispatch", async () => {
+  it("keeps an unclassifiable damaged attempt unavailable and does not dispatch", async () => {
     const state = fixture();
     state.kernel.publishCanonicalRecord("quality/reviews/attempts/unscoped/attempt.json", "not-json\n");
     let dispatches = 0;
     const result = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: request(), resolveRouteIdentity: route,
       runRound: async () => { dispatches += 1; return unavailableResult(request()); } });
     expect(dispatches).toBe(0);
-    expect(result).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN" } });
+    expect(result).toMatchObject({ status: "unavailable", dispatch_state: "blocked_before_dispatch", error: { code: "REVIEW_HISTORY_UNAVAILABLE" } });
   });
 
-  it("does not let a different review subject consume the current subject budget", async () => {
+  it("does not let a different review subject cause an accidental duplicate", async () => {
     const state = fixture();
     const first = { ...request(), subject: { component: "runtime/review" } };
     const second = { ...request(), subject: { component: "runtime/evidence" } };
@@ -124,6 +124,6 @@ describe("review budget namespace classification", () => {
     await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: first, resolveRouteIdentity: route, runRound });
     const result = await recordSimpleReviewRequest({ task: state.task, kernel: state.kernel, request: second, resolveRouteIdentity: route, runRound });
     expect(dispatches).toBe(2);
-    expect(result).toMatchObject({ status: "recorded", dispatch_state: "dispatched", review_budget: { ok: true } });
+    expect(result).toMatchObject({ status: "recorded", dispatch_state: "dispatched" });
   });
 });

@@ -10,6 +10,8 @@ import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { createTask, createTaskKernel } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { runStage, runStageEndReflection, runOfficialStage, authenticateStageOutcomeForProjection } from "../../runtime/stage/stage-runner.mjs";
+import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
+import { publishStageHandoff } from "../../runtime/stage/stage-handoff.mjs";
 import { deriveExecutionOutcomes } from "../../runtime/stage/completion-predicates.mjs";
 
 import { recordSimpleReviewResult } from "../../runtime/review/review-record-route.mjs";
@@ -112,6 +114,57 @@ function reflection(taskId, stageStatus = "completed") {
   });
 }
 
+function currentSessionReflection(taskId, stageStatus = "completed", attemptId = `current-session-${stageStatus}`) {
+  const context = contexts.get(taskId);
+  const snapshot = context.kernel.currentVNextSnapshot();
+  const materialRevision = context.kernel.currentVNextMaterialRevision();
+  const outputHash = "a".repeat(64);
+  return {
+    schema_version: "stage-reflection.v2",
+    record_kind: "judgment",
+    task_id: taskId,
+    stage: "build-spec",
+    stage_status: stageStatus,
+    generated_at: NOW,
+    status: stageStatus === "failed" ? "failed" : "ok",
+    error: null,
+    judgments: [{
+      subject_id: "current-session-reflection",
+      subject_kind: "step",
+      classification: "keep",
+      severity: "low",
+      reason: "The current WorkflowHub session owns this reflection.",
+      evidence_refs: [],
+      confidence: "medium",
+      next_review_trigger: "next current-session run",
+    }],
+    interventions: [],
+    lessons_added: [],
+    identity: {
+      task_id: taskId,
+      worktree: context.candidateWorkspace.worktreeRoot,
+      branch: context.candidateWorkspace.branch,
+      attempt: attemptId,
+      snapshot_tree: snapshot.tree,
+      material_revision: materialRevision,
+    },
+    executor: {
+      kind: "workflowhub-current-session",
+      source_id: "workflowhub-current-session",
+      attempt_id: attemptId,
+      started_at: "2026-08-31T00:00:01.000Z",
+      completed_at: "2026-08-31T00:00:02.000Z",
+      output_hash: outputHash,
+    },
+    output_hash: outputHash,
+    status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"]
+      .map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+    source_completeness: { compaction: false, truncation: false, visible_scope: "current task", unknown_reasons: [] },
+    ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"]
+      .map((key) => [key, { state: "none_observed", items: [] }])),
+  };
+}
+
 function reflectionPath(state) {
   return join(state.task.taskPath, "quality", "stage-reflection", `${state.context.stage}.json`);
 }
@@ -187,6 +240,133 @@ describe("stage-runner reflection transfer matrix", () => {
     expect(fact).toMatchObject({ stage: "build-spec", state: "unavailable", reason_code: "executor_absent" });
   });
 
+  it("publishes a current-session judgment without an external stage outcome", async () => {
+    const state = fixture("current-session-reflection");
+    const attempt = "current-session-reflection-attempt";
+    const snapshot = state.context.kernel.currentVNextSnapshot();
+    const materialRevision = state.context.kernel.currentVNextMaterialRevision();
+    const outputHash = "b".repeat(64);
+    const judgment = {
+      schema_version: "stage-reflection.v2",
+      record_kind: "judgment",
+      task_id: state.task.identity.taskId,
+      stage: "build-spec",
+      stage_status: "completed",
+      generated_at: NOW,
+      status: "ok",
+      error: null,
+      judgments: [{
+        subject_id: "current-session-reflection",
+        subject_kind: "step",
+        classification: "keep",
+        severity: "low",
+        reason: "The current session reflection is bound directly to current task facts.",
+        evidence_refs: [],
+        confidence: "medium",
+        next_review_trigger: "next current-session run",
+      }],
+      interventions: [],
+      lessons_added: [],
+      status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"]
+        .map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+      identity: {
+        task_id: state.task.identity.taskId,
+        worktree: state.context.candidateWorkspace.worktreeRoot,
+        branch: state.context.candidateWorkspace.branch,
+        attempt,
+        snapshot_tree: snapshot.tree,
+        material_revision: materialRevision,
+      },
+      executor: {
+        kind: "workflowhub-current-session",
+        source_id: "workflowhub-current-session",
+        attempt_id: attempt,
+        started_at: "2026-08-31T00:00:01.000Z",
+        completed_at: "2026-08-31T00:00:02.000Z",
+        output_hash: outputHash,
+      },
+      output_hash: outputHash,
+      source_completeness: { compaction: false, truncation: false, visible_scope: "current task", unknown_reasons: [] },
+      ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"]
+        .map((key) => [key, { state: "none_observed", items: [] }])),
+    };
+    const result = await runStageEndReflection(state.context, {
+      stageStatus: "completed",
+      judgment,
+      attemptId: attempt,
+      now: NOW,
+    });
+    expect(result.stage_handoff.status, JSON.stringify(result.stage_handoff)).toBe("published");
+    expect(result).toMatchObject({ status: "completed", persisted: true, reflection_status: "ok" });
+    expect(result.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
+    expect(JSON.parse(state.task.readRecord(result.ref))).toMatchObject({
+      schema_version: "stage-reflection.v2",
+      identity: { attempt, snapshot_tree: snapshot.tree, material_revision: materialRevision },
+    });
+    expect(state.task.listCanonicalStageOutcomeRefs("build-spec")).toEqual([]);
+    expect(state.task.readRecord(result.stage_handoff.ref)).toContain("未使用外部 stage outcome");
+    const historical = structuredClone(judgment);
+    historical.judgments[0].evidence_refs = [`quality/evidence/stage-outcomes/build-spec/${"d".repeat(64)}.json`];
+    await expect(runStageReflection(state.context, { input: historical, now: NOW })).rejects.toThrow(/cannot consume historical stage outcome/);
+    expect(() => publishStageHandoff({
+      task: state.task,
+      kernel: state.context.kernel,
+      artifacts: state.context.artifacts,
+      taskId: state.task.identity.taskId,
+      stage: "build-spec",
+      snapshotTree: snapshot.tree,
+      materialScopeRevision: state.context.kernel.currentVNextMaterialScopeRevision("build-spec"),
+      reflectionStatus: "ok",
+      stageReflection: { ref: result.ref, sha256: result.sha256 },
+      worktree: state.context.candidateWorkspace.worktreeRoot,
+      branch: "foreign-branch",
+      materials: Object.fromEntries(Object.entries(canonicalStageMaterials())),
+    })).toThrow(/identity/);
+  });
+
+  it("does not let a caller spoof the current-session reflection producer", async () => {
+    const state = fixture("current-session-reflection-spoof");
+    const attempt = "current-session-reflection-spoof-attempt";
+    const snapshot = state.context.kernel.currentVNextSnapshot();
+    const materialRevision = state.context.kernel.currentVNextMaterialRevision();
+    const judgment = {
+      schema_version: "stage-reflection.v2",
+      record_kind: "judgment",
+      task_id: state.task.identity.taskId,
+      stage: "build-spec",
+      stage_status: "completed",
+      generated_at: NOW,
+      status: "ok",
+      error: null,
+      judgments: [],
+      interventions: [],
+      lessons_added: [],
+      status_matrix: Object.fromEntries(["code", "verify", "physical_close", "acceptance", "release"]
+        .map((key) => [key, { state: "not_applicable", evidence_refs: [] }])),
+      identity: {
+        task_id: state.task.identity.taskId,
+        worktree: state.context.candidateWorkspace.worktreeRoot,
+        branch: state.context.candidateWorkspace.branch,
+        attempt,
+        snapshot_tree: snapshot.tree,
+        material_revision: materialRevision,
+      },
+      executor: {
+        kind: "workflowhub-current-session",
+        source_id: "foreign-caller",
+        attempt_id: attempt,
+        started_at: "2026-08-31T00:00:01.000Z",
+        completed_at: "2026-08-31T00:00:02.000Z",
+        output_hash: "c".repeat(64),
+      },
+      output_hash: "c".repeat(64),
+      source_completeness: { compaction: false, truncation: false, visible_scope: "current task", unknown_reasons: [] },
+      ...Object.fromEntries(["what_helped", "what_to_improve", "blockers", "intervention_reasons", "what_to_simplify", "simplifiable_now"]
+        .map((key) => [key, { state: "none_observed", items: [] }])),
+    };
+    await expect(runStageReflection(state.context, { input: judgment, now: NOW })).rejects.toThrow(/runtime-owned/);
+  });
+
   it("does not let execution-status writeback poison the execution projection", () => {
     const state = fixture("record-only-outcome", { stage: "build-code" });
     const outcome = writeStageOutcomeFixture({
@@ -227,7 +407,10 @@ describe("stage-runner reflection transfer matrix", () => {
       state.context,
       async () => ({ facts: {} }),
       {},
-      { stageReflection: { execute: async ({ taskId, stageStatus }) => reflection(taskId, stageStatus) } },
+      {
+        stageReflection: { execute: async ({ taskId, stageStatus, currentBinding }) => currentSessionReflection(taskId, stageStatus, currentBinding.attempt) },
+        stageReflectionInput: { attemptId: "executor-injected-attempt" },
+      },
     );
     expect(result.stage_reflection).toMatchObject({ status: "completed", reflection_status: "ok", persisted: true });
     expect(result.stage_reflection.ref).toMatch(/^quality\/stage-reflection\/build-spec\/[a-f0-9]{64}\.json$/);
@@ -272,11 +455,12 @@ describe("stage-runner reflection transfer matrix", () => {
       {},
       {
         stageReflection: {
-          execute: async ({ taskId, stageStatus }) => {
+          execute: async ({ taskId, stageStatus, currentBinding }) => {
             receivedStageStatus = stageStatus;
-            return { ...reflection(taskId, stageStatus), status: "failed", error: { summary: "ordinary stage execution failed" } };
+            return { ...currentSessionReflection(taskId, stageStatus, currentBinding.attempt), status: "failed", error: { summary: "ordinary stage execution failed" } };
           },
         },
+        stageReflectionInput: { attemptId: "handler-failed-attempt" },
       },
     )).rejects.toThrow("ordinary stage execution failed");
     expect(receivedStageStatus).toBe("failed");

@@ -5,9 +5,10 @@ Mode: `lens-only`. Delivery: `file_only`.
 Inspect only `review-packet.v1` planning artifacts. Report consistency, duplication, ambiguity, and under-definition with packet anchors. Missing material is `material_incomplete`.
 
 The packet lens is reused by the four authoring-stage profiles and is the
-single stage-end semantic check for those stages. The Stage Agent supplies the
-current packet and the existing stage-outcome bridge authenticates the profile
-result. Each profile consumes
+single stage-end semantic check for those stages. The current WorkflowHub
+session supplies the current packet and the existing official stage writer
+authenticates the profile result; no external Stage Agent, bridge, session or
+stage outcome is required. Each profile consumes
 the original requirement, the cumulative four-material chain, and the evidence
 appropriate to the current stage. It compares behavior meaning and observable
 evidence, not just IDs, paths, or document presence. Findings are repaired by

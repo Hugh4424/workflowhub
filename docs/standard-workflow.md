@@ -31,7 +31,7 @@
 | `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 自动记录结果；随后单独谈 close 授权 |
 
 每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
-`quality/reviews/results/` 或 `quality/reviews/attempts/`，以及 stage outcome 事实。前四 stage 的 `spec-analyze` 结果由现有 stage
+`quality/reviews/results/` 或 `quality/reviews/attempts/`。旧 stage outcome 仅作历史兼容事实，当前阶段不依赖它。前四 stage 的 `spec-analyze` 结果由现有 stage
 publication 原子写入对应的 quality fact 和 acceptance evidence。它们用于证明实际发生了
 什么，不会覆盖四份材料，也不会把 `unknown`、`unavailable` 或 `incomplete` 改写成通过。
 
@@ -51,7 +51,7 @@ host、doctor、status、monitor、run、review、verify、confirm、authorize�
 
 ### 进入 stage
 
-Stage Agent 先读取当前 stage 的 workflow skill、依赖清单、原始需求、适用的四份材料和
+当前 WorkflowHub 会话先读取当前 stage 的 workflow skill、依赖清单、原始需求、适用的四份材料和
 已有真实事实。只读取当前任务范围；旧 task、旧 review 和历史 snapshot 只能作为只读
 背景。先确认当前工作区、依赖、接口、权限、安全和测试环境是否满足本 stage 的工作条件。
 
@@ -95,7 +95,7 @@ pass。健康的 provider 由 3rd-review 自己监管，WorkflowHub 不手动设
 6. 下游可以直接消费什么、不能自行猜什么。
 
 发现的 finding 必须先在当前 stage 修复，再重跑受影响的 `spec-analyze` profile；不能静默
-交给下游。六项摘要和 `unavailable`/`incomplete` 事实随现有 stage outcome 交接，不新建
+交给下游。六项摘要和 `unavailable`/`incomplete` 事实随当前阶段事实交接，不新建
 store 或门禁。摘要说的是当前事实，不是“文档存在所以完成”。交接只交接已确认的材料和事实。
 
 每个 stage 结束时，当前主会话必须按 `stage-reflection` 技能先产出 judgment JSON，再调用实际公共入口 `run --action=reflect`。判断 JSON 使用六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`；每个区块条目带真实 `evidence_refs` 与 `confidence`。已检查但无观察写 `none_observed`，无法判断写 `unknown` 并给 `unknown_reason`，确实不适用写 `not_applicable` 并说明原因，不能静默省略。v2 还保留 `status_matrix`、`identity`、`source_completeness` 三件套；它们是事实投影，不是质量结论。
@@ -158,7 +158,7 @@ worktree cleanup 和 branch cleanup，并对每一步做物理读回。
 ### 完成与失败边界
 
 完成是：用户确认的 decision-log 含完整需求边界、事实、选择、理由、风险、非目标、延期、
-前置准备和真实 stage outcome（外部宿主执行时），或真实的 unavailable 执行事实。方向未定、页面/依赖材料未准备、错误回复未匹配或关键语义
+前置准备和当前阶段真实事实。旧 stage outcome（若有）只是历史 provenance，不是完成前置；方向未定、页面/依赖材料未准备、错误回复未匹配或关键语义
 被猜测时，不能发布成已确认决定；应在本 stage 继续询问、修复或如实保留未决。
 
 ### 下游交接
@@ -175,7 +175,7 @@ build-spec 只消费已确认的方向和真实事实，不再替用户补产品
 
 ### 标准输入
 
-原始需求、已确认 `decision-log.md`、已有当前 `spec.md`（如有）、前置事实和可用的 stage outcome。
+原始需求、已确认 `decision-log.md`、已有当前 `spec.md`（如有）和前置事实；不要求 stage outcome。
 
 ### 标准步骤与最小结果
 
@@ -292,7 +292,7 @@ build-code 只能按 `plan.md`/`tasks.md` 的当前 phase 执行；它以真实�
 ### 产物、完成与失败边界
 
 核心产物是实现变更、phase task facts、canonical test receipts、review facts、AC trace、
-final aggregate 和 build-code stage outcome（或真实的 unavailable 执行事实）。不能只凭“代码改了”“测试绿了”或“review 空了”
+final aggregate 和当前阶段事实。不能只凭“代码改了”“测试绿了”或“review 空了”
 宣称完成；provider failure、测试失败、缺 AC 证据、缺 step outcome、snapshot 漂移和 serious
 finding 必须原样保留。它们是质量事实，不得伪造，但也不应被错误地扩展成新的工作许可证。
 

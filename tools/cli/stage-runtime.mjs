@@ -18,6 +18,7 @@ import {
 } from "../../runtime/stage/stage-context.mjs";
 import { authenticateStageOutcomeForProjection, runOfficialStage } from "../../runtime/stage/stage-runner.mjs";
 import { validateStageInvocation } from "../../runtime/stage/stage-handlers.mjs";
+import { diagnoseMissingInput } from "../../runtime/stage/stage-handlers.mjs";
 import { runStageReflection } from "../../runtime/stage/stage-reflect.mjs";
 import {
   validateAcceptanceEvidence,
@@ -27,7 +28,7 @@ import { runCapture as captureBuildCodeTests } from "../../workflows/build-code/
 import { runCapture as captureVerifyCodeTests } from "../../workflows/verify-code/capture.mjs";
 import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../../runtime/interface/runtime-facade.mjs";
 import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
-import { deriveExecutionOutcomes, deriveStageCompletion, deriveStageOutcomeStatuses, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
+import { deriveExecutionOutcomes, deriveStageCompletion, deriveStageProgress, stageMaterialScopeRevision, stageMaterialScopeRevisions } from "../../runtime/stage/completion-predicates.mjs";
 import { validatePlanTaskContract } from "../../runtime/stage/stage-content-contracts.mjs";
 import { authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { deriveResearchStatus, listCurrentResearchReports } from "../../runtime/evidence/research-report.mjs";
@@ -42,7 +43,7 @@ import { validateProjectName, validateTaskId } from "../../runtime/task/task-ide
 import { resolveStorageRoot, resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { createSimpleReviewPacket, resolveSimpleReviewRouteIdentity, runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { captureReviewSource } from "../../skills/wh-review/scripts/review-source.mjs";
-import { buildReviewMaterials } from "../../skills/wh-review/scripts/review-materials.mjs";
+import { buildReviewMaterials, reviewInstructionsFor } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
@@ -50,6 +51,12 @@ const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
+
+export function stageRuntimeProcessExitCode(result) {
+  const stageRowWriteFailed = typeof result?.stage_row_error === "string"
+    || typeof result?.stage_reflection?.stage_row_error === "string";
+  return result?.status === "protocol_invalid" ? 2 : stageRowWriteFailed ? 1 : 0;
+}
 const RUNNER_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const GIT_OID = /^[a-f0-9]{40,64}$/;
@@ -76,6 +83,101 @@ export function resolveWorkflowHubIdentity(values, cwd = process.cwd(), env = pr
   });
   if (derived) return derived;
   throw new Error("WorkflowHub identity missing: supply --project and --task or run from an authenticated task worktree");
+}
+
+/**
+ * Check the complete identity tuple immediately before a formal write.
+ * Explicit task/path values are useful diagnostics, but they never replace the
+ * canonical task path or the Workspace bound to the opened TaskHandle.
+ */
+export function assertTaskWriteIdentity({
+  task,
+  project,
+  taskId,
+  taskPath,
+  workspace,
+  workspaceRoot,
+  cwd = process.cwd(),
+  env = process.env,
+  checkCwd = true,
+  requireWorkspace = true,
+} = {}) {
+  if (!task || typeof task !== "object" || !task.identity || !task.manifest) {
+    throw new TypeError("TaskHandle is required for write identity validation");
+  }
+  const violations = [];
+  if (project !== task.identity.projectName) violations.push("PROJECT_ID_MISMATCH");
+  if (taskId !== task.identity.taskId) violations.push("TASK_ID_MISMATCH");
+
+  let canonicalTaskPath;
+  try {
+    canonicalTaskPath = resolveCanonicalTaskPath({
+      project: task.identity.projectName,
+      task: task.identity.taskId,
+      env,
+      home: env?.HOME,
+    }).taskPath;
+  } catch {
+    violations.push("CANONICAL_TASK_PATH_UNAVAILABLE");
+  }
+  const declaredTaskPath = taskPath ?? task.taskPath;
+  if (typeof declaredTaskPath !== "string" || !isAbsolute(declaredTaskPath)) {
+    violations.push("TASK_PATH_INVALID");
+  } else if (canonicalTaskPath
+      && (resolve(declaredTaskPath) !== canonicalTaskPath || resolve(task.taskPath) !== canonicalTaskPath)) {
+    violations.push("TASK_PATH_MISMATCH");
+  }
+
+  let realDeclaredWorkspaceRoot = null;
+  if (requireWorkspace) {
+    let authenticatedWorkspaceRoot = null;
+    try {
+      authenticatedWorkspaceRoot = workspace?.worktreeRoot ?? null;
+    } catch {
+      violations.push("WORKSPACE_INVALID");
+    }
+    let declaredWorkspaceRoot = workspaceRoot ?? authenticatedWorkspaceRoot;
+    if (typeof declaredWorkspaceRoot !== "string" || !isAbsolute(declaredWorkspaceRoot)) {
+      violations.push("WORKSPACE_ROOT_INVALID");
+      declaredWorkspaceRoot = null;
+    }
+    try {
+      if (declaredWorkspaceRoot !== null) realDeclaredWorkspaceRoot = realpathSync(resolve(declaredWorkspaceRoot));
+    } catch {
+      violations.push("WORKSPACE_ROOT_INVALID");
+    }
+    if (authenticatedWorkspaceRoot !== null && realDeclaredWorkspaceRoot !== null) {
+      try {
+        if (realpathSync(authenticatedWorkspaceRoot) !== realDeclaredWorkspaceRoot) violations.push("WORKSPACE_ROOT_MISMATCH");
+      } catch {
+        violations.push("WORKSPACE_INVALID");
+      }
+    }
+    if (typeof task.manifest.workspace_root === "string" && realDeclaredWorkspaceRoot !== null) {
+      try {
+        if (realpathSync(task.manifest.workspace_root) !== realDeclaredWorkspaceRoot) violations.push("WORKSPACE_ROOT_MISMATCH");
+      } catch {
+        violations.push("WORKSPACE_ROOT_INVALID");
+      }
+    }
+  }
+  if (checkCwd && requireWorkspace) {
+    const currentRoot = gitWorktreeRoot(cwd);
+    if (!currentRoot) violations.push("CURRENT_WORKTREE_UNAVAILABLE");
+    else if (realDeclaredWorkspaceRoot !== null && currentRoot !== realDeclaredWorkspaceRoot) violations.push("CURRENT_WORKTREE_MISMATCH");
+  }
+  const uniqueViolations = [...new Set(violations)];
+  if (uniqueViolations.length) {
+    const error = new Error(`WRITE_IDENTITY_PREFLIGHT_FAILED: ${uniqueViolations.join(",")}`);
+    error.code = "WRITE_IDENTITY_PREFLIGHT_FAILED";
+    error.violations = Object.freeze(uniqueViolations);
+    throw error;
+  }
+  return Object.freeze({
+    task_id: task.identity.taskId,
+    canonical_task_path: canonicalTaskPath,
+    worktree_root: realDeclaredWorkspaceRoot,
+  });
 }
 
 function gitWorktreeRoot(cwd) {
@@ -219,6 +321,7 @@ function isIntegrationReviewRequest(request) {
 
 function isTaskBoundBuildCodeReviewRequest(request) {
   const scope = request?.review_scope ?? request?.reviewScope ?? null;
+  if (request?.stage === "verify-code") return scope === null;
   return request?.stage === "build-code"
     && (scope === "phase" || scope === "integration");
 }
@@ -247,7 +350,19 @@ export function prepareTaskBoundBuildCodeReviewBundle(context, request, {
       reviewTrack: request.review_track ?? request.reviewTrack ?? null,
       reviewScope,
       reviewKind: request.review_kind ?? request.reviewKind ?? null,
-      materials: request.materials,
+      materials: {
+        ...(request.materials ?? {}),
+        // The fixed instruction is a runner-owned control file. Keep it out
+        // of caller packet identity and inject it only after the authenticated
+        // current-worktree bundle has been selected.
+        review_instructions: reviewInstructionsFor(
+          request.stage,
+          request.review_track ?? request.reviewTrack ?? null,
+          false,
+          reviewScope,
+          request.review_kind ?? request.reviewKind ?? null,
+        ),
+      },
     });
     let disposed = false;
     return Object.freeze({
@@ -298,6 +413,14 @@ function collectCurrentQualityFactObservations({ context, stage = null }) {
  * fixed names, and K4-K6 are names carried by the frozen facts row.
  */
 const STATUS_MATERIAL_REFS = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
+export const REFLECTION_CONCLUSION_FIELDS = Object.freeze([
+  "what_helped",
+  "what_to_improve",
+  "blockers",
+  "intervention_reasons",
+  "what_to_simplify",
+  "simplifiable_now",
+]);
 
 function statusRootCauseId(gap) {
   const text = String(gap);
@@ -331,7 +454,7 @@ function canonicalTaskFacts(context) {
   }
 }
 
-function readStageReflectionConclusion(context, stage, facts) {
+export function readStageReflectionConclusion(context, stage, facts) {
   const refs = new Set();
   for (const row of facts) {
     if (row?.stage !== stage) continue;
@@ -348,10 +471,21 @@ function readStageReflectionConclusion(context, stage, facts) {
       ref,
       conclusion: value?.conclusion ?? value?.summary ?? value?.reflection ?? null,
       status_matrix: value?.status_matrix ?? null,
+      ...Object.fromEntries(REFLECTION_CONCLUSION_FIELDS.map((field) => [field, value?.[field] ?? null])),
     });
   } catch {
-    return Object.freeze({ status: "unavailable", ref, conclusion: null, status_matrix: null });
+    return Object.freeze({
+      status: "unavailable",
+      ref,
+      conclusion: null,
+      status_matrix: null,
+      ...Object.fromEntries(REFLECTION_CONCLUSION_FIELDS.map((field) => [field, null])),
+    });
   }
+}
+
+export function diagnoseStageInput(options = {}) {
+  return diagnoseMissingInput(options);
 }
 
 export function deriveNamedStatusRefs({ facts = [] } = {}) {
@@ -422,25 +556,7 @@ export function deriveCurrentStatusDomains(context, {
     throw new TypeError("current status domain derivation requires an authenticated context, snapshot, material revision, and materials");
   }
   const observations = collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials, stage });
-  const allQualityFactObservations = collectCurrentQualityFactObservations({ context, currentSnapshot, materialRevision, materials });
-  const stageOutcomeStatuses = deriveStageOutcomeStatuses({
-    task_id: context.identity.taskId,
-    read: readQualityEvidence(context.task),
-    // Current stage status is read from the frozen K2 row.  K5 stage-outcome
-    // envelopes remain named evidence, never a directory-selected status
-    // source for this route.
-    stage_outcome_refs: {},
-    snapshot_tree: currentSnapshot.tree,
-    material_revision: materialRevision,
-    material_scope_revisions: stageMaterialScopeRevisions(materials),
-    snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-    quality_fact_observations: allQualityFactObservations,
-    read_task_facts: () => readTaskFacts(context.task.taskPath),
-    authenticate: ({ stage: outcomeStage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage: outcomeStage }, outcomeStage, ref),
-  });
   const quality = deriveStageCompletion(stage, observations, {
-    requireStageOutcome: true,
-    stageOutcomeStatus: stageOutcomeStatuses?.[stage] ?? "unavailable",
     requireOutline: stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
   });
   const facts = canonicalTaskFacts(context);
@@ -517,7 +633,9 @@ function executableCommand(argv) {
 }
 
 function runPreflight(stage, input, services = {}) {
-  validateStageInvocation(stage, input);
+  // Preflight is a pure payload-shape diagnostic and must remain able to
+  // inspect legacy/caller-supplied fields without selecting the vNext writer.
+  validateStageInvocation(stage, input, { currentOnly: false });
   const adapter = services.preflight;
   if (adapter === undefined) return { status: "valid", diagnostics: [] };
   if (!adapter || typeof adapter !== "object" || Array.isArray(adapter)) {
@@ -705,9 +823,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       materialRevision = materialRevisionFromValues(materialValues);
     }
     const observations = collectCurrentQualityFactObservations({ context, currentSnapshot: current, materialRevision, materials, stage: values.stage });
-    const allQualityFactObservations = current
-      ? collectCurrentQualityFactObservations({ context, currentSnapshot: current, materialRevision, materials })
-      : [];
     const researchStage = ["make-decision", "build-spec", "build-plan"].includes(values.stage);
     const researchReports = current && researchStage
       ? listCurrentResearchReports({
@@ -720,28 +835,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       : [];
     const researchDisclosure = deriveResearchStatus(researchReports);
     const authenticatedResearchReports = researchReports.filter((report) => report?.value?.recorded_at);
-    const statusObservations = authenticatedResearchReports.length > 0
-      ? [...observations, ...authenticatedResearchReports.map((report) => ({
-          fact: { ref: report.ref, value: { ...report.value, subject: "research" } },
-          authenticated: true,
-          recorded: true,
-          freshness: { status: "current" },
-        }))]
-      : observations;
-    const stageOutcomeStatuses = current
-      ? deriveStageOutcomeStatuses({
-          task_id: context.identity.taskId,
-          read: readQualityEvidence(context.task),
-          stage_outcome_refs: {},
-          snapshot_tree: current.tree,
-          material_revision: materialRevision,
-          material_scope_revisions: stageMaterialScopeRevisions(materials),
-          snapshot_root: context.workspace?.worktreeRoot ?? context.candidateWorkspace?.worktreeRoot ?? null,
-          quality_fact_observations: allQualityFactObservations,
-          read_task_facts: () => readTaskFacts(context.task.taskPath),
-          authenticate: ({ stage, ref }) => authenticateStageOutcomeForProjection({ ...context, stage }, stage, ref),
-        })
-      : null;
     const executionOutcome = current
       ? deriveExecutionOutcomes({
           task_id: context.identity.taskId,
@@ -756,8 +849,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         })
       : null;
     const quality = deriveStageCompletion(values.stage, observations, {
-      requireStageOutcome: stageOutcomeStatuses !== null,
-      stageOutcomeStatus: stageOutcomeStatuses?.[values.stage] ?? "unavailable",
       requireOutline: values.stage === "make-decision" && context.manifest?.record_model === "vnext-single-write",
     });
     const slicingValidation = typeof materials["spec.md"] === "string"
@@ -806,10 +897,21 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       execution_outcome: executionOutcome?.[values.stage] ?? { status: "unavailable", blocking: false, attempt_count: 0, completed_attempt_count: 0, refs: [], diagnostic: null },
     });
   }
-  authenticateStageWriteBoundary(context, {
-    runnerRoot: RUNNER_ROOT,
-    operation: command,
-  });
+  if (command !== "doctor") {
+    assertTaskWriteIdentity({
+      task: context.task,
+      project: identity.project,
+      taskId: identity.task,
+      taskPath: identity.taskPath,
+      workspace: context.workspace ?? context.candidateWorkspace,
+      cwd,
+      env: launchEnv,
+    });
+    authenticateStageWriteBoundary(context, {
+      runnerRoot: RUNNER_ROOT,
+      operation: command,
+    });
+  }
   if (command === "doctor") {
     const allowed = new Set(["stage", "project", "task", "task-path"]);
     if (Object.keys(values).some((key) => !allowed.has(key))) throw new TypeError("doctor accepts only --stage, --project, --task, and optional --task-path");
@@ -968,14 +1070,27 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     }
     const allowedRunFields = new Set([
       "receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts",
-      "fallback_protocol", "review_budget", "user_reply", "stage_reflection",
+      "fallback_protocol", "review_budget", "user_reply", "stage_reflection", "interaction_aggregate",
       ...(values.stage === "make-decision" ? ["research_report"] : []),
       ...(values.stage === "build-spec" || values.stage === "build-plan" ? ["decision_freeze"] : []),
+      ...(values.stage === "verify-code" ? ["code_review_repairs"] : []),
     ]);
     const suppliedInput = { ...(input ?? {}) };
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);
     if (Object.prototype.hasOwnProperty.call(suppliedInput.receipts ?? {}, "audit")) throw new TypeError("run audit summary is runtime-derived and caller-forbidden");
+    if (suppliedInput.decision_freeze
+        && typeof suppliedInput.decision_freeze === "object"
+        && !Array.isArray(suppliedInput.decision_freeze)
+        && Object.hasOwn(suppliedInput.decision_freeze, "stage_outcome_ref")) {
+      throw new TypeError("current stage run does not accept decision_freeze.stage_outcome_ref; freeze uses current confirmation and quality facts");
+    }
+    // Reject the retired host-outcome input before any current-run publisher
+    // (including research_report) can write a partial transaction. Historical
+    // outcome bytes remain readable only through explicit compatibility APIs.
+    if (Object.hasOwn(suppliedInput.receipts ?? {}, "stage_outcomes")) {
+      throw new TypeError("current stage run does not accept receipts.stage_outcomes; the current WorkflowHub session is the official producer");
+    }
     if (Object.hasOwn(suppliedInput, "research_report")) {
       const receipts = suppliedInput.receipts && typeof suppliedInput.receipts === "object" && !Array.isArray(suppliedInput.receipts)
         ? { ...suppliedInput.receipts }
@@ -987,9 +1102,9 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
       delete suppliedInput.research_report;
     }
     // Missing, stale, or unavailable upstream quality facts remain visible in
-    // the read-only status projection, but never become a work permit.
-    // Stage outcomes must be supplied explicitly by the caller; no host
-    // session is scanned or rebound as a side effect of public run.
+    // the read-only status projection, but never become a work permit. The
+    // current WorkflowHub session is the official stage producer. Public run
+    // does not accept or rebind historical host outcome packets.
     const stageResult = await runOfficialStage(values.stage, context, {
       ...suppliedInput,
       receipts: { ...(suppliedInput.receipts ?? {}) },
@@ -1117,7 +1232,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
       ? result.diagnostics
       : result;
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-    process.exitCode = result?.status === "protocol_invalid" ? 2 : 0;
+    process.exitCode = stageRuntimeProcessExitCode(result);
   }).catch((error) => {
     if (error?.preflight_protocol === true && error?.diagnostic) {
       process.stdout.write(`${JSON.stringify([error.diagnostic], null, 2)}\n`);

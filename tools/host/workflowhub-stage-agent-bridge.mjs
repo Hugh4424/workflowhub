@@ -22,6 +22,7 @@ import {
   validateWorkerSummary,
 } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { bootstrapStage, prepareMakeDecisionWorkspace } from "../../runtime/stage/stage-context.mjs";
+import { assertTaskWriteIdentity } from "../cli/stage-runtime.mjs";
 import { authenticateCodeReviewRepairs } from "../../runtime/evidence/freshness.mjs";
 import { verifyWorkerBrief } from "../../runtime/task/material-workspace.mjs";
 import { buildHostRequirementAuthentication } from "../../runtime/evidence/host-session-transcript.mjs";
@@ -522,6 +523,21 @@ async function runBridge(input) {
   if (stage === "make-decision" && !context.candidateWorkspace) {
     context = prepareMakeDecisionWorkspace(context);
   }
+  const activeWorkspace = context.workspace ?? context.candidateWorkspace;
+  // Sidecar mode receives the task path from the parent, but canonical storage
+  // still comes from the trusted launcher environment. Never synthesize a
+  // storage root from the request path: a foreign task path must fail the
+  // canonical task-path check before any outcome bytes are written.
+  assertTaskWriteIdentity({
+    task: context.task,
+    project: projectName,
+    taskId,
+    taskPath,
+    workspace: activeWorkspace,
+    workspaceRoot: input.workspace_root ?? activeWorkspace?.worktreeRoot,
+    checkCwd: false,
+    env: process.env,
+  });
   const hasRequirementSource = hasSession && input.session.source !== undefined;
   const requirementAuthentication = hasRequirementSource
     ? buildRequirementAuthentication({

@@ -1,0 +1,10 @@
+command: npx vitest run tests/contract/close-remote-branch-cleanup.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 1
+test_files: 1 failed
+tests: 3 failed, 1 passed
+oracle: ORACLE-REMOTE-CLEANUP
+facts:
+- unauthorized cleanup did not delete the remote branch (target negative path passed)
+- authorized cleanup completed while the remote task branch remained (target failure)
+- denied remote deletion resolved instead of remaining visible as an incomplete close (target failure)
+- close projection omitted remote_branch_cleanup and known-gap preservation (target failure)

@@ -1,0 +1,6 @@
+T001 RED evidence (captured during build-code execution)
+
+command: npx vitest run tests/contract/review-material-change-redispatch.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 1
+setup: passed after fixture material_id correction
+target assertion: second material-only request was unavailable/blocked_before_dispatch instead of reusing the recorded review; the failure was the intended pre-change behavior.

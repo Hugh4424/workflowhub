@@ -1,0 +1,4 @@
+command: npx vitest run tests/contract/external-threshold-contract.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+oracle: GREEN — explicit minimum_heterologous reaches the broker request; v3 running is accepted as running; only completed distinct model identities satisfy the threshold; impossible thresholds are blocked before dispatch.
+summary: 1 file passed, 3 tests passed.

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-import { ReviewProviderClient } from "./review-provider-client.mjs";
+import { registerReviewSupplement, ReviewProviderClient } from "./review-provider-client.mjs";
 import { parseReviewerOutput } from "./review-output.mjs";
 import {
   loadTrustedThirdReviewConfig,
@@ -109,7 +109,7 @@ function stableValue(value) {
 // TTL; the managed public envelope and its exact key set remain unchanged.
 const MANAGED_REQUEST_ID_PROTOCOL_VERSION = "managed-request-id.v1";
 
-function managedRequestId(input, { materialId, hostProvider, providers, providerIdentities, reviewMode, prompt }) {
+function managedRequestId(input, { materialId, hostProvider, providers, providerIdentities, minimumHeterologous, reviewMode, prompt }) {
   const subject = {
     stage: input.stage,
     review_track: input.review_track ?? input.reviewTrack ?? null,
@@ -120,7 +120,7 @@ function managedRequestId(input, { materialId, hostProvider, providers, provider
     pair_id: input.pair_id ?? input.pairId ?? null,
     role: input.role ?? null,
   };
-  const identity = stableValue({ protocol_version: MANAGED_REQUEST_ID_PROTOCOL_VERSION, material_id: materialId, host_provider: hostProvider, providers, provider_identities: providerIdentities ?? null, review_mode: reviewMode, prompt, subject });
+  const identity = stableValue({ protocol_version: MANAGED_REQUEST_ID_PROTOCOL_VERSION, material_id: materialId, host_provider: hostProvider, providers, provider_identities: providerIdentities ?? null, minimum_heterologous: minimumHeterologous, review_mode: reviewMode, prompt, subject });
   return "wh-review-" + hash(JSON.stringify(identity));
 }
 
@@ -136,7 +136,30 @@ function providerSelectionShape(selection) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: provider selection repeats a provider");
   }
   const identities = Array.isArray(selection) ? undefined : (selection?.provider_identities ?? selection?.providerIdentities);
-  if (identities === undefined || identities === null) return { providers };
+  const models = Array.isArray(selection) ? undefined : (selection?.provider_models ?? selection?.providerModels);
+  const rawEligible = Array.isArray(selection) ? undefined : (selection?.eligible_profiles ?? selection?.eligibleProfiles);
+  const eligible = rawEligible === undefined || rawEligible === null ? [...providers] : [...rawEligible];
+  if (!Array.isArray(eligible) || eligible.length === 0
+      || eligible.some((provider) => typeof provider !== "string" || !providers.includes(provider))
+      || new Set(eligible).size !== eligible.length) {
+    throw new TypeError("PROVIDER_SELECTION_INVALID: eligible provider profiles are invalid");
+  }
+  const shaped = { providers, eligible_profiles: eligible };
+  if (models !== undefined && models !== null) {
+    if (!plainRecord(models)) throw new TypeError("PROVIDER_SELECTION_INVALID: provider models are invalid");
+    const modelKeys = Object.keys(models).sort();
+    if (modelKeys.join("\u0000") !== [...providers].sort().join("\u0000")) {
+      throw new TypeError("PROVIDER_SELECTION_INVALID: provider models do not match providers");
+    }
+    shaped.provider_models = Object.fromEntries(providers.map((provider) => {
+      const model = models[provider];
+      if (model !== null && (typeof model !== "string" || model.trim() === "")) {
+        throw new TypeError(`PROVIDER_SELECTION_INVALID: provider model ${provider} is invalid`);
+      }
+      return [provider, model];
+    }));
+  }
+  if (identities === undefined || identities === null) return shaped;
   if (!plainRecord(identities)) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities are invalid");
   }
@@ -145,7 +168,7 @@ function providerSelectionShape(selection) {
     throw new TypeError("PROVIDER_SELECTION_INVALID: provider identities do not match providers");
   }
   return {
-    providers,
+    ...shaped,
     provider_identities: Object.fromEntries(providers.map((provider) => {
       const identity = identities[provider];
       exactKeys(identity, ["source_id", "config_id"], `provider identity ${provider}`);
@@ -155,6 +178,34 @@ function providerSelectionShape(selection) {
       }
       return [provider, { source_id: identity.source_id, config_id: identity.config_id }];
     })),
+  };
+}
+
+function validateReviewThreshold(route, selection) {
+  const minimum = route?.minimum_heterologous;
+  if (!Number.isSafeInteger(minimum) || minimum < 1) {
+    throw new TypeError("minimum_heterologous must be an explicit positive integer");
+  }
+  const models = selection?.provider_models;
+  if (!models) throw new TypeError("provider selection is missing underlying model identities");
+  const eligible = selection.eligible_profiles ?? selection.providers;
+  const eligibleModels = eligible.map((provider) => models[provider]);
+  if (eligibleModels.some((model) => typeof model !== "string" || model.trim() === "")) {
+    throw new TypeError("provider selection contains a member without an underlying model identity");
+  }
+  const distinct = new Set(eligibleModels).size;
+  if (distinct < minimum) {
+    throw new TypeError(`minimum_heterologous ${minimum} exceeds ${distinct} distinct eligible underlying model identities`);
+  }
+  return minimum;
+}
+
+function providerSelectionOutput(selection) {
+  return {
+    providers: [...selection.providers],
+    provider_identities: selection.provider_identities ?? null,
+    ...(selection.eligible_profiles ? { eligible_profiles: [...selection.eligible_profiles] } : {}),
+    ...(selection.provider_models ? { provider_models: { ...selection.provider_models } } : {}),
   };
 }
 
@@ -595,6 +646,7 @@ export async function dispatchFrozenProviderInput({ bytes, attachmentRoot, clien
       materials: restored.materials,
       prompt: restored.prompt,
       reviewMode: restored.review_mode,
+      minimumHeterologous: restored.review_policy?.minimum_heterologous,
       strictProtocol: true,
     });
   } finally { restored.materials.dispose(); }
@@ -621,7 +673,6 @@ function unavailableResult(input, error, pair = null, extra = {}) {
     ...pairFields(pair),
     runtime_id: null,
     outcome: "unavailable",
-    minimum_heterologous: 1,
     provider_results: [],
     findings: [],
     ...extra,
@@ -779,6 +830,17 @@ function runStaticPreflight(input, { route, providerSelection, runnerOwnsBundle 
       nextAction: "configure an enabled heterologous provider and retry",
     }), pair);
   }
+  let minimum;
+  try {
+    minimum = validateReviewThreshold(route, providerSelection);
+  } catch (error) {
+    return blockedPreflight(input, "REVIEW_THRESHOLD_INVALID", error.message, preflightDiagnostic({
+      field: "minimum_heterologous",
+      expected: "explicit positive integer no greater than distinct eligible underlying model identities",
+      actual: route?.minimum_heterologous ?? "missing",
+      nextAction: "repair the trusted review route/model identities and retry",
+    }), pair);
+  }
   const materialPreflight = shouldRunMaterialPreflight(input, rule)
     || input.stage === "build-prd" || input.review_kind === "build_prd" || input.reviewKind === "build_prd";
   return materialPreflight ? runMaterialAllowlistPreflight(input, rule, pair) : null;
@@ -808,6 +870,57 @@ function evidenceAnchorValidity(bundleRoot, findings) {
     const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length;
     return finding.line <= lineCount;
   });
+}
+
+function bindReviewSupplementToSelection(supplement, { selectedSet, selectedIdentities, selectedModels, bundleRoot }) {
+  const provider = supplement?.provider;
+  if (typeof provider !== "string" || !selectedSet.has(provider)) {
+    const error = new Error("supplement provider is not part of the trusted review selection");
+    error.code = "SUPPLEMENT_PROVIDER_INVALID";
+    throw error;
+  }
+  let parsed;
+  try {
+    parsed = parseReviewerOutput(JSON.stringify({ findings: supplement.findings }), { requireEvidence: true });
+  } catch (error) {
+    const invalid = new Error(`supplement findings are invalid: ${error.message}`);
+    invalid.code = "SUPPLEMENT_INVALID";
+    throw invalid;
+  }
+  const evidenceAnchors = evidenceAnchorValidity(bundleRoot, parsed.findings);
+  if (!evidenceAnchors.every(Boolean)) {
+    const error = new Error("supplement finding evidence does not anchor to submitted material");
+    error.code = "EVIDENCE_ANCHOR_INVALID";
+    throw error;
+  }
+  const suppliedIdentity = supplement.identity;
+  const trustedIdentity = selectedIdentities?.[provider] ?? null;
+  if (suppliedIdentity !== undefined) {
+    if (!suppliedIdentity || typeof suppliedIdentity !== "object"
+        || suppliedIdentity.provider !== provider
+        || suppliedIdentity.adapter !== providerAdapter(provider)
+        || (trustedIdentity && (suppliedIdentity.source_id !== trustedIdentity.source_id
+          || suppliedIdentity.config_id !== trustedIdentity.config_id))
+        || (selectedModels && suppliedIdentity.model !== selectedModels[provider])) {
+      const error = new Error("supplement identity does not match the trusted review selection");
+      error.code = "SUPPLEMENT_PROVIDER_INVALID";
+      throw error;
+    }
+  }
+  const identity = suppliedIdentity ?? (trustedIdentity
+    ? {
+        provider,
+        adapter: providerAdapter(provider),
+        source_id: trustedIdentity.source_id,
+        config_id: trustedIdentity.config_id,
+        model: selectedModels?.[provider] ?? null,
+      }
+    : null);
+  return {
+    ...supplement,
+    ...(identity ? { identity } : {}),
+    findings: parsed.findings.map((finding) => ({ ...finding, provider })),
+  };
 }
 
 function publicProviderResult(item, evidenceAnchors = undefined, pair = null) {
@@ -870,7 +983,7 @@ function unavailableReason(providers) {
     : { code: "REVIEW_NO_SEMANTIC_RESULT", message: "no provider produced a semantic review result" };
 }
 
-function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
+function normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels = null, pair = null) {
   const group = lifecycle?.group;
   if (!group || !Array.isArray(group.providers)) throw Object.assign(new Error("managed lifecycle did not return a terminal provider group"), { code: "PROTOCOL_INCOMPATIBLE" });
   const materialId = group.material_id ?? group.materialId ?? lifecycle.material_id ?? lifecycle.materialId;
@@ -880,6 +993,9 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
     round: group.round,
     selectedTier: group.selected_tier,
     ...(materialId === undefined ? {} : { material_id: materialId }),
+    ...(Object.hasOwn(group, "initial_result_ref") ? { initial_result_ref: group.initial_result_ref } : {}),
+    ...(group.publication ? { publication: group.publication } : {}),
+    ...(Array.isArray(group.supplements) ? { supplements: group.supplements } : {}),
     providers: group.providers.map((item) => {
       // Managed v2 omits source identity: only the trusted route selection may
       // supply it, and no identity-like field may be copied from the broker
@@ -902,7 +1018,7 @@ function normalizeManagedGroup(lifecycle, selectedIdentities, pair = null) {
         // so the normalized member satisfies the same adapter contract as every
         // other path instead of degrading to PROVIDER_IDENTITY_INVALID.
         identity: brokerV3Identity ?? (selectedIdentities?.[provider]
-          ? { provider, adapter: providerAdapter(provider), ...selectedIdentities[provider] }
+          ? { provider, adapter: providerAdapter(provider), ...selectedIdentities[provider], model: selectedModels?.[provider] ?? item.model ?? null }
           : null),
         ...(pair ? pairFields(pair) : {}),
       };
@@ -1036,9 +1152,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     pair,
   );
   if (preflight) return preflight;
+  const minimum = validateReviewThreshold(route, providerSelection);
   const selectedProviders = providerSelection.providers;
   const selectedIdentities = providerSelection.provider_identities ?? null;
+  const selectedModels = providerSelection.provider_models ?? null;
   const selectedSet = new Set(selectedProviders);
+  const eligibleSet = new Set(providerSelection.eligible_profiles ?? selectedProviders);
   let bundle;
   try {
     bundle = typeof dependencies.buildBundle === "function"
@@ -1050,10 +1169,8 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
     }
   } catch (error) {
     return unavailableResult(reviewInput, normalizeProviderError(error), pair, {
-      provider_selection: {
-        providers: [...selectedProviders],
-        provider_identities: selectedIdentities,
-      },
+      minimum_heterologous: minimum,
+      provider_selection: providerSelectionOutput(providerSelection),
     });
   }
   try {
@@ -1067,6 +1184,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         hostProvider,
         providers: selectedProviders,
         providerIdentities: selectedIdentities,
+        minimumHeterologous: minimum,
         reviewMode: route.mode,
         prompt,
       });
@@ -1074,6 +1192,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       try {
         lifecycle = await client.startManaged({
           requestId, hostProvider, providers: selectedProviders, materials: bundle, prompt,
+          minimumHeterologous: minimum,
           reviewMode: route.mode,
           reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
         });
@@ -1087,14 +1206,14 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           lifecycle = terminal?.state ? terminal : { ...lifecycle, state: "terminal", group: terminal };
         }
         if (lifecycle?.state !== "terminal") throw Object.assign(new Error("managed review terminal event is invalid"), { code: "PROTOCOL_INCOMPATIBLE" });
-        group = normalizeManagedGroup(lifecycle, selectedIdentities, pair);
+        group = normalizeManagedGroup(lifecycle, selectedIdentities, selectedModels, pair);
       } catch (error) {
         return unavailableResult(input, normalizeProviderError(error), pair, {
           dispatch_state: lifecycle ? "dispatched" : "blocked_before_dispatch",
           request_id: requestId,
           runtime_id: lifecycle?.runtime_id ?? null,
-          minimum_heterologous: route.minimum_heterologous,
-          provider_selection: { providers: [...selectedProviders], provider_identities: selectedIdentities },
+          minimum_heterologous: minimum,
+          provider_selection: providerSelectionOutput(providerSelection),
         });
       }
     } else {
@@ -1104,22 +1223,20 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           providers: selectedProviders,
           materials: bundle,
           prompt,
+          minimumHeterologous: minimum,
           reviewMode: route.mode,
           // The managed and unmanaged transports must expose the same provider
           // contract: a direction review is one request carrying its ordered
           // reconstruct -> reveal -> challenge flow. Omitting it here would let
           // the unmanaged path silently downgrade the governed flow.
           reviewFlow: input.review_flow ?? input.reviewFlow ?? null,
-          strictProtocol: false,
+          strictProtocol: true,
           ...pairFields(pair),
         });
       } catch (error) {
         return unavailableResult(input, normalizeProviderError(error), pair, {
-          minimum_heterologous: route.minimum_heterologous,
-          provider_selection: {
-            providers: [...selectedProviders],
-            provider_identities: selectedIdentities,
-          },
+          minimum_heterologous: minimum,
+          provider_selection: providerSelectionOutput(providerSelection),
         });
       }
     }
@@ -1133,15 +1250,12 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       }, pair, {
         runtime_id: group?.runtimeId ?? group?.runtime_id ?? null,
         outcome: group?.outcome ?? "unavailable",
-        minimum_heterologous: route.minimum_heterologous,
-        provider_selection: {
-          providers: [...selectedProviders],
-          provider_identities: selectedIdentities,
-        },
+        minimum_heterologous: minimum,
+        provider_selection: providerSelectionOutput(providerSelection),
       });
     }
     const findings = [];
-    const semanticProviders = new Set();
+    const semanticModels = new Set();
     const receivedProviders = Array.isArray(group?.providers) ? group.providers : [];
     const seenProviders = new Set();
     const providers = receivedProviders.map((rawItem) => {
@@ -1151,6 +1265,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       const provider = item?.provider;
       const expectedIdentity = selectedIdentities && typeof selectedIdentities === "object"
         ? selectedIdentities[provider] : null;
+      const expectedModel = selectedModels?.[provider];
       const identity = item?.identity;
       const identityValid = typeof provider === "string" && selectedSet.has(provider)
         && !seenProviders.has(provider)
@@ -1160,7 +1275,10 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
           && typeof expectedIdentity.source_id === "string" && expectedIdentity.source_id.trim() !== ""
           && typeof expectedIdentity.config_id === "string" && expectedIdentity.config_id.trim() !== ""
           && identity.config_id === expectedIdentity.config_id
-          && identity.source_id === expectedIdentity.source_id));
+          && identity.source_id === expectedIdentity.source_id))
+        && (!selectedModels || (item.status !== "completed"
+          ? true
+          : typeof identity.model === "string" && identity.model === expectedModel));
       seenProviders.add(provider);
       if (!identityValid) {
         // Identity degradation is a member-level fact, not a replacement for
@@ -1191,7 +1309,7 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
               error: { code: "EVIDENCE_ANCHOR_INVALID", message: "provider finding evidence does not anchor to submitted material" },
             };
           }
-          semanticProviders.add(item.provider);
+          if (eligibleSet.has(item.provider)) semanticModels.add(item.identity.model);
           for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
           return publicProviderResult(item, evidenceAnchors, pair);
         } catch {
@@ -1228,20 +1346,15 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
         code: "PROVIDER_RESULT_INVALID",
         message: "broker provider results could not be bound uniquely to the trusted review selection",
       }, pair, {
-        minimum_heterologous: route.minimum_heterologous,
+        minimum_heterologous: minimum,
         runtime_id: group.runtimeId,
         outcome: group.outcome,
-        provider_selection: {
-          providers: [...selectedProviders],
-          provider_identities: selectedIdentities,
-        },
+        provider_selection: providerSelectionOutput(providerSelection),
       });
     }
-    const minimum = Number.isSafeInteger(route.minimum_heterologous) && route.minimum_heterologous >= 1
-      ? route.minimum_heterologous : 1;
-    const available = semanticProviders.size >= minimum;
+    const available = semanticModels.size >= minimum;
     const observedMaterialId = brokerMaterialIds[0] ?? bundle.materialId;
-    return {
+    const baseResult = {
       status: available ? "available" : "unavailable",
       stage: input.stage,
       ...reviewSubjectFields(input),
@@ -1252,15 +1365,36 @@ async function runSimpleReviewSingle(input, dependencies = {}, pair = null) {
       runtime_id: group.runtimeId,
       outcome: group.outcome,
       ...(group.transport_timeout ? { transport_timeout: group.transport_timeout } : {}),
+      ...(Object.hasOwn(group, "initial_result_ref") ? { initial_result_ref: group.initial_result_ref } : {}),
+      ...(group.publication ? { publication: group.publication } : {}),
       minimum_heterologous: minimum,
-      provider_selection: {
-        providers: [...selectedProviders],
-        provider_identities: selectedIdentities,
-      },
+      provider_selection: providerSelectionOutput(providerSelection),
       provider_results: providers,
       findings,
       ...(available ? {} : { error: unavailableReason(providers) }),
     };
+    if (!Array.isArray(group.supplements) || group.supplements.length === 0) {
+      return { ...baseResult, ...(Array.isArray(group.supplements) ? { supplements: group.supplements } : {}) };
+    }
+    try {
+      const supplements = group.supplements.map((supplement) => bindReviewSupplementToSelection(supplement, {
+        selectedSet, selectedIdentities, selectedModels, bundleRoot: bundle.bundleRoot,
+      }));
+      return supplements.reduce((current, supplement) => registerReviewSupplement(current, supplement), {
+        ...baseResult,
+        supplements: [],
+      });
+    } catch (error) {
+      return unavailableResult(input, normalizeProviderError(error), pair, {
+        dispatch_state: "dispatched",
+        minimum_heterologous: minimum,
+        runtime_id: group.runtimeId,
+        outcome: group.outcome,
+        provider_selection: providerSelectionOutput(providerSelection),
+        provider_results: providers,
+        findings,
+      });
+    }
   } finally {
     bundle.dispose();
   }

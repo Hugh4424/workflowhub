@@ -8,9 +8,12 @@ description: Report-only packet lens for consistency between supplied specificat
 Mode: `lens-only`. Delivery: `file_only`.
 
 This skill owns the single stage-end semantic check and its quality-fact
-contract for the four authoring stages. The Stage Agent invokes the profile on
-the current stage packet, and the runtime authenticates the resulting semantic
-packet and validator result inside the existing stage-outcome fact.
+contract for the four authoring stages. When a current stage packet is
+available, the current WorkflowHub session invokes the profile and the
+existing stage publication records its result as a quality fact; when the
+packet is unavailable, it records `material_incomplete`/`missing` honestly.
+No external Stage Agent, bridge, session packet, or stage-outcome envelope is
+required for this check.
 `verify-code` is deliberately excluded: it uses the separate `dsh-code-review`
 code-review skill. This is one final quality check inside the existing stage
 outcome, not a second workflow engine or a work-permission gate:
@@ -29,15 +32,15 @@ or create a review verdict. The existing stage publication is the sole
 publication owner: it atomically writes the authenticated result to the
 existing `quality/facts/*.json` and corresponding acceptance evidence under
 `quality/evidence/`, using the existing store and writer. `spec-analyze` does
-not create a second store, projection, or gate. The Stage Agent repairs each
-finding in the current stage and invokes this same profile again after the
-real change; the runtime only uses the truthful result to describe stage
-quality. `unavailable`, `material_incomplete`, and `inconsistent` are never
+not create a second store, projection, or gate. The current WorkflowHub
+session repairs each finding in the current stage and invokes this same
+profile again after the real change; the runtime only uses the truthful result
+to describe stage quality. `unavailable`, `material_incomplete`, and `inconsistent` are never
 `pass`, but they do not prevent same-task repair or invent a new task.
 
 ## Input boundary
 
-Read only the stage packet supplied by the Stage Agent and the frozen skill bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet. The current profile also applies the stage-owned material contract: make-decision authenticates the raw-requirement projection, Talk/Clarify/Grill/confirmation facts; build-spec authenticates the structured spec and Clarify result; build-plan authenticates the existing plan/task contract; build-code authenticates the per-AC implementation-to-evidence chain. The stage outcome binds the packet and validator result to the current stage snapshot, material revision, declared analyzer step, and `spec-analyze` skill outcome.
+Read only the current stage packet and the frozen skill bundle. For build-plan, use the generated `planning_artifacts` packet projection. It must include the decision-log `raw_requirement_index`, `approved_spec`, `acceptance_criteria`, `draft_plan`, and `draft_tasks`; when the existing source index carries them, the projection may also carry derived `DEFER-*`/`OPEN-*` entries. This projection is derived review input, not a fifth current material and not a writer. Do not request additional files, locate repository files, or infer material that is absent from the packet. The current profile also applies the stage-owned material contract: make-decision authenticates the raw-requirement projection, Talk/Clarify/Grill/confirmation facts; build-spec authenticates the structured spec and Clarify result; build-plan authenticates the existing plan/task contract; build-code authenticates the per-AC implementation-to-evidence chain. The current stage publication binds the packet and validator result to the current stage snapshot and material revision.
 
 ## Check
 
@@ -74,11 +77,10 @@ This lens is read-only and 不阻断工作. At the end of each of the four
 authoring stages it is the only stage-end semantic check, invoked after finding
 disposition and the last stage-material revision, immediately before publish or
 handoff. `verify-code` does not invoke this lens; it uses `dsh-code-review` for
-current implementation review. The Stage Agent records the returned lens
-result in the existing stage-outcome evidence, and the existing stage
-publication atomically writes the corresponding `quality/facts` and acceptance
-evidence. A manifest entry or prose declaration that the check happened is not
-execution evidence. Scan categories: inconsistency, duplicate, ambiguity,
+current implementation review. The current WorkflowHub session records the
+returned lens result through the existing stage publication. A manifest entry
+or prose declaration that the check happened is not execution evidence. Scan
+categories: inconsistency, duplicate, ambiguity,
 underdefined, deferred/open handoff, and constitution-alignment. Constitution
 alignment is record-only, 不阻断. This lens is not a provider review and does
 not create a separate workflow, store, or provider-pass gate. A missing or

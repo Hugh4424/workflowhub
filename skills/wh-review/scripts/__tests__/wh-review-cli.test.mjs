@@ -9,7 +9,7 @@ import { createTask, createTaskKernel } from "../../../../runtime/task/task-hand
 import { prepareTaskWorkspace } from "../../../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../../../core/artifact-dir.mjs";
 import { reviewInstructionsFor } from "../review-materials.mjs";
-import { writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../../../../tests/helpers/stage-outcome.mjs";
+import { writeCanonicalStageMaterials } from "../../../../tests/helpers/stage-outcome.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("wh-review production CLI", () => {
-  it("records current unavailable evidence when the build-code outcome is missing", async () => {
+  it("records current unavailable evidence when build-code acceptance execution is missing", async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-no-execution-"))); roots.push(root);
     const repo = join(root, "repo"); mkdirSync(repo);
     git(repo, ["init", "-q"]); git(repo, ["config", "user.name", "Test"]); git(repo, ["config", "user.email", "test@example.com"]);
@@ -69,7 +69,7 @@ describe("wh-review production CLI", () => {
     const result = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
       resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
     });
-    expect(result).toMatchObject({ status: "unavailable", review_fact_intent: { status: "unavailable" }, error: { message: "verify-code E2E review requires one current completed build-code outcome" } });
+    expect(result).toMatchObject({ status: "unavailable", review_fact_intent: { status: "unavailable" }, error: { message: "verify-code E2E review requires one current passed build-code acceptance execution" } });
   });
 
   it("rejects a content-addressed but semantically incomplete build-code outcome", async () => {
@@ -100,7 +100,7 @@ describe("wh-review production CLI", () => {
     const result = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
       resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
     });
-    expect(result).toMatchObject({ status: "unavailable", error: { message: "verify-code E2E review requires one current completed build-code outcome" } });
+    expect(result).toMatchObject({ status: "unavailable", error: { message: "verify-code E2E review requires one current passed build-code acceptance execution" } });
   });
 
   it("uses an explicit one-profile route, freezes implementation evidence, and reuses the current E2E review", async () => {
@@ -118,9 +118,7 @@ describe("wh-review production CLI", () => {
     const kernel = createTaskKernel(task, { candidateWorkspace: workspace });
     const snapshot = kernel.currentVNextSnapshot();
     const materialRevision = kernel.currentVNextMaterialRevision();
-    const outcome = writeStageOutcomeFixture({ task, kernel, artifacts, workspace, stage: "build-code", attemptId: "build-1", workflowRunId: kernel.deriveStageWorkflowRunId("build-code") });
-    const outcomeRaw = `${JSON.stringify(outcome.value, null, 2)}\n`;
-    const outcomeHash = outcome.sha256;
+    const currentRunId = kernel.deriveStageWorkflowRunId("build-code");
     const testOutput = "focused test passed\n";
     const testOutputRef = "quality/tests/output/build-code-e2e";
     kernel.publishCanonicalRecord(testOutputRef, testOutput);
@@ -163,7 +161,10 @@ describe("wh-review production CLI", () => {
     const stageEvidenceRaw = `${JSON.stringify({
       schema_version: "stage-quality-evidence.v1", task_id: task.identity.taskId, stage: "build-code", subject: "acceptance_execution", status: "passed",
       material_revision: materialRevision, snapshot_tree: snapshot.tree,
-      subject_fact: { status: "passed", execution_binding: { stage_outcome_ref: outcome.ref, stage_outcome_hash: outcomeHash }, execution_items: [{
+      subject_fact: { status: "passed", execution_binding: {
+        kind: "workflowhub-current-session", task_id: task.identity.taskId, stage: "build-code", attempt_id: "build-1",
+        run_id: currentRunId, snapshot_tree: snapshot.tree, material_revision: materialRevision,
+      }, executor_actor: { source_kind: "workflowhub-session", source_id: "workflowhub-current-session", run_id: currentRunId }, execution_items: [{
         task_id: "T002", source: "demo/source", sample: "demo/sample", scenario: "demo/scenario", tier: "browser", status: "executed",
         evidence_refs: [{ ref: browserRef, sha256: browserHash }],
       }] },
@@ -187,13 +188,13 @@ describe("wh-review production CLI", () => {
       version: 4,
       tiers: [],
       providers: {
-        "kimi/coding": { enabled: true, source_id: "kimi/coding" },
-        "kimi/k3": { enabled: true, source_id: "kimi/k3" },
-        "opencode/v4flash": { enabled: true, source_id: "opencode/v4flash" },
-        "codex/luna": { enabled: true, source_id: "codex/luna" },
+        "kimi/coding": { enabled: true, source_id: "kimi/coding", model: "kimi-model" },
+        "kimi/k3": { enabled: true, source_id: "kimi/k3", model: "kimi-k3-model" },
+        "opencode/v4flash": { enabled: true, source_id: "opencode/v4flash", model: "opencode-model" },
+        "codex/luna": { enabled: true, source_id: "codex/luna", model: "codex-model" },
       },
     }));
-    const opencodeConfigId = createHash("sha256").update(JSON.stringify({ id: "opencode/v4flash", source_id: "opencode/v4flash", model: null, effort: null, thinking: null, deadline_ms: null }), "utf8").digest("hex");
+    const opencodeConfigId = createHash("sha256").update(JSON.stringify({ id: "opencode/v4flash", source_id: "opencode/v4flash", model: "opencode-model", effort: null, thinking: null, deadline_ms: null }), "utf8").digest("hex");
     const { runTaskBoundE2eReview } = await import(cli.href);
 
     let unavailableDispatches = 0;
@@ -232,14 +233,14 @@ describe("wh-review production CLI", () => {
         const readMaterial = (suffix) => readFileSync(join(request.materials.bundleRoot, "materials", materialFiles.find((name) => name.endsWith(suffix))), "utf8");
         seen.push({
           providers: request.providers, strict: request.strictProtocol, materialId: request.materials.materialId,
-          decision: readMaterial("decision-log.md.md"), outcome: readMaterial("build-code-outcome.json.md"),
+          decision: readMaterial("decision-log.md.md"), outcome: readMaterial("build-code-execution.json.md"),
           diff: readMaterial("implementation-diff.patch.md"), tests: readMaterial("test-1-receipt.json.md"), testOutput: readMaterial("test-1-output.txt.md"),
           browser: readMaterial("browser-evidence-1.json.md"),
-          screenshot: readMaterial("browser-1-screenshot-1.bin.md"), browserTestOutput: readMaterial("browser-1-test-output.txt.md"),
+          screenshot: readMaterial("browser-1-screenshot-1.json.md"), browserTestOutput: readMaterial("browser-1-test-output.txt.md"),
           binding: JSON.parse(readMaterial("review-subject-binding.json.json")),
         });
         return { runtimeId: "review-runtime", outcome: "completed", providers: [{
-          provider: "opencode/v4flash", status: "completed", error: null, identity: { provider: "opencode/v4flash", adapter: "opencode", source_id: "opencode/v4flash", config_id: opencodeConfigId, model: "model" },
+          provider: "opencode/v4flash", status: "completed", error: null, identity: { provider: "opencode/v4flash", adapter: "opencode", source_id: "opencode/v4flash", config_id: opencodeConfigId, model: "opencode-model" },
           output: JSON.stringify({ findings: [] }), timing: null, usage: null,
         }] };
       } },
@@ -253,24 +254,24 @@ describe("wh-review production CLI", () => {
     expect(seen[0].strict).toBe(true);
     expect(seen[0].materialId).toEqual(expect.any(String));
     expect(seen[0].decision).toContain("# Decision log");
-    expect(seen[0].outcome).toContain('"attempt_id": "build-1"');
+    expect(seen[0].outcome).toContain('"attempt_id":"build-1"');
     expect(seen[0].diff).toContain("diff --git");
     expect(seen[0].tests).toContain(testOutputRef);
     expect(seen[0].testOutput).toContain("focused test passed");
     expect(seen[0].browser).toContain('"page":"Dogfood"');
     expect(seen[0].screenshot).toContain(screenshotContentHash);
     expect(seen[0].browserTestOutput).toContain("focused test passed");
-    expect(seen[0].binding).toMatchObject({ execution_ref: `quality/evidence/stage-outcomes/build-code/${outcomeHash}.json`, executor_actor: { source_id: "fixture/executor", source_kind: "stage-agent", run_id: "build-1" } });
+    expect(seen[0].binding).toMatchObject({ execution_ref: `quality/evidence/stage-quality/build-code/acceptance_execution-${stageEvidenceHash}.json`, executor_actor: { source_id: "workflowhub-current-session", source_kind: "workflowhub-session", run_id: currentRunId } });
     expect(result).toMatchObject({ status: "available", review_fact_intent: { status: "recorded", subject: "independent_review" } });
     const stored = JSON.parse(task.readRecord(result.result_ref));
     expect(stored.e2e_binding).toMatchObject({
       reviewer_actor: { source_id: "opencode/v4flash" },
-      reviewed_execution: { ref: `quality/evidence/stage-outcomes/build-code/${outcomeHash}.json`, actor: { source_id: "fixture/executor" } },
+      reviewed_execution: { ref: `quality/evidence/stage-quality/build-code/acceptance_execution-${stageEvidenceHash}.json`, actor: { source_id: "workflowhub-current-session" } },
     });
     expect(stored.review_policy).toMatchObject({
       mode: "single_round", minimum_heterologous: 1,
       broker_identity: { provider: "opencode/v4flash", source_id: "opencode/v4flash", config_id: opencodeConfigId },
-      requested_profile_specs: [{ provider: "opencode/v4flash", model: null, effort: null, thinking: null, priority: 0 }],
+      requested_profile_specs: [{ provider: "opencode/v4flash", model: "opencode-model", effort: null, thinking: null, priority: 0 }],
     });
 
     const reused = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
@@ -300,8 +301,8 @@ describe("wh-review production CLI", () => {
     const sameSourceIdentity = await runTaskBoundE2eReview({ stage: "verify-code", host_provider: "codex" }, {
       resolveTrustedSubject: () => ({ task, taskId: task.identity.taskId, kernel, workspace }),
       loadConfig: () => ({ whReview: {}, config: brokerConfig, attachmentRoot, command: ["unused"] }),
-      resolveRoute: () => ({ mode: "single_round", initial: ["fixture/executor"], minimum_heterologous: 1 }),
-      selectProviders: () => ({ providers: ["fixture/executor"], provider_identities: { "fixture/executor": { source_id: "fixture/executor", config_id: "a".repeat(64) } } }),
+      resolveRoute: () => ({ mode: "single_round", initial: ["workflowhub-current-session"], minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["workflowhub-current-session"], provider_identities: { "workflowhub-current-session": { source_id: "workflowhub-current-session", config_id: "a".repeat(64) } } }),
       client: { async runGroup() { throw new Error("same source identity must not be dispatched"); } },
     });
     expect(sameSourceIdentity).toMatchObject({
@@ -455,11 +456,11 @@ describe("wh-review production CLI", () => {
         [field]: value,
       }, {
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-retired-"))), command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
-        selectProviders: () => ({ providers: ["other"] }),
+        resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+        selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
         client: {
           async runGroup() {
-            return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+            return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other", adapter: "other", model: "other-model" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
           },
         },
       });
@@ -473,11 +474,11 @@ describe("wh-review production CLI", () => {
       materials: { raw: "current", response_ledger: {} },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-ledger-"))), command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other"] }),
+      resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
       client: {
         async runGroup() {
-          return { runtimeId: "r2", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+          return { runtimeId: "r2", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other", adapter: "other", model: "other-model" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
         },
       },
     });
@@ -525,11 +526,11 @@ describe("wh-review production CLI", () => {
       materials: { raw: "x", scope_revision: {} },
     }, {
       loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-scope-"))), command: ["unused"] }),
-      resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
-      selectProviders: () => ({ providers: ["other"] }),
+      resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+      selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
       client: {
         async runGroup() {
-          return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+          return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other", adapter: "other", model: "other-model" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
         },
       },
     });
@@ -548,11 +549,11 @@ describe("wh-review production CLI", () => {
         [field]: { opencode: "old-runtime" },
       }, {
         loadConfig: () => ({ whReview: {}, config: "/unused/config.json", attachmentRoot: realpathSync(mkdtempSync(join(tmpdir(), "wh-review-runtime-"))), command: ["unused"] }),
-        resolveRoute: () => ({ initial: ["other"], mode: "single_round" }),
-        selectProviders: () => ({ providers: ["other"] }),
+        resolveRoute: () => ({ initial: ["other"], mode: "single_round", minimum_heterologous: 1 }),
+        selectProviders: () => ({ providers: ["other"], provider_models: { other: "other-model" } }),
         client: {
           async runGroup() {
-            return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
+            return { runtimeId: "r1", outcome: "completed", providers: [{ provider: "other", status: "completed", identity: { provider: "other", adapter: "other", model: "other-model" }, error: null, output: JSON.stringify({ findings: [] }), timing: null, usage: null }] };
           },
         },
       });
@@ -924,11 +925,11 @@ describe("wh-review production CLI", () => {
     writeFileSync(brokerConfig, JSON.stringify({
       version: 4,
       tiers: [["kimi"]],
-      providers: { kimi: { enabled: true, source_id: "fixture-kimi-source" } },
+      providers: { kimi: { enabled: true, source_id: "fixture-kimi-source", model: "kimi-model" } },
       attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }],
     }));
     const brokerConfigId = createHash("sha256").update(JSON.stringify({
-      id: "kimi", source_id: "fixture-kimi-source", model: null, effort: null, thinking: null, deadline_ms: null,
+      id: "kimi", source_id: "fixture-kimi-source", model: "kimi-model", effort: null, thinking: null, deadline_ms: null,
     }), "utf8").digest("hex");
     const counter = join(root, "broker-count"); writeFileSync(counter, "0");
     const broker = join(root, "fake-broker.mjs");
@@ -943,11 +944,11 @@ writeFileSync(countPath, String(count));
 const request = JSON.parse(readFileSync(requestPath, "utf8"));
 const attachments = JSON.parse(readFileSync(attachmentsPath, "utf8"));
 const trustedIdentity = {
-  source_id: "fixture-kimi-source",
-  config_id: createHash("sha256").update(JSON.stringify({
+    source_id: "fixture-kimi-source",
+    config_id: createHash("sha256").update(JSON.stringify({
     id: "kimi",
     source_id: "fixture-kimi-source",
-    model: null,
+    model: "kimi-model",
     effort: null,
     thinking: null,
     deadline_ms: null,
@@ -958,7 +959,7 @@ const requestId = process.argv.find((value) => value.startsWith("--request-id=")
 const error = { code: "AUTH", message: "fixture auth unavailable" };
 const member = {
   adapter: "kimi", continuable: false, effort: null, error,
-  material_id: attachments.bundle_id, model: null, output: null, provider: "kimi",
+  material_id: attachments.bundle_id, model: "kimi-model", output: null, provider: "kimi",
   raw_output_ref: null, result_protocol: "workflowhub-result.v2",
   retry: { count: 0, progress_events: 0 }, runtime_id: runtimeId,
   session_file_path: null, session_id: null, status: "failed", thinking: null,
@@ -990,7 +991,6 @@ process.stdout.write(JSON.stringify({
       materials: {
         raw_requirement: "A bounded review recovery fixture.", objective_facts: "The task workspace and trusted route exist.",
         convergence_outline: "The fixture review converges on the configured direction.",
-        review_instructions: "Review the materials.",
       },
     }));
 

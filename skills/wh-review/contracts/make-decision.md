@@ -84,7 +84,7 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 detail 的同一 wh-review packet 必须包含 `simplicity-guard` 只读 advisory lens，逐项执行
 P0-P3：优先删除、直接复用或最小改造；标出 scope creep、重复已有能力，以及没有故障
 证据或硬约束的长期能力。lens 不单独调用、不生成事实或 receipt；发现实质扩大实现或
-维护面的内容时，在同一 findings 中报告具体问题，由 Stage Agent 处置。
+维护面的内容时，在同一 findings 中报告具体问题，由当前 WorkflowHub 会话处置。
 
 direction 是不含候选方案的盲审，不包含 `simplicity-guard` 或其他依赖候选方案的 lens，
 避免从不存在的方案中推断或裁剪内容。

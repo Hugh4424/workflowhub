@@ -1,0 +1,15 @@
+{
+  "request": {
+    "stage": "build-code",
+    "subject_kind": "phase",
+    "phase_id": "P1",
+    "review_scope": "phase",
+    "host_provider": "codex",
+    "materials": {
+      "approved_spec": "FR-REV-001 / AC-REV-001: a recorded stage or phase review remains readable and reusable after material-only changes; provenance remains visible.",
+      "acceptance_criteria": "AC-REV-001: mutate only submitted material bytes while holding the code snapshot fixed; assert status, source refs, availability, and dispatch count are unchanged.",
+      "test_evidence": "npx vitest run tests/contract/review-material-change-redispatch.test.mjs --poolOptions.forks.singleFork --no-fileParallelism: exit 0, 2 tests passed; adjacent review/freshness tests: exit 0, 17 tests passed.",
+      "review_instructions": "Review stage build-code/phase. All provider-visible files are under bundle/; begin with bundle/review-instructions.md and read only files in that bundle. Read contracts/ and Read these manifest-declared reviewer skills before reviewing: skills/simplicity-guard/SKILL.md, skills/review/SKILL.md. The sealed manifest and canonical receipts are broker-verified; do not recompute hashes or fetch excluded raw logs. Use changes.diff when present; otherwise use diff-index.json plus the complete included diff-shards as the self-contained indexed Phase authority. Use context/ only for map-selected dependencies. Focus on the complete current Phase diff, its direct consumers, tests, acceptance trace, and actionable major or blocking risks. Ignore unrelated history and do not require a provider pass. Review in this order: spec_conformance -> correctness -> necessity. Judge the supplied stage artifact against its requirements, contract, and evidence. This is a full review of the supplied current stage subject.  Every stage produces heterologous advice as a quality fact only; this is advice only, not a completion license. An unavailable or non-terminal provider result is not advice, not empty findings, and not pass. Do not keep calling the broker to obtain pass or empty findings. For build-code, a review cycle is clean only when the current trusted semantic result has no actionable major or blocking finding. If one exists, allow one focused review only after an actual repair or subject change; repeated findings, no actual change, or no trusted terminal result stop automatic continuation and remain visible as needs_human, unavailable, or incomplete.  按根因合并同类问题；不要把同一个问题重复写成多条 finding，也不要重复描述 provider、packet、snapshot、receipt 或审查流程。每条 finding 只写最小必要的 issue、root_cause、recommendation 和一到两句可复核 evidence；不要输出推理过程、背景复述或长篇总结。不要为了凑数量少报真正独立的交付风险。 Return only one JSON object with findings using the requested findings-only reviewer schema; findings may be empty. Do not output verdict, pass/fail status, summary, checklist, skill execution receipts, or a second JSON object. Do not access the repository, parent directories, Git, shell, network, or host paths."
+    }
+  }
+}

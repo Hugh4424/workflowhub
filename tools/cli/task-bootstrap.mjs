@@ -11,18 +11,46 @@
  * provenance is not used to select or rebind task identity during bootstrap.
  */
 
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
-import { isAbsolute } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 import { resolveCanonicalTaskPath } from "../../core/load-config.mjs";
-import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
+import { canonical } from "../../runtime/evidence/canonical-utils.mjs";
+import { authenticateOfficialInvocation, inspectOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { prepareTaskWorkspace, validateExistingWorkspaceBinding } from "../../runtime/task/workspace.mjs";
+
+const RUNNER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function recordBootstrapTransaction(task, creationResult) {
+  const runId = `bootstrap-${task.identity.taskId}`;
+  const inspected = inspectOfficialInvocation(task, {
+    runnerRoot: RUNNER_ROOT,
+    stage: "make-decision",
+    runId,
+  });
+  const { execution_manifest_hash: _oldHash, ...baseIdentity } = inspected.identity;
+  const value = {
+    ...baseIdentity,
+    command: "task-bootstrap",
+    creation_result: creationResult,
+    transaction: {
+      status: "closed",
+      closed_at: new Date().toISOString(),
+    },
+  };
+  value.execution_manifest_hash = sha256(canonical(value));
+  const raw = `${canonical(value)}\n`;
+  task.createInvocationIdentityRecord(inspected.ref, raw);
+  return Object.freeze({ ref: inspected.ref, hash: sha256(raw), identity: Object.freeze(value) });
+}
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
 export function bootstrapTask(values, { env = process.env, home, cwd = process.cwd() } = {}) {
@@ -86,7 +114,19 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
   // Prepare it before initializing the task store, so Git/path failures
   // surface at bootstrap rather than at publication.
   const workspace = prepareTaskWorkspace(task);
-  initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+  const store = initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
+  const bootstrapIdentity = recordBootstrapTransaction(task, {
+    status: "completed",
+    task_path: task.taskPath,
+    project: task.identity.projectName,
+    task: task.identity.taskId,
+    workspace: {
+      worktree_root: workspace.worktreeRoot,
+      branch: workspace.branch,
+      baseline_commit: workspace.baselineCommit,
+    },
+    store: { record_ref: store.record_ref },
+  });
   return Object.freeze({
     task_path: task.taskPath,
     project: task.identity.projectName,
@@ -94,6 +134,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     task_path_source: "canonical_resolver",
     storage_root: authority.storage_root,
     cutover_epoch: authority.cutover_epoch,
+    bootstrap_identity_ref: bootstrapIdentity.ref,
     workspace: Object.freeze({ worktree_root: workspace.worktreeRoot, branch: workspace.branch, baseline_commit: workspace.baselineCommit }),
   });
 }

@@ -69,7 +69,7 @@ describe("workflow quality regression and historical replay", () => {
       const analyzer = manifest.steps.find((step) => ["stage-end-spec-analyze", "final-spec-analyze"].includes(step.step_slug));
       expect(analyzer, `${stage}: analyzer step`).toBeTruthy();
       expect(analyzer.observable_result).toMatch(/checks|检查|evidence|证据/i);
-      expect(analyzer.completion_evidence.some((item) => item.kind === "stage_outcome")).toBe(true);
+      expect(analyzer.completion_evidence.some((item) => item.kind === "stage_outcome")).toBe(false);
     }
     const verify = json("workflows/verify-code/steps.json");
     expect(verify.steps.find((step) => step.step_slug === "finalize-code-review")).toMatchObject({

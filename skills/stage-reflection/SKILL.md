@@ -15,8 +15,7 @@ grade、质量 verdict、release/acceptance 结论，也不阻断 stage、repair
 
 复盘不改变五阶段拓扑，不增加 stage，不启动第二个 Agent，也不创建新的状态机。
 它只准备 judgment JSON，再交给现有公共 `run` 行为的 `reflect` action 做机器闭环。
-当前 checkout 若尚未提供该 route，要如实记录 unavailable，并等待 P2 的 route 实现；
-不要用私有脚本替代公共入口。
+当前 checkout 若尚未提供该 route，要如实记录 unavailable；不要用私有脚本替代公共入口。
 
 ## 输入：三个只读来源
 
@@ -26,8 +25,8 @@ grade、质量 verdict、release/acceptance 结论，也不阻断 stage、repair
 1. **当前 session memory**：本次会话真实发生的判断、阻塞、修复、等待、用户回复和失败；
 2. **lessons/** 索引：`<storageRoot>/Projects/<proj>/lessons/` 下当前 stage 的 JSONL，
    保留 raw/merged 原文和引用；旧 lesson 是背景，不是当前事实；
-3. **current stage step/skill outcome**：当前 stage 的 `step_outcomes`、`skill_outcomes`、
-   失败/未启动/超时摘要和 `human-confirmation.v3` 确认事实。
+3. **current stage facts**：当前 stage 的阶段行、质量事实、测试/review 结果和
+   `human-confirmation.v3` 确认事实。阶段 outcome 不是当前会话的前置输入。
 
 输入缺失必须显式保留 `unknown`，不能用编号、文件存在、默认成功或历史任务补全。
 冷启动允许 `evidence_refs: []`，但相应判断的 `confidence` 不能是 `high`。
@@ -133,12 +132,9 @@ run --action=reflect
 引用时才形成 edge；每个 output 还保留 `consumer_count` 和
 `consumption_status`。
 
-- validator 扫描五个 stage 的当前 stage-outcome 文件；所有 stage 文件有效且每个声明
-  output 都存在时，`consumer_scan.status=complete`、`coverage_status=complete`，并可
-  产生 `zero_consumption_proof`；
-- 任一 stage outcome 缺失/损坏，或 output 文件缺失时，扫描是 partial/unknown，
-  `zero_consumption_proof` 为 false。单个 output 没找到后续输入边时也标
-  `consumption_status=unknown`，不能称为零消费；
+- validator 扫描当前已登记的 output/input 事实；阶段 outcome 缺失不再阻止当前
+  reflection，相关消费覆盖保持 `partial`/`unknown`；
+- output 没找到后续输入边时标 `consumption_status=unknown`，不能称为零消费；
 - 只有完整扫描证明、近 30 天内有已登记 output 且每个 consumer count 都是 0 时，
   `remove_candidate` 才可能通过消费信号；还必须有人工 rejected 或同一 step 的至少
   两次人工介入，否则 validator 改成 `needs_evidence`。LLM 不能把 unknown 当 zero；
@@ -157,7 +153,7 @@ run --action=reflect
 追加。只有判断经 validator 通过并完成发布后，机器才按 `entry_id` 去重合并为
 `merged_lesson`，保留 `occurrence_count`、`source_refs` 和 `supersedes`，并把对应 raw
 行标记 merged。`status:failed`、超时、技能未启动或 validator unavailable 时不合并
-lessons；原始失败事实留在 stage outcome 和 raw JSONL。
+lessons；原始失败事实留在阶段反思失败记录和 raw JSONL。
 
 同字节提交应保持幂等，异字节 immutable 路径冲突必须明确失败且不覆盖。无执行器或未
 调度时使用真实 `unavailable`/`not_scheduled` 事实，不写假失败判断；这些状态不产生

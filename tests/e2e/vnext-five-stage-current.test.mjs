@@ -14,6 +14,7 @@ import { validateStageSpecAnalyzeProfile } from "../../runtime/stage/stage-conte
 import { captureGitWorktreeSnapshot, materialRevisionFromValues } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { openCurrentTaskWorkspace, prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
+import { authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 import { completeCanonicalStageMaterials, writeCanonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
 
@@ -358,7 +359,7 @@ function publicStatus(state, stage) {
     runtime, "status", "--action=begin", `--stage=${stage}`, "--project=WorkflowHub",
     `--task=${state.task.identity.taskId}`, "--reason=public-current-stage",
   ], {
-    cwd: state.repo,
+    cwd: state.candidate.worktreeRoot,
     env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
@@ -370,15 +371,15 @@ function publicRun(state, stage, input) {
   const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
   const inputPath = join(state.root, `public-${stage}-input.json`);
   const receipts = input?.receipts ?? {};
-  const prepared = receipts.stage_outcomes
-    ? input
-    : { ...input, receipts: { ...receipts, stage_outcomes: stageOutcomeReceipt(state, stage).ref } };
+  const prepared = input === undefined
+    ? { receipts: {} }
+    : { ...input, receipts: { ...receipts } };
   writeFileSync(inputPath, `${JSON.stringify(prepared)}\n`);
   const result = spawnSync(process.execPath, [
     runtime, "run", "--action=execute", `--stage=${stage}`, "--project=WorkflowHub",
     `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
   ], {
-    cwd: state.repo,
+    cwd: state.candidate.worktreeRoot,
     env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
@@ -394,7 +395,7 @@ function publicRunRaw(state, stage, input) {
     runtime, "run", "--action=execute", `--stage=${stage}`, "--project=WorkflowHub",
     `--task=${state.task.identity.taskId}`, `--input=${inputPath}`,
   ], {
-    cwd: state.repo,
+    cwd: state.candidate.worktreeRoot,
     env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
@@ -503,7 +504,7 @@ function publicConfirm(state, stage) {
     `--task=${state.task.identity.taskId}`, "--decision=accepted",
     `--reply-text=fixture confirmation for ${stage}`, `--step-slug=${stepSlug}`,
   ], {
-    cwd: state.repo,
+    cwd: state.candidate.worktreeRoot,
     env: isolatedPublicRuntimeEnv(state),
     encoding: "utf8",
   });
@@ -725,24 +726,17 @@ describe("current vNext five-stage runtime", () => {
     }
   });
 
-  it("keeps current stage work running when a supplied stage-outcome receipt is invalid", () => {
+  it("rejects a supplied historical stage-outcome receipt at the current run boundary", () => {
     const state = fixture("stage-outcome-receipt-required");
-    return seedCompletedMakeDecision(state).then(() => {
     const result = publicRunRaw(state, "build-spec", {
       receipts: { stage_outcomes: "quality/evidence/stage-outcomes/build-spec/missing.json" },
     });
-    expect(result.status).toBe(0);
-    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      stage: "build-spec",
-      quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
-    });
-    });
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
+    expect(historicalFacts(state.task.taskPath).filter((row) => row.record_kind === "stage")).toHaveLength(0);
   });
 
-  it("keeps the public route runnable when the current Stage Agent outcome is absent", () => {
+  it("runs the public route from current materials when no host outcome is supplied", () => {
     const state = fixture("stage-outcome-optional-for-work");
     return seedCompletedMakeDecision(state).then(() => {
       const result = publicRunRaw(state, "build-spec", { receipts: {} });
@@ -751,13 +745,13 @@ describe("current vNext five-stage runtime", () => {
       expect(JSON.parse(result.stdout)).toMatchObject({
         stage: "build-spec",
         quality_status: "incomplete",
-        stage_outcome_status: "unavailable",
-        stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
       });
+      expect(JSON.parse(result.stdout)).not.toHaveProperty("stage_outcome_status");
+      expect(JSON.parse(result.stdout)).not.toHaveProperty("stage_outcome_diagnostic");
     });
   });
 
-  it("keeps a public run going when Stage Agent evidence belongs to another declared step", async () => {
+  it("rejects historical Stage Agent evidence even when it is structurally malformed", async () => {
     const state = fixture("stage-outcome-semantic-binding");
     await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
@@ -768,17 +762,11 @@ describe("current vNext five-stage runtime", () => {
     const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
-    expect(result.status).toBe(0);
-    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      stage: "build-spec",
-      quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_invalid" },
-    });
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
   });
 
-  it("reports invalid stage-end spec-analyze results without blocking public build-spec", async () => {
+  it("rejects historical spec-analyze packets at the current public run boundary", async () => {
     const state = fixture("stage-outcome-spec-analyze-required");
     await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
@@ -789,9 +777,8 @@ describe("current vNext five-stage runtime", () => {
     const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
-    expect(result.status).toBe(0);
-    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
-    expect(JSON.parse(result.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
 
     const semanticTamper = structuredClone(original.value);
     semanticTamper.spec_analyze.packet.coverage[0].actual_behavior = "文档文件存在";
@@ -800,9 +787,8 @@ describe("current vNext five-stage runtime", () => {
     const semanticRef = `quality/evidence/stage-outcomes/build-spec/${semanticHash}.json`;
     state.kernel.publishCanonicalRecord(semanticRef, semanticRaw);
     const semanticResult = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: semanticRef } });
-    expect(semanticResult.status).toBe(0);
-    expect(semanticResult.stderr).not.toContain("MATERIAL_INCOMPLETE");
-    expect(JSON.parse(semanticResult.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
+    expect(semanticResult.status).toBe(1);
+    expect(`${semanticResult.stdout}\n${semanticResult.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
 
     const materialTamper = structuredClone(original.value);
     materialTamper.spec_analyze.packet.materials.decision_log = "伪造的 decision-log 内容";
@@ -815,12 +801,11 @@ describe("current vNext five-stage runtime", () => {
     const materialRef = `quality/evidence/stage-outcomes/build-spec/${materialHash}.json`;
     state.kernel.publishCanonicalRecord(materialRef, materialRaw);
     const materialResult = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: materialRef } });
-    expect(materialResult.status).toBe(0);
-    expect(materialResult.stderr).not.toContain("MATERIAL_INCOMPLETE");
-    expect(JSON.parse(materialResult.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
+    expect(materialResult.status).toBe(1);
+    expect(`${materialResult.stdout}\n${materialResult.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
   });
 
-  it("publishes semantic spec-analyze facts without turning them into a run gate", async () => {
+  it("does not use a historical semantic spec-analyze packet as a current run input", async () => {
     const state = fixture("stage-outcome-spec-analyze-report-only");
     await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
@@ -835,24 +820,11 @@ describe("current vNext five-stage runtime", () => {
     const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
-    expect(result.status).toBe(0);
-    const output = JSON.parse(result.stdout);
-    // This fixture intentionally leaves unrelated build-spec inputs unavailable;
-    // the non-consistent analyzer must still not add its own quality warning or
-    // completion gap. The stage quality result may remain incomplete for those
-    // other recorded warnings, while the stage result itself is completed.
-    expect(output.status).toBe("completed");
-    expect(output.completion.missing ?? []).not.toContain("stage_end_spec_analyze");
-    expect(output.stage_outcome_summary.spec_analyze).toMatchObject({ status: "inconsistent" });
-    expect(output.quality_warnings ?? []).not.toContain("stage-end-spec-analyze:inconsistent");
-    expect(output.quality_advisories).toContain("stage-end-spec-analyze:inconsistent");
-    const analyzerFactRef = (output.quality_advisory_fact_refs ?? []).find((factRef) =>
-      JSON.parse(state.task.readRecord(factRef)).subject === "stage_end_spec_analyze");
-    expect(analyzerFactRef).toBeDefined();
-    expect(output.quality_fact_refs ?? []).not.toContain(analyzerFactRef);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
   });
 
-  it("reports unavailable Stage Agent outcome cost that contains guessed numbers without blocking work", async () => {
+  it("rejects historical Stage Agent cost data at the current run boundary", async () => {
     const state = fixture("stage-outcome-cost-unavailable");
     await seedCompletedMakeDecision(state);
     const original = stageOutcomeReceipt(state, "build-spec");
@@ -868,9 +840,8 @@ describe("current vNext five-stage runtime", () => {
     const ref = `quality/evidence/stage-outcomes/build-spec/${hash}.json`;
     state.kernel.publishCanonicalRecord(ref, raw);
     const result = publicRunRaw(state, "build-spec", { receipts: { stage_outcomes: ref } });
-    expect(result.status).toBe(0);
-    expect(result.stderr).not.toContain("MATERIAL_INCOMPLETE");
-    expect(JSON.parse(result.stdout)).toMatchObject({ stage_outcome_status: "unavailable", stage_outcome_diagnostic: { reason: "stage_outcome_invalid" } });
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
   });
 
   it("publishes immutable stage outcomes with every declared step and skill", () => {
@@ -938,7 +909,7 @@ describe("current vNext five-stage runtime", () => {
     expect(invoked).toBe(false);
   });
 
-  it("completes make-decision from the stage outcome and confirmation without a duplicate Talk receipt", () => {
+  it("completes make-decision from current materials and confirmation without a duplicate Talk receipt", () => {
     const state = fixture("public-make-decision-no-audit");
     state.artifacts.writeAtomic("decision-log.md", completeDecisionLog);
     const snapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
@@ -950,14 +921,13 @@ describe("current vNext five-stage runtime", () => {
       semanticFields: currentDirectionSemanticFields(state.task.identity.taskId),
     });
     const detail = writeFormalReviewFixture({ task: state.task, stage: "make-decision", snapshotTree: snapshot.tree, reviewTrack: "detail" });
-    const stageOutcome = stageOutcomeReceipt(state, "make-decision");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const confirmationResult = spawnSync(process.execPath, [
       runtime, "confirm", "--action=decision", "--stage=make-decision", "--project=WorkflowHub",
       `--task=${state.task.identity.taskId}`, "--decision=accepted",
       "--reply-text=fixture accepted make-decision", "--step-slug=approve-decision",
     ], {
-      cwd: state.repo,
+      cwd: state.candidate.worktreeRoot,
       env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
@@ -967,13 +937,13 @@ describe("current vNext five-stage runtime", () => {
     const input = join(state.root, "make-decision-input.json");
     writeFileSync(input, `${JSON.stringify({ receipts: {
       direction_review: direction.resultRef, detail_review: detail.resultRef,
-      confirmation: confirmation.ref, stage_outcomes: stageOutcome.ref,
+      confirmation: confirmation.ref,
     } })}\n`);
     const result = spawnSync(process.execPath, [
       runtime, "run", "--action=execute", "--stage=make-decision", "--project=WorkflowHub",
       `--task=${state.task.identity.taskId}`, `--input=${input}`,
     ], {
-      cwd: state.repo,
+      cwd: state.candidate.worktreeRoot,
       env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
@@ -1002,7 +972,7 @@ describe("current vNext five-stage runtime", () => {
       `--task=${state.task.identity.taskId}`, "--decision=rejected",
       "--reply-text=fixture rejected make-decision", "--step-slug=approve-decision",
     ], {
-      cwd: state.repo,
+      cwd: state.candidate.worktreeRoot,
       env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
@@ -1093,14 +1063,14 @@ describe("current vNext five-stage runtime", () => {
     expect(accepted.risk_acceptance_ref).toMatch(/^quality\/evidence\/risk-acceptances\/[a-f0-9]{64}\.json$/);
   });
 
-  it("keeps the public run route runnable when its Stage Agent outcome receipt is unavailable", () => {
+  it("keeps the public run route runnable without an outcome receipt", () => {
     const state = fixture("public-run-missing-receipt");
     const runtime = join(process.cwd(), "tools", "cli", "stage-runtime.mjs");
     const result = spawnSync(process.execPath, [
       runtime, "run", "--action=execute", "--stage=build-spec", "--project=WorkflowHub",
       `--task=${state.task.identity.taskId}`,
     ], {
-      cwd: state.repo,
+      cwd: state.candidate.worktreeRoot,
       env: isolatedPublicRuntimeEnv(state),
       encoding: "utf8",
     });
@@ -1110,9 +1080,9 @@ describe("current vNext five-stage runtime", () => {
       stage: "build-spec",
       work_status: "ready",
       quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
+    expect(JSON.parse(result.stdout)).not.toHaveProperty("stage_outcome_status");
+    expect(JSON.parse(result.stdout)).not.toHaveProperty("stage_outcome_diagnostic");
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
 
@@ -1126,9 +1096,30 @@ describe("current vNext five-stage runtime", () => {
       work_status: "ready",
       continuation_allowed: true,
       quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
+    expect(JSON.parse(result.stdout)).not.toHaveProperty("stage_outcome_status");
+    expect(JSON.parse(result.stdout)).not.toHaveProperty("stage_outcome_diagnostic");
+  });
+
+  it("does not mark a successfully published stage as failed when no host outcome exists", () => {
+    const state = fixture("public-verify-code-no-host-stage-outcome");
+    const result = publicRunRaw(state, "verify-code", { receipts: {} });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const stageRows = historicalFacts(state.task.taskPath).filter((row) => row.record_kind === "stage" && row.stage === "verify-code");
+    expect(stageRows).toHaveLength(1);
+    expect(stageRows[0].evidence.value).toEqual([
+      { command: "stage-end:verify-code", exit_code: 0, failure_signature: "stage_end_recorded" },
+    ]);
+  });
+
+  it("rejects a historical stage outcome from the current public run input", () => {
+    const state = fixture("public-run-rejects-stage-outcome");
+    const result = publicRunRaw(state, "verify-code", {
+      receipts: { stage_outcomes: `quality/evidence/stage-outcomes/verify-code/${"a".repeat(64)}.json` },
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("current stage run does not accept receipts.stage_outcomes");
+    expect(historicalFacts(state.task.taskPath).filter((row) => row.record_kind === "stage")).toHaveLength(0);
   });
 
   it("binds verify-code only to the current code-review fact, not build-code review", async () => {
@@ -1169,6 +1160,7 @@ describe("current vNext five-stage runtime", () => {
         evidence_refs: [{ ref: buildReview.resultRef, sha256: buildReview.resultHash }],
         facts: {
           ...currentEvidence.facts,
+          code_review: { status: "unavailable", error: { code: "REVIEW_UNAVAILABLE", message: "dsh executor absent" } },
           review: {
             status: "recorded",
             result_ref: buildReview.resultRef,
@@ -1187,6 +1179,47 @@ describe("current vNext five-stage runtime", () => {
     expect(codeReview.evidence[0]?.ref).not.toBe(buildReview.resultRef);
   });
 
+  it("does not let a stale verify-code review satisfy the current code-review fact", async () => {
+    const state = fixture("verify-review-evidence-stale-snapshot");
+    const reviewedSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+    const materialRevision = materialRevisionFromValues(materials.map((file) => [file, state.artifacts.read(file)]));
+    const staleReview = writeFormalReviewFixture({
+      task: state.task,
+      stage: "verify-code",
+      snapshotTree: reviewedSnapshot.tree,
+      materialRevision,
+    });
+    writeFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"), "current snapshot\n");
+    const currentSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+    expect(currentSnapshot.tree).not.toBe(reviewedSnapshot.tree);
+
+    const result = await runStage("verify-code", context("verify-code", state), async () => {
+      const currentEvidence = evidence(state, "verify-code");
+      return {
+        ...currentEvidence,
+        facts: {
+          ...currentEvidence.facts,
+          code_review: {
+            status: "recorded",
+            result_ref: staleReview.resultRef,
+            result_hash: staleReview.resultHash,
+            snapshot_tree: reviewedSnapshot.tree,
+            subject_kind: "worktree",
+            phase_id: null,
+            review_scope: null,
+          },
+        },
+      };
+    });
+    const codeReview = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.subject === "code_review");
+    expect(result.completion.predicates.code_review).toMatchObject({ status: "missing" });
+    expect(result.quality_status).toBe("incomplete");
+    expect(codeReview).toMatchObject({ status: "missing", snapshot_tree: currentSnapshot.tree });
+    expect(codeReview.evidence[0]?.ref).toMatch(/^quality\/evidence\/stage-quality-missing\//);
+  });
+
   it("persists a resolved repair from the authenticated stage outcome without a clean re-review", async () => {
     const state = fixture("current-review-repair-resolution");
     const reviewedSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
@@ -1196,6 +1229,7 @@ describe("current vNext five-stage runtime", () => {
       stage: "verify-code",
       snapshotTree: reviewedSnapshot.tree,
       verdict: "findings",
+      findingSeverity: "minor",
       reviewScope: null,
       materialRevision,
     });
@@ -1257,6 +1291,68 @@ describe("current vNext five-stage runtime", () => {
     expect(reopened.status).toBe("completed");
   });
 
+  it("resolves repaired findings from the current WorkflowHub session without a stage outcome", async () => {
+    const state = fixture("current-review-repair-current-session");
+    const reviewedSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
+    const materialRevision = materialRevisionFromValues(materials.map((file) => [file, state.artifacts.read(file)]));
+    const review = writeFormalReviewFixture({
+      task: state.task,
+      stage: "verify-code",
+      snapshotTree: reviewedSnapshot.tree,
+      verdict: "findings",
+      reviewScope: null,
+      materialRevision,
+    });
+    writeFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"), "repaired-current-session\n");
+    const repairCheck = createCanonicalReceiptWriter({
+      task: state.task,
+      workspace: openCurrentTaskWorkspace(state.task),
+      stage: "verify-code",
+      component: "verify-code-test-capture",
+    }).captureTests({
+      command: "node -e \"const fs=require('node:fs');if(fs.readFileSync('src/app.txt','utf8') !== 'repaired-current-session\\n') process.exit(1)\"",
+      receiptRef: "quality/tests/current-session-review-repair.json",
+      outputRef: "quality/tests/output/current-session-review-repair.output",
+    });
+    const reviewValue = JSON.parse(state.task.readRecord(review.resultRef));
+    const repairs = reviewValue.findings.map(({ id }) => ({
+      finding_id: id,
+      status: "fixed",
+      reason: "the current WorkflowHub session contains the repair and its affected check passed",
+      source_refs: [{ path: "src/app.txt", sha256: sha256(readFileSync(join(state.candidate.worktreeRoot, "src", "app.txt"))) }],
+      check_refs: [{ ref: repairCheck.receipt_ref, sha256: repairCheck.receipt_hash }],
+    }));
+    const result = await runOfficialStage("verify-code", context("verify-code", state), {
+      attempt_id: "attempt-current-session-review-repair",
+      receipts: { quality_review: review.resultRef },
+      code_review_repairs: repairs,
+    });
+    const codeReviewFactRef = result.quality_fact_refs.find((ref) => {
+      const fact = JSON.parse(state.task.readRecord(ref));
+      return fact.kind === "review" && fact.subject === "code_review";
+    });
+    const codeReviewFact = JSON.parse(state.task.readRecord(codeReviewFactRef));
+    const codeReviewFactRaw = state.task.readRecord(codeReviewFactRef);
+    const readback = authenticateQualityFactRecord({
+      ...codeReviewFact,
+      ref: codeReviewFactRef,
+      sha256: sha256(codeReviewFactRaw),
+    }, { read: state.task.readRecord });
+
+    expect(result.stage_outcome_ref ?? null).toBeNull();
+    expect(codeReviewFact).toMatchObject({
+      status: "recorded",
+      review_status: "resolved",
+      snapshot_tree: state.candidate.captureSnapshot().tree,
+    });
+    expect(readback).toMatchObject({ status: "recorded", authenticated: true, review_status: "resolved" });
+    expect(result.completion.predicates.code_review).toMatchObject({ status: "satisfied" });
+    expect(result.status).toBe("completed");
+    expect(result.quality_warnings ?? []).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/^code review has \d+ actionable serious finding\(s\); repair them in verify-code$/),
+    ]));
+  });
+
   it("runs build-spec through verify-code without inventing an audit gate", async () => {
     const state = fixture("public-build-spec-through-verify-code");
     writeCanonicalStageMaterials(state.artifacts);
@@ -1270,7 +1366,10 @@ describe("current vNext five-stage runtime", () => {
     const specReview = writeFormalReviewFixture({ task: state.task, stage: "build-spec", snapshotTree: specSnapshot.tree });
     const specRun = publicRun(state, "build-spec", { receipts: { review: specReview.resultRef } });
     expect(specRun.status, JSON.stringify(specRun, null, 2)).toBe("completed");
-    expect(specRun.stage_outcome_summary.spec_analyze).toMatchObject({ status: "consistent" });
+    const specAnalyzeFact = specRun.quality_advisory_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.subject === "stage_end_spec_analyze");
+    expect(specAnalyzeFact).toMatchObject({ status: "missing", stage: "build-spec" });
     expect(specRun.completion.missing).not.toContain("traceability");
     expect(publicStatus(state, "build-spec")).toMatchObject({ work_status: "ready", quality_status: "completed" });
 
@@ -1297,28 +1396,14 @@ describe("current vNext five-stage runtime", () => {
     const buildSnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const buildTests = publicTestReceipt(state, "build-code", buildSnapshot);
     const buildReview = writeFormalReviewFixture({ task: state.task, stage: "build-code", snapshotTree: buildSnapshot.tree });
-    const buildProof = record(state, "quality/evidence/public-build-code-proof.json", { verified: true, snapshot_tree: buildSnapshot.tree });
     const buildRun = publicRun(state, "build-code", {
       receipts: { implementation: implementation.ref, tests: buildTests.ref, review: buildReview.resultRef },
-      acceptance_coverage: {
-        snapshot_tree: buildSnapshot.tree, accepted_criterion_ids: ["AC-001"],
-        items: [{
-          acceptance_criterion_id: "AC-001",
-          status: "covered",
-          evidence_refs: [buildProof],
-          scenario: "run build-code through the public stage route",
-          oracle: "current implementation, tests, AC evidence, and integration review complete",
-          actual_outcome: "public build-code returned completed",
-          coverage_limits: "fixture covers AC-001 only",
-          implementation_anchor: { id: "impl-ac-1", path: "src/app.txt", start_line: 1, end_line: 1, role: "implementation" },
-          verification_anchor: { id: "verify-ac-1", path: "tasks.md", start_line: 1, end_line: 1, role: "verification" },
-        }],
-      },
     });
-    expect(buildRun, JSON.stringify(buildRun)).toMatchObject({ status: "completed" });
+    expect(buildRun, JSON.stringify(buildRun)).toMatchObject({ status: "in_progress" });
+    expect(buildRun.completion.missing).toContain("acceptance_criteria");
     expect(buildRun.completion.missing).not.toContain("support:audit");
     expect(buildRun.completion.missing).not.toEqual(expect.arrayContaining([expect.stringMatching(/audit unavailable\/unverified\/mismatch/i)]));
-    expect(publicStatus(state, "build-code")).toMatchObject({ work_status: "ready", quality_status: "completed" });
+    expect(publicStatus(state, "build-code")).toMatchObject({ work_status: "ready", quality_status: "in_progress" });
 
     const verifySnapshot = captureGitWorktreeSnapshot(state.candidate.worktreeRoot);
     const verifyMaterialRevision = materialRevisionFromValues(materials.map((file) => [file, state.artifacts.read(file)]));
@@ -1328,16 +1413,8 @@ describe("current vNext five-stage runtime", () => {
       snapshotTree: verifySnapshot.tree,
       materialRevision: verifyMaterialRevision,
     });
-    const verifyOutcome = writeStageOutcomeFixture({
-      task: state.task,
-      kernel: state.kernel,
-      artifacts: state.artifacts,
-      candidateWorkspace: state.candidate,
-      stage: "verify-code",
-      qualityReview: { ref: qualityReview.resultRef },
-    });
     const verifyRun = publicRun(state, "verify-code", {
-      receipts: { quality_review: qualityReview.resultRef, stage_outcomes: verifyOutcome.ref },
+      receipts: { quality_review: qualityReview.resultRef },
     });
     expect(verifyRun.status).toBe("completed");
     expect(publicStatus(state, "verify-code")).toMatchObject({ work_status: "ready", quality_status: "completed" });

@@ -17,7 +17,7 @@ import { acceptanceExecutionFacts } from "../../runtime/stage/stage-handlers.mjs
 import { createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../runtime/evidence/canonical-receipt-writer.mjs";
 import { publishCurrentWorkflowHubSession } from "../../tools/host/workflowhub-stage-agent-bridge.mjs";
 import { stageRuntimeCliMain } from "../../tools/cli/stage-runtime.mjs";
-import { authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
+import { authenticateAcceptanceExecutionAggregate, authenticateQualityFactRecord } from "../../runtime/evidence/freshness.mjs";
 import { redactProviderHostPaths } from "../../skills/wh-review/scripts/review-materials.mjs";
 import { runSimpleReview } from "../../skills/wh-review/scripts/simple-review-runner.mjs";
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
@@ -436,7 +436,7 @@ describe("acceptance execution tiers", () => {
     });
   });
 
-  it("keeps the current stage runnable when an upstream Stage Agent outcome is not current", async () => {
+  it("keeps the current stage runnable without an upstream host outcome", async () => {
     const state = officialBrowserFixture();
     await seedCompletedUpstreamStages(state);
     const inputPath = join(state.root, "run-input.json");
@@ -451,12 +451,12 @@ describe("acceptance execution tiers", () => {
       "--task=browser-acceptance",
       `--input=${inputPath}`,
     ], {
-      cwd: state.repo,
+      cwd: state.candidate.worktreeRoot,
       services: {
         monitoring: false,
         runControlledUiQa: async (input) => {
           calls.push(input);
-          throw new Error("browser capability must not run without a Stage Agent outcome");
+          throw new Error("browser capability fixture is unavailable");
         },
       },
     }));
@@ -464,10 +464,29 @@ describe("acceptance execution tiers", () => {
       stage: "build-code",
       work_status: "ready",
       quality_status: "incomplete",
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
     });
+    expect(result).not.toHaveProperty("stage_outcome_status");
+    expect(result).not.toHaveProperty("stage_outcome_diagnostic");
     expect(calls).toHaveLength(1);
+  });
+
+  it("rejects a retired nested stage outcome before current stage execution can start", async () => {
+    const state = officialBrowserFixture();
+    const inputPath = join(state.root, "retired-freeze-input.json");
+    writeFileSync(inputPath, JSON.stringify({
+      attempt_id: "retired-freeze-attempt",
+      receipts: {},
+      decision_freeze: { stage_outcome_ref: `quality/evidence/stage-outcomes/build-spec/${"a".repeat(64)}.json` },
+    }));
+
+    await expect(withRuntimeEnvironment(state, () => stageRuntimeCliMain([
+      "run",
+      "--action=execute",
+      "--stage=build-spec",
+      "--project=WorkflowHub",
+      "--task=browser-acceptance",
+      `--input=${inputPath}`,
+    ], { cwd: state.candidate.worktreeRoot }))).rejects.toThrow(/decision_freeze\.stage_outcome_ref/);
   });
 
   it("keeps verify-code browser execution unavailable when current canonical data identity does not bind the declared scenario", async () => {
@@ -479,10 +498,8 @@ describe("acceptance execution tiers", () => {
       workflowRunId: state.context.kernel.deriveStageWorkflowRunId("verify-code"),
     }, { attempt_id: "verify-data-binding", receipts: {} });
 
-    expect(verify).toMatchObject({
-      stage_outcome_status: "unavailable",
-      stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
-    });
+    expect(verify).not.toHaveProperty("stage_outcome_status");
+    expect(verify).not.toHaveProperty("stage_outcome_diagnostic");
     expect(e2eAcceptanceSubjectFact(state, verify)).toMatchObject({
       status: "missing",
       evidence_refs: [],
@@ -699,8 +716,8 @@ export async function accept(input) {
 async function p9Execute(state, signal) {
   return runOfficialStage("build-code", state.context, {
     attempt_id: state.outcome?.value?.attempt_id ?? "p9-attempt-A",
-    receipts: state.outcome ? { stage_outcomes: state.outcome.ref } : {},
-  }, {}, signal ? { requireStageOutcome: true, signal } : { requireStageOutcome: true });
+    receipts: {},
+  }, {}, signal ? { signal } : {});
 }
 
 function p9PerAc(state, result) {
@@ -715,8 +732,17 @@ function p9PerAc(state, result) {
     expect(value.stage).toBe("build-code");
     expect(value.material_revision).toBe(state.context.kernel.currentVNextMaterialRevision());
     expect(value.snapshot_tree).toBe(state.context.kernel.currentVNextSnapshot().tree);
-    expect(value.subject_fact.executor_actor).toEqual({ source_kind: "workflowhub-session", source_id: "fixture/p9-executor", run_id: "p9-agent-B" });
-    expect(value.subject_fact.execution_binding).toEqual({ stage_outcome_ref: state.outcome.ref, stage_outcome_hash: state.outcome.sha256 });
+    const expectedRunId = state.context.kernel.deriveStageWorkflowRunId("build-code");
+    expect(value.subject_fact.executor_actor).toEqual({ source_kind: "workflowhub-session", source_id: "workflowhub-current-session", run_id: expectedRunId });
+    expect(value.subject_fact.execution_binding).toEqual({
+      kind: "workflowhub-current-session",
+      task_id: state.task.identity.taskId,
+      stage: "build-code",
+      attempt_id: state.outcome?.value?.attempt_id ?? "p9-attempt-A",
+      run_id: expectedRunId,
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+      material_revision: state.context.kernel.currentVNextMaterialRevision(),
+    });
     const execution = value.subject_fact.execution;
     expect(execution).toMatchObject({ tier: state.tier, timed_out: expect.any(Boolean), cancelled: expect.any(Boolean), cleanup: { status: "completed" } });
     expect(execution.timed_out && execution.cancelled).toBe(false);
@@ -777,6 +803,92 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(observed.argv).toEqual(["$(not-a-shell); literal"]);
     expect(result.quality_status).toBe("incomplete");
     expect(JSON.stringify(records)).not.toContain('"run_id":"p9-attempt-A"');
+  });
+
+  it("executes command ACs with a runtime-owned current-session binding when no stage outcome is supplied", async () => {
+    const state = p9Fixture();
+    const attemptId = "p9-current-session-attempt";
+    const result = await runOfficialStage("build-code", state.context, {
+      attempt_id: attemptId,
+      receipts: {},
+    });
+    const aggregate = acceptanceExecutionSubjectFact(state, result);
+    expect(aggregate).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    const leafRef = aggregate.execution_items[0].evidence_refs[0];
+    const leaf = JSON.parse(state.task.readRecord(leafRef.ref));
+    const expectedRunId = state.context.kernel.deriveStageWorkflowRunId("build-code");
+    expect(leaf.subject_fact.executor_actor).toEqual({
+      source_kind: "workflowhub-session",
+      source_id: "workflowhub-current-session",
+      run_id: expectedRunId,
+    });
+    expect(leaf.subject_fact.execution_binding).toEqual(expect.objectContaining({
+      kind: "workflowhub-current-session",
+      task_id: state.task.identity.taskId,
+      stage: "build-code",
+      attempt_id: attemptId,
+      run_id: expectedRunId,
+      snapshot_tree: state.context.kernel.currentVNextSnapshot().tree,
+      material_revision: state.context.kernel.currentVNextMaterialRevision(),
+    }));
+    expect(leaf.subject_fact.execution_binding).not.toHaveProperty("stage_outcome_ref");
+    expect(leaf.subject_fact.execution_binding).not.toHaveProperty("stage_outcome_hash");
+  });
+
+  it("authenticates the complete current aggregate before review consumers can use it", async () => {
+    const state = p9Fixture();
+    const result = await runOfficialStage("build-code", state.context, {
+      attempt_id: "p9-authenticator-attempt",
+      receipts: {},
+    });
+    const executionFact = result.quality_fact_refs
+      .map((ref) => JSON.parse(state.task.readRecord(ref)))
+      .find((fact) => fact.kind === "acceptance_criterion" && fact.subject === "acceptance_execution");
+    const acceptance = JSON.parse(state.task.readRecord(executionFact.evidence[0].ref));
+    const aggregateRef = acceptance.refs[0];
+    const aggregate = JSON.parse(state.task.readRecord(aggregateRef.ref));
+    const read = (ref) => state.task.readRecord(ref);
+
+    expect(() => authenticateAcceptanceExecutionAggregate(
+      { ...aggregate, task_id: "foreign-task" }, executionFact, read,
+    )).toThrow(/invalid/);
+
+    const missingLeaf = {
+      ...aggregate,
+      subject_fact: {
+        ...aggregate.subject_fact,
+        execution_items: aggregate.subject_fact.execution_items.map((item, index) => (
+          index === 0 ? { ...item, evidence_refs: [] } : item
+        )),
+      },
+    };
+    expect(() => authenticateAcceptanceExecutionAggregate(missingLeaf, executionFact, read)).toThrow(/invalid|evidence/);
+
+    const originalBinding = aggregate.subject_fact.execution_items[0].evidence_refs[0];
+    const originalLeaf = JSON.parse(read(originalBinding.ref));
+    const forgedLeaf = {
+      ...originalLeaf,
+      subject_fact: {
+        ...originalLeaf.subject_fact,
+        executor_actor: { ...originalLeaf.subject_fact.executor_actor, source_id: "forged/current-session" },
+      },
+    };
+    const forgedRaw = `${JSON.stringify(forgedLeaf, null, 2)}\n`;
+    const forgedHash = p9Hash(forgedRaw);
+    const forgedRef = originalBinding.ref.replace(/-[a-f0-9]{64}\.json$/, `-${forgedHash}.json`);
+    const forgedAggregate = {
+      ...aggregate,
+      subject_fact: {
+        ...aggregate.subject_fact,
+        execution_items: aggregate.subject_fact.execution_items.map((item, index) => (
+          index === 0
+            ? { ...item, evidence_refs: [{ ref: forgedRef, sha256: forgedHash }, ...item.evidence_refs.slice(1)] }
+            : item
+        )),
+      },
+    };
+    const forgedRead = (ref) => ref === forgedRef ? forgedRaw : read(ref);
+    expect(() => authenticateAcceptanceExecutionAggregate(forgedAggregate, executionFact, forgedRead)).toThrow(/actor|producer/);
   });
 
   it("expands only the authenticated task directory in command argv", async () => {
@@ -890,13 +1002,12 @@ describe("P3 T009 real command and service acceptance", () => {
     expect(aggregate.status).not.toBe("passed");
   });
 
-  it.each([["absent producer", { missingActor: true }], ["rehash actor with old proof", { tamperActor: true }]])("never starts a command with %s", async (_label, options) => {
+  it.each([["absent producer", { missingActor: true }], ["rehash actor with old proof", { tamperActor: true }]])("starts a command with %s because the current session is the producer", async (_label, options) => {
     const state = p9Fixture(options);
-    await expect(p9Execute(state)).rejects.toMatchObject({
-      code: "MATERIAL_INCOMPLETE",
-      message: expect.stringContaining(options.missingActor ? "stage_outcome_missing" : "stage_outcome_invalid"),
-    });
-    expect(existsSync(join(state.marker, "started.json"))).toBe(false);
+    const result = await p9Execute(state);
+    expect(acceptanceExecutionSubjectFact(state, result)).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    expect(existsSync(join(state.marker, "started.json"))).toBe(true);
+    expect(result).not.toHaveProperty("stage_outcome_diagnostic");
   });
 
   it("timeout terminates the actual child and grandchild and releases the listening port", async () => {
@@ -960,9 +1071,13 @@ function p9ConfigureReview(state, { sameSource = false, mixedSources = false, on
   writeFileSync(brokerConfig, JSON.stringify({
     version: 4, engine_version: "1.2.0", tiers: [["opencode/reviewer", ...(mixedSources ? ["opencode/independent"] : [])], ["codex/host"]],
     providers: {
-      "codex/host": { enabled: true, source_id: "codex/p9-host" },
-      "opencode/reviewer": { enabled: true, source_id: sameSource || mixedSources ? "fixture/p9-executor" : "opencode/p9-reviewer" },
-      ...(mixedSources ? { "opencode/independent": { enabled: true, source_id: "opencode/p9-independent" } } : {}),
+      "codex/host": { enabled: true, source_id: "codex/p9-host", model: "fixture-host-model" },
+      "opencode/reviewer": {
+        enabled: true,
+        source_id: sameSource || mixedSources ? "fixture/p9-executor" : "opencode/p9-reviewer",
+        model: sameSource ? "fixture-host-model" : "fixture-reviewer-model",
+      },
+      ...(mixedSources ? { "opencode/independent": { enabled: true, source_id: "opencode/p9-independent", model: "fixture-independent-model" } } : {}),
     },
     attachment_roots: [{ root: attachmentRoot, sources: [".wh-review-packets"] }],
   }));
@@ -1002,7 +1117,7 @@ async function p9PublicReview(state, trace, reviewedExecution, extra = {}) {
           runtimeId: trace.runtimeId, material_id: input.materials.materialId, outcome: "completed",
           providers: selected.providers.map((provider) => {
             const failed = trace.onlySameCompletes && provider === "opencode/independent";
-            return { provider, status: failed ? "failed" : "completed", identity: { provider, adapter: "opencode", ...selected.provider_identities[provider] },
+            return { provider, status: failed ? "failed" : "completed", identity: { provider, adapter: "opencode", model: selected.provider_models[provider], ...selected.provider_identities[provider] },
               error: failed ? { code: "PROCESS_FAILED", message: "actual independent fixture member failed" } : null,
               output: failed ? null : JSON.stringify({ findings: [] }), timing: { started_at_ms: 1, completed_at_ms: 2, duration_ms: 1 }, usage: null };
           }),
@@ -1103,7 +1218,10 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     expect(state.task.listCanonicalReviewAttemptRefs().filter((ref) => !beforeAttempts.includes(ref))).toEqual([review.attempt_ref]);
     const original = state.task.readRecord(review.result_ref);
     const record = JSON.parse(original);
-    expect(record.e2e_binding.reviewed_execution).toMatchObject({ ref: input.ref, sha256: input.sha256, actor: { run_id: "p9-agent-B", source_id: "fixture/p9-executor" } });
+    expect(record.e2e_binding.reviewed_execution).toMatchObject({ ref: input.ref, sha256: input.sha256, actor: {
+      source_kind: "workflowhub-session", source_id: "workflowhub-current-session",
+      run_id: state.context.kernel.deriveStageWorkflowRunId("build-code"),
+    } });
     expect(record.e2e_binding.reviewer_actor).toMatchObject({ source_id: "opencode/p9-reviewer", run_id: trace.runtimeId });
     const providerBytes = Object.values(trace.bundles[0].bytes).join("\n");
     expect(providerBytes).toContain("acceptance_execution");
@@ -1167,7 +1285,7 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     const corruptions = [
       ["deleted stdout", perAc.subject_fact.execution.stdout_ref, null, "missing"],
       ["changed stdout bytes", perAc.subject_fact.execution.stdout_ref, Buffer.from([0xff, 0x00, 0x80]), "stale"],
-      ["changed actor proof", proofRef, Buffer.from("{}\n"), "stale"],
+      ["changed historical producer proof does not affect current-session execution", proofRef, Buffer.from("{}\n"), "current"],
       ["changed actor", perAcRef, Buffer.from(JSON.stringify({ ...perAc, subject_fact: { ...perAc.subject_fact, executor_actor: { ...perAc.subject_fact.executor_actor, run_id: "wrong-actor" } } })), "stale"],
       ["changed revision", perAcRef, Buffer.from(JSON.stringify({ ...perAc, material_revision: `revision-${"f".repeat(64)}` })), "stale"],
       ["changed frozen material", frozen.ref, Buffer.from("{}\n"), "stale"],
@@ -1233,13 +1351,11 @@ describe("P3 T009 ordinary public review consumes actual execution", () => {
     }
   });
 
-  it("runs the reversed dependency order once: missing execution remains missing, then actual execution becomes reviewable", async () => {
+  it("runs the reversed dependency order without requiring an external producer", async () => {
     const state = p9Fixture({ tier: "service", independent: true, missingActor: true });
-    await expect(p9Execute(state)).rejects.toMatchObject({ code: "MATERIAL_INCOMPLETE", message: expect.stringContaining("stage_outcome_missing") });
-    expect(existsSync(join(state.marker, "service-data.json"))).toBe(false);
-    state.outcome = p9Actor(state, { attemptId: "p9-attempt-B" });
-    const second = await p9Execute(state);
-    const input = p9ExecutionInput(state, second);
+    const first = await p9Execute(state);
+    expect(acceptanceExecutionSubjectFact(state, first)).toMatchObject({ status: "passed", execution_items: [{ status: "executed" }] });
+    const input = p9ExecutionInput(state, first);
     expect(input.ref).toMatch(/acceptance_execution-/);
     expect(JSON.parse(readFileSync(join(state.marker, "service-data.json"), "utf8")).count).toBe(1);
   }, 60_000);

@@ -200,6 +200,90 @@ function validateResolvedReviewAuthorization({ task, stage, input, authorization
       { stage, kind: input.kind ?? null, subject: input.subject ?? null },
     );
   }
+  if (authorization?.current_session !== undefined) {
+    const current = authorization.current_session;
+    if (!current || typeof current !== "object" || Array.isArray(current)
+        || Object.keys(authorization).length !== 1
+        || Object.keys(current).sort().join(",") !== ["repairs", "review_hash", "review_ref", "source_snapshot_tree", "status"].sort().join(",")
+        || current.status !== "resolved"
+        || typeof current.review_ref !== "string"
+        || !SHA256_HEX.test(current.review_hash ?? "")
+        || !/^[a-f0-9]{40,64}$/.test(current.source_snapshot_tree ?? "")
+        || !Array.isArray(current.repairs)
+        || current.repairs.length === 0) {
+      throwResolvedReviewError(
+        "resolved review current-session repair proof is invalid",
+        "repair_evidence",
+        { status: "resolved", review_ref: "quality/reviews/results/<name>.json", repairs: "non-empty array" },
+        current,
+        TypeError,
+      );
+    }
+    if (!Array.isArray(input.evidence)
+        || !input.evidence.some((entry) => entry?.ref === current.review_ref && entry?.sha256 === current.review_hash)) {
+      throwResolvedReviewError(
+        "resolved review current-session repair proof does not bind the review evidence",
+        "review_binding",
+        { ref: current.review_ref, hash: current.review_hash },
+        input.evidence ?? [],
+      );
+    }
+    let reviewRaw;
+    try { reviewRaw = task.readRecord(current.review_ref); }
+    catch (error) {
+      throwResolvedReviewError(
+        `resolved review current-session review is unavailable: ${error.message}`,
+        "review_identity",
+        { ref: current.review_ref, hash: current.review_hash },
+        { ref: current.review_ref, status: "unavailable" },
+      );
+    }
+    if (hash(reviewRaw) !== current.review_hash) {
+      throwResolvedReviewError(
+        "resolved review current-session review hash mismatch",
+        "review_identity",
+        { ref: current.review_ref, hash: current.review_hash },
+        { ref: current.review_ref, hash: hash(reviewRaw) },
+      );
+    }
+    let review;
+    try { review = JSON.parse(reviewRaw); }
+    catch {
+      throwResolvedReviewError(
+        "resolved review current-session review must be valid JSON",
+        "review_identity",
+        "valid JSON review result",
+        { ref: current.review_ref, status: "invalid_json" },
+      );
+    }
+    if (review?.snapshot_tree !== current.source_snapshot_tree) {
+      throwResolvedReviewError(
+        "resolved review current-session source snapshot does not match the review",
+        "review_identity",
+        { snapshot_tree: review?.snapshot_tree ?? null },
+        { snapshot_tree: current.source_snapshot_tree },
+      );
+    }
+    const repairStatus = authenticateCodeReviewRepairs({
+      review,
+      result: { status: "findings", findings: review.findings, repairs: structuredClone(current.repairs) },
+      taskId: task.identity.taskId,
+      snapshotTree: currentContext().snapshot.tree,
+      materialRevision: currentContext().revision.revision_id,
+      workspaceRoot,
+      read: task.readRecord,
+      includeNonblocking: true,
+    });
+    if (repairStatus !== "resolved") {
+      throwResolvedReviewError(
+        "resolved review current-session repair evidence does not cover every finding",
+        "repair_evidence",
+        "resolved",
+        repairStatus,
+      );
+    }
+    return;
+  }
   if (!authorization || typeof authorization !== "object" || Array.isArray(authorization)) {
     throwResolvedReviewError(
       "resolved review authorization must be an object",

@@ -541,6 +541,7 @@ describe("current review material and capture contracts", () => {
       const result = await fakeProvider.runGroup({
         hostProvider: "codex/terra", providers: [provider], materials: bundle,
         prompt: "Read only the supplied bundle and return findings.", attachmentDelivery: "file_only",
+        minimumHeterologous: 1,
       });
       expect(result.providers[0].output).toBe(JSON.stringify({ findings: [] }));
       expect(result.providers[0].output).not.toContain("reviewed_file");
@@ -1075,7 +1076,10 @@ describe("current review material and capture contracts", () => {
       });
       expect(bundle.files).not.toContain("requirements/test_evidence.json");
       expect(bundle.files).toContain("evidence/test-summary.json");
-      expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({ status: "unavailable" });
+      expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({
+        status: "unavailable",
+        snapshot_tree: source.snapshotTree,
+      });
       expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "packet-plan.json"), "utf8")).included.required).toContain("evidence/test-summary.json");
     } finally {
       source.dispose();
@@ -1098,7 +1102,7 @@ describe("current review material and capture contracts", () => {
         materials: {
           approved_spec: "# Spec\n\nAC-01：用户得到正确结果。\n",
           acceptance_criteria: "# Acceptance\n\nAC-01：用户得到正确结果。\n",
-          test_evidence: { status: "missing", reason: "当前会话没有提供测试回执" },
+          test_evidence: { status: "missing", snapshot_tree: source.snapshotTree, reason: "当前会话没有提供测试回执" },
           ac_trace: {
             schema_version: "ac-change-test-trace.v1",
             snapshot_tree: source.snapshotTree,
@@ -1121,8 +1125,51 @@ describe("current review material and capture contracts", () => {
       });
       expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "evidence/test-summary.json"), "utf8"))).toMatchObject({
         status: "unavailable",
+        snapshot_tree: source.snapshotTree,
         reason: "当前会话没有提供测试回执",
       });
+    } finally {
+      source.dispose();
+    }
+  });
+
+  it("rejects unavailable integration test evidence bound to an older snapshot", () => {
+    const { root, task, workspace } = taskFixture();
+    const taskId = task.identity.taskId;
+    const source = captureReviewSource({ workspace, reviewDataRoot: root, taskId, includeDiff: false });
+    try {
+      expect(() => buildReviewMaterials({
+        reviewDataRoot: root,
+        attachmentRoot: root,
+        source,
+        task,
+        taskId,
+        stage: "build-code",
+        reviewScope: "integration",
+        materials: {
+          approved_spec: "# Spec\\n\\nAC-01：用户得到正确结果。\\n",
+          acceptance_criteria: "# Acceptance\\n\\nAC-01：用户得到正确结果。\\n",
+          test_evidence: { status: "unavailable", snapshot_tree: "a".repeat(40), reason: "旧快照没有完整测试回执" },
+          ac_trace: {
+            schema_version: "ac-change-test-trace.v1",
+            snapshot_tree: source.snapshotTree,
+            acceptance_ids: ["AC-01"],
+            entries: [{
+              acceptance_criterion_id: "AC-01",
+              coverage_status: "unknown",
+              coverage_reason: "当前测试回执不可用",
+              change: [{ task_id: null, summary: "当前实现" }],
+              test: [],
+              evidence: [],
+              evidence_status: "unavailable",
+              evidence_reason: "当前实现回执不可用",
+              anchors: [{ id: "stale-test-implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现上下文" }],
+            }],
+            implementation_anchors: [{ id: "stale-test-implementation", path: "README.md", start_line: 1, end_line: 1, role: "implementation", reason: "当前实现上下文" }],
+          },
+          review_instructions: reviewInstructionsFor("build-code", null, false, "integration"),
+        },
+      })).toThrow(/unavailable integration test evidence must bind the current snapshot/);
     } finally {
       source.dispose();
     }

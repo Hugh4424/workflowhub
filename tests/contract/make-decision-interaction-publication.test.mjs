@@ -12,6 +12,8 @@ import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snap
 import * as contracts from "../../runtime/stage/stage-content-contracts.mjs";
 import * as stageEvidence from "../../runtime/evidence/stage-content-evidence.mjs";
 import { buildReviewMaterials, reviewInstructionsFor } from "../../skills/wh-review/scripts/review-materials.mjs";
+import * as stageHandlers from "../../runtime/stage/stage-handlers.mjs";
+import { writeFormalReviewFixture } from "../helpers/formal-review.mjs";
 
 const roots = [];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -206,6 +208,20 @@ afterEach(() => {
 });
 
 describe("P2 formal wiring contract", () => {
+  it("keeps caller, invalid-input, and host-capability gaps distinguishable", () => {
+    expect(typeof stageHandlers.diagnoseMissingInput).toBe("function");
+    if (typeof stageHandlers.diagnoseMissingInput !== "function") return;
+    expect(stageHandlers.diagnoseMissingInput({ callerProvided: false, providedValid: false, hostCanProvide: false })).toMatchObject({
+      status: "caller_not_provided",
+    });
+    expect(stageHandlers.diagnoseMissingInput({ callerProvided: true, providedValid: false, hostCanProvide: true })).toMatchObject({
+      status: "provided_but_invalid",
+    });
+    expect(stageHandlers.diagnoseMissingInput({ callerProvided: true, providedValid: true, hostCanProvide: false })).toMatchObject({
+      status: "host_cannot_provide",
+    });
+  });
+
   it("publishes one immutable make-decision interaction aggregate through the kernel", () => {
     const state = fixture();
     expect(typeof state.kernel.prepareMakeDecisionInteractionPublication).toBe("function");
@@ -314,6 +330,52 @@ describe("P2 formal wiring contract", () => {
     const handlerSource = await import("../../runtime/stage/stage-handlers.mjs");
     expect(typeof runnerSource.runOfficialStage).toBe("function");
     expect(typeof handlerSource.officialStageHandler).toBe("function");
+  });
+
+  it("preserves an available integration review when vnext implementation and test receipts are absent", async () => {
+    const state = fixture("build-code-review-fallback");
+    const taskId = state.task.identity.taskId;
+    state.artifacts.writeAtomic("decision-log.md", uiApplicabilityDecisionLog("non_ui"));
+    state.artifacts.writeAtomic("spec.md", "# spec\nAC-REV-001\n");
+    state.artifacts.writeAtomic("plan.md", "# plan\n");
+    state.artifacts.writeAtomic("tasks.md", "# tasks\n");
+    const snapshot = state.candidate.captureSnapshot();
+    const review = writeFormalReviewFixture({
+      task: state.task,
+      stage: "build-code",
+      snapshotTree: snapshot.tree,
+      materialRevision: state.kernel.currentVNextMaterialRevision(),
+      verdict: "fail",
+      subjectKind: "worktree",
+      phaseId: null,
+      reviewScope: "integration",
+      provider: "kimi/coding",
+    });
+    const worker = {
+      stage: "build-code",
+      identity: { taskId },
+      workflowRunId: "fallback-review-run",
+      manifest: { record_model: "vnext-single-write" },
+      currentMaterialRevision: state.kernel.currentVNextMaterialRevision(),
+      readArtifact: (name) => state.artifacts.read(name),
+      artifactRef: (name) => state.artifacts.reference(name),
+      snapshotWorkspace: () => state.candidate.captureSnapshot(),
+      readReceipt: (ref) => {
+        const raw = state.task.readRecord(ref);
+        return { value: JSON.parse(raw), sha256: hash(raw) };
+      },
+      readEvidence: (ref) => {
+        const raw = state.task.readRecord(ref);
+        return { bytes: raw, sha256: hash(raw) };
+      },
+    };
+    const result = await stageHandlers.officialStageHandler("build-code")(worker, {
+      receipts: { review: review.resultRef },
+    });
+    expect(result.facts.review).toMatchObject({ status: "recorded", result_ref: review.resultRef });
+    expect(result.facts.finding_dispositions.status).not.toBe("not_applicable");
+    expect(result.completion.facts.review).toMatchObject({ status: "recorded", refs: [{ ref: review.resultRef }] });
+    expect(result.missing_items).toContain("current implementation/test facts are unavailable; record them when available");
   });
 
   it("actually invokes the controlled QA adapter once for an applicable official build-code run", async () => {

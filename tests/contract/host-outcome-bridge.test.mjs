@@ -15,6 +15,10 @@ import { validateWorkerSummary } from "../../runtime/stage/stage-agent-outcome-a
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 
 const roots = [];
+const originalEnvironment = {
+  HOME: process.env.HOME,
+  WORKFLOWHUB_TASK_DIR: process.env.WORKFLOWHUB_TASK_DIR,
+};
 const fixture = (taskId = "host-outcome-task", { legacy = false } = {}) => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-host-outcome-")));
   roots.push(root);
@@ -49,6 +53,9 @@ const fixture = (taskId = "host-outcome-task", { legacy = false } = {}) => {
   for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
     writeFileSync(join(materialRoot, name), `# ${name}\nfixture\n`);
   }
+  // Model the trusted launcher environment used by the sidecar bridge.
+  process.env.HOME = join(root, "home");
+  process.env.WORKFLOWHUB_TASK_DIR = storage;
   return {
     root, repo, storage,
     env: { HOME: join(root, "home"), WORKFLOWHUB_TASK_DIR: storage },
@@ -203,6 +210,10 @@ const bridgeRequestWithCoordination = (state, coordination, attemptId) => ({
 
 afterEach(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
+  if (originalEnvironment.HOME === undefined) delete process.env.HOME;
+  else process.env.HOME = originalEnvironment.HOME;
+  if (originalEnvironment.WORKFLOWHUB_TASK_DIR === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
+  else process.env.WORKFLOWHUB_TASK_DIR = originalEnvironment.WORKFLOWHUB_TASK_DIR;
 });
 
 describe("explicit host outcome bridge contract", () => {

@@ -1,0 +1,88 @@
+T018 active-path gate
+
+RED root cause:
+- no receipts.stage_outcomes
+- official handler/publication succeeded
+- old runOfficialStage mapped missing host outcome to stage_end_failed
+
+Targeted tests:
+npx vitest run tests/contract/no-external-stage-agent-gate.test.mjs tests/contract/stage-routing-and-concrete-testing.test.mjs tests/contract/workflow-quality-regression.test.mjs tests/contract/stage-runner-reflection.test.mjs tests/contract/stage-handoff.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+- stage-handoff.test.mjs: 35/35 passed
+- stage-runner-reflection.test.mjs: 21/21 passed
+- no-external-stage-agent-gate.test.mjs: 2/2 passed
+- stage-routing-and-concrete-testing.test.mjs: 13/13 passed after protocol line-wrap repair
+- workflow-quality-regression.test.mjs: 7/7 passed
+
+Public current-task smoke:
+node tools/cli/stage-runtime.mjs run --action=execute --stage=verify-code --project=workflowhub --task=workflowhub-mechanism-waste-reduction-20260915
+- exit: 0
+- no receipts.stage_outcomes supplied
+- execution_outcome.status: completed
+- stage row: stage-end:verify-code / exit_code=0 / failure_signature=stage_end_recorded
+- work_status: ready
+- continuation_allowed: true
+- quality_status: in_progress; code_review remains missing
+- reflection: executor_absent/unavailable, non-blocking; no external Stage Agent or bridge was used
+
+Status readback:
+node tools/cli/stage-runtime.mjs status --action=begin --stage=verify-code --project=workflowhub --task=workflowhub-mechanism-waste-reduction-20260915
+- four current materials present
+- only actionable root cause: code_review missing
+- execution_outcome.status: completed
+
+Final material-bound smoke after D-026/T018 material updates (2026-09-16T15:56:26+08:00):
+- material_revision: revision-b35a820ed9183fd0cc6fbb790231432f375bb80cffa35c9741daaa4dd0882d0f
+- snapshot_tree: b2314d9207ddb85109e06cfab777c3cce2cf7533
+- run exit: 0; execution_outcome.status: completed
+- work_status: ready; continuation_allowed: true
+- latest stage row: stage-end:verify-code / exit_code=0 / failure_signature=stage_end_recorded
+- quality_status: in_progress; code_review missing; reflection executor_absent/unavailable non-blocking
+
+Final run after all current-material edits (2026-09-16T15:57:39+08:00):
+- material_revision: revision-1210e55ce5888275f5212caf5bd167ebe5f0857855ef06a3a23a2bec92002eba
+- snapshot_tree: 2ae5fd195578898a690bcaab0b41599cca506e0a
+- exit: 0; latest stage row remains `stage_end_recorded` with `exit_code=0`
+- status: `work_status=ready`, `continuation_allowed=true`, `execution_outcome.status=completed`
+- remaining quality fact: `code_review=missing`; no external Stage Agent/bridge/session/outcome used
+
+Final current-session closure audit (2026-09-17T01:46:59+08:00):
+- `skills/wh-review/scripts/__tests__/wh-review-cli.test.mjs`: 34/34 passed
+- `tests/contract/no-external-stage-agent-gate.test.mjs`: 3/3 passed
+- private wh-review E2E now selects the current TaskKernel `acceptance_execution` aggregate and rejects legacy-only execution as current; screenshot publication remains text/JSON for provider redaction
+- active verify-code manifest no longer describes an external Stage Agent or bridge producer
+- wh-review bundle closure: 30 files, bundle hash `372ae6e6de8069be7ee84aeb1bc53110f6303ea88fb3687231d0b017aaaad4eb`
+- final material-bound public run exit: 0; material revision `revision-4258a88f692eb69e8a42e67f6ad45d7f5a99ce36e9c3d1db4746e4e2cf9ced6e`; snapshot tree `480f3cbadd6c388e921f6de08681d1a5f84e7ce5`
+- latest stage row: `stage-end:verify-code` / `exit_code=0` / `failure_signature=stage_end_recorded`; `contains_stage_outcome=false`
+- final status: `work_status=ready`, `continuation_allowed=true`, `quality_status=in_progress`, `code_review=missing`; reflection `executor_absent/unavailable` is non-blocking
+- no commit/push/merge/archive/close performed
+
+Post-review repair evidence (2026-09-17):
+- independent architecture findings fixed: retired nested decision-freeze outcome rejected;
+  stage-row write error mapped to non-zero CLI exit; review-record uses full current
+  acceptance aggregate authentication.
+- provider minor findings fixed: explicit not_applicable quality status; retired
+  requireStageOutcome test argument removed; read-only remote probe unavailable state
+  disclosed without throwing.
+- targeted commands/results:
+  - no-external + routing: 2 files / 17 tests passed
+  - acceptance single-writer empty values: 4/4 passed
+  - current-session/aggregate/retired-outcome acceptance boundaries: 3 passed
+  - mixed approval sources: 3/3 passed
+  - read-only unavailable remote probe: 1/1 passed
+  - syntax checks and git diff --check: exit 0
+- explicit stage-runtime process-exit contract: no-external-stage-agent-gate 5/5;
+  row-write failure -> 1 and protocol-invalid -> 2.
+- latest public verify-code run used no input and no external outcome: exit 0;
+  work_status=ready; continuation_allowed=true; execution_outcome=completed;
+  latest stage row exit_code=0/failure_signature=stage_end_recorded;
+  quality remains incomplete only because code_review is missing/current review is not
+  available; no stale review or legacy outcome was promoted.
+
+Post-route current-session smoke (2026-09-17T01:52:41+08:00):
+- public `stage-runtime run --action=execute --stage=verify-code` with no input and no external outcome exited 0
+- material_revision: `revision-4258a88f692eb69e8a42e67f6ad45d7f5a99ce36e9c3d1db4746e4e2cf9ced6e`
+- snapshot_tree: `853496ad423772297b0501be3d6dc7075c0aec49`
+- status: `work_status=ready`, `continuation_allowed=true`, `execution_outcome.status=completed`
+- quality remains `incomplete`; `code_review` remains missing; reflection `executor_absent/unavailable` remains non-blocking
+- latest stage row: `stage-end:verify-code` / `exit_code=0` / `failure_signature=stage_end_recorded`; no `stage_outcome` field
+- no commit/push/merge/archive/close performed

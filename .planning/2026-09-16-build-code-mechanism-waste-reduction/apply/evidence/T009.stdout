@@ -1,0 +1,9 @@
+command: npx vitest run tests/contract/write-identity-workspace.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 1
+oracle: intended RED; the wrong-current-worktree artifact write resolved, the foreign bridge task path resolved, and no bootstrap execution record existed.
+summary:
+  Test Files 1 failed (1)
+  Tests 3 failed (3)
+  - wrong current worktree write: promise resolved instead of rejecting
+  - foreign bridge task path: promise resolved instead of rejecting
+  - bootstrap transaction: expected one identity execution record, got zero

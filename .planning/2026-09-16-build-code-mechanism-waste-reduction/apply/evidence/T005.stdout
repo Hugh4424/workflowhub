@@ -1,0 +1,4 @@
+command: npx vitest run tests/contract/external-threshold-contract.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 1
+oracle: RED — baseline rejected running v3 member before the threshold assertion, accepted the same-model cross-adapter threshold, and omitted minimum_heterologous from the dispatched runner request.
+summary: 3 tests failed; failures are the intended missing threshold/model-identity/lifecycle consumer behavior, not an environment failure.

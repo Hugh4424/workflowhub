@@ -9,6 +9,10 @@ import { createTask } from "../../runtime/task/task-handle.mjs";
 import { prepareTaskWorkspace } from "../../runtime/task/workspace.mjs";
 
 const roots = [];
+const originalEnvironment = {
+  HOME: process.env.HOME,
+  WORKFLOWHUB_TASK_DIR: process.env.WORKFLOWHUB_TASK_DIR,
+};
 const analyzerEvidence = ["decision-log", "spec", "plan", "tasks", "implementation", "tests", "ac-trace"];
 const buildCodeSteps = JSON.parse(readFileSync(join(process.cwd(), "workflows", "build-code", "steps.json"), "utf8")).steps;
 const firstStep = buildCodeSteps[0].step_slug;
@@ -48,7 +52,9 @@ function fixture(taskId = "claude-outcome-e2e-fixture") {
   for (const name of ["decision-log.md", "spec.md", "plan.md", "tasks.md"]) {
     writeFileSync(join(materialRoot, name), `# ${name}\nfixture\n`);
   }
-  return { root, repo, home, storage, task };
+  process.env.HOME = home;
+  process.env.WORKFLOWHUB_TASK_DIR = storage;
+  return { root, repo, home, storage, task, workspace };
 }
 
 function claudePacket(taskId, taskPath) {
@@ -119,7 +125,7 @@ describe("Claude structured outcome packet e2e", () => {
       `--task=${state.task.identity.taskId}`,
       `--input=${publicInputPath}`,
     ], {
-      cwd: state.repo,
+      cwd: state.workspace.worktreeRoot,
       env: { ...process.env, HOME: state.home, WORKFLOWHUB_TASK_DIR: state.storage },
       encoding: "utf8",
     });
@@ -151,4 +157,8 @@ describe("Claude structured outcome packet e2e", () => {
 
 afterAll(() => {
   while (roots.length) rmSync(roots.pop(), { recursive: true, force: true });
+  if (originalEnvironment.HOME === undefined) delete process.env.HOME;
+  else process.env.HOME = originalEnvironment.HOME;
+  if (originalEnvironment.WORKFLOWHUB_TASK_DIR === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
+  else process.env.WORKFLOWHUB_TASK_DIR = originalEnvironment.WORKFLOWHUB_TASK_DIR;
 });

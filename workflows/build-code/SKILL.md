@@ -23,16 +23,15 @@ per-AC evidence, independent review, and explicit finding disposition.
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
-manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
-`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
-“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
 产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
 `unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
 不得用一条阶段结论均摊到所有 step/skill。
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 必须显式引用本阶段唯一真实 `quality/evidence/stage-outcomes/<stage>/<sha256>.json`；writer 重读并完整认证来源，核对 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree，run/executor 来自认证 outcome。缺来源、executor 或 judgment 保持 `unavailable`，保留实际错误，不借用旧复盘。
+阶段结束时，当前主会话按 `stage-reflection` 产出 `stage-reflection.v2` judgment JSON，经现有 `run --action=reflect` 或 runner 的 `on_stage_end` 调度提交。`judgments[].evidence_refs` 引用本阶段当前可复核的质量事实、测试、review 或阶段行；不要求外部 Stage Agent、bridge、session 或 stage outcome。writer 直接核对当前 `identity` 的 task、worktree、branch、attempt、material_revision 和 snapshot_tree。缺 judgment 或 reflection executor 时保持 `unavailable(executor_absent)`，保留实际错误且不阻断 stage、repair 或 close，不借用旧复盘。
 
 JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`，以及 `status_matrix`、`source_completeness`。条目写真实证据与 confidence；无发现写 `none_observed`，未知写 `unknown` 和原因，不适用写 `not_applicable` 和原因。
 
@@ -40,16 +39,12 @@ JSON 保留六个结构化区块：`what_helped`、`what_to_improve`、`blockers
 
 `validate-stage-reflection.mjs` 内部验证消费边：较早 output 与较晚 input 的同一引用才形成 edge；来源不完整保持 partial/unknown。`remove_candidate` 仍须既有完整零消费证明和人工介入条件，否则降为 `needs_evidence`。
 
-When the host automatically binds the current WorkflowHub session to an
-explicit `WORKFLOWHUB_STAGE_OUTCOME_PATH`, delivery comes before extended
-reporting: read the host stage input once, perform the smallest real
-verification needed for the current task, write the complete current-session
-execution object to that exact path, verify that it parses, and stop. The user
-does not start another agent. Do not spend the bounded host run rereading
-runtime adapters, replaying old phases, or repeating a full test suite after a
-current result exists. Any step not actually performed must be recorded as
-`incomplete` with its real reason; leaving the execution file unwritten is
-never an acceptable handoff.
+The current WorkflowHub session owns delivery. It performs the smallest real
+verification needed for the current task and publishes the current facts through
+the existing public `run` behavior. No external Stage Agent, bridge,
+`WORKFLOWHUB_STAGE_OUTCOME_PATH`, transcript, or session/outcome packet is
+needed. Any step not actually performed is recorded as `incomplete` with its
+real reason; quality facts remain separate from the permission to continue.
 
 ## Authority and entry
 

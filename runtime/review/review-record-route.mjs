@@ -10,7 +10,9 @@ import { openCurrentTaskWorkspace } from "../task/workspace.mjs";
 import { runWorkspaceCommand } from "../task/workspace-runner.mjs";
 import { freezeReviewMaterial, readFrozenReviewMaterial } from "../evidence/canonical-receipt-writer.mjs";
 import { createQualityFact, qualityFactDigest } from "../evidence/quality-fact.mjs";
-import { validateStageOutcomeProducerIdentity, validateCanonicalQualityFact } from "../evidence/canonical-evidence-validators.mjs";
+import { WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, validateStageOutcomeProducerIdentity, validateCanonicalQualityFact } from "../evidence/canonical-evidence-validators.mjs";
+import { authenticateAcceptanceExecutionAggregate } from "../evidence/freshness.mjs";
+import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
 import { reviewIdentityFromInput } from "./review-policy.mjs";
 
 const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
@@ -22,7 +24,7 @@ const REVIEW_PROVIDER_OUTPUT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Z
 const IN_PROCESS_REQUEST_LOCKS = new Map();
 const EXECUTION_CONTEXTS = new WeakSet();
 
-function readExecutionSource(task, selection, identity, materials) {
+function readExecutionSource(task, selection, identity, materials, { allowLegacy = false } = {}) {
   if (!selection || typeof selection !== "object" || Array.isArray(selection)
       || Object.keys(selection).sort().join(",") !== "quality_fact_ref,ref,sha256"
       || !SHA256_HEX.test(selection.sha256 ?? "")
@@ -45,14 +47,60 @@ function readExecutionSource(task, selection, identity, materials) {
     if (textHash(evidenceRaw) !== evidence.sha256) throw new Error("reviewed_execution evidence hash mismatch");
   }
   const wrapper = JSON.parse(task.readRecord(fact.evidence[0].ref));
-  if (wrapper.refs.length !== 1 || wrapper.refs[0].ref !== selection.ref || wrapper.refs[0].sha256 !== selection.sha256) throw new Error("reviewed_execution wrapper binds another aggregate");
+  try { validateAcceptanceEvidence(wrapper); } catch (error) { throw new Error(`reviewed_execution acceptance wrapper is invalid: ${error.message}`); }
+  if (wrapper.acceptance_criterion_id !== "acceptance_execution"
+      || wrapper.result !== "pass"
+      || wrapper.snapshot_tree !== identity.tree
+      || wrapper.refs.length !== 1
+      || wrapper.refs[0].ref !== selection.ref
+      || wrapper.refs[0].sha256 !== selection.sha256
+      || wrapper.freshness?.status !== "current"
+      || wrapper.freshness.snapshot_tree !== identity.tree
+      || wrapper.freshness.material_revision !== identity.materialRevision
+      || wrapper.freshness.evidence_freshness?.length !== 1
+      || wrapper.freshness.evidence_freshness[0]?.ref !== wrapper.refs[0].ref
+      || wrapper.freshness.evidence_freshness[0]?.sha256 !== wrapper.refs[0].sha256
+      || wrapper.freshness.evidence_freshness[0]?.status !== "current") {
+    throw new Error("reviewed_execution wrapper is not current or binds another aggregate");
+  }
   const aggregateRaw = task.readRecord(selection.ref);
   if (textHash(aggregateRaw) !== selection.sha256) throw new Error("reviewed_execution aggregate hash mismatch");
   const aggregate = JSON.parse(aggregateRaw);
-  const outcome = JSON.parse(task.readRecord(aggregate.subject_fact.execution_binding.stage_outcome_ref));
-  const producer = validateStageOutcomeProducerIdentity(outcome, "build-code", { requireSource: true });
-  const actor = { source_kind: producer.kind, source_id: producer.sourceId, run_id: producer.agentRunId };
+  const binding = aggregate.subject_fact?.execution_binding;
+  const actor = authenticateAcceptanceExecutionAggregate(aggregate, fact, read, {}, "reviewed-execution");
+  if (binding?.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND) {
+    const expectedRunId = `vnext-${textHash(`${aggregate.task_id}\0build-code`).slice(0, 32)}`;
+    if (binding.task_id !== aggregate.task_id || binding.stage !== "build-code"
+        || binding.snapshot_tree !== aggregate.snapshot_tree
+        || binding.material_revision !== aggregate.material_revision
+        || typeof binding.attempt_id !== "string" || !binding.attempt_id.trim()
+        || binding.run_id !== expectedRunId) throw new Error("reviewed_execution current-session binding is invalid");
+  } else {
+    if (!allowLegacy) throw new Error("reviewed_execution must bind a current WorkflowHub session execution");
+    if (!binding || typeof binding.stage_outcome_ref !== "string" || !binding.stage_outcome_ref.trim()) {
+      throw new Error("reviewed_execution binding is missing");
+    }
+    const outcome = JSON.parse(task.readRecord(binding?.stage_outcome_ref));
+    const producer = validateStageOutcomeProducerIdentity(outcome, "build-code", { requireSource: true });
+    if (actor.source_kind !== producer.kind || actor.source_id !== producer.sourceId || actor.run_id !== producer.agentRunId) {
+      throw new Error("reviewed_execution aggregate actor does not match its historical producer proof");
+    }
+  }
   return { aggregate, aggregateRaw, actor, fact, wrapper, wrapperReference: fact.evidence[0] };
+}
+
+// Read-only authenticated consumer seam for current execution evidence.  The
+// route keeps legacy stage-outcome provenance readable internally, but current
+// callers must select the TaskKernel-published acceptance aggregate and its
+// quality fact; no host/bridge outcome is manufactured here.
+export function readAuthenticatedExecutionSource(task, selection, identity, materials = {}) {
+  const source = readExecutionSource(task, selection, identity, materials);
+  if (source.aggregate.subject_fact?.execution_binding?.kind !== WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND
+      || source.actor.source_kind !== "workflowhub-session"
+      || source.actor.source_id !== WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID) {
+    throw new Error("current execution source must be published by the WorkflowHub session");
+  }
+  return source;
 }
 
 function prepareExecutionReviewRequest(task, request, identity) {
@@ -315,6 +363,12 @@ function reviewRequestMaterialId(request, materialIdForRequest = null) {
 }
 
 function requestLockHash(request, materialId, routeIdentity) {
+  const retry = request.retry && typeof request.retry === "object" && !Array.isArray(request.retry)
+    ? {
+        requested: request.retry.requested === true,
+        basis: typeof request.retry.basis === "string" ? request.retry.basis : null,
+      }
+    : null;
   const stable = {
     stage: request.stage,
     review_track: request.review_track ?? request.reviewTrack ?? null,
@@ -327,6 +381,10 @@ function requestLockHash(request, materialId, routeIdentity) {
     host_provider: request.host_provider ?? request.hostProvider ?? null,
     material_id: materialId,
     authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
+    // Free-form retry explanations are provenance, not request identity. A
+    // changing sentence must not manufacture another dispatch for the same
+    // authenticated material/route change.
+    retry,
   };
   return textHash(canonicalJson(stable));
 }
@@ -355,141 +413,84 @@ function semanticOriginFromRecord(value) {
   return `${reviewScope ?? "stage"}:${subjectKind}`;
 }
 
-// ---------------------------------------------------------------------------
-// The review round policy. FR-C4-002 removes the material-hash-driven dedup
-// gate and its evidence-layer validator; the per-Phase core review plus the one
-// focus review (FR-C4-003) stay, and their decision table now lives with its
-// only remaining caller, the review route. Decisions and reported fields are
-// unchanged; only the owner and the symbol name changed.
-// ---------------------------------------------------------------------------
+// A retry is a caller-owned judgment, not a counter or a material-derived
+// trigger. The basis values are deliberately narrow so an arbitrary changed
+// request cannot silently become a second provider call.
+const REVIEW_RETRY_BASES = new Set(["material_changed", "provider_changed", "source_recovered"]);
 
-const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "phase", "route_repair"]);
-const REVIEW_ATTEMPT_STATUSES = new Set(["completed", "executed", "failed", "unavailable"]);
-
-function reviewBudgetResult({ ok, reason = null, route = null, budget_scope = "material", attempt_created = false, counts, errors = [] }) {
+function retryDecision(request) {
+  const value = request?.retry;
+  if (value === undefined || value === null
+      || (value && typeof value === "object" && !Array.isArray(value)
+        && (!Object.hasOwn(value, "requested") || value.requested === false))) {
+    return Object.freeze({ requested: false, admitted: false, basis: null, reason: null });
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.requested !== true
+      || typeof value.reason !== "string" || value.reason.trim() === "") {
+    return Object.freeze({
+      requested: true,
+      admitted: false,
+      basis: null,
+      reason: null,
+      invalid: true,
+      error: "review retry requires requested=true and a non-empty reason",
+    });
+  }
+  const basis = typeof value.basis === "string" ? value.basis : null;
   return Object.freeze({
-    ok,
-    status: ok ? "ready" : "incomplete",
-    ...(reason ? { reason } : {}),
-    ...(route ? { route } : {}),
-    budget_scope,
-    attempt_created,
-    counts: Object.freeze({ ...counts }),
-    errors: Object.freeze([...errors]),
+    requested: true,
+    admitted: REVIEW_RETRY_BASES.has(basis),
+    basis,
+    reason: value.reason.trim(),
   });
 }
 
-const ROUTE_REPAIR_EXCLUDED_ERRORS = new Set([
-  "ROUTE_UNAVAILABLE", "MATERIAL_INCOMPLETE", "MATERIAL_FORBIDDEN", "REVIEW_INPUT_TOO_LARGE",
-  "PROTOCOL_INCOMPATIBLE", "REVIEW_BROKER_START_FAILED", "REVIEW_STATUS_UNAVAILABLE",
-  "REVIEW_RUNTIME_EXPIRED", "REVIEW_RUNTIME_MISSING", "REVIEW_SOURCE_DRIFT",
-  "REVIEW_MATERIAL_MISMATCH", "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH",
-  "REVIEW_CANCELLED", "REVIEW_EXECUTION_TIMEOUT",
-]);
-
-function validateRouteRepairAttempt(attempt, request) {
-  if (!attempt) return "route_repair_attempt_missing";
-  if (attempt.dispatch_state !== "dispatched") return "route_repair_not_dispatched";
-  if (!new Set(["failed", "unavailable"]).has(attempt.status)
-      || !new Set(["failed", "unavailable"]).has(attempt.terminal_status)) return "route_repair_not_terminal_failure";
-  if (!SHA256_HEX.test(attempt.route_identity ?? "") || !SHA256_HEX.test(request.route_identity ?? "")) return "route_repair_identity_invalid";
-  if (attempt.route_identity === request.route_identity) return "route_repair_identity_unchanged";
-  if (!SHA256_HEX.test(attempt.closure_identity ?? "") || !SHA256_HEX.test(request.closure_identity ?? "")
-      || attempt.closure_identity !== request.closure_identity) return "route_repair_source_changed";
-  if (attempt.has_semantic_output !== false) return "route_repair_semantic_output_present";
-  if (typeof attempt.error_code !== "string" || !attempt.error_code.trim()
-      || ROUTE_REPAIR_EXCLUDED_ERRORS.has(attempt.error_code)) return "route_repair_failure_ineligible";
-  if (!Array.isArray(attempt.provider_attempts) || attempt.provider_attempts.length === 0) return "route_repair_provider_attempts_missing";
-  if (attempt.provider_attempts.some((member) => !member || !new Set(["failed", "cancelled"]).has(member.status)
-      || member.output_ref !== null || typeof member.error_code !== "string" || !member.error_code.trim())) {
-    return "route_repair_provider_failure_unverified";
-  }
-  if (attempt.provider_attempts.some((member) => ROUTE_REPAIR_EXCLUDED_ERRORS.has(member.error_code))) {
-    return "route_repair_provider_failure_ineligible";
-  }
-  return null;
+function attemptRouteIdentity(attempt) {
+  const value = attempt?.closure_manifest?.route_identity ?? attempt?.route_identity ?? null;
+  return SHA256_HEX.test(value ?? "") ? value : null;
 }
 
-/**
- * Decide whether one review round may be dispatched, without creating a new
- * gate or persistent counter. The caller supplies the immutable attempt facts
- * for the current frozen revision; phase reviews use their own target
- * namespace.
- */
-export function evaluateReviewRound({ material_revision, attempts = [], canonical_attempts = null, request = {} } = {}) {
-  const errors = [];
-  if (typeof material_revision !== "string" || material_revision.trim() === "") errors.push("material_revision_missing");
-  if (!Array.isArray(attempts)) errors.push("attempts_must_be_array");
-  const suppliedAttempts = Array.isArray(attempts) ? attempts : [];
-  suppliedAttempts.forEach((attempt, index) => {
-    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt)) {
-      errors.push(`attempt_${index + 1}_must_be_object`);
-      return;
+function sameReviewLineage(attempt, request) {
+  const requestScope = request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null);
+  const attemptScope = attempt.review_scope ?? (attempt.stage === "build-code" ? "integration" : null);
+  return attempt.stage === request.stage
+    && (attempt.phase_id ?? null) === (request.phase_id ?? null)
+    && (attempt.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
+    && (attempt.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
+    && (attempt.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
+    && attemptScope === requestScope
+    && semanticOriginFromRecord(attempt) === semanticOriginFromRecord(request)
+    && subjectMatchesAttempt(attempt, request.subject)
+    && (attempt.authenticated_evidence_sha256 ?? null) === authenticatedEvidenceHash(request.authenticated_evidence);
+}
+
+function authenticateRetryDecision(retry, { history, request, materialId, routeIdentity, requestKey }) {
+  if (!retry?.admitted) return retry;
+  const currentRoute = SHA256_HEX.test(routeIdentity ?? "") ? routeIdentity : null;
+  const lineage = history.filter(({ attempt }) => sameReviewLineage(attempt, request));
+  // A canonical attempt with the current request key is the current lineage
+  // head for this exact material/route input. A prior attempt must not keep
+  // admitting another dispatch after that head has already consumed the
+  // judged change (A -> B -> repeated B, including unavailable B).
+  const currentHead = lineage.find(({ attempt }) => attempt.request_key === requestKey);
+  if (currentHead) {
+    // The exact retry request was already recorded. Treat the request as
+    // idempotently admitted so findReusableReview can return that immutable
+    // semantic or unavailable fact without dispatching a second provider call.
+    return Object.freeze({ ...retry, admitted: true });
+  }
+  const authenticated = lineage.some(({ attempt }) => {
+    if (retry.basis === "material_changed") return attempt.material_id !== materialId;
+    const previousRoute = attemptRouteIdentity(attempt);
+    if (retry.basis === "provider_changed") {
+      return currentRoute !== null && previousRoute !== null && previousRoute !== currentRoute;
     }
-    if (typeof attempt.attempt_id !== "string" || attempt.attempt_id.trim() === "") errors.push(`attempt_${index + 1}_id_missing`);
-    if (!REVIEW_ATTEMPT_REF.test(attempt.attempt_ref ?? "")) errors.push(`attempt_${index + 1}_ref_invalid`);
-    if (!SHA256_HEX.test(attempt.attempt_hash ?? "")) errors.push(`attempt_${index + 1}_hash_invalid`);
-    if (!REVIEW_ATTEMPT_STATUSES.has(attempt.status)) errors.push(`attempt_${index + 1}_status_invalid`);
+    if (retry.basis === "source_recovered") {
+      return currentRoute !== null && previousRoute === null && attempt.dispatch_state === "blocked_before_dispatch";
+    }
+    return false;
   });
-  const canonicalAttempts = canonical_attempts === null ? null : (Array.isArray(canonical_attempts) ? canonical_attempts : []);
-  if (canonical_attempts !== null && !Array.isArray(canonical_attempts)) errors.push("canonical_attempts_must_be_array");
-  if (canonicalAttempts !== null) {
-    const canonicalByRef = new Map(canonicalAttempts.map((attempt) => [attempt?.attempt_ref, attempt]));
-    for (const attempt of suppliedAttempts) {
-      const canonical = canonicalByRef.get(attempt?.attempt_ref);
-      if (!canonical || canonical.attempt_hash !== attempt.attempt_hash || canonical.attempt_id !== attempt.attempt_id) {
-        errors.push("attempt_not_bound_to_canonical_record");
-      }
-    }
-    const currentCanonical = canonicalAttempts.filter((attempt) => attempt?.material_revision === material_revision);
-    const suppliedRefs = new Set(suppliedAttempts.map((attempt) => attempt?.attempt_ref));
-    if (currentCanonical.some((attempt) => !suppliedRefs.has(attempt.attempt_ref))) errors.push("attempt_history_incomplete");
-  }
-  if (!request || typeof request !== "object" || Array.isArray(request)) errors.push("request_must_be_object");
-  const kind = request?.kind ?? "initial";
-  if (!REVIEW_BUDGET_KINDS.has(kind)) errors.push("review_kind_invalid");
-  const currentAttempts = suppliedAttempts.filter((attempt) => attempt?.material_revision === material_revision);
-  if (currentAttempts.length !== suppliedAttempts.length) errors.push("material_revision_mismatch");
-  const counts = {
-    initial: currentAttempts.filter((attempt) => attempt?.kind === "initial").length,
-    focused: currentAttempts.filter((attempt) => attempt?.kind === "focused").length,
-    phase: currentAttempts.filter((attempt) => attempt?.kind === "phase" && attempt?.phase_id === request?.phase_id).length,
-    route_repair: currentAttempts.filter((attempt) => attempt?.kind === "route_repair").length,
-  };
-  if (errors.length) return reviewBudgetResult({ ok: false, reason: "budget_input_invalid", budget_scope: kind === "phase" ? "phase" : "material", counts, errors });
-  if (kind === "phase") {
-    if (typeof request.phase_id !== "string" || request.phase_id.trim() === "") {
-      return reviewBudgetResult({ ok: false, reason: "phase_id_missing", budget_scope: "phase", counts, errors: ["phase_id_missing"] });
-    }
-    if (counts.phase > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", budget_scope: "phase", counts });
-    return reviewBudgetResult({ ok: true, route: "phase_review", budget_scope: "phase", counts });
-  }
-  if (kind === "initial") {
-    if (counts.initial > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
-    return reviewBudgetResult({ ok: true, route: "initial_review", counts });
-  }
-  if (kind === "focused") {
-    if (request.changed !== true) return reviewBudgetResult({ ok: false, reason: "no_material_change_for_focused_review", route: "ask_user", counts });
-    if (counts.focused > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
-    return reviewBudgetResult({ ok: true, route: "focused_review", counts });
-  }
-  if (kind === "route_repair") {
-    if (canonicalAttempts === null) {
-      return reviewBudgetResult({ ok: false, reason: "route_repair_canonical_history_required", counts,
-        errors: ["route_repair_canonical_history_required"] });
-    }
-    if (counts.route_repair > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
-    const prior = currentAttempts.find((attempt) => attempt.attempt_ref === request.repair_attempt_ref);
-    const canonical = canonicalAttempts.find((attempt) => attempt?.attempt_ref === request.repair_attempt_ref);
-    if (!prior || !canonical || canonicalJson(prior) !== canonicalJson(canonical)) {
-      return reviewBudgetResult({ ok: false, reason: "route_repair_attempt_not_canonical", counts,
-        errors: ["route_repair_attempt_not_canonical"] });
-    }
-    const reason = validateRouteRepairAttempt(prior, request);
-    if (reason) return reviewBudgetResult({ ok: false, reason, route: "ask_user", counts });
-    return reviewBudgetResult({ ok: true, route: "route_repair_review", counts });
-  }
-  return reviewBudgetResult({ ok: false, reason: "review_kind_invalid", counts, errors: ["review_kind_invalid"] });
+  return Object.freeze({ ...retry, admitted: authenticated });
 }
 
 function reviewSubjectHash(subject) {
@@ -511,10 +512,10 @@ function subjectMatchesAttempt(attempt, subject) {
     : actual === reviewSubjectHash(subject);
 }
 
-function findReusableReview({ history, request, routeIdentity = null, materialRevision = null, snapshotTree = null, materialId = null }) {
+function findReusableReview({ history, request, routeIdentity = null, snapshotTree = null, requestKey = null, retry = null }) {
   const requestOrigin = semanticOriginFromRecord(request);
   // An origin that cannot be reconstructed from the record fails closed: the
-  // request is dispatched under the round budget instead of reusing an attempt
+  // request is dispatched only when no authenticated reusable attempt exists
   // whose canonical identity is unprovable.
   if (requestOrigin === null) return null;
   // Reuse is an authenticated transport decision. If the current route could
@@ -539,41 +540,36 @@ function findReusableReview({ history, request, routeIdentity = null, materialRe
     // The identity matched, so this entry is the same canonical review. The
     // checks below are transport and integrity preconditions on the recorded
     // attempt as a reuse target; they are deliberately not part of the key.
-    // A changed trusted route keeps a failed attempt a repair candidate so the
-    // round budget decides, while an unchanged route reuses the record. An
-    // unresolved route proves nothing, so it never reuses a recorded route.
-    if ((entry.fact?.route_identity ?? null) !== (routeIdentity ?? null)) continue;
+    // The recorded route identity remains provenance. A route change does not
+    // silently invalidate a historical review; an explicit judged retry gets
+    // a distinct request key and is handled below.
     if (!subjectMatchesAttempt(attempt, request.subject)) continue;
     if ((attempt.authenticated_evidence_sha256 ?? null) !== authenticatedEvidenceHash(request.authenticated_evidence)) continue;
-    // A provider material-size rejection is a transport preflight fact, not a
-    // reusable review result. It must not consume the one-round allowance and
-    // must also remain retryable after the caller bounds the material.
-    if (isNonConsumingMaterialBoundFailure(attempt)) continue;
-    // Material identity stays OUT of the five-dimensional dedup key
-    // (FR-C4-002), but reading an attempt back as the current review still
-    // requires that the reviewed input did not move on. The round budget is
-    // only evaluated after this lookup, so an attempt recorded for a different
-    // reviewed input must fall through to the budget rather than be returned
-    // here as the current result. The task-material revision is a cheap fast
-    // path and is never sufficient on its own: the four materials can keep the
-    // same revision while the submitted review material changes in place (for
-    // example a re-derived ac_trace for a new snapshot).
-    const sameRevision = attempt.material_revision === materialRevision;
-    const sameReviewedInput = attempt.material_id === materialId;
-    if (!sameReviewedInput) continue;
-    if (!sameRevision) {
-      const semantic = (entry.prepared?.semantic_status ?? entry.pairSummary?.semantic_status) === "available";
-      if (!semantic) continue;
-    }
-    // An ordinary verify-code review is permitted one focused round after an
-    // authenticated code-snapshot repair (FR-C4-003). A recorded authenticated
-    // result must not be returned once that snapshot moved, or the permitted
-    // round could never run. Material-only moves keep the same code snapshot
-    // and still reuse.
+    // Material revision and submitted material identity are provenance only.
+    // They are deliberately absent from the reuse key: editing review input
+    // must leave the immutable recorded fact readable and must not trigger a
+    // fresh dispatch. The one remaining currentness guard is the verify-code
+    // terminal review's authenticated code snapshot.
     if (request.stage === "verify-code" && snapshotTree !== null && attempt.snapshot_tree !== snapshotTree) continue;
+    if (retry?.admitted && attempt.request_key !== requestKey) continue;
     return entry.pairSummary ?? entry.prepared.refs;
   }
   return null;
+}
+
+function hasPriorVerifySnapshot(request, history, snapshotTree) {
+  if (request.stage !== "verify-code") return false;
+  const requestTrack = request.review_track ?? request.reviewTrack ?? null;
+  const requestKind = request.review_kind ?? request.reviewKind ?? null;
+  const requestPhaseId = request.phase_id ?? null;
+  const requestOrigin = semanticOriginFromRecord(request);
+  return history.some(({ attempt }) => attempt.stage === request.stage
+    && (attempt.phase_id ?? null) === requestPhaseId
+    && (attempt.review_track ?? null) === requestTrack
+    && (attempt.review_kind ?? null) === requestKind
+    && semanticOriginFromRecord(attempt) === requestOrigin
+    && subjectMatchesAttempt(attempt, request.subject)
+    && attempt.snapshot_tree !== snapshotTree);
 }
 
 function reviewReportRef(stage, resultId) {
@@ -656,6 +652,88 @@ function recordError(error, fallback) {
   return { code: value.code, message: value.message };
 }
 
+function unavailableAfterDispatch({ request, result, materialId, error } = {}) {
+  const providerResults = Array.isArray(result?.provider_results)
+    ? result.provider_results.flatMap((item) => {
+      const provider = item?.provider;
+      if (typeof provider !== "string" || provider.trim() === "") return [];
+      try { providerAdapter(provider); } catch { return []; }
+      const status = new Set(["completed", "running", "failed", "cancelled"]).has(item?.status)
+        ? item.status
+        : "failed";
+      const originalError = item?.error && typeof item.error === "object" && !Array.isArray(item.error)
+        && typeof item.error.code === "string" && item.error.code.trim() !== ""
+        && typeof item.error.message === "string" && item.error.message.trim() !== ""
+        ? { code: item.error.code, message: item.error.message }
+        : null;
+      return [{
+        provider,
+        status,
+        ...(item.identity && typeof item.identity === "object" && !Array.isArray(item.identity) ? { identity: item.identity } : {}),
+        session_id: item.session_id ?? null,
+        error: ["completed", "running"].includes(status)
+          ? null
+          : (originalError ?? { code: "REVIEW_POST_DISPATCH_VALIDATION_FAILED", message: "provider result was retained as unavailable after review record validation failed" }),
+        // The fallback deliberately drops semantic findings, so the retained
+        // provider lifecycle must carry an empty anchor list rather than the
+        // original finding anchors.
+        evidence_anchor_valid: [],
+        ...(item.timing === undefined ? {} : { timing: item.timing }),
+        ...(item.usage === undefined ? {} : { usage: item.usage }),
+      }];
+    })
+    : [];
+  return {
+    status: "unavailable",
+    stage: request.stage,
+    ...(request.review_track === undefined ? {} : { review_track: request.review_track }),
+    ...(request.review_kind === undefined ? {} : { review_kind: request.review_kind }),
+    ...(request.subject_kind === undefined ? {} : { subject_kind: request.subject_kind }),
+    ...(request.phase_id === undefined ? {} : { phase_id: request.phase_id }),
+    ...(request.review_scope === undefined ? {} : { review_scope: request.review_scope }),
+    material_id: materialId,
+    runtime_id: result?.runtime_id ?? null,
+    outcome: "unavailable",
+    dispatch_state: result?.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+    provider_results: providerResults,
+    findings: [],
+    ...(request.authenticated_evidence === undefined ? {} : {
+      authenticated_evidence: request.authenticated_evidence,
+      authenticated_evidence_sha256: authenticatedEvidenceHash(request.authenticated_evidence),
+    }),
+    error: reviewRequestError(error),
+  };
+}
+
+async function resolveReviewRouteState({ request, executionContext, resolveRouteIdentity, routeDependencies } = {}) {
+  let routeIdentity;
+  let routeError;
+  try {
+    const trustedRoute = await resolveRouteIdentity(request, routeDependencies ?? undefined);
+    routeIdentity = trustedRoute?.route_identity;
+    if (!SHA256_HEX.test(routeIdentity ?? "")) throw new TypeError("trusted route identity is missing or invalid");
+    if (executionContext) {
+      const selection = trustedRoute.provider_selection;
+      const executorFamily = executionContext.reviewed_execution.actor.source_id.split("/")[0];
+      if (!Array.isArray(selection?.providers) || !selection.providers.some((provider) => {
+        const sourceId = selection.provider_identities?.[provider]?.source_id;
+        return typeof sourceId === "string" && sourceId.trim() && sourceId.split("/")[0] !== executorFamily;
+      })) {
+        const error = new Error("execution review has no independent source candidate for the authenticated executor actor");
+        error.code = "REVIEW_EXECUTOR_SOURCE_NOT_INDEPENDENT";
+        throw error;
+      }
+    }
+  } catch (error) { routeError = reviewRequestError(error); }
+  return Object.freeze({ routeIdentity: routeIdentity ?? null, routeError });
+}
+
+function sameAuthenticatedReviewIdentity(left, right) {
+  return left?.tree === right?.tree
+    && left?.materialRevision === right?.materialRevision
+    && canonicalJson(left?.source ?? null) === canonicalJson(right?.source ?? null);
+}
+
 function buildPolicy(result) {
   const providers = result.provider_results?.map((item) => item.provider) ?? [];
   const minimum = Number.isSafeInteger(result.minimum_heterologous) && result.minimum_heterologous >= 1
@@ -698,7 +776,7 @@ function normalizeIdentity(item, provider) {
 
 function providerAttemptRecord(item, runtimeId, outputRef = null) {
   const completed = item?.status === "completed" && item?.error === null;
-  const status = completed ? "completed" : item?.status === "cancelled" ? "cancelled" : "failed";
+  const status = completed ? "completed" : item?.status === "running" ? "running" : item?.status === "cancelled" ? "cancelled" : "failed";
   const execution = item?.execution && typeof item.execution === "object" ? item.execution : {};
   const retry = execution.retry ?? item?.retry ?? { count: 0, progress_events: 0 };
   const rawOutputRef = item?.raw_output_ref ?? execution.raw_output_ref ?? null;
@@ -714,7 +792,7 @@ function providerAttemptRecord(item, runtimeId, outputRef = null) {
     runtime_id: runtimeId ?? null,
     output_ref: outputRef,
     raw_output_ref: rawOutputRef,
-    error: status === "completed" ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
+    error: ["completed", "running"].includes(status) ? null : recordError(item.error, { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" }),
     ...(item?.unavailable_diagnostics ? { unavailable_diagnostics: item.unavailable_diagnostics } : {}),
     execution: {
       adapter: execution.adapter ?? providerAdapter(item.provider),
@@ -766,9 +844,9 @@ function assertAuthenticatedReviewIdentity(task, kernel) {
   });
 }
 
-// Budget metadata belongs to the host writer, never to the public request or
-// provider result. Its complete value participates in the immutable attempt ID.
-function authenticateBudgetContext(context, identity, requestKey, result) {
+// Older records carried a host-owned context block in their report. Read it
+// only to authenticate immutable history; new records do not write this block.
+function authenticateHistoricalReviewContext(context, identity, requestKey, result) {
   if (context === null) return null;
   if (!context || typeof context !== "object" || Array.isArray(context)
       || Object.keys(context).sort().join(",") !== "kind,material_revision,phase_id,route_identity,snapshot_tree"
@@ -778,7 +856,7 @@ function authenticateBudgetContext(context, identity, requestKey, result) {
       || context.phase_id !== (result?.phase_id ?? null)
       || (context.kind === "phase") !== (result?.review_scope === "phase")
       || (context.kind === "phase" && (typeof context.phase_id !== "string" || !context.phase_id.trim()))) {
-    throw new TypeError("review budget context is not bound to its authenticated source and scope");
+    throw new TypeError("historical review context is not bound to its authenticated source and scope");
   }
   return { kind: context.kind, phase_id: context.phase_id, material_revision: context.material_revision,
     snapshot_tree: context.snapshot_tree, route_identity: context.route_identity };
@@ -787,7 +865,7 @@ function authenticateBudgetContext(context, identity, requestKey, result) {
 // Read the existing pre-coverage-block writer format. This is verification of
 // immutable facts, not conversion or a retired writer. New deterministic
 // records cannot downgrade to this format by deleting their provenance block.
-function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
+function readLegacyReviewAttempt(task, ref, raw, attempt, report) {
   validateSchema("attempt", attempt);
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(attempt.attempt_id)
       || attempt.pair_id || !attempt.source
@@ -795,7 +873,7 @@ function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
       || attempt.source.base_tree !== attempt.snapshot_tree
       || !["target_commit", "base_commit", "captured_head"].every((key) => GIT_OID.test(attempt.source[key] ?? ""))
       || !attempt.review_policy || policyHash(attempt.review_policy) !== attempt.policy_snapshot_hash
-      || !["dispatched", "blocked_before_dispatch"].includes(attempt.dispatch_state)) throw new Error("old canonical budget source or policy is invalid");
+      || !["dispatched", "blocked_before_dispatch"].includes(attempt.dispatch_state)) throw new Error("old canonical review source or policy is invalid");
   const attempted = attempt.provider_attempts.map((item) => item.provider);
   if (new Set(attempted).size !== attempted.length
       || canonicalJson([...attempted].sort()) !== canonicalJson([...(attempt.review_policy.requested_profiles ?? [])].sort())
@@ -828,7 +906,7 @@ function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
   if (report !== expected) throw new Error("old canonical report provenance is incomplete or changed");
   const kind = attempt.review_scope === "phase" ? "phase" : "initial";
   return { attempt, identity: { tree: attempt.snapshot_tree, materialRevision: attempt.material_revision, source: attempt.source },
-    saved: { budget_context: null }, consumesRound: reviewAttemptConsumesRound(attempt),
+    saved: {},
     prepared: { refs: { attempt_ref: ref, result_ref: resultRef, report_ref: attempt.report_ref },
       semantic_status: canonical ? "available" : "unavailable", coverage: canonical ? "satisfied" : "incomplete" },
     fact: { attempt_id: attempt.attempt_id, attempt_ref: ref, attempt_hash: textHash(raw), material_revision: attempt.material_revision,
@@ -841,33 +919,13 @@ function readLegacyBudgetAttempt(task, ref, raw, attempt, report) {
         output_ref: item.output_ref ?? null, error_code: item.error?.code ?? null })), } };
 }
 
-function reviewAttemptConsumesRound(attempt) {
-  if (attempt.dispatch_state === "blocked_before_dispatch") return false;
-  // Older writers recorded a pre-dispatch material-size failure as
-  // "dispatched" even though no provider attempt existed. Do not exhaust the
-  // authenticated one-round allowance for a provider call that never ran.
-  return !isNonConsumingMaterialBoundFailure(attempt);
-}
-
-function isNonConsumingMaterialBoundFailure(attempt) {
-  return attempt?.terminal_status === "unavailable"
-    && attempt?.dispatch_state === "dispatched"
-    && attempt?.error?.code === "REVIEW_INPUT_TOO_LARGE"
-    && Array.isArray(attempt?.provider_attempts)
-    && attempt.provider_attempts.length === 0;
-}
-
 /**
- * `result_ref` is a pointer to the paired record, not budget evidence. Records
- * written before that binding existed are still authentic immutable history:
- * the freshness reader already tolerates the missing field, so budget
- * reconstruction must not fail closed on the added pointer alone. Otherwise a
- * single added binding permanently blocks every later dispatch for the stage
- * because the older bytes can never again reproduce byte-for-byte. The
- * tolerance stays narrow: a stored record that already carries `result_ref`
- * must still match exactly.
+ * `result_ref` is a pointer to the paired record. Records written before that
+ * binding existed are still authentic immutable history: the freshness reader
+ * tolerates the missing field, so history reconstruction must not fail closed
+ * only because the pointer was added later.
  */
-function budgetRecordProjection(raw) {
+function reviewRecordProjection(raw) {
   let value;
   try { value = JSON.parse(raw); } catch { return null; }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -875,26 +933,26 @@ function budgetRecordProjection(raw) {
   return JSON.stringify(value);
 }
 
-function matchesBudgetRecord(stored, expected) {
+function matchesReviewRecord(stored, expected) {
   if (stored === expected) return true;
   let storedValue;
   try { storedValue = JSON.parse(stored); } catch { return false; }
   if (!storedValue || typeof storedValue !== "object" || Array.isArray(storedValue)
       || Object.prototype.hasOwnProperty.call(storedValue, "result_ref")) return false;
-  const storedProjection = budgetRecordProjection(stored);
-  return storedProjection !== null && storedProjection === budgetRecordProjection(expected);
+  const storedProjection = reviewRecordProjection(stored);
+  return storedProjection !== null && storedProjection === reviewRecordProjection(expected);
 }
 
-function readCanonicalBudgetHistory(task, scope = null) {
+function readCanonicalReviewHistory(task, scope = null) {
   if (typeof task.listCanonicalReviewAttemptRefs !== "function") throw new Error("canonical attempt inventory is unavailable");
   const refs = task.listCanonicalReviewAttemptRefs();
   if (!Array.isArray(refs) || new Set(refs).size !== refs.length) throw new Error("canonical attempt inventory is invalid");
   const classifyScope = (attempt) => {
     // A malformed historical record can still carry a trustworthy namespace
-    // discriminator.  Stage is part of the review budget key, so an explicit
-    // different stage is provably foreign even when the legacy record omitted
-    // task_id/material identity.  Do not let that unrelated debris block the
-    // current stage; same-stage records remain unknown/fail-closed below.
+    // discriminator. An explicit different stage is provably foreign even
+    // when a legacy record omitted task_id/material identity. Do not let that
+    // unrelated debris block the current stage; same-stage records remain
+    // unknown/fail-closed below.
     if (scope !== null && typeof attempt?.stage === "string" && attempt.stage !== scope.stage) return "foreign";
     if (scope === null || !attempt || typeof attempt !== "object"
         || attempt.task_id !== task.identity.taskId
@@ -912,9 +970,7 @@ function readCanonicalBudgetHistory(task, scope = null) {
     const actualSubjectHash = attemptSubjectHash(attempt);
     if (actualSubjectHash !== null && actualSubjectHash !== scope.subjectSha256) return "foreign";
     if (actualSubjectHash === null && scope.subjectSha256 !== reviewSubjectHash(null)) return "unknown";
-    if ((attempt.phase_id ?? null) !== scope.phaseId
-        || attempt.snapshot_tree !== scope.snapshotTree
-        || attempt.material_revision !== scope.materialRevision) return "unknown";
+    if ((attempt.phase_id ?? null) !== scope.phaseId) return "foreign";
     return "current";
   };
   const entries = refs.map((ref) => {
@@ -926,22 +982,22 @@ function readCanonicalBudgetHistory(task, scope = null) {
     if (attempt.task_id !== task.identity.taskId || typeof attempt.attempt_id !== "string"
         || ref !== `quality/reviews/attempts/${attempt.attempt_id}/attempt.json`
         || !MATERIAL_REVISION.test(attempt.material_revision ?? "") || !GIT_OID.test(attempt.snapshot_tree ?? "")
-        || !["semantic", "failed", "unavailable"].includes(attempt.terminal_status)) throw new Error("canonical budget attempt identity is invalid");
+        || !["semantic", "failed", "unavailable"].includes(attempt.terminal_status)) throw new Error("canonical review attempt identity is invalid");
     const report = task.readRecord(attempt.report_ref);
     const saved = JSON.parse(report.match(/## Public result and coverage\n\n```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
-    if (!saved?.public_result) return readLegacyBudgetAttempt(task, ref, raw, attempt, report);
+    if (!saved?.public_result) return readLegacyReviewAttempt(task, ref, raw, attempt, report);
     const identity = { tree: attempt.snapshot_tree, materialRevision: attempt.material_revision, source: attempt.source };
     const context = saved.budget_context ?? null;
     const prepared = prepareSimpleReviewRecord(task, saved.public_result, identity, attempt.request_key ?? null,
-      { paired: Boolean(attempt.pair_id), budgetContext: context, executionContext: saved.execution_context ?? null,
+      { paired: Boolean(attempt.pair_id), legacyReviewContext: context, executionContext: saved.execution_context ?? null,
         allowHistoricalPreDispatchMaterialFailure: true, closureManifest: attempt.closure_manifest ?? null });
     if (prepared.refs.attempt_ref !== ref || prepared.refs.report_ref !== attempt.report_ref
-        || prepared.semantic_status !== saved.semantic_status || prepared.coverage !== saved.coverage) throw new Error("canonical budget report binding is invalid");
+        || prepared.semantic_status !== saved.semantic_status || prepared.coverage !== saved.coverage) throw new Error("canonical review report binding is invalid");
     for (const [recordRef, expected] of prepared.records) {
-      if (!matchesBudgetRecord(task.readRecord(recordRef), expected)) throw new Error("canonical budget evidence is incomplete or changed");
+      if (!matchesReviewRecord(task.readRecord(recordRef), expected)) throw new Error("canonical review evidence is incomplete or changed");
     }
     if (attempt.dispatch_state === "blocked_before_dispatch" && attempt.provider_attempts.length !== 0) throw new Error("blocked review contains provider attempts");
-    return { attempt, saved, prepared, identity, consumesRound: reviewAttemptConsumesRound(attempt), fact: {
+    return { attempt, saved, prepared, identity, fact: {
       attempt_id: attempt.attempt_id, attempt_ref: ref, attempt_hash: textHash(raw),
       material_revision: attempt.material_revision,
       kind: context?.kind ?? (attempt.review_scope === "phase" ? "phase" : "initial"),
@@ -956,10 +1012,8 @@ function readCanonicalBudgetHistory(task, scope = null) {
     } };
     } catch (error) {
       // A damaged record from another stage in the same task is historical
-      // noise and must not consume or block this request. Any damaged record
-      // from the requested stage remains relevant history: an exact current
-      // record is an incomplete canonical fact, while an older/phase-mismatched
-      // record keeps the budget unknown because dispatch cannot be justified.
+      // noise and must not block this request. A damaged record in the
+      // requested namespace remains a canonical integrity failure.
       const classification = classifyScope(parsedAttempt);
       if (classification === "foreign") return null;
       if (classification === "current") error.review_attempt_ref = ref;
@@ -977,7 +1031,7 @@ function readCanonicalBudgetHistory(task, scope = null) {
     const report = task.readRecord(pairRef);
     const summary = JSON.parse(report.match(/```json\n([\s\S]*?)\n```/)?.[1] ?? "null");
     if (!summary || summary.pair_id !== attempt.pair_id || summary.report_ref !== pairRef
-        || Object.keys(summary.role_results ?? {}).sort().join(",") !== "blue,red") throw new Error("canonical budget pair is incomplete");
+        || Object.keys(summary.role_results ?? {}).sort().join(",") !== "blue,red") throw new Error("canonical review pair is incomplete");
     const members = ["red", "blue"].map((role) => {
       const roleRefs = summary.role_results[role];
       const member = byRef.get(roleRefs?.attempt_ref);
@@ -987,15 +1041,14 @@ function readCanonicalBudgetHistory(task, scope = null) {
           || member.attempt.snapshot_tree !== attempt.snapshot_tree
           || canonicalJson(member.saved.budget_context ?? null) !== canonicalJson(entry.saved.budget_context ?? null)
           || canonicalJson(roleRefs) !== canonicalJson({ ...member.prepared.refs,
-            semantic_status: member.prepared.semantic_status, coverage: member.prepared.coverage })) throw new Error("canonical budget pair member binding is invalid");
+            semantic_status: member.prepared.semantic_status, coverage: member.prepared.coverage })) throw new Error("canonical review pair member binding is invalid");
       return member;
     });
     const semanticStatus = members.some((member) => member.prepared.semantic_status === "available") ? "available" : "unavailable";
     const partial = members.some((member) => member.prepared.coverage !== "satisfied"
       || member.saved.public_result.provider_results.some((item) => item.status !== "completed" || item.error !== null));
-    if (summary.status !== "recorded" || summary.semantic_status !== semanticStatus || summary.partial !== partial) throw new Error("canonical budget pair summary is invalid");
+    if (summary.status !== "recorded" || summary.semantic_status !== semanticStatus || summary.partial !== partial) throw new Error("canonical review pair summary is invalid");
     entry.pairSummary = summary;
-    entry.consumesRound = members.some((member) => member.consumesRound);
     seenPairs.add(pairRef);
     // A complete pair is one round even when both role attempts failed.
     entry.fact.status = members.every((member) => member.fact.status === "completed") ? "completed" : "unavailable";
@@ -1037,55 +1090,90 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
   const executionPrepared = prepareExecutionReviewRequest(taskHandle, request, before);
   request = executionPrepared.request;
   const executionContext = executionPrepared.executionContext;
+  const retryRequest = retryDecision(request);
+  if (retryRequest.invalid) {
+    return {
+      status: "unavailable",
+      reused: false,
+      dispatch_state: "blocked_before_dispatch",
+      error: { code: "REVIEW_RETRY_INVALID", message: retryRequest.error },
+      retry: { requested: true, admitted: false },
+    };
+  }
   const materialId = reviewRequestMaterialId(request, materialIdForRequest);
   const authenticatedMaterialId = typeof materialIdForRequest === "function"
     || (request.materials && typeof request.materials === "object" && !Array.isArray(request.materials))
     ? materialId : null;
-  let routeIdentity, routeError;
-  try {
-    const trustedRoute = await resolveRouteIdentity(request, routeDependencies ?? undefined);
-    routeIdentity = trustedRoute?.route_identity;
-    if (!SHA256_HEX.test(routeIdentity ?? "")) throw new TypeError("trusted route identity is missing or invalid");
-    if (executionContext) {
-      const selection = trustedRoute.provider_selection;
-      const executorFamily = executionContext.reviewed_execution.actor.source_id.split("/")[0];
-      if (!Array.isArray(selection?.providers) || !selection.providers.some((provider) => {
-        const sourceId = selection.provider_identities?.[provider]?.source_id;
-        return typeof sourceId === "string" && sourceId.trim() && sourceId.split("/")[0] !== executorFamily;
-      })) {
-        const error = new Error("execution review has no independent source candidate for the authenticated executor actor");
-        error.code = "REVIEW_EXECUTOR_SOURCE_NOT_INDEPENDENT";
-        throw error;
-      }
-    }
-  } catch (error) { routeError = reviewRequestError(error); }
-  const requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
-  const closure = reviewClosure(request, before, materialId, requestKey, routeIdentity ?? null);
-  const currentClosureIdentity = routeRepairClosureIdentity(closure);
-  // Serialize the shared round allowance across different request keys as well.
-  const lockRef = "quality/reviews/request-locks/current-round.lock";
+  // Serialize concurrent reads and writes for the same authenticated task.
+  const lockRef = "quality/reviews/request-locks/current-request.lock";
   const operation = async () => {
+    let lockedIdentity;
+    try { lockedIdentity = assertAuthenticatedReviewIdentity(taskHandle, kernel); }
+    catch (error) {
+      return {
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
+      };
+    }
+    if (!sameAuthenticatedReviewIdentity(before, lockedIdentity)) {
+      return {
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed before the review lock was acquired" },
+      };
+    }
+    // Resolve the trusted route again while the task lock is held. Route
+    // resolution is allowed to observe configuration/provider state, and a
+    // source edit during that await must be caught before any provider call.
+    const routeState = await resolveReviewRouteState({
+      request, executionContext, resolveRouteIdentity, routeDependencies,
+    });
+    const routeIdentity = routeState.routeIdentity;
+    const routeError = routeState.routeError;
+    let preDispatchIdentity;
+    try { preDispatchIdentity = assertAuthenticatedReviewIdentity(taskHandle, kernel); }
+    catch (error) {
+      return {
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
+      };
+    }
+    if (!sameAuthenticatedReviewIdentity(lockedIdentity, preDispatchIdentity)) {
+      return {
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while resolving the trusted review route" },
+      };
+    }
+    lockedIdentity = preDispatchIdentity;
+    const requestKey = requestLockHash(request, materialId, routeIdentity ?? "unavailable");
+    const closure = reviewClosure(request, lockedIdentity, materialId, requestKey, routeIdentity ?? null);
     let history;
     try {
-      history = readCanonicalBudgetHistory(taskHandle, {
+      history = readCanonicalReviewHistory(taskHandle, {
         stage: request.stage,
-        snapshotTree: before.tree,
-        materialRevision: before.materialRevision,
+        snapshotTree: lockedIdentity.tree,
+        materialRevision: lockedIdentity.materialRevision,
         phaseId: request.phase_id ?? null,
         reviewTrack: request.review_track ?? request.reviewTrack ?? null,
         reviewKind: request.review_kind ?? request.reviewKind ?? null,
         subjectKind: request.subject_kind ?? "worktree",
         reviewScope: request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null),
         subjectSha256: reviewSubjectHash(request.subject),
-        materialId,
       });
     }
     catch (error) {
       if (error.review_attempt_ref) {
         let damaged;
         try { damaged = JSON.parse(taskHandle.readRecord(error.review_attempt_ref)); } catch { /* unavailable history stays unknown */ }
-        if (damaged?.stage === request.stage && damaged?.snapshot_tree === before.tree
-            && damaged?.material_revision === before.materialRevision
+        if (damaged?.stage === request.stage && damaged?.snapshot_tree === lockedIdentity.tree
+            && damaged?.material_revision === lockedIdentity.materialRevision
             && (damaged?.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
             && (damaged?.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
             && (damaged?.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
@@ -1098,45 +1186,75 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         }
       }
       return { status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch",
-        error: { code: "REVIEW_RETRY_BUDGET_UNKNOWN", message: `complete review budget history is unavailable: ${error.message}` },
-        review_budget: { ok: false, reason: "budget_unknown", counts: null } };
+        error: { code: "REVIEW_HISTORY_UNAVAILABLE", message: `canonical review history is unavailable: ${error.message}` } };
     }
-    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, materialRevision: before.materialRevision, snapshotTree: before.tree, materialId });
-    const sameSubject = (prior) => prior.stage === request.stage
-      && (prior.review_track ?? null) === (request.review_track ?? request.reviewTrack ?? null)
-      && (prior.review_kind ?? null) === (request.review_kind ?? request.reviewKind ?? null)
-      && (prior.subject_kind ?? "worktree") === (request.subject_kind ?? "worktree")
-      && (prior.phase_id ?? null) === (request.phase_id ?? null)
-      && (prior.review_scope ?? (prior.stage === "build-code" ? "integration" : null)) === (request.review_scope ?? request.reviewScope ?? (request.stage === "build-code" ? "integration" : null))
-      && subjectMatchesAttempt(prior, request.subject);
-    const priorSubject = history.filter((entry) => entry.consumesRound && sameSubject(entry.attempt));
-    const materialChanged = priorSubject.some((entry) => entry.attempt.material_revision !== before.materialRevision);
-    // An ordinary verify-code review may be retried once after an authenticated
-    // implementation snapshot changed. Phase reviews remain scoped to their
-    // material revision: a code-only edit must not reset a phase allowance.
-    const codeSnapshotChanged = request.stage === "verify-code"
-      && priorSubject.some((entry) => entry.attempt.snapshot_tree !== before.tree);
-    const changed = materialChanged || codeSnapshotChanged;
-    const latestCurrent = priorSubject.filter((entry) => entry.attempt.material_revision === before.materialRevision).at(-1) ?? null;
-    const routeRepaired = routeIdentity && latestCurrent
-      && latestCurrent.fact.dispatch_state === "dispatched"
-      && latestCurrent.fact.route_identity && latestCurrent.fact.route_identity !== routeIdentity
-      && latestCurrent.fact.closure_identity === currentClosureIdentity;
-    // A previously assigned focused round remains focused on the same revision.
-    // Neither request bytes nor a code-only snapshot change reset its allowance.
-    const kind = request.review_scope === "phase" ? "phase"
-      : routeRepaired ? "route_repair"
-        : changed || priorSubject.some((entry) => entry.fact.kind === "focused") ? "focused" : "initial";
-    const attempts = priorSubject.map((entry) => entry.fact).filter((entry) => entry.material_revision === before.materialRevision);
-    const reviewBudget = evaluateReviewRound({ material_revision: before.materialRevision,
-      attempts, canonical_attempts: attempts, request: { kind, changed, phase_id: request.phase_id,
-        route_identity: routeIdentity, closure_identity: currentClosureIdentity,
-        repair_attempt_ref: routeRepaired ? latestCurrent.fact.attempt_ref : null } });
-    if (reusable) return { status: "recorded", reused: true, dispatch_state: "reused", ...reusable, review_budget: reviewBudget };
-    if (!reviewBudget.ok) return { status: "unavailable", reused: false, dispatch_state: "blocked_before_dispatch",
-      error: { code: "REVIEW_RETRY_BUDGET_EXHAUSTED", message: `review round budget unavailable: ${reviewBudget.reason}` }, review_budget: reviewBudget };
-    const budgetContext = routeIdentity ? { kind, phase_id: request.phase_id ?? null,
-      material_revision: before.materialRevision, snapshot_tree: before.tree, route_identity: routeIdentity } : null;
+    const retry = authenticateRetryDecision(retryRequest, {
+      history, request, materialId, routeIdentity: routeIdentity ?? null, requestKey,
+    });
+    const reusable = findReusableReview({ history, request, routeIdentity: routeIdentity ?? null, snapshotTree: lockedIdentity.tree, requestKey, retry });
+    const retryResult = retry.requested ? {
+      requested: true,
+      admitted: retry.admitted,
+      ...(retry.basis === null ? {} : { basis: retry.basis }),
+      ...(retry.admitted ? {} : { explanation: "no accepted material/provider/source-change basis; retry declined" }),
+    } : null;
+    if (retry.requested && !retry.admitted) {
+      return {
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: {
+          code: "REVIEW_RETRY_NOT_ADMITTED",
+          message: "explicit review retry has no authenticated material, provider, or recovered-source change basis",
+        },
+        ...(retryResult ? { retry: retryResult } : {}),
+      };
+    }
+    if (reusable) {
+      // Reuse is a read-only fast path, but it still crosses the same
+      // authenticated worktree boundary as dispatch. The route resolver and
+      // history scan may yield to a caller that edits the current Workspace;
+      // never return a result bound to the earlier `before` identity after
+      // that source has changed.
+      let current;
+      try { current = assertAuthenticatedReviewIdentity(taskHandle, kernel); }
+      catch (error) {
+        return {
+          status: "unavailable",
+          reused: false,
+          dispatch_state: "blocked_before_dispatch",
+          error: { code: error?.code ?? "REVIEW_SOURCE_UNAVAILABLE", message: error?.message ?? "current review source is unavailable" },
+          ...(retryResult ? { retry: retryResult } : {}),
+        };
+      }
+      if (!closureMatches(closure, current, materialId, request)) {
+        return {
+          status: "unavailable",
+          reused: false,
+          dispatch_state: "blocked_before_dispatch",
+          error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed before reusing the recorded result" },
+          ...(retryResult ? { retry: retryResult } : {}),
+        };
+      }
+      return {
+        status: "recorded", reused: true, dispatch_state: "reused", ...reusable,
+        ...(retryResult ? { retry: retryResult } : {}),
+      };
+    }
+    if (hasPriorVerifySnapshot(request, history, lockedIdentity.tree) && !retry.admitted) {
+      return {
+        status: "unavailable",
+        reused: false,
+        dispatch_state: "blocked_before_dispatch",
+        error: {
+          code: "REVIEW_CURRENT_SNAPSHOT_RETRY_REQUIRED",
+          message: "verify-code review belongs to an older code snapshot; an explicit judged retry is required",
+        },
+        ...(retryResult ? { retry: retryResult } : {}),
+      };
+    }
+    const dispatchRequest = { ...request };
+    delete dispatchRequest.retry;
     let result;
     try {
       if (routeError) {
@@ -1152,7 +1270,7 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
           dispatch_state: "blocked_before_dispatch",
           error: routeError,
         };
-      } else result = await runRound(structuredClone(request));
+      } else result = await runRound(structuredClone(dispatchRequest));
     } catch (error) {
       result = {
         status: "unavailable",
@@ -1167,48 +1285,55 @@ export async function recordSimpleReviewRequest({ task, kernel, request, runRoun
         error: reviewRequestError(error),
       };
     }
-    if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review runner must return a result object");
-    const normalizedResult = normalizeCanonicalReviewResult(result, "review request result");
-    if (normalizedResult.stage !== request.stage
-        || (normalizedResult.review_track ?? null) !== (request.review_track ?? request.reviewTrack ?? null)
-        || (normalizedResult.review_kind ?? null) !== (request.review_kind ?? request.reviewKind ?? null)) {
-      throw new TypeError("review result stage/track/kind does not match its request");
+    let closureCurrent = false;
+    let recordIdentity = lockedIdentity;
+    try {
+      if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review runner must return a result object");
+      const normalizedResult = normalizeCanonicalReviewResult(result, "review request result");
+      if (normalizedResult.stage !== request.stage
+          || (normalizedResult.review_track ?? null) !== (request.review_track ?? request.reviewTrack ?? null)
+          || (normalizedResult.review_kind ?? null) !== (request.review_kind ?? request.reviewKind ?? null)) {
+        throw new TypeError("review result stage/track/kind does not match its request");
+      }
+      result = normalizedResult;
+      result = mergeRequestResultIdentity(request, result);
+      result = normalizeCanonicalReviewResult(result, "review request result");
+      const after = assertAuthenticatedReviewIdentity(taskHandle, kernel);
+      closureCurrent = closureMatches(closure, after, materialId, request);
+      if (!closureCurrent) {
+        result = {
+          ...result,
+          status: "unavailable",
+          outcome: "unavailable",
+          dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
+          error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while dispatching; completed provider facts were retained without publishing a result" },
+        };
+      }
+      if (authenticatedMaterialId !== null && result.material_id !== materialId) {
+        const error = new Error("review result material_id does not match the authenticated request material");
+        error.code = "REVIEW_MATERIAL_MISMATCH";
+        throw error;
+      }
+      const expectedEvidenceHash = authenticatedEvidenceHash(request.authenticated_evidence);
+      if ((result.authenticated_evidence_sha256 ?? null) !== expectedEvidenceHash) {
+        const error = new Error("review result authenticated evidence does not match the authenticated request evidence");
+        error.code = "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH";
+        throw error;
+      }
+      recordIdentity = closureCurrent ? after : lockedIdentity;
+    } catch (error) {
+      result = unavailableAfterDispatch({ request, result, materialId, error });
+      closureCurrent = false;
+      recordIdentity = lockedIdentity;
     }
-    result = normalizedResult;
-    result = mergeRequestResultIdentity(request, result);
-    result = normalizeCanonicalReviewResult(result, "review request result");
-    const after = assertAuthenticatedReviewIdentity(taskHandle, kernel);
-    const closureCurrent = closureMatches(closure, after, materialId, request);
-    if (!closureCurrent) {
-      result = {
-        ...result,
-        status: "unavailable",
-        outcome: "unavailable",
-        dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
-        error: { code: "REVIEW_SOURCE_DRIFT", message: "review source changed while dispatching; completed provider facts were retained without publishing a result" },
-      };
-    }
-    if (authenticatedMaterialId !== null && result.material_id !== materialId) {
-      const error = new Error("review result material_id does not match the authenticated request material");
-      error.code = "REVIEW_MATERIAL_MISMATCH";
-      throw error;
-    }
-    const expectedEvidenceHash = authenticatedEvidenceHash(request.authenticated_evidence);
-    if ((result.authenticated_evidence_sha256 ?? null) !== expectedEvidenceHash) {
-      const error = new Error("review result authenticated evidence does not match the authenticated request evidence");
-      error.code = "REVIEW_AUTHENTICATED_EVIDENCE_MISMATCH";
-      throw error;
-    }
-    const recordIdentity = closureCurrent ? after : before;
     const refs = recordSimpleReviewResult({ task: taskHandle, result, kernel, requestKey,
-      budgetContext: budgetContext ? { ...budgetContext, snapshot_tree: recordIdentity.tree, material_revision: recordIdentity.materialRevision } : null,
-      executionContext, closureManifest: closure, identityOverride: closureCurrent ? null : before });
+      executionContext, closureManifest: closure, identityOverride: closureCurrent ? null : recordIdentity });
     return {
       status: "recorded",
       reused: false,
       dispatch_state: result.dispatch_state === "blocked_before_dispatch" ? "blocked_before_dispatch" : "dispatched",
       ...refs,
-      review_budget: reviewBudget,
+      ...(retryResult ? { retry: retryResult } : {}),
       ...(result.dispatch_state === "blocked_before_dispatch" ? { error: result.error } : {}),
     };
   };
@@ -1236,13 +1361,13 @@ function pairedReportRef(stage, taskId, identity, pairId, requestKey) {
 
 function prepareSimpleReviewRecord(task, result, identity, requestKey, {
   paired = false,
-  budgetContext = null,
+  legacyReviewContext = null,
   executionContext = null,
   allowHistoricalPreDispatchMaterialFailure = false,
   closureManifest = null,
 } = {}) {
   rejectBuildPrdCanonicalPersistence(result, "review result");
-  const context = authenticateBudgetContext(budgetContext, identity, requestKey, result);
+  const context = authenticateHistoricalReviewContext(legacyReviewContext, identity, requestKey, result);
   if (!result || typeof result !== "object" || Array.isArray(result)) throw new TypeError("review result must be an object");
   if (!["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status must be available or unavailable (including available-with-failures)");
   if (!["make-decision", "build-spec", "build-plan", "build-code", "verify-code"].includes(result.stage)) throw new TypeError("review result stage is required");
@@ -1524,8 +1649,8 @@ function validateImportedProviderOutputs(task, attempt, canonicalResult, provide
 }
 
 /**
- * Import an already-created canonical result without creating a new attempt,
- * consuming budget, or treating caller-supplied result bytes as a writer.
+ * Import an already-created canonical result without creating a new attempt or
+ * treating caller-supplied result bytes as a writer.
  * Every accepted reference is re-read from the authenticated TaskHandle and
  * bound to the current task/snapshot/material identity.
  */
@@ -1589,7 +1714,7 @@ export function importCanonicalReviewResult({ task, kernel, result, provenance }
   }
 }
 
-export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, budgetContext = null, executionContext = null, closureManifest = null, identityOverride = null }) {
+export function recordSimpleReviewResult({ task, result, kernel, requestKey = null, executionContext = null, closureManifest = null, identityOverride = null }) {
   result = normalizeCanonicalReviewResult(result, "review result");
   const handle = assertTaskHandle(task);
   if (executionContext !== null && !EXECUTION_CONTEXTS.has(executionContext)) throw new TypeError("execution binding requires the same authenticated public request");
@@ -1603,7 +1728,7 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
   if (!result || !["available", "available-with-failures", "unavailable"].includes(result.status)) throw new TypeError("review result status is invalid");
   if (["source", "base_tree", "candidate_tree", "snapshot_tree", "material_revision"].some((key) => Object.hasOwn(result, key))) throw new TypeError("review result identity fields must come from the authenticated current context");
   if (!result?.role_results) {
-    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { budgetContext, executionContext, closureManifest });
+    const prepared = prepareSimpleReviewRecord(handle, result, identity, requestKey, { executionContext, closureManifest });
     for (const [ref, raw] of prepared.records) createCanonicalRecord(handle, ref, raw, kernel);
     return prepared.refs;
   }
@@ -1626,7 +1751,7 @@ export function recordSimpleReviewResult({ task, result, kernel, requestKey = nu
       ...(result.subject_kind === undefined ? {} : { subject_kind: result.subject_kind }),
       ...(result.phase_id === undefined ? {} : { phase_id: result.phase_id }),
       ...(result.review_scope === undefined ? {} : { review_scope: result.review_scope }),
-    }, identity, requestKey, { paired: true, budgetContext, executionContext, closureManifest });
+    }, identity, requestKey, { paired: true, executionContext, closureManifest });
   }
   const reportRef = pairedReportRef(result.stage, handle.identity.taskId, identity, result.pair_id, requestKey);
   const summary = {

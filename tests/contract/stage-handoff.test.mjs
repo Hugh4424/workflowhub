@@ -14,6 +14,7 @@ import { renderStageHandoff, publishStageHandoff, SECTION_TITLES } from "../../r
 import { publishStageReflectionExecutionFailure, validateStageReflectionSibling } from "../../runtime/stage/stage-reflect.mjs";
 import { createWorkflowHubSessionRecorder } from "../../runtime/stage/stage-agent-outcome-adapter.mjs";
 import { canonicalStageMaterials, writeStageOutcomeFixture } from "../helpers/stage-outcome.mjs";
+import * as stageRuntime from "../../tools/cli/stage-runtime.mjs";
 
 const roots = [];
 const NOW = "2026-09-10T00:00:00.000Z";
@@ -211,6 +212,24 @@ describe("stage-handoff current view contract", () => {
     });
     expect(raw).toContain("- stage outcome: `unknown`（attempt `unknown`）");
     expect(raw).not.toContain("undefined");
+  });
+
+  it("publishes the current handoff from the WorkflowHub run without a stage outcome", () => {
+    const state = fixture("handoff-without-stage-outcome");
+    const result = publishStageHandoff({
+      task: state.task,
+      kernel: state.kernel,
+      artifacts: state.artifacts,
+      taskId: state.context.identity.taskId,
+      stage: "build-spec",
+      snapshotTree: state.source.value.snapshot_tree,
+      materialScopeRevision: state.source.value.material_scope_revision,
+      reflectionStatus: "unavailable",
+      materials: Object.fromEntries(Object.entries(canonicalStageMaterials())),
+      nextAction: "继续读取当前材料",
+    });
+    expect(result).toMatchObject({ status: "published", current: true });
+    expect(state.task.readRecord(result.ref)).toContain("当前阶段由 WorkflowHub 当前会话直接执行；本次未使用外部 stage outcome");
   });
 
   it("publishes by atomic overwrite, reads back current identity, and returns an absolute path", () => {
@@ -793,5 +812,29 @@ describe("T1 stage handoff material boundary", () => {
     expect(readTaskFacts(state.task.taskPath)[0].evidence.value[0]).toMatchObject({
       command: "stage-handoff:build-spec", exit_code: 0, failure_signature: "published",
     });
+  });
+
+  it("keeps all six reflection blocks readable in the runtime status view", () => {
+    expect(typeof stageRuntime.readStageReflectionConclusion).toBe("function");
+    if (typeof stageRuntime.readStageReflectionConclusion !== "function") return;
+    const state = fixture("reflection-fields", "build-plan");
+    const reflectionRef = "quality/stage-reflection/build-plan/reflection-fields.json";
+    const reflection = {
+      status: "degraded",
+      conclusion: "保留当前阶段复盘事实。",
+      status_matrix: { code: { state: "completed", evidence_refs: [] } },
+      what_helped: { state: "observed", items: [{ summary: "共享 writer", evidence_refs: [], confidence: "medium" }] },
+      what_to_improve: { state: "none_observed", items: [] },
+      blockers: { state: "unknown", unknown_reason: "没有可读阻塞判断", items: [] },
+      intervention_reasons: { state: "none_observed", items: [] },
+      what_to_simplify: { state: "observed", items: [{ summary: "去重", evidence_refs: [], confidence: "medium" }] },
+      simplifiable_now: { state: "none_observed", items: [] },
+    };
+    state.task.writeRecordAtomic(reflectionRef, `${JSON.stringify(reflection)}\n`);
+    const view = stageRuntime.readStageReflectionConclusion(state.context, "build-plan", [{
+      stage: "build-plan",
+      handoff: reflectionRef,
+    }]);
+    expect(view).toMatchObject(reflection);
   });
 });

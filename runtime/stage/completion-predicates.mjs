@@ -85,15 +85,11 @@ export const STAGE_PREDICATES = Object.freeze({
 // build-code keeps both dispositions and its final integration review in
 // STAGE_PREDICATES because that is the one user-defined implementation gate.
 //
-// `stage_end_spec_analyze` is advisory everywhere on purpose. Its only producer
-// is the optional host Stage Agent outcome, and
-// skills/workflowhub-host-protocol/SKILL.md fixes the boundary: "没有外部 Stage
-// Agent 时，标准 WorkflowHub 流程继续执行，并把 outcome 记为 unavailable 诊断，不把它变成
-// 阶段门禁" and "没有外部宿主 outcome 时，正式 run 不因缺少宿主而拒绝当前工作" and
-// "阶段结果中的 outcome 摘要只披露实际执行、遗漏和可得成本，不改变质量 predicate". Keeping it
-// here as a gate made four of the five stages structurally impossible to finish
-// in any session that is not the external host. It stays published and visible
-// as an advisory fact so a real host run is still disclosed.
+// `stage_end_spec_analyze` is advisory everywhere on purpose. The current
+// WorkflowHub session may publish the semantic fact when its packet is
+// available; an absent or incomplete packet is published as a truthful
+// missing/unavailable fact. Historical host outcomes can still be projected by
+// compatibility readers, but they are never the producer or a completion gate.
 export const STAGE_ADVISORY_PREDICATES = Object.freeze({
   "make-decision": Object.freeze({ direction_review: "review", detail_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
   "build-spec": Object.freeze({ independent_review: "review", finding_dispositions: "acceptance_criterion", stage_end_spec_analyze: "acceptance_criterion" }),
@@ -332,13 +328,12 @@ export function deriveStageCompletion(stage, observations = [], {
     }
   }
   const missing = Object.keys(requirements).filter((subject) => !satisfied.has(subject));
-  // ADR-0026 fixes this boundary: the stage-outcome projection "不写入质量谓词、
-  // 不生成 missing、不选择 winner，也不替代 current quality evidence … 不能把它重新当作
-  // quality completion gate". An absent or conflicting host outcome is therefore an
-  // independent execution disclosure, never a quality predicate: it must not appear
-  // in `missing`, must not change `status`, and must not be counted as a conflict of
-  // the stage's own facts. Callers still disclose it through `outcome_disclosure`
-  // here plus their own `execution_outcome` / `stage_outcome_diagnostic` surfaces.
+  // ADR-0026 fixes this boundary for the legacy stage-outcome projection:
+  // historical host execution is not a quality predicate and cannot become a
+  // completion gate. An absent or conflicting historical outcome is therefore
+  // an independent disclosure, never a reason to change the stage's own
+  // `missing` or `status`. The current session's quality facts are evaluated
+  // above from `observations`; only legacy callers request `outcome_disclosure`.
   const stageOutcomeMissing = requireStageOutcome && !["completed", "conflict"].includes(stageOutcomeStatus);
   const stageOutcomeConflict = requireStageOutcome && stageOutcomeStatus === "conflict";
   const predicates = Object.fromEntries(Object.keys(requirements).map((subject) => [

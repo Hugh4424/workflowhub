@@ -1,0 +1,10 @@
+command: npx vitest run tests/contract/acceptance-single-writer-empty-values.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+test_files: 1 passed
+tests: 4 passed
+oracle: ORACLE-ACCEPTANCE-SINGLE-WRITER
+facts:
+- current vNext caller acceptance_coverage is rejected before the official handler
+- unknown_empty_evidence, zero_review_findings, and not_applicable(reason) remain distinct
+- authenticated Stage Agent packet coverage is not promoted into the official current ledger
+- interaction publication is non-idempotent first, idempotent on replay, has one talk_clarify ref, and is consumed by outline_closed

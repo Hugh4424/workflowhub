@@ -15,13 +15,17 @@ import {
   validateAllWhReviewRoutes,
 } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace } from "../../../runtime/stage/stage-context.mjs";
-import { authenticateCurrentBuildCodeStageOutcome } from "../../../runtime/stage/stage-runner.mjs";
+import { readAuthenticatedExecutionSource } from "../../../runtime/review/review-record-route.mjs";
 import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import { openTask } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
 import { ArtifactDir } from "../../../core/artifact-dir.mjs";
 import { freezeReviewMaterial, readFrozenReviewMaterial } from "../../../runtime/evidence/canonical-receipt-writer.mjs";
-import { validateCanonicalTestReceipt } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
+import {
+  validateCanonicalTestReceipt,
+  WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND,
+  WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID,
+} from "../../../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "../../../runtime/evidence/acceptance-evidence-validator.mjs";
 import { validateBrowserQaEvidence } from "../../../runtime/evidence/stage-content-evidence.mjs";
 import { qualityFactDigest } from "../../../runtime/evidence/quality-fact.mjs";
@@ -386,25 +390,43 @@ function providerClient(stage = null, reviewTrack = null, reviewKind = null) {
 }
 
 function currentBuildCodeExecution(trusted) {
-  try {
-    const current = authenticateCurrentBuildCodeStageOutcome({
-      ...trusted,
-      identity: trusted.identity ?? trusted.task?.identity ?? { taskId: trusted.taskId },
-      workflowRunId: trusted.kernel.deriveStageWorkflowRunId("build-code"),
-    });
-    return Object.freeze({
-      ref: current.ref,
-      sha256: current.sha256,
-      raw: current.raw,
-      value: current.value,
-      actor: current.actor,
-    });
-  } catch {
-    // Do not disclose whether a caller supplied a structurally plausible but
-    // semantically invalid stage outcome. The E2E route must remain a single
-    // unavailable fact for every missing or unauthenticated current outcome.
-    throw new Error("verify-code E2E review requires one current completed build-code outcome");
+  const snapshot = trusted.kernel.currentVNextSnapshot();
+  const identity = {
+    tree: snapshot.tree,
+    materialRevision: trusted.kernel.currentVNextMaterialRevision(),
+  };
+  const candidates = [];
+  for (const factRef of trusted.task.listCanonicalQualityFactRefs?.() ?? []) {
+    if (!QUALITY_FACT_REF.test(factRef)) continue;
+    let fact;
+    try { fact = JSON.parse(trusted.task.readRecord(factRef)); } catch { continue; }
+    if (fact?.task_id !== trusted.taskId || fact.stage !== "build-code"
+        || fact.kind !== "acceptance_criterion" || fact.subject !== "acceptance_execution"
+        || fact.status !== "passed" || !Array.isArray(fact.evidence) || fact.evidence.length !== 1) continue;
+    const wrapperReference = fact.evidence[0];
+    let wrapper;
+    try { wrapper = JSON.parse(trusted.task.readRecord(wrapperReference.ref)); } catch { continue; }
+    const aggregate = wrapper?.refs?.length === 1 ? wrapper.refs[0] : null;
+    if (!aggregate) continue;
+    try {
+      const current = readAuthenticatedExecutionSource(trusted.task, {
+        quality_fact_ref: factRef,
+        ref: aggregate.ref,
+        sha256: aggregate.sha256,
+      }, identity);
+      candidates.push(Object.freeze({
+        ref: aggregate.ref,
+        sha256: aggregate.sha256,
+        raw: current.aggregateRaw,
+        value: current.aggregate,
+        actor: current.actor,
+      }));
+    } catch { /* malformed, stale, or legacy-only evidence is not current execution */ }
   }
+  if (candidates.length !== 1) {
+    throw new Error("verify-code E2E review requires one current passed build-code acceptance execution");
+  }
+  return candidates[0];
 }
 
 function sourceFamily(sourceId) {
@@ -509,9 +531,26 @@ function readCurrentExecutionFact(trusted, factRef, subjectBinding, snapshot) {
       || stageEvidence.value.material_revision !== subjectBinding.material_revision
       || stageEvidence.value.snapshot_tree !== snapshot.tree
       || stageEvidence.value.subject_fact?.status !== fact.status
-      || stageEvidence.value.subject_fact?.execution_binding?.stage_outcome_ref !== subjectBinding.execution_ref
-      || stageEvidence.value.subject_fact?.execution_binding?.stage_outcome_hash !== subjectBinding.execution_sha256
       || !Array.isArray(stageEvidence.value.subject_fact?.execution_items)) return null;
+
+  const executionBinding = stageEvidence.value.subject_fact.execution_binding;
+  const currentSessionBinding = executionBinding?.kind === WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND;
+  if (currentSessionBinding) {
+    if (executionBinding.task_id !== subjectBinding.task_id
+        || executionBinding.stage !== "build-code"
+        || executionBinding.snapshot_tree !== snapshot.tree
+        || executionBinding.material_revision !== subjectBinding.material_revision
+        || typeof executionBinding.attempt_id !== "string" || executionBinding.attempt_id.trim() === ""
+        || executionBinding.run_id !== subjectBinding.executor_actor.run_id
+        || subjectBinding.executor_actor.source_kind !== "workflowhub-session"
+        || subjectBinding.executor_actor.source_id !== WORKFLOWHUB_CURRENT_SESSION_SOURCE_ID) return null;
+  } else if (executionBinding?.stage_outcome_ref !== subjectBinding.execution_ref
+      || executionBinding?.stage_outcome_hash !== subjectBinding.execution_sha256) {
+    // Historical records retain their original stage-outcome binding and are
+    // readable only as compatibility evidence; they cannot be mistaken for a
+    // current-session execution.
+    return null;
+  }
 
   const browser = [];
   for (const item of stageEvidence.value.subject_fact.execution_items) {
@@ -591,7 +630,7 @@ function currentTaskBoundReviewMaterials(trusted, execution, subjectBinding) {
     "plan.md": ArtifactDir.open(trusted.workspace.worktreeRoot, trusted.task).read("plan.md"),
     "tasks.md": ArtifactDir.open(trusted.workspace.worktreeRoot, trusted.task).read("tasks.md"),
     "review-subject-binding.json": subjectBinding,
-    "build-code-outcome.json": execution.raw,
+    "build-code-execution.json": execution.raw,
     "implementation-diff.patch": diff,
     "implementation-index.json": {
       baseline_commit: trusted.workspace.baselineCommit,
@@ -636,7 +675,12 @@ function currentTaskBoundReviewMaterials(trusted, execution, subjectBinding) {
       browserIndex += 1;
       materials[`browser-evidence-${browserIndex}.json`] = entry.raw;
       entry.screenshots.forEach((raw, index) => {
-        materials[`browser-${browserIndex}-screenshot-${index + 1}.bin`] = Buffer.from(raw);
+        // The provider packet is text/JSON-only so its host-path redaction
+        // boundary remains effective.  `raw` is the canonical screenshot
+        // publication JSON (including the content hash), not an opaque image
+        // blob; keeping it as text preserves the evidence identity without
+        // creating an unredactable binary material.
+        materials[`browser-${browserIndex}-screenshot-${index + 1}.json`] = raw;
       });
       materials[`browser-${browserIndex}-test-output.txt`] = entry.output;
     }

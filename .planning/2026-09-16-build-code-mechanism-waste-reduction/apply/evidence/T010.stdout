@@ -1,0 +1,11 @@
+command: npx vitest run tests/contract/write-identity-workspace.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+oracle: GREEN; exact workspace write succeeded, wrong current worktree/path/root and child task-id mismatches failed before target bytes, status stayed readable, and bootstrap reuse remained idempotent.
+summary:
+  Test Files 1 passed (1)
+  Tests 3 passed (3)
+public_verify_capture:
+  receipt_ref: quality/tests/build-code-p5-write-identity.json
+  receipt_hash: dc0bab8c6be4e3ef6ca2fd0d0ee3ec0330eafe915b6fc9b4c416ea0b6a100e70
+  snapshot_tree: b15ed5071cadba82c714bff2551bc8e67c443e2b
+  output_hash: d6f5b9dfc92245c00c4518197c6ea1d7c981632e67ced2e78d59ab6c803ed3f6

@@ -31,6 +31,7 @@ const PHYSICAL_DELIVERY_FACTS = Object.freeze([
   "worktree_cleanup",
   "formal_cleanup_safe",
   "branch_cleanup",
+  "remote_branch_cleanup",
 ]);
 const PHYSICAL_DELIVERY_STATE_KEYS = Object.freeze([
   ...PHYSICAL_DELIVERY_FACTS,
@@ -42,6 +43,7 @@ const PHYSICAL_DELIVERY_STATE_KEYS = Object.freeze([
   "worktree_cleanup_scan",
   "cleanup",
 ]);
+const KNOWN_GAP_STATUSES = Object.freeze(new Set(["unknown", "unavailable", "incomplete", "partial"]));
 const PLANNING_MATERIAL_FILES = Object.freeze(["decision-log.md", "prd.md"]);
 const CLOSE_MODES = Object.freeze(new Set(["ordinary", "mini-task", "planning", "manual-risk-close"]));
 const LEGACY_DELIVERY_STEPS = Object.freeze([
@@ -128,6 +130,32 @@ function physicalStateForRecord(state) {
   return Object.fromEntries(PHYSICAL_DELIVERY_STATE_KEYS
     .filter((name) => Object.prototype.hasOwnProperty.call(facts ?? {}, name))
     .map((name) => [name, structuredClone(facts[name])]));
+}
+
+function normalizeKnownGaps(value, label = "delivery known_gaps") {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
+  const seen = new Set();
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new TypeError(`${label}[${index}] must be an object`);
+    const keys = Object.keys(entry).sort();
+    if (keys.join("\0") !== ["gap_id", "impact", "missing_source", "owner", "status"].sort().join("\0")) {
+      throw new Error(`${label}[${index}] must carry gap_id, status, missing_source, impact, and owner`);
+    }
+    for (const field of ["gap_id", "missing_source", "impact", "owner"]) {
+      if (typeof entry[field] !== "string" || entry[field].trim() === "") throw new TypeError(`${label}[${index}].${field} must be non-empty`);
+    }
+    if (!KNOWN_GAP_STATUSES.has(entry.status)) throw new Error(`${label}[${index}].status must remain unknown, unavailable, incomplete, or partial`);
+    if (seen.has(entry.gap_id)) throw new Error(`${label} contains duplicate gap_id: ${entry.gap_id}`);
+    seen.add(entry.gap_id);
+    return Object.freeze({
+      gap_id: entry.gap_id,
+      status: entry.status,
+      missing_source: entry.missing_source,
+      impact: entry.impact,
+      owner: entry.owner,
+    });
+  });
 }
 
 export function authenticateReviewEvidence(task, result) {
@@ -1819,12 +1847,36 @@ function treeEntry(root, commit, path) {
 function remoteOid(root, remote, branch) {
   const result = gitResult(root, ["ls-remote", "--exit-code", remote, `refs/heads/${branch}`]);
   if (!result.ok) {
+    // `ls-remote --exit-code` uses status 2 for a valid remote with no
+    // matching ref. Keep an absent target distinguishable from a transport
+    // or configuration failure; callers already treat null as an unsatisfied
+    // remote-baseline fact.
+    if (result.status === 2 && result.stdout === "") return null;
     const exit = Number.isInteger(result.status) ? result.status : "unknown";
     throw new Error(`git ls-remote failed (exit ${exit}): ${result.stderr || "no error output"}`);
   }
   const value = result.stdout.split(/\s+/)[0]?.toLowerCase();
   if (!/^[a-f0-9]{40}$/.test(value ?? "")) throw new Error("git ls-remote returned an invalid commit OID");
   return value;
+}
+
+function remoteBranchOid(root, remote, branch) {
+  return remoteOid(root, remote, branch);
+}
+
+// Read-only close/status projections must distinguish an absent ref from an
+// unavailable remote probe. Destructive preflight and execution continue to
+// use remoteOid/remoteBranchOid directly and therefore remain fail-loud.
+function readOnlyRemoteProbe(root, remote, branch) {
+  try {
+    return Object.freeze({ status: "available", oid: remoteBranchOid(root, remote, branch) });
+  } catch (error) {
+    return Object.freeze({
+      status: "unavailable",
+      oid: null,
+      reason: `git ls-remote probe unavailable: ${error?.message ?? String(error)}`,
+    });
+  }
 }
 
 function branchOid(root, branch) {
@@ -2124,6 +2176,7 @@ function validateDeliveryPlan(plan, task, kernel) {
     validateRiskClose(delivery.risk_close);
     validateRiskCloseQualityReasons(delivery.risk_close, delivery.quality_gaps, delivery.status_root_cause_refs);
   }
+  normalizeKnownGaps(delivery.known_gaps);
   for (const branch of [delivery.task_branch, delivery.target_branch]) {
     if (!gitResult(delivery.target_repo_root, ["check-ref-format", "--branch", branch]).ok) throw new TypeError(`invalid Git branch: ${branch}`);
   }
@@ -2369,6 +2422,7 @@ function preparedPlanningStepPhysicalState(task, plan, step) {
         satisfied: true,
         worktree_cleanup: { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task worktree directory is preserved", worktree_root: resolve(delivery.worktree_root) },
         branch_cleanup: { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task branch and directory are preserved", task_branch: delivery.task_branch },
+        remote_branch_cleanup: { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; remote task branch is preserved", task_branch: delivery.task_branch },
       };
     }
     const worktreeRoot = resolve(delivery.worktree_root);
@@ -2381,10 +2435,18 @@ function preparedPlanningStepPhysicalState(task, plan, step) {
     if (pathExists !== registered) throw new Error("task worktree path/registration mismatch during prior close probe");
     const worktreeObservation = { satisfied: !pathExists && !registered, worktree_root: worktreeRoot };
     const branchObservation = { satisfied: branchOid(root, delivery.task_branch) === null, task_branch: delivery.task_branch };
+    const remoteBranchProbe = readOnlyRemoteProbe(root, delivery.remote, delivery.task_branch);
+    const remoteBranchObservation = {
+      satisfied: remoteBranchProbe.status === "available" && remoteBranchProbe.oid === null,
+      task_branch: delivery.task_branch,
+      status: remoteBranchProbe.status,
+      ...(remoteBranchProbe.reason === undefined ? {} : { reason: remoteBranchProbe.reason }),
+    };
     return {
-      satisfied: worktreeObservation.satisfied && branchObservation.satisfied,
+      satisfied: worktreeObservation.satisfied && branchObservation.satisfied && remoteBranchObservation.satisfied,
       worktree_cleanup: worktreeObservation,
       branch_cleanup: branchObservation,
+      remote_branch_cleanup: remoteBranchObservation,
     };
   }
   throw new Error(`unsupported prior planning close operation: ${step.operation}`);
@@ -2565,6 +2627,7 @@ function preparePostCleanupArchivePlan({ task, kernel, priorPlanHash, archiveDec
       development_status: "not_executed",
       quality_status: "not_run",
       quality_gaps: [...new Set(planningContext.qualityGaps)],
+      known_gaps: structuredClone(priorPlan.delivery.known_gaps ?? []),
     },
     steps: POST_CLEANUP_ARCHIVE_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
   };
@@ -2722,6 +2785,7 @@ export function prepareDeliveryClosePlan({
       ...(planningContext ? {} : { quality_status: qualityReasons.length === 0 ? "observed" : "incomplete" }),
       quality_gaps: [...new Set(qualityReasons)],
       status_root_cause_refs: [...new Set(statusRootCauseRefs)],
+      known_gaps: normalizeKnownGaps(input.known_gaps),
     },
     steps: (declaredPlanningTask ? UNARCHIVED_PLANNING_STEPS : DELIVERY_STEPS)
       .map(([step_id, operation]) => ({ step_id, operation })),
@@ -2774,7 +2838,8 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     : unarchivedPlanning
       ? inspectPlanningSource(root, delivery, localTarget.ok ? delivery.target_branch : null)
       : null;
-  const remoteTarget = remoteOid(root, delivery.remote, delivery.target_branch);
+  const remoteTargetProbe = readOnlyRemoteProbe(root, delivery.remote, delivery.target_branch);
+  const remoteTarget = remoteTargetProbe.oid;
   const pushed = merged && localTarget.ok && archiveScopePreserved
     && /^[a-f0-9]{40}$/.test(remoteTarget ?? "")
     && remoteTarget === localTarget.stdout.toLowerCase();
@@ -2786,9 +2851,15 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     : inspectWorktreeCleanup(delivery.worktree_root);
   const formalCleanupSafe = worktreeCleanup || worktreeCleanupScan.safe === true;
   const branchCleanup = existingWorkspace ? true : !gitResult(root, ["show-ref", "--verify", "--quiet", `refs/heads/${delivery.task_branch}`]).ok;
+  const remoteBranchProbe = existingWorkspace
+    ? Object.freeze({ status: "not_applicable", oid: null })
+    : readOnlyRemoteProbe(root, delivery.remote, delivery.task_branch);
+  const remoteBranchCleanup = existingWorkspace
+    ? true
+    : remoteBranchProbe.status === "available" && remoteBranchProbe.oid === null;
   const cleanupFact = existingWorkspace
     ? { skipped: true, reason: "authenticated existing Workspace is not task-owned; worktree directory and branch are preserved" }
-    : (worktreeCleanup && branchCleanup ? { removed: true } : { incomplete: true });
+    : (worktreeCleanup && branchCleanup && remoteBranchCleanup ? { removed: true } : { incomplete: true });
   const stepRecords = plan.steps.map((step) => {
     const raw = readOptional(task, `operations/close/plans/${closePlanHash(plan)}/steps/${step.step_id}.json`);
     if (raw === undefined) return null;
@@ -2806,10 +2877,13 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     push: pushed,
     local_target_oid: localTarget.ok ? localTarget.stdout.toLowerCase() : null,
     remote_target_oid: remoteTarget,
+    remote_target_probe: remoteTargetProbe,
     worktree_cleanup: worktreeCleanup,
     formal_cleanup_safe: formalCleanupSafe,
     worktree_cleanup_scan: worktreeCleanupScan,
     branch_cleanup: branchCleanup,
+    remote_branch_cleanup: remoteBranchCleanup,
+    remote_branch_probe: remoteBranchProbe,
     cleanup: cleanupFact,
   };
   const missing = [
@@ -2820,6 +2894,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     ["worktree_cleanup", facts.worktree_cleanup],
     ["formal_cleanup_safe", facts.formal_cleanup_safe],
     ["branch_cleanup", facts.branch_cleanup],
+    ["remote_branch_cleanup", facts.remote_branch_cleanup],
     ...(planningDelivery ? [["planning_material", planningMaterial?.status === "complete" && delivery.material_status === "complete"]] : []),
   ].filter(([, done]) => !done).map(([name]) => name);
   const physicalMissing = physicalDeliveryMissing(facts, { requireArchive: !unarchivedPlanning });
@@ -2857,6 +2932,7 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
     // The execution record's own view of this plan's physical actions. The row
     // values reach a real caller here rather than only a test.
     close_actions: readRecordedCloseActions(task, plan),
+    known_gaps: Object.freeze(normalizeKnownGaps(delivery.known_gaps)),
     facts: Object.freeze(facts),
   });
 }
@@ -3152,16 +3228,34 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           },
           verify: async (value) => value.satisfied && value.task_branch === delivery.task_branch,
         };
+        const remoteBranchRemover = {
+          probe: () => ({ satisfied: remoteBranchOid(root, delivery.remote, delivery.task_branch) === null, remote: delivery.remote, task_branch: delivery.task_branch }),
+          execute: async () => {
+            const target = branchOid(root, delivery.target_branch);
+            const tip = branchOid(root, delivery.task_branch);
+            if (!tip || !contains(tip, target)) throw new Error("task branch is not merged into target");
+            const remoteTip = remoteBranchOid(root, delivery.remote, delivery.task_branch);
+            if (remoteTip === null) return;
+            if (remoteTip !== tip) throw new Error("remote task branch changed before cleanup");
+            git(root, ["push", delivery.remote, `:refs/heads/${delivery.task_branch}`]);
+          },
+          verify: async (value) => value.satisfied
+            && value.remote === delivery.remote
+            && value.task_branch === delivery.task_branch,
+        };
         if (existingWorkspace) {
           return {
             probe: async () => {
               const branchObservation = { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task branch and directory are preserved", task_branch: delivery.task_branch };
               const worktreeObservation = { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; task worktree directory is preserved", worktree_root: resolve(delivery.worktree_root) };
-              return { satisfied: true, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation };
+              const remoteBranchObservation = { satisfied: true, skipped: true, reason: "authenticated existing Workspace is not task-owned; remote task branch is preserved", remote: delivery.remote, task_branch: delivery.task_branch };
+              return { satisfied: true, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation, remote_branch_cleanup: remoteBranchObservation };
             },
             execute: async () => {},
             verify: async (value) => {
-              return value.worktree_cleanup?.skipped === true && value.branch_cleanup?.skipped === true;
+              return value.worktree_cleanup?.skipped === true
+                && value.branch_cleanup?.skipped === true
+                && value.remote_branch_cleanup?.skipped === true;
             },
           };
         }
@@ -3174,10 +3268,11 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           probe: async () => {
             const worktreeObservation = await removal.probe();
             const branchObservation = branchRemover.probe();
-            if (worktreeObservation.satisfied && branchObservation.satisfied) {
-              return { satisfied: true, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation };
+            const remoteBranchObservation = remoteBranchRemover.probe();
+            if (worktreeObservation.satisfied && branchObservation.satisfied && remoteBranchObservation.satisfied) {
+              return { satisfied: true, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation, remote_branch_cleanup: remoteBranchObservation };
             }
-            return { satisfied: false, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation };
+            return { satisfied: false, worktree_cleanup: worktreeObservation, branch_cleanup: branchObservation, remote_branch_cleanup: remoteBranchObservation };
           },
           execute: async () => {
             const worktreeObservation = await removal.probe();
@@ -3187,16 +3282,19 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
               // remover delete bytes that have not been published to task
               // storage.
               assertNoCloseExecutionSidecars(worktree, { taskId: task.identity.taskId });
-              await removal.execute();
             }
+            const remoteBranchObservation = remoteBranchRemover.probe();
+            if (!remoteBranchObservation.satisfied) await remoteBranchRemover.execute();
+            if (!worktreeObservation.satisfied) await removal.execute();
             const branchObservation = branchRemover.probe();
             if (!branchObservation.satisfied) await branchRemover.execute();
           },
           verify: async (value) => {
-            if (!value.worktree_cleanup || !value.branch_cleanup) return false;
+            if (!value.worktree_cleanup || !value.branch_cleanup || !value.remote_branch_cleanup) return false;
             const worktreeVerified = await removal.verify(value.worktree_cleanup);
             const branchVerified = await branchRemover.verify(value.branch_cleanup);
-            return worktreeVerified && branchVerified;
+            const remoteBranchVerified = await remoteBranchRemover.verify(value.remote_branch_cleanup);
+            return worktreeVerified && branchVerified && remoteBranchVerified;
           },
         };
       }

@@ -27,6 +27,8 @@ import { validateHumanConfirmation } from "../evidence/canonical-evidence-valida
 
 export { isDateTime };
 
+const CURRENT_SESSION_SOURCE_ID = "workflowhub-current-session";
+
 export const STAGE_REFLECTION_STAGES = Object.freeze([
   "make-decision",
   "build-spec",
@@ -142,6 +144,65 @@ function contextParts(context) {
   };
 }
 
+function currentWorkspaceBinding(parts) {
+  const workspace = parts.context.candidateWorkspace ?? parts.context.workspace;
+  const worktree = workspace?.worktreeRoot ?? null;
+  if (typeof worktree !== "string" || worktree.trim() === "") {
+    fail("current-session stage reflection requires an authenticated worktree", "STAGE_REFLECTION_CONTEXT_INVALID");
+  }
+  let branch = workspace?.branch ?? null;
+  if (typeof branch !== "string" || branch.trim() === "") {
+    try {
+      branch = execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+        cwd: worktree,
+        encoding: "utf8",
+      }).trim();
+    } catch (error) {
+      fail(`current-session stage reflection branch is unavailable: ${error.message}`, "STAGE_REFLECTION_CONTEXT_INVALID");
+    }
+  }
+  return Object.freeze({ worktree, branch });
+}
+
+function currentSessionReflectionSource(parts, candidate) {
+  const identity = candidate?.identity;
+  const workspace = currentWorkspaceBinding(parts);
+  const snapshotTree = parts.kernel.currentVNextSnapshot().tree;
+  const materialRevision = parts.kernel.currentVNextMaterialRevision();
+  const executor = candidate?.executor;
+  const attempt = executor?.attempt_id ?? identity?.attempt ?? null;
+  if (!identity || identity.task_id !== parts.taskId
+      || identity.worktree !== workspace.worktree
+      || identity.branch !== workspace.branch
+      || identity.snapshot_tree !== snapshotTree
+      || identity.material_revision !== materialRevision
+      || typeof attempt !== "string" || attempt.trim() === "") {
+    fail("current-session stage reflection identity does not match the current task worktree, snapshot, materials, or attempt", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  if (executor?.attempt_id !== undefined && executor.attempt_id !== attempt) {
+    fail("current-session stage reflection executor attempt does not match its identity", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  const suppliedSourceId = executor?.source_id ?? executor?.executor_id ?? executor?.id;
+  if (suppliedSourceId !== undefined
+      && (typeof suppliedSourceId !== "string" || suppliedSourceId !== CURRENT_SESSION_SOURCE_ID)) {
+    fail("current-session stage reflection producer identity is runtime-owned", "STAGE_REFLECTION_INPUT_INVALID");
+  }
+  return Object.freeze({
+    ref: null,
+    sha256: null,
+    value: Object.freeze({
+      run_id: parts.kernel.deriveStageWorkflowRunId(parts.stage),
+      attempt_id: attempt,
+      snapshot_tree: snapshotTree,
+      material_revision: materialRevision,
+      producer: Object.freeze({
+        kind: "workflowhub-current-session",
+        source_id: CURRENT_SESSION_SOURCE_ID,
+      }),
+    }),
+  });
+}
+
 function assertInputIdentity(input, { stage, taskId }) {
   assertObject(input, "reflection input");
   if (input.task_id !== taskId || input.stage !== stage) {
@@ -173,12 +234,12 @@ function assertExecutedReflectionProvenance(input) {
 }
 
 /**
- * Validate the host-produced sibling supplied to an official run.  The
+ * Validate the current-session sibling supplied to an official run. The
  * deterministic runner may authenticate and publish this value, but it must
- * never manufacture the executor identity or a judgment.  The sibling keeps
- * executor provenance and timing beside the v2 judgment; the canonical
- * stage-outcome reference remains in judgments[].evidence_refs and is checked
- * again by runStageReflection after publication.
+ * never manufacture a judgment. A legacy stage-outcome reference is accepted
+ * only when the caller explicitly supplies that legacy source; the normal
+ * WorkflowHub path binds the sibling directly to the current task snapshot
+ * and material revision.
  */
 export function validateStageReflectionSibling(input, {
   taskId,
@@ -229,12 +290,16 @@ export function validateStageReflectionSibling(input, {
   const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${stage}/[a-f0-9]{64}\\.json$`);
   const outcomeRefs = [...new Set((input.judgments ?? []).flatMap((item) => item?.evidence_refs ?? [])
     .filter((ref) => typeof ref === "string" && outcomePattern.test(ref)))];
-  if (outcomeRefs.length !== 1) {
-    fail("stage_reflection sibling must reference exactly one stage outcome", "STAGE_REFLECTION_INPUT_INVALID");
-  }
-  if (stageOutcome && (outcomeRefs[0] !== stageOutcome.ref
-      || (stageOutcome.sha256 !== undefined && !outcomeRefs[0].endsWith(`${stageOutcome.sha256}.json`)))) {
-    fail("stage_reflection sibling source outcome does not match the official run", "STAGE_REFLECTION_INPUT_INVALID");
+  if (stageOutcome) {
+    if (outcomeRefs.length !== 1) {
+      fail("legacy stage_reflection sibling must reference exactly one supplied stage outcome", "STAGE_REFLECTION_INPUT_INVALID");
+    }
+    if (outcomeRefs[0] !== stageOutcome.ref
+        || (stageOutcome.sha256 !== undefined && !outcomeRefs[0].endsWith(`${stageOutcome.sha256}.json`))) {
+      fail("stage_reflection sibling source outcome does not match the official run", "STAGE_REFLECTION_INPUT_INVALID");
+    }
+  } else if (outcomeRefs.length > 0) {
+    fail("current-session stage reflection must not depend on an external stage outcome", "STAGE_REFLECTION_INPUT_INVALID");
   }
   return Object.freeze({
     ...input,
@@ -289,17 +354,17 @@ function publishImmutable({ task, kernel, ref, raw }) {
 }
 
 /**
- * Persist an executor failure without manufacturing a judgment.  This is the
- * compatibility path for the injected executor API: a missing executor still
- * publishes an availability fact, while an executor that was actually
- * invoked but failed gets a durable failed reflection record with no
- * judgment, intervention, or lesson claims.
+ * Persist a reflection-executor failure without manufacturing a judgment. A
+ * current-session failure binds to the current task identity directly. A
+ * supplied stage outcome remains readable for old callers, but it is not
+ * created merely to make this failure record valid.
  */
 export function publishStageReflectionExecutionFailure(context, {
   stageStatus = "completed",
   generatedAt,
   error,
-  stageOutcome,
+  stageOutcome = null,
+  attemptId = null,
 } = {}) {
   const parts = contextParts(context);
   if (!(stageStatus === "completed" || stageStatus === "failed")) {
@@ -307,29 +372,32 @@ export function publishStageReflectionExecutionFailure(context, {
   }
   const observedAt = assertTimestamp(generatedAt ?? new Date().toISOString(), "generatedAt");
   const summary = error instanceof Error ? error.message : String(error ?? "stage reflection executor failed");
-  const source = assertObject(stageOutcome, "stage reflection failure stage outcome");
-  const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${parts.stage}/[a-f0-9]{64}\\.json$`);
-  if (!outcomePattern.test(source.ref ?? "") || !SHA256_HEX.test(source.sha256 ?? "")) {
-    fail("stage reflection failure requires a canonical stage outcome ref/hash", "STAGE_REFLECTION_INPUT_INVALID");
+  let source = null;
+  let sourceValue = null;
+  if (stageOutcome !== null && stageOutcome !== undefined) {
+    source = assertObject(stageOutcome, "stage reflection failure stage outcome");
+    const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${parts.stage}/[a-f0-9]{64}\\.json$`);
+    if (!outcomePattern.test(source.ref ?? "") || !SHA256_HEX.test(source.sha256 ?? "")) {
+      fail("stage reflection failure stage outcome ref/hash is invalid", "STAGE_REFLECTION_INPUT_INVALID");
+    }
+    const sourceRaw = parts.task.readRecord(source.ref);
+    if (hash(sourceRaw) !== source.sha256 || !source.ref.endsWith(`${source.sha256}.json`)) {
+      fail("stage reflection failure stage outcome hash mismatch", "STAGE_REFLECTION_INPUT_INVALID");
+    }
+    try { sourceValue = JSON.parse(sourceRaw); }
+    catch (parseError) { fail(`stage reflection failure stage outcome JSON is invalid: ${parseError.message}`, "STAGE_REFLECTION_INPUT_INVALID"); }
+    if (sourceValue.task_id !== parts.taskId || sourceValue.stage !== parts.stage
+        || sourceValue.attempt_id !== source.value?.attempt_id
+        || sourceValue.snapshot_tree !== source.value?.snapshot_tree
+        || sourceValue.material_revision !== source.value?.material_revision) {
+      fail("stage reflection failure stage outcome identity mismatch", "STAGE_REFLECTION_INPUT_INVALID");
+    }
   }
-  const sourceRaw = parts.task.readRecord(source.ref);
-  if (hash(sourceRaw) !== source.sha256 || !source.ref.endsWith(`${source.sha256}.json`)) {
-    fail("stage reflection failure stage outcome hash mismatch", "STAGE_REFLECTION_INPUT_INVALID");
-  }
-  let sourceValue;
-  try { sourceValue = JSON.parse(sourceRaw); }
-  catch (parseError) { fail(`stage reflection failure stage outcome JSON is invalid: ${parseError.message}`, "STAGE_REFLECTION_INPUT_INVALID"); }
-  if (sourceValue.task_id !== parts.taskId || sourceValue.stage !== parts.stage
-      || sourceValue.attempt_id !== source.value?.attempt_id
-      || sourceValue.snapshot_tree !== source.value?.snapshot_tree
-      || sourceValue.material_revision !== source.value?.material_revision) {
-    fail("stage reflection failure stage outcome identity mismatch", "STAGE_REFLECTION_INPUT_INVALID");
-  }
-  const workspace = context.candidateWorkspace ?? context.workspace;
-  const branch = workspace?.branch ?? execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
-    cwd: workspace.worktreeRoot,
-    encoding: "utf8",
-  }).trim();
+  const workspace = currentWorkspaceBinding(parts);
+  const snapshotTree = sourceValue?.snapshot_tree ?? parts.kernel.currentVNextSnapshot().tree;
+  const materialRevision = sourceValue?.material_revision ?? parts.kernel.currentVNextMaterialRevision();
+  const attempt = sourceValue?.attempt_id
+    ?? (typeof attemptId === "string" && attemptId.trim() !== "" ? attemptId : null);
   const value = {
     schema_version: "stage-reflection.v1",
     record_kind: "judgment",
@@ -341,13 +409,13 @@ export function publishStageReflectionExecutionFailure(context, {
     error: { summary: summary || "stage reflection executor failed" },
     identity: {
       task_id: parts.taskId,
-      worktree: workspace?.worktreeRoot ?? null,
-      branch,
-      attempt: sourceValue.attempt_id,
-      snapshot_tree: sourceValue.snapshot_tree,
-      material_revision: sourceValue.material_revision,
+      worktree: workspace.worktree,
+      branch: workspace.branch,
+      attempt,
+      snapshot_tree: snapshotTree,
+      material_revision: materialRevision,
     },
-    source: { ref: source.ref, sha256: source.sha256 },
+    ...(source === null ? {} : { source: { ref: source.ref, sha256: source.sha256 } }),
     judgments: [],
     interventions: [],
     lessons_added: [],
@@ -816,21 +884,31 @@ export async function runStageReflection(context, {
   assertExecutedReflectionProvenance(candidate);
   const outcomePattern = new RegExp(`^quality/evidence/stage-outcomes/${parts.stage}/[a-f0-9]{64}\\.json$`);
   const outcomeRefs = [...new Set((candidate.judgments ?? []).flatMap((item) => item.evidence_refs ?? []).filter((ref) => typeof ref === "string" && outcomePattern.test(ref)))];
-  if (outcomeRefs.length !== 1) {
-    const unavailable = await runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
-    return Object.freeze({ ...unavailable, error: "reflection requires exactly one explicit authenticated executor outcome" });
+  if (outcomeRefs.length > 1) {
+    fail("stage reflection must reference at most one stage outcome", "STAGE_REFLECTION_INPUT_INVALID");
   }
-  // Resolve only the explicit judgment source. Dynamic import avoids a static
-  // runner/writer dependency cycle while reusing the complete authenticator.
-  const { authenticateStageOutcomeForProjection } = await import("./stage-runner.mjs");
+  if (outcomeRefs.length === 1 && !stageOutcome) {
+    fail("current stage reflection cannot consume historical stage outcome evidence", "STAGE_REFLECTION_INPUT_INVALID");
+  }
   let source;
-  try { source = authenticateStageOutcomeForProjection(context, parts.stage, outcomeRefs[0]); }
-  catch (error) {
-    const unavailable = await runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
-    return Object.freeze({ ...unavailable, error: error.message });
-  }
-  if (!source || !source.value?.run_id || !source.value?.producer?.agent_run_id) {
-    return runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+  if (outcomeRefs.length === 1) {
+    // Resolve only an explicitly supplied legacy source. Dynamic import avoids
+    // a static runner/writer dependency cycle while preserving the complete
+    // authenticator for historical outcome packets.
+    const { authenticateStageOutcomeForProjection } = await import("./stage-runner.mjs");
+    try { source = authenticateStageOutcomeForProjection(context, parts.stage, outcomeRefs[0]); }
+    catch (error) {
+      const unavailable = await runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+      return Object.freeze({ ...unavailable, error: error.message });
+    }
+    if (!source || !source.value?.run_id || !source.value?.producer?.agent_run_id) {
+      return runStageReflection(context, { now: observedAt, availabilityState: "unavailable", reasonCode: "executor_absent" });
+    }
+  } else {
+    // The current WorkflowHub session is the normal reflection source. It
+    // binds to the current worktree/material bytes directly; no bridge packet
+    // or external Stage Agent outcome is needed to publish a judgment.
+    source = currentSessionReflectionSource(parts, candidate);
   }
   if (stageOutcome && (stageOutcome.ref !== source.ref || stageOutcome.sha256 !== source.sha256)) fail("reflection stage outcome source mismatch", "STAGE_REFLECTION_INPUT_INVALID");
   const identity = candidate.identity;
@@ -838,12 +916,16 @@ export async function runStageReflection(context, {
   if (!identity || identity.task_id !== parts.taskId || identity.attempt !== source.value.attempt_id
       || identity.snapshot_tree !== source.value.snapshot_tree || identity.material_revision !== source.value.material_revision
       || identity.worktree !== workspace?.worktreeRoot || identity.branch !== (workspace?.branch ?? execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim())) {
-    fail("reflection identity does not match authenticated outcome and workspace", "STAGE_REFLECTION_INPUT_INVALID");
+    fail("reflection identity does not match the current task binding and workspace", "STAGE_REFLECTION_INPUT_INVALID");
   }
   const semantic = withoutLessons(candidate);
   if (semantic.status === "degraded" && semantic.error === null) semantic.status = "ok";
   parts.reflectionKey = hash(semanticJson({ stage: parts.stage, run_id: source.value.run_id, executor: source.value.producer,
-    source: { ref: source.ref, sha256: source.sha256 }, judgment: semantic }));
+    source: source.ref === null ? {
+      kind: "workflowhub-current-session",
+      snapshot_tree: source.value.snapshot_tree,
+      material_revision: source.value.material_revision,
+    } : { ref: source.ref, sha256: source.sha256 }, judgment: semantic }));
   const fixedRef = `quality/stage-reflection/${parts.stage}/${parts.reflectionKey}.json`;
   parts.reflectionRef = fixedRef;
   const sourceRaw = canonicalJson(candidate);

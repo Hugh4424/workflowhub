@@ -129,10 +129,10 @@ make-decision 的完整决策记录；逐题保存问题、最终选择、推荐
 vNext 的当前文件位于认证 worktree 的 `specs/<task-id>/decision-log.md`；宿主会话 transcript 只用于校验它是否覆盖真实原始需求，不是第五份当前材料。
 
 **显式任务身份（explicit task identity）**：
-公共入口使用成对的 `--project` 与 `--task`，或从已认证 task worktree 取得当前身份。宿主桥接还必须提交匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 和 `agent_run_id`；旧 session/env、cwd 猜测和 transcript 扫描不构成身份来源。
+公共入口使用成对的 `--project` 与 `--task`，或从已认证 task worktree 取得当前身份。当前阶段不需要宿主桥接；旧 session/env、cwd 猜测和 transcript 扫描也不构成身份来源。历史 bridge packet 若被兼容 reader 显式读取，仍须保留匹配的 `project_name`、`task_id`、`task_path`、`stage`、`attempt_id` 和 `agent_run_id`。
 
 **Stage Agent outcome**：
-外部宿主对当前阶段已执行结果的显式提交，只能是 `session` 或 `unavailable`。现有 bridge 将其绑定到当前 task、stage、attempt、snapshot 和材料 revision 后，由 `TaskKernel` 写入 `workflowhub-stage-outcomes.v1`；它不是质量 receipt、第二套控制面或阶段推进门禁。
+历史兼容术语：外部宿主对阶段执行结果的显式提交，只能是 `session` 或 `unavailable`。旧 bridge 将其绑定到 task、stage、attempt、snapshot 和材料 revision 后写入 `workflowhub-stage-outcomes.v1`；这些记录现在仅供历史读取、迁移和兼容测试。当前 WorkflowHub 阶段由主会话直接执行，不需要 Stage Agent、bridge、session 或该 outcome；它不是当前质量 receipt，也不是阶段推进门禁。
 
 **工作继续（work continuation）**：
 同一 task 在质量事实缺失、不一致或不可用时仍可继续编辑、补证据和修复；它不表示 stage 已完成。

@@ -1,0 +1,5 @@
+{
+  "command": "npx vitest run tests/contract/review-material-change-redispatch.test.mjs tests/contract/review-budget-deletion.test.mjs tests/contract/external-threshold-contract.test.mjs tests/contract/external-supplement-window.test.mjs tests/contract/write-identity-workspace.test.mjs tests/contract/acceptance-single-writer-empty-values.test.mjs tests/contract/close-remote-branch-cleanup.test.mjs tests/contract/make-decision-interaction-publication.test.mjs tests/contract/stage-handoff.test.mjs tests/contract/build-reflection-page.test.mjs tests/contract/five-stage-spec-analyze-wiring.test.mjs tests/contract/review-materials-contract.test.mjs tests/contract/close-sidecar-and-archive.test.mjs --poolOptions.forks.singleFork --no-fileParallelism",
+  "receipt_ref": "quality/tests/build-code-p7-final-aggregate.json",
+  "output_ref": "quality/tests/output/build-code-p7-final-aggregate.output"
+}

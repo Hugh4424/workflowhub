@@ -1,0 +1,10 @@
+command: npx vitest run tests/contract/close-remote-branch-cleanup.test.mjs --poolOptions.forks.singleFork --no-fileParallelism
+exit_code: 0
+test_files: 1 passed
+tests: 4 passed
+oracle: ORACLE-REMOTE-CLEANUP
+facts:
+- cleanup authorization is consumed before any physical action; unauthorised remote branch remains
+- authorized cleanup deletes the remote task branch and records remote_branch_cleanup
+- remote delete denial leaves cleanup failed/incomplete and no completed close
+- known_gaps preserve real status, missing_source, impact, and owner; projection does not promote them to passed

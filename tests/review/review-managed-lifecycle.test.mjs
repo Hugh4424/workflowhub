@@ -72,6 +72,7 @@ function managedContext(overrides = {}) {
     materials: managedMaterials,
     prompt: "review the submitted material",
     reviewMode: "single_round",
+    minimumHeterologous: 1,
     requestId: managedRequestId,
     ...overrides,
   };
@@ -312,6 +313,7 @@ describe("managed review lifecycle boundary", () => {
       selectProviders: () => ({
         providers: [managedProvider],
         provider_identities: { [managedProvider]: { source_id: "review/source", config_id: "review-config" } },
+        provider_models: { [managedProvider]: "review-model" },
       }),
       client,
       onManagedTerminal: ({ client: managedClient, lifecycle, ...value }) => managedClient.statusManaged({
@@ -356,7 +358,7 @@ describe("managed review lifecycle boundary", () => {
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
-      } }),
+      }, provider_models: { [managedProvider]: "review-model" } }),
       client,
       managedStatusPollMs: 0,
     });
@@ -393,7 +395,7 @@ describe("managed review lifecycle boundary", () => {
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
-      } }),
+      }, provider_models: { [managedProvider]: "review-model" } }),
       client,
       managedStatusPollMs: 0,
     });
@@ -422,7 +424,7 @@ describe("managed review lifecycle boundary", () => {
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
-      } }),
+      }, provider_models: { [managedProvider]: "review-model" } }),
       client,
       managedStatusPollMs: 0,
     });
@@ -455,7 +457,7 @@ describe("managed review lifecycle boundary", () => {
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
-      } }),
+      }, provider_models: { [managedProvider]: "review-model" } }),
       client,
       managedTerminalWaitMs: 0,
       managedStatusPollMs: 0,
@@ -714,7 +716,7 @@ describe("managed review lifecycle boundary", () => {
       resolveRoute: () => ({ initial: [managedProvider], mode: "single_round", minimum_heterologous: 1 }),
       selectProviders: () => ({ providers: [managedProvider], provider_identities: {
         [managedProvider]: { source_id: "review/source", config_id: "review-config" },
-      } }),
+      }, provider_models: { [managedProvider]: "review-model" } }),
       client,
       managedStatusPollMs: 0,
     });

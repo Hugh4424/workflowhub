@@ -122,8 +122,15 @@ function completedTasks(task, taskText) {
     const historyGapReasons = [];
     if (acceptanceIds.length === 0) historyGapReasons.push("Trace AC ids are missing");
     if (refs.length === 0) historyGapReasons.push("evidence refs are missing");
+    // Test receipts and their raw stdout are often listed together in a task
+    // card.  Only the receipt is structured task evidence; trying to JSON
+    // parse the output bytes aborts the whole integration subject before the
+    // current implementation can be reviewed.  Keep raw output available in
+    // its canonical namespace, but exclude it from structured bindings.
+    const structuredRefs = refs.filter((ref) => !/^quality\/tests\/output\//.test(ref));
+    if (refs.length > 0 && structuredRefs.length === 0) historyGapReasons.push("structured evidence refs are missing; raw test output refs are non-binding");
     const missingEvidenceRefs = [];
-    const evidenceBindings = refs.flatMap((ref) => {
+    const evidenceBindings = structuredRefs.flatMap((ref) => {
       if (!/^quality\/(?:evidence|tests)\//.test(ref)) incomplete(`${taskId} evidence path is outside quality namespaces: ${ref}`);
       let raw;
       try { raw = task.readRecord(ref); }

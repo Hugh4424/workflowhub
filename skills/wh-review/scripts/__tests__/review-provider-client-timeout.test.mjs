@@ -25,6 +25,7 @@ test("client bounds a hanging broker and returns a typed timeout", async () => {
     providers: ["codex/luna"],
     materials,
     prompt: "review",
+    minimumHeterologous: 1,
   })).rejects.toMatchObject({ code: "PROCESS_TIMEOUT" });
 });
 
@@ -65,6 +66,7 @@ function group(providers = ["opencode/v4flash", "codex/luna"]) {
 
 const timeoutRun = (wire, strictProtocol = false) => new ReviewProviderClient({ invoke: async () => wire }).runGroup({
   hostProvider: "codex/terra", providers: ["codex/luna", "kimi/coding"], materials, prompt: "review", strictProtocol,
+  minimumHeterologous: 1,
 });
 const partial = () => ({ ...group(["codex/luna", "kimi/coding"]), outcome: "partial", providers: [member("codex/luna"), member("kimi/coding", "kimi", "cancelled")] });
 

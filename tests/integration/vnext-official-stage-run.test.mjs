@@ -421,7 +421,10 @@ function p3ApprovedDecision(state, { decisionId = "D-FIXTURE-1" } = {}) {
   expect(approvedFact.evidence[0]).toMatchObject({ ref: confirmation.ref, sha256: confirmation.hash });
   return {
     artifacts, confirmation, outcome, approvedFact,
-    input: { confirmation_ref: confirmation.ref, quality_fact_ref: confirmation.quality_fact_ref, stage_outcome_ref: outcome.ref },
+    // Current build-spec/build-plan freeze consumes only the authenticated
+    // confirmation and its quality fact. The bridge outcome remains in this
+    // fixture solely for the separate historical compatibility tests.
+    input: { confirmation_ref: confirmation.ref, quality_fact_ref: confirmation.quality_fact_ref },
   };
 }
 
@@ -731,16 +734,17 @@ describe("P3 T007 real bridge identity and decision approval consumers", () => {
     expect(JSON.parse(state.task.readRecord(approved.confirmation.quality_fact_ref))).toEqual(approved.approvedFact);
   });
 
-  it.each(["confirmation", "quality_fact", "stage_outcome"])("does not let a missing %s source become an accepted freeze", async (source) => {
+  it.each(["confirmation", "quality_fact", "retired_stage_outcome"])("does not let a missing or retired %s source become an accepted freeze", async (source) => {
     const state = fixture(`p3-freeze-missing-${source}`);
     const approved = p3ApprovedDecision(state);
-    delete approved.input[`${source}_ref`];
+    if (source === "retired_stage_outcome") approved.input.stage_outcome_ref = approved.outcome.ref;
+    else delete approved.input[`${source}_ref`];
     const result = await runOfficialStage("build-spec", p3Context(state, "build-spec"), { decision_freeze: approved.input });
     expect(p3FreezeWarnings(result).length).toBeGreaterThan(0);
     expect(result.quality_status).toBe("incomplete");
   });
 
-  it.each(["missing step", "uncompleted step", "different confirmation", "wrong fact scope"])("rejects authenticated-looking mixed approval sources: %s", async (mutation) => {
+  it.each(["different confirmation", "wrong fact scope", "retired stage outcome"])("rejects authenticated-looking mixed approval sources: %s", async (mutation) => {
     const state = fixture(`p3-freeze-mixed-${mutation.replaceAll(" ", "-")}`);
     const approved = p3ApprovedDecision(state);
     if (mutation === "wrong fact scope") {
@@ -753,13 +757,8 @@ describe("P3 T007 real bridge identity and decision approval consumers", () => {
     } else if (mutation === "different confirmation") {
       const other = state.kernel.publishHumanConfirmation("make-decision", { decision: "accepted", subject_ref: approved.artifacts.reference("decision-log.md"), reply_text: "different fixture reply, never linked by original step", step_slug: "approve-decision" });
       approved.input.confirmation_ref = other.ref;
-      approved.input.quality_fact_ref = other.quality_fact_ref;
     } else {
-      const changed = p3RehashOutcome(state, approved.outcome, (value) => {
-        if (mutation === "missing step") value.step_outcomes = value.step_outcomes.filter((row) => row.step_slug !== "approve-decision");
-        else value.step_outcomes.find((row) => row.step_slug === "approve-decision").status = "incomplete";
-      });
-      approved.input.stage_outcome_ref = changed.ref;
+      approved.input.stage_outcome_ref = approved.outcome.ref;
     }
     const result = await runOfficialStage("build-spec", p3Context(state, "build-spec"), { decision_freeze: approved.input });
     expect(p3FreezeWarnings(result).length).toBeGreaterThan(0);

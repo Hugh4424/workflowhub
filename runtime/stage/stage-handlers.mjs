@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { validateAcceptanceEvidence } from "../evidence/canonical-receipt-writer.mjs";
-import { STAGE_REFLECTION_REF, isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
+import { STAGE_REFLECTION_REF, WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND, isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 import { SHA256_HEX, normalizeRuntimeOnlyPaths } from "../evidence/canonical-utils.mjs";
 import { minimumReviewersFor } from "../review/review-policy.mjs";
 import { parseReviewerOutput } from "../review/review-output.mjs";
@@ -52,6 +52,20 @@ import { STAGE_FACT_MATERIALS, STAGE_MATERIALS, separateAttemptFindingFacts, sta
 const HANDLERS = new Map();
 const hashText = (value) => createHash("sha256").update(value).digest("hex");
 const CURRENT_MATERIAL_COMPONENTS = new Set(["decision", "spec", "plan", "tasks"]);
+
+/** Keep the three normal missing-input causes distinct for callers and hosts. */
+export function diagnoseMissingInput({ callerProvided = false, providedValid = false, hostCanProvide = false } = {}) {
+  if (callerProvided !== true) {
+    return Object.freeze({ status: "caller_not_provided", reason: "caller did not provide the required input" });
+  }
+  if (providedValid !== true) {
+    return Object.freeze({ status: "provided_but_invalid", reason: "caller provided input, but it failed validation" });
+  }
+  if (hostCanProvide !== true) {
+    return Object.freeze({ status: "host_cannot_provide", reason: "the current host cannot provide the required input" });
+  }
+  return Object.freeze({ status: "available", reason: "required input is available and valid" });
+}
 function currentMaterialContent(worker, name) {
   if (typeof worker.readArtifact !== "function" || typeof worker.artifactRef !== "function") {
     throw materialIncomplete(`${worker.stage} requires an authenticated current ArtifactDir`);
@@ -125,6 +139,9 @@ function currentResearchMaterialScopeRevision(worker, stage = worker.stage) {
 function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
   const supplied = input?.decision_freeze;
   const bindingErrors = [];
+  if (supplied && Object.hasOwn(supplied, "stage_outcome_ref")) {
+    bindingErrors.push("decision freeze stage_outcome_ref is retired; use current confirmation and quality facts");
+  }
   if (supplied?.material_revision !== undefined && supplied.material_revision !== worker.currentMaterialRevision) {
     bindingErrors.push("decision freeze input material_revision does not match the current worker revision");
   }
@@ -133,7 +150,7 @@ function currentDecisionFreeze(worker, input, decisionLog, snapshot) {
   }
   const current = { currentMaterialRevision: worker.currentMaterialRevision, currentSnapshotTree: snapshot.tree };
   let checked = validateDecisionFreeze({ decisionLog, ...current });
-  const hasExplicitSources = supplied && ["confirmation_ref", "quality_fact_ref", "stage_outcome_ref"].some((key) => Object.hasOwn(supplied, key));
+  const hasExplicitSources = supplied && ["confirmation_ref", "quality_fact_ref"].some((key) => Object.hasOwn(supplied, key));
   if (hasExplicitSources) {
     try {
       if (typeof worker.readDecisionFreezeSources !== "function") throw new Error("authenticated decision freeze source reader is unavailable");
@@ -188,14 +205,14 @@ const COMPLETION_COPY = Object.freeze({
   "verify-code": { objective: "对当前实现完成一次高质量代码审查", approach: "沿真实入口、consumer、生命周期、安全和失败边界检查代码", effect: "任务获得代码风险结论或回同一 task 修复", next_owner: "task owner" },
 });
 const RECEIPT_KEYS = Object.freeze({
-  "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit", "stage_outcomes"]),
-  "build-spec": new Set(["spec", "review", "research", "clarify", "risk_acceptance", "audit", "stage_outcomes"]),
-  "build-plan": new Set(["plan", "tasks", "research", "review", "risk_acceptance", "audit", "confirmation", "stage_outcomes"]),
-  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "stage_outcomes", "ui_qa"]),
-  // quality_review is the dsh-code-review result bound by the stage outcome;
+  "make-decision": new Set(["decision", "interaction", "direction_review", "detail_review", "detail_risk_acceptance", "direction_risk_acceptance", "research", "grill", "confirmation", "audit"]),
+  "build-spec": new Set(["spec", "review", "research", "clarify", "risk_acceptance", "audit"]),
+  "build-plan": new Set(["plan", "tasks", "research", "review", "risk_acceptance", "audit", "confirmation"]),
+  "build-code": new Set(["implementation", "tests", "review", "risk_acceptance", "audit", "ui_qa"]),
+  // quality_review is the dsh-code-review result;
   // review is the existing wh-review advisory receipt and never feeds the
   // canonical completion subject.
-  "verify-code": new Set(["quality_review", "review", "confirmation", "stage_outcomes"]),
+  "verify-code": new Set(["quality_review", "review", "confirmation"]),
 });
 const object = (value, label) => { if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`); return value; };
 const text = (value, label) => { if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${label} must be non-empty`); return value; };
@@ -370,17 +387,32 @@ function shapeDiagnosticError(message, path, expected, actual, ErrorClass = Erro
 function stageInputKeys(stage) {
   if (stage === "build-code") return ["receipts", "acceptance_coverage", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply"];
   if (stage === "build-spec" || stage === "build-plan" || stage === "verify-code") {
-    return ["receipts", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? [] : ["decision_freeze"] )];
+    return ["receipts", "finding_dispositions", "contract_facts", "fallback_protocol", "review_budget", "user_reply", ...(stage === "verify-code" ? ["code_review_repairs"] : ["decision_freeze"] )];
   }
-  return ["receipts", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
+  return ["receipts", "interaction_aggregate", "finding_dispositions", "fallback_protocol", "review_budget", "user_reply"];
 }
 
-export function validateStageInvocation(stage, input, { currentOnly = true, expectedCriterionIds = null } = {}) {
+export function validateStageInvocation(stage, input, {
+  currentOnly = true,
+  expectedCriterionIds = null,
+  rejectCallerAcceptanceCoverage = false,
+} = {}) {
   if (!new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]).has(stage)) {
     throw new TypeError(`unsupported stage for invocation validation: ${stage}`);
   }
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw shapeDiagnosticError("official stage input must be an object", "$", "object", input, TypeError);
+  }
+  // Current vNext build-code has one product writer for AC coverage. Keep the
+  // old input readable for legacy fixtures, but do not let a current caller
+  // nominate or overwrite the official ledger.
+  if (stage === "build-code" && rejectCallerAcceptanceCoverage === true && Object.hasOwn(input, "acceptance_coverage")) {
+    throw shapeDiagnosticError(
+      "build-code caller acceptance_coverage is retired; the official handler derives current ACs and caller input cannot be used to match the current spec acceptance criteria",
+      "acceptance_coverage",
+      "officially derived acceptance coverage",
+      input.acceptance_coverage,
+    );
   }
   const allowed = stageInputKeys(stage);
   const unknown = Object.keys(input).filter((key) => !allowed.includes(key));
@@ -490,8 +522,8 @@ export function validateAcceptanceCoverageShape(value, {
       throw shapeDiagnosticError(`acceptance_coverage item is not an accepted criterion: ${id}`, `acceptance_coverage.items[${index}].acceptance_criterion_id`, [...declared], id);
     }
     declared.delete(id);
-    if (!["covered", "missing", "unknown"].includes(item.status)) {
-      throw shapeDiagnosticError(`acceptance_coverage ${id} status must be covered, missing, or unknown`, `acceptance_coverage.items[${index}].status`, "covered|missing|unknown", item.status);
+    if (!["covered", "missing", "unknown", "not_applicable"].includes(item.status)) {
+      throw shapeDiagnosticError(`acceptance_coverage ${id} status must be covered, missing, unknown, or not_applicable`, `acceptance_coverage.items[${index}].status`, "covered|missing|unknown|not_applicable", item.status);
     }
     if (!Array.isArray(item.evidence_refs)) {
       throw shapeDiagnosticError(`acceptance_coverage ${id} evidence_refs must be an array`, `acceptance_coverage.items[${index}].evidence_refs`, "array", item.evidence_refs, TypeError);
@@ -501,6 +533,33 @@ export function validateAcceptanceCoverageShape(value, {
     }
     if (item.status !== "covered" && item.evidence_refs.length !== 0) {
       throw shapeDiagnosticError(`non-covered acceptance criterion must not claim evidence: ${id}`, `acceptance_coverage.items[${index}].evidence_refs`, "empty array", item.evidence_refs);
+    }
+    if (item.status === "not_applicable"
+        && (typeof item.not_applicable_reason !== "string" || item.not_applicable_reason.trim() === "")) {
+      throw shapeDiagnosticError(
+        `not_applicable acceptance criterion requires an explicit reason: ${id}`,
+        `acceptance_coverage.items[${index}].not_applicable_reason`,
+        "non-empty string",
+        item.not_applicable_reason,
+      );
+    }
+    if (item.evidence_state !== undefined
+        && !["unknown_empty_evidence", "zero_review_findings", "not_applicable"].includes(item.evidence_state)) {
+      throw shapeDiagnosticError(
+        `acceptance_coverage ${id} evidence_state is invalid`,
+        `acceptance_coverage.items[${index}].evidence_state`,
+        "unknown_empty_evidence|zero_review_findings|not_applicable",
+        item.evidence_state,
+      );
+    }
+    if (item.evidence_state === "zero_review_findings"
+        && (!Array.isArray(item.review_findings) || item.review_findings.length !== 0)) {
+      throw shapeDiagnosticError(
+        `zero_review_findings acceptance criterion must carry an empty findings array: ${id}`,
+        `acceptance_coverage.items[${index}].review_findings`,
+        "empty array",
+        item.review_findings,
+      );
     }
     const refs = item.evidence_refs.map((entry, refIndex) => {
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
@@ -517,7 +576,16 @@ export function validateAcceptanceCoverageShape(value, {
       }
       return { ref: entry.ref, sha256: entry.sha256 };
     });
-    return { ...item, acceptance_criterion_id: id, evidence_refs: refs };
+    const evidenceState = item.status === "not_applicable"
+      ? "not_applicable"
+      : item.evidence_state
+        ?? (item.status === "unknown" && refs.length === 0 ? "unknown_empty_evidence" : undefined);
+    return {
+      ...item,
+      acceptance_criterion_id: id,
+      evidence_refs: refs,
+      ...(evidenceState === undefined ? {} : { evidence_state: evidenceState }),
+    };
   });
   if (declared.size) {
     throw shapeDiagnosticError(`${label} is missing an accepted criterion`, "acceptance_coverage.items", "one row for every accepted criterion", [...declared]);
@@ -535,6 +603,9 @@ function subjectFact(status, evidenceRefs = [], detail = null, attributes = {}) 
     ...(detail ? { detail } : {}),
     ...(Array.isArray(attributes.execution_items) ? {
       execution_items: Object.freeze(attributes.execution_items.map((item) => Object.freeze({ ...item }))),
+    } : {}),
+    ...(Object.prototype.hasOwnProperty.call(attributes, "execution_binding") ? {
+      execution_binding: attributes.execution_binding ?? null,
     } : {}),
   });
 }
@@ -1586,12 +1657,24 @@ export async function acceptanceExecutionFacts(worker, snapshotTree) {
   const status = items.every((item) => item.status === "executed")
     ? "executed"
     : (items.some((item) => item.status === "unavailable") ? "unavailable" : "failed");
+  const executionBinding = typeof worker.currentAttemptId === "string" && worker.currentAttemptId.trim() !== ""
+    ? Object.freeze({
+      kind: WORKFLOWHUB_CURRENT_SESSION_BINDING_KIND,
+      task_id: worker.identity.taskId,
+      stage: worker.stage,
+      attempt_id: worker.currentAttemptId,
+      run_id: worker.workflowRunId,
+      snapshot_tree: snapshotTree,
+      material_revision: worker.currentMaterialRevision,
+    })
+    : null;
   return Object.freeze({
     status,
     requires_execution: true,
     requires_independent_verdict: projection.requires_independent_verdict,
     items: Object.freeze(items),
     evidence_refs: Object.freeze(evidenceRefs),
+    execution_binding: executionBinding,
     missing_items: Object.freeze(items.filter((item) => item.status !== "executed").map((item) => `${item.task_id}:${item.tier}: ${item.reason ?? item.status}`)),
   });
 }
@@ -1721,6 +1804,7 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
         acceptance_criterion_id: id,
         status: "unknown",
         evidence_refs: [],
+        evidence_state: "unknown_empty_evidence",
         semantic_gap: `covered claim lacks semantic proof: ${[...semanticMissing, ...(anchorsValid ? [] : ["implementation_anchor/verification_anchor"])].join(", ")}`,
       };
     }
@@ -1728,6 +1812,11 @@ function acceptanceCoverageFacts(worker, invocation, snapshotTree) {
       acceptance_criterion_id: id,
       status: value.status,
       evidence_refs: refs,
+      ...(value.evidence_state === undefined
+        ? (value.status === "unknown" && refs.length === 0 ? { evidence_state: "unknown_empty_evidence" } : {})
+        : { evidence_state: value.evidence_state }),
+      ...(value.status === "not_applicable" ? { not_applicable_reason: value.not_applicable_reason } : {}),
+      ...(value.evidence_state === "zero_review_findings" ? { review_findings: [] } : {}),
       ...(value.status === "covered" ? {
         scenario: value.scenario,
         oracle: value.oracle,
@@ -1965,6 +2054,34 @@ export function certifyCurrentTaskCompletion(worker, {
   });
   return Object.freeze(completion);
 }
+
+function uncertifiedBuildCodeCompletion(worker, review, snapshotTree) {
+  const reviewRef = review?.facts?.result_ref ?? review?.facts?.attempt_ref;
+  const reviewHash = review?.facts?.result_hash ?? review?.facts?.attempt_hash;
+  if (typeof reviewRef !== "string" || !SHA256_HEX.test(reviewHash ?? "")) {
+    throw new Error("build-code snapshot consistency cannot be disclosed without an authenticated review reference");
+  }
+  const completion = {
+    status: "completed",
+    evidence_ref: worker.artifactRef("tasks.md"),
+    evidence_hash: hashText(worker.readArtifact("tasks.md")),
+    integration_review: { ref: reviewRef, sha256: reviewHash },
+    formal_record_status: {
+      status: "unavailable",
+      reason: "implementation, tests, and review facts use different snapshots; current completion was not certified",
+    },
+    quality_gaps: [
+      "implementation, tests, and review use different snapshots; current completion was not certified",
+      ...(snapshotTree ? [] : ["current build-code snapshot is unavailable"]),
+    ],
+  };
+  Object.defineProperty(completion, "audit_gaps", {
+    value: Object.freeze(["cross-snapshot quality facts were retained without certification"]),
+    enumerable: false,
+  });
+  return Object.freeze(completion);
+}
+
 function reviewMinimumForAttempt(attempt, producerStage, expectedTrack) {
   const policy = attempt.review_policy;
   if (policy?.source !== "wh_review.v2") return minimumReviewersFor(producerStage, expectedTrack ?? null);
@@ -3841,6 +3958,12 @@ HANDLERS.set("build-code", async (worker, input) => {
     const contractFacts = mergeUiQaIntoContractFacts(contractFactsBase, uiQa);
     const current = currentMaterialContent(worker, "tasks.md");
     const snapshot = captureWorkerSnapshot(worker);
+    const review = safeReviewFacts(worker, input, "review", undefined, "build-code", {
+      requireRiskAcceptance: false,
+      requireDispositions: false,
+    });
+    const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
+    const dispositions = findingDispositions([review], input, worker.currentMaterialRevision);
     const acceptanceExecution = await acceptanceExecutionFacts(worker, snapshot?.tree ?? null);
     const acceptanceCoverage = acceptanceExecution.requires_execution
       ? acceptanceCoverageForExecution(worker, input, snapshot?.tree ?? null, acceptanceExecution)
@@ -3869,24 +3992,40 @@ HANDLERS.set("build-code", async (worker, input) => {
               acceptanceExecution.evidence_refs,
               acceptanceExecution.status === "executed"
                 ? "all declared acceptance scenarios executed with canonical evidence"
-                : `declared acceptance execution is ${acceptanceExecution.status}`,
-              { execution_items: acceptanceExecution.items },
+              : `declared acceptance execution is ${acceptanceExecution.status}`,
+              { execution_items: acceptanceExecution.items, execution_binding: acceptanceExecution.execution_binding },
             ),
           } : {}),
         },
         ...(uiQa ? { ui_qa: uiQa.facts } : {}),
-        finding_dispositions: { status: "not_applicable", items: [] },
+        review: review.facts,
+        finding_dispositions: dispositions.facts,
         audit_gaps: ["current implementation/test facts are unavailable; current four materials remain the work authority"],
       },
-      evidence_refs: [...(uiQa?.evidence ? [uiQa.evidence] : []), ...acceptanceExecution.evidence_refs],
-      missing_items: ["current implementation/test facts are unavailable; record them when available", ...acceptanceExecution.missing_items, ...(input.contract_facts === undefined ? [] : contractFacts.missing_items), ...(uiQa?.missing_items ?? [])],
+      evidence_refs: [
+        ...(uiQa?.evidence ? [uiQa.evidence] : []),
+        ...(review.evidence ? [review.evidence] : []),
+        ...acceptanceExecution.evidence_refs,
+        ...review.risk_evidence,
+      ],
+      missing_items: [
+        "current implementation/test facts are unavailable; record them when available",
+        ...acceptanceExecution.missing_items,
+        ...(reviewWarning ? [reviewWarning] : []),
+        ...(review.missing_items ?? []),
+        ...dispositions.missing_items,
+        ...(input.contract_facts === undefined ? [] : contractFacts.missing_items),
+        ...(uiQa?.missing_items ?? []),
+      ],
     }, {
       worker,
       artifacts: [{ label: "当前任务材料", ref: current.ref, hash: current.content_hash }],
-      reviews: [],
+      reviews: [review],
       businessFacts: { content: "present", code: "unknown", tests: "unknown", acceptance_criteria: "unknown" },
       audit: null,
-      verification: "当前四份材料可继续；实现、测试和审查质量事实尚未提供",
+      verification: review.facts.status === "recorded"
+        ? "当前四份材料可继续；实现和测试质量事实尚未提供，现有集成审查已保留"
+        : "当前四份材料可继续；实现、测试和审查质量事实尚未提供",
     });
   }
   const missingItems = [];
@@ -3907,8 +4046,13 @@ HANDLERS.set("build-code", async (worker, input) => {
   const impl = receipt(worker, input, "implementation"), tests = testFacts(worker, input), review = safeReviewFacts(worker, input, "review");
   if (!Array.isArray(impl.value.changed)) throw new TypeError("implementation.changed must be array");
   for (const key of ["snapshot_head", "snapshot_tree", "snapshot_commit", "diff_ref", "diff_hash"]) text(impl.value[key], `implementation.${key}`);
-  if (impl.value.snapshot_tree !== tests.facts.snapshot_tree || review.facts.snapshot_tree !== tests.facts.snapshot_tree) {
-    missingItems.push("implementation, tests, and review use different snapshots; quality warning only");
+  const currentFactsSnapshot = currentSnapshotTree ?? null;
+  const snapshotMismatch = currentFactsSnapshot === null
+    || impl.value.snapshot_tree !== currentFactsSnapshot
+    || tests.facts.snapshot_tree !== currentFactsSnapshot
+    || review.facts.snapshot_tree !== currentFactsSnapshot;
+  if (snapshotMismatch) {
+    missingItems.push("implementation, tests, and review use different snapshots; current completion was not certified");
   }
   const reviewWarning = requireFinalIntegrationReview(review, "build-code final review");
   if (reviewWarning) missingItems.push(reviewWarning);
@@ -3918,19 +4062,19 @@ HANDLERS.set("build-code", async (worker, input) => {
   // ordinary completion gap. Verify-code reports its unavailable current
   // review as a concrete finding-disposition gap instead.
   if (review.facts.status !== "unavailable") missingItems.push(...dispositions.missing_items);
-  const acceptanceExecution = await acceptanceExecutionFacts(worker, tests.facts.snapshot_tree);
+  const acceptanceExecution = await acceptanceExecutionFacts(worker, currentFactsSnapshot);
   if (acceptanceExecution.status !== "executed" && acceptanceExecution.status !== "not_applicable") {
     missingItems.push(...acceptanceExecution.missing_items);
   }
   let coverage;
-  try { coverage = acceptanceCoverageForExecution(worker, input, tests.facts.snapshot_tree, acceptanceExecution); }
+  try { coverage = acceptanceCoverageForExecution(worker, input, currentFactsSnapshot, acceptanceExecution); }
   catch (error) {
     if (error.message !== "build-code acceptance_coverage must be an object") throw error;
     missingItems.push(`acceptance coverage unavailable: ${error.message}`);
-    coverage = { snapshot_tree: tests.facts.snapshot_tree, accepted_criterion_ids: [], items: [] };
+    coverage = { snapshot_tree: currentFactsSnapshot, accepted_criterion_ids: [], items: [] };
   }
   let reviewBinding = { evidence: [] };
-  try { reviewBinding = bindFinalReview(worker, input, review, tests.facts.snapshot_tree, { stage: "build-code" }); }
+  try { reviewBinding = bindFinalReview(worker, input, review, currentFactsSnapshot, { stage: "build-code" }); }
   catch (error) { missingItems.push(`build-code review binding unavailable: ${error.message}`); }
   if (tests.facts.exit_code !== 0) missingItems.push("build-code final tests are not passing; quality warning only");
   if (tests.facts.runtime_profile !== undefined && (tests.facts.runtime_profile_status !== "ready" || tests.facts.runtime_profile_authenticated !== true)) {
@@ -3938,18 +4082,23 @@ HANDLERS.set("build-code", async (worker, input) => {
   }
   const actualChangedFiles = authenticatedImplementationChanged(worker, impl.value);
   const integrationAudit = typeof worker.inspectIntegrationReviewSubject === "function"
-    ? worker.inspectIntegrationReviewSubject(tests.facts.snapshot_tree, { implementation_ref: impl.ref, green_ref: tests.ref })
+    ? worker.inspectIntegrationReviewSubject(currentFactsSnapshot, { implementation_ref: impl.ref, green_ref: tests.ref })
     : { formal_record_status: unavailableFormalRecordStatus() };
-  const phase = certifyCurrentTaskCompletion(worker, {
-    changedFiles: actualChangedFiles,
-    tests: tests.facts,
-    review: review.facts,
-    acceptanceCoverage: coverage,
-    formalRecordStatus: integrationAudit.formal_record_status,
-  });
+  const phase = snapshotMismatch
+    ? uncertifiedBuildCodeCompletion(worker, review, currentFactsSnapshot)
+    : certifyCurrentTaskCompletion(worker, {
+      changedFiles: actualChangedFiles,
+      tests: tests.facts,
+      review: review.facts,
+      acceptanceCoverage: coverage,
+      formalRecordStatus: integrationAudit.formal_record_status,
+    });
   const acceptanceComplete = coverage.accepted_criterion_ids.length > 0
     && coverage.items.length === coverage.accepted_criterion_ids.length
-    && coverage.items.every((entry) => entry.status === "covered" && entry.evidence_refs.length > 0);
+    && coverage.items.every((entry) => (entry.status === "covered" && entry.evidence_refs.length > 0)
+      || (entry.status === "not_applicable"
+        && typeof entry.not_applicable_reason === "string"
+        && entry.not_applicable_reason.trim() !== ""));
   return addCompletion("build-code", {
     fallback_protocol: fallbackProtocolFacts(worker, input),
     facts: {
@@ -3973,7 +4122,7 @@ HANDLERS.set("build-code", async (worker, input) => {
             acceptanceExecution.status === "executed"
               ? "all declared acceptance scenarios executed with canonical evidence"
               : `declared acceptance execution is ${acceptanceExecution.status}`,
-            { execution_items: acceptanceExecution.items },
+            { execution_items: acceptanceExecution.items, execution_binding: acceptanceExecution.execution_binding },
           ),
         } : {}),
       },
@@ -4104,6 +4253,7 @@ export function officialStageHandler(stage) {
     recordConsumerInvocation(worker, `stage-handlers#officialStageHandler("${stage}")`);
     const normalized = validateStageInvocation(stage, invocation, {
       currentOnly: worker?.manifest?.record_model === "vnext-single-write",
+      rejectCallerAcceptanceCoverage: worker?.manifest?.record_model === "vnext-single-write",
       expectedCriterionIds: stage === "build-code" && typeof worker?.readArtifact === "function"
         ? activeAcceptanceCriterionIds(worker.readArtifact("spec.md"))
         : null,

@@ -33,20 +33,19 @@ continues without guessing.
 阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 阶段末逐项披露协议：主会话先读取本 stage 的 `workflows/<stage>/steps.json`
-manifest，再按声明顺序对齐 `stage_outcome.step_outcomes`、
-`stage_outcome.skill_outcomes`。没有 outcome 也必须逐条列出全部声明项，并明确写
-“无 outcome”及真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
+manifest，再按声明顺序对齐当前阶段事实、产物和质量证据。阶段 outcome 不是必需输入；
+若某项没有当前事实，明确写真实原因。每一项分别读回并报告执行状态、产物存在性和完成判据是否齐备；
 产物存在不能替代完成判据。至少区分“未启动”“跳过”“产物缺失”“完成判据缺失”、
 `unknown` 与 `unavailable`。`executor_absent` 只能记为不可用，不能记为正常跳过；
 不得用一条阶段结论均摊到所有 step/skill。
 
 ## 阶段末复盘（必须执行）
 
-阶段结束时，当前主会话先按 `stage-reflection` 技能产出 `stage-reflection.v2` judgment JSON，再调用实际的公共入口 `run --action=reflect`。`judgments[].evidence_refs` 必须显式引用唯一的当前 `quality/evidence/stage-outcomes/build-plan/<sha256>.json`；`identity` 的 task、真实 worktree/branch、attempt、material_revision 与 snapshot_tree 必须匹配该认证原件。executor/run 从真实 outcome 派生。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。
+阶段结束时，当前主会话先按 `stage-reflection` 技能产出 `stage-reflection.v2` judgment JSON，再调用实际的公共入口 `run --action=reflect`。`judgments[].evidence_refs` 引用当前 `build-plan` 可复核的阶段行、质量事实、测试或 review；不要求外部 Stage Agent、bridge、session 或 stage outcome。`identity` 的 task、真实 worktree/branch、attempt、material_revision 与 snapshot_tree 必须匹配当前认证工作区。没有 judgment 或 executor 时如实为 `unavailable(executor_absent)`，不借用旧运行身份。JSON 要用六个结构化区块回答什么帮了忙、什么要改进、什么阻塞、为什么需要人工介入、什么应简化、什么现在就能简化：`what_helped`、`what_to_improve`、`blockers`、`intervention_reasons`、`what_to_simplify`、`simplifiable_now`。每块条目必须带真实 `evidence_refs` 与 `confidence`；已检查无发现为 `none_observed`，输入不足为 `unknown` 并写 `unknown_reason`，不适用为 `not_applicable` 并写理由，不能静默省略。
 
 返回后把实际 `quality/stage-reflection/build-plan/<semantic-key>.json` 的 ref 与原件 bytes 的 sha256 交给既有 lesson/report consumer。semantic key 不等于原件 hash：同判断 A 复用首件 bytes/ref/time，判断或真实执行身份变化 B 写新件并保留 A；旧 fixed ref 只读。缺 executor/judgment 保持 `unavailable`。复盘失败保留原 stage error 和实际 `reflection_error`；既有 stage 事实继续有效。
 
-`validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`，技能不另行派生消费边。实际边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 同引用形成；stage outcome 或 output 不全时 `coverage_status=partial`、消费为 unknown，不能当零消费。只有完整扫描、近 30 天登记 output 的 `zero_consumption_proof`，以及人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才保留，否则变为 `needs_evidence`。如果 route 尚未实现，记录真实 unavailable/dependency，不发明私有命令。
+`validate-stage-reflection.mjs` 在验证内部调用 `deriveConsumptionEdges`，技能不另行派生消费边。实际边只由较早 subject 的 `output_refs` 与较晚 subject 的 `input_refs` 同引用形成；当前阶段事实或 output 不全时 `coverage_status=partial`、消费为 unknown，不能当零消费。只有完整扫描、近 30 天登记 output 的 `zero_consumption_proof`，以及人工 rejected 或同一步骤至少两次介入，`remove_candidate` 才保留，否则变为 `needs_evidence`。如果 route 尚未实现，记录真实 unavailable/dependency，不发明私有命令。
 
 ## Portable dependencies
 
