@@ -105,6 +105,10 @@ function validateManifest(manifest) {
   if (manifest.record_model !== "vnext-single-write") {
     throw new TypeError('task manifest record_model must be "vnext-single-write"');
   }
+  if (manifest.write_resolution_source !== undefined
+      && !new Set(["env", "config", "home"]).has(manifest.write_resolution_source)) {
+    throw new TypeError("task manifest write_resolution_source must be env, config, or home when present");
+  }
   for (const field of FORBIDDEN_MANIFEST_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(manifest, field)) throw new TypeError(`task manifest must not contain mutable field: ${field}`);
   }

@@ -40,10 +40,11 @@ describe("left-shift suite (T7)", () => {
     }
   });
 
-  it("FR-LEFT-004/005: code_review event and agent outcome receipt consumers exist", () => {
-    const sessionEvent = readFileSync(fileURLToPath(new URL("../../tools/host/workflowhub-codex-session-event.mjs", import.meta.url)), "utf8");
-    expect(sessionEvent).toContain("code_review");
+  it("FR-LEFT-004/005: explicit code_review and agent outcome receipt consumers exist", () => {
+    const bridge = readFileSync(fileURLToPath(new URL("../../tools/host/workflowhub-stage-agent-bridge.mjs", import.meta.url)), "utf8");
+    expect(bridge).toContain("agent_run_id");
     const outcomeAdapter = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-agent-outcome-adapter.mjs", import.meta.url)), "utf8");
+    expect(outcomeAdapter).toContain("code_review");
     expect(outcomeAdapter).toContain("publishUnavailableStageAgentOutcome");
     const stageRunner = readFileSync(fileURLToPath(new URL("../../runtime/stage/stage-runner.mjs", import.meta.url)), "utf8");
     expect(stageRunner).toContain("agent_outcome");

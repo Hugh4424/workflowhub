@@ -20,10 +20,10 @@
 - **SCEN-04（存储漂移）**：writer 写入路径与解析链（env > config > home）不一致，或存在可疑第二存储根 → doctor 输出 `warnings` 字段如实描述，exit 0（C-002）。
 - **SCEN-05（旧树访问）**：人翻到旧 Knowledge tree → 树根存在 `ARCHIVED.md` 只读说明（C-003），指明权威根与休眠日期。
 - **SCEN-06（diff 证据）**：build-code 发布后，执行者继续改动 untracked 文件 → verify 时重算哈希不匹配 → 仍然 fail-closed 报错（语义不削弱）；但正常流程（发布后不再改）不再误报整轮重跑。
-- **SCEN-07（wh-review 0 字节）**：broker 收到 provider 0 字节/非法 JSON 输出 → 标记内部标签 `contract_failure`，保留原始事实于任务私有证据区，公共边界只暴露错误码+脱敏消息。
+- **SCEN-07（wh-review 0 字节）**：broker 收到 provider 0 字节/非法 JSON 输出 → 标记内部标签 `contract_failure`；原始流只保留在 broker/host 私有诊断中，WorkflowHub 任务材料与公共边界只暴露错误码、脱敏消息和 stdout/stderr 摘要哈希。
 - **SCEN-08（wh-review partial）**：部分 provider 成功、部分失败 → `available-with-failures`：逐 provider 保留错误事实；输入无变化不重试；永不声明 pass。
 - **SCEN-09（stage 结束）**：stage 大白话总结列出所有非 completed 的 step/skill 及原因（R-006）。
-- **SCEN-10（B5b 兜底）**：usability 任务取消或长期不合并 → 本任务接管五份 SKILL.md 改写与 session 三件套删除，同批原子交付（C-001）。
+- **SCEN-10（B5b 接管）**：当前任务完成 T9 后直接接管五份 SKILL.md 改写与 session 三件套删除，同批原子交付（C-001）；不等待 usability 任务状态或时间条件。
 
 ## 3. 范围与非目标
 
@@ -34,10 +34,10 @@
 
 - PFACT-01：存储根解析优先级 = env `WORKFLOWHUB_TASK_DIR` > `~/.config/workflowhub/config.json` `task_dir` > home 默认；launcher-only，不看 cwd/git（F-206）。
 - PFACT-02：会话绑定族 = `tools/host/workflowhub-codex-session-{state,hook,event}.mjs`；合并当前 `main` 后，生产消费者仍包括 `tools/cli/stage-runtime.mjs`、`tools/cli/task-bootstrap.mjs`、`workflowhub-stage-agent-bridge.mjs` 的 `session.session_id` 输入面，以及五份 SKILL.md 文本；本任务仍负责按 FR-005/FR-006 移除这些消费面（F-201）。
-- PFACT-03：合并当前 `main` 后，五份 SKILL.md 已加入 stage-reflection 说明，但仍保留"同一会话自动记录"段与 `workflowhub-codex-session-event.mjs` 指令；B5b gate 必须按内容级零残留和遗漏披露段判断，不能按文件是否被修改判断（F-202，2026-09-04 rebaseline）。
+- PFACT-03：合并当前 `main` 后，五份 SKILL.md 已加入 stage-reflection 说明，但仍保留"同一会话自动记录"段与 `workflowhub-codex-session-event.mjs` 指令；B5b 交付必须按内容级零残留和遗漏披露段验收，不能按文件是否被修改判断；这只是交付验收条件，不是等待外部任务的启动门禁（F-202，2026-09-04 rebaseline）。
 - PFACT-04：diff 证据的 untracked blob 哈希在捕获时冻结（canonical receipt 写入路径），verify 时重算比对，不一致即抛错（F-203）。
 - PFACT-05：doctor 当前输出 JSON（stage/task_id/worktree_root/baseline_commit/materials），正常 exit 0，异常抛错非零（F-204）。
-- PFACT-06：合并当前 `main` 后，wh-review broker 已有本地 120000ms bounded timeout，并将超时标记为 `PROCESS_TIMEOUT`，simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；0 字节/非法 JSON 仍需本任务补充专属 `contract_failure` 语义；隐私守卫在多处抛 `PUBLIC_RESULT_INVALID`；配置 `wh_review.v2`（profiles/minimum_heterologous）（F-205，2026-09-04 rebaseline）。
+- PFACT-06：合并当前 `main` 后，wh-review broker 已有本地 120000ms bounded timeout，并将超时标记为 `PROCESS_TIMEOUT`，simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；0 字节/非法 JSON 仍需本任务补充专属 `contract_failure` 语义；隐私守卫在多处抛 `PUBLIC_RESULT_INVALID`；main 的 provider-protocol 规定 WorkflowHub 不读取 broker private raw，非 JSON 输出只保留 stdout/stderr SHA-256，不把原始流或主机路径写入任务材料；配置 `wh_review.v2`（profiles/minimum_heterologous）（F-205，2026-09-04 rebaseline）。
 - PFACT-07：M15 监控链已退休（commit 95bfa2247）；CONTEXT.md:274 明文拒绝宿主身份系统扩展（F-017/F-018）。
 - PFACT-08：DSH 宿主下会话事件链整体不可用（本会话全部实测 unavailable）（make-decision F-013 等）。
 
@@ -50,11 +50,11 @@
 - **FR-003 旧树归档标记**：在旧 Knowledge tree 根放置 `ARCHIVED.md` 只读说明（权威根、休眠起始日期、禁止写入声明）；**该文件的首次创建是唯一被豁免的一次性写入**，除此之外不迁移、不修改旧树任何数据（D-004、C-003；SCEN-05；AC-2）。
 - **FR-004 untracked diff 证据唯一捕获点**：untracked 文件哈希的唯一捕获点移到发布事务内（与实现发布同一时机同事务）；捕获后的任何修改在 verify 重算时仍然 fail-closed 报错；历史错误样例转为 fixture 重放验证（D-003；SCEN-06；AC-3）。
 - **FR-005 移除会话身份派生**：删除 stage-runtime 的会话身份派生路径与 task-bootstrap 的绑定调用；任务身份改为显式 `--project/--task` 优先、认证 worktree 派生其次；缺失或冲突时 fail-closed。**同族消费面含 stage-agent bridge 的 `session.session_id` 输入**：移除后该输入改为显式参数携带；无显式输入时该桥接能力如实不可用（unavailable），不得从环境猜测会话身份（D-007、PFACT-02；SCEN-01/02/03；AC-5/AC-6）。
-- **FR-006 移除 session 三件套 + SKILL.md 原子批**：删除 session-state/session-event/session-hook 三件套，同批改写五份 SKILL.md（移除"同一会话自动记录"段、新增遗漏披露段）；**必须先于或同于 CLI 删除交付，绝不允许先删 CLI 留旧指令**；gated on usability merge，**gate 释放信号（可观察、有 owner，且按内容验证）**：usability 任务合并且五份 SKILL.md 均已移除 session-event/session-binding 指令并包含遗漏披露段 → 本批只做三件套删除与 bridge 改造；仅有文件改动或 stage-reflection 新增不算 gate 释放；或 usability 任务被取消 → 本任务接管全批（C-001）；或 usability 任务 14 天无合并进展 → 本任务接管全批；owner=本任务执行者，接管动作=在 build-plan 对应任务卡中记录触发信号（D-006/D-007、C-001、PFACT-03；SCEN-09/10；AC-6）。
+- **FR-006 移除 session 三件套 + SKILL.md 原子批**：删除 session-state/session-event/session-hook 三件套，同批改写五份 SKILL.md（移除"同一会话自动记录"段、新增遗漏披露段）；**必须先于或同于 CLI 删除交付，绝不允许先删 CLI 留旧指令**；T9 完成后由本任务执行者直接接管全批，接管动作=在 build-plan 对应任务卡中记录当前任务已接管，并完成内容级零残留校验；不依赖 usability 任务合并、取消或等待时限。五份 SKILL.md 即使已被其他改动部分更新，也必须由本批统一核对并保证 bridge、三件套删除、文档改写同一 git 提交原子交付（D-006/D-007、C-001、PFACT-03；SCEN-09/10；AC-6）。
 - **FR-007 身份解析算法**：优先级=显式 `--project/--task` > 认证 worktree 派生。认证 worktree 的定义=该目录是经任务清单（manifest）登记的任务 worktree，能从中读出已登记的 project/task 身份；派生即读取该登记身份；比较前对 project/task 做统一规范化（去空白、精确匹配）；显式与派生冲突=fail-closed 报冲突；两者皆缺=fail-closed 报缺身份；登记损坏/不可读=fail-closed；旧任务记录中的 session 字段只读保留、不再消费（D-007；SCEN-02/03；AC-5）。
-- **FR-008 broker 输出契约守护**：broker 读取 provider 输出处加契约守护：0 字节或非法 JSON → 标记内部标签 `contract_failure`（非公共行为，公共行为保持七类），原始全文入任务私有证据区，公共输出只含错误码+脱敏消息（D-005、PFACT-06；SCEN-07；AC-4）。
+- **FR-008 broker 输出契约守护**：broker 读取 provider 输出处加契约守护：0 字节或非法 JSON → 标记内部标签 `contract_failure`（非公共行为，公共行为保持七类）；原始全文只保留在 broker/host 私有诊断中，WorkflowHub 任务材料只保留 stdout/stderr 摘要哈希，公共输出只含错误码+脱敏消息（D-005、PFACT-06；SCEN-07；AC-4）。
 - **FR-009 partial 处置规则**：`available-with-failures` 语义写死：逐 provider 保留错误与状态；相同输入不重试；partial 永不当 pass；处置矩阵明细（timeout/partial/invalid/0字节/unavailable 各自终态+重试条件+完成影响）在本规格数据契约节给出（D-005；SCEN-08；AC-4）。
-- **FR-010 隐私边界**：原始 provider 错误全文只入任务私有证据区；**公共/跨任务边界枚举**=wh-review CLI stdout JSON、canonical review result 记录、审查报告投影、跨任务 quality facts——四处只保留错误码+脱敏消息；既有 `PUBLIC_RESULT_INVALID` 守卫行为不变（D-005、PFACT-06；SCEN-07；AC-4）。
+- **FR-010 隐私边界**：原始 provider 错误全文只留在 broker/host 私有诊断中；**WorkflowHub 任务与公共/跨任务边界枚举**=task records、wh-review CLI stdout JSON、canonical review result 记录、审查报告投影、跨任务 quality facts——均只保留错误码、脱敏消息和 stdout/stderr 摘要哈希；既有 `PUBLIC_RESULT_INVALID` 守卫行为不变（D-005、PFACT-06；SCEN-07；AC-4）。
 - **FR-011 调用约定文本化**：wh-review 技能文档声明：长审查由宿主后台执行+轮询收集；不引入任何真异步机制/新的状态对象或新的进程管理。本任务保留合并自 `main` 的既有本地 bounded timeout，不重复实现另一套超时/进程生命周期控制（D-005；SCEN-08；AC-7）。
 - **FR-012 遗漏披露规则**：五份 SKILL.md 的阶段末交接段新增规则：stage 结束大白话总结必须列出所有非 completed 的 step/skill 及真实原因；与 FR-006 同批交付（D-006；SCEN-09；AC-6）。
 
@@ -74,7 +74,7 @@
 
 ### AC-4 wh-review 终态与隐私（FR-008/FR-009/FR-010）
 场景：分别构造 provider 五种终态——timeout、partial、PUBLIC_RESULT_INVALID、0 字节/非法 JSON、宿主链不可用。
-验证：通过=各终态如实记录、0字节/非法输出被 contract_failure 拦截、partial 不当 pass、相同指纹输入不被重试（修复致指纹变化后恰好允许一轮）、公共边界经测试证明无私有路径泄漏；失败=任一终态被当 pass/相同输入被重试/泄漏本地路径。证据类型=测试捕获（含四处公共边界逐一断言无原始路径、私有证据区保留全文的测试）。
+验证：通过=各终态如实记录、0字节/非法输出被 contract_failure 拦截、partial 不当 pass、相同指纹输入不被重试（修复致指纹变化后恰好允许一轮）、broker/host 私有诊断保留原始事实且任务与公共边界只保留错误码、脱敏消息和摘要哈希、公共边界经测试证明无私有路径泄漏；失败=任一终态被当 pass/相同输入被重试/任务材料或公共边界泄漏原始流或本地路径。证据类型=测试捕获（含私有诊断与任务/四处公共边界的逐一断言）。
 
 ### AC-5 身份解析与执行事实完整性（FR-005/FR-006 输入面/FR-007）
 场景：fixture 覆盖六例——显式标志、认证 worktree 派生、显式/派生冲突、两者皆缺、登记损坏、旧任务（含 session 字段）；另对显式与派生两种正常路径各跑一次正式 run。
@@ -104,19 +104,19 @@
 - **doctor 存储一致性段**：字段含 resolution_chain（三来源实际值）、selected_source、task_write_root、suspected_secondary_roots、warnings[]；全部机器可读。
 - **任务身份**：{project, task} 二元组；来源=explicit|worktree；旧 session 字段只读。
 - **task.json 新增字段**：write_resolution_source ∈ {env, config, home}（FR-002）。
-- **兼容性**：旧任务记录、旧 receipt、旧 review 只读保留且可读路径不回退；旧 task.json 无 write_resolution_source 字段时 doctor 显示 unknown（历史记录）而非误报漂移；wh-review 输出 schema 不新增公共字段（contract_failure 为内部标签经私有证据承载）。
+- **兼容性**：旧任务记录、旧 receipt、旧 review 只读保留且可读路径不回退；旧 task.json 无 write_resolution_source 字段时 doctor 显示 unknown（历史记录）而非误报漂移；wh-review 输出 schema 不新增公共字段（contract_failure 为内部标签；原始流只在 broker/host 私有诊断中保留，任务材料仅保留错误码、脱敏消息和摘要哈希）。
 
 ## 8. 风险、假设与未决
 
 - RISK-S-01：与任务 A 在 stage-runtime.mjs 同文件不同区；merge 冲突不可调和时本任务让路（owner=双任务 owner；关闭条件=双方契约测试绿）。
-- RISK-S-02：B5b gated on usability merge 且需内容级检查；当前 `main` 已合并 usability 但五份 SKILL.md 仍有 session-event 引用，因此 gate 尚未释放；兜底=C-001 本任务接管（关闭条件=原子批交付或 usability 内容满足条件后交付）。
+- RISK-S-02：B5b 涉及 usability 任务曾改动的五份 SKILL.md，存在并行修改冲突风险；处置=C-001 由本任务在 T9 完成后直接接管，先检查当前工作树和文件冲突，再做 bridge、三件套、五份文档的原子批（关闭条件=原子批交付）。
 - RISK-S-03：宿主子代理不稳定（本任务已三次失败）；降级=主会话亲自执行（关闭条件=不影响交付）。
 - RISK-S-04：grok/grok 与 opencode/pax3.8 provider 身份连续失效（decision-log OPEN-007，owner=用户择机核查配置）。
-- 假设 A-01：usability 任务会合并（若不成立→C-001 兜底）；A-02：旧树保持休眠只读；A-03：任务 A 不反向触碰本任务分区。
+- 假设 A-01：T9 完成后本任务可独占 B5b 文件边界；A-02：旧树保持休眠只读；A-03：任务 A 不反向触碰本任务分区。
 - 未决（转 build-plan）：OPEN-P-01 diff 证据发布事务的具体实现位置（decision-log OPEN-006）；其余方向级未决均已在 make-decision 收敛。
 
 ## 9. 排除与交接
 
 - 排除：任何页面/交互/视觉诉求（non_ui）；任何新公共行为类；任何对任务 A 领地的修改。
-- 交接 build-plan：按 FR-001~B6/C1~C4/R6 排实施顺序与任务拆分；B5a 可先交付，B5b 原子批等 gate/兜底；注意 stage-runtime.mjs 内部分区纪律；验证命令与测试选型归 build-plan 决定。
-- 本阶段澄清记录：spec-clarify trigger=true（理由：B5b 兜底、doctor 报警形态、归档标记载体三处材料歧义无法从既有决策推导）；一轮真实 ask→wait→reply→resume，用户 2026-09-03 真实回复：C-001 B5b 兜底=本任务接管；C-002 doctor=JSON warnings+exit 0；C-003 归档标记=旧树根 ARCHIVED.md。当前开放问题：0。注：认证 transcript 绑定的 clarify receipt 依赖 Codex 会话链，在 DSH 宿主不可用——此缺口如实保留，clarify 质量事实将显示 missing，不伪造。
+- 交接 build-plan：按 FR-001~B6/C1~C4/R6 排实施顺序与任务拆分；B5a 完成后，B5b 由本任务直接接管并原子交付；注意 stage-runtime.mjs 内部分区纪律；验证命令与测试选型归 build-plan 决定。
+- 本阶段澄清记录：spec-clarify trigger=true（理由：C-001 B5b 接管、doctor 报警形态、归档标记载体三处材料歧义无法从既有决策推导）；一轮真实 ask→wait→reply→resume，用户 2026-09-03 真实回复：C-001 B5b 接管=本任务负责；C-002 doctor=JSON warnings+exit 0；C-003 归档标记=旧树根 ARCHIVED.md。2026-09-05 用户进一步明确：C-001 不设置等待时限，本任务在 T9 完成后直接接管。当前开放问题：0。注：认证 transcript 绑定的 clarify receipt 依赖 Codex 会话链，在 DSH 宿主不可用——此缺口如实保留，clarify 质量事实将显示 missing，不伪造。

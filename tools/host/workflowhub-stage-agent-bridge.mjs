@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Private host boundary for the current WorkflowHub session.
+ * Private host boundary for one explicit WorkflowHub Stage Agent run.
  *
  * The current session host submits lifecycle events on stdin. This bridge
  * measures and binds those events to the existing TaskKernel adapter, then
  * prints the immutable outcome reference. The bridge accepts only the narrow
- * session/unavailable handoff; legacy execution input is historical-only. This bridge never starts an agent, resolves a
- * skill, scans sessions, or guesses a source.
+ * session/unavailable handoff; legacy execution input is historical-only. The
+ * run identity is explicit and never inferred from host session state. This
+ * bridge never starts an agent, resolves a skill, scans sessions, or guesses a
+ * source.
  */
 
 import { createHash } from "node:crypto";
@@ -150,6 +152,7 @@ function rejectStaleVerifyCodeReview({ context, stage, session }) {
 function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId, requirementAuthentication = null }) {
   const session = input.session;
   if (!session || typeof session !== "object" || Array.isArray(session)) throw new TypeError("session must be an object");
+  const agentRunId = requiredText(input.agent_run_id, "agent_run_id");
   if (!Array.isArray(session.events)) throw new TypeError("session.events must be an array");
   if (requiredText(session.task_id, "session.task_id") !== context.task.identity.taskId) throw new Error("session.task_id does not match the current WorkflowHub task");
   rejectStaleVerifyCodeReview({ context, stage, session });
@@ -166,7 +169,7 @@ function publishCurrentWorkflowHubSessionImpl({ context, input, stage, attemptId
     host: requiredText(session.host, "session.host"),
     sourceId: requiredText(session.source_id, "session.source_id"),
     sourceFamily: requiredText(session.source_family, "session.source_family"),
-    sessionId: requiredText(session.session_id, "session.session_id"),
+    sessionId: agentRunId,
     sourceRef: requiredText(session.source_ref, "session.source_ref"),
     now: () => clock,
     requirementAuthentication,

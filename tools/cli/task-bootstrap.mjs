@@ -8,9 +8,7 @@
  * without a new official invocation is explicitly not supported. A new task
  * must have an authenticated parallel worktree prepared before the stage
  * starts. An existing task is bound explicitly via --workspace-root. Session
- * provenance is recorded only when a Codex session is present; a missing
- * session is reported as unavailable and does not block an otherwise
- * authenticated bootstrap.
+ * provenance is not used to select or rebind task identity during bootstrap.
  */
 
 import { execFileSync } from "node:child_process";
@@ -20,11 +18,10 @@ import { pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../../core/runtime-mode.mjs";
 import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
-import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
+import { resolveStorageRootDetails } from "../../runtime/evidence/storage-root.mjs";
 import { createTask, openTask } from "../../runtime/task/task-handle.mjs";
 import { initializeTaskStore } from "../../runtime/task/task-store.mjs";
 import { prepareTaskWorkspace, validateExistingWorkspaceBinding } from "../../runtime/task/workspace.mjs";
-import { bindCodexSessionTask, currentCodexSessionId, readCurrentCodexSession } from "../host/workflowhub-codex-session-state.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
 export function bootstrapTask(values, { env = process.env, home, cwd = process.cwd() } = {}) {
@@ -47,7 +44,6 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
       project: task.identity.projectName,
       task: task.identity.taskId,
       runner_identity: runnerIdentity,
-      session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }),
     });
   }
   for (const key of ["project", "task", "target-repo"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required`);
@@ -61,7 +57,8 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     : validateExistingWorkspaceBinding({ targetRepoRoot: target, workspaceRoot: values["workspace-root"] });
   const inputs = values.inputs ? JSON.parse(readFileSync(values.inputs, "utf8")) : {};
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs) || Object.keys(inputs).some((key) => !["decision", "spec", "build_plan"].includes(key)) || Object.values(inputs).some((ref) => typeof ref !== "string" || !isAbsolute(ref))) throw new TypeError("inputs must contain only absolute decision/spec/build_plan accepted refs");
-  const storageRoot = resolveStorageRoot({ env, home });
+  const storageResolution = resolveStorageRootDetails({ env, home });
+  const storageRoot = storageResolution.storage_root;
   const authority = assertRuntimeAuthority(storageRoot, { home, expectedEpoch: values.epoch });
   const task = createTask({ storageRoot, manifest: {
     schema_version: "1.0.0",
@@ -71,13 +68,14 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     task_id: values.task,
     created_at: new Date().toISOString(),
     target_repo_root: target,
+    write_resolution_source: storageResolution.selected_source,
     ...(existingWorkspace ? { workspace_mode: "existing", workspace_root: existingWorkspace.worktreeRoot } : {}),
     issue_ids: values.issues ? values.issues.split(",").filter(Boolean) : [],
     inputs,
   } });
   // A new task is not ready until its authenticated parallel worktree exists.
-  // Prepare it before initializing the task store or binding the host session,
-  // so Git/path failures surface at bootstrap rather than at publication.
+  // Prepare it before initializing the task store, so Git/path failures
+  // surface at bootstrap rather than at publication.
   const workspace = prepareTaskWorkspace(task);
   initializeTaskStore(task.taskPath, { taskId: task.identity.taskId });
   return Object.freeze({
@@ -87,30 +85,7 @@ export function bootstrapTask(values, { env = process.env, home, cwd = process.c
     storage_root: authority.storage_root,
     cutover_epoch: authority.cutover_epoch,
     workspace: Object.freeze({ worktree_root: workspace.worktreeRoot, branch: workspace.branch, baseline_commit: workspace.baselineCommit }),
-    session_binding: bindTaskToCurrentSession(task, { cwd, sessionId: currentCodexSessionId(env) }),
   });
-}
-
-function bindTaskToCurrentSession(task, { cwd = process.cwd(), sessionId = null } = {}) {
-  const current = readCurrentCodexSession({ cwd, sessionId });
-  if (current.status !== "present") return Object.freeze({ status: current.status });
-  try {
-    return bindCodexSessionTask({
-      projectName: task.identity.projectName,
-      taskId: task.identity.taskId,
-      taskPath: task.taskPath,
-      cwd,
-      sessionId,
-    });
-  } catch (error) {
-    // Session handoff is supporting provenance, not task/workspace authority.
-    // A different task already bound in the host session must be reported as
-    // unavailable instead of blocking an otherwise authenticated bootstrap.
-    if (/cannot switch the current WorkflowHub task|current WorkflowHub task context identity does not match|current WorkflowHub task binding path does not match/i.test(String(error?.message ?? error))) {
-      return Object.freeze({ status: "unavailable", reason: "session_task_binding_mismatch" });
-    }
-    throw error;
-  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

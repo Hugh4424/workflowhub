@@ -13,13 +13,6 @@ import {
   readDshTranscriptText,
   snapshotDshRequirementMessages,
 } from "../runtime/evidence/dsh-transcript.mjs";
-import {
-  bindCodexSessionTask,
-  readCurrentCodexSession,
-  registerCodexSession,
-} from "../tools/host/workflowhub-codex-session-state.mjs";
-import { resolveRequirementSource } from "../tools/cli/stage-runtime.mjs";
-import { parseRegisteredRequirementTranscript } from "../runtime/evidence/codex-transcript-adapter.mjs";
 
 function dshUserLine({ id, text, time, kind = "user" }) {
   return JSON.stringify({
@@ -49,11 +42,6 @@ function fixture() {
   const taskPath = join(root, "task");
   mkdirSync(taskPath, { recursive: true });
   return { root, home, cwd, sessionId, transcript, taskPath, taskId: "task-dsh-source" };
-}
-
-function writeTranscript(state, frames) {
-  writeFileSync(state.transcript, Buffer.concat(frames.map((frame) => zstdCompressSync(Buffer.from(frame, "utf8")))));
-  return state.transcript;
 }
 
 describe("dsh transcript zstd frame handling", () => {
@@ -128,55 +116,5 @@ describe("dsh requirement authentication through the registered source", () => {
     const emitted = JSON.parse(normalized);
     expect(emitted.content).toBe("");
     expect(emitted.content_hash).toBe(frozen[0].content_hash);
-  });
-});
-
-describe("dsh host session binding and requirement source", () => {
-  it("registers a dsh transcript path and snapshots requirements at bind time", () => {
-    const state = fixture();
-    writeTranscript(state, [
-      `${dshUserLine({ id: "m1", text: "开工需求", time: 100 })}\n`,
-      `${dshUserLine({ id: "m2", text: "绑定后消息", time: 999999 })}\n`,
-    ]);
-    registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.transcript, cwd: state.cwd, home: state.home, observedAtMs: 0 });
-    const bound = bindCodexSessionTask({ projectName: "workflowhub", taskId: state.taskId, taskPath: state.taskPath, cwd: state.cwd, boundAtMs: 500 });
-    expect(bound.status).toBe("bound");
-    expect(bound.task_binding.requirement_messages).toEqual([
-      { id: "m1", order: 1, content_hash: createHash("sha256").update("开工需求").digest("hex") },
-    ]);
-  });
-
-  it("repairs an empty frozen snapshot once an authentic transcript is registered", () => {
-    const state = fixture();
-    registerCodexSession({ sessionId: state.sessionId, transcriptPath: null, cwd: state.cwd, home: state.home, observedAtMs: 0 });
-    const bound = bindCodexSessionTask({ projectName: "workflowhub", taskId: state.taskId, taskPath: state.taskPath, cwd: state.cwd, boundAtMs: 500 });
-    expect(bound.task_binding.requirement_messages).toEqual([]);
-    writeTranscript(state, [`${dshUserLine({ id: "m1", text: "开工需求", time: 100 })}\n`]);
-    registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.transcript, cwd: state.cwd, home: state.home, observedAtMs: 1 });
-    const rebound = bindCodexSessionTask({ projectName: "workflowhub", taskId: state.taskId, taskPath: state.taskPath, cwd: state.cwd, boundAtMs: 600 });
-    expect(rebound.status).toBe("already_bound");
-    expect(rebound.task_binding.requirement_messages).toEqual([
-      { id: "m1", order: 1, content_hash: createHash("sha256").update("开工需求").digest("hex") },
-    ]);
-  });
-
-  it("authenticates requirement messages via resolveRequirementSource", () => {
-    const state = fixture();
-    writeTranscript(state, [`${dshUserLine({ id: "m1", text: "开工需求", time: 100 })}\n`]);
-    registerCodexSession({ sessionId: state.sessionId, transcriptPath: state.transcript, cwd: state.cwd, home: state.home, observedAtMs: 0 });
-    const bound = bindCodexSessionTask({ projectName: "workflowhub", taskId: state.taskId, taskPath: state.taskPath, cwd: state.cwd, boundAtMs: 500 });
-    const source = resolveRequirementSource({
-      task_id: state.taskId,
-      run_id: "run-1",
-      stage: "make-decision",
-      env: { CODEX_SESSION_ID: state.sessionId },
-      home: state.home,
-      cwd: state.cwd,
-    });
-    expect(source?.adapter_version).toBe("dsh-transcript-adapter.v1");
-    const result = parseRegisteredRequirementTranscript(source, { stage: "make-decision" });
-    expect(result.status).toBe("present");
-    expect(result.messages).toHaveLength(1);
-    expect(result.messages[0].content_hash).toBe(bound.task_binding.requirement_messages[0].content_hash);
   });
 });

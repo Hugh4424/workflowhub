@@ -6,7 +6,7 @@
 
 ## 合并后重基线（2026-09-04）
 
-任务分支已合并 `main`（`f4f2ae20b`）的 stage-reflection/`preflight`/`reflect`、verify-close、bridge stale-review 校验、snapshot materialization 与 wh-review 本地 bounded timeout。已提交的合并基线无文件冲突；当前任务四份材料先以 `a8310efd2` 固化，再通过 merge 保留。main 的五份 workflow SKILL.md 仍含 `workflowhub-codex-session-event.mjs` 和“同一会话自动记录”段，因此 B5b gate 未按“文件有改动”释放。main 已占用 `docs/adr/0023-stage-reflection-execution-and-status.md`，本任务 ADR 改用 0024。该记录只更新事实，不改变用户已确认的 B/C 方向。
+任务分支已合并 `main`（`f4f2ae20b`）的 stage-reflection/`preflight`/`reflect`、verify-close、bridge stale-review 校验、snapshot materialization 与 wh-review 本地 bounded timeout。已提交的合并基线无文件冲突；当前任务四份材料先以 `a8310efd2` 固化，再通过 merge 保留。历史基线中 main 的五份 workflow SKILL.md 仍含 `workflowhub-codex-session-event.mjs` 和“同一会话自动记录”段，因此 B5b 当时未按旧 gate 释放；该启动条件已由 2026-09-05 的 C-001 修订记录替代。main 已占用 `docs/adr/0023-stage-reflection-execution-and-status.md`，本任务 ADR 改用 0024。该记录只更新事实，不改变用户已确认的 B/C 方向。
 
 ## 阶段执行记录
 
@@ -37,7 +37,7 @@
 | R-003 | make-decision 过程中与用户一起梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项 | 用户原文："先基于原始需求，在make-decision的过程中和我一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项" | 已覆盖 → 目标/范围/成功失败边界/非目标/未决项各节 |
 | R-004 | Talk 用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接 | 用户原文："Talk 请用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接" | 已覆盖 → Talk 九组真实回复大白话卡片；本 log 全节 |
 | R-005 | 最终效果：workflowhub 简洁优雅；B 和 C 让执行效率更好更快；不违反宪法；不新增一堆增加维护成本的对象 | 用户原文："我希望最终效果workflowhub是一个简洁优雅的项目，B和C能让workflowhub执行效率更好效率更快，并且不会违反workflowhub的宪法，不会新增一堆增加维护成本的对象" | 已覆盖 → D-008 判定可以做且范围有限；非目标节写死约束 |
-| R-006 | 每个 stage 结束时，如果有 step 或 skill 遗漏，要在 stage 结束的大白话总结里说明，不能默默遗漏步骤 | 用户原文："我希望每个stage结束时，如果有step或skill遗漏，可以在stage结束的大白话总结时说明一下，不能默默的遗漏步骤" | 已覆盖 → D-006（纯文本规则，实施随 B5b 批延期至 usability merge） |
+| R-006 | 每个 stage 结束时，如果有 step 或 skill 遗漏，要在 stage 结束的大白话总结里说明，不能默默遗漏步骤 | 用户原文："我希望每个stage结束时，如果有step或skill遗漏，可以在stage结束的大白话总结时说明一下，不能默默的遗漏步骤" | 已覆盖 → D-006（纯文本规则，B5b 原子批由本任务在 T9 后直接接管） |
 | R-101 | 修复执行身份链与存储一致性：双 Knowledge tree 并存、writer 路径与配置错位、facts.jsonl 空写、session_task_binding_mismatch、snapshot hash 被 evidence 产出破坏（dirty worktree 矛盾） | ~/Downloads/workflowhub-remaining-fix-plan-20260902.md 任务 B；~/Downloads/paperbuilder-t08-workflowhub-root-cause.md 一/三节；PaperBuilder build-code lessons（untracked evidence hash mismatch ×3） | 已覆盖 → D-003（untracked 冻结）/D-004（双 tree）/D-007（移除绑定） |
 | R-102 | 修复 wh-review 异源审查健壮性：同步 300s 超时、provider PUBLIC_RESULT_INVALID、0 字节输出无法判成败、partial 处置缺流程 | ~/Downloads/workflowhub-remaining-fix-plan-20260902.md 任务 C；T08 根因报告二节（t08-build-plan-output.json 0 字节、kimi PUBLIC_RESULT_INVALID）；make-decision lesson（detail 300s 超时后后台重试成功） | 已覆盖 → D-005（契约守护+调用约定；矩阵明细 OPEN-004 延期至 build-spec） |
 
@@ -61,7 +61,7 @@
 
 ## 范围
 
-- 当前范围：B面=doctor 一致性检查（stage-runtime doctor）、旧 tree 归档标记、untracked diff 证据冻结时机（stage-handlers）、writer 解析来源记录+doctor 交叉核验（FND-D02）；**B5=彻底移除会话绑定机制族**（session-state/session-event/session-hook 三件套、bootstrap 的绑定调用、stage-runtime 的会话身份派生路径；task 身份改为显式 --project/--task 或认证 worktree 派生；step/skill 执行事实改由正式 run 输入显式携带——该通道本就存在且 authoritative）；C面=wh-review broker 输出契约守护（contract_failure 内部标签+partial 处置规则+处置矩阵原则）+ 调用约定文本化；R-006=五份 SKILL.md 阶段末交接文本（与 B5 的 SKILL.md 改写合并为同一批，gated on usability merge）。
+- 当前范围：B面=doctor 一致性检查（stage-runtime doctor）、旧 tree 归档标记、untracked diff 证据冻结时机（stage-handlers）、writer 解析来源记录+doctor 交叉核验（FND-D02）；**B5=彻底移除会话绑定机制族**（session-state/session-event/session-hook 三件套、bootstrap 的绑定调用、stage-runtime 的会话身份派生路径；task 身份改为显式 --project/--task 或认证 worktree 派生；step/skill 执行事实改由正式 run 输入显式携带——该通道本就存在且 authoritative）；C面=wh-review broker 输出契约守护（contract_failure 内部标签+partial 处置规则+处置矩阵原则）+ 调用约定文本化；R-006=五份 SKILL.md 阶段末交接文本，与 B5 的 SKILL.md 改写同批由本任务按 C-001 直接接管（旧 gate 仅为历史方案）。
 - 移除绑定的宪法依据：AGENTS.md"技能可搬运、不绑死单一宿主环境"；宪法"记录事实而非阻断"（绑定令非 Codex 宿主记录系统整体失能）；"简单优先"（M15 退休后该链已成残余）。
 - 用户流程/结果只记索引和验收影响，细节进入 spec：用户=使用 workflowhub 的 agent 与任务 owner；流程=任务执行链路本身，无终端页面。
 
@@ -95,7 +95,7 @@
 ### D-002
 - question/final_option: 与任务 A 的时间关系？→ 立即并行、先钉文件级边界
 - recommendation/plain_language: 推荐项；最快见效
-- decision: 并行开发；边界：本任务不动 stage-runner.mjs 与 task-kernel-implementation.mjs；stage-handlers.mjs 只碰 diff 证据捕获点；stage-runtime.mjs 内部分区——A=命令白名单/预检，本任务=doctor 实现+会话派生路径删除（FND-DD09 补强：同文件不同区域，merge 时若冲突不可调和则本任务让路、A 优先）；五份 SKILL.md 等 usability merge；联合验收=双方契约测试绿（FND-D07 补强）
+- decision: 并行开发；边界：本任务不动 stage-runner.mjs 与 task-kernel-implementation.mjs；stage-handlers.mjs 只碰 diff 证据捕获点；stage-runtime.mjs 内部分区——A=命令白名单/预检，本任务=doctor 实现+会话派生路径删除（FND-DD09 补强：同文件不同区域，merge 时若冲突不可调和则本任务让路、A 优先）；五份 SKILL.md 由本任务按 C-001 直接接管；联合验收=双方契约测试绿（FND-D07 补强）
 - source_type/reference/exact_excerpt: 用户真实回复 Talk R1 选①；T-002
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
 - facts_and_constraints: A spec §6 模块划分（F-001）；FND-D07 审查意见
@@ -137,10 +137,10 @@
 ### D-005
 - question/final_option: wh-review 异步化做到什么程度？→ 只做契约守护+调用约定
 - recommendation/plain_language: 推荐项；不新增进程/状态对象
-- decision: broker 边界加输出契约守护（0字节/非法输出→contract_failure 内部标签并保留原文；partial=available-with-failures 逐 provider 保留错误、输入无变化不重试、不得当 pass；contract_failure 非公共行为，公共行为保持七类——FND-D03/D04）；**隐私边界（FND-DD10）：原始错误全文只入任务内部证据区（私有），wh-review 输出 JSON 与任何公共/跨任务边界只保留错误码+脱敏消息，私有路径一律脱敏——现有隐私守卫行为不变**；调用约定文本化（长审查由宿主后台执行+轮询）；处置矩阵原则=如实记录/不重试无变化输入/只限完成声明不阻塞修复，矩阵明细归 build-spec（FND-D05，OPEN-004）
+- decision: broker 边界加输出契约守护（0字节/非法输出→contract_failure 内部标签；原始流只保留在 broker/host 私有诊断中，任务材料仅保留 stdout/stderr 摘要哈希；partial=available-with-failures 逐 provider 保留错误、输入无变化不重试、不得当 pass；contract_failure 非公共行为，公共行为保持七类——FND-D03/D04）；**隐私边界（FND-DD10）：broker/host 私有诊断可保留原始错误全文，WorkflowHub 任务记录、wh-review 输出 JSON 与任何公共/跨任务边界只保留错误码、脱敏消息和摘要哈希，私有路径一律脱敏——遵守合并后 main 的 provider-protocol 约束**；调用约定文本化（长审查由宿主后台执行+轮询）；处置矩阵原则=如实记录/不重试无变化输入/只限完成声明不阻塞修复，矩阵明细归 build-spec（FND-D05，OPEN-004）
 - source_type/reference/exact_excerpt: 用户真实回复 Talk R2 选①；T-006
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
-- facts_and_constraints: 合并前记录为 broker spawn 无超时；合并后 main 已提供 120000ms 本地 bounded timeout，超时内部标记 `PROCESS_TIMEOUT`、simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；PUBLIC_RESULT_INVALID 仍是隐私守卫（F-011）
+- facts_and_constraints: 合并前记录为 broker spawn 无超时；合并后 main 已提供 120000ms 本地 bounded timeout，超时内部标记 `PROCESS_TIMEOUT`、simple runner 对外归一为 `REVIEW_EXECUTION_TIMEOUT`；PUBLIC_RESULT_INVALID 仍是隐私守卫（F-011）；进一步核对 main `skills/wh-review/contracts/provider-protocol.md:136-140`：WorkflowHub 不读取 broker private raw，非 JSON 输出只允许保留 stdout/stderr SHA-256，不得把原始流或主机路径写入任务材料；因此本决策的“私有证据”具体化为 broker/host 私有诊断，不新增公共字段或第二套超时机制
 - Logic: 失败语义已分清但守护与约定缺失 -> 补守护+文本约定 -> provider 故障如实可见且不卡死 -> 关闭率回升
 - choice_reason/impact: 最小改动命中痛点；真异步机制违反"不新增维护成本对象"被拒
 - consequences_and_risks: 长审查依赖宿主后台能力（DSH/Codex 均具备）
@@ -151,21 +151,21 @@
 ### D-006
 - question/final_option: stage 结束遗漏披露怎么做？→ 纯文本规则，纳入本任务最后实施
 - recommendation/plain_language: 用户选定并给实现指示
-- decision: 五份 SKILL.md 阶段末交接增补"总结必须列出所有非 completed 的 step/skill 及真实原因"（用户原话指示："看看stage结束的大白话汇报是怎么产生的，在里面加一段遗漏总结和原因汇报即可"）；与 B5 的 SKILL.md 改写合并为同一批，gated on usability 任务 merge
+- decision: 五份 SKILL.md 阶段末交接增补"总结必须列出所有非 completed 的 step/skill 及真实原因"（用户原话指示："看看stage结束的大白话汇报是怎么产生的，在里面加一段遗漏总结和原因汇报即可"）；与 B5 的 SKILL.md 改写合并为同一批，由本任务按 C-001 直接接管，旧的 usability merge gate 已被 2026-09-05 修订记录替代
 - source_type/reference/exact_excerpt: 用户真实回复 Talk R2 选①+自定义指示；T-007
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
 - facts_and_constraints: 总结为会话手写、非机器生成（F-015）；机器层已强制每 step/skill 有记录（F-012）
 - Logic: 记录已强制存在但总结无披露义务 -> 文本规则补义务 -> 遗漏不再静默 -> 零新对象
 - choice_reason/impact: 最省且命中需求；无机器强制是已接受代价
-- consequences_and_risks: 靠会话自觉；RISK-004（等 usability merge）
+- consequences_and_risks: 靠会话自觉；RISK-004（与 usability 旧改动存在潜在文件冲突，启动前检查）
 - rejected_alternatives: ②机器核对注入（新投影面+撞文件）；追加到在途 usability（打乱其节奏）；另立小任务（流程成本不成比例）
-- unresolved_items/owner: usability merge 时序=外部依赖
+- unresolved_items/owner: 本任务在 T9 完成后直接接管；并行文件冲突由启动前检查处理
 - Supersedes: none
 
 ### D-007
 - question/final_option: 会话绑定机制存废？→ 彻底移除绑定机制族
 - recommendation/plain_language: 用户拍板，且纠正助手"M15监控链已退休"（核实属实）
-- decision: 移除会话绑定机制族，**拆两个交付批（FND-DD01/DD11 补强）**：**B5a（不 gated）**=stage-runtime 的会话身份派生路径删除 + bootstrap 的绑定调用移除；**B5b（原子批，gated on usability merge）**=session-event/session-hook/session-state 三件套的命令删除 + 五份 SKILL.md 同批改写（"同一会话自动记录"段移除 + D-006 遗漏披露段新增）——CLI 删除与 SKILL.md 改写必须同批原子交付，不允许先删 CLI 留旧指令。**替代身份规则（FND-DD08）**：优先级=显式 --project/--task > 认证 worktree（cwd）派生；缺失或冲突=fail-closed 报错；旧任务记录的 session 字段只读保留；算法明细归 build-spec（OPEN-005）；step/skill 执行事实由正式 run 输入显式携带（既有 authoritative 通道，G-003）
+- decision: 移除会话绑定机制族，**拆两个交付批（FND-DD01/DD11 补强）**：**B5a（不 gated）**=stage-runtime 的会话身份派生路径删除 + bootstrap 的绑定调用移除；**B5b（原子批，C-001 由本任务直接接管）**=T9 完成后删除 session-event/session-hook/session-state 三件套的命令 + 五份 SKILL.md 同批改写（"同一会话自动记录"段移除 + D-006 遗漏披露段新增）——CLI 删除与 SKILL.md 改写必须同批原子交付，不允许先删 CLI 留旧指令。启动前只检查是否有未纳入本批的并行修改，不等待 usability 状态或时间条件。**替代身份规则（FND-DD08）**：优先级=显式 --project/--task > 认证 worktree（cwd）派生；缺失或冲突=fail-closed 报错；旧任务记录的 session 字段只读保留；算法明细归 build-spec（OPEN-005）；step/skill 执行事实由正式 run 输入显式携带（既有 authoritative 通道，G-003）
 - source_type/reference/exact_excerpt: 用户真实回复 Talk R3 追加："彻底移除绑定机制，M15的监控链已经彻底退休了！请检查"；T-008/T-009
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
 - facts_and_constraints: 绑定=M15 防串台记录机制（F-017）；M15 监控链 8/30 已退休（F-018，commit 95bfa2247）；剩余消费者仅 stage-runtime/task-bootstrap/5 份 SKILL.md；CONTEXT.md:274 明文拒绝 provenance 扩成宿主身份系统；宪法 S8 可搬运不绑死宿主
@@ -179,12 +179,12 @@
 ### D-008
 - question/final_option: 范围四维判定与裁决？→ 可以做（限制范围）
 - recommendation/plain_language: 四维：真实痛点=证据（lessons 逐条+T08 报告）；复杂度/ROI=证据（B小-中/C中/移除绑定减少对象；ROI=消整轮重跑，lessons 计数）；风险影响=证据（改动边界已列到文件级）；时机=证据（用户原文要求 A 研发期并行）
-- decision: 裁决=可以做，限制范围=不碰 A 领地、SKILL.md 批次 gated on usability、不做真异步、不做机器核对注入
+- decision: 裁决=可以做，限制范围=不碰 A 领地、SKILL.md 批次由本任务在 T9 后直接接管并原子交付、不做真异步、不做机器核对注入
 - source_type/reference/exact_excerpt: 本任务 lessons 统计与 T08 报告；用户 Talk 记录 T-001~T-009
 - approval_binding: accepted（2026-09-03 用户最终确认"① 确认接受"；host-visible=GUI ask_user_question final-confirmation）
 - facts_and_constraints: R-005 约束（简洁/宪法/不新增维护成本对象）
 - Logic: 痛点与改动边界均有证据 -> 限范围推进 -> 收益最大风险可控
-- choice_reason/impact: 推翻条件=任务 A 范围扩至 stage-handlers diff 证据；usability 长期不合并；DSH 宿主语义大变
+- choice_reason/impact: 推翻条件=任务 A 范围扩至 stage-handlers diff 证据；B5b 文件出现未协调的并行修改；DSH 宿主语义大变
 - consequences_and_risks: 见各 D 条目
 - rejected_alternatives: 缓一缓（痛点持续烧时间）；不建议做（与证据矛盾）
 - unresolved_items/owner: 无
@@ -233,7 +233,7 @@
 
 | grill_id | CONTEXT/冲突 | 结论 | ADR/四项退出 | source/evidence |
 | --- | --- | --- | --- | --- |
-| G-001 | 覆盖矩阵五类全落实：goal=R-005+T-009（移除绑定反而减少对象）；flow_or_surface=non_ui 已记录；data_or_state=task store/lessons/wh-review 输出/快照哈希/session 三件套删除；success_failure=成功/失败边界+处置矩阵原则+fail-closed 不削弱（FND-D06）；constraint_non_goal_defer=非目标清单+gated 项+DE 项 | 零用户提问：所有候选问题均被代码/文档事实回答（理由见下），无剩余方向改变项 | 见"文档结果"节 | CONTEXT.md:274、CONSTITUTION.md S8、F-012、F-017/F-018 |
+| G-001 | 覆盖矩阵五类全落实：goal=R-005+T-009（移除绑定反而减少对象）；flow_or_surface=non_ui 已记录；data_or_state=task store/lessons/wh-review 输出/快照哈希/session 三件套删除；success_failure=成功/失败边界+处置矩阵原则+fail-closed 不削弱（FND-D06）；constraint_non_goal_defer=非目标清单+已明确延期/接管边界+DE 项 | 零用户提问：所有候选问题均被代码/文档事实回答（理由见下），无剩余方向改变项 | 见"文档结果"节 | CONTEXT.md:274、CONSTITUTION.md S8、F-012、F-017/F-018 |
 | G-002 | 冲突发现：CONTEXT.md:274 明文拒绝"把 provenance 扩成宿主身份系统"，而会话绑定实际漂移成了宿主身份前置——文档与本方向一致，冲突在现实代码；处置=移除绑定即消解冲突，CONTEXT 无需改义，只在移除后核对残留术语（:127/:132 监控来源条款随 M15 退休状态核实，机械核对归 build-code） | 冲突已定位，处置明确 | 四项退出：①外部接口核实=pass（wh-review broker 协议经一次真实调用核实 F-010/F-011/F-016；移除方向使 DSH 适配接口核实不再必要）；②命名唯一=pass（task id/worktree/branch/存储根/contract_failure 均已钉死）；③失败语义=pass（处置矩阵原则+fail-closed 不削弱，明细归 build-spec）；④范围边界=pass（非目标+文件级边界写死） | 同上 |
 | G-003 | "移除绑定后是否废除 step/skill 级机器记录"——由事实回答、不问用户：不可废除，stage outcome 强制按 manifest 校验 step_outcomes/skill_outcomes（stage-runner.mjs:140-158），且在途 usability 任务的 stage-reflection 消费它；因此保留记录能力、仅把身份锚从会话改为显式 run 输入（该通道已存在且 authoritative，stage-runtime.mjs:325-331 注释证实） | 能力保留、锚更换 | — | stage-runner.mjs:140-158；stage-runtime.mjs:325-331 |
 
@@ -252,10 +252,10 @@
 | FND-D04 | contract_failure 与"不新增公共行为类"关系未说明（codex F5） | 可能被误读为第八类行为 | fixed（澄清）：contract_failure 是 wh-review 输出 JSON 内部 error.code 标签，非公共行为；公共行为保持七类 | 决策卡方向段已更新 | agent/保留 |
 | FND-D05 | C 面缺 timeout/partial/invalid/0字节/unavailable 的终态+重试+完成条件处置矩阵（codex F6） | 可能挂起/误判成功/绕过审查 | fixed（方向增补）：方向包含处置矩阵原则（如实记录、输入无变化不重试、只限完成声明不阻塞修复），矩阵明细在 build-spec 细化 | 决策卡方向段已更新 | agent/保留 |
 | FND-D06 | untracked 重新捕获缺约束（codex F7） | 可能削弱 fail-closed | fixed（方向增补）：唯一捕获点=阶段发布时（所有 writer 完成后同事务）；捕获后修改仍 fail-closed；历史样例做 fixture | 决策卡方向段已更新 | agent/保留 |
-| FND-D07 | 与 A/usability 缺文件级归属与合并顺序（codex F8） | 并行冲突无操作化约束 | fixed（方向增补）：文件级边界表入方向（本任务不动 stage-runner.mjs/task-kernel-implementation.mjs；stage-handlers.mjs 只碰 diff 证据捕获点；五份 SKILL.md 等 usability merge）；联合验收=双方契约测试绿 | 决策卡方向段已更新 | agent/保留 |
+| FND-D07 | 与 A/usability 缺文件级归属与合并顺序（codex F8） | 并行冲突无操作化约束 | fixed（方向增补）：文件级边界表入方向（本任务不动 stage-runner.mjs/task-kernel-implementation.mjs；stage-handlers.mjs 只碰 diff 证据捕获点；五份 SKILL.md 由本任务按 C-001 直接接管）；联合验收=双方契约测试绿 | 决策卡方向段已更新 | agent/保留 |
 | FND-D08 | provider 失败事实（pi/coding 限流、pax3.8 身份失效） | 本阶段异源覆盖=2 家有效 | accepted_risk：minimum_heterologous=1 已满足；失败如实保留，输入无变化不重试（wh-review 规则） | 无需行动 | agent/保留 |
 | （细节审查 detail，2026-09-03，available/partial） | material_id=c8817ca69a3ca913ed8b0e27aa5f24f80c8f8db9b81f8d59e80df7b30421a860；runtime_id=49c3a8b4-1788-4b33-93ac-73f277f950e9；antigravity/flash+codex/luna 有效；grok/grok、opencode/pax3.8=PROVIDER_IDENTITY_INVALID 如实保留 | 11 条 findings | — | /tmp/wh-review-detail-result-20260902.json（临时） | — |
-| FND-DD01 | B5 删 CLI 与 SKILL.md 改写不同批会导致旧指令引用不存在命令而中断（antigravity F1） | 执行态崩溃风险 | fixed：B5 拆 B5a（不 gated）/B5b（CLI 删除+SKILL.md 改写同批原子交付，gated on usability merge） | D-007 已更新 | agent/保留 |
+| FND-DD01 | B5 删 CLI 与 SKILL.md 改写不同批会导致旧指令引用不存在命令而中断（antigravity F1） | 执行态崩溃风险 | fixed：B5 拆 B5a（不 gated）/B5b（CLI 删除+SKILL.md 改写同批原子交付）；旧 usability merge gate 已由 C-001 修订记录取消 | D-007 已更新 | agent/保留 |
 | FND-DD02 | 未决项表 OPEN-001~003 仍标待决（antigravity F2） | 全文自相矛盾 | fixed：未决项表已标关闭并链接 D/T 记录 | 未决项节 | agent/保留 |
 | FND-DD03 | 拒绝方案表留占位符（antigravity F3） | 结构化查阅缺失 | fixed：已回填 15 条被拒方案 | 拒绝方案节 | agent/保留 |
 | FND-DD04 | step 6 执行记录停在"等待结果"（antigravity F4） | 记录与现实脱节 | fixed：阶段执行记录已更新 | 阶段执行记录节 | agent/保留 |
@@ -264,8 +264,14 @@
 | FND-DD07 | 验收未覆盖 B5/C 新增行为（codex F7） | 新范围无验收 | fixed：成功边界补⑥（四类身份场景测试/无绑定环境正式 run/终态矩阵/脱敏证明/零残留） | 成功/失败边界节 | agent/保留 |
 | FND-DD08 | 绑定移除后的身份解析规则欠定义（codex F8） | 实现可能各自约定 | fixed（方向级规则）+ OPEN-004/005 转 build-spec：优先级=显式>worktree 派生；缺失/冲突 fail-closed | D-007 已更新 | agent/保留 |
 | FND-DD09 | stage-runtime.mjs 与 A 的边界非真正互斥（codex F9） | merge 冲突无处置 | fixed：文件内分区（A=白名单/预检；本任务=doctor+会话派生删除）；冲突不可调和时本任务让路 | D-002 已更新 | agent/保留 |
-| FND-DD10 | 保留原始错误与隐私守卫未调和（codex F10） | 可能泄漏私有路径 | fixed：原始全文只入任务私有证据区；公共边界只留错误码+脱敏消息；守卫行为不变 | D-005 已更新 | agent/保留 |
-| FND-DD11 | runtime 移除被 usability merge gate 住的耦合（codex F11，与 DD01 同源） | 文档可能引用已删机制 | fixed（同 DD01 的 B5a/B5b 原子批拆分） | D-007 已更新 | agent/保留 |
+| FND-DD10 | 保留原始错误与隐私守卫未调和（codex F10） | 可能泄漏私有路径 | fixed（合并 main 后收紧）：原始全文只留 broker/host 私有诊断；任务记录与公共边界只留错误码、脱敏消息和摘要哈希；守卫行为不变 | D-005 已更新；main provider-protocol:136-140 | agent/保留 |
+| FND-DD11 | runtime 移除曾被 usability merge gate 住的耦合（codex F11，与 DD01 同源） | 文档可能引用已删机制 | fixed（同 DD01 的 B5a/B5b 原子批拆分）；旧 gate 已由 C-001 修订记录取消 | D-007 已更新 | agent/保留 |
+
+## C-001 修订记录（2026-09-05）
+
+- 用户明确接受简化方案：C-001 不设置固定等待时限；T9 完成后由本任务直接接管 B5b，全批仍须单次原子交付。
+- 本次修订 supersede 旧的“等待 usability 合并/取消/长期不合并”启动条件；保留原有并行冲突风险、文件边界、零残留验收和单提交不变量。
+- 触发动作：在 T13 启动前记录当前任务接管，并检查五份 SKILL.md、bridge 与 session 三件套没有未协调的并行修改；发现冲突即 STOP 协调，不覆盖他人修改。
 
 ## 最终确认
 
@@ -306,7 +312,7 @@
 | RISK-001 | 与任务 A 同改 runtime/stage/ 或 tools/cli/stage-runtime.mjs 的 merge 冲突；T-004 选择②后，本任务 additionally 碰 stage-handlers.mjs（diff 证据冻结时机），与 A 的失败通道改动相邻 | 两任务并行推进且触及相邻代码 | 本任务规划阶段钉文件级边界；merge 时协调 |
 | RISK-002 | C 的"unavailable 不阻塞修复"语义与 A 的协议/质量分类器在 verify-code 边界语义重叠 | 两任务对同一失败通道给出不同分类 | 边界约定：A 管阶段内绑定/分类；本任务 C 只管 broker 输出契约与调用约定文本 |
 | RISK-003 | session-event 在 DSH 宿主不可用，本阶段执行记录缺机器 receipt | 全程 | 如实记 unavailable；不补填 |
-| RISK-004 | R-006 改五份 SKILL.md 与在途 usability 任务撞同批文件 | usability 未合并 | R-006 排在最后，gated on usability merge（镜像其 P6 对 M16 的做法） |
+| RISK-004 | R-006 改五份 SKILL.md 与在途 usability 任务撞同批文件 | T9 后启动前发现未协调的并行修改 | 本任务直接接管；先核对工作树和文件边界，冲突时 STOP 协调，不覆盖他人修改 |
 | RISK-005 | 宿主子代理机制不稳定（本阶段两次失败），后续阶段重活委派可能受阻 | 子代理再次失败 | 降级主会话亲自执行并如实记录（F-013 已有先例） |
 | RISK-006 | grok/grok 与 opencode/pax3.8 连续两次审查 PROVIDER_IDENTITY_INVALID | provider 配置失效面扩大 | OPEN-007：用户择机核查；本任务不阻塞（minimum_heterologous=1 满足） |
 | DE-001 | lesson 预防侧注入（阶段执行前把历史 lesson 注入技能） | 归 M16 候选池演进 | M16 后续任务 |
@@ -342,7 +348,7 @@
 | 维度 | 用户答案 | 材料引用 | 可执行验收 |
 | --- | --- | --- | --- |
 | 目标 | 用户已确认：提升执行效率——身份/存储一致性 + wh-review 健壮性 + 阶段末遗漏披露 + 彻底移除会话绑定机制；约束=简洁优雅、不违宪法、不新增维护成本对象（T-001~T-009 九组真实回复 + 最终确认"① 确认接受"） | R-005/R-006/R-101/R-102；D-001~D-008 | 验收：D-008 判定=可以做且范围有限；全部需求条目在覆盖矩阵有处置；final-confirmation=accepted |
-| 范围 | 用户已确认：B面（doctor 一致性/旧 tree 归档/untracked 冻结时机/writer 来源记录）+ B5（移除绑定，B5a/B5b 分批）+ C面（契约守护+调用约定）+ R-006（SKILL.md 文本，gated）；用户同时确认非目标与文件级边界（不碰 stage-runner.mjs 等） | 范围/非目标节；D-002/D-007 | 验收：范围六项与非目标清单均在 decision-log；build-spec 开工时逐项核对无范围漂移 |
+| 范围 | 用户已确认：B面（doctor 一致性/旧 tree 归档/untracked 冻结时机/writer 来源记录）+ B5（移除绑定，B5a/B5b 分批）+ C面（契约守护+调用约定）+ R-006（SKILL.md 文本，由本任务按 C-001 直接接管）；用户同时确认非目标与文件级边界（不碰 stage-runner.mjs 等） | 范围/非目标节；D-002/D-007 | 验收：范围六项与非目标清单均在 decision-log；build-spec 开工时逐项核对无范围漂移 |
 | 方案 | 用户已确认（T-001~T-009）。取舍：合并任务+立即并行+纯文本披露+契约守护，以零新增对象换约定靠自觉。被拒方案：B/C拆分、等A、真异步机制、机器核对注入、迁移旧树、DSH适配、松绑保留绑定（拒绝方案节15条）。未决项：OPEN-004~006 处置矩阵/身份算法/捕获点明细延期至 build-spec/build-plan，OPEN-007 provider 配置核查归用户择机 | D-001~D-007；拒绝方案节；OPEN-004~007 | 验收：每个 D 有 rejected_alternatives+consequences；OPEN-004~006 有明确归属阶段 |
 | 验收 | 用户已确认验收来源与通过/失败形态（最终确认卡含验收与失败边界） | 成功/失败边界节；验收标准节 AC-1~AC-6；D-008 | 场景：契约测试绿+异源审查完成+历史错误样例重放为 fixture+人为构造漂移报警。数据来源：lessons 真实失败 payload 与人为构造场景。通过：同类错误不再触发整轮重跑，0字节被 contract_failure 拦截，doctor 报警可复现，四类身份场景测试各绿。失败：放宽 fail-closed，新增公共行为类，旧记录被改，存在先删后改窗口 |
 
@@ -359,7 +365,7 @@
 - 上下文一致：pass（Talk 三轮+Grill 事实互证；F-001~F-018 全部带文件级证据）
 - owner/接口一致：pass（与 A/usability 文件级边界；wh-review broker 协议经真实调用核实）
 - 失败语义明确：pass（处置矩阵原则+fail-closed 不削弱+contract_failure 为内部标签）
-- 范围与延期明确：pass（非目标节+DE 项+gated 项写死）
+- 范围与延期明确：pass（非目标节+DE 项+接管边界写死；C-001 不以 usability 状态或等待时限为前置条件）
 
 ## Supersedes
 

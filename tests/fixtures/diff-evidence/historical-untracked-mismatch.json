@@ -1,0 +1,13 @@
+{
+  "schema_version": "workflowhub-diff-evidence.v1",
+  "baseline_commit": "$BASELINE_COMMIT",
+  "snapshot_head": "$SNAPSHOT_HEAD",
+  "snapshot_tree": "$SNAPSHOT_TREE",
+  "patch": "historical captured patch",
+  "untracked": [
+    {
+      "path": "new.txt",
+      "blob_oid": "0000000000000000000000000000000000000000"
+    }
+  ]
+}

@@ -29,19 +29,7 @@ function readConfiguredTaskDir({ env, home }) {
   return config.task_dir.trim();
 }
 
-/**
- * Resolve the global WorkflowHub storage root.
- *
- * This is launcher-only policy. It never inspects cwd, Git metadata, or
- * repository names.
- */
-export function resolveStorageRoot({ env = process.env, home = homedir() } = {}) {
-  const configured = env?.WORKFLOWHUB_TASK_DIR;
-  const value =
-    typeof configured === "string" && configured.trim() !== ""
-      ? configured.trim()
-      : readConfiguredTaskDir({ env, home }) ?? home;
-
+function validateStorageRoot(value) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new TypeError("storage root must be a non-empty absolute path");
   }
@@ -58,6 +46,37 @@ export function resolveStorageRoot({ env = process.env, home = homedir() } = {})
       `legacy WORKFLOWHUB_TASK_DIR semantics are not supported; expected global storage root, got project tasks root: ${normalized}`,
     );
   }
-
   return normalized;
+}
+
+/**
+ * Resolve the global storage root and retain the inputs used by the launcher.
+ * Missing optional sources are represented as null so doctor can distinguish
+ * an absent source from an unrecorded historical task field.
+ */
+export function resolveStorageRootDetails({ env = process.env, home = homedir() } = {}) {
+  const configured = env?.WORKFLOWHUB_TASK_DIR;
+  const envValue = typeof configured === "string" && configured.trim() !== ""
+    ? configured.trim()
+    : null;
+  const configValue = readConfiguredTaskDir({ env, home }) ?? null;
+  const homeValue = home;
+  const selectedSource = envValue !== null ? "env" : configValue !== null ? "config" : "home";
+  const selectedValue = envValue ?? configValue ?? homeValue;
+
+  return Object.freeze({
+    resolution_chain: Object.freeze({ env: envValue, config: configValue, home: homeValue }),
+    selected_source: selectedSource,
+    storage_root: validateStorageRoot(selectedValue),
+  });
+}
+
+/**
+ * Resolve the global WorkflowHub storage root.
+ *
+ * This is launcher-only policy. It never inspects cwd, Git metadata, or
+ * repository names.
+ */
+export function resolveStorageRoot({ env = process.env, home = homedir() } = {}) {
+  return resolveStorageRootDetails({ env, home }).storage_root;
 }

@@ -38,20 +38,9 @@ This is a conditional fact consumed by the existing five stages. It adds no
 new stage, public command, fifth material, independent state machine, or gate.
 No new stage or no gate is introduced by this applicability check.
 
-## 同一会话自动记录
+## 阶段末遗漏披露
 
-本阶段就在当前 WorkflowHub 会话中执行，不启动第二个 Agent。每个 manifest step 和每个声明的 skill 都必须在实际开始前、结束后调用一次私有记录命令；这是工作流内部动作，用户不需要手工提醒。命令失败就保留真实 incomplete/unavailable，不能补填成功。
-
-阶段入口必须收到明确的 project/task context，并在宿主侧登记、激活该 task context；新任务创建或单独启动任务时由内部 `task-bootstrap` 完成同一登记。同一 Codex 会话可以顺序处理多个 task，但每次切换都必须显式提供 project/task，并由已认证 worktree 校验；旧 task context 只读保留，不会和新 task 的事件混在一起。完成选择后，下面的事件命令可以省略 task id；未登记的 task id 仍直接失败。
-
-新项目或新任务首次准备仓库时，可把 [`docs/templates/project-gitignore.md`](../../docs/templates/project-gitignore.md) 作为 `.gitignore` 起点，排除仅用于执行的侧车目录。它只适用于新建场景；不得借此改写存量项目的 `.gitignore`，也不得把设计材料或源代码目录当作侧车排除。
-
-```sh
-node tools/host/workflowhub-codex-session-event.mjs start --stage=<本阶段> --subject-kind=step --subject-id=<step_slug>
-node tools/host/workflowhub-codex-session-event.mjs finish --stage=<本阶段> --subject-kind=step --subject-id=<step_slug> --status=<completed|failed|skipped|not_applicable> --summary="<真实结果>" --evidence=<真实证据引用>
-```
-
-skill 使用同一命令，把 subject-kind 改成 skill，并在结束时带上实际 --version、--trigger=true|false 和 --executed=true|false；未触发的 skill 记录 not_applicable 和原因。阶段末执行 node tools/host/workflowhub-codex-session-event.mjs record-spec-analyze --stage=<本阶段> --input=<当前真实结构结果 JSON>，再执行 public run。token 从本次会话的真实 transcript 读取，无法读到就保持未提供；耗时由开始/结束时间计算。没有当前 task 绑定时命令会直接失败，不会把别的 task 的记录写进来。
+阶段结束的大白话总结必须逐项列出本阶段所有未完成、失败、跳过、不适用、`unknown`、`unavailable` 或 `incomplete` 的 step 和 skill，并写真实原因与证据引用；没有遗漏就明确写“无遗漏”。执行事实通过正式 `run` 输入提交，不依赖宿主会话绑定、隐式选 task 或等待时限。
 
 ## 阶段末复盘（必须执行）
 
