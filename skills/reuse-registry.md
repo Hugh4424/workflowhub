@@ -44,6 +44,8 @@ UI governance records include an explicit owner, consumer, and delete condition.
 把适用的普通 review lens 放进同一 frozen packet，不重复建立 planning advisory 的事实或
 控制面；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
+- `stage-reflection` — native；五个 authoring stage 的 stage-end 判断层复盘。只消费当前会话记忆、lessons 索引和本 stage outcome；由 runner 先追加 raw observation，再由技能产出 judgment 记录并调用确定性 validator；不生成质量分数或继续工作门禁。
+
 - `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87)，Apache-2.0。首次导入的核心文件已逐 blob 对上该 commit；仓内打包，不做全局安装。
 - `decision-log` — native；make-decision。结构化唯一权威需求记录。`upstream=[]`；随 stage 合同更新。
 - `grill-with-docs` — `skills/grill-with-docs/`；adapted；make-decision。来源 Matt Pocock [`grilling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/grilling) 与 [`domain-modeling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling)，MIT。保留完整交互、代码核实、CONTEXT/ADR 写入和四项退出合同；不使用 lite 或只读变体，真实阻塞才转人工。

@@ -45,10 +45,13 @@ describe("simple material-only review", () => {
     });
     expect(result).toMatchObject({ status: "available", stage: "make-decision", review_track: "detail" });
     expect(result.findings).toHaveLength(1);
+    expect(result.provider_results[0].evidence_anchor_valid).toEqual([true]);
     expect(calls).toHaveLength(1);
     expect(calls[0].decision).toBe("current decision bytes");
     expect(calls[0].instructions).toContain("complete user flow");
     expect(calls[0].prompt).toContain("Return exactly one JSON object");
+    expect(calls[0].prompt).toContain("sample below.\n\nExample of a complete finding:");
+    expect(calls[0].prompt).not.toContain("sample below.\\n\\n");
   });
 
   it("requires only stage, host provider, and materials", async () => {
@@ -86,12 +89,13 @@ describe("simple material-only review", () => {
         },
       },
     });
-    expect(result).toMatchObject({ status: "unavailable", stage: "build-code" });
+    expect(result).toMatchObject({ status: "available", stage: "build-code" });
     expect(result.provider_results).toHaveLength(2);
     expect(result.provider_results[0]).toMatchObject({ provider: "model-a", status: "failed", error: { code: "OUTPUT_INVALID" } });
     expect(result.provider_results[1]).toMatchObject({ provider: "model-b", status: "completed" });
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toMatchObject({ severity: "major", path: "materials/02-spec.md", provider: "model-b" });
+    expect(result.provider_results[1].evidence_anchor_valid).toEqual([false]);
     expect(result).not.toHaveProperty("error_code");
     expect(result).not.toHaveProperty("attempt_ref");
   });
@@ -105,5 +109,23 @@ describe("simple material-only review", () => {
     expect(parsed.findings).toHaveLength(1);
     expect(parsed.findings[0]).toHaveProperty("severity");
     expect(parsed.findings[0]).toHaveProperty("evidence_kind");
+  });
+
+  it("returns a recordable unavailable result when route loading fails", async () => {
+    const result = await runSimpleReview({
+      stage: "verify-code",
+      host_provider: "codex/luna",
+      materials: { implementation: "implementation bytes" },
+    }, {
+      loadConfig: () => { throw new Error("route config is unavailable"); },
+    });
+    expect(result).toMatchObject({
+      status: "unavailable",
+      error: { code: "ROUTE_UNAVAILABLE" },
+      runtime_id: null,
+      provider_results: [],
+      findings: [],
+    });
+    expect(result.material_id).toMatch(/^[a-f0-9]{64}$/);
   });
 });

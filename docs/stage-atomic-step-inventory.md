@@ -21,6 +21,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | make-decision | 11 | approve-decision | S9 | only real user confirmation counts |
 | make-decision | 12 | stage-end-spec-analyze | S9.5 | final consistency check after confirmation and aggregate |
 | make-decision | 13 | publish-decision | S10 | publish the current artifact snapshot |
+| make-decision | 14 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 | build-spec | 1 | read-decision-log | pre-read | read the controlled current materials |
 | build-spec | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-spec | 3 | spec-clarify | clarification | unique build-spec clarification owner |
@@ -35,6 +36,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-spec | 12 | main-agent-disposes-findings | disposition | inspect every finding |
 | build-spec | 13 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
 | build-spec | 14 | publish-spec-result | handoff | publish spec and facts |
+| build-spec | 15 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 | build-plan | 1 | read-current-materials | pre-read | read decision-log and spec |
 | build-plan | 2 | conditional-spec-research | research | real question only; else skipped |
 | build-plan | 3 | testing-system-blueprint | test design | outline behavior, state, error, seam, and delivery cases |
@@ -47,6 +49,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-plan | 10 | main-agent-disposes-findings | disposition | inspect every finding |
 | build-plan | 11 | final-spec-analyze | final cross-material trace | report-only check before publish |
 | build-plan | 12 | publish-plan-result | handoff | publish plan/tasks and facts |
+| build-plan | 13 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 | build-code | 1 | read-current-task-documents | pre-read | read all four current materials |
 | build-code | 2 | write-red-tests | TDD RED | record real RED or unknown |
 | build-code | 3 | implement-change | implementation | stay within task scope |
@@ -62,6 +65,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 13 | final-integration-review | integration review | existing phase_id=null review after tests |
 | build-code | 14 | stage-end-spec-analyze | final cross-material trace | report-only consistency check before publish |
 | build-code | 15 | publish-code-result | handoff | after all Phase and final facts |
+| build-code | 16 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 | verify-code | 1 | read-current-materials-and-code | pre-read | read all four current materials and implementation |
 | verify-code | 2 | architect-code-review | architecture check | inspect current implementation and real consumers |
 | verify-code | 3 | main-agent-repair-batch-1 | repair | fix only valid delivery findings |
@@ -73,6 +77,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | verify-code | 9 | handoff-code-review | handoff | explain code review conclusion and remaining risks |
 | verify-code | 10 | approve-verification | confirmation | record actual user conclusion |
 | verify-code | 11 | publish-verification-result | handoff | close remains separate authorization |
+| verify-code | 12 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 
 ## P0 boundary
 

@@ -18,6 +18,7 @@ import { isAuthenticatedRequirementResult } from "../evidence/codex-transcript-a
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const STATUSES = new Set(["completed", "skipped", "not_applicable", "incomplete", "unavailable"]);
+const STAGE_STATUSES = new Set([...STATUSES, "failed"]);
 const REPOSITORY_ROOT = new URL("../../", import.meta.url);
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -51,7 +52,15 @@ function status(value, label) {
   return value;
 }
 
+function stageOutcomeStatus(value, label) {
+  if (!STAGE_STATUSES.has(value)) throw new TypeError(`${label} must be a supported stage outcome status`);
+  return value;
+}
+
 function cost(value, label) {
+  // External Stage Agent payloads may carry an already-authenticated legacy
+  // cost fact. This adapter never measures or derives it; the current-session
+  // recorder below deliberately emits unavailable cost fields instead.
   const entry = object(value, label);
   const allowed = new Set(["duration_ms", "tokens", "status", "reason"]);
   const unknown = Object.keys(entry).filter((key) => !allowed.has(key));
@@ -473,6 +482,7 @@ function unavailableExecution({ stage, host, agentRunId, reason, manifest, skill
     trigger: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
     executed: skill.name === (stage === "verify-code" ? "dsh-code-review" : "spec-analyze"),
     version: "unavailable",
+    input_refs: [],
     result_summary: `Stage Agent 未提供 ${skill.name} 的真实执行结果`,
     evidence: evidence("skill", skill.name),
     reason: safeReason,
@@ -549,7 +559,7 @@ export function publishStageAgentOutcome({
     text(provenance.session_id, "execution provenance.session_id");
     text(provenance.source_ref, "execution provenance.source_ref");
   }
-  const stageStatus = status(input.status, "Stage Agent execution.status");
+  const stageStatus = stageOutcomeStatus(input.status, "Stage Agent execution.status");
   text(attemptId, "attemptId");
   if (!Array.isArray(input.steps) || !Array.isArray(input.skills)) throw new TypeError("Stage Agent execution must include steps and skills arrays");
 
@@ -604,6 +614,7 @@ export function publishStageAgentOutcome({
       trigger: entry.trigger,
       executed: entry.executed,
       version: text(entry.version, `skill ${expected.name}.version`),
+      input_refs: Array.isArray(entry.input_refs) ? [...entry.input_refs] : [],
       result_summary: result.resultSummary,
       evidence_refs: result.evidenceRefs,
       consumer_binding: consumerBindings[index],
@@ -673,55 +684,17 @@ export function publishStageAgentOutcome({
   });
 }
 
-function clockValue(now, label) {
-  const value = now();
-  const timestamp = value instanceof Date ? value.getTime() : value;
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0) throw new TypeError(`${label} must return a non-negative integer timestamp`);
-  return timestamp;
+function unavailableLifecycleCost() {
+  return { duration_ms: null, tokens: null, status: "unavailable", reason: "session_lifecycle_telemetry_not_collected" };
 }
 
-function usageTokens(value, label) {
-  if (value === undefined || value === null) return null;
-  const input = object(value, label);
-  const direct = input.tokens ?? input.total_tokens;
-  if (direct !== undefined && (!Number.isSafeInteger(direct) || direct < 0)) {
-    throw new TypeError(`${label}.tokens must be a non-negative integer`);
-  }
-  const inputTokens = input.input_tokens;
-  const outputTokens = input.output_tokens;
-  for (const [name, count] of [["input_tokens", inputTokens], ["output_tokens", outputTokens]]) {
-    if (count !== undefined && (!Number.isSafeInteger(count) || count < 0)) throw new TypeError(`${label}.${name} must be a non-negative integer`);
-  }
-  const pair = inputTokens === undefined || outputTokens === undefined ? null : inputTokens + outputTokens;
-  if (direct !== undefined && pair !== null && direct !== pair) throw new Error(`${label} total token usage conflicts with input/output usage`);
-  return direct ?? pair;
-}
-
-function lifecycleCost({ startedAt, endedAt, usage }) {
-  const durationMs = endedAt >= startedAt ? endedAt - startedAt : null;
-  const tokens = usageTokens(usage, "session usage");
-  if (durationMs !== null && tokens !== null) return { duration_ms: durationMs, tokens, status: "recorded" };
-  if (durationMs !== null || tokens !== null) {
-    return {
-      duration_ms: durationMs,
-      tokens,
-      status: "partial",
-      reason: durationMs === null ? "duration_unavailable" : "tokens_unavailable",
-    };
-  }
-  return { duration_ms: null, tokens: null, status: "unavailable", reason: "duration_and_tokens_unavailable" };
-}
-
-function lifecycleEvidence({ sourceRef, sessionId, subjectKind, subjectId, startedAt = null, endedAt = null, usage }) {
+function lifecycleEvidence({ sourceRef, sessionId, subjectKind, subjectId }) {
   return {
     kind: "workflowhub-session-lifecycle",
     source_ref: sourceRef,
     session_id: sessionId,
     subject_kind: subjectKind,
     subject_id: subjectId,
-    ...(startedAt === null ? {} : { started_at_ms: startedAt }),
-    ...(endedAt === null ? {} : { ended_at_ms: endedAt }),
-    ...(usage?.event_id || usage?.message_id ? { usage_event_id: usage.event_id ?? usage.message_id } : {}),
   };
 }
 
@@ -735,14 +708,14 @@ function sessionManifest(stage) {
  * Record the lifecycle of the current WorkflowHub session.
  *
  * The host calls this from the same session that is executing the workflow.
- * It measures wall time at begin/end and accepts only usage explicitly bound
- * to that subject. It never starts another agent, reads a transcript path, or
- * fills a missing token count. The returned outcome still goes through the
- * existing authenticated adapter and single TaskKernel writer.
+ * It records lifecycle identity only. Token, elapsed-time, and transcript
+ * telemetry are deliberately not collected here. The returned outcome still
+ * goes through the existing authenticated adapter and single TaskKernel
+ * writer.
  */
 export function createWorkflowHubSessionRecorder({
   task, kernel, artifacts, workspace, candidateWorkspace, stage, attemptId = "attempt-workflowhub-session-1", workflowRunId = null,
-  host, sessionId, sourceRef, now = () => Date.now(), requirementAuthentication = null,
+  host, sessionId, sourceRef, requirementAuthentication = null,
 } = {}) {
   const safeTask = assertTaskHandle(task);
   const safeKernel = assertTaskKernel(kernel);
@@ -782,14 +755,12 @@ export function createWorkflowHubSessionRecorder({
       error.code = "BRIDGE_SUBJECT_DUPLICATE";
       throw error;
     }
-    const startedAt = clockValue(now, "session clock");
-    activeSubjects.set(key, { expected, startedAt });
+    activeSubjects.set(key, { expected });
     return (result = {}) => {
       if (closed) throw new Error("WorkflowHub session recorder is already closed");
       const value = object(result, `${subjectKind} ${subjectId} result`);
       const current = activeSubjects.get(key);
       if (!current) throw new Error(`${stage} ${subjectKind} has no open lifecycle: ${subjectId}`);
-      const endedAt = clockValue(now, "session clock");
       activeSubjects.delete(key);
       const outcomeStatus = status(value.status, `${subjectKind} ${subjectId}.status`);
       const resultSummary = text(value.result_summary, `${subjectKind} ${subjectId}.result_summary`);
@@ -799,7 +770,7 @@ export function createWorkflowHubSessionRecorder({
       }
       if (outcomeStatus !== "completed") text(value.reason, `${subjectKind} ${subjectId}.reason`);
       const evidence = Array.isArray(value.evidence) ? value.evidence.map((entry) => object(entry, `${subjectKind} ${subjectId}.evidence`)) : [];
-      const costValue = lifecycleCost({ startedAt: current.startedAt, endedAt, usage: value.usage });
+      const costValue = unavailableLifecycleCost();
       const output = subjectKind === "step"
         ? {
             step_id: current.expected.step_id,
@@ -808,18 +779,19 @@ export function createWorkflowHubSessionRecorder({
             status: outcomeStatus,
             input_refs: Array.isArray(value.input_refs) ? [...value.input_refs] : current.expected.entry_conditions.map(({ uri_or_path }) => uri_or_path),
             result_summary: resultSummary,
-            evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId, startedAt: current.startedAt, endedAt, usage: value.usage })],
+            evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
             ...(outcomeStatus === "completed" ? {} : { reason: value.reason }),
             cost: costValue,
           }
-        : {
+          : {
             skill_id: current.expected.name,
             status: outcomeStatus,
             trigger: value.trigger,
             executed: value.executed,
             version: text(value.version, `skill ${subjectId}.version`),
+            input_refs: Array.isArray(value.input_refs) ? [...value.input_refs] : [],
             result_summary: resultSummary,
-            evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId, startedAt: current.startedAt, endedAt, usage: value.usage })],
+            evidence: [...evidence, lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
             ...(outcomeStatus === "completed" ? {} : { reason: value.reason }),
             cost: costValue,
           };
@@ -841,7 +813,7 @@ export function createWorkflowHubSessionRecorder({
           result_summary: `当前 WorkflowHub 会话未记录步骤 ${subjectId}`,
           evidence: [lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
           reason,
-          cost: { duration_ms: null, tokens: null, status: "unavailable", reason },
+          cost: { ...unavailableLifecycleCost(), reason },
         }
       : {
           skill_id: subjectId,
@@ -849,10 +821,11 @@ export function createWorkflowHubSessionRecorder({
           trigger: false,
           executed: false,
           version: "unavailable",
+          input_refs: [],
           result_summary: `当前 WorkflowHub 会话未记录技能 ${subjectId}`,
           evidence: [lifecycleEvidence({ sourceRef: safeSourceRef, sessionId: safeSessionId, subjectKind, subjectId })],
           reason,
-          cost: { duration_ms: null, tokens: null, status: "unavailable", reason },
+          cost: { ...unavailableLifecycleCost(), reason },
         };
   };
 
@@ -867,8 +840,17 @@ export function createWorkflowHubSessionRecorder({
         const subjectId = skillIdentity(entry);
         return finishedSkills.get(subjectId) ?? missingOutcome("skill", subjectId);
       });
-      const terminal = (entry) => ["completed", "skipped", "not_applicable"].includes(entry.status);
-      const resolvedStatus = stageStatus ?? (steps.every(terminal) && skills.every(terminal) ? "completed" : "incomplete");
+      const nonBlockingStepSlugs = new Set(subjects.steps
+        .filter((entry) => entry.on_stage_end === true && entry.blocking === false)
+        .map((entry) => entry.step_slug));
+      const nonBlocking = (entry) => entry.step_slug === undefined
+        ? entry.skill_id === "stage-reflection"
+        : nonBlockingStepSlugs.has(entry.step_slug);
+      const terminal = (entry) => ["completed", "skipped", "not_applicable"].includes(entry.status)
+        || (nonBlocking(entry) && ["incomplete", "unavailable"].includes(entry.status));
+      const resolvedStatus = stageStatus === undefined || stageStatus === null
+        ? (steps.every(terminal) && skills.every(terminal) ? "completed" : "incomplete")
+        : stageOutcomeStatus(stageStatus, "WorkflowHub session stage status");
       if (resolvedStatus === "completed" && [...steps, ...skills].some((entry) => !terminal(entry))) {
         throw new Error("completed WorkflowHub session outcome cannot contain non-terminal step/skill rows");
       }

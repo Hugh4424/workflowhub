@@ -123,11 +123,45 @@ const ACTION_TO_OPERATION = {
 };
 
 describe("close contract (T0-RED)", () => {
+  it("requires explicit user reply text and current-step provenance", () => {
+    const state = fixture();
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    expect(() => confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed" }))
+      .toThrow(/replyText is required/i);
+    expect(() => confirmClosePlan({ task: state.task, kernel: state.kernel, plan: prepared.plan, outcome: "confirmed", replyText: "用户确认。" }))
+      .toThrow(/stepSlug is required/i);
+  });
+
+  it("records timeout without inventing a human reply and blocks execution", async () => {
+    const state = fixture();
+    const prepared = prepareDeliveryClosePlan({ task: state.task, kernel: state.kernel, delivery: state.delivery });
+    const confirmation = confirmClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      outcome: "timeout",
+    });
+
+    expect(confirmation.confirmation).toMatchObject({
+      outcome: "timeout",
+      human_confirmation_ref: null,
+      human_confirmation_hash: null,
+    });
+    await expect(executeClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      plan: prepared.plan,
+      closeConfirmationRef: confirmation.ref,
+    })).resolves.toMatchObject({ status: "blocked", confirmationOutcome: "timeout" });
+  });
+
   it("one-shot close returns normal mode and completed.json has only physical facts", async () => {
     const state = fixture();
     const result = await closeDelivery({
       task: state.task,
       kernel: state.kernel,
+      replyText: "用户确认执行关闭。",
+      stepSlug: "confirm-close-plan",
       now: () => "2026-08-21T00:00:00.000Z",
     });
 
@@ -161,6 +195,8 @@ describe("close contract (T0-RED)", () => {
       kernel: state.kernel,
       plan: prepared.plan,
       outcome: "confirmed",
+      replyText: "用户确认执行关闭。",
+      stepSlug: "confirm-close-plan",
     });
     authorizeBatch(state, confirmation.confirmation.human_confirmation_ref);
 
@@ -187,6 +223,8 @@ describe("close contract (T0-RED)", () => {
     await expect(closeDelivery({
       task: state.task,
       kernel: state.kernel,
+      replyText: "用户确认执行关闭。",
+      stepSlug: "confirm-close-plan",
       now: () => "2026-08-21T00:00:00.000Z",
     })).resolves.toMatchObject({ status: "completed", close_mode: "normal" });
 

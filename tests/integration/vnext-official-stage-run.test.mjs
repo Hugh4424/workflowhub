@@ -126,10 +126,10 @@ function analyzerRequirementFixture() {
       axis_id: `axis-${index + 1}`,
       impact: index < 2 ? "high" : "medium",
       disposition: "represented",
-      decision_ids: [`D-${index + 1}`],
-      requirement_ids: [`R-${index + 1}`],
-      fr_ids: [`FR-${index + 1}`],
-      ac_ids: [`AC-${index + 1}`],
+      decision_ids: [`D-FIXTURE-${index + 1}`],
+      requirement_ids: [`R-FIXTURE-${index + 1}`],
+      fr_ids: [`FR-FIXTURE-${index + 1}`],
+      ac_ids: [`AC-FIXTURE-${index + 1}`],
     })),
   };
 }
@@ -166,9 +166,9 @@ function stageAgentExecution(stage) {
     } : {
     spec_analyze: {
       packet: {
-        original_requirements: [{ id: "R-001", summary: "当前用户需求" }],
+        original_requirements: [{ id: "R-FIXTURE-1", summary: "当前用户需求" }],
         coverage: [{
-          requirement_id: "R-001", expected_behavior: "当前用户需求",
+          requirement_id: "R-FIXTURE-1", expected_behavior: "当前用户需求",
           actual_behavior: "当前用户需求已由 Stage Agent 实际执行并产生当前结果", semantic_match: true,
           scenario_refs: ["SCN-real-stage-agent"], oracle_refs: ["ORACLE-real-stage-agent"],
           artifact_refs: ["decision_log"], evidence_refs: ["decision-log"], status: "covered",
@@ -407,9 +407,9 @@ describe("vNext official stage completion", () => {
       source_ref: "codex-rollout-thread-session",
     });
     expect(outcome.value.step_outcomes[0].cost).toMatchObject({
-      status: "partial", duration_ms: 10, tokens: null, reason: "tokens_unavailable",
+      status: "unavailable", duration_ms: null, tokens: null, reason: "session_lifecycle_telemetry_not_collected",
     });
-    expect(outcome.value.step_outcomes[1].cost).toMatchObject({ status: "recorded", duration_ms: 10, tokens: 2 });
+    expect(outcome.value.step_outcomes[1].cost).toMatchObject({ status: "unavailable", duration_ms: null, tokens: null });
     const result = await runOfficialStage("make-decision", context, {
       attempt_id: "attempt-workflowhub-session",
       receipts: { stage_outcomes: outcome.ref },
@@ -566,6 +566,10 @@ describe("vNext official stage completion", () => {
     const result = await runOfficialStage("make-decision", context, { attempt_id: "attempt-real-stage-agent", receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "make-decision", stage_outcome_status: "completed", work_status: "ready" });
     expect(result.skill_consumer_bindings.find((entry) => entry.skill_id === "decision-log")).toMatchObject({ status: "consumed" });
+    expect(result.skill_consumer_bindings.find((entry) => entry.skill_id === "stage-reflection")).toMatchObject({
+      status: "consumed",
+      consumer: "stage-runner#runStageEndReflection",
+    });
   });
 
   it("does not complete verify-code when the current code review still has findings", async () => {
@@ -955,6 +959,7 @@ describe("vNext official stage completion", () => {
       stage_outcome_hash: null,
       stage_outcome_status: "unavailable",
       stage_outcome_diagnostic: { status: "unavailable", reason: "stage_outcome_missing" },
+      stage_reflection: { status: "failed", step_status: "failed", persisted: true },
     });
   });
   it("records a supplied invalid optional outcome without hiding the diagnostic", async () => {
@@ -1020,7 +1025,9 @@ describe("vNext official stage completion", () => {
       attemptId: "attempt-external-host-bridge",
       requirementAuthentication,
     });
-    expect(published.value.step_outcomes[0].cost.duration_ms).toBe(10);
+    expect(published.value.step_outcomes[0].cost).toMatchObject({
+      status: "unavailable", duration_ms: null, tokens: null,
+    });
     const qualityBeforeReplay = state.task.listCanonicalQualityFactRefs();
     const replayed = publishCurrentWorkflowHubSession({
       context: contextFor("make-decision", state),
@@ -1296,8 +1303,8 @@ describe("vNext official stage completion", () => {
         axis_id: `rerun-axis-${index + 1}`,
         impact: index < 2 ? "high" : "medium",
         disposition: "represented",
-        decision_ids: ["D-001"],
-        requirement_ids: ["R-001"],
+        decision_ids: [`D-FIXTURE-${index + 1}`],
+        requirement_ids: [`R-FIXTURE-${index + 1}`],
       }));
       analyzer.packet.work_summary = `${pass}: current make-decision result`;
       recordCodexSessionSpecAnalyze({ stage: "make-decision", value: analyzer, cwd: root, sessionId });
@@ -1352,12 +1359,13 @@ describe("vNext official stage completion", () => {
       reason: "stage_agent_outcome_missing",
     });
     expect(outcome.value.status).toBe("unavailable");
-    expect(outcome.value.step_outcomes).toHaveLength(15);
+    expect(outcome.value.step_outcomes).toHaveLength(JSON.parse(readFileSync(join(process.cwd(), "workflows", "build-code", "steps.json"), "utf8")).steps.length);
     expect(outcome.value.step_outcomes.every((entry) => entry.status === "unavailable")).toBe(true);
     expect(outcome.value.skill_outcomes.find((entry) => entry.skill_id === "spec-analyze")).toMatchObject({ trigger: true, executed: true, status: "unavailable" });
     expect(outcome.value.spec_analyze.result.status).toBe("material_incomplete");
     const result = await runOfficialStage("build-code", contextFor("build-code", state), { receipts: { stage_outcomes: outcome.ref } });
     expect(result).toMatchObject({ stage: "build-code", stage_outcome_status: "unavailable", quality_status: "incomplete" });
+    expect(JSON.parse(state.task.readRecord("quality/stage-reflection/build-code.json"))).toMatchObject({ stage_status: "failed" });
   });
   it("guards the official stage run against monitoring fact and projection side effects", () => {
     const state = fixture("vnext-stage-run-no-monitoring-side-effect");
@@ -1571,10 +1579,13 @@ describe("vNext official stage completion", () => {
     );
 
     expect(result).toMatchObject({ stage: "build-spec", status: "in_progress", work_status: "ready", quality_status: "incomplete" });
-    expect(result.completion).toMatchObject({ status: "in_progress", missing: ["stage_end_spec_analyze"] });
+    expect(result.completion).toMatchObject({
+      status: "in_progress",
+      missing: expect.arrayContaining(["clarify", "stage_end_spec_analyze"]),
+    });
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
-    expect(result.quality_fact_refs).toHaveLength(4);
+    expect(result.quality_fact_refs).toHaveLength(5);
     expect(() => state.task.readRecord("results/build-spec/attempt-0001.json")).toThrow(/ENOENT/);
     expect(() => state.task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT/);
   });
@@ -1706,7 +1717,7 @@ describe("vNext official stage completion", () => {
     expect(result.quality_advisories).toContain("finding_dispositions:missing");
     expect(result).not.toHaveProperty("publication_ref");
     expect(result).not.toHaveProperty("publication_hash");
-    expect(result.quality_fact_refs).toHaveLength(4);
+    expect(result.quality_fact_refs).toHaveLength(5);
     const qualityFacts = result.quality_fact_refs.map((ref) => JSON.parse(state.task.readRecord(ref)));
     expect(qualityFacts.find((fact) => fact.kind === "review")).toMatchObject({ status: "unavailable" });
     expect(qualityFacts.find((fact) => fact.subject === "finding_dispositions")).toMatchObject({ status: "missing" });

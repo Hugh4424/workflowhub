@@ -16,7 +16,7 @@ import {
   startCodexSessionEvent,
 } from "../../tools/host/workflowhub-codex-session-state.mjs";
 
-function eventFixture() {
+function eventFixture({ stageEndStep = null, stageEndBlocking = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "workflowhub-stage-order-contract-"));
   const cwd = join(root, "workspace");
   const taskPath = join(root, "task");
@@ -27,7 +27,7 @@ function eventFixture() {
     stage_slug: "build-code",
     steps: [
       { step_id: 1, step_slug: "read-current-task-documents", order: 1, depends_on: [] },
-      { step_id: 2, step_slug: "write-red-tests", order: 2, depends_on: [1] },
+      { step_id: 2, step_slug: "write-red-tests", order: 2, depends_on: [1], ...(stageEndStep === "write-red-tests" ? { on_stage_end: true, blocking: stageEndBlocking } : {}) },
       { step_id: 3, step_slug: "implement-change", order: 3, depends_on: [2] },
       { step_id: 4, step_slug: "publish-current-result", order: 4, depends_on: [3] },
     ],
@@ -142,6 +142,29 @@ describe("P1 stage order and real host interaction contract", () => {
     } finally {
       rmSync(sessionHandoffPath(state.cwd), { force: true });
       rmSync(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("bypasses a failed predecessor only for an explicitly non-blocking stage-end step", () => {
+    const blocking = eventFixture({ stageEndStep: "write-red-tests", stageEndBlocking: true });
+    try {
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: blocking.cwd, sessionId: blocking.sessionId, startedAtMs: 3000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: blocking.cwd, sessionId: blocking.sessionId, endedAtMs: 3100, status: "failed", reason: "fixture failure" });
+      expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: blocking.cwd, sessionId: blocking.sessionId, startedAtMs: 3200 }))
+        .toThrow(/dependency .* must be completed/i);
+    } finally {
+      rmSync(sessionHandoffPath(blocking.cwd), { force: true });
+      rmSync(blocking.root, { recursive: true, force: true });
+    }
+
+    const nonBlocking = eventFixture({ stageEndStep: "write-red-tests", stageEndBlocking: false });
+    try {
+      startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: nonBlocking.cwd, sessionId: nonBlocking.sessionId, startedAtMs: 4000 });
+      finishCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "read-current-task-documents", cwd: nonBlocking.cwd, sessionId: nonBlocking.sessionId, endedAtMs: 4100, status: "failed", reason: "fixture failure" });
+      expect(() => startCodexSessionEvent({ stage: "build-code", subjectKind: "step", subjectId: "write-red-tests", cwd: nonBlocking.cwd, sessionId: nonBlocking.sessionId, startedAtMs: 4200 })).not.toThrow();
+    } finally {
+      rmSync(sessionHandoffPath(nonBlocking.cwd), { force: true });
+      rmSync(nonBlocking.root, { recursive: true, force: true });
     }
   });
 

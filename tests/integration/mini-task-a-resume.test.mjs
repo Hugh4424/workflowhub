@@ -41,7 +41,7 @@ describe("mini-task A resume RED contract", () => {
     const before = git(state.aWorktree, ["rev-parse", "HEAD"]);
     writeFileSync(join(state.aWorktree, "a-progress.txt"), "A progress\n");
     const plan = prepareAResumePlan({ task: state.task, kernel: state.kernel, targetOid: state.targetOid, originalStage: "build-plan" });
-    const confirmation = confirmAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan });
+    const confirmation = confirmAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan, replyText: "用户确认恢复并合并。", stepSlug: "confirm-a-resume" });
     authorizeAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     const result = await resumeTaskA({ task: state.task, kernel: state.kernel, plan: plan.plan, closeConfirmationRef: confirmation.ref });
     expect(result.status).toBe("completed");
@@ -66,7 +66,7 @@ describe("mini-task A resume RED contract", () => {
     const state = resumeFixture({ conflict: true });
     writeFileSync(join(state.aWorktree, "shared.txt"), "A conflicting progress\n");
     const plan = prepareAResumePlan({ task: state.task, kernel: state.kernel, targetOid: state.targetOid, originalStage: "build-plan" });
-    const confirmation = confirmAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan });
+    const confirmation = confirmAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan, replyText: "用户确认恢复并合并。", stepSlug: "confirm-a-resume" });
     authorizeAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     const result = await resumeTaskA({ task: state.task, kernel: state.kernel, plan: plan.plan, closeConfirmationRef: confirmation.ref });
     expect(result.status).toBe("blocked");
@@ -81,7 +81,7 @@ describe("mini-task A resume RED contract", () => {
     const state = resumeFixture({ clean: true });
     const plan = prepareAResumePlan({ task: state.task, kernel: state.kernel, targetOid: state.targetOid, originalStage: "build-plan" });
     expect(plan.plan.steps.map((step) => step.operation)).toEqual(["merge"]);
-    const confirmation = confirmAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan });
+    const confirmation = confirmAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan, replyText: "用户确认恢复并合并。", stepSlug: "confirm-a-resume" });
     authorizeAResumePlan({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     const result = await resumeTaskA({ task: state.task, kernel: state.kernel, plan: plan.plan, closeConfirmationRef: confirmation.ref });
     expect(result).toMatchObject({ status: "completed", progress_commit_oid: null });

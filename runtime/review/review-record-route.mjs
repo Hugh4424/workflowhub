@@ -1,25 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
+import { assertTaskKernel } from "../../core/task-capability.mjs";
 import { aggregateCanonicalProviderResults, providerAdapter } from "./canonical-review-result.mjs";
 
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+const GIT_OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
+const MATERIAL_REVISION = /^revision-[a-f0-9]{64}$/;
 
 function textHash(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
-function stableFindingId(finding) {
-  const canonical = JSON.stringify({
-    path: finding.path ?? null,
-    line: finding.line ?? null,
-    issue: finding.issue ?? "",
-    root_cause: finding.root_cause ?? "",
-  }, Object.keys({ path: 1, line: 1, issue: 1, root_cause: 1 }).sort());
-  return `F-${textHash(canonical).slice(0, 12)}`;
-}
-
 function providerFileName(provider, index) {
   const encoded = Buffer.from(provider, "utf8").toString("base64url");
-  return `p-${encoded}.output.json`;
+  return `p-${encoded}-${index}.output.json`;
 }
 
 function assertTaskHandle(task) {
@@ -42,6 +35,8 @@ function policyHash(policy) {
 
 function buildPolicy(result) {
   const providers = result.provider_results?.map((item) => item.provider) ?? [];
+  const minimum = Number.isSafeInteger(result.minimum_heterologous) && result.minimum_heterologous >= 1
+    ? result.minimum_heterologous : 1;
   const effectiveProfiles = providers.map((provider) => ({
     provider,
     adapter: providerAdapter(provider),
@@ -62,7 +57,7 @@ function buildPolicy(result) {
   const policy = {
     source: "wh_review.v2",
     mode: "single_round",
-    minimum_heterologous: 1,
+    minimum_heterologous: minimum,
     requested_profiles: providers,
     eligible_profiles: providers,
     same_source_exclusions: [],
@@ -82,8 +77,67 @@ function normalizeIdentity(item, provider) {
   };
 }
 
-export function recordSimpleReviewResult({ task, result }) {
+function providerAttemptRecord(item, runtimeId, outputRef = null) {
+  const completed = item?.status === "completed" && item?.error === null;
+  const status = completed ? "completed" : item?.status === "cancelled" ? "cancelled" : "failed";
+  return {
+    provider: item.provider,
+    status,
+    identity: normalizeIdentity(item.identity, item.provider),
+    session_id: item.session_id ?? null,
+    runtime_id: runtimeId ?? null,
+    output_ref: outputRef,
+    raw_output_ref: null,
+    error: status === "completed" ? null : item.error ?? { code: "PROVIDER_RESULT_UNAVAILABLE", message: "provider result unavailable" },
+    execution: {
+      adapter: providerAdapter(item.provider),
+      model: item.identity?.model ?? "unknown",
+      effort: null,
+      thinking: null,
+      timing: item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
+      usage: item.usage ?? null,
+      retry: { count: 0, progress_events: 0 },
+      runtime_id: runtimeId ?? "unknown",
+      session_file_path: null,
+    },
+  };
+}
+
+function assertAuthenticatedReviewIdentity(task, kernel) {
+  const taskKernel = assertTaskKernel(kernel);
+  if (taskKernel.task !== task
+      || typeof taskKernel.currentVNextSnapshot !== "function"
+      || typeof taskKernel.currentVNextMaterialRevision !== "function") {
+    throw new TypeError("review record requires the authenticated TaskKernel for this task");
+  }
+  const snapshot = taskKernel.currentVNextSnapshot();
+  const materialRevision = taskKernel.currentVNextMaterialRevision();
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    throw new TypeError("review record requires an authenticated current snapshot");
+  }
+  for (const [name, value] of [["head", snapshot.head], ["tree", snapshot.tree], ["commit", snapshot.commit]]) {
+    if (typeof value !== "string" || !GIT_OID.test(value)) {
+      throw new TypeError(`review record current snapshot.${name} must be a Git object id`);
+    }
+  }
+  if (typeof materialRevision !== "string" || !MATERIAL_REVISION.test(materialRevision)) {
+    throw new TypeError("review record current material revision must match revision-<sha256>");
+  }
+  return Object.freeze({
+    tree: snapshot.tree,
+    source: {
+      target_commit: snapshot.head,
+      base_commit: snapshot.commit,
+      base_tree: snapshot.tree,
+      captured_head: snapshot.head,
+    },
+    materialRevision,
+  });
+}
+
+export function recordSimpleReviewResult({ task, result, kernel }) {
   const taskHandle = assertTaskHandle(task);
+  const currentIdentity = assertAuthenticatedReviewIdentity(taskHandle, kernel);
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new TypeError("review result must be an object");
   }
@@ -99,6 +153,20 @@ export function recordSimpleReviewResult({ task, result }) {
   if (!Array.isArray(result.provider_results)) {
     throw new TypeError("review result provider_results must be an array");
   }
+  const providers = new Set();
+  for (const [index, item] of result.provider_results.entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)
+        || typeof item.provider !== "string" || item.provider.trim() === "") {
+      throw new TypeError(`review result provider_results[${index}].provider must be a non-empty string`);
+    }
+    if (providers.has(item.provider)) throw new TypeError(`review result provider is duplicated: ${item.provider}`);
+    providers.add(item.provider);
+  }
+  const callerIdentityFields = ["source", "base_tree", "candidate_tree", "snapshot_tree", "material_revision"]
+    .filter((key) => Object.prototype.hasOwnProperty.call(result, key));
+  if (callerIdentityFields.length > 0) {
+    throw new TypeError(`review result identity fields must come from the authenticated current context: ${callerIdentityFields.join(", ")}`);
+  }
 
   const attemptId = randomUUID();
   const taskId = taskHandle.identity.taskId;
@@ -106,19 +174,14 @@ export function recordSimpleReviewResult({ task, result }) {
   const reviewTrack = result.review_track ?? null;
   const reviewKind = result.review_kind ?? null;
   const materialId = result.material_id;
-  const tree = materialId;
+  const tree = currentIdentity.tree;
 
   const attemptRef = `quality/reviews/attempts/${attemptId}/attempt.json`;
   const providerDirRef = `quality/reviews/attempts/${attemptId}/providers`;
   const resultId = randomUUID();
   const resultRef = `quality/reviews/results/${stage}-simple-${resultId}.json`;
 
-  const source = {
-    target_commit: tree,
-    base_commit: tree,
-    base_tree: tree,
-    captured_head: tree,
-  };
+  const source = currentIdentity.source;
 
   const commonSubject = {
     subject_kind: "worktree",
@@ -142,7 +205,8 @@ export function recordSimpleReviewResult({ task, result }) {
       source,
       snapshot_tree: tree,
       material_id: materialId,
-      provider_attempts: [],
+      material_revision: currentIdentity.materialRevision,
+      provider_attempts: result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id)),
       terminal_status: "unavailable",
       error,
       review_policy: policyResult.policy,
@@ -155,10 +219,18 @@ export function recordSimpleReviewResult({ task, result }) {
   // available: canonicalize provider outputs and run aggregation
   const providerOutputContents = new Map();
   const providerOutputRefs = new Map();
+  const providerOutputRecords = new Map();
 
-  for (let index = 0; index < result.provider_results.length; index += 1) {
-    const item = result.provider_results[index];
+  const semanticResults = result.provider_results.filter((item) => item.status === "completed" && item.error === null);
+  for (let index = 0; index < semanticResults.length; index += 1) {
+    const item = semanticResults[index];
     const providerFindings = (result.findings ?? []).filter((f) => f.provider === item.provider);
+    const evidenceAnchors = item.evidence_anchor_valid;
+    if (!Array.isArray(evidenceAnchors)
+        || evidenceAnchors.length !== providerFindings.length
+        || evidenceAnchors.some((value) => typeof value !== "boolean")) {
+      throw new TypeError(`review result provider_results[${index}].evidence_anchor_valid must match provider findings`);
+    }
     const outputContent = JSON.stringify({ findings: providerFindings.map(({ provider, ...rest }) => rest) });
     providerOutputContents.set(item.provider, outputContent);
 
@@ -172,22 +244,23 @@ export function recordSimpleReviewResult({ task, result }) {
       provider: item.provider,
       content: outputContent,
       content_hash: textHash(outputContent),
-      evidence_anchor_valid: providerFindings.map(() => true),
+      evidence_anchor_valid: evidenceAnchors,
     };
-    taskHandle.writeRecordAtomic(outputRef, JSON.stringify(outputRecord));
+    providerOutputRecords.set(outputRef, outputRecord);
   }
 
-  const providerOutputs = result.provider_results.map((item) => {
+  const providerOutputs = semanticResults.map((item) => {
     const content = providerOutputContents.get(item.provider);
     return {
       provider: item.provider,
       ...(item.identity ? { identity: normalizeIdentity(item.identity, item.provider) } : {}),
+      evidenceAnchors: item.evidence_anchor_valid,
       review: JSON.parse(content ?? "{\"findings\":[]}"),
     };
   });
 
-  const aggregation = aggregateCanonicalProviderResults(providerOutputs, 1, {
-    profilePriority: result.provider_results.map((item) => item.provider),
+  const aggregation = aggregateCanonicalProviderResults(providerOutputs, Number.isSafeInteger(result.minimum_heterologous) ? result.minimum_heterologous : 1, {
+    profilePriority: semanticResults.map((item) => item.provider),
     requireIdentity: false,
     requireSourceId: false,
   });
@@ -195,27 +268,11 @@ export function recordSimpleReviewResult({ task, result }) {
     throw new Error(`simple-review provider outputs could not be aggregated: ${JSON.stringify(aggregation.invalid_members ?? "quorum not satisfied")}`);
   }
 
-  const providerAttemptRecords = result.provider_results.map((item, index) => ({
-    provider: item.provider,
-    status: item.status === "completed" ? "completed" : "failed",
-    identity: normalizeIdentity(item.identity, item.provider),
-    session_id: null,
-    runtime_id: result.runtime_id ?? null,
-    output_ref: providerOutputRefs.get(item.provider),
-    raw_output_ref: null,
-    error: item.error ?? null,
-    execution: {
-      adapter: providerAdapter(item.provider),
-      model: item.identity?.model ?? "unknown",
-      effort: null,
-      thinking: null,
-      timing: item.timing ?? { started_at_ms: null, completed_at_ms: null, duration_ms: null },
-      usage: item.usage ?? null,
-      retry: { count: 0, progress_events: 0 },
-      runtime_id: result.runtime_id ?? "unknown",
-      session_file_path: null,
-    },
-  }));
+  for (const [outputRef, outputRecord] of providerOutputRecords) {
+    taskHandle.writeRecordAtomic(outputRef, JSON.stringify(outputRecord));
+  }
+
+  const providerAttemptRecords = result.provider_results.map((item) => providerAttemptRecord(item, result.runtime_id, providerOutputRefs.get(item.provider) ?? null));
 
   const resultFindings = aggregation.findings.map((finding) => ({ provider: finding.providers[0], ...finding }));
 
@@ -234,6 +291,7 @@ export function recordSimpleReviewResult({ task, result }) {
     source,
     snapshot_tree: tree,
     material_id: materialId,
+    material_revision: currentIdentity.materialRevision,
     provider_attempts: providerAttemptRecords,
     terminal_status: "semantic",
     error: null,
@@ -253,6 +311,7 @@ export function recordSimpleReviewResult({ task, result }) {
     source,
     snapshot_tree: tree,
     material_id: materialId,
+    material_revision: currentIdentity.materialRevision,
     attempt_ref: attemptRef,
     provider_results: aggregation.valid.map((item) => ({ provider: item.provider, output: item.review })),
     findings: resultFindings,

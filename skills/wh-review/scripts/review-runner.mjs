@@ -38,6 +38,15 @@ function sourceRecord(source, integrationSubject = null) {
 function reviewScopeFor(stage, phaseId) {
   return stage === "build-code" ? (phaseId ? "phase" : "integration") : null;
 }
+
+function normalizeDirectionSelection(value) {
+  if (typeof value === "string" && value.trim() !== "") return Object.freeze({ current_selection: value });
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.current_selection !== "string" || value.current_selection.trim() === "") {
+    throw new TypeError("current_selection is required for direction review");
+  }
+  return Object.freeze(structuredClone(value));
+}
+
 /**
  * Direction review is one broker request containing an internal, ordered flow.
  * The broker must enforce the reveal boundary; WorkflowHub must not emulate it

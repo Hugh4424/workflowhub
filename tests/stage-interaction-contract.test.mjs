@@ -129,7 +129,7 @@ describe("current interaction boundary", () => {
     expect(talk).toMatch(/只把用户实际给出的回复当作回答/);
   });
 
-  it("executes the 13 steps in Talk -> direction advice -> Grill -> detail advice -> confirmation -> consistency order", () => {
+  it("executes the 14 steps in Talk -> direction advice -> Grill -> detail advice -> confirmation -> consistency -> reflection order", () => {
     expect(makeSteps.map(({ step_slug }) => step_slug)).toEqual([
       "load-context",
       "triage-scope",
@@ -144,6 +144,7 @@ describe("current interaction boundary", () => {
       "approve-decision",
       "stage-end-spec-analyze",
       "publish-decision",
+      "stage-reflection",
     ]);
     expect(makeSteps.find((step) => step.step_slug === "direction-advice").order)
       .toBeLessThan(makeSteps.find((step) => step.step_slug === "talk-round-3").order);
@@ -151,7 +152,8 @@ describe("current interaction boundary", () => {
       .toBeLessThan(makeSteps.find((step) => step.step_slug === "grill-with-docs").order);
     expect(makeSteps.find((step) => step.step_slug === "grill-with-docs").order)
       .toBeLessThan(makeSteps.find((step) => step.step_slug === "detail-advice").order);
-    expect(makeSteps.every((step) => step.observable_result.includes("same decision-log.md"))).toBe(true);
+    expect(makeSteps.filter((step) => step.step_slug !== "stage-reflection")
+      .every((step) => step.observable_result.includes("same decision-log.md"))).toBe(true);
   });
 
   it("requires a real Talk and Grill ask -> wait -> reply -> resume lifecycle", () => {

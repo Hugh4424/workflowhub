@@ -613,9 +613,9 @@
       "destination": "tools/cli/check-task-record-paths.mjs",
       "status": "move",
       "sha256_before": "1daff9f4fb5000962decfcaa6d9b0621281ff6d83f78f61ce25749eed7f872cd",
-      "bytes": 16059,
-      "sha256_after": "514d17f476c45cbec23550372d3a21b6084c96173f9a12589d273c019c26d480",
-      "content_change": "import/path-only"
+      "bytes": 16066,
+      "sha256_after": "b5e23d24e85c94bd0cb6a5e25c5c0814d42358c17228af214c3fc9d4f79d010e",
+      "content_change": "import/path-only plus explicit stage-reflection lesson-writer capability classification"
     },
     {
       "source": "scripts/ci-chain-check.mjs",
@@ -696,8 +696,8 @@
       "status": "move",
       "sha256_before": "e3f36a7ae88d7f97aad7ce956c6caaba793b39a46ccc2dbb22e5176ec9c57129",
       "bytes": 3254,
-      "sha256_after": "150f5353890826dfef960af5fbf1fcc42ee652c4b488d685da13ff2af6dc50c5",
-      "content_change": "import/path-only"
+      "sha256_after": "2e0aa58e7153eb41e02257f05605610cf1db069e41db52b525cab4bdb8257b76",
+      "content_change": "migrated fixture to current simple-review-runner input boundary; no legacy runReview API restored"
     },
     {
       "source": "scripts/run-wh-review-provider-smoke.mjs",
@@ -705,8 +705,8 @@
       "status": "move",
       "sha256_before": "882dce9c2f74dd0dc8e13fbe68ea61e5f5072a18477003aee6caafcd9451c9d0",
       "bytes": 2993,
-      "sha256_after": "a46f7e74970cd715b22114d119d012790fce886ce4599eadedce66988ff4b5a9",
-      "content_change": "import/path-only"
+      "sha256_after": "77ff6282ee5ed4f599b5216567679ef02769f1843d65adf5cd5403957dcd8153",
+      "content_change": "migrated provider smoke to current simple-review-runner input boundary; keeps explicit path validation and evidence output"
     },
     {
       "source": "scripts/scan-core-files.mjs",
@@ -2166,9 +2166,9 @@
       "status": "modify",
       "owner": "stage-runner",
       "consumer": "T7 FR-LEFT-001/004",
-      "content_change": "added assertWriteBoundary (task/kernel identity + worktree bound + env-gated cwd check)",
-      "bytes": 91435,
-      "sha256_after": "80e101c7cebd42154b454541be77509009ee96915d856db03d31b326e7947d63"
+      "content_change": "added assertWriteBoundary plus deferred stage reflection lifecycle across official publication boundary and failed-stage evidence",
+      "bytes": 106731,
+      "sha256_after": "097adb986a6b69045659a8367531db1da51c57f16de0fade5ea295ea0e0b4e64"
     },
     {
       "source": "tests/close/close-contract.test.mjs",
@@ -2219,6 +2219,88 @@
       "content_change": "RED placeholder for T14 review record route persistence",
       "bytes": 309,
       "sha256_after": "a1f11918f634b23a41c7998bc65a3a9dddf43ac88236df95d738b4872514db08"
+    },
+    {
+      "source": "runtime/schemas/stage-reflection.v1.json",
+      "destination": "runtime/schemas/stage-reflection.v1.json",
+      "status": "add",
+      "owner": "workflowhub runtime stage-reflection contract",
+      "consumer": "stage-reflection skill and static page projection",
+      "delete_condition": "remove when the stage-reflection skill and projection are retired",
+      "content_change": "judgment-only stage reflection schema with quality-safe and merged lesson references, without quality scoring fields",
+      "sha256_before": null,
+      "bytes": 4216,
+      "sha256_after": "842ad285678f5e3c6eff4cc0fa58bc8dd6b4cb96becc4c671b32f43103a70476"
+    },
+    {
+      "source": "skills/stage-reflection",
+      "destination": "skills/stage-reflection",
+      "status": "add",
+      "owner": "stage-reflection portable skill",
+      "consumer": "five authoring stage-end mounts and current-session host reflection executor",
+      "delete_condition": "remove when all stage-end reflection mounts and the current-session executor are retired",
+      "content_change": "new portable judgment-layer skill contract with explicit schema and evidence boundaries",
+      "sha256_before": null
+    },
+    {
+      "source": "tools/cli/derive-consumption-edges.mjs",
+      "destination": "tools/cli/derive-consumption-edges.mjs",
+      "status": "add",
+      "owner": "stage-reflection data-plane utilities",
+      "consumer": "stage-reflection remove gate and reflection page consumption graph",
+      "delete_condition": "remove when stage outcome consumption edges are no longer consumed",
+      "content_change": "new read-only derivation of later consumer edges with unknown fallback",
+      "sha256_before": null,
+      "bytes": 11262,
+      "sha256_after": "e718d686df8e84dfec8e9801fa81094a32c789e8116668359c9aeac7e2a1f135"
+    },
+    {
+      "source": "tools/cli/append-lesson-observation.mjs",
+      "destination": "tools/cli/append-lesson-observation.mjs",
+      "status": "add",
+      "owner": "stage-reflection data-plane utilities",
+      "consumer": "stage-runner machine prelude and stage-reflection lessons index",
+      "delete_condition": "remove when automatic stage lessons are retired",
+      "content_change": "raw_observation JSONL writer plus atomic idempotent merged_lesson lifecycle",
+      "sha256_before": null,
+      "bytes": 10966,
+      "sha256_after": "880bcf9cf1796f0717aec2bb9ffe8145c6f9406bf18406792f0c5acefb82abad"
+    },
+    {
+      "source": "tools/cli/validate-stage-reflection.mjs",
+      "destination": "tools/cli/validate-stage-reflection.mjs",
+      "status": "add",
+      "owner": "stage-reflection deterministic validator",
+      "consumer": "stage-reflection workflow after reflection output and before page projection",
+      "delete_condition": "remove when the stage-reflection workflow and remove gate are retired",
+      "content_change": "new read-only validator for evidence existence and remove_candidate hard signals",
+      "sha256_before": null,
+      "bytes": 12812,
+      "sha256_after": "79b540a1492c1d3266eb119d8c95b74d8e48c59e07a2c933127f04f321afcfc1"
+    },
+    {
+      "source": "tools/cli/build-reflection-page.mjs",
+      "destination": "tools/cli/build-reflection-page.mjs",
+      "status": "add",
+      "owner": "stage-reflection static page projection",
+      "consumer": "user browser and M16 data input",
+      "delete_condition": "remove when the stage-reflection page is retired",
+      "content_change": "read-only reflection projection into data.js with globally resolvable merged lesson references",
+      "sha256_before": null,
+      "bytes": 21074,
+      "sha256_after": "4e5e2dc0601596989349a298ba8a2e5337d604859cd64e1e83040fc8aded418d"
+    },
+    {
+      "source": "tools/cli/build-reflection-page-template.html",
+      "destination": "tools/cli/build-reflection-page-template.html",
+      "status": "add",
+      "owner": "stage-reflection static page projection",
+      "consumer": "tools/cli/build-reflection-page.mjs generated browser page",
+      "delete_condition": "remove when the stage-reflection page is retired",
+      "content_change": "rebuild and replace retired ADR 0012 static monitor page blueprint with dependency-free Industrial task and overall pending views",
+      "sha256_before": null,
+      "bytes": 20462,
+      "sha256_after": "bd8731e9ff67385fc282028dce17bb796bfc90d9a8fb406c6f2561a9c411f174"
     }
   ]
 }

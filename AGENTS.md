@@ -35,7 +35,7 @@
 
 ## 当前治理边界
 
-- 当前工作真相只有 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四份材料；旧 task、旧 receipt、旧 review、历史 snapshot 只读保留。
+- 当前工作真相只有认证 worktree `specs/<task-id>/` 下的 `decision-log.md`、`spec.md`、`plan.md`、`tasks.md` 四份材料；外置任务追踪目录只放 `task.json`、`facts.jsonl`、`quality/`、`index.json` 等执行文件，不新增 gate。旧 task、旧 receipt、旧 review、历史 snapshot 只读保留。`m15-retirement` 材料迁移及仓外 `~/Knowledge/Projects/workflowhub/tasks/Projects/` 清理不属于本任务范围。
 - 测试、审查、历史和 inventory/complexity 只产生事实证据，不是推进许可证；质量缺失保持 `unknown`/`unavailable`/`incomplete`，不能伪造通过。
 - provenance、原始 review 事实和失败事实必须保留，不能用摘要覆盖来源，也不能把 provider 失败改写为质量通过。
 - 新机制或新控制面必须先登记职责、真实 consumer、owner、测试和删除/保留条件；没有当前消费者的重复控制面不新增。

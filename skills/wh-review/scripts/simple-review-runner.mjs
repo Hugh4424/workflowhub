@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 import { ReviewProviderClient } from "./review-provider-client.mjs";
@@ -12,7 +12,7 @@ import {
 
 const RESULT_SAMPLE = `Example of a complete finding:\n{\n  "findings": [{\n    "severity": "major",\n    "path": "materials/02-approved_spec.md",\n    "line": 42,\n    "issue": "FR-REV-002 requires a constitution clause citation, but the evidence field only contains the decision id; acceptance cannot verify clause-level traceability.",\n    "recommendation": "Add the constitution clause (e.g., F9, F4) to the 'evidence' field of FR-REV-002.",\n    "root_cause": "New FR was copied without the existing template's evidence field.",\n    "evidence_kind": "direct",\n    "evidence": "FR-REV-002 evidence field reads 'D-007' but lacks any '宪法' clause reference, unlike other FRs which cite specific clauses."\n  }]\n}\nExample of an empty result (no findings):\n{\n  "findings": []\n}\nOutput rules:\n- Emit exactly one JSON object shaped like the example above.\n- severity must be one of: blocking, major, minor.\n- evidence_kind must be one of: direct, machine, inferred.\n- path must be the bundle-relative path shown in the manifest.\n- line must be an integer line number in that file, or omitted.\n- Do not output a verdict, summary, pass/fail, checklist, or a second JSON object.\n- Do not wrap the JSON in markdown code fences.\n`;
 
-const RESULT_PROMPT = `Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\\n\\n${RESULT_SAMPLE}`;
+const RESULT_PROMPT = `Read bundle/review-instructions.md and bundle/manifest.json, then every submitted material listed in the manifest. Review only those bytes. Return exactly one JSON object shaped as shown in the sample below.\n\n${RESULT_SAMPLE}`;
 
 const FOCUS = Object.freeze({
   "make-decision/direction": "Challenge whether the proposed direction solves the stated problem with the smallest useful scope. Check assumptions, constraints, failure consequences, and rejected alternatives.",
@@ -82,14 +82,58 @@ function buildBundle(attachmentRoot, input) {
   };
 }
 
-function publicProviderResult(item) {
+function materialIdForInput(input) {
+  const entries = [{ path: "review-instructions.md", bytes: Buffer.byteLength(`${instructions(input)}\n`, "utf8") }];
+  entries[0].sha256 = hash(Buffer.from(`${instructions(input)}\n`, "utf8"));
+  Object.entries(input.materials ?? {}).forEach(([key, value], index) => {
+    const bytes = materialBytes(value);
+    entries.push({ path: safeName(key, index, value), bytes: bytes.length, sha256: hash(bytes) });
+  });
+  const manifest = Buffer.from(`${JSON.stringify({ version: 1, surface: surface(input), files: entries }, null, 2)}\n`, "utf8");
+  entries.push({ path: "manifest.json", bytes: manifest.length, sha256: hash(manifest) });
+  return hash(Buffer.from(JSON.stringify(entries), "utf8"));
+}
+
+function unavailableResult(input, error) {
+  return {
+    status: "unavailable",
+    stage: input.stage,
+    review_track: input.review_track ?? input.reviewTrack ?? null,
+    review_kind: input.review_kind ?? input.reviewKind ?? null,
+    material_id: materialIdForInput(input),
+    runtime_id: null,
+    outcome: "unavailable",
+    minimum_heterologous: 1,
+    provider_results: [],
+    findings: [],
+    error,
+  };
+}
+
+function evidenceAnchorValidity(bundleRoot, findings) {
+  return findings.map((finding) => {
+    if (!finding || typeof finding.path !== "string" || finding.path.startsWith("/")
+        || finding.path.includes("\\") || finding.path.split("/").includes("..")) return false;
+    const target = join(bundleRoot, ...finding.path.split("/"));
+    if (!existsSync(target)) return false;
+    if (finding.line === undefined || finding.line === null) return true;
+    if (!Number.isSafeInteger(finding.line) || finding.line < 1) return false;
+    const content = readFileSync(target, "utf8");
+    const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length;
+    return finding.line <= lineCount;
+  });
+}
+
+function publicProviderResult(item, evidenceAnchors = undefined) {
   return {
     provider: item.provider,
     status: item.status,
     identity: item.identity,
+    session_id: item.session_id ?? null,
     error: item.error,
     timing: item.timing,
     usage: item.usage,
+    ...(evidenceAnchors === undefined ? {} : { evidence_anchor_valid: evidenceAnchors }),
   };
 }
 
@@ -110,9 +154,9 @@ export async function runSimpleReview(input, dependencies = {}) {
     trusted = loadConfig({ requestedStage: input.stage, requestedTrack: reviewTrack, requestedReviewKind: reviewKind });
     route = resolveRoute(trusted.whReview, input.stage, reviewTrack, reviewKind);
   } catch (error) {
-    return { status: "unavailable", stage: input.stage, review_track: reviewTrack, error: { code: "ROUTE_UNAVAILABLE", message: String(error?.message ?? error) } };
+    return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: String(error?.message ?? error) });
   }
-  if (!route) return { status: "unavailable", stage: input.stage, review_track: reviewTrack, error: { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" } };
+  if (!route) return unavailableResult(input, { code: "ROUTE_UNAVAILABLE", message: "no heterologous review route is configured" });
   const selection = selectProviders(trusted.config, input.host_provider ?? input.hostProvider, route);
   const bundle = buildBundle(trusted.attachmentRoot, input);
   try {
@@ -126,17 +170,24 @@ export async function runSimpleReview(input, dependencies = {}) {
       strictProtocol: false,
     });
     const findings = [];
+    const semanticProviders = new Set();
     const providers = group.providers.map((item) => {
       if (item.status === "completed" && typeof item.output === "string" && item.error === null) {
         try {
-          for (const finding of parseReviewerOutput(item.output, { requireEvidence: true }).findings) findings.push({ ...finding, provider: item.provider });
+          const parsed = parseReviewerOutput(item.output, { requireEvidence: true });
+          const evidenceAnchors = evidenceAnchorValidity(bundle.bundleRoot, parsed.findings);
+          semanticProviders.add(item.provider);
+          for (const finding of parsed.findings) findings.push({ ...finding, provider: item.provider });
+          return publicProviderResult(item, evidenceAnchors);
         } catch {
           return { ...publicProviderResult(item), status: "failed", error: { code: "OUTPUT_INVALID", message: "provider output is not valid findings JSON" } };
         }
       }
       return publicProviderResult(item);
     });
-    const available = providers.length > 0 && providers.every((item) => item.status === "completed");
+    const minimum = Number.isSafeInteger(route.minimum_heterologous) && route.minimum_heterologous >= 1
+      ? route.minimum_heterologous : 1;
+    const available = semanticProviders.size >= minimum;
     return {
       status: available ? "available" : "unavailable",
       stage: input.stage,
@@ -145,6 +196,7 @@ export async function runSimpleReview(input, dependencies = {}) {
       material_id: bundle.materialId,
       runtime_id: group.runtimeId,
       outcome: group.outcome,
+      minimum_heterologous: minimum,
       provider_results: providers,
       findings,
     };

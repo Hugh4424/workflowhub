@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateCanonicalTestReceipt, validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import { validateAcceptanceEvidence } from "./acceptance-evidence-validator.mjs";
 import { validateSchema } from "../review/schema-validator.mjs";
 import { STAGE_ADVISORY_PREDICATES, STAGE_FACT_MATERIALS, STAGE_PREDICATES } from "../stage/completion-predicates.mjs";
@@ -194,7 +194,7 @@ function authenticateNested(fact, evidence, raw, { read, dependencies, key, allo
       });
       if (!closeConfirmation && fact.subject !== "human_confirmation") throw new Error("confirmation subject mismatch");
       if (closeConfirmation && !CLOSE_PLAN_REF.test(value.subject_ref ?? "")) throw new Error("close confirmation subject mismatch");
-      if (value.schema_version === "human-confirmation.v2"
+      if (isHumanConfirmationVersion(value, { current: true })
         && (value.material_revision !== fact.material_revision || value.snapshot_tree !== fact.snapshot_tree)) {
         throw new Error("confirmation provenance mismatch");
       }

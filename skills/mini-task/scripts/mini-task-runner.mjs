@@ -5,7 +5,7 @@ import { createCanonicalReceiptWriter } from "../../../runtime/evidence/canonica
 import { captureExecutionSnapshot, materialRevisionFromValues } from "../../../runtime/task/git-worktree-snapshot.mjs";
 import { assertTaskHandle, assertTaskKernel } from "../../../runtime/task/task-handle.mjs";
 import { openCurrentTaskWorkspace } from "../../../runtime/task/workspace.mjs";
-import { validateCanonicalFullTestReceipt, validateMiniTaskAcTrace } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
+import { isHumanConfirmationVersion, validateCanonicalFullTestReceipt, validateMiniTaskAcTrace } from "../../../runtime/evidence/canonical-evidence-validators.mjs";
 import { validateReportableFindingDispositions } from "../../../runtime/review/stage-review-disposition.mjs";
 import { validateSchema } from "../../../runtime/review/schema-validator.mjs";
 import {
@@ -30,7 +30,7 @@ const DELIVERY_AUTH_STEP_IDS = Object.freeze({
   archive: ["archive-spec"],
   merge: ["merge-task-branch"],
   push: ["push-target-branch"],
-  cleanup: ["remove-task-worktree", "remove-task-branch"],
+  cleanup: ["cleanup"],
 });
 const MINI_REVIEW_STATUSES = new Set(["passed", "failed", "recorded", "unavailable", "missing"]);
 const MINI_REVIEW_CLOSE_STATUSES = new Set(["passed", "recorded"]);
@@ -120,7 +120,7 @@ function readAcceptedCloseConfirmation(task, plan, confirmationRef) {
   const humanRaw = task.readRecord(confirmation.human_confirmation_ref);
   if (hash(humanRaw) !== confirmation.human_confirmation_hash) throw new Error("A resume human confirmation hash mismatch");
   const human = JSON.parse(humanRaw);
-  if (human.schema_version !== "human-confirmation.v2"
+  if (!isHumanConfirmationVersion(human, { current: true })
       || human.task_id !== task.identity.taskId
       || human.decision !== "accepted"
       || human.subject_ref !== `${RESUME_PLAN_PREFIX}${planHash}/plan.json`) {
@@ -142,7 +142,7 @@ function readCloseConfirmationOutcome(task, plan, confirmationRef) {
   if (confirmation.schema_version !== "task-close-confirmation.v1"
       || confirmation.task_id !== task.identity.taskId
       || confirmation.plan_hash !== planHash
-      || !["confirmed", "rejected"].includes(confirmation.outcome)) {
+      || !["confirmed", "rejected", "timeout"].includes(confirmation.outcome)) {
     throw new Error("mini-task close confirmation is invalid or not bound to this plan");
   }
   return confirmation.outcome;
@@ -898,10 +898,10 @@ export function prepareMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, 
   return prepareDeliveryClosePlan({ task, kernel, delivery, allowMiniTaskFocused: true });
 }
 
-export function confirmMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, plan, outcome = "confirmed" } = {}) {
+export function confirmMiniTaskDelivery({ task: taskHandle, kernel: taskKernel, plan, outcome = "confirmed", replyText, stepSlug } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("mini-task TaskHandle/TaskKernel mismatch");
-  return confirmClosePlan({ task, kernel, plan, outcome });
+  return confirmClosePlan({ task, kernel, plan, outcome, replyText, stepSlug });
 }
 
 export function recordMiniTaskDesignReview({ task: taskHandle, kernel: taskKernel, review, findingDispositions } = {}) {
@@ -963,10 +963,10 @@ export function prepareAResumePlan({ task: taskHandle, kernel: taskKernel, targe
   return createResumePlan({ task, workspace, targetOid, originalStage });
 }
 
-export function confirmAResumePlan({ task: taskHandle, kernel: taskKernel, plan, outcome = "confirmed" } = {}) {
+export function confirmAResumePlan({ task: taskHandle, kernel: taskKernel, plan, outcome = "confirmed", replyText, stepSlug } = {}) {
   const task = assertTaskHandle(taskHandle); const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("A resume TaskHandle/TaskKernel mismatch");
-  return confirmClosePlan({ task, kernel, plan, outcome });
+  return confirmClosePlan({ task, kernel, plan, outcome, replyText, stepSlug });
 }
 
 export function authorizeAResumePlan({ task: taskHandle, kernel: taskKernel, plan, confirmationRef } = {}) {

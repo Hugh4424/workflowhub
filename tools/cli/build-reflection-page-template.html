@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkflowHub stage reflection</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0c0a;
+      --panel: #11130f;
+      --panel-strong: #171a15;
+      --line: #354034;
+      --text: #e7eee4;
+      --muted: #94a18f;
+      --signal: #c6ff4a;
+      --warn: #ffb800;
+      --danger: #ff3b30;
+      --quiet: #5b6657;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); }
+    body { font-size: 13px; line-height: 1.55; }
+    button, select { color: inherit; font: inherit; }
+    button { border: 1px solid var(--line); background: var(--panel); cursor: pointer; }
+    button:hover, button:focus-visible, select:focus-visible { border-color: var(--signal); outline: 1px solid var(--signal); outline-offset: 2px; }
+    select { border: 1px solid var(--line); background: var(--panel); padding: 8px 10px; min-width: 150px; }
+    .app { min-height: 100vh; }
+    .masthead { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding: 24px 28px 18px; border-bottom: 1px solid var(--line); }
+    .title { margin: 0; font-size: 22px; letter-spacing: .02em; font-weight: 600; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); max-width: 760px; }
+    .signal { color: var(--signal); }
+    .state-badge { border: 1px solid currentColor; padding: 5px 8px; white-space: nowrap; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 14px 28px; border-bottom: 1px solid var(--line); }
+    .views { display: flex; gap: 0; margin-right: auto; }
+    .view-tab { padding: 8px 12px; border-right: 0; }
+    .view-tab:last-child { border-right: 1px solid var(--line); }
+    .view-tab.active { color: var(--bg); background: var(--signal); border-color: var(--signal); }
+    .filter { display: grid; gap: 4px; color: var(--muted); }
+    .filter label { font-size: 11px; }
+    .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: calc(100vh - 155px); }
+    .sidebar { border-right: 1px solid var(--line); padding: 18px 14px; }
+    .sidebar h2, .section-title { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .task-list { display: grid; gap: 4px; }
+    .task-item { width: 100%; text-align: left; padding: 9px 10px; }
+    .task-item.active { color: var(--bg); background: var(--signal); border-color: var(--signal); }
+    .task-meta { display: block; margin-top: 2px; font-size: 11px; opacity: .75; }
+    .content { min-width: 0; padding: 22px 28px 42px; }
+    .view { display: block; }
+    .view[hidden] { display: none; }
+    .task-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .task-id { margin: 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+    .coverage { color: var(--muted); }
+    .state-line { margin: 4px 0 0; color: var(--muted); }
+    .stage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 18px; }
+    .stage-card, .pending-card, .lesson-card { border: 1px solid var(--line); background: var(--panel); padding: 14px; }
+    .stage-card.state-failed { border-color: var(--danger); }
+    .stage-card.state-degraded, .stage-card.state-stale { border-color: var(--warn); }
+    .stage-card.state-ok { border-color: var(--signal); }
+    .card-head { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+    .card-title { margin: 0; font-size: 14px; }
+    .state { color: var(--muted); }
+    .state-ok { color: var(--signal); }
+    .state-failed, .state-fatal { color: var(--danger); }
+    .state-degraded, .state-stale { color: var(--warn); }
+    .state-unknown, .state-unavailable, .state-empty { color: var(--quiet); }
+    .counts { display: flex; flex-wrap: wrap; gap: 5px 10px; min-height: 25px; margin: 10px 0; color: var(--muted); font-size: 11px; }
+    .count strong { color: var(--text); }
+    .judgment, .intervention { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+    .judgment:first-child, .intervention:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+    .judgment-label { color: var(--signal); }
+    .field { margin-top: 6px; overflow-wrap: anywhere; }
+    .field-name { color: var(--muted); }
+    .ref { color: var(--signal); text-decoration: underline; }
+    .ref-unavailable { color: var(--muted); }
+    .state-copy, .empty-copy { color: var(--muted); margin: 12px 0 0; }
+    .lessons { margin-top: 26px; }
+    .lesson-grid, .pending-list { display: grid; gap: 10px; }
+    .pending-list { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .pending-score { color: var(--signal); font-size: 18px; }
+    .pending-title { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+    .pending-source { color: var(--muted); font-size: 11px; }
+    .global-state { margin-bottom: 18px; border: 1px solid var(--line); padding: 10px 12px; color: var(--muted); }
+    .global-state.fatal { border-color: var(--danger); color: var(--danger); }
+    .global-state.degraded { border-color: var(--warn); color: var(--warn); }
+    .state-legend { display: flex; flex-wrap: wrap; gap: 7px 14px; margin: 0 0 20px; color: var(--muted); font-size: 11px; }
+    @media (max-width: 800px) {
+      .masthead, .toolbar, .content { padding-left: 16px; padding-right: 16px; }
+      .masthead { display: block; }
+      .state-badge { display: inline-block; margin-top: 12px; }
+      .views { width: 100%; margin: 0 0 8px; }
+      .layout { display: block; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; }
+      .task-list { display: flex; overflow-x: auto; }
+      .task-item { min-width: 190px; }
+      .content { padding-top: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="masthead">
+      <div>
+        <h1 class="title">WorkflowHub stage reflection</h1>
+        <p class="subtitle">每个 stage 的判断层记录。判断不是事实，也不是质量裁决；缺失、失败和不可用状态保持可见。</p>
+      </div>
+      <div id="overall-state" class="state-badge">加载中</div>
+    </header>
+    <div class="toolbar">
+      <div class="views" role="tablist" aria-label="视图">
+        <button id="task-tab" class="view-tab active" type="button" role="tab">任务视图</button>
+        <button id="overall-tab" class="view-tab" type="button" role="tab">Overall pending</button>
+      </div>
+      <div class="filter"><label for="task-filter">任务</label><select id="task-filter"></select></div>
+      <div class="filter"><label for="stage-filter">stage</label><select id="stage-filter"></select></div>
+      <div class="filter"><label for="classification-filter">判断分类</label><select id="classification-filter"></select></div>
+    </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <h2>任务</h2>
+        <div id="task-list" class="task-list"></div>
+      </aside>
+      <main class="content">
+        <div id="global-state" class="global-state"></div>
+        <div class="state-legend" aria-label="状态说明">
+          <span>unknown=未知</span><span>unavailable=不可用</span><span>degraded=降级</span><span>failed=失败</span><span>empty=空数据</span><span>fatal=投影失败</span><span>stale=过期</span>
+        </div>
+        <section id="reference-panel" class="global-state" hidden>
+          <strong>受控证据引用</strong>
+          <div id="reference-value" class="field"></div>
+          <div class="state-copy">当前页面不复制证据内容；此处只展示已通过路径校验的 task quality ref。</div>
+        </section>
+        <section id="task-view" class="view" role="tabpanel">
+          <div id="task-header" class="task-header"></div>
+          <div id="stage-list" class="stage-grid"></div>
+          <section class="lessons">
+            <h2 class="section-title">Lessons index · 事实层输入</h2>
+            <div id="lesson-list" class="lesson-grid"></div>
+          </section>
+        </section>
+        <section id="overall-pending" class="view" role="tabpanel" hidden>
+          <h2 class="section-title">Overall pending · 30 天判断聚合</h2>
+          <div id="pending-list" class="pending-list"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script src="data.js"></script>
+  <script>
+    (() => {
+      const data = globalThis.__WH_MONITOR_DATA__;
+      const stateNames = new Set(["unknown", "unavailable", "degraded", "failed", "empty", "fatal", "stale", "ok", "ready"]);
+      let selectedTaskId = data?.tasks?.[0]?.task_id || "all";
+      const el = (id) => document.getElementById(id);
+      const text = (node, value) => { node.textContent = value === null || value === undefined || value === "" ? "unknown" : String(value); return node; };
+      const option = (label, value) => { const node = document.createElement("option"); node.value = value; node.textContent = label; return node; };
+      const stateLabel = (value) => ({ ok: "ok", ready: "ready", unknown: "unknown", unavailable: "unavailable", degraded: "degraded", failed: "failed", empty: "empty", fatal: "fatal", stale: "stale" }[value] || "unknown");
+      const classificationLabel = (value) => ({ keep: "保留", optimize: "优化", simplify: "简化", merge: "合并", remove_candidate: "移除候选", add: "新增", needs_evidence: "需要证据" }[value] || value);
+      const make = (tag, className, value) => { const node = document.createElement(tag); if (className) node.className = className; if (value !== undefined) text(node, value); return node; };
+      const addField = (parent, name, value) => { const row = make("div", "field"); row.appendChild(make("span", "field-name", `${name}: `)); if (value instanceof Node) row.appendChild(value); else row.appendChild(document.createTextNode(value === null || value === undefined || value === "" ? "unknown" : String(value))); parent.appendChild(row); };
+      const stateNode = (state) => make("span", `state state-${stateNames.has(state) ? state : "unknown"}`, stateLabel(state));
+      const refList = (refs) => {
+        const wrap = make("span");
+        if (!Array.isArray(refs) || refs.length === 0) { wrap.textContent = "unknown"; return wrap; }
+        refs.forEach((entry, index) => {
+          if (index > 0) wrap.appendChild(document.createTextNode(", "));
+          if (entry && entry.safe_ref) {
+            const link = make("a", "ref", entry.safe_ref);
+            link.href = `#ref=${encodeURIComponent(entry.safe_ref)}`;
+            link.dataset.ref = entry.safe_ref;
+            link.addEventListener("click", (event) => {
+              event.preventDefault();
+              const panel = el("reference-panel");
+              text(el("reference-value"), entry.safe_ref);
+              panel.hidden = false;
+              panel.scrollIntoView({ block: "nearest" });
+            });
+            wrap.appendChild(link);
+          } else wrap.appendChild(make("span", "ref-unavailable", "unavailable"));
+        });
+        return wrap;
+      };
+      const renderJudgment = (judgment) => {
+        const article = make("article", "judgment");
+        const heading = make("div", "judgment-label", `${judgment.subject_kind}:${judgment.subject_id} · ${classificationLabel(judgment.classification)}`);
+        article.appendChild(heading);
+        addField(article, "severity", judgment.severity);
+        addField(article, "confidence", judgment.confidence);
+        addField(article, "reason", judgment.reason);
+        addField(article, "evidence_refs", refList(judgment.evidence_refs));
+        addField(article, "next_review_trigger", judgment.next_review_trigger);
+        return article;
+      };
+      const renderIntervention = (intervention) => {
+        const article = make("article", "intervention");
+        article.appendChild(make("div", "judgment-label", "人工介入 · judgment"));
+        addField(article, "step_slug", intervention.step_slug);
+        addField(article, "reply_text", intervention.reply_text);
+        addField(article, "attribution", intervention.attribution);
+        addField(article, "confidence", intervention.confidence);
+        return article;
+      };
+      const activeFilters = () => ({ task: el("task-filter").value, stage: el("stage-filter").value, classification: el("classification-filter").value });
+      const renderStage = (stage, filters) => {
+        if (filters.stage !== "all" && filters.stage !== stage.stage) return null;
+        const judgments = stage.judgments.filter((judgment) => filters.classification === "all" || judgment.classification === filters.classification);
+        const card = make("article", `stage-card state-${stage.state}`);
+        const head = make("div", "card-head");
+        head.appendChild(make("h3", "card-title", stage.stage));
+        head.appendChild(stateNode(stage.state));
+        card.appendChild(head);
+        const meta = make("div", "state-line", `stage_status=${stage.stage_status || "unknown"} · reflection_status=${stage.reflection_status || "unknown"}`);
+        card.appendChild(meta);
+        const counts = make("div", "counts");
+        Object.entries(stage.judgment_counts || {}).filter(([, count]) => count > 0).forEach(([classification, count]) => {
+          const item = make("span", "count"); item.appendChild(document.createTextNode(`${classificationLabel(classification)} `)); item.appendChild(make("strong", "", count)); counts.appendChild(item);
+        });
+        card.appendChild(counts);
+        if (stage.error) addField(card, "error", stage.error.summary);
+        if (judgments.length === 0) card.appendChild(make("p", "state-copy", stage.state === "empty" ? "暂无复盘产物。" : "暂无符合筛选条件的判断。"));
+        judgments.forEach((judgment) => card.appendChild(renderJudgment(judgment)));
+        (stage.interventions || []).forEach((intervention) => card.appendChild(renderIntervention(intervention)));
+        return card;
+      };
+      const renderTask = () => {
+        const taskId = el("task-filter").value === "all" ? selectedTaskId : el("task-filter").value;
+        const task = (data.tasks || []).find((entry) => entry.task_id === taskId);
+        const header = el("task-header"); header.replaceChildren();
+        const stages = el("stage-list"); stages.replaceChildren();
+        const lessons = el("lesson-list"); lessons.replaceChildren();
+        if (!task) { header.appendChild(make("p", "empty-copy", "empty: 暂无任务数据。")); return; }
+        const title = make("div"); title.appendChild(make("h2", "task-id", task.task_id)); title.appendChild(make("p", "coverage", `覆盖 ${task.coverage.present}/${task.coverage.total} 个 stage · generated_at=${task.generated_at || "unknown"}`));
+        const badge = stateNode(task.state); header.appendChild(title); header.appendChild(badge);
+        const filters = activeFilters();
+        task.stages.forEach((stage) => { const card = renderStage(stage, filters); if (card) stages.appendChild(card); });
+        const entries = (task.lessons || []).filter((entry) => !filters.stage || filters.stage === "all" || entry.stage === filters.stage);
+        if (entries.length === 0) lessons.appendChild(make("p", "empty-copy", "暂无 lessons。"));
+        entries.forEach((entry) => { const card = make("article", "lesson-card"); addField(card, "entry_kind", entry.entry_kind); addField(card, "stage", entry.stage); addField(card, "text/lesson", entry.text || entry.lesson); addField(card, "judgment_layer", entry.judgment_layer); lessons.appendChild(card); });
+      };
+      const renderPending = () => {
+        const list = el("pending-list"); list.replaceChildren();
+        const filters = activeFilters();
+        const entries = (data.overall_pending || []).filter((entry) => (filters.task === "all" || entry.source_task_stages.some((source) => source.task_id === filters.task)) && (filters.stage === "all" || entry.source_task_stages.some((source) => source.stage === filters.stage)) && (filters.classification === "all" || entry.classification === filters.classification));
+        if (entries.length === 0) { list.appendChild(make("p", "empty-copy", "empty: 暂无 pending 判断。")); return; }
+        entries.forEach((entry) => { const card = make("article", "pending-card"); card.appendChild(make("div", "pending-score", `score ${entry.score}`)); card.appendChild(make("h3", "pending-title", `${entry.subject_kind}:${entry.subject_id}`)); addField(card, "classification", classificationLabel(entry.classification)); addField(card, "severity", entry.severity); addField(card, "frequency", entry.frequency); addField(card, "reason", entry.reason); addField(card, "suggested_action", classificationLabel(entry.suggested_action)); addField(card, "first_seen", entry.first_seen); addField(card, "recent_seen", entry.recent_seen); addField(card, "source_task_stages", entry.source_task_stages.map((source) => `${source.task_id}/${source.stage}`).join(", ")); card.appendChild(make("div", "pending-source", "judgment · 非事实")); list.appendChild(card); });
+      };
+      const render = () => { renderTask(); renderPending(); };
+      const populate = () => {
+        const taskFilter = el("task-filter"); taskFilter.replaceChildren(option("全部任务", "all")); (data.filters?.tasks || []).forEach((task) => taskFilter.appendChild(option(task, task))); if (selectedTaskId !== "all") taskFilter.value = selectedTaskId;
+        const stageFilter = el("stage-filter"); stageFilter.replaceChildren(option("全部 stage", "all")); (data.filters?.stages || []).forEach((stage) => stageFilter.appendChild(option(stage, stage)));
+        const classFilter = el("classification-filter"); classFilter.replaceChildren(option("全部分类", "all")); (data.filters?.classifications || []).forEach((classification) => classFilter.appendChild(option(classificationLabel(classification), classification)));
+        const list = el("task-list"); list.replaceChildren(); (data.tasks || []).forEach((task) => { const item = make("button", "task-item", task.task_id); item.type = "button"; item.dataset.task = task.task_id; item.appendChild(make("span", "task-meta", `${stateLabel(task.state)} · ${task.coverage.present}/${task.coverage.total}`)); item.addEventListener("click", () => { selectedTaskId = task.task_id; taskFilter.value = task.task_id; [...list.children].forEach((node) => node.classList.toggle("active", node.dataset.task === task.task_id)); render(); }); list.appendChild(item); }); [...list.children].forEach((node) => node.classList.toggle("active", node.dataset.task === selectedTaskId));
+      };
+      if (!data) { text(el("overall-state"), "fatal"); text(el("global-state"), "fatal: data.js 不可用，未展示陈旧数据。"); return; }
+      text(el("overall-state"), stateLabel(data.state || data.status));
+      el("overall-state").className = `state-badge state-${data.state || data.status}`;
+      text(el("global-state"), `${stateLabel(data.status)} · generated_at=${data.generated_at || "unknown"} · judgment layer only`);
+      el("global-state").classList.add(data.status);
+      populate();
+      el("task-filter").addEventListener("change", () => { if (el("task-filter").value !== "all") selectedTaskId = el("task-filter").value; render(); });
+      ["stage-filter", "classification-filter"].forEach((id) => el(id).addEventListener("change", render));
+      el("task-tab").addEventListener("click", () => { el("task-filter").value = selectedTaskId; el("task-view").hidden = false; el("overall-pending").hidden = true; el("task-tab").classList.add("active"); el("overall-tab").classList.remove("active"); render(); });
+      el("overall-tab").addEventListener("click", () => { el("task-filter").value = "all"; el("task-view").hidden = true; el("overall-pending").hidden = false; el("task-tab").classList.remove("active"); el("overall-tab").classList.add("active"); renderPending(); });
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -62,11 +62,11 @@ function usage() {
   return [
     "Usage:",
     "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=...",
-    "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout",
+    "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout [--reply-text=...] [--step-slug=...] (reply and step required unless timeout)",
     "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status --task-path=... --project=... --task=... [--plan-hash=...]",
-    "  task-close.mjs close --task-path=... --project=... --task=... [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
+    "  task-close.mjs close --task-path=... --project=... --task=... --reply-text=... --step-slug=... [--remote=origin] [--target-branch=main] [--spec-source=...] [--spec-archive=...]",
   ].join("\n");
 }
 
@@ -100,6 +100,8 @@ async function main() {
       ...(values["target-branch"] ? { targetBranch: values["target-branch"] } : {}),
       ...(values["spec-source"] ? { specSourcePath: values["spec-source"] } : {}),
       ...(values["spec-archive"] ? { specArchivePath: values["spec-archive"] } : {}),
+      replyText: required(values, "reply-text"),
+      stepSlug: required(values, "step-slug"),
     });
     return finish(result, "operations/close/completed.json");
   }
@@ -122,7 +124,15 @@ async function main() {
   }
   const plan = preparedPlan(task, required(values, "plan-hash"));
   if (command === "confirm") {
-    const result = confirmClosePlan({ task, kernel, plan, outcome: required(values, "decision") });
+    const outcome = required(values, "decision");
+    const result = confirmClosePlan({
+      task,
+      kernel,
+      plan,
+      outcome,
+      ...(values["reply-text"] === undefined ? {} : { replyText: values["reply-text"] }),
+      ...(values["step-slug"] === undefined ? {} : { stepSlug: values["step-slug"] }),
+    });
     return finish(result, result.ref);
   }
   if (command === "execute") {

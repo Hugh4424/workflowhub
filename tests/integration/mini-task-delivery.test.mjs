@@ -216,7 +216,7 @@ describe("mini-task delivery RED contract", () => {
     publishMiniTaskQualityFixture(state);
     const candidateRoot = state.candidate.worktreeRoot;
     const plan = prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan });
+    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, replyText: "用户确认交付。", stepSlug: "confirm-mini-task-delivery" });
     authorizeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     const completed = await executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     expect(completed.status).toBe("completed");
@@ -235,7 +235,7 @@ describe("mini-task delivery RED contract", () => {
     const candidateRoot = state.candidate.worktreeRoot;
     const before = git(state.repo, ["rev-parse", "refs/heads/main"]);
     const plan = prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan });
+    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, replyText: "用户确认取消交付。", stepSlug: "confirm-mini-task-delivery" });
     await expect(executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref })).rejects.toThrow("IRREVERSIBLE_AUTHORIZATION_REQUIRED");
     expect(git(state.repo, ["rev-parse", "refs/heads/main"])).toBe(before);
     expect(existsSync(candidateRoot)).toBe(true);
@@ -450,7 +450,7 @@ describe("mini-task delivery RED contract", () => {
 
     const before = git(state.repo, ["rev-parse", `refs/heads/task/WorkflowHub/${state.taskId}`]);
     const plan = prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: state.delivery });
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, outcome: "rejected" });
+    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, outcome: "rejected", replyText: "用户拒绝交付。", stepSlug: "confirm-mini-task-delivery" });
     const cancelled = await executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     expect(cancelled).toMatchObject({ status: "blocked", confirmationOutcome: "rejected" });
     expect(git(state.repo, ["rev-parse", `refs/heads/task/WorkflowHub/${state.taskId}`])).toBe(before);
@@ -496,7 +496,7 @@ describe("mini-task delivery RED contract", () => {
     expect(quality.snapshot_tree).toBe(implementationSnapshot.tree);
 
     const plan = prepareMiniTaskDelivery({ task: state.task, kernel: state.kernel, delivery: { ...state.delivery, task_commit: quality.snapshot_commit } });
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan });
+    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, replyText: "用户确认交付。", stepSlug: "confirm-mini-task-delivery" });
     authorizeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     await expect(executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref }))
       .resolves.toMatchObject({ status: "completed" });
@@ -598,7 +598,7 @@ describe("mini-task delivery RED contract", () => {
     git(state.candidate.worktreeRoot, ["add", "."]);
     git(state.candidate.worktreeRoot, ["commit", "-qm", "partial mini-task operation"]);
     const partialTip = git(state.repo, ["rev-parse", `refs/heads/task/WorkflowHub/${state.taskId}`]);
-    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, outcome: "rejected" });
+    const confirmation = confirmMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, outcome: "rejected", replyText: "用户拒绝交付。", stepSlug: "confirm-mini-task-delivery" });
     const cancelled = await executeMiniTaskDelivery({ task: state.task, kernel: state.kernel, plan: plan.plan, confirmationRef: confirmation.ref });
     expect(cancelled).toMatchObject({ status: "blocked", confirmationOutcome: "rejected" });
     expect(git(state.repo, ["rev-parse", `refs/heads/task/WorkflowHub/${state.taskId}`])).toBe(partialTip);

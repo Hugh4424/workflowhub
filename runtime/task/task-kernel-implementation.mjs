@@ -6,6 +6,7 @@ import { ArtifactDir, assertArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureExecutionSnapshot, materialRevisionFromValues } from "./git-worktree-snapshot.mjs";
 import { createQualityFact, publishQualityFact } from "../evidence/quality-fact.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
+import { isHumanConfirmationVersion, validateHumanConfirmation } from "../evidence/canonical-evidence-validators.mjs";
 import { deriveStageCompletion, STAGE_FACT_MATERIALS } from "../stage/completion-predicates.mjs";
 import {
   buildRiskAcceptance,
@@ -24,6 +25,8 @@ const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/i;
 const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
 const CONFIRMATION_REF = /^quality\/confirmations\/[a-f0-9]{64}\.json$/;
+const STAGE_REFLECTION_NAMESPACE = "quality/stage-reflection/";
+const STAGE_REFLECTION_REF = /^quality\/stage-reflection\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\.json$/;
 const AUTHORIZATION_OPERATIONS = new Set(["commit", "push", "merge", "archive", "cleanup"]);
 const CLOSE_PLAN_REF = /^operations\/close\/plans\/[a-f0-9]{64}\/plan\.json$/;
 const RESOLVED_REVIEW_STAGE_OUTCOME_REF = /^quality\/evidence\/stage-outcomes\/verify-code\/[a-f0-9]{64}\.json$/;
@@ -60,6 +63,7 @@ function ref(value, label) {
   if (value.includes("..") || value.startsWith("/") || !/^[a-z][a-z0-9_-]*\//.test(value)) {
     throw new TypeError(`${label} must be a task-relative canonical ref`);
   }
+  if (value.startsWith(STAGE_REFLECTION_NAMESPACE) && STAGE_REFLECTION_REF.test(value)) return value;
   return value;
 }
 function oid(value, label) {
@@ -78,12 +82,31 @@ function readAcceptedHumanConfirmation(task, confirmationRef, label = "human con
   if (hash(raw) !== confirmationRef.slice("quality/confirmations/".length, -".json".length)) throw new Error(`${label} hash does not bind its canonical bytes`);
   let value;
   try { value = JSON.parse(raw); } catch { throw new Error(`${label} must be valid JSON`); }
-  if (value?.schema_version !== "human-confirmation.v2" || value.task_id !== task.identity.taskId || value.decision !== "accepted") {
-    throw new Error(`${label} must be an accepted human-confirmation.v2 for the current task`);
+  if (!isHumanConfirmationVersion(value)
+      || value.task_id !== task.identity.taskId || value.decision !== "accepted"
+      || typeof value.stage !== "string" || value.stage.trim() === "") {
+    throw new Error(`${label} must be an accepted human confirmation for the current task`);
+  }
+  try {
+    validateHumanConfirmation(value, {
+      taskId: task.identity.taskId,
+      stage: value.stage,
+      requireAccepted: true,
+    });
+  } catch (error) {
+    throw new Error(`${label} is invalid: ${error.message}`);
+  }
+  if (!isHumanConfirmationVersion(value, { current: true })) {
+    throw new Error(`${label} uses legacy human-confirmation.v1; it remains readable but cannot authorize current operations`);
   }
   if (typeof value.subject_ref !== "string" || value.subject_ref.trim() === "") throw new Error(`${label} must bind a non-empty subject_ref`);
   if (!/^revision-[a-f0-9]{64}$/.test(value.material_revision ?? "") || !/^[a-f0-9]{40,64}$/i.test(value.snapshot_tree ?? "")) {
     throw new Error(`${label} has invalid material/snapshot provenance`);
+  }
+  if (value.schema_version === "human-confirmation.v3"
+      && (typeof value.reply_text !== "string" || value.reply_text.trim() === ""
+        || typeof value.step_slug !== "string" || value.step_slug.trim() === "")) {
+    throw new Error(`${label} v3 must preserve the non-empty reply_text and step_slug`);
   }
   return Object.freeze({ ref: confirmationRef, sha256: hash(raw), raw, value: Object.freeze(value) });
 }
@@ -517,10 +540,25 @@ export function buildTaskKernel(taskHandle, {
     publishHumanConfirmation(stage, input = {}) {
       const name = stageName(stage);
       object(input, "human confirmation input");
-      rejectUnknown(input, new Set(["decision", "subject_ref"]), "human confirmation input");
+      rejectUnknown(input, new Set(["decision", "subject_ref", "attempt_ref", "reply_text", "step_slug"]), "human confirmation input");
       if (!new Set(["accepted", "rejected"]).has(input.decision)) throw new TypeError("human confirmation decision is invalid");
+      const subjectRef = input.subject_ref ?? null;
+      if (subjectRef !== null && (typeof subjectRef !== "string" || subjectRef.trim() === "")) throw new TypeError("human confirmation subject_ref must be non-empty when supplied");
+      const attemptRef = input.attempt_ref === undefined ? undefined : text(input.attempt_ref, "human confirmation attempt_ref");
       const { revision, snapshot } = currentContext();
-      const value = { schema_version: "human-confirmation.v2", task_id: task.identity.taskId, stage: name, decision: input.decision, subject_ref: input.subject_ref ?? null, material_revision: revision.revision_id, snapshot_tree: snapshot.tree, confirmed_at: now() };
+      const value = {
+        schema_version: "human-confirmation.v3",
+        task_id: task.identity.taskId,
+        stage: name,
+        ...(attemptRef === undefined ? {} : { attempt_ref: attemptRef }),
+        decision: input.decision,
+        subject_ref: subjectRef,
+        material_revision: revision.revision_id,
+        snapshot_tree: snapshot.tree,
+        confirmed_at: now(),
+        reply_text: text(input.reply_text, "human confirmation reply_text"),
+        step_slug: text(input.step_slug, "human confirmation step_slug"),
+      };
       const qualityStatus = input.decision === "accepted" ? "passed" : "failed";
       // A close-plan confirmation authorizes an irreversible close operation;
       // it is not the verify-code stage's human quality confirmation. Keep the
@@ -546,7 +584,7 @@ export function buildTaskKernel(taskHandle, {
             : null;
           if (!evidenceRef) continue;
           const existing = JSON.parse(task.readRecord(evidenceRef));
-          if (existing.schema_version === value.schema_version && existing.decision === value.decision && existing.subject_ref === value.subject_ref) {
+          if (JSON.stringify(existing) === JSON.stringify(value)) {
             return { ref: evidenceRef, hash: hash(task.readRecord(evidenceRef)), value: existing, quality_fact_ref: qualityRef, quality_fact_hash: hash(qualityRaw), idempotent: true };
           }
         } catch {

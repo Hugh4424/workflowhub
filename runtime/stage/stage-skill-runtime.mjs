@@ -19,6 +19,7 @@ const FORMAL_CONSUMERS = new Set([
   "stage-handlers#buildCodeContractFacts",
   "stage-handlers#codeReviewFacts",
   "stage-runner#validateStageSpecAnalyzeOutcome",
+  "stage-runner#runStageEndReflection",
   "stage-content-contracts#validateComponentQualityMap",
 ]);
 

@@ -271,6 +271,20 @@ test("canonical namespaced ACs and legacy compact ACs share the parser", () => {
   assert.deepEqual(legacy, ["AC-001", "AC-011"]);
 });
 
+test("Chinese acceptance checklist tables exclude historical AC references outside the section", () => {
+  const ids = activeAcceptanceCriterionIds([
+    "Earlier text mentions AC-HISTORY-001.",
+    "## 10. 验收清单（AC）",
+    "| AC ID | 验收内容 |",
+    "| --- | --- |",
+    "| AC-001 | first |",
+    "| AC-002 | second, with AC-HISTORY-001 only as supporting context |",
+    "## 11. 风险",
+    "AC-RISK-001 is not a current acceptance criterion.",
+  ].join("\n"));
+  assert.deepEqual(ids, ["AC-001", "AC-002"]);
+});
+
 test("design gaps remain unknown facts and never become a UI gate", () => {
   const unknown = alignUiDesignEvidence({
     uiContract: {
