@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { officialStageHandler } from "../core/stage-handlers.mjs";
-import { validateStageFacts } from "../core/task-kernel.mjs";
+import { validateStageFacts } from "../runtime/task/task-kernel.mjs";
 import { aggregateProviderResults } from "../skills/wh-review/scripts/review-result.mjs";
 import { buildNonGateReviewResponseRecord } from "../skills/wh-review/scripts/review-controller.mjs";
-import { buildRiskAcceptance, deriveSeriousReviewPause } from "../core/stage-review-disposition.mjs";
+import { buildRiskAcceptance, deriveSeriousReviewPause } from "../runtime/review/stage-review-disposition.mjs";
 
 describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
@@ -1144,7 +1144,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("uses an epoch-bound quiescing protocol before switching storage roots", () => {
-    const source = readFileSync(resolve("scripts/migrate-task-v2.mjs"), "utf8");
+    const source = readFileSync(resolve("tools/cli/migrate-task-v2.mjs"), "utf8");
     expect(source).toMatch(/assertMigrationAuthority[\s\S]*expectedEpoch:\s*options\.epoch/);
     const authority = readFileSync(resolve("core/runtime-mode.mjs"), "utf8");
     expect(authority).toMatch(/assertMigrationAuthority[\s\S]*quiescing[\s\S]*epoch/i);
@@ -1165,13 +1165,13 @@ ${task("T002", "contract GREEN", 0, "T001")}
   });
 
   it("does not exempt test directories wholesale and keeps fixture exceptions file-scoped", () => {
-    const source = readFileSync(resolve("scripts/check-task-record-paths.mjs"), "utf8");
+    const source = readFileSync(resolve("tools/cli/check-task-record-paths.mjs"), "utf8");
     expect(source).not.toMatch(/rel\.includes\("\/__tests__\/"\)|\(\?:\^\|\\\/\)tests\?\\\//);
     expect(source).toMatch(/FIXTURE_ALLOWLIST/);
   });
 
   it("allows specs task-path construction only inside ArtifactDir", () => {
-    const source = readFileSync(resolve("scripts/check-task-record-paths.mjs"), "utf8");
+    const source = readFileSync(resolve("tools/cli/check-task-record-paths.mjs"), "utf8");
     expect(source).toMatch(/specs[\s\S]+ArtifactDir product authority/);
     expect(source).toMatch(/literal specs path derivation is only legal in core\/artifact-dir\.mjs/);
   });

@@ -8,7 +8,7 @@
       "title": "Grill replacement machinery",
       "candidatePaths": [
         "skills/grill-with-docs",
-        "core/stage-content-contracts.mjs"
+        "runtime/stage/stage-content-contracts.mjs"
       ],
       "consumers": [
         "pending: reverse-reference audit in T022"
@@ -53,8 +53,8 @@
       "id": "DEL-02",
       "title": "Phase trace lineage and supersession",
       "candidatePaths": [
-        "core/stage-review-disposition.mjs",
-        "core/review-flow-authority.mjs"
+        "runtime/review/stage-review-disposition.mjs",
+        "runtime/review/review-flow-authority.mjs"
       ],
       "consumers": [
         "pending: reverse-reference audit in T024"

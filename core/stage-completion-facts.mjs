@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-export { assertStageCompleted, deriveStageCompletion } from "./completion-predicates.mjs";
+export { assertStageCompleted, deriveStageCompletion } from "../runtime/stage/completion-predicates.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const CANONICAL = new WeakSet();

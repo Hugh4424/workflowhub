@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { validatePhaseGate } from "../scripts/phase-gate.mjs";
+import { validatePhaseGate } from "../tools/cli/phase-gate.mjs";
 
 let root, outside;
 let tree, baseTree, baselineCommit, implementationCommit;

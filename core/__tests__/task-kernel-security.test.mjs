@@ -8,8 +8,8 @@ import { spawnSync } from "node:child_process";
 
 import { bootstrapStage } from "../stage-context.mjs";
 import { createTask } from "../task-handle.mjs";
-import { createTaskKernel } from "../task-kernel.mjs";
-import { assertTaskKernel } from "../task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
+import { assertTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { buildTaskKernel } from "../task-kernel-implementation.mjs";
 
 const temporaryDirs = [];

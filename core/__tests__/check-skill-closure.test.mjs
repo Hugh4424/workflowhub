@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { checkSkillClosure } from "../check-skill-closure.mjs";
-import { validateSkillBundle } from "../local-skill-resolver.mjs";
+import { checkSkillClosure } from "../../runtime/evidence/check-skill-closure.mjs";
+import { validateSkillBundle } from "../../runtime/adapters/local-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -17,7 +17,7 @@ function fixture({ prompt = "Use `skills/demo/SKILL.md`.", manifestSkill = true,
   fs.mkdirSync(path.join(root, "workflows/stage"), { recursive: true });
   fs.writeFileSync(path.join(root, "config/workflowhub.yaml"), "registry:\n  - path: workflows/stage/SKILL.md\n");
   for (const name of ["skill-catalog", "stage-skill-deps", "skill-bundle", "review-bundle"]) {
-    fs.copyFileSync(new URL(`../../schemas/${name}.schema.json`, import.meta.url), path.join(root, `schemas/${name}.schema.json`));
+    fs.copyFileSync(new URL(`../../runtime/schemas/${name}.schema.json`, import.meta.url), path.join(root, `schemas/${name}.schema.json`));
   }
   fs.writeFileSync(path.join(root, "skills/catalog.yaml"), "schema_version: 2\nlast_reviewed_at: '2026-07-14'\nprojects: {}\nskills:\n  - { name: demo, path: skills/demo/SKILL.md, local_version: 1.0.0, local_bundle_hash: eec6793d194db66a45a5954cd4fc36797f497ef16097e53ed9c593edb6449bee, last_reviewed_at: '2026-07-14', status: native, purpose: test, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/demo], update_policy: manual }\ncapability_decisions:\n  - { name: fixture, status: rejected, purpose: fixture, design_idea: fixture, used_by_stages: [], local_path: null, upstream: [], local_changes: rejected, dependency_closure: [], update_policy: none }\n");
   fs.writeFileSync(path.join(root, "skills/reuse-registry.md"), "- `demo`\n- `fixture`\n");

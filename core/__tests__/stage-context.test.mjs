@@ -7,9 +7,9 @@ import { join } from "node:path";
 
 import { bootstrapStage } from "../stage-context.mjs";
 import { createTask, migrateTaskRunnerRoot } from "../task-handle.mjs";
-import { createTaskKernel } from "../task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
-import { hashAuditSummary } from "../audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 import { writeOfficialComponentReceipt } from "../canonical-receipt-writer.mjs";
 
@@ -344,7 +344,7 @@ describe("bootstrapStage", () => {
       runnerRoot,
     });
     const { authenticateStageWriteBoundary } = await import("../stage-context.mjs");
-    const { persistWriteBoundaryPathCard } = await import("../write-boundary-preflight.mjs");
+    const { persistWriteBoundaryPathCard } = await import("../../runtime/evidence/write-boundary-preflight.mjs");
     const boundary = authenticateStageWriteBoundary(context, {
       runnerRoot,
       operation: "accept",

@@ -152,13 +152,13 @@ N/A — 不新增外部 HTTP API。现有 CLI 和 TaskKernel 接口按各 Task �
 
 ### NEW
 
-- `core/write-boundary-preflight.mjs`
+- `runtime/evidence/write-boundary-preflight.mjs`
 - `docs/adr/0011-authenticated-review-flow-generations.md`
 - `apply/evidence/current-diff-ac-coverage.json`
 
 ### MODIFY
 
-- `core/invocation-identity.mjs`
+- `runtime/evidence/invocation-identity.mjs`
 - `core/stage-context.mjs`
 - `core/task-handle.mjs`
 - `core/stage-runner.mjs`
@@ -168,21 +168,21 @@ N/A — 不新增外部 HTTP API。现有 CLI 和 TaskKernel 接口按各 Task �
 - `core/task-kernel-implementation.mjs`
 - `core/build-spec-receipt-recovery.mjs`
 - `core/workspace.mjs`
-- `core/local-skill-resolver.mjs`
-- `core/capability-doctor.mjs`
-- `core/stage-skill-runtime.mjs`
-- `core/receipt-writer.mjs`
+- `runtime/adapters/local-skill-resolver.mjs`
+- `runtime/evidence/capability-doctor.mjs`
+- `runtime/stage/stage-skill-runtime.mjs`
+- `runtime/evidence/receipt-writer.mjs`
 - `core/audit-aggregator.mjs`
-- `core/review-flow-authority.mjs`
+- `runtime/review/review-flow-authority.mjs`
 - `core/stage-content-evidence.mjs`
-- `core/stage-content-contracts.mjs`
+- `runtime/stage/stage-content-contracts.mjs`
 - `core/stage-completion-facts.mjs`
 - `core/stage-handlers.mjs`
 - `core/schemas/workflowhub-recovery-credential.v1.json`
 - `core/schemas/workflowhub-recovery-generation.v1.json`
-- `core/schemas/ambiguity-ledger.v2.json`
-- `core/schemas/stage-completion-facts.v1.json`
-- `schemas/task-attempt.v2.schema.json`
+- `runtime/schemas/ambiguity-ledger.v2.json`
+- `runtime/schemas/stage-completion-facts.v1.json`
+- `runtime/schemas/task-attempt.v2.schema.json`
 - `contracts/facts-subschema.json`
 - `core/__tests__/invocation-identity.test.mjs`
 - `core/__tests__/stage-context.test.mjs`
@@ -262,7 +262,7 @@ spec → plan Phase → tasks 唯一 Task 卡 → 执行者填写完成事实 �
 | --- | --- | --- | --- | --- |
 | A-001 | `core/task-kernel-implementation.mjs` | publication/review authority | extend | 不造平行 state |
 | A-002 | `core/stage-runner.mjs` | official stage boundary | extend | 不把 audit 当入口 gate |
-| A-003 | `core/stage-content-contracts.mjs` | plan/task validation | extend | 不生成完成状态 |
+| A-003 | `runtime/stage/stage-content-contracts.mjs` | plan/task validation | extend | 不生成完成状态 |
 | A-004 | `skills/spec-tasks/templates/tasks-template.md` | Task 卡模板 | extend | 不产生第二执行清单 |
 
 ### Reuse → Extend → New
@@ -317,8 +317,8 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009 →
 
 ### Files
 
-- **NEW**：`core/write-boundary-preflight.mjs`
-- **MODIFY**：`core/invocation-identity.mjs`、`core/stage-context.mjs`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-recovery.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-recovery.mjs`、`scripts/task-close.mjs`、`core/__tests__/invocation-identity.test.mjs`、`core/__tests__/stage-context.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`
+- **NEW**：`runtime/evidence/write-boundary-preflight.mjs`
+- **MODIFY**：`runtime/evidence/invocation-identity.mjs`、`core/stage-context.mjs`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-recovery.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-recovery.mjs`、`scripts/task-close.mjs`、`core/__tests__/invocation-identity.test.mjs`、`core/__tests__/stage-context.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`
 - **DO NOT TOUCH**：`CONSTITUTION.md`、`constitution-checklist.md`、`.git/`
 
 ### Tasks
@@ -394,7 +394,7 @@ provider 前本地材料 fail-loud，五类记录同字节同快照。
 ### Files
 
 - **NEW**：N/A — 扩展现有测试。
-- **MODIFY**：`core/local-skill-resolver.mjs`、`core/capability-doctor.mjs`、`core/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`core/receipt-writer.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/stage-handlers.mjs`、`scripts/stage-runtime.mjs`、`core/__tests__/local-skill-resolver.test.mjs`、`core/__tests__/capability-doctor.test.mjs`、`core/__tests__/stage-skill-runtime.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **MODIFY**：`runtime/adapters/local-skill-resolver.mjs`、`runtime/evidence/capability-doctor.mjs`、`runtime/stage/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`runtime/evidence/receipt-writer.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`core/build-spec-receipt-recovery.mjs`、`core/stage-handlers.mjs`、`scripts/stage-runtime.mjs`、`core/__tests__/local-skill-resolver.test.mjs`、`core/__tests__/capability-doctor.test.mjs`、`core/__tests__/stage-skill-runtime.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/stage-runtime-spec-recovery.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`config/review-providers.json`
 
 ### Tasks
@@ -432,7 +432,7 @@ support 不制造第二核心；step 重试和 review generation 保持单一 au
 ### Files
 
 - **NEW**：`docs/adr/0011-authenticated-review-flow-generations.md`
-- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
+- **MODIFY**：`core/task-kernel-implementation.mjs`、`core/task-handle.mjs`、`core/audit-aggregator.mjs`、`core/canonical-receipt-writer.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`runtime/review/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`core/__tests__/task-handle.test.mjs`、`core/__tests__/receipt-writer.test.mjs`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`
 - **DO NOT TOUCH**：`config/review-providers.json`、历史 generation bytes。
 
 ### Tasks
@@ -470,7 +470,7 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 ### Files
 
 - **NEW**：N/A — 扩展现有材料和测试。
-- **MODIFY**：`core/stage-context.mjs`、`core/workspace.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`contracts/facts-subschema.json`、`schemas/task-attempt.v2.schema.json`、`core/schemas/ambiguity-ledger.v2.json`、`core/schemas/stage-completion-facts.v1.json`、`core/stage-content-evidence.mjs`、`core/stage-content-contracts.mjs`、`core/stage-completion-facts.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/steps.json`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json`、`workflows/build-code/SKILL.md`、`workflows/build-code/steps.json`、`workflows/build-code/phase-evidence.mjs`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/steps.json`、`core/__tests__/stage-context.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/interaction-quality-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/build-code-phase-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/facts-subschema.test.mjs`、`specs/review-flow-reset/spec.md`、`specs/review-flow-reset/plan.md`、`specs/review-flow-reset/tasks.md`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`
+- **MODIFY**：`core/stage-context.mjs`、`core/workspace.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-kernel-implementation.mjs`、`contracts/facts-subschema.json`、`runtime/schemas/task-attempt.v2.schema.json`、`runtime/schemas/ambiguity-ledger.v2.json`、`runtime/schemas/stage-completion-facts.v1.json`、`core/stage-content-evidence.mjs`、`runtime/stage/stage-content-contracts.mjs`、`core/stage-completion-facts.mjs`、`core/stage-handlers.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`scripts/stage-runtime.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/steps.json`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json`、`workflows/build-code/SKILL.md`、`workflows/build-code/steps.json`、`workflows/build-code/phase-evidence.mjs`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/steps.json`、`core/__tests__/stage-context.test.mjs`、`scripts/__tests__/stage-runtime-five-stage-e2e.test.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/interaction-quality-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/build-code-phase-evidence.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/facts-subschema.test.mjs`、`specs/review-flow-reset/spec.md`、`specs/review-flow-reset/plan.md`、`specs/review-flow-reset/tasks.md`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`
 - **DO NOT TOUCH**：`config/review-providers.json`、历史正式记录。
 
 ### Tasks
@@ -509,7 +509,7 @@ clarify、review、摘要、任务状态和来源覆盖均来自当前真实材�
 ### Files
 
 - **NEW**：`apply/evidence/current-diff-ac-coverage.json`
-- **MODIFY**：`core/__tests__/stage-context.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/interaction-quality-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/build-code-phase-evidence.test.mjs`；生产文件候选白名单固定为 `core/write-boundary-preflight.mjs`、`core/invocation-identity.mjs`、`core/stage-context.mjs`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-recovery.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-recovery.mjs`、`scripts/task-close.mjs`、`core/schemas/workflowhub-recovery-credential.v1.json`、`core/schemas/workflowhub-recovery-generation.v1.json`、`core/schemas/ambiguity-ledger.v2.json`、`core/schemas/stage-completion-facts.v1.json`、`contracts/facts-subschema.json`、`schemas/task-attempt.v2.schema.json`、`core/task-kernel-implementation.mjs`、`core/workspace.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`core/local-skill-resolver.mjs`、`core/capability-doctor.mjs`、`core/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`core/receipt-writer.mjs`、`core/audit-aggregator.mjs`、`core/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`core/stage-content-evidence.mjs`、`core/stage-content-contracts.mjs`、`core/stage-completion-facts.mjs`、`core/stage-handlers.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/steps.json`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json`、`workflows/build-code/SKILL.md`、`workflows/build-code/steps.json`、`workflows/build-code/phase-evidence.mjs`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/steps.json`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`；T012 只能启用其中被差距图标为 missing 或 contradicted 的文件。
+- **MODIFY**：`core/__tests__/stage-context.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`tests/stage-completion-facts.test.mjs`、`tests/interaction-quality-contract.test.mjs`、`tests/stage-plan-task-contract-v3.test.mjs`、`core/__tests__/task-kernel-publish.test.mjs`、`scripts/__tests__/task-recovery.test.mjs`、`tests/task-close-delivery.test.mjs`、`tests/five-stage-facts-v2.test.mjs`、`tests/official-component-receipts.test.mjs`、`tests/build-code-phase-evidence.test.mjs`；生产文件候选白名单固定为 `runtime/evidence/write-boundary-preflight.mjs`、`runtime/evidence/invocation-identity.mjs`、`core/stage-context.mjs`、`core/task-handle.mjs`、`core/stage-runner.mjs`、`skills/wh-review/scripts/integration-review-subject.mjs`、`core/canonical-receipt-writer.mjs`、`core/task-recovery.mjs`、`core/task-close.mjs`、`scripts/stage-runtime.mjs`、`scripts/task-recovery.mjs`、`scripts/task-close.mjs`、`core/schemas/workflowhub-recovery-credential.v1.json`、`core/schemas/workflowhub-recovery-generation.v1.json`、`runtime/schemas/ambiguity-ledger.v2.json`、`runtime/schemas/stage-completion-facts.v1.json`、`contracts/facts-subschema.json`、`runtime/schemas/task-attempt.v2.schema.json`、`core/task-kernel-implementation.mjs`、`core/workspace.mjs`、`skills/wh-review/scripts/review-runner.mjs`、`runtime/adapters/local-skill-resolver.mjs`、`runtime/evidence/capability-doctor.mjs`、`runtime/stage/stage-skill-runtime.mjs`、`skills/wh-review/scripts/review-materials.mjs`、`runtime/evidence/receipt-writer.mjs`、`core/audit-aggregator.mjs`、`runtime/review/review-flow-authority.mjs`、`skills/wh-review/scripts/review-controller.mjs`、`core/stage-content-evidence.mjs`、`runtime/stage/stage-content-contracts.mjs`、`core/stage-completion-facts.mjs`、`core/stage-handlers.mjs`、`workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-spec/steps.json`、`workflows/build-plan/SKILL.md`、`workflows/build-plan/steps.json`、`workflows/build-code/SKILL.md`、`workflows/build-code/steps.json`、`workflows/build-code/phase-evidence.mjs`、`workflows/verify-code/SKILL.md`、`workflows/verify-code/steps.json`、`skills/spec-tasks/SKILL.md`、`skills/spec-tasks/templates/tasks-template.md`；T012 只能启用其中被差距图标为 missing 或 contradicted 的文件。
 - **DO NOT TOUCH**：provider config、历史 task records、`.git/`。
 
 ### Tasks

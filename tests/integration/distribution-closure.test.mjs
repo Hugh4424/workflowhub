@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { buildSkillBundleRelease } from "../../core/skill-bundle-release.mjs";
-import { checkReleaseClosure } from "../../core/check-skill-closure.mjs";
+import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { checkReleaseClosure } from "../../runtime/evidence/check-skill-closure.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const temps = [];
@@ -35,7 +35,7 @@ describe("skill bundle release", () => {
       const content = fs.readFileSync(path.join(outputDir, locator), "utf8");
       expect(content).not.toMatch(/\/Users\/[A-Za-z0-9._-]+\//);
     }
-    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "schemas/skill-bundle.schema.json"), "utf8"));
+    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime/schemas/skill-bundle.schema.json"), "utf8"));
     const validate = new Ajv2020({ strict: false }).compile(schema);
     expect(validate(release)).toBe(true);
     const missingContract = { ...release };

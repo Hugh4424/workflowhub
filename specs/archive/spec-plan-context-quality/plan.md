@@ -64,7 +64,7 @@
 
 | Anchor | Path and symbol | Current responsibility | Intended use | Forbidden change |
 |---|---|---|---|---|
-| A-001 | core/stage-content-contracts.mjs:validatePlanTaskContract | v1 plan/tasks、DAG、命令、覆盖 | extend v2 parser/validator | 不建平行账本 |
+| A-001 | runtime/stage/stage-content-contracts.mjs:validatePlanTaskContract | v1 plan/tasks、DAG、命令、覆盖 | extend v2 parser/validator | 不建平行账本 |
 | A-002 | core/stage-content-evidence.mjs:registry | typed evidence/schema/required kinds | register v2 kinds | 不改 receipt ownership |
 | A-003 | core/canonical-receipt-writer.mjs:writeCanonicalAuditSummary | 消费 required content facts | reuse | 不手写 audit |
 | A-004 | skills/wh-review/scripts/review-materials.mjs | frozen maps/最小材料 | extend v2 maps/bytes facts | 不送全仓/日志 |
@@ -101,7 +101,7 @@
 
 | Anchor | Mode | Exact location | Related IDs | Reason |
 |---|---|---|---|---|
-| A-001 | read_now | core/stage-content-contracts.mjs:303-515 | FR-01,FR-06,FR-10,DEC-01,DEC-02 | 当前 v1 parser、coverage、DAG、command oracle |
+| A-001 | read_now | runtime/stage/stage-content-contracts.mjs:303-515 | FR-01,FR-06,FR-10,DEC-01,DEC-02 | 当前 v1 parser、coverage、DAG、command oracle |
 | A-002 | read_now | core/stage-content-evidence.mjs:20-60,377-380 | FR-01,FR-02,FR-04,DEC-02 | schema registry、revisionable/required kind 边界 |
 | A-003 | read_now | core/canonical-receipt-writer.mjs:99-139 | FR-01,FR-02,AC-01,AC-02,DEC-02 | required kind 由既有 canonical audit 消费；若需改 audit 才能消费则 STOP |
 | A-008 | read_now | scripts/stage-runtime.mjs:1-50,283-289 | FR-01,FR-02,AC-01,AC-02,DEC-02 | 正式 runner 只调用既有 audit；不得把 runtime/AJV 改动带入本 task |
@@ -250,8 +250,8 @@ accepted decision/spec identity → template artifact → A-001/A-002 typed evid
 
 ### NEW
 
-core/schemas/ambiguity-ledger.v2.json
-core/schemas/plan-task-contract.v2.json
+runtime/schemas/ambiguity-ledger.v2.json
+runtime/schemas/plan-task-contract.v2.json
 tests/stage-plan-task-contract.test.mjs
 tests/verify-code-design-alignment.test.mjs
 
@@ -274,9 +274,9 @@ skills/wh-review/contracts/build-spec.md
 skills/wh-review/contracts/build-plan.md
 skills/wh-review/contracts/verify-code.md
 skills/wh-review/scripts/review-materials.mjs
-core/stage-content-contracts.mjs
+runtime/stage/stage-content-contracts.mjs
 core/stage-content-evidence.mjs
-core/schemas/plan-task-contract.v1.json
+runtime/schemas/plan-task-contract.v1.json
 tests/stage-content-evidence.test.mjs
 tests/stage-review-cost-policy.test.mjs
 tests/final-cutover-guards.red.test.mjs
@@ -291,7 +291,7 @@ skills/wh-review/scripts/__tests__/simple-contracts.test.mjs
 scripts/stage-runtime.mjs
 core/task-kernel-implementation.mjs
 core/workspace.mjs
-core/workspace-runner.mjs
+runtime/task/workspace-runner.mjs
 core/dispatch-component.mjs
 package.json
 CONSTITUTION.md
@@ -347,8 +347,8 @@ spec 可表达 PFACT/FR/AC、状态、风险、影响和 version identity；v2 e
 
 ### Files
 
-- NEW：core/schemas/ambiguity-ledger.v2.json
-- MODIFY：skills/spec-specify/SKILL.md、skills/spec-specify/templates/spec-template.md、workflows/build-spec/SKILL.md、core/stage-content-contracts.mjs、core/stage-content-evidence.mjs（含 REQUIRED_STAGE_CONTENT_KINDS、REVISIONABLE_KINDS）、tests/stage-content-evidence.test.mjs
+- NEW：runtime/schemas/ambiguity-ledger.v2.json
+- MODIFY：skills/spec-specify/SKILL.md、skills/spec-specify/templates/spec-template.md、workflows/build-spec/SKILL.md、runtime/stage/stage-content-contracts.mjs、core/stage-content-evidence.mjs（含 REQUIRED_STAGE_CONTENT_KINDS、REVISIONABLE_KINDS）、tests/stage-content-evidence.test.mjs
 
 ### Tasks
 
@@ -389,9 +389,9 @@ plan 记录 anchors、FACT/DEC/CTRL、Lite/Full 九维质量、状态/错误/历
 
 ### Files
 
-- NEW：core/schemas/plan-task-contract.v2.json、tests/stage-plan-task-contract.test.mjs
-- MODIFY：core/schemas/plan-task-contract.v1.json
-- MODIFY：skills/spec-plan/SKILL.md、skills/spec-plan/templates/plan-template.md、skills/spec-tasks/SKILL.md、skills/spec-tasks/templates/tasks-template.md、workflows/build-plan/SKILL.md、skills/plan-eng-review/SKILL.md、core/stage-content-contracts.mjs、core/stage-content-evidence.mjs（含 REQUIRED_STAGE_CONTENT_KINDS、REVISIONABLE_KINDS）
+- NEW：runtime/schemas/plan-task-contract.v2.json、tests/stage-plan-task-contract.test.mjs
+- MODIFY：runtime/schemas/plan-task-contract.v1.json
+- MODIFY：skills/spec-plan/SKILL.md、skills/spec-plan/templates/plan-template.md、skills/spec-tasks/SKILL.md、skills/spec-tasks/templates/tasks-template.md、workflows/build-plan/SKILL.md、skills/plan-eng-review/SKILL.md、runtime/stage/stage-content-contracts.mjs、core/stage-content-evidence.mjs（含 REQUIRED_STAGE_CONTENT_KINDS、REVISIONABLE_KINDS）
 
 ### Tasks
 

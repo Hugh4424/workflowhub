@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { bootstrapTask } from "../task-bootstrap.mjs";
+import { bootstrapTask } from "../../tools/cli/task-bootstrap.mjs";
 import { createTask } from "../../core/task-handle.mjs";
-import { migrateTaskRunner } from "../task-migrate-runner-root.mjs";
+import { migrateTaskRunner } from "../../tools/cli/task-migrate-runner-root.mjs";
 
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });

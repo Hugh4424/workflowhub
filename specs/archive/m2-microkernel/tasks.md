@@ -103,7 +103,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
 ### Files
 - `workflowhub/core/resolve-component.mjs`（新增）[FR-CORE-001]
 - `workflowhub/core/dispatch-component.mjs`（新增）[FR-CORE-002]
-- `workflowhub/core/kernel.mjs`（新增）[FR-CORE-003]
+- `workflowhub/runtime/evidence/kernel.mjs`（新增）[FR-CORE-003]
 - `workflowhub/core/__tests__/kernel.test.mjs`（新增）
 
 ### Tasks
@@ -122,7 +122,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
   - 验证：`cd workflowhub && npx vitest run kernel`（更多绿）
 - [x] T011 [FR-CORE-003] GREEN：实现 `kernel.mjs`——串联 load-config→resolve→dispatch，零业务分支（不按阶段名/业务类型 if/switch）
   - 出参：`kernel.mjs` 导出 runKernel()
-  - 文件：`workflowhub/core/kernel.mjs`
+  - 文件：`workflowhub/runtime/evidence/kernel.mjs`
   - 验证：`cd workflowhub && npx vitest run kernel`（全绿）
 - [x] T012 Knowledge 维护：写 `apply/phase-2.md`，evidence 落 `apply/evidence/p2-backend-testing-test-report.json`
   - 文件：`tasks/m2-microkernel/apply/phase-2.md`
@@ -147,7 +147,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
 所有路径取值走单一入口 `resolve-path.mjs`，拒绝宿主推断（不 REPO_ROOT 上溯、不硬编码 host 路径）；并把配置里的 task_dir（FR-CFG-004 框架配置）接到此单一入口解析，证明它经 resolver、不被当普通字符串绕过。
 
 ### Files
-- `workflowhub/core/resolve-path.mjs`（新增）[FR-PATHG-004]
+- `workflowhub/runtime/adapters/resolve-path.mjs`（新增）[FR-PATHG-004]
 - `workflowhub/core/parse-framework-config.mjs`（新增）[FR-CFG-004]
 - `workflowhub/core/__tests__/resolve-path.test.mjs`（新增）
 - `workflowhub/core/__tests__/parse-framework-config.test.mjs`（新增）
@@ -160,7 +160,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
   - 验证：`cd workflowhub && npx vitest run resolve-path --passWithNoTests=false`（红）
 - [x] T014 [FR-PATHG-004] GREEN：实现 `resolve-path.mjs`——单一入口，只接受显式传入的路径配置，拒绝宿主推断
   - 出参：`resolve-path.mjs` 导出 resolvePath()
-  - 文件：`workflowhub/core/resolve-path.mjs`
+  - 文件：`workflowhub/runtime/adapters/resolve-path.mjs`
   - 验证：`cd workflowhub && npx vitest run resolve-path --passWithNoTests=false`（绿）
 - [x] T014b [FR-CFG-004] RED：写 `parse-framework-config.test.mjs`——断言「task_dir 经 resolvePath() 单一入口解析、返回解析后路径」「task_dir 用宿主推断写法（cwd 推断/上溯）→被 resolver 拒/抛错」「M2 不读写 task_dir 目录内容（只解析路径，不触碰运行态语义）」，无实现，红
   - 入参：spec FR-CFG-004 验收（经路径解析单一入口解析、不消费运行态语义）+ 决策 3、13
@@ -194,16 +194,16 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
 建边界扫描器 `scan-core-files.mjs`（glob `core/**/*.mjs`），反宿主 lint 扫核心本体四类宿主耦合，命中非零退出；漏扫自检 + 四类坏样本变异自测。
 
 ### Files
-- `workflowhub/scripts/scan-core-files.mjs`（新增）[FR-CI-001]
-- `workflowhub/scripts/check-anti-host.mjs`（新增）[FR-GUARD-001]
+- `workflowhub/tools/cli/scan-core-files.mjs`（新增）[FR-CI-001]
+- `workflowhub/tools/cli/check-anti-host.mjs`（新增）[FR-GUARD-001]
 - `workflowhub/core/__tests__/check-anti-host.test.mjs`（新增）
 - `workflowhub/fixtures/anti-host-bad/{hardcoded-path,repo-root-climb,source-derived,claude-hook}.mjs`（4 坏样本）
 
 ### Tasks
 - [x] T016 [FR-CI-001] GREEN：实现 `scan-core-files.mjs`——glob 匹配 `core/**/*.mjs` 返回路径数组（反宿主/扩展性/漏扫三处共用此唯一锚点）
   - 出参：`scan-core-files.mjs` 导出 scanCoreFiles()
-  - 文件：`workflowhub/scripts/scan-core-files.mjs`
-  - 验证：`cd workflowhub && node -e "import('./scripts/scan-core-files.mjs').then(m=>console.log(m.scanCoreFiles()))"` 列出现有 core/*.mjs
+  - 文件：`workflowhub/tools/cli/scan-core-files.mjs`
+  - 验证：`cd workflowhub && node -e "import('./tools/cli/scan-core-files.mjs').then(m=>console.log(m.scanCoreFiles()))"` 列出现有 core/*.mjs
 - [x] T017 [FR-GUARD-001] [FR-GUARD-002] RED：写 `check-anti-host.test.mjs` + 4 坏样本——断言「4 类坏样本各自命中、lint 非零退出（FR-GUARD-001）」「已知坏样本自检证明实际命中时报红、非空跑通过（FR-GUARD-002）」「漏扫自检：core 下故意含耦合的样本被 scan 列入」，无 checker，红
   - 入参：plan 留定点 2（四类 pattern + 第4类 known-gap）
   - 出参：失败测试 + 4 坏样本 fixture
@@ -211,7 +211,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
   - 验证：`cd workflowhub && npx vitest run check-anti-host`（红）
 - [x] T018 [FR-GUARD-001] [FR-GUARD-002] GREEN：实现 `check-anti-host.mjs`——调 scan-core-files 取清单，扫四类耦合（host 绝对路径/REPO_ROOT 上溯/source-derived/Claude hook 硬绑），命中非零退出（001）；自带坏样本自检证明实际命中报红（002）；第4类注释标 known-gap
   - 出参：`check-anti-host.mjs`（CLI 可跑，命中 exit≠0）
-  - 文件：`workflowhub/scripts/check-anti-host.mjs`
+  - 文件：`workflowhub/tools/cli/check-anti-host.mjs`
   - 验证：`cd workflowhub && npx vitest run check-anti-host`（绿，4 坏样本必红+漏扫自检绿）
 - [x] T019 Knowledge 维护：写 `apply/phase-4.md`，evidence 落 `apply/evidence/p4-backend-testing-test-report.json`
   - 文件：`tasks/m2-microkernel/apply/phase-4.md`
@@ -273,7 +273,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
 替换、新增两件独立验收：替换组件 = 改 registry 指向另一 component_id，核心 `core/**/*.mjs` diff 为空；新增 = registry 加条目 + 目录加组件，核心零改。锚定边界规则 diff 判"核心零改"，非存在性检查。
 
 ### Files
-- `workflowhub/scripts/check-extensibility.mjs`（新增）[FR-EXT-001] [FR-EXT-002] [FR-EXT-003]
+- `workflowhub/tools/cli/check-extensibility.mjs`（新增）[FR-EXT-001] [FR-EXT-002] [FR-EXT-003]
 - `workflowhub/core/__tests__/check-extensibility.test.mjs`（新增）
 
 ### Tasks
@@ -284,7 +284,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
   - 验证：`cd workflowhub && npx vitest run check-extensibility`（红）
 - [x] T024 [FR-EXT-001] [FR-EXT-002] [FR-EXT-003] GREEN：实现 `check-extensibility.mjs`——可换性+扩展性两件独立验收，调 scan-core-files 取核心清单，比对操作前后核心 diff，非空即非零退出
   - 出参：`check-extensibility.mjs`
-  - 文件：`workflowhub/scripts/check-extensibility.mjs`
+  - 文件：`workflowhub/tools/cli/check-extensibility.mjs`
   - 验证：`cd workflowhub && npx vitest run check-extensibility`（绿）
 - [x] T025 Knowledge 维护：写 `apply/phase-6.md`，evidence 落 `apply/evidence/p6-backend-testing-test-report.json`
   - 文件：`tasks/m2-microkernel/apply/phase-6.md`
@@ -309,7 +309,7 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
 建 M2 校验聚合 `run-checks.mjs`，串进 `npm run check`（保留 M1 markdownlint + verify-structure），CI 增跑 `npm test`。回归：M1 结构校验仍在 check 内、仍绿。
 
 ### Files
-- `workflowhub/scripts/run-checks.mjs`（新增）[FR-CI-001/002]
+- `workflowhub/tools/cli/run-checks.mjs`（新增）[FR-CI-001/002]
 - `workflowhub/package.json`（改：scripts.check 串接 run-checks）
 - `workflowhub/.github/workflows/ci.yml`（改：增 npm test）
 - `workflowhub/core/__tests__/run-checks.test.mjs`（新增，集成）
@@ -322,9 +322,9 @@ RED→GREEN：`npx vitest run load-config` 改前红、实现后绿；缺 regist
   - 验证：`cd workflowhub && npx vitest run run-checks`（红）
 - [x] T027 [FR-CI-001] [FR-CI-002] GREEN：实现 `run-checks.mjs`——顺序调 check-anti-host/check-path-guard/check-extensibility，任一非零则聚合非零退出（CI-001）；含漏扫+变异自检（父子进程语义，坏样本子过程验证、主流程正常样本仍绿，不让 npm check 永久红，CI-002）
   - 出参：`run-checks.mjs`
-  - 文件：`workflowhub/scripts/run-checks.mjs`
+  - 文件：`workflowhub/tools/cli/run-checks.mjs`
   - 验证：`cd workflowhub && npx vitest run run-checks`（绿）
-- [x] T028 [FR-CI-001] [FR-CI-003] 挂载：`package.json` scripts.check 末尾串 `&& node scripts/run-checks.mjs`；`ci.yml` 增 `npm test` 步骤（保留 npm run check）。完成标准=正常样本全绿+各检查坏样本自检证明能报红，全部纳入统一入口由 CI 跑（FR-CI-003）
+- [x] T028 [FR-CI-001] [FR-CI-003] 挂载：`package.json` scripts.check 末尾串 `&& node tools/cli/run-checks.mjs`；`ci.yml` 增 `npm test` 步骤（保留 npm run check）。完成标准=正常样本全绿+各检查坏样本自检证明能报红，全部纳入统一入口由 CI 跑（FR-CI-003）
   - 入参：M1 package.json check / ci.yml
   - 出参：check 串入 M2 校验，CI 跑 vitest
   - 文件：`workflowhub/package.json`、`workflowhub/.github/workflows/ci.yml`

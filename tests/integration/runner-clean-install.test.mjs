@@ -8,10 +8,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
-import { buildRunnerRelease, installRunnerRelease, validateRunnerRelease } from "../../core/runner-release.mjs";
-import { buildSkillBundleRelease } from "../../core/skill-bundle-release.mjs";
-import { validateSkillBundleRelease } from "../../core/skill-bundle-release.mjs";
-import { createCanonicalSource, createSourceManifest } from "../../core/canonical-source.mjs";
+import { buildRunnerRelease, installRunnerRelease, validateRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
+import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
+import { createCanonicalSource, createSourceManifest } from "../../runtime/evidence/canonical-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const temps = [];
@@ -45,7 +45,7 @@ describe("runner release", () => {
     const release = await buildRunnerRelease({ packageRoot: ROOT, outputDir });
     const bundle = await buildSkillBundleRelease({ packageRoot: ROOT, outputDir: bundleDir });
 
-    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "schemas/runner-release.schema.json"), "utf8"));
+    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime/schemas/runner-release.schema.json"), "utf8"));
     expect(new Ajv2020({ strict: false }).compile(schema)(release)).toBe(true);
     expect(release.files.some(({ path: locator }) => locator.startsWith("node_modules/"))).toBe(false);
     expect(release.files.some(({ path: locator }) => locator === "package-lock.json")).toBe(true);
@@ -59,7 +59,7 @@ describe("runner release", () => {
       WORKFLOWHUB_TASK_DIR: storage,
       NODE_PATH: "",
     };
-    const bootstrap = runCli(path.join(outputDir, "scripts/task-bootstrap.mjs"), [
+    const bootstrap = runCli(path.join(outputDir, "tools/cli/task-bootstrap.mjs"), [
       "--project=Demo", "--task=clean-release", `--target-repo=${target}`,
     ], { cwd: outputDir, env });
     const runtime = path.join(outputDir, "scripts/stage-runtime.mjs");
@@ -142,7 +142,7 @@ describe("runner release", () => {
       releaseRoot: outputDir,
       skillBundleManifest: { runner_contract_major: 2, runner_contract_min_minor: 0 },
     })).toThrow(/major mismatch/);
-    fs.appendFileSync(path.join(outputDir, "core/runtime-facade.mjs"), "\n// tampered\n");
+    fs.appendFileSync(path.join(outputDir, "runtime/interface/runtime-facade.mjs"), "\n// tampered\n");
     expect(() => validateRunnerRelease({
       releaseRoot: outputDir,
       skillBundleManifest: { runner_contract_major: 1, runner_contract_min_minor: 0 },

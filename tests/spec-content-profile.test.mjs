@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   validateAmbiguityLedgerV2,
   validateSpecContentProfile,
-} from "../core/stage-content-contracts.mjs";
+} from "../runtime/stage/stage-content-contracts.mjs";
 
 const SPEC_HASH = "a".repeat(64);
 const binding = (id) => ({

@@ -11,7 +11,7 @@ import { buildClassificationManifest, buildNonGateReviewResponseRecord, buildRev
 import { loadTrustedThirdReviewConfig, resolveTrustedReviewRoute, selectTrustedReviewProviderSelection, validateAllWhReviewRoutes } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace, recoverMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
 import { openTask } from "../../../core/task-handle.mjs";
-import { captureGitWorktreeSnapshot } from "../../../core/git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot } from "../../../runtime/task/git-worktree-snapshot.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const RESULT_REF = /^reviews\/results\/[A-Za-z0-9._-]+\.json$/;

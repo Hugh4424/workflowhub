@@ -10,7 +10,7 @@ import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.m
 import { aggregateProviderResults, renderReviewReport, reviewRefs, writeAttempt, writeProviderOutput, writeReviewReport, writeSemanticResult } from "./review-result.mjs";
 import { buildClassificationManifest, validateResponseLedger } from "./review-controller.mjs";
 import { validateSchema } from "./schema-validator.mjs";
-import { authenticateCanonicalReviewResult } from "../../../core/canonical-review-result.mjs";
+import { authenticateCanonicalReviewResult } from "../../../runtime/review/canonical-review-result.mjs";
 
 const freshable = new Set(["RUNTIME_EXPIRED", "RUNTIME_NOT_FOUND", "NO_CONTINUABLE_SESSION"]);
 const errorPriority = ["MATERIAL_INCOMPLETE", "PUBLIC_RESULT_INVALID", "PROTOCOL_INCOMPATIBLE", "OUTPUT_INVALID", "PROVIDER_UNAVAILABLE"];

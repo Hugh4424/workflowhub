@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildRunnerRelease, validateRunnerRelease } from "../../core/runner-release.mjs";
-import { buildSkillBundleRelease, validateSkillBundleRelease } from "../../core/skill-bundle-release.mjs";
+import { buildRunnerRelease, validateRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
+import { buildSkillBundleRelease, validateSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { listDeliveryFiles } from "../../tools/architecture/inventory.mjs";
 
 const LEGACY_ENTRY_PATHS = Object.freeze([

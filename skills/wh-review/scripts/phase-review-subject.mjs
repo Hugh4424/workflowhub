@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../core/stage-review-disposition.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../runtime/review/stage-review-disposition.mjs";
 import { validateSchema } from "./schema-validator.mjs";
-import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../core/canonical-utils.mjs";
+import { isRuntimeOnlyPath, normalizeRuntimeOnlyPaths } from "../../../runtime/evidence/canonical-utils.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;

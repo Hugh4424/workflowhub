@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask } from "../task-handle.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
-import { runCandidateWorkspaceCommand, runWorkspaceCommand } from "../workspace-runner.mjs";
+import { runCandidateWorkspaceCommand, runWorkspaceCommand } from "../../runtime/task/workspace-runner.mjs";
 
 const temporary = [];
 

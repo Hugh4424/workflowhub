@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { findUndeclaredStaticDependencies } from "../skill-static-deps.mjs";
+import { findUndeclaredStaticDependencies } from "../../runtime/evidence/skill-static-deps.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });

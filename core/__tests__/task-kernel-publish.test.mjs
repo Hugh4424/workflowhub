@@ -8,15 +8,15 @@ import { createHash, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 
 import { createTask } from "../task-handle.mjs";
-import { createTaskKernel, validateAccepted, validateStageFacts } from "../task-kernel.mjs";
+import { createTaskKernel, validateAccepted, validateStageFacts } from "../../runtime/task/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
 import { ArtifactDir } from "../artifact-dir.mjs";
 import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
-import { aggregateCanonicalProviderResults } from "../canonical-review-result.mjs";
-import { hashAuditSummary } from "../audit-summary-carrier.mjs";
-import { assertAuthenticatedReviewHead } from "../review-flow-authority.mjs";
-import { captureGitWorktreeSnapshot } from "../git-worktree-snapshot.mjs";
-import { createCanonicalSource, createSourceManifest } from "../canonical-source.mjs";
+import { aggregateCanonicalProviderResults } from "../../runtime/review/canonical-review-result.mjs";
+import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
+import { assertAuthenticatedReviewHead } from "../../runtime/review/review-flow-authority.mjs";
+import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { createCanonicalSource, createSourceManifest } from "../../runtime/evidence/canonical-source.mjs";
 import { createStageSkillInvocation } from "../stage-skill-invocation.mjs";
 import { writeOfficialComponentReceipt } from "../canonical-receipt-writer.mjs";
 import {
@@ -2264,7 +2264,7 @@ describe("TaskKernel append-only publication", () => {
     const confirmationRef = confirmation(kernel, "make-decision", initial.attempt_ref);
     const initialFacts = JSON.parse(task.readRecord(`results/make-decision/${initial.attempt_ref}`)).facts;
     const handleModule = pathToFileURL(join(process.cwd(), "core/task-handle.mjs")).href;
-    const kernelModule = pathToFileURL(join(process.cwd(), "core/task-kernel.mjs")).href;
+    const kernelModule = pathToFileURL(join(process.cwd(), "runtime/task/task-kernel.mjs")).href;
     const workspaceModule = pathToFileURL(join(process.cwd(), "core/workspace.mjs")).href;
     const worker = async (operation) => execFileAsync(process.execPath, ["--input-type=module", "-e", `
       import { openTask } from ${JSON.stringify(handleModule)};

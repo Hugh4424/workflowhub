@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createTask, migrateTaskRunnerRoot } from "../../../../core/task-handle.mjs";
-import { createTaskKernel } from "../../../../core/task-kernel.mjs";
+import { createTaskKernel } from "../../../../runtime/task/task-kernel.mjs";
 import { prepareTaskWorkspace, recoverTaskWorkspace } from "../../../../core/workspace.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);

@@ -47,7 +47,7 @@ minimal-path: **P2 — 改造复用现有 `receipt-writer`、`journal-appender`�
 
 - [x] **S1 能用外部就不造轮子** — 判据：优先复用仓库既有 receipt、journal、aggregator、validator、facts 与 Node.js 标准库。
 - [x] **S2 外部技能可针对项目改造合宪** — 判据：不引入外部技能实现；既有 adapted spec skills 继续按 WorkflowHub 合同使用。
-- [x] **S3 迭代时保持最新并就地检查** — 判据：T001 在五份 `SKILL.md` 就地登记来源路径 `constitution-checklist.md`、`schemas/steps.schema.json` 与对应 `steps.json`，T020 对来源引用和 manifest 漂移做全仓扫描；本 change 不引入外部技能或第三方依赖，无需虚构外部版本。
+- [x] **S3 迭代时保持最新并就地检查** — 判据：T001 在五份 `SKILL.md` 就地登记来源路径 `constitution-checklist.md`、`runtime/schemas/steps.schema.json` 与对应 `steps.json`，T020 对来源引用和 manifest 漂移做全仓扫描；本 change 不引入外部技能或第三方依赖，无需虚构外部版本。
 - [x] **S4 自定义技能必须有指标系统** — 判据：五阶段继续接入既有 `metrics/collector.mjs`，不另造指标存储。
 - [x] **S5 自定义技能方便子代理调用省主上下文** — 判据：稳定 manifest ID、窄 schema 与独立 adapter 允许 executor/sub-agent 按单步调用。
 - [x] **S6 自定义技能参考市面方案不闭门造车** — 判据：沿用仓库现有 adapted skills、JSON Schema/append-only journal 等成熟模式，不自创新框架。
@@ -151,14 +151,14 @@ docs/
 
 为 5/5 stage 添加 `steps.json`；实现无第三方依赖的 loader/validator，拒绝重复 ID、非连续顺序、缺字段、未知依赖与环。
 
-**Files**: `workflows/make-decision/steps.json`, `workflows/build-spec/steps.json`, `workflows/build-plan/steps.json`, `workflows/build-code/steps.json`, `workflows/verify-code/steps.json`, `core/step-manifest.mjs`, `schemas/steps.schema.json`, `tests/step-manifest.test.mjs`
+**Files**: `workflows/make-decision/steps.json`, `workflows/build-spec/steps.json`, `workflows/build-plan/steps.json`, `workflows/build-code/steps.json`, `workflows/verify-code/steps.json`, `runtime/stage/step-manifest.mjs`, `runtime/schemas/steps.schema.json`, `tests/step-manifest.test.mjs`
 **Maps to**: FR-CONTRACT-001, FR-BEHAV-001
 
 #### Step 1.3: 建立 requirement ledger 与 source normalization
 
 实现 immutable requirement ID、source→decision→artifact→acceptance lineage、coverage、hash/stale DAG；用窄 adapter 把 Multica 与 offline fixture 规范化为同一 canonical input。R10 保留 withdrawn 历史但不进分母。
 
-**Files**: `core/requirement-ledger.mjs`, `core/canonical-source.mjs`, `core/multica-source-adapter.mjs`, `schemas/requirement-ledger.schema.json`, `tests/requirement-lineage.test.mjs`, `tests/source-adapter.test.mjs`
+**Files**: `runtime/evidence/requirement-ledger.mjs`, `runtime/evidence/canonical-source.mjs`, `core/multica-source-adapter.mjs`, `runtime/schemas/requirement-ledger.schema.json`, `tests/requirement-lineage.test.mjs`, `tests/source-adapter.test.mjs`
 **Maps to**: FR-ALIGN-001, FR-TRACKING-001, FR-CONTRACT-002
 
 ### Phase 2: Core Implementation
@@ -167,14 +167,14 @@ docs/
 
 在每个 manifest step 的真实进入/退出边界调用现有 receipt writer；统一 run/stage/step/attempt identity。entry 写失败 fail-closed；exit 写失败保留 warn 事实，最终因缺证据 non-pass。journal 只保留 observed facts。
 
-**Files**: `workflows/make-decision/SKILL.md`, `workflows/build-spec/SKILL.md`, `workflows/build-plan/SKILL.md`, `workflows/build-code/SKILL.md`, `workflows/verify-code/SKILL.md`, `core/receipt-schema.mjs`, `core/receipt-writer.mjs`, `core/journal-schema.mjs`, `core/journal-appender.mjs`, `tests/receipt-wiring.test.mjs`, `tests/receipt-verification.test.mjs`
+**Files**: `workflows/make-decision/SKILL.md`, `workflows/build-spec/SKILL.md`, `workflows/build-plan/SKILL.md`, `workflows/build-code/SKILL.md`, `workflows/verify-code/SKILL.md`, `core/receipt-schema.mjs`, `runtime/evidence/receipt-writer.mjs`, `core/journal-schema.mjs`, `core/journal-appender.mjs`, `tests/receipt-wiring.test.mjs`, `tests/receipt-verification.test.mjs`
 **Maps to**: FR-ARTIFACT-001, FR-BEHAV-001
 
 #### Step 2.2: 让 aggregator 对账 expected 与 observed 并唯一裁决
 
 扩展 aggregator，从 manifest、ledger、journal、receipts 生成结构化 summary；逐项输出 missing/unexpected/duplicate/out-of-order/unknown/stale/tampered-hash，严格匹配 attempt，处理大量 receipt、retry、分页与顺序变化。
 
-**Files**: `core/chain-topology.mjs`, `core/audit-aggregator.mjs`, `schemas/audit-summary.schema.json`, `tests/audit-aggregator.test.mjs`, `tests/fixtures/step-audit/`
+**Files**: `core/chain-topology.mjs`, `core/audit-aggregator.mjs`, `runtime/schemas/audit-summary.schema.json`, `tests/audit-aggregator.test.mjs`, `tests/fixtures/step-audit/`
 **Maps to**: FR-REVIEW-001, FR-BEHAV-001, FR-ACCOUNT-001, FR-BUILD-001
 
 #### Step 2.3: 迁移 stage-result、validator 与 facts assembly 为只读消费者
@@ -221,7 +221,7 @@ stage-result 只携带 summary ref/hash/verdict；validator 只验证引用、sc
 These are the exact current exported interfaces before apply. Tasks that change an existing interface must preserve compatibility or update every listed consumer and contract test.
 
 - **SIG-001** `core/receipt-schema.mjs`: `validateReviewPayload(review)`, `validateEntryPayload(payload)`, `validateExitPayload(payload)`, `validateStepAutoRollbackPayload(payload)`.
-- **SIG-002** `core/receipt-writer.mjs`: `buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId } = {})`, `writeEntryReceipt(taskId, payload)`, `writeExitReceipt(taskId, payload)`, `writeStepAutoRollback(taskId, payload)`.
+- **SIG-002** `runtime/evidence/receipt-writer.mjs`: `buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId } = {})`, `writeEntryReceipt(taskId, payload)`, `writeExitReceipt(taskId, payload)`, `writeStepAutoRollback(taskId, payload)`.
 - **SIG-003** `core/journal-schema.mjs`: constants `JOURNAL_SCHEMA_VERSION`, `JOURNAL_EVENT_TYPES`, `JOURNAL_EVENT_TYPE_VALUES`, `STEP_AUTO_ROLLBACK_REQUIRED_FIELDS`, `AUDIT_SUMMARY_FIELDS`.
 - **SIG-004** `core/journal-appender.mjs`: `journalPathForTaskDir(taskSpecDir)`, `buildJournalEvent(eventType, payload)`, `appendJournalLine(taskId, eventType, payload)`, `appendReceiptWriteWarn(taskId, writeError, exitPayload)`.
 - **SIG-005** `core/chain-topology.mjs`: `firstByStepAndEntry(exitEvents)`, `firstByStepId(exitEvents)`, `discoverChainNodes(entryEvents, firstExitByStepAndEntry, stageSlug)`, `discoverChainStepIds(entryEvents, exitByStepId, stageSlug)`.

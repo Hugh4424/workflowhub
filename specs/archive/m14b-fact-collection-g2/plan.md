@@ -19,10 +19,10 @@
 
 - `core/stage-context.mjs` 的 `bootstrapStage` 与 branded StageContext；
 - `core/task-handle.mjs` 的 `readRecord`、`withRecordLock`、`writeRecordAtomic`；
-- `core/workspace.mjs` / `core/git-worktree-snapshot.mjs` 的 Workspace 身份与 snapshot；
-- `core/canonical-source.mjs` 的 `canonicalJson`、`contentHash`；
+- `core/workspace.mjs` / `runtime/task/git-worktree-snapshot.mjs` 的 Workspace 身份与 snapshot；
+- `runtime/evidence/canonical-source.mjs` 的 `canonicalJson`、`contentHash`；
 - `metrics/collector.mjs` 的 `createMetricsLauncherConfig`、`configForCollector`、`recordSkeleton`、`updateOwnResult`；
-- `core/check-skill-closure.mjs` 与 `core/local-skill-resolver.mjs` 的现有 closure/bundle 能力；
+- `runtime/evidence/check-skill-closure.mjs` 与 `runtime/adapters/local-skill-resolver.mjs` 的现有 closure/bundle 能力；
 - `specs/m14a-audit-contract-layer/skills-inventory.schema.json` 和 `quality-failure-taxonomy.md`。
 
 ## 3. 技术上下文与最小改动面
@@ -33,9 +33,9 @@
 
 ```text
 core/fact-indexes.mjs                  [NEW] 纯投影、校验、排序、去重与冲突合并
-core/fact-collector.mjs                [NEW] StageContext 校验、可信来源读取、四文件持久化编排
+runtime/evidence/fact-collector.mjs                [NEW] StageContext 校验、可信来源读取、四文件持久化编排
 config/transcript-sources.mjs          [NEW] 生产静态登记；基线为空
-scripts/collect-task-facts.mjs         [NEW] 唯一 launcher；创建 StageContext 与 metrics capability
+tools/cli/collect-task-facts.mjs         [NEW] 唯一 launcher；创建 StageContext 与 metrics capability
 core/task-handle.mjs                   [MODIFY] 增加受控 attempt 枚举能力，并补原子写故障测试注入点
 tests/m14b-fact-collection.test.mjs    [NEW] AC-001 至 AC-015 的最小 fixture
 ```
@@ -46,7 +46,7 @@ tests/m14b-fact-collection.test.mjs    [NEW] AC-001 至 AC-015 的最小 fixture
 
 ### 4.1 Launcher 与采集入口
 
-`scripts/collect-task-facts.mjs` 只接受 `--stage=<canonical-stage> --project=<project> --task=<task>`，不接受 task path、worktree root 或 baseline override。launcher 使用 `loadConfig()`、`bootstrapStage(...)`、`createMetricsLauncherConfig(loadedConfig)`，再调用：
+`tools/cli/collect-task-facts.mjs` 只接受 `--stage=<canonical-stage> --project=<project> --task=<task>`，不接受 task path、worktree root 或 baseline override。launcher 使用 `loadConfig()`、`bootstrapStage(...)`、`createMetricsLauncherConfig(loadedConfig)`，再调用：
 
 ```js
 collectTaskFacts(ctx, {

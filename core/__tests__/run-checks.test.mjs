@@ -1,7 +1,7 @@
 /**
  * run-checks.test.mjs  (FR-CI-001 / FR-CI-002 / FR-CI-003)
  *
- * Integration tests for scripts/run-checks.mjs — written RED-first.
+ * Integration tests for tools/cli/run-checks.mjs — written RED-first.
  * All tests use spawnSync; no file writes to the real working tree.
  */
 

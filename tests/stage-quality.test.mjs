@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 
-import { scanFiles } from "../scripts/check-stage-quality.mjs";
+import { scanFiles } from "../tools/cli/check-stage-quality.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");

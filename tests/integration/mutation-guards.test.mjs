@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { evaluateFactFreshness, sha256 } from "../../core/freshness.mjs";
-import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../core/completion-predicates.mjs";
-import { buildSkillBundleRelease } from "../../core/skill-bundle-release.mjs";
+import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
+import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const FIXTURES = resolve(ROOT, "tests/fixtures/mutations");

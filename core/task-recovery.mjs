@@ -1,6 +1,6 @@
-import { canonical, deepEqual, isRuntimeOnlyPath, normalizeRuntimeOnlyPaths, sha256 } from "./canonical-utils.mjs";
+import { canonical, deepEqual, isRuntimeOnlyPath, normalizeRuntimeOnlyPaths, sha256 } from "../runtime/evidence/canonical-utils.mjs";
 
-export { canonical, deepEqual, isRuntimeOnlyPath, normalizeRuntimeOnlyPaths, sha256 } from "./canonical-utils.mjs";
+export { canonical, deepEqual, isRuntimeOnlyPath, normalizeRuntimeOnlyPaths, sha256 } from "../runtime/evidence/canonical-utils.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeLedgerHash, computeRequirementContentHash } from '../core/requirement-ledger.mjs';
+import { computeLedgerHash, computeRequirementContentHash } from '../runtime/evidence/requirement-ledger.mjs';
 import { buildAuditSummaryFromJournalEvents } from '../core/audit-aggregator.mjs';
-import { carryAuditSummary, verifyAuditCarrier } from '../core/audit-summary-carrier.mjs';
+import { carryAuditSummary, verifyAuditCarrier } from '../runtime/evidence/audit-summary-carrier.mjs';
 import { publishCanonicalAuditSummaryRecord } from '../core/canonical-receipt-writer.mjs';
 
 const STAGES = ['make-decision', 'build-spec', 'build-plan', 'build-code', 'verify-code'];

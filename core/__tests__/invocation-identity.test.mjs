@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { authenticateOfficialInvocation } from "../invocation-identity.mjs";
+import { authenticateOfficialInvocation } from "../../runtime/evidence/invocation-identity.mjs";
 import { createTask, migrateTaskRunnerRoot, migrateTaskToPerInvocation, openTask } from "../task-handle.mjs";
 
 const roots = [];

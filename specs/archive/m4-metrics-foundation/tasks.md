@@ -179,9 +179,9 @@
 **Goal**: 新增结构校验脚本挂入 run-checks.mjs，聚合冒烟用临时目录注入全局路径（覆盖双写代码路径不依赖用户级目录），负向喂坏 schema 验证能红。
 
 **Files**:
-- `scripts/check-metrics-schema.mjs`（新增）
+- `tools/cli/check-metrics-schema.mjs`（新增）
 - `tests/metrics-smoke.test.mjs`（新增）
-- `scripts/run-checks.mjs`（追加一行）
+- `tools/cli/run-checks.mjs`（追加一行）
 
 **Tasks**:
 - [x] T020 [FR-CI-001/002] 写 RED：`metrics-smoke.test.mjs` 断言临时目录注入全局路径跑结构校验+聚合通过、负向喂缺类键记录或坏 schema 须判失败（红）
@@ -192,7 +192,7 @@
 - [x] T021 [FR-CI-001/002] 实现 `check-metrics-schema.mjs`（模板=check-contract.mjs，校验执行记录/卡点卡片/统一记录结构）+ 挂入 `run-checks.mjs` 聚合
   - 入参：T020 RED + check-contract.mjs 模板
   - 出参：校验脚本 + run-checks 追加调用
-  - 文件：`scripts/check-metrics-schema.mjs`、`scripts/run-checks.mjs`
+  - 文件：`tools/cli/check-metrics-schema.mjs`、`tools/cli/run-checks.mjs`
   - 验证：T020 转 GREEN + `npm run check` 含新校验
 - [x] T022 [FR-CI-002] 聚合冒烟用临时目录注入 metrics_path（不依赖用户级目录），正向通过 + 负向能红
   - 入参：T021 校验脚本

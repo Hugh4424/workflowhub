@@ -106,8 +106,8 @@ describe("WorkflowHub host independence", () => {
     const findings = activeSurfaceFiles().flatMap((repoPath) => {
       if (isSourceRecord(repoPath)) return [];
       const isGenericHostGuard = new Set([
-        "scripts/check-anti-host.mjs",
-        "scripts/check-task-record-paths.mjs",
+        "tools/cli/check-anti-host.mjs",
+        "tools/cli/check-task-record-paths.mjs",
       ]).has(repoPath);
       return [
         ...lineFindings(

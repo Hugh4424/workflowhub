@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import {
   RUNTIME_BEHAVIORS,
   createRuntimeFacade,
-} from "../../core/runtime-facade.mjs";
-import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../core/runner-contract.mjs";
+} from "../../runtime/interface/runtime-facade.mjs";
+import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../../runtime/interface/runner-contract.mjs";
 import { stageRuntimeCliMain } from "../../scripts/stage-runtime.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

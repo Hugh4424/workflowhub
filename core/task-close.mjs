@@ -4,8 +4,8 @@ import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
-import { assertTaskKernel } from "./task-kernel.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { readAuthenticatedDirtyCleanupBinding } from "./task-recovery.mjs";
 import { createTaskWorktreeRemoval, openAcceptedWorkspace } from "./workspace.mjs";
 

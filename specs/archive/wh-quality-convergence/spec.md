@@ -246,7 +246,7 @@
 - **未决 1（已解决）**：`core/__tests__/task-dir-parser.test.mjs:242-259` 现有两个测试明确禁止 home 目录兜底——原设计草案中的"未配置默认 `~`"与该测试及 `skills/wh-review/contracts/intake.md` 第 51 行"两者皆缺时 fail-loud"契约冲突。本 spec 已改口径为 fail-loud（见 FR-TASKDIR-001/003、AC4），与既有测试预期一致，冲突已消除，build-code 阶段无需再判断先改测试还是先调整实现。
 - **未决 2（技能改名待办）**：`skills/intake-decision-review` 需改名为 `decision-blind-review`（用户 2026-07-08 确认），本轮不做，列入 build-code 阶段实现范围。
 - **未决 3（同名函数混淆）**：`scripts/validate-stage-result.mjs` 导出的 `validateStageResult` 与 `tests/stage-quality.test.mjs` 从 `./contracts/stage-result.contract.mjs` 导入的同名 `validateStageResult` 是两个不同实现，命名混淆，待排期澄清（非阻塞）。
-- **未决 4（extensibility gate 误报）**：新建的 `core/task-index.mjs` 会触发仓库已有的 `scripts/check-extensibility.mjs` git-HEAD-diff 门（凡 `core/` 下有未提交变更就报违规），这是该 gate 的既有设计行为，不是新 bug，提交代码后自动清除，不阻塞本轮决策，仅记录供 build-code 阶段知悉。
+- **未决 4（extensibility gate 误报）**：新建的 `core/task-index.mjs` 会触发仓库已有的 `tools/cli/check-extensibility.mjs` git-HEAD-diff 门（凡 `core/` 下有未提交变更就报违规），这是该 gate 的既有设计行为，不是新 bug，提交代码后自动清除，不阻塞本轮决策，仅记录供 build-code 阶段知悉。
 - **未决 5（spec-clarify 发现——D1-B/D3-B"已落地"与代码现状不符）**：**已解决，解决方式=B**（用户 2026-07-08 明确回复："改口径，推迟到 build-code 做，不现在补代码"）。原始发现：decision-log 曾称 D1-B（receipt 真核验）、D3-B（`core/task-index.mjs`）本轮已落地，但实测当前 worktree 及多个已检查分支代码均不存在对应实现。经核实：此前在旧 agent 沙箱临时目录里做的实现 commit 因目录清理已丢失（索引数据文件 `~/.workflowhub/task-index.json` 因位于本机全局状态目录未受影响，仍存在 112 条记录（来源：decision-log D3-B + 现场 `wc -l` 核验））。`tasks/wh-quality-convergence/decision-log.md` 改口径结论已直接固化在本 spec 内：第 2 节背景已同步改口径，不再声称已实现；第 4 节 FR-RECEIPT-001/002、FR-PROJECTINDEX-002 已加"状态：待实现（build-code 阶段）"字段。本 spec 内文视为该口径变更的权威记录。
 - **未决 6（F10 反过度工程发现——flow_profile 占位字段）**：按 F10 四问核查 FR-FLOWPROFILE-001：Q1「具体防御的真实威胁」回答为"无特定"（none in particular）——本轮 flow_profile 不驱动任何行为分支，仅为未来 full/fast 执行路径差异化预留占位，非应对已观测到的具体故障。Q2 现有机制未覆盖此需求（当前无该字段）。Q3 无 bypass 风险（非校验/阻断机制，只是枚举字段）。Q4 维护成本低（纯字段无逻辑）。按 SKILL.md 规则，Q1=none in particular 已达记录门槛：记入本未解风险，供后续独立审查/人工判断是否有必要现在就引入该占位字段，还是等真正需要驱动行为时再新增（非阻断，不自动移除该字段）。其余三个新增机制（receipt 真核验、task-index 索引、config.json 持久化）经四问核查均有明确根因驱动、无重复建设、bypass 风险可控、维护成本可接受，未触发 F10 记录门槛。
 
@@ -350,6 +350,6 @@ D3-A 方案的实现代码待 build-code 阶段（旧沙箱实现已丢失）。
 - 未决 1（已解决）：`core/__tests__/task-dir-parser.test.mjs:242-259` 现有测试与原"未配置默认 `~`"设计的冲突已通过本 spec 改口径为 fail-loud 消除，无需再留待 build-code 判断。
 - 未决 2：`skills/intake-decision-review` 改名为 `decision-blind-review`，留待 build-code。
 - 未决 3：`validateStageResult` 存在两处同名不同实现，命名混淆，非阻塞待排期。
-- 未决 4：build-code 阶段新建 `core/task-index.mjs` 会触发既有 `scripts/check-extensibility.mjs` gate，属既有设计行为非新 bug，不阻塞。
+- 未决 4：build-code 阶段新建 `core/task-index.mjs` 会触发既有 `tools/cli/check-extensibility.mjs` gate，属既有设计行为非新 bug，不阻塞。
 - 未决 5（已解决）：D1-B/D3-B"已落地"表述与代码现状不符——已按用户决策改口径为"设计已定，代码延后至 build-code 阶段实现"；`decision-log.md` 口径已与本 spec 一致；改口径结论同时固化于本 spec 第 2 节背景与第 4 节相应 FR 状态字段。
 - 未决 6：F10 四问核查发现 flow_profile 占位字段（FR-FLOWPROFILE-001）Q1 答案为"无特定威胁"，按规则记录、非阻断，供后续审查判断是否保留该占位设计。

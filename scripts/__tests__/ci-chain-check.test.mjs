@@ -6,18 +6,18 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
-import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
 import { captureWorkspaceSnapshot } from "../../core/canonical-receipt-writer.mjs";
 import { createTask } from "../../core/task-handle.mjs";
-import { createTaskKernel } from "../../core/task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { bootstrapStage } from "../../core/stage-context.mjs";
 import { acceptStageAttempt, runStage } from "../../core/stage-runner.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
-import { requiresHumanConfirmation } from "../../core/stage-acceptance-policy.mjs";
+import { requiresHumanConfirmation } from "../../runtime/stage/stage-acceptance-policy.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const script = join(root, "scripts/ci-chain-check.mjs");
+const script = join(root, "tools/cli/ci-chain-check.mjs");
 const temporary = [];
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 

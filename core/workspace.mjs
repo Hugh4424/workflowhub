@@ -3,7 +3,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { assertTaskHandle } from "./task-handle.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { readAuthenticatedDirtyCleanupBinding } from "./task-recovery.mjs";
 
 const WORKSPACES = new WeakSet();

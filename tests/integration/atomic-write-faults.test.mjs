@@ -5,18 +5,18 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { sha256 } from "../../core/freshness.mjs";
-import { MATERIAL_FILES, createMaterialRevision, publishMaterialRevisionRecord } from "../../core/material-revision.mjs";
-import { WRITER_FAULT_CONTRACT, publishImmutable, publishPublication } from "../../core/publication.mjs";
-import { createQualityFact, publishQualityFact } from "../../core/quality-fact.mjs";
+import { sha256 } from "../../runtime/evidence/freshness.mjs";
+import { MATERIAL_FILES, createMaterialRevision, publishMaterialRevisionRecord } from "../../runtime/task/material-revision.mjs";
+import { WRITER_FAULT_CONTRACT, publishImmutable, publishPublication } from "../../runtime/stage/publication.mjs";
+import { createQualityFact, publishQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 import { createTask, createTaskKernel } from "../../core/task-handle.mjs";
 
 const temporaryDirs = [];
 const taskHandleModule = resolve(fileURLToPath(new URL("../../core/task-handle.mjs", import.meta.url)));
 const artifactDirModule = resolve(fileURLToPath(new URL("../../core/artifact-dir.mjs", import.meta.url)));
-const publicationModule = resolve(fileURLToPath(new URL("../../core/publication.mjs", import.meta.url)));
-const materialModule = resolve(fileURLToPath(new URL("../../core/material-revision.mjs", import.meta.url)));
-const qualityModule = resolve(fileURLToPath(new URL("../../core/quality-fact.mjs", import.meta.url)));
+const publicationModule = resolve(fileURLToPath(new URL("../../runtime/stage/publication.mjs", import.meta.url)));
+const materialModule = resolve(fileURLToPath(new URL("../../runtime/task/material-revision.mjs", import.meta.url)));
+const qualityModule = resolve(fileURLToPath(new URL("../../runtime/evidence/quality-fact.mjs", import.meta.url)));
 afterEach(() => {
   while (temporaryDirs.length > 0) rmSync(temporaryDirs.pop(), { recursive: true, force: true });
 });

@@ -11,10 +11,11 @@ import { validateSchema } from "../../skills/wh-review/scripts/schema-validator.
 import { validatePhaseAcceptanceTrace, validatePhaseReviewEvidence } from "../../skills/wh-review/scripts/phase-review-subject.mjs";
 import { createPhaseDiffScan } from "./diff-scanner.mjs";
 import { readRecoveryCredential, readRecoveryGeneration, sha256 as recoverySha256, assertSafeRecoveryRef, recoveryError } from "../../core/task-recovery.mjs";
-import { normalizeRuntimeOnlyPaths } from "../../core/canonical-utils.mjs";
-import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../../core/review-flow-authority.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../core/stage-review-disposition.mjs";
-import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../core/stage-content-contracts.mjs";
+import { normalizeRuntimeOnlyPaths } from "../../runtime/evidence/canonical-utils.mjs";
+import { assertAuthenticatedReviewAttempt, assertAuthenticatedReviewHead } from "../../runtime/review/review-flow-authority.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../runtime/review/stage-review-disposition.mjs";
+import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../runtime/stage/stage-content-contracts.mjs";
+import { readCurrentTaskMaterialRevision } from "../../core/stage-content-evidence.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const OID = /^[a-f0-9]{40,64}$/;
@@ -25,12 +26,19 @@ const REVIEW_ACTION = /^reviews\/(?:results\/[A-Za-z0-9._-]+|attempts\/[A-Za-z0-
 const RISK_ACCEPTANCE = /^evidence\/risk-acceptances\/([a-f0-9]{64})\.json$/;
 const INPUT_KEYS = new Set([
   "phase_id", "implementation_receipt_ref", "green_test_receipt_ref",
-  "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "review_result_ref", "reopen_ref",
+  "red_evidence_ref", "previous_phase_review_ref", "allowed_files", "guarded_c2_paths", "review_result_ref", "reopen_ref",
   "repair_review_result_ref", "adjudication_correction_ref", "recovery_ref", "recovery_hash",
   "risk_acceptance_refs",
 ]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => `${JSON.stringify(value, null, 2)}\n`;
+const MATERIAL_FILES = Object.freeze(["decision-log.md", "spec.md", "plan.md", "tasks.md"]);
+const PHASE_LOCAL_C2_PATHS = Object.freeze([
+  ".github/workflows/ci.yml",
+  "package.json",
+  "scripts/__tests__/ci-chain-check.test.mjs",
+  "tools/cli/ci-chain-check.mjs",
+]);
 
 export function requiresSameAdjudicationCorrection(current, input) {
   return current?.phase_id === input.phase_id
@@ -266,6 +274,8 @@ function phaseMapTrace({
     base_tree: value.base_tree,
     snapshot_tree: scan.snapshot_tree,
     allowed_files: [...scan.allowed_files],
+    guarded_c2_paths: [...(scan.guarded_c2_paths ?? [])],
+    guarded_changes: [...(scan.guarded_changes ?? [])],
     changed_files: [...scan.changed_files],
     canonical_phase_evidence: { ref: canonicalEvidenceRef, sha256: canonicalEvidenceHash },
     diff_scan: { ref: scanRef, sha256: scanHash },
@@ -304,6 +314,20 @@ function currentPhaseReviewVerdict(task, phaseResult) {
 
 function currentPhaseReviewRef(phaseResult) {
   return phaseResult?.review?.action_ref ?? phaseResult?.review?.result_ref;
+}
+
+function phaseTasksSection(document, phaseHeading) {
+  const lines = String(document).split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `## ${phaseHeading}`);
+  if (start < 0) throw new Error(`tasks.md is missing the completed Phase section: ${phaseHeading}`);
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index])) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n");
 }
 
 function phaseSubject(task, workspace, phaseResult) {
@@ -378,6 +402,116 @@ function tasksOnlyBaseline(task, workspace, previous) {
   }
 }
 
+export function materialRevisionBaseline(task, workspace, previous) {
+  const revision = readCurrentTaskMaterialRevision({ task });
+  if (revision === undefined) throw new Error("current material revision is required for a material baseline");
+  const root = workspace.worktreeRoot;
+  const taskRoot = `specs/${task.identity.taskId}`;
+  const paths = MATERIAL_FILES.map((name) => `${taskRoot}/${name}`);
+  for (const name of MATERIAL_FILES.filter((name) => name !== "tasks.md")) {
+    const live = readFileSync(resolve(root, taskRoot, name), "utf8");
+    if (sha256(live) !== revision.value.hashes[name]) {
+      throw new Error(`current material revision does not bind live ${name}`);
+    }
+  }
+  const tasksPath = `${taskRoot}/tasks.md`;
+  const liveTasks = readFileSync(resolve(root, tasksPath), "utf8");
+  const revisionTasksHash = revision.value.hashes["tasks.md"];
+  const previousTasks = execFileSync("git", ["show", `${previous.scan.implementation_commit}:${tasksPath}`], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  });
+  const previousPlanPath = `${taskRoot}/plan.md`;
+  const previousPlan = execFileSync("git", ["show", `${previous.scan.implementation_commit}:${previousPlanPath}`], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  });
+  const phaseTasks = resolvePhaseTaskIds({ plan: previousPlan, tasks: previousTasks, phaseId: previous.phaseResult.phase_id });
+  const previousPhaseTasks = phaseTasksSection(previousTasks, phaseTasks.phase);
+  const validateCompletionSeam = (after, label) => {
+    const requiredRefs = [
+      previous.phaseResult.evidence?.implementation_receipt_ref,
+      previous.phaseResult.evidence?.green_test_receipt_ref,
+      currentPhaseReviewRef(previous.phaseResult),
+    ];
+    const requiredBindings = requiredRefs.map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
+    const afterSection = phaseTasksSection(after, phaseTasks.phase)
+      .replace(/^(#####\s+执行状态填写区（唯一完成权威）\s*)$/gm, "$1\n<!-- workflowhub completion facts audit -->");
+    const seam = validateTasksOnlyCompletionSeam({
+      // Material revisions may legitimately edit future tasks. Restrict the
+      // seam to the already completed Phase so those edits cannot hide a
+      // forged completion fact, while remaining material changes stay free.
+      before: previousPhaseTasks,
+      after: afterSection,
+      allowedTaskIds: phaseTasks.task_ids,
+      requiredBindings,
+      expectedReviewRef: currentPhaseReviewRef(previous.phaseResult),
+      completionEvidence: ({ ref }) => {
+        try { return task.readRecord(ref); }
+        catch (error) {
+          if (error?.code === "ENOENT") return undefined;
+          throw error;
+        }
+      },
+    });
+    if (!seam.ok) throw new Error(`invalid ${label} completion seam: ${seam.errors.join("; ")}`);
+  };
+  // A revision that changes the completed Phase tasks must carry a valid
+  // completion seam itself; otherwise a malicious revision could overwrite
+  // prior Phase facts and still become the next Phase baseline. Future-Phase
+  // task edits are intentionally outside this seam. A later completion update
+  // is only allowed when the revision left the full tasks document unchanged,
+  // so the two writes cannot be conflated.
+  validateCompletionSeam(liveTasks, "material revision");
+  if (sha256(liveTasks) !== revisionTasksHash) {
+    if (revisionTasksHash !== sha256(previousTasks)) {
+      throw new Error("current material revision is stale after tasks completion; publish a new revision from the current tasks.md");
+    }
+    validateCompletionSeam(liveTasks, "tasks-only after material revision");
+  }
+  const index = resolve(tmpdir(), `workflowhub-material-seam-${randomUUID()}.index`);
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  const parent = previous.scan.implementation_commit;
+  try {
+    execFileSync("git", ["read-tree", `${parent}^{tree}`], { cwd: root, env, stdio: "ignore" });
+    execFileSync("git", ["add", "--", ...paths], { cwd: root, env, stdio: "ignore" });
+    const tree = execFileSync("git", ["write-tree"], {
+      cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return execFileSync("git", ["commit-tree", tree, "-p", parent, "-m", "workflowhub material revision baseline"], {
+      cwd: root,
+      env: {
+        ...env,
+        GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local",
+        GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local",
+        GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
+      },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
+function materialRevisionDiffersFromCommit(task, workspace, previous) {
+  const revision = readCurrentTaskMaterialRevision({ task });
+  if (revision === undefined) return false;
+  const root = workspace.worktreeRoot;
+  const taskRoot = `specs/${task.identity.taskId}`;
+  return MATERIAL_FILES.some((name) => {
+    const path = `${taskRoot}/${name}`;
+    let historical;
+    try {
+      historical = execFileSync("git", ["show", `${previous.scan.implementation_commit}:${path}`], {
+        cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      if (error?.status === 128) return true;
+      throw error;
+    }
+    return sha256(historical) !== revision.value.hashes[name];
+  });
+}
+
 function currentMaterialsBaseline(task, kernel, workspace) {
   try {
     return kernel.readAccepted("build-plan").accepted.checkpoint.commit_oid;
@@ -448,6 +582,9 @@ function deriveBaseline({ task, kernel, workspace, input, current, red }) {
       ...(predecessorAdjudicationCorrection(current, input.phase_id) === undefined ? {}
         : { adjudicationCorrectionRef: predecessorAdjudicationCorrection(current, input.phase_id) }),
     });
+    if (materialRevisionDiffersFromCommit(task, workspace, { ...previous, phaseResult: current })) {
+      return materialRevisionBaseline(task, workspace, { ...previous, phaseResult: current });
+    }
     return tasksOnlyBaseline(task, workspace, { ...previous, phaseResult: current });
   }
   if (input.repair_review_result_ref !== undefined) {
@@ -478,9 +615,68 @@ function phaseCommit(workspace, tree, baseline, phaseId) {
   }).trim();
 }
 
-function assertLiveWorkspaceMatchesImplementation(workspace, implementation, snapshot) {
+export function assertLiveWorkspaceMatchesImplementation(workspace, implementation, snapshot, {
+  task,
+  currentPhase,
+  input,
+} = {}) {
   if (snapshot.tree === implementation.value.snapshot_tree) return;
   const runtimeOnlyCommit = phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "runtime-context");
+  const taskPath = task?.identity?.taskId === undefined
+    ? null
+    : `specs/${task.identity.taskId}/tasks.md`;
+  const phaseInTasksOnlyWindow = currentPhase?.phase_id === input?.phase_id
+    && currentPhase?.status === "awaiting_review"
+    && taskPath !== null;
+  if (phaseInTasksOnlyWindow) {
+    const requiredRefs = [input.implementation_receipt_ref, input.green_test_receipt_ref, input.review_result_ref];
+    if (requiredRefs.some((ref) => typeof ref !== "string" || ref.trim() === "")) {
+      throw new Error("tasks-only completion seam requires implementation, GREEN, and review refs");
+    }
+    const scan = createPhaseDiffScan({
+      sourceRoot: workspace.worktreeRoot,
+      phaseId: "tasks-completion-seam",
+      baselineCommit: implementation.value.snapshot_commit,
+      implementationCommit: phaseCommit(workspace, snapshot.tree, implementation.value.snapshot_commit, "tasks-completion-seam"),
+      allowedFiles: [taskPath],
+    });
+    const changed = new Set(scan.changed_files);
+    const onlyTasksAndRuntime = scan.safe
+      && changed.has(taskPath)
+      && changed.size === 1;
+    if (onlyTasksAndRuntime) {
+      const planPath = `specs/${task.identity.taskId}/plan.md`;
+      const before = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${taskPath}`], {
+        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      });
+      const plan = execFileSync("git", ["show", `${implementation.value.snapshot_commit}:${planPath}`], {
+        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      });
+      const after = readFileSync(resolve(workspace.worktreeRoot, taskPath), "utf8");
+      const phaseTasks = resolvePhaseTaskIds({ plan, tasks: before, phaseId: input.phase_id });
+      const requiredBindings = [
+        input.implementation_receipt_ref,
+        input.green_test_receipt_ref,
+        ...(typeof input.review_result_ref === "string" ? [input.review_result_ref] : []),
+      ].map((ref) => ({ ref, sha256: sha256(task.readRecord(ref)) }));
+      const seam = validateTasksOnlyCompletionSeam({
+        before,
+        after,
+        allowedTaskIds: phaseTasks.task_ids,
+        requiredBindings,
+        expectedReviewRef: input.review_result_ref,
+        completionEvidence: ({ ref }) => {
+          try { return task.readRecord(ref); }
+          catch (error) {
+            if (error?.code === "ENOENT") return undefined;
+            throw error;
+          }
+        },
+      });
+      if (seam.ok) return;
+      throw new Error(`invalid tasks-only completion seam: ${seam.errors.join("; ")}`);
+    }
+  }
   const runtimeOnly = createPhaseDiffScan({
     sourceRoot: workspace.worktreeRoot,
     phaseId: "runtime-context",
@@ -577,7 +773,30 @@ export function validatePhaseEvidenceInput(input) {
     || new Set(input.allowed_files).size !== input.allowed_files.length) {
     throw new TypeError("allowed_files must be an array of repository-relative paths");
   }
+  if (input.guarded_c2_paths !== undefined && (!Array.isArray(input.guarded_c2_paths)
+    || !input.guarded_c2_paths.every((file) => typeof file === "string" && file.length > 0
+      && !file.startsWith("/") && !file.includes("\\") && file.split("/").every((part) => part && part !== "." && part !== ".."))
+    || new Set(input.guarded_c2_paths).size !== input.guarded_c2_paths.length)) {
+    throw new TypeError("guarded_c2_paths must be an array of unique repository-relative paths");
+  }
   return input;
+}
+
+function validatePhaseLocalC2Declaration(task, workspace, phaseId, guardedC2Paths) {
+  if (guardedC2Paths.length === 0) return;
+  if (phaseId !== "phase-8") throw new Error("guarded_c2_paths are only allowed for phase-8");
+  if (JSON.stringify(guardedC2Paths) !== JSON.stringify([...PHASE_LOCAL_C2_PATHS].sort())) {
+    throw new Error("guarded_c2_paths must exactly match the declared Phase 8 C2 paths");
+  }
+  const taskId = task.identity?.taskId;
+  if (typeof taskId !== "string" || taskId.length === 0 || taskId.includes("..") || taskId.includes("/")) {
+    throw new Error("guarded_c2_paths cannot resolve the task plan");
+  }
+  const taskPlan = resolve(workspace.worktreeRoot, "specs", taskId, "tasks.md");
+  const content = readFileSync(taskPlan, "utf8");
+  for (const path of PHASE_LOCAL_C2_PATHS) {
+    if (!content.includes(`\`${path}\``)) throw new Error(`guarded_c2_path is not declared by the Phase card: ${path}`);
+  }
 }
 
 export function publishBuildCodePhaseEvidence(context, rawInput) {
@@ -586,6 +805,8 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
   const workspace = assertWorkspace(context?.workspace);
   const input = validatePhaseEvidenceInput(rawInput);
   const allowedFiles = normalizeRuntimeOnlyPaths(input.allowed_files);
+  const guardedC2Paths = normalizeRuntimeOnlyPaths(input.guarded_c2_paths ?? []);
+  validatePhaseLocalC2Declaration(task, workspace, input.phase_id, guardedC2Paths);
   const implementation = readImplementation(task, input.implementation_receipt_ref);
   const green = readTestReceipt(task, input.green_test_receipt_ref, { green: true });
   const red = input.red_evidence_ref === undefined ? null : readTestReceipt(task, input.red_evidence_ref, { green: false });
@@ -609,8 +830,10 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         snapshotTree: implementation.value.snapshot_tree,
       });
     const before = captureWorkspaceSnapshot(workspace);
-    if (input.recovery_ref === undefined) assertLiveWorkspaceMatchesImplementation(workspace, implementation, before);
     const current = currentPhaseResult(task);
+    if (input.recovery_ref === undefined) {
+      assertLiveWorkspaceMatchesImplementation(workspace, implementation, before, { task, currentPhase: current, input });
+    }
     if (current?.recovery_ref !== undefined) {
       if (input.recovery_ref !== current.recovery_ref || input.recovery_hash !== current.recovery_hash) throw new Error("recovered Phase publication requires the current recovery_ref and recovery_hash");
       const generation = readRecoveryGeneration(task, "phase-pointer");
@@ -649,7 +872,8 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
         && current.evidence?.implementation_receipt_ref === input.implementation_receipt_ref
         && current.evidence?.green_test_receipt_ref === input.green_test_receipt_ref
         && current.evidence?.red_evidence_ref === input.red_evidence_ref
-        && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.allowed_files ?? [])) === JSON.stringify(allowedFiles);
+        && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.allowed_files ?? [])) === JSON.stringify(allowedFiles)
+        && JSON.stringify(normalizeRuntimeOnlyPaths(existing.scan.guarded_c2_paths ?? [])) === JSON.stringify(guardedC2Paths);
       if (sameIdentity && reopen && current.reopen_ref === undefined) {
         throw new Error("reopen_ref requires a changed current completed Phase identity");
       }
@@ -690,7 +914,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
     const implementationCommitRef = pinPhaseCommit(workspace, task, input.phase_id, implementation.value.snapshot_tree, implementationCommit);
     const scan = createPhaseDiffScan({
       sourceRoot: workspace.worktreeRoot, phaseId: input.phase_id, baselineCommit: baseline,
-      implementationCommit, allowedFiles,
+      implementationCommit, allowedFiles, guardedC2Paths,
     });
     if (!scan.safe) throw new Error(`Phase diff is outside the allowed scope: ${JSON.stringify(scan.allowlist_violations)}`);
     const after = captureWorkspaceSnapshot(workspace);
@@ -715,6 +939,7 @@ export function publishBuildCodePhaseEvidence(context, rawInput) {
       },
       diff_scan: { path: scanRef },
       declared_allowed_files: allowedFiles,
+      declared_guarded_c2_paths: guardedC2Paths,
       evidence: {
         diff: scanRef,
         implementation_receipt_ref: input.implementation_receipt_ref,

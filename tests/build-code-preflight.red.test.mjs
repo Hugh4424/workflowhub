@@ -6,11 +6,11 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ArtifactDir } from "../core/artifact-dir.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];

@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolvePath } from "../../core/resolve-path.mjs";
+import { resolvePath } from "../../runtime/adapters/resolve-path.mjs";
 
 const COMPONENT_ID = "spike-design-variant";
 const OUT_DIR = join(tmpdir(), "wfh-spike-design-variant");

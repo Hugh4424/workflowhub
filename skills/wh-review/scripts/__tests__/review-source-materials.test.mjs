@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -182,6 +182,62 @@ describe("review source capture", () => {
     })).toThrow(/changed-path anchor summary-anchor has no included shard/);
   });
 
+  it("summarizes declared mechanical moves without shipping their full diff shard", () => {
+    const f = fixture();
+    writeFileSync(join(f.source, "context-change.txt"), "changed context\n");
+    mkdirSync(join(f.source, "docs", "architecture"), { recursive: true });
+    writeFileSync(join(f.source, "docs", "architecture", "move-map.json"), `${JSON.stringify({
+      schema_version: "move-map.v1",
+      entries: [{
+        source: "legacy/context-change.txt",
+        destination: "context-change.txt",
+        status: "move",
+        content_change: "import/path-only",
+        sha256_before: "0".repeat(64),
+        sha256_after: "1".repeat(64),
+        bytes: 123,
+      }],
+    })}\n`);
+    writeFileSync(join(f.source, "tests", "large.test.mjs"), `${"// mechanical migration fixture\n".repeat(18000)}`);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: "0".repeat(64) })}\n`);
+    const task = evidenceTask(f, receipt, Buffer.from("tests pass\n"));
+    const bundle = buildReviewMaterials({
+      task,
+      reviewDataRoot: f.data,
+      attachmentRoot: f.data,
+      source,
+      taskId: "mechanical-move",
+      stage: "build-code",
+      phaseId: "phase-mechanical-move",
+      materials: {
+        approved_spec: "spec",
+        acceptance_criteria: "ac",
+        test_evidence: { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") },
+        review_instructions: reviewInstructionsFor("build-code"),
+      },
+    });
+    const index = JSON.parse(readFileSync(join(bundle.bundleRoot, "diff-index.json"), "utf8"));
+    const contextChange = index.changes.find(({ path }) => path === "context-change.txt");
+    expect(contextChange.shards).toHaveLength(0);
+    expect(contextChange.summary).toMatchObject({
+      kind: "mechanical-move",
+      path: "context-change.txt",
+      source: "legacy/context-change.txt",
+      destination: "context-change.txt",
+      content_change: "import/path-only",
+      old_sha256: "0".repeat(64),
+      new_sha256: "1".repeat(64),
+    });
+    expect(contextChange.shards.some(({ shard_id }) => existsSync(join(bundle.bundleRoot, "diff-shards", `${shard_id}.diff`)))).toBe(false);
+    const compactChangeMap = JSON.parse(readFileSync(join(bundle.bundleRoot, "change-map.json"), "utf8"));
+    expect(compactChangeMap.changes.find(({ path }) => path === "context-change.txt").summary).toMatchObject({
+      source: "legacy/context-change.txt",
+      destination: "context-change.txt",
+      content_change: "import/path-only",
+    });
+  });
+
   it("captures only the immutable phase commit range named by current phase evidence", () => {
     const f = fixture();
     writeFileSync(join(f.source, "upstream.txt"), "upstream\n");
@@ -262,7 +318,7 @@ describe("review source capture", () => {
 
   it("uses the authenticated Workspace baseline after target main already contains task history", () => {
     const f = acceptedWorkspaceFixture();
-    const paths = ["core/fact-indexes.mjs", "core/fact-collector.mjs", "scripts/collect-task-facts.mjs", "config/transcript-sources.mjs", "tests/m14b-fact-collection.test.mjs"];
+    const paths = ["core/fact-indexes.mjs", "runtime/evidence/fact-collector.mjs", "tools/cli/collect-task-facts.mjs", "config/transcript-sources.mjs", "tests/m14b-fact-collection.test.mjs"];
     for (const path of paths) {
       mkdirSync(join(f.worktree, ...path.split("/").slice(0, -1)), { recursive: true });
       writeFileSync(join(f.worktree, path), `export const fixture = ${JSON.stringify(path)};\n`);

@@ -6,10 +6,10 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 import { createTask, migrateTaskRunnerRoot, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { canonical } from "../core/task-recovery.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { prepareTaskWorkspace } from "../core/workspace.mjs";
 import { runRecovery } from "../scripts/task-recovery.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";

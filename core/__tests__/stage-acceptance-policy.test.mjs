@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { acceptanceModeFor, requiresHumanConfirmation } from "../stage-acceptance-policy.mjs";
+import { acceptanceModeFor, requiresHumanConfirmation } from "../../runtime/stage/stage-acceptance-policy.mjs";
 
 describe("stage acceptance policy", () => {
   it.each([

@@ -18,6 +18,52 @@ const STREAM_CHUNK_BYTES = 64 * 1024;
 export const PHASE_DIFF_INLINE_LIMIT_BYTES = 320 * 1024;
 export const SELECTED_CONTEXT_PACKET_LIMIT_BYTES = 330 * 1024;
 const PHASE_DIFF_SHARD_TARGET_BYTES = 96 * 1024;
+const MOVE_MAP_PATH = "docs/architecture/move-map.json";
+
+function readMechanicalMoveMap(source, reviewDataRoot) {
+  const temporaryRoot = mkdtempSync(join(resolve(reviewDataRoot), "move-map-capture-"));
+  const snapshotPath = join(temporaryRoot, "move-map.json");
+  try {
+    let snapshot;
+    try {
+      snapshot = source.copySnapshotFile(MOVE_MAP_PATH, snapshotPath);
+    } catch (error) {
+      if (String(error?.message ?? error).startsWith("SOURCE_UNAVAILABLE")) return new Map();
+      throw error;
+    }
+    if (!snapshot || !existsSync(snapshotPath)) return new Map();
+    let parsed;
+    try { parsed = JSON.parse(readFileSync(snapshotPath, "utf8")); }
+    catch (error) { throw new Error(`MATERIAL_INCOMPLETE: ${MOVE_MAP_PATH} is invalid JSON: ${error.message}`); }
+    if (!Array.isArray(parsed?.entries)) throw new Error(`MATERIAL_INCOMPLETE: ${MOVE_MAP_PATH} requires entries`);
+    const moves = new Map();
+    for (const entry of parsed.entries) {
+      if (entry?.status !== "move" || entry?.content_change !== "import/path-only") continue;
+      if (typeof entry.source !== "string" || typeof entry.destination !== "string"
+          || typeof entry.sha256_before !== "string" || typeof entry.sha256_after !== "string") {
+        throw new Error(`MATERIAL_INCOMPLETE: ${MOVE_MAP_PATH} mechanical move entries require source, destination, and hashes`);
+      }
+      const mechanicalMove = Object.freeze({
+        kind: "mechanical-move",
+        source: entry.source,
+        destination: entry.destination,
+        status: entry.status,
+        content_change: entry.content_change,
+        sha256_before: entry.sha256_before,
+        sha256_after: entry.sha256_after,
+        bytes: entry.bytes ?? null,
+      });
+      // Git rename sections normally expose the destination, while some
+      // snapshots expose the old source path. Accept either representation;
+      // the signed pair remains the authority for the summary.
+      moves.set(entry.destination, mechanicalMove);
+      moves.set(entry.source, mechanicalMove);
+    }
+    return moves;
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
 
 function sha256File(path) {
   const hash = createHash("sha256");
@@ -604,6 +650,39 @@ function isSummaryEligiblePath(path) {
     || /\.(?:snap|golden|log)$/i.test(path);
 }
 
+function phaseCompactSummary(path, change, mechanicalMoves) {
+  const move = mechanicalMoves.get(path);
+  if (move !== undefined) {
+    return {
+      kind: move.kind,
+      path,
+      source: move.source,
+      destination: move.destination,
+      status: move.status,
+      content_change: move.content_change,
+      old_sha256: move.sha256_before,
+      new_sha256: move.sha256_after,
+      bytes: move.bytes,
+    };
+  }
+  let changeType = null;
+  if (path === "docs/architecture/repository-inventory.tsv" || path === "docs/architecture/move-map.json") {
+    changeType = "generated-architecture-index";
+  } else if (path.startsWith("specs/archive/")) {
+    changeType = "archived-spec-artifact";
+  } else if (path.startsWith("specs/review-flow-reset/")) {
+    changeType = "historical-plan-artifact";
+  }
+  if (changeType === null) return null;
+  return {
+    kind: "phase-summary",
+    path,
+    change_type: changeType,
+    old_hash: change.old_blob ?? null,
+    new_hash: change.blob ?? null,
+  };
+}
+
 function semanticDiffBytes(bytes) {
   const text = bytes.toString("utf8");
   const trailing = text.endsWith("\n");
@@ -635,7 +714,7 @@ function semanticAnchorRanges(change, anchor) {
   };
 }
 
-function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials }) {
+function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, mechanicalMoves = new Map() }) {
   const archive = canonicalDiffArchive({ reviewDataRoot, source });
   const changesByPath = new Map(changeMap.changes.map((change) => [change.path, change]));
   const shards = [];
@@ -643,6 +722,12 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   for (const section of diffSections(source)) {
     const change = changesByPath.get(section.path);
     if (!change) throw new Error(`MATERIAL_INCOMPLETE: diff section ${section.path} is absent from change-map`);
+    const mechanicalMove = mechanicalMoves.get(section.path) ?? null;
+    const compactSummary = phaseCompactSummary(section.path, change, mechanicalMoves);
+    // Mechanical import/path-only moves are represented by their signed move
+    // summary in the index. Their complete diff remains in full_diff archive;
+    // sending per-hunk shards would duplicate migration noise in the provider packet.
+    if (compactSummary !== null) continue;
     const semanticBytes = semanticDiffBytes(section.bytes);
     for (let offset = 0; offset < semanticBytes.length; offset += PHASE_DIFF_SHARD_TARGET_BYTES) {
       const body = semanticBytes.subarray(offset, Math.min(semanticBytes.length, offset + PHASE_DIFF_SHARD_TARGET_BYTES));
@@ -667,9 +752,11 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
   const compactChanges = changeMap.changes.map((change) => ({
     change_id: change.change_id,
     path: change.path,
-    hunk_ids: change.hunks.map(({ hunk_id }) => hunk_id),
     shards: shards.filter((shard) => shard._source_path === change.path)
       .map(({ _source_path, ...shard }) => shard),
+    ...(phaseCompactSummary(change.path, change, mechanicalMoves) === null ? {} : {
+      summary: phaseCompactSummary(change.path, change, mechanicalMoves),
+    }),
   }));
   const index = {
     schema_version: "wh-review-diff-index.v1",
@@ -680,9 +767,18 @@ function writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, 
     anchors: selectedAnchors(materials).map((anchor) => {
       const change = compactChanges.find(({ path }) => path === anchor.path);
       if (!change) return canonicalAnchorSource({ reviewDataRoot, source, anchor });
-      const shard = change.shards.find(({ delivery }) => delivery === "included");
-      if (!shard) throw new Error(`MATERIAL_INCOMPLETE: changed-path anchor ${anchor.id} has no included shard`);
       const fullChange = changeMap.changes.find(({ change_id }) => change_id === change.change_id);
+      const shard = change.shards.find(({ delivery }) => delivery === "included");
+      if (!shard) {
+        const summary = phaseCompactSummary(anchor.path, fullChange ?? {}, mechanicalMoves);
+        if (summary !== null) {
+          return {
+            anchor_id: anchor.id,
+            summary,
+          };
+        }
+        throw new Error(`MATERIAL_INCOMPLETE: changed-path anchor ${anchor.id} has no included shard`);
+      }
       return { anchor_id: anchor.id, shard_id: shard.shard_id, source_lines: semanticAnchorRanges(fullChange, anchor) };
     }),
   };
@@ -943,6 +1039,9 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
   for (const key of rule.forbidden) if (key in materials) throw new Error(`MATERIAL_FORBIDDEN: ${stage}/${reviewTrack ?? "default"} forbids ${key}`);
   const diffIndex = stage === "build-code" && effectiveScope === "phase" ? diffIndexFor(source) : null;
   const changeMap = stage === "build-code" && effectiveScope === "phase" ? changeMapFor({ source, phaseId, diffIndex }) : null;
+  const mechanicalMoves = stage === "build-code" && effectiveScope === "phase"
+    ? readMechanicalMoveMap(source, reviewDataRoot)
+    : new Map();
   validateV2AuthorityMaps(rule, materials, strictV2Maps, changeMap);
   const fixedInstructions = reviewInstructionsFor(stage, reviewTrack, uiScope, reviewRound, effectiveScope);
   if (materials.review_instructions !== fixedInstructions) throw new Error("MATERIAL_FORBIDDEN: review_instructions must use the fixed stage template");
@@ -973,6 +1072,15 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         compacted.acceptance_criteria,
         materials.acceptance_map,
         canonicalMaterialArchive({ reviewDataRoot, label: "approved-spec", bytes }),
+      );
+    }
+    if (compacted.acceptance_criteria && materials.acceptance_map) {
+      const bytes = materialBytes(compacted.acceptance_criteria);
+      compacted.acceptance_criteria = compactApprovedSpec(
+        materials.approved_spec ?? compacted.acceptance_criteria,
+        compacted.acceptance_criteria,
+        materials.acceptance_map,
+        canonicalMaterialArchive({ reviewDataRoot, label: "acceptance-criteria", bytes }),
       );
     }
     providerMaterials = compacted;
@@ -1007,11 +1115,16 @@ export function buildReviewMaterials({ reviewDataRoot, attachmentRoot, source, t
         base_tree: changeMap.base_tree,
         candidate_tree: changeMap.candidate_tree,
         changes: changeMap.changes.map(({ change_id, path, status, hunks }) => ({
-          change_id, path, status, hunk_ids: hunks.map(({ hunk_id }) => hunk_id),
+          change_id,
+          path,
+          status,
+          ...(phaseCompactSummary(path, changeMap.changes.find((change) => change.change_id === change_id), mechanicalMoves) === null ? {} : {
+            summary: phaseCompactSummary(path, changeMap.changes.find((change) => change.change_id === change_id), mechanicalMoves),
+          }),
         })),
       };
       write(bundleRoot, "change-map.json", Buffer.from(`${JSON.stringify(compactChangeMap)}\n`));
-      const index = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials });
+      const index = writeShardedPhaseDiff({ bundleRoot, reviewDataRoot, source, changeMap, materials, mechanicalMoves });
     }
   }
   // Context is never inferred from repository size or file membership. Every

@@ -10,9 +10,9 @@ import {
   prepareMakeDecisionWorkspace,
   recoverMakeDecisionWorkspace,
 } from "../core/stage-context.mjs";
-import { persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
+import { persistWriteBoundaryPathCard } from "../runtime/evidence/write-boundary-preflight.mjs";
 import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
-import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
+import { requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
 import {
   validateAcceptanceEvidence,
   writeCanonicalAuditSummary,
@@ -28,10 +28,10 @@ import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evi
 import { runCapture as captureVerifyCodeTests } from "../workflows/verify-code/capture.mjs";
 import { publishPhaseTraceLineage, supersedePhaseTraceLineage } from "./task-recovery.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
-import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
-import { dispatchStageSkill, loadStageSkillManifest, preflightStageSkills } from "../core/stage-skill-runtime.mjs";
-import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../core/runtime-facade.mjs";
-import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../core/runner-contract.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { dispatchStageSkill, loadStageSkillManifest, preflightStageSkills } from "../runtime/stage/stage-skill-runtime.mjs";
+import { invokeRuntimeCommand, RUNTIME_BEHAVIORS } from "../runtime/interface/runtime-facade.mjs";
+import { LOCAL_RUNNER_CONTRACT, LOCAL_SKILL_BUNDLE_CONTRACT } from "../runtime/interface/runner-contract.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),

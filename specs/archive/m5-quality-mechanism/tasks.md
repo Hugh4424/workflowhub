@@ -74,11 +74,11 @@ ui_change: false
 
 ### Goal
 
-新建 `core/boundary-confirm.mjs`，暴露 `confirmBoundary(state, cfg)` 接口；三态（missing/failed/unknown）各能选"继续"并把选择+原因写进 execution-record.boundary_decisions；复用 M2 findViolation 检测不可逆操作类型（FR-BOUND-003），不新建确认机制。
+新建 `runtime/evidence/boundary-confirm.mjs`，暴露 `confirmBoundary(state, cfg)` 接口；三态（missing/failed/unknown）各能选"继续"并把选择+原因写进 execution-record.boundary_decisions；复用 M2 findViolation 检测不可逆操作类型（FR-BOUND-003），不新建确认机制。
 
 ### Files
 
-- Create: `/Users/Hugh/Hugh/Project/workflowhub/core/boundary-confirm.mjs` — 三态边界确认接口
+- Create: `/Users/Hugh/Hugh/Project/workflowhub/runtime/evidence/boundary-confirm.mjs` — 三态边界确认接口
 - Create: `/Users/Hugh/Hugh/Project/workflowhub/tests/boundary-confirm.test.mjs` — 三态单元测试
 - Modify: `/Users/Hugh/Hugh/Project/workflowhub/scripts/check-path-guard.mjs` — A-005b：`function findViolation`（L97）加 `export`（仅加关键字，不改函数体/CLI 行为），使 boundary-confirm.mjs 可 import
 - Modify: `/Users/Hugh/Hugh/Project/workflowhub/metrics/collector.mjs` — A-002b：`function upsert`（L80）加 `export`（仅加关键字，不改函数体/签名），使 boundary-confirm.mjs 可 import 写 boundary_decisions 键
@@ -92,9 +92,9 @@ ui_change: false
   - 做什么：为 missing/failed/unknown 三态各写一个测试，断言 confirmBoundary 返回 `{decision, reason, timestamp}` 且 decision 可为"continue"；验证选择和原因落进 boundary_decisions 键（可查记录，非孤儿）；接口签名按 plan 第 5 章 `confirmBoundary(state, cfg)` 
   - 验证意图：先跑失败命令确认真红（boundary-confirm.mjs 不存在 → exit 1）；三态各独立可测
 
-- [x] T005 [FR-BOUND-001/002/003/FR-GATE-003/FR-GATE-004] 实现 `core/boundary-confirm.mjs`（含 confirmBoundary 三态 + confirmIrreversible 不可逆四类×三结果）
+- [x] T005 [FR-BOUND-001/002/003/FR-GATE-003/FR-GATE-004] 实现 `runtime/evidence/boundary-confirm.mjs`（含 confirmBoundary 三态 + confirmIrreversible 不可逆四类×三结果）
   - 入参：`scripts/check-path-guard.mjs`（A-005b：先给 findViolation 加 export，再 import 不复制）；`metrics/collector.mjs`（A-002b：先给 upsert 加 export，再 import）
-  - 出参：`core/boundary-confirm.mjs`（新建）
+  - 出参：`runtime/evidence/boundary-confirm.mjs`（新建）
   - 做什么：⓪前置（A-002b/A-005b）：先给 `metrics/collector.mjs:upsert`（L80）和 `scripts/check-path-guard.mjs:findViolation`（L97）各加 `export` 关键字（仅加关键字、不改函数体/签名/CLI 行为），使 boundary-confirm.mjs 能跨文件 import；改后跑一次现有 run-checks 确认 collector/check-path-guard 无回归。①`confirmBoundary(state, cfg)` 接受三态枚举（missing/failed/unknown）和 cfg（含 execution_id/taskMetricsPath/globalMetricsPath/project/taskId）；返回 `{decision, reason, timestamp}`；写进 boundary_decisions 键（含 source 声明 `boundary-confirm@m5`，遵 FR-EXECREC-004）。②另暴露 `confirmIrreversible(op, cfg, targetPath, opts)` 处理不可逆操作确认（FR-GATE-003/004）：覆盖 delete/push/merge/archive 四类、对涉及路径的操作复用 A-005 findViolation 判断是否命中保护区、命中则记 needs_manual_confirm；结果按 opts.outcome 支持 confirmed/rejected/timeout 三种，各写 boundary_decisions（带 source）。③两函数均 never throws，失败 stderr 告警后仍返回结果（FR-BOUND-001 放行不卡死）；rejected/timeout 也记录并继续不 BLOCK（FR-GATE-004 守恒铁律）
   - 验证意图：真跑活流程——①三态各一例能选"继续"并让选择和原因落进可查询记录（非孤儿，FR-BOUND-002）；②不可逆确认对 delete/push/merge/archive 四类分别触发、对普通修改等非四类断言不触发；confirmed/rejected/timeout 三结果各断言 boundary_decisions 有记录且流程继续不 BLOCK（FR-GATE-003/004）；③复用 findViolation（FR-BOUND-003）被换成自建机制时测试应红
 
@@ -130,38 +130,38 @@ ui_change: false
 
 ### Goal
 
-新建 `scripts/check-stage-quality.mjs`，扫描质量类 blocking 数量；质量类 blocking=0 时 exit 0，>0 时 exit 1（CI 可红）；支持 `--self-test` 模式注入真实路径验证可红；在 `scripts/run-checks.mjs` 追加为第 6 个 checker。V6 三坑防复发逻辑在此模块实现。
+新建 `tools/cli/check-stage-quality.mjs`，扫描质量类 blocking 数量；质量类 blocking=0 时 exit 0，>0 时 exit 1（CI 可红）；支持 `--self-test` 模式注入真实路径验证可红；在 `tools/cli/run-checks.mjs` 追加为第 6 个 checker。V6 三坑防复发逻辑在此模块实现。
 
 ### Files
 
-- Create: `/Users/Hugh/Hugh/Project/workflowhub/scripts/check-stage-quality.mjs` — CI gate 扫描
-- Modify: `/Users/Hugh/Hugh/Project/workflowhub/scripts/run-checks.mjs` — 追加第 6 个 checker（≤5 行）
-- Reference: `/Users/Hugh/Hugh/Project/workflowhub/scripts/run-checks.mjs` — A-006 runChecker/runAggregate，不改已有 checker 顺序
-- Reference: `/Users/Hugh/Hugh/Project/workflowhub/core/validate-contract.mjs` — A-007 validateContract，用于格式校验
+- Create: `/Users/Hugh/Hugh/Project/workflowhub/tools/cli/check-stage-quality.mjs` — CI gate 扫描
+- Modify: `/Users/Hugh/Hugh/Project/workflowhub/tools/cli/run-checks.mjs` — 追加第 6 个 checker（≤5 行）
+- Reference: `/Users/Hugh/Hugh/Project/workflowhub/tools/cli/run-checks.mjs` — A-006 runChecker/runAggregate，不改已有 checker 顺序
+- Reference: `/Users/Hugh/Hugh/Project/workflowhub/runtime/evidence/validate-contract.mjs` — A-007 validateContract，用于格式校验
 - Reference: `/Users/Hugh/Hugh/Project/workflowhub/metrics/` — 扫描范围含此目录（fact collector 所在），排除 check-stage-quality.mjs 自身
 
 ### Tasks
 
-- [x] T007 [FR-GATE-001/002] 新建 `scripts/check-stage-quality.mjs`（先跑文件不存在时 RED 证据）
+- [x] T007 [FR-GATE-001/002] 新建 `tools/cli/check-stage-quality.mjs`（先跑文件不存在时 RED 证据）
   - 入参：无（新建文件）
-  - 出参：`scripts/check-stage-quality.mjs`；RED 证据存 `$TASK_DIR/apply/evidence/v2-gate-scan-RED.txt`
-  - 做什么：先跑 `node scripts/check-stage-quality.mjs` 确认因文件不存在而 exit 1，存为 RED 证据
+  - 出参：`tools/cli/check-stage-quality.mjs`；RED 证据存 `$TASK_DIR/apply/evidence/v2-gate-scan-RED.txt`
+  - 做什么：先跑 `node tools/cli/check-stage-quality.mjs` 确认因文件不存在而 exit 1，存为 RED 证据
   - 验证意图：先跑失败命令确认真红，存 RED 证据后进实现
 
 - [x] T008 [FR-GATE-001/002/003/004] 实现 `check-stage-quality.mjs` 主体
   - 入参：workflowhub 仓 `scripts/` 目录（扫描目标）；`metrics/` 目录（含 fact collector，须纳入扫描范围）
-  - 出参：`scripts/check-stage-quality.mjs`（实现）
+  - 出参：`tools/cli/check-stage-quality.mjs`（实现）
   - 做什么：扫描全部 checker 文件统计质量类 blocking 数量（FR-GATE-001）；识别三类违规——① fact collector 失败被写成 blocking（V6①，FR-GATE-002）；② stage_result schema 被用在运行时拦截（V6②，FR-RESULT-003）；③ 不可测指标当自动 gate（V6③，FR-GATE-001）；支持 `--self-test` flag，注入真实路径模拟违规验扫描可红；扫描范围必须含 `metrics/`（fact collector 所在），排除自身文件；self-test 用真实路径注入（非硬编码字符串），能真正让注入后扫描变红
   - 验证意图：正常扫描 exit 0（质量类 blocking=0）；故意注入质量类 blocking 后 exit 1（防假绿）；`--self-test` 路径注入验证：注入后能变红（FR-GATE-001 场景二）；self-test 测试的是真实注入非 mock
 
 - [x] T009 [FR-GATE-001/FR-GATE-002/FR-GATE-003/FR-GATE-004] 追加第 6 个 checker 进 `run-checks.mjs`
-  - 入参：`scripts/run-checks.mjs`（现有，按 A-006 runChecker/runAggregate 模式）
-  - 出参：`scripts/run-checks.mjs`（修改，追加 ≤5 行）
+  - 入参：`tools/cli/run-checks.mjs`（现有，按 A-006 runChecker/runAggregate 模式）
+  - 出参：`tools/cli/run-checks.mjs`（修改，追加 ≤5 行）
   - 做什么：在 runAggregate() 末尾追加 check-stage-quality checker 注册，保持已有 5 个 checker 顺序不变（A-006 禁止改已有顺序）；checker 聚合结果要能反映 FR-GATE-003（不可逆确认四类）和 FR-GATE-004（超时仍放行不 BLOCK）的违规扫描——这两类违规由 T008 实现，T009 只负责接入到 CI 聚合链
   - 验证意图：`npm run check` 能调用到第 6 个 checker；故意注入质量违规时 npm run check 整体 exit 1
 
 - [x] T010 [FR-GATE-001/002/003/004] 新建 `tests/stage-quality.test.mjs`，写 self-test 真实路径注入测试
-  - 入参：`scripts/check-stage-quality.mjs`
+  - 入参：`tools/cli/check-stage-quality.mjs`
   - 出参：`tests/stage-quality.test.mjs`（新建）
   - 做什么：测试正常扫描结果 exit 0；测试故意注入 blocking（三类各一例）后 exit 1；self-test 注入须用真实路径（非字符串 mock），确保测试可证伪（注入一个 blocking → 结果变红；删掉 blocking → 恢复绿）；扫描范围覆盖 metrics/ 验证测试
   - 验证意图：每类注入测试必须可证伪——故意把注入逻辑改掉后测试应红（防假绿）；self-test 真实路径注入能红是 FR-GATE-001 防假绿的核心
@@ -207,7 +207,7 @@ ui_change: false
 - Create: `/Users/Hugh/Hugh/Project/workflowhub/contracts/stage-result.contract.json` — 七字段最小 schema
 - Create: `/Users/Hugh/Hugh/Project/workflowhub/tests/stage-result-contract.test.mjs` — 契约测试
 - Reference: `/Users/Hugh/Hugh/Project/workflowhub/contracts/execution-record.contract.json` — A-008 格式参考（version/validated_by_stage/required_fields[]），只读对齐格式
-- Reference: `/Users/Hugh/Hugh/Project/workflowhub/core/validate-contract.mjs` — A-007 validateContract，zero-AJV，不引 AJV
+- Reference: `/Users/Hugh/Hugh/Project/workflowhub/runtime/evidence/validate-contract.mjs` — A-007 validateContract，zero-AJV，不引 AJV
 
 ### Tasks
 

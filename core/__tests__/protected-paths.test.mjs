@@ -1,12 +1,12 @@
 /**
  * protected-paths.test.mjs
  *
- * Pure-function tests for core/protected-paths.mjs.
+ * Pure-function tests for runtime/evidence/protected-paths.mjs.
  * These replace the CLI-layer tests that lived in check-path-guard.test.mjs.
  */
 
 import { describe, it, expect } from "vitest";
-import { findViolation, PROTECTED_PATHS } from "../protected-paths.mjs";
+import { findViolation, PROTECTED_PATHS } from "../../runtime/evidence/protected-paths.mjs";
 
 describe("findViolation — protected paths", () => {
   it("CONSTITUTION.md (protected) returns matching entry", () => {

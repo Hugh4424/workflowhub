@@ -5,10 +5,10 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../core/task-handle.mjs";
-import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
-import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
+import { requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 
 const temporary = [];
 function fixture() {

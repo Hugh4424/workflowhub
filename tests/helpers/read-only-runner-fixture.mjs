@@ -5,11 +5,11 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { buildRunnerRelease, installRunnerRelease } from "../../core/runner-release.mjs";
-import { buildSkillBundleRelease } from "../../core/skill-bundle-release.mjs";
+import { buildRunnerRelease, installRunnerRelease } from "../../runtime/distribution/runner-release.mjs";
+import { buildSkillBundleRelease } from "../../runtime/distribution/skill-bundle-release.mjs";
 import { createTask } from "../../core/task-handle.mjs";
-import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
-import { hashAuditSummary } from "../../core/audit-summary-carrier.mjs";
+import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
+import { hashAuditSummary } from "../../runtime/evidence/audit-summary-carrier.mjs";
 import { writeHumanConfirmation } from "./human-confirmation.mjs";
 
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -206,11 +206,11 @@ export async function runScenario(fixture, scenario) {
         const currentTree = captureGitWorktreeSnapshot(worktree).tree;
         const value = { task_id: fixture.taskId, stage: "build-code", material_revision: "revision-a", snapshot_tree: historicalTree, kind: "review", subject: "integration", status: "passed", evidence: [] };
         const raw = JSON.stringify(value);
-        const { evaluateFactFreshness } = await import(pathToFileURL(path.join(SOURCE_ROOT, "core/freshness.mjs")).href);
+        const { evaluateFactFreshness } = await import(pathToFileURL(path.join(SOURCE_ROOT, "runtime/evidence/freshness.mjs")).href);
         stale = evaluateFactFreshness({ ...value, ref: "fact.json", sha256: hash(raw) }, { material_revision: "revision-b", snapshot_tree: currentTree }, { read: () => raw }).status === "stale";
       }
       if (scenario === "idempotent-resume" && stage === "build-code") {
-        const { dispatchStageSkill } = await fixture.load("core/stage-skill-runtime.mjs");
+        const { dispatchStageSkill } = await fixture.load("runtime/stage/stage-skill-runtime.mjs");
         const unavailable = await dispatchStageSkill({ packageRoot: fixture.providerRoot, stage: "build-code", name: "test-routing-advisor", invocationKey: "resume", independentContextAvailable: false, kernel: context.kernel });
         const replay = await dispatchStageSkill({ packageRoot: fixture.providerRoot, stage: "build-code", name: "test-routing-advisor", invocationKey: "resume", independentContextAvailable: false, kernel: context.kernel });
         const replayWrite = context.kernel.publishStageSkillInvocation(replay);

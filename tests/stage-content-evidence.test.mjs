@@ -16,13 +16,13 @@ import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { writeCanonicalAuditSummary } from "../core/canonical-receipt-writer.mjs";
-import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { createCanonicalSource, createSourceManifest } from "../runtime/evidence/canonical-source.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
-import { dispatchStageSkill } from "../core/stage-skill-runtime.mjs";
-import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
-import { loadStageManifest } from "../core/step-manifest.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { dispatchStageSkill } from "../runtime/stage/stage-skill-runtime.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
+import { loadStageManifest } from "../runtime/stage/step-manifest.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];

@@ -9,7 +9,7 @@
 ## 2. 已验证技术上下文
 
 - 复用 `core/fact-indexes.mjs` 的严格字段校验、canonical JSON、合并去重与 JSONL 读写；不另建 schema 框架或第二套序列化器。
-- 复用 `core/fact-collector.mjs` 的 StageContext 身份预检、TaskHandle 锁与单文件原子写入；新批次先完整校验、合并，再写入第五个文件。
+- 复用 `runtime/evidence/fact-collector.mjs` 的 StageContext 身份预检、TaskHandle 锁与单文件原子写入；新批次先完整校验、合并，再写入第五个文件。
 - 复用 launcher-issued reader capability 和闭合 registry 模式。生产配置保持空 registry：当前没有获准的成本、归属或自动化来源。测试通过受控 capability 注入直接机器记录。
 - 已检查当前实现：四旧索引只由既有 collector 负责。计划不修改 `core/stage-handlers.mjs`、TaskHandle 身份模型、旧索引 schema、私有日志或全局存储。
 
@@ -26,7 +26,7 @@
 
 ### 3.2 受控来源
 
-- 在 `core/fact-collector.mjs` 增加独立 runtime-fact reader capability、闭合 source registry 与 `fact_type → source.class` 唯一映射。registry 是唯一入口，不接收路径、目录扫描、裸 reader、原始对话或推断输入。
+- 在 `runtime/evidence/fact-collector.mjs` 增加独立 runtime-fact reader capability、闭合 source registry 与 `fact_type → source.class` 唯一映射。registry 是唯一入口，不接收路径、目录扫描、裸 reader、原始对话或推断输入。
 - 每个 registry entry 在读任何 source 前校验身份、类型、source class、registration ID 与 capability。重复登记、同类型多来源、跨任务身份或输入 schema 错误立即失败；runtime-facts 本批不写部分数据。
 - 各 source adapter 仅投射规格第 6 节的白名单字段。conversation 明确拒绝 `body`、`content`、`text` 或可还原正文。session 和 subagent 的 parent 值只取 launcher 登记字段。cost 不从 token、模型、时长或价格表计算。
 - 未登记来源为 `missing/no_registered_source`；已登记对象不存在为 `missing/not_found`；普通未跳步不生成 `step_skip` 缺口。读错、格式错、坏行、冲突和显式 legacy marker 映射到各自的 unknown reason。
@@ -35,7 +35,7 @@
 
 - 扩展现有 `INDEX_REFS`、锁内编排和 CLI 组装，使第五个 index 与旧四索引由同一次受控 collection 返回，但不改变旧 index 的内容或 health 计算。
 - 在开始任何写入前完成 runtime registry 与整批 candidate 校验；随后沿用现有 TaskHandle 单文件原子写入。写入错误保持稳定错误并使本次 collection 失败，绝不降级成 missing 或 unknown。
-- 新增最小 `config/runtime-fact-sources.mjs`，只导出空的生产 registry 声明。`scripts/collect-task-facts.mjs` 只将该配置经受控 factory 传入 collector。未来真实 source 需单独批准输入契约，不能在此任务隐式启用。
+- 新增最小 `config/runtime-fact-sources.mjs`，只导出空的生产 registry 声明。`tools/cli/collect-task-facts.mjs` 只将该配置经受控 factory 传入 collector。未来真实 source 需单独批准输入契约，不能在此任务隐式启用。
 
 ## 4. 实施顺序
 

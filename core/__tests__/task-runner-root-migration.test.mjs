@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { bootstrapStage } from "../stage-context.mjs";
 import { createTask, migrateTaskRunnerRoot, openTask } from "../task-handle.mjs";
-import { createTaskKernel } from "../task-kernel.mjs";
+import { createTaskKernel } from "../../runtime/task/task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 

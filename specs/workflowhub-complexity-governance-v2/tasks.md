@@ -2336,14 +2336,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：按冻结 `docs/architecture/move-map.json` 完成剩余 core/scripts/schemas 的机械迁移并同步 import；保留路径与行为等价证据。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/build-code-phase-evidence.test.mjs`（5 tests）、`./node_modules/.bin/vitest run tests/build-code-diff-only.test.mjs`（33 tests）、结构组合（44 tests + `node tools/cli/verify-structure.mjs` + `git diff --check`）；独立 `wh-review` attempt `a83348a9-644f-452d-825d-dc9cc1565a24`。
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e5df25785a448caf3c5f2af9295aabb10765548c634b92a65c973445eb8b84ea.json","sha256":"40282635e9f130806aac1cdd13c0fae7cf442e545e54c95824d26f1e6fdb2aad"},{"ref":"receipts/build-tests-phase-8-seam-regression-v2.json","sha256":"1f9e4ef0028d05d2eb3e1fb68185e216324b4a78e13ab1b06cd1c571259ce221"},{"ref":"receipts/build-tests-phase-8-seam-diff-v2.json","sha256":"a2a4460b7d2cfca3ff96bff5526c804f1e1da57a2b705853adb281c0f94c4c52"},{"ref":"receipts/build-tests-phase-8-seam-structure-v2.json","sha256":"42604ccd05afb345af1cab42bfdd39de2537d7084f99a57c799a5da4de78b1f0"},{"ref":"evidence/phases/phase-8/be9699465f6bab32e53a7b432f0990ced47f195e/phase-evidence-1680a143df06bf36951ca69f9f6fb3fe70d4b7f9c477f1c0072e4ee8a6906bfc.json","sha256":"1680a143df06bf36951ca69f9f6fb3fe70d4b7f9c477f1c0072e4ee8a6906bfc"},{"ref":"reviews/results/build-code-default-be9699465f6bab32e53a7b432f0990ced47f195e-a83348a9-644f-452d-825d-dc9cc1565a24.json","sha256":"09bf49f2e54669cbabccec3901d8a982b2840576cbbb3362ecb08139d99447f7"}]`
+- **covered_ac**：`AC-13、AC-15`
+- **review_fact**：`{"ref":"reviews/results/build-code-default-be9699465f6bab32e53a7b432f0990ced47f195e-a83348a9-644f-452d-825d-dc9cc1565a24.json","verdict":"pass","valid_provider":"opencode/k3","provider_failure":"cursor/grok: PROVIDER_PERMISSION_DENIED","findings":"1 invalid_evidence major + 3 nonblocking minor，均保留原事实，未阻断 Phase"}`
+- **completed_at**：`2026-08-01T01:52:37+08:00`
 
 #### T053 — 同步 AGENTS、CLAUDE、CONTEXT、ADR 与结构门
 
@@ -2374,14 +2374,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：同步 AGENTS、CLAUDE、CONTEXT、README、constitution-checklist、结构 schema 与 repository inventory，完成治理文档和结构门收口。
+- **executed_commands**：`./node_modules/.bin/vitest run tests/build-code-diff-only.test.mjs tests/build-code-phase-evidence.test.mjs && node --check workflows/build-code/diff-scanner.mjs && node --check workflows/build-code/phase-evidence.mjs && git diff --check`；独立 `wh-review` attempt `a83348a9-644f-452d-825d-dc9cc1565a24`。
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/e5df25785a448caf3c5f2af9295aabb10765548c634b92a65c973445eb8b84ea.json","sha256":"40282635e9f130806aac1cdd13c0fae7cf442e545e54c95824d26f1e6fdb2aad"},{"ref":"receipts/build-tests-phase-8-seam-regression-v2.json","sha256":"1f9e4ef0028d05d2eb3e1fb68185e216324b4a78e13ab1b06cd1c571259ce221"},{"ref":"receipts/build-tests-phase-8-seam-diff-v2.json","sha256":"a2a4460b7d2cfca3ff96bff5526c804f1e1da57a2b705853adb281c0f94c4c52"},{"ref":"receipts/build-tests-phase-8-seam-structure-v2.json","sha256":"42604ccd05afb345af1cab42bfdd39de2537d7084f99a57c799a5da4de78b1f0"},{"ref":"evidence/phases/phase-8/be9699465f6bab32e53a7b432f0990ced47f195e/phase-evidence-1680a143df06bf36951ca69f9f6fb3fe70d4b7f9c477f1c0072e4ee8a6906bfc.json","sha256":"1680a143df06bf36951ca69f9f6fb3fe70d4b7f9c477f1c0072e4ee8a6906bfc"},{"ref":"reviews/results/build-code-default-be9699465f6bab32e53a7b432f0990ced47f195e-a83348a9-644f-452d-825d-dc9cc1565a24.json","sha256":"09bf49f2e54669cbabccec3901d8a982b2840576cbbb3362ecb08139d99447f7"}]`
+- **covered_ac**：`AC-10、AC-14、AC-15`
+- **review_fact**：`{"ref":"reviews/results/build-code-default-be9699465f6bab32e53a7b432f0990ced47f195e-a83348a9-644f-452d-825d-dc9cc1565a24.json","verdict":"pass","valid_provider":"opencode/k3","provider_failure":"cursor/grok: PROVIDER_PERMISSION_DENIED","findings":"1 invalid_evidence major + 3 nonblocking minor，均保留原事实，未阻断 Phase"}`
+- **completed_at**：`2026-08-01T01:52:37+08:00`
 
 ### Verify
 

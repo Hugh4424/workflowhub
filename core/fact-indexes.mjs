@@ -1,8 +1,8 @@
-import { canonicalJson, contentHash } from "./canonical-source.mjs";
+import { canonicalJson, contentHash } from "../runtime/evidence/canonical-source.mjs";
 
 export const FACT_SCHEMA_VERSION = "v1";
 export const COLLECTOR_VERSION = "v1";
-export const SKILLS_SCHEMA_ID = "https://workflowhub.local/schemas/skills-inventory.schema.json";
+export const SKILLS_SCHEMA_ID = "https://workflowhub.local/runtime/schemas/skills-inventory.schema.json";
 export const RUNTIME_FACT_SCHEMA_VERSION = "runtime-facts.v1";
 export const RUNTIME_FACT_COLLECTOR_VERSION = "1.0.0";
 export const RUNTIME_FACT_TYPES = Object.freeze(["cost", "conversation", "session", "subagent", "step_skip", "automation"]);

@@ -3,11 +3,11 @@ import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, overlayCheckpointArtifacts, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
-import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
+import { acceptanceModeFor, requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 import { ArtifactDir, assertArtifactDir } from "./artifact-dir.mjs";
-import { validateTaskMaterialRevision } from "./stage-content-contracts.mjs";
-import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "./git-worktree-snapshot.mjs";
+import { validateTaskMaterialRevision } from "../runtime/stage/stage-content-contracts.mjs";
+import { captureGitWorktreeSnapshot, equivalentWorkspaceTrees } from "../runtime/task/git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 import { deriveChangeClassification } from "../skills/wh-review/scripts/review-controller.mjs";
@@ -15,11 +15,11 @@ import {
   authenticateCanonicalReviewResult,
   conservativelyAssessUnattestedAnchors,
   parseCanonicalReviewerOutput,
-} from "./canonical-review-result.mjs";
-import { hashAuditSummary } from "./audit-summary-carrier.mjs";
-import { createRequirementLedger, createRequirementsCoverage } from "./requirement-ledger.mjs";
+} from "../runtime/review/canonical-review-result.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
+import { createRequirementLedger, createRequirementsCoverage } from "../runtime/evidence/requirement-ledger.mjs";
 import { validateEntryPayload, validateExitPayload } from "./receipt-schema.mjs";
-import { validateBuildCodeAdjudicationCorrection, validateReviewFlowReset } from "./review-flow-authority.mjs";
+import { validateBuildCodeAdjudicationCorrection, validateReviewFlowReset } from "../runtime/review/review-flow-authority.mjs";
 import { validateHumanConfirmation } from "./canonical-evidence-validators.mjs";
 import {
   BUILD_SPEC_RECOVERY_REFS,
@@ -35,15 +35,15 @@ import {
   deriveSeriousReviewPause,
   validateRiskAcceptance,
   validateRiskAcceptanceSet,
-} from "./stage-review-disposition.mjs";
+} from "../runtime/review/stage-review-disposition.mjs";
 import { assertRuntimeStageSkillInvocation, serializeStageSkillInvocation, stageSkillInvocationRef } from "./stage-skill-invocation.mjs";
-import { createMaterialRevision as createUnifiedMaterialRevision } from "./material-revision.mjs";
-import { createQualityFact as createUnifiedQualityFact, publishQualityFact as publishUnifiedQualityFact } from "./quality-fact.mjs";
-import { createPublication as createUnifiedPublication, publishPublication as publishUnifiedPublication } from "./publication.mjs";
-import { evaluateFactFreshness } from "./freshness.mjs";
-export { createMaterialRevision } from "./material-revision.mjs";
-export { createQualityFact } from "./quality-fact.mjs";
-export { deriveStageCompletion } from "./completion-predicates.mjs";
+import { createMaterialRevision as createUnifiedMaterialRevision } from "../runtime/task/material-revision.mjs";
+import { createQualityFact as createUnifiedQualityFact, publishQualityFact as publishUnifiedQualityFact } from "../runtime/evidence/quality-fact.mjs";
+import { createPublication as createUnifiedPublication, publishPublication as publishUnifiedPublication } from "../runtime/stage/publication.mjs";
+import { evaluateFactFreshness } from "../runtime/evidence/freshness.mjs";
+export { createMaterialRevision } from "../runtime/task/material-revision.mjs";
+export { createQualityFact } from "../runtime/evidence/quality-fact.mjs";
+export { deriveStageCompletion } from "../runtime/stage/completion-predicates.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;

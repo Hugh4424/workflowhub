@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { MATERIAL_FILES, createMaterialRevision } from "../../core/material-revision.mjs";
-import { evaluateFactFreshness, sha256 } from "../../core/freshness.mjs";
+import { MATERIAL_FILES, createMaterialRevision } from "../../runtime/task/material-revision.mjs";
+import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
 import { createTask, createTaskKernel } from "../../core/task-handle.mjs";
 
 const materials = Object.fromEntries(MATERIAL_FILES.map((name) => [name, `# ${name}\n`]));

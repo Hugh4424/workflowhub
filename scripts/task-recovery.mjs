@@ -5,11 +5,11 @@ import { realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { inspectRunnerIdentity } from "../core/runner-identity.mjs";
+import { inspectRunnerIdentity } from "../runtime/evidence/runner-identity.mjs";
 import { openTask } from "../core/task-handle.mjs";
-import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../core/write-boundary-preflight.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../core/stage-review-disposition.mjs";
+import { authenticateWriteBoundary, persistWriteBoundaryPathCard } from "../runtime/evidence/write-boundary-preflight.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../runtime/review/stage-review-disposition.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import { publishBuildCodePhaseEvidence } from "../workflows/build-code/phase-evidence.mjs";
 import {

@@ -26,10 +26,10 @@ import {
   validateRuntimeFactV2,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, buildRuntimeFactV2Projection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createRuntimeFactV2Reader, createRuntimeFactV2Registry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildArtifactProjection, buildHealthProjection, buildRuntimeFactProjection, buildRuntimeFactV2Projection, collectTaskFacts, createFactCollectorWriteTestHooks, createRuntimeFactReader, createRuntimeFactRegistry, createRuntimeFactV2Reader, createRuntimeFactV2Registry, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../runtime/evidence/fact-collector.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { acceptStageAttempt, runStage } from "../core/stage-runner.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
@@ -578,7 +578,7 @@ describe("M14b fact collection acceptance", () => {
     });
     const skills = JSON.parse(file(fixture.task, "indexes/skills-inventory.json"));
     const health = records(fixture.task, "indexes/flow-health-facts.jsonl");
-    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "schemas/skills-inventory.schema.json"), "utf8"));
+    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "runtime/schemas/skills-inventory.schema.json"), "utf8"));
     const validate = new Ajv2020({ strict: false, formats: { "date-time": true } }).compile(schema);
     const before = file(fixture.task, "indexes/skills-inventory.json");
     const second = collectTaskFacts(collectionContext(fixture), {
@@ -641,7 +641,7 @@ describe("M14b fact collection acceptance", () => {
 
   it("AC-012 serializes two collector processes and makes health use the final merged transcript", async () => {
     const fixture = await createM14bFixture();
-    const collector = join(repositoryRoot, "core/fact-collector.mjs");
+    const collector = join(repositoryRoot, "runtime/evidence/fact-collector.mjs");
     const contextModule = join(repositoryRoot, "core/stage-context.mjs");
     const script = `
       import { bootstrapStage } from ${JSON.stringify(contextModule)};

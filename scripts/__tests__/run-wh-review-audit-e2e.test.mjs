@@ -2,9 +2,9 @@ import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runAuditE2E } from "../run-wh-review-audit-e2e.mjs";
+import { runAuditE2E } from "../../tools/cli/run-wh-review-audit-e2e.mjs";
 import { openTask } from "../../core/task-handle.mjs";
-import { deriveTaskPath } from "../../core/task-identity.mjs";
+import { deriveTaskPath } from "../../runtime/task/task-identity.mjs";
 describe("simple audit E2E", () => {
   it("writes evidence for five stages and both decision tracks", async () => {
     const output = realpathSync(mkdtempSync(join(tmpdir(), "audit-e2e-test-"))); const result = await runAuditE2E({ outputRoot: output });

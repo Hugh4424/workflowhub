@@ -22,11 +22,11 @@ import { execFileSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
-import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
-import { inspectRunnerIdentity } from "./runner-identity.mjs";
+import { deriveTaskPath, validateProjectName, validateTaskId } from "../runtime/task/task-identity.mjs";
+import { inspectRunnerIdentity } from "../runtime/evidence/runner-identity.mjs";
 import { buildTaskKernel } from "./task-kernel-implementation.mjs";
-import { canonical } from "./canonical-utils.mjs";
-export { publishImmutable } from "./publication.mjs";
+import { canonical } from "../runtime/evidence/canonical-utils.mjs";
+export { publishImmutable } from "../runtime/stage/publication.mjs";
 
 const FORBIDDEN_MANIFEST_FIELDS = new Set([
   "status", "stage_map", "updated_at", "lock", "worktree", "worktree_root",

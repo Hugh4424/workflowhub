@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTask } from "../../core/task-handle.mjs";
 import { ArtifactDir } from "../../core/artifact-dir.mjs";
-import { captureGitWorktreeSnapshot } from "../../core/git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot } from "../../runtime/task/git-worktree-snapshot.mjs";
 import { verifyGitCheckpoint } from "../../core/git-checkpoint.mjs";
-import { evaluateFactFreshness, sha256 } from "../../core/freshness.mjs";
-import { requiresHumanConfirmation } from "../../core/stage-acceptance-policy.mjs";
+import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { requiresHumanConfirmation } from "../../runtime/stage/stage-acceptance-policy.mjs";
 import { writeHumanConfirmation } from "../helpers/human-confirmation.mjs";
 
 // T017/T018 GREEN — ORACLE-PROGRESSION：材料可改可执行；stale 仅阻止正式 verify/close。

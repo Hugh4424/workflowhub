@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { relative, resolve } from "node:path";
 
 import { artifactReference, assertArtifactDir } from "./artifact-dir.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 

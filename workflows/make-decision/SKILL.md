@@ -12,7 +12,7 @@ A real review outcome is recorded as returned; `unavailable` never becomes
 ## Runtime contract
 
 The stable Runner interface is the seven-behavior facade in
-`core/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
 `confirm`, and `authorize`. Commands below are delegated compatibility locators,
 not additional public Runner behaviors.
 

@@ -1,14 +1,14 @@
 import { assertTaskHandle } from "./task-handle.mjs";
-import { assertTaskKernel } from "./task-kernel.mjs";
+import { assertTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
-import { requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
+import { requiresHumanConfirmation } from "../runtime/stage/stage-acceptance-policy.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { captureWorkspaceSnapshot } from "./canonical-receipt-writer.mjs";
 import { inspectIntegrationReviewSubject } from "../skills/wh-review/scripts/integration-review-subject.mjs";
 import { fileURLToPath } from "node:url";
-import { loadStageSkillManifest } from "./stage-skill-runtime.mjs";
+import { loadStageSkillManifest } from "../runtime/stage/stage-skill-runtime.mjs";
 
 const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
 function declaredBundleHash(root, dependency) {

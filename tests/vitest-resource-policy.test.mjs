@@ -13,7 +13,7 @@ describe("Vitest resource policy", () => {
   it("runs only root-writing tests in the exclusive batch", () => {
     const scripts = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts;
     const config = readFileSync(join(root, "vitest.config.mjs"), "utf8");
-    const checks = readFileSync(join(root, "scripts/run-checks.mjs"), "utf8");
+    const checks = readFileSync(join(root, "tools/cli/run-checks.mjs"), "utf8");
 
     expect(scripts.test).toBe("npm run test:safe && npm run test:exclusive");
     for (const file of rootWriters) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCanonicalSource } from "../core/canonical-source.mjs";
+import { createCanonicalSource } from "../runtime/evidence/canonical-source.mjs";
 
 const completeSource = {
   source_type: "host_input",

@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
-import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../../core/stage-content-contracts.mjs";
-import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../core/stage-review-disposition.mjs";
+import { resolvePhaseTaskIds, validateTasksOnlyCompletionSeam } from "../../../runtime/stage/stage-content-contracts.mjs";
+import { deriveSeriousReviewPause, validateRiskAcceptanceSet } from "../../../runtime/review/stage-review-disposition.mjs";
 import { validateSchema } from "./schema-validator.mjs";
 import { readPhaseMapTrace } from "./phase-review-subject.mjs";
 

@@ -17,8 +17,8 @@
 
 ## T002 — 接入受控来源与六类投影
 
-- 动作：在 `core/fact-collector.mjs` 增加 runtime reader capability、闭合 source registry、整批预校验和六个白名单 adapter。先校验 source identity/registration/type 再读；生成 missing、not_found、unknown 和 present。
-- 影响区域：`core/fact-collector.mjs` 及受控测试 helper。
+- 动作：在 `runtime/evidence/fact-collector.mjs` 增加 runtime reader capability、闭合 source registry、整批预校验和六个白名单 adapter。先校验 source identity/registration/type 再读；生成 missing、not_found、unknown 和 present。
+- 影响区域：`runtime/evidence/fact-collector.mjs` 及受控测试 helper。
 - 需求：FR-003、FR-005、FR-007、FR-008、FR-011、FR-013、FR-014；AC-002 至 AC-006、AC-009。
 - 依赖：T001。
 - 验证：重复或错配来源、伪造任务身份和非法 value 在 reader 调用前失败且 runtime index 未改；conversation 不落正文；跳步 receipt 生成一条事实、普通未跳步不生成行；五个 unknown reason 都有稳定去敏错误。
@@ -26,8 +26,8 @@
 
 ## T003 — 写入第五索引并保持旧链不变
 
-- 动作：把 `indexes/runtime-facts.jsonl` 加入既有 collection 编排；复用锁和原子单文件写入。新增 `config/runtime-fact-sources.mjs` 的空生产声明，并让 `scripts/collect-task-facts.mjs` 仅通过受控 factory 注入它。
-- 影响区域：`core/fact-collector.mjs`、`scripts/collect-task-facts.mjs`、新增 `config/runtime-fact-sources.mjs`、相关 CLI 单测。
+- 动作：把 `indexes/runtime-facts.jsonl` 加入既有 collection 编排；复用锁和原子单文件写入。新增 `config/runtime-fact-sources.mjs` 的空生产声明，并让 `tools/cli/collect-task-facts.mjs` 仅通过受控 factory 注入它。
+- 影响区域：`runtime/evidence/fact-collector.mjs`、`tools/cli/collect-task-facts.mjs`、新增 `config/runtime-fact-sources.mjs`、相关 CLI 单测。
 - 需求：FR-001、FR-011、FR-012；AC-003、AC-009、AC-010。
 - 依赖：T002。
 - 验证：空 registry 不读取私有位置，写出规定 missing 行且不造 step_skip 缺口；写入失败为可断言失败；四旧 index 的 schema、内容快照和 consumer 输入保持不变，flow health 不读取 runtime-facts。

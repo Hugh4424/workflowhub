@@ -1,13 +1,13 @@
 import { isAbsolute, resolve } from "node:path";
 
 import { ArtifactDir } from "./artifact-dir.mjs";
-import { resolveStorageRoot } from "./storage-root.mjs";
+import { resolveStorageRoot } from "../runtime/evidence/storage-root.mjs";
 import { assertRuntimeAuthority } from "./runtime-mode.mjs";
-import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
+import { deriveTaskPath, validateProjectName, validateTaskId } from "../runtime/task/task-identity.mjs";
 import { openTask } from "./task-handle.mjs";
-import { createTaskKernel } from "./task-kernel.mjs";
-import { assertTaskRunnerIdentity } from "./runner-identity.mjs";
-import { authenticateWriteBoundary } from "./write-boundary-preflight.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
+import { assertTaskRunnerIdentity } from "../runtime/evidence/runner-identity.mjs";
+import { authenticateWriteBoundary } from "../runtime/evidence/write-boundary-preflight.mjs";
 import {
   assertWorkspace,
   openAcceptedCandidateWorkspace,

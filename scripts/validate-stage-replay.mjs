@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 import { readLatestStageContentEvidence, verifyStageContentEvidence } from "../core/stage-content-evidence.mjs";
 import { createTaskKernel, openTask } from "../core/task-handle.mjs";
-import { resolveStorageRoot } from "../core/storage-root.mjs";
+import { resolveStorageRoot } from "../runtime/evidence/storage-root.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const HASH = /^[a-f0-9]{64}$/;

@@ -6,7 +6,7 @@ import {
   validateTasksOnlyCompletionSeam,
   validatePlanTaskContract,
   validatePlanTaskContractV2,
-} from "../core/stage-content-contracts.mjs";
+} from "../runtime/stage/stage-content-contracts.mjs";
 import { certifyCurrentTaskCompletion } from "../core/stage-handlers.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");

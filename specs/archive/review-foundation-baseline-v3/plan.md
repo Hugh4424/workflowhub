@@ -20,7 +20,7 @@
 - `skills/wh-review/scripts/wh-review-cli.mjs`：在知道 stage/track 后加载当前 route；公开 doctor 入口只消费 host config，不消费 TaskHandle。
 - `core/stage-handlers.mjs`：在 serious-review pause 前验证同 flow resolution；复用现有 resolution 读取和最终绑定校验。
 - `skills/wh-review/scripts/review-result.mjs`：把 provider attempt 投影为固定分类，保留原码、duration 和 retry count，并把失败 attempt 排除在 finding/质量分母外。
-- `core/stage-content-contracts.mjs`、`core/schemas/plan-task-contract.v1.json`：让计划覆盖校验和 canonical schema 同时识别当前已接受规格使用的 `FR-001 / AC-001` 编号；只放宽编号格式，不改变其他字段约束。
+- `runtime/stage/stage-content-contracts.mjs`、`runtime/schemas/plan-task-contract.v1.json`：让计划覆盖校验和 canonical schema 同时识别当前已接受规格使用的 `FR-001 / AC-001` 编号；只放宽编号格式，不改变其他字段约束。
 - `docs/wh-review-e2e.md`：补源仓、active runner、fresh process 三层证据模板。
 - `skills/wh-review/SKILL.md`、`skills/wh-review/manifest.json`、`skills/wh-review/contracts/provider-protocol.md`：同步公开命令、supporting files 和失败分类口径。
 - `skills/catalog.yaml`：仅重算现有 wh-review bundle hash。
@@ -169,7 +169,7 @@ resolution 是处置证据，不是新 verdict；最终绑定仍由现有 `bindF
 
 ### Files
 
-`docs/multica-monitoring-sop.md`、`docs/wh-review-e2e.md`、`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`、`skills/wh-review/scripts/review-result.mjs`、`skills/wh-review/contracts/provider-protocol.md`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`core/stage-content-contracts.mjs`、`core/schemas/plan-task-contract.v1.json`、`tests/stage-plan-task-contract.test.mjs`、`skills/catalog.yaml`。
+`docs/multica-monitoring-sop.md`、`docs/wh-review-e2e.md`、`skills/wh-review/scripts/__tests__/simple-contracts.test.mjs`、`skills/wh-review/scripts/review-result.mjs`、`skills/wh-review/contracts/provider-protocol.md`、`skills/wh-review/scripts/__tests__/review-runner.test.mjs`、`runtime/stage/stage-content-contracts.mjs`、`runtime/schemas/plan-task-contract.v1.json`、`tests/stage-plan-task-contract.test.mjs`、`skills/catalog.yaml`。
 
 ### Tasks
 

@@ -3,7 +3,7 @@ import {
   loadStageManifest,
   validateAllStageManifests,
   validateStepManifest,
-} from "../core/step-manifest.mjs";
+} from "../runtime/stage/step-manifest.mjs";
 
 const repoRoot = new URL("..", import.meta.url).pathname;
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];

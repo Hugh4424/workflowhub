@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 import {
   assertRunnerCompatibility,
   createRunnerContract,
-} from "../../core/runner-contract.mjs";
+} from "../../runtime/interface/runner-contract.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -30,7 +30,7 @@ describe("runner contract", () => {
   });
 
   test("runner release schema is closed", () => {
-    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "schemas/runner-release.schema.json"), "utf8"));
+    const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "runtime/schemas/runner-release.schema.json"), "utf8"));
     const validate = new Ajv2020({ strict: false }).compile(schema);
     expect(validate({
       schema_version: 1,
@@ -38,7 +38,7 @@ describe("runner contract", () => {
       version: "1.0.0",
       runner_contract_major: 1,
       runner_contract_minor: 0,
-      files: [{ path: "core/runtime-facade.mjs", sha256: "a".repeat(64) }],
+      files: [{ path: "runtime/interface/runtime-facade.mjs", sha256: "a".repeat(64) }],
       surprise: true,
     })).toBe(false);
   });

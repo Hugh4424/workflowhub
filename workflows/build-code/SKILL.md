@@ -30,7 +30,7 @@ the same implementation, test, and review facts.
 ## Runtime contract
 
 The stable Runner interface is the seven-behavior facade in
-`core/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
 `confirm`, and `authorize`. Commands below are delegated compatibility locators,
 not additional public Runner behaviors.
 
@@ -39,7 +39,7 @@ branded StageContext from
 `bootstrapStage("build-code", ...)`. All commands run with explicit
 `ctx.workspace.worktreeRoot`. This execution cwd is not an identity source.
 Task records use `ctx.task`/`ctx.kernel`; design files use `ctx.artifacts`.
-Repository-owned subprocesses use `core/workspace-runner.mjs`, which accepts
+Repository-owned subprocesses use `runtime/task/workspace-runner.mjs`, which accepts
 only a branded Workspace plus argv and fixes cwd to the verified worktree.
 Never derive task identity or paths from cwd, a repository, or an external
 tracker identifier. The launcher resolves all `scripts/`, `core/`, and `metrics/`

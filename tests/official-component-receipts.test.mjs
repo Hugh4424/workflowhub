@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validatePhaseCompletion } from "../core/task-kernel-implementation.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 

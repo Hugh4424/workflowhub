@@ -54,7 +54,7 @@ describe("runner binding removal migration", () => {
   it("uses task.json bytes as a CAS condition, removes only the live binding, and preserves lineage", async () => {
     const f = fixture();
     const before = f.task.readRecord("task.json");
-    const { migrateTaskToPerInvocation } = await import("../../core/invocation-identity.mjs");
+    const { migrateTaskToPerInvocation } = await import("../../runtime/evidence/invocation-identity.mjs");
 
     const result = migrateTaskToPerInvocation({
       taskPath: f.task.taskPath,
@@ -82,7 +82,7 @@ describe("runner binding removal migration", () => {
   it("is replay-safe and rejects a stale CAS without changing task.json", async () => {
     const f = fixture();
     const before = f.task.readRecord("task.json");
-    const { migrateTaskToPerInvocation } = await import("../../core/invocation-identity.mjs");
+    const { migrateTaskToPerInvocation } = await import("../../runtime/evidence/invocation-identity.mjs");
     const first = migrateTaskToPerInvocation({
       taskPath: f.task.taskPath,
       projectName: "Demo",

@@ -22,3 +22,12 @@
 - 设计宪法：[CONSTITUTION.md](CONSTITUTION.md)
 - 检查清单：[constitution-checklist.md](constitution-checklist.md)
 - 术语表：[CONTEXT.md](CONTEXT.md)
+
+## 当前目录职责（Phase 8）
+
+- `runtime/`：生产运行时；按 `interface/`、`stage/`、`task/`、`evidence/`、`review/`、`adapters/`、`distribution/`、`schemas/` 分区。
+- `tools/cli/`：人工或 CI 调用的命令行工具，不承载运行时状态。
+- `skills/`：可搬运技能；`workflows/`：五阶段入口；`config/`：配置；`tests/`：跨模块和集成测试。
+- `core/`、`scripts/`、顶层 `schemas/`：历史兼容区。未列入 move-map 的文件保持原位，未经证明不得新增能力。
+- `docs/architecture/move-map.json` 是本次目录迁移的唯一事实；新增文件必须先登记职责和消费者。
+- `node_modules/` 仅为本地/CI 安装产物，不提交、不作为运行时来源。

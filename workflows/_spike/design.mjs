@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { resolvePath } from "../../core/resolve-path.mjs";
+import { resolvePath } from "../../runtime/adapters/resolve-path.mjs";
 
 const COMPONENT_ID = "spike-design";
 const OUT_DIR = join(tmpdir(), "wfh-spike-design");

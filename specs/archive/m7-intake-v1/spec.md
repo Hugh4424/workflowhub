@@ -282,7 +282,7 @@ workflowhub 已有五段薄骨架（M6），宪法 F4/F10 确立"质量靠异源
 - `tests/metric-scan.test.mjs` — 三 skill 指标接入扫描测试（FR-METRIC-003，Phase 5 T018）
 - `/Users/Hugh/Hugh/Knowledge/Projects/multica-agenthub/tasks/agenthub-extraction-program/artifacts/roadmap.md`（Knowledge 仓，**不在 workflowhub 仓**）— 命名全局对齐（intake→make-decision 等，D-M7-9；仅改 roadmap.md 文档约 26 处 M6/M7/M10/M13/X4 段命名，代码级 intake 改名出 M7 范围）
 - 已有 five-skills/冒烟测试文件 — five-skills-present 从 5 扩到 7（字面量断言）+ 加 reuse-registry 轻量断言
-- `scripts/check-stage-quality.mjs` — 扩展为能检出三个 skill（make-decision、scope-triage、decision-log）中任一未接指标（FR-METRIC-003，D-M7-5）
+- `tools/cli/check-stage-quality.mjs` — 扩展为能检出三个 skill（make-decision、scope-triage、decision-log）中任一未接指标（FR-METRIC-003，D-M7-5）
 - `CONTEXT.md` — 补充「组件 skill」概念定义段（已决 2，D-M7-2）
 
 ### 不涉及

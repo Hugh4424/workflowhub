@@ -187,7 +187,7 @@
 
 ### REQ-040 严格复用 M14a schema
 
-`indexes/skills-inventory.json` 必须逐字遵守基线内 `specs/m14a-audit-contract-layer/skills-inventory.schema.json`（JSON Schema draft 2020-12，`$id=https://workflowhub.local/schemas/skills-inventory.schema.json`）：顶层只允许 `schema_version`、`generated_at`、`skills`；每个 skill 必须含 `name`、`path`、`version`、`stage`、`owner`、`source`、`portable`、`metrics_expected`、`subagent_friendly`，只可使用 schema 已声明的可选字段。禁止添加 `run_id`、状态、hash、entrypoint 或其他字段。实现若发现该路径、`$id` 或所列 required/additionalProperties 口径与基线不一致，必须停止该文件生成并报告契约不匹配，不得自行改 schema。
+`indexes/skills-inventory.json` 必须逐字遵守基线内 `specs/m14a-audit-contract-layer/skills-inventory.schema.json`（JSON Schema draft 2020-12，`$id=https://workflowhub.local/runtime/schemas/skills-inventory.schema.json`）：顶层只允许 `schema_version`、`generated_at`、`skills`；每个 skill 必须含 `name`、`path`、`version`、`stage`、`owner`、`source`、`portable`、`metrics_expected`、`subagent_friendly`，只可使用 schema 已声明的可选字段。禁止添加 `run_id`、状态、hash、entrypoint 或其他字段。实现若发现该路径、`$id` 或所列 required/additionalProperties 口径与基线不一致，必须停止该文件生成并报告契约不匹配，不得自行改 schema。
 
 ### REQ-041 权威来源与排序
 

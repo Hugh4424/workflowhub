@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../core/completion-predicates.mjs";
+import { STAGE_PREDICATES, assertStageCompleted, deriveStageCompletion } from "../../runtime/stage/completion-predicates.mjs";
 
 function observations(stage) {
   return Object.entries(STAGE_PREDICATES[stage]).map(([subject, kind], index) => ({

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { STAGE_PREDICATES } from "../../core/completion-predicates.mjs";
-import { evaluateFactFreshness, sha256 } from "../../core/freshness.mjs";
-import { createMaterialRevision } from "../../core/material-revision.mjs";
-import { createPublication, rebuildPublication } from "../../core/publication.mjs";
-import { createQualityFact, publishQualityFact } from "../../core/quality-fact.mjs";
+import { STAGE_PREDICATES } from "../../runtime/stage/completion-predicates.mjs";
+import { evaluateFactFreshness, sha256 } from "../../runtime/evidence/freshness.mjs";
+import { createMaterialRevision } from "../../runtime/task/material-revision.mjs";
+import { createPublication, rebuildPublication } from "../../runtime/stage/publication.mjs";
+import { createQualityFact, publishQualityFact } from "../../runtime/evidence/quality-fact.mjs";
 
 const materials = { "decision-log.md": "decision", "spec.md": "spec", "plan.md": "plan", "tasks.md": "tasks" };
 const requirements = {

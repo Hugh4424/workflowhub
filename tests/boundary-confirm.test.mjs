@@ -11,7 +11,7 @@ import { mkdtempSync, realpathSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
-import { confirmBoundary, confirmIrreversible } from "../core/boundary-confirm.mjs";
+import { confirmBoundary, confirmIrreversible } from "../runtime/evidence/boundary-confirm.mjs";
 import { configForCollector, createMetricsLauncherConfig, recordSkeleton } from "../metrics/collector.mjs";
 import { createTask } from "../core/task-handle.mjs";
 
@@ -151,7 +151,7 @@ describe("boundary-confirm irreversible ops", () => {
 
 describe("boundary-confirm findViolation reuse", () => {
   it("delete on a CONSTITUTION.md (protected path) records needs_manual_confirm", () => {
-    // CONSTITUTION.md is in PROTECTED_PATHS per core/protected-paths.mjs.
+    // CONSTITUTION.md is in PROTECTED_PATHS per runtime/evidence/protected-paths.mjs.
     // If boundary-confirm used a home-grown checker with a different list,
     // this test would fail (the assertion is on the specific protected list entry).
     const execution_id = "exec-protected-path";

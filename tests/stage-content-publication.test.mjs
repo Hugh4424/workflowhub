@@ -12,12 +12,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildAuditSummaryFromJournalEvents } from "../core/audit-aggregator.mjs";
-import { hashAuditSummary } from "../core/audit-summary-carrier.mjs";
-import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
-import { computeLedgerHash, computeRequirementContentHash } from "../core/requirement-ledger.mjs";
+import { hashAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
+import { createCanonicalSource, createSourceManifest } from "../runtime/evidence/canonical-source.mjs";
+import { computeLedgerHash, computeRequirementContentHash } from "../runtime/evidence/requirement-ledger.mjs";
 import { createStageContentEvidenceWriter } from "../core/stage-content-evidence.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { prepareTaskWorkspace } from "../core/workspace.mjs";
 
 const roots = [];

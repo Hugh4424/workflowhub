@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createTask, createTaskKernel } from "../core/task-handle.mjs";
-import { createCanonicalSource, createSourceManifest } from "../core/canonical-source.mjs";
+import { createCanonicalSource, createSourceManifest } from "../runtime/evidence/canonical-source.mjs";
 import { ArtifactDir } from "../core/artifact-dir.mjs";
 import { readCurrentTaskMaterialRevision } from "../core/stage-content-evidence.mjs";
 import { validateReplayRecordSet } from "../scripts/validate-stage-replay.mjs";

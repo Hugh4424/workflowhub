@@ -1,21 +1,21 @@
 import { createHash } from "node:crypto";
-export { createPublication, publishImmutable } from "./publication.mjs";
+export { createPublication, publishImmutable } from "../runtime/stage/publication.mjs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
-import { createTaskKernel } from "./task-kernel.mjs";
+import { createTaskKernel } from "../runtime/task/task-kernel.mjs";
 import { validateAcceptanceEvidence } from "./task-kernel-implementation.mjs";
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
-import { runWorkspaceCommand } from "./workspace-runner.mjs";
-import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { runWorkspaceCommand } from "../runtime/task/workspace-runner.mjs";
+import { captureGitWorktreeSnapshot } from "../runtime/task/git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
-import { normalizeRuntimeOnlyPaths } from "./canonical-utils.mjs";
+import { normalizeRuntimeOnlyPaths } from "../runtime/evidence/canonical-utils.mjs";
 import { authenticateAuditRetryEvidence, buildAuditSummaryFromJournalEvents } from "./audit-aggregator.mjs";
-import { carryAuditSummary, verifyAuditSummary } from "./audit-summary-carrier.mjs";
+import { carryAuditSummary, verifyAuditSummary } from "../runtime/evidence/audit-summary-carrier.mjs";
 import { readLatestStageContentEvidence, requiredStageContentKinds, verifyStageContentEvidence } from "./stage-content-evidence.mjs";
-import { loadStageManifest } from "./step-manifest.mjs";
+import { loadStageManifest } from "../runtime/stage/step-manifest.mjs";
 import { validateCanonicalTestReceipt } from "./canonical-evidence-validators.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");

@@ -550,7 +550,7 @@ capability_decisions:
     purpose: 把 AgentHub 或宿主技能软链进 .claude/skills
     design_idea: 依赖宿主自动发现全局技能
     used_by_stages: []
-    local_path: core/local-skill-resolver.mjs
+    local_path: runtime/adapters/local-skill-resolver.mjs
     upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/contract.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/contract.md" }]
     local_changes: 由 repo-relative manifest、bundle 和 resolved path payload 取代
     dependency_closure: []

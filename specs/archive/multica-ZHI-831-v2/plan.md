@@ -9,8 +9,8 @@
 ## 已核对的现状
 
 - `core/fact-indexes.mjs` 已提供 v1 的固定信封、确定性合并、冲突可见化和安全错误净化，适合复用这些通用原则，但 v2 必须有自己的常量、校验器、合并器和 JSONL 入口。
-- `core/fact-collector.mjs` 已有受能力保护的来源 reader/registry、预检、任务锁和原子 JSONL 写入；生产 v1 运行事实来源配置为空。v2 应复用这条受控写入链，而不是另建采集流程。
-- `scripts/collect-task-facts.mjs` 是唯一生产入口；现有测试已用真实 TaskHandle、accepted workspace 和写入失败钩子覆盖 v1。
+- `runtime/evidence/fact-collector.mjs` 已有受能力保护的来源 reader/registry、预检、任务锁和原子 JSONL 写入；生产 v1 运行事实来源配置为空。v2 应复用这条受控写入链，而不是另建采集流程。
+- `tools/cli/collect-task-facts.mjs` 是唯一生产入口；现有测试已用真实 TaskHandle、accepted workspace 和写入失败钩子覆盖 v1。
 - 任务已有可直接回读的正式 review、测试/verification、stage receipt/journal 与人工确认记录；usage、launcher/transcript metadata 与 orchestrator dispatch 仍没有登记来源。因此前者可在其记录存在且通过身份校验时生成 `present`，后者必须是 `missing/no_registered_source`。
 
 ## 实施阶段
@@ -29,7 +29,7 @@
 
 ### 阶段 2：受控来源投影与独立持久化
 
-修改 `core/fact-collector.mjs`，将现有“受登记 reader + 预检 + 单任务锁 + 原子写”模式扩展为独立 v2 投影路径；必要时新增仅声明 v2 来源描述的新配置模块，保留 `config/runtime-fact-sources.mjs` 不变。
+修改 `runtime/evidence/fact-collector.mjs`，将现有“受登记 reader + 预检 + 单任务锁 + 原子写”模式扩展为独立 v2 投影路径；必要时新增仅声明 v2 来源描述的新配置模块，保留 `config/runtime-fact-sources.mjs` 不变。
 
 1. 增加 v2 专用、封闭的来源 registry/reader 品牌校验。每个 entry 固定 source class、registration ID、格式/版本和读取能力；拒绝未知字段、重复登记和来源类型不匹配。直接读取的 canonical 记录也要经过该受控投影层，不允许业务代码传任意路径或裸 reader。
 2. 实现十类投影的唯一来源规则：
@@ -44,7 +44,7 @@
 
 ### 阶段 3：接入正式入口并锁定消费者边界
 
-修改 `scripts/collect-task-facts.mjs`，通过唯一生产入口创建 v2 registry 并传给 collector；若新增 v2 配置模块，默认只声明已批准的空/直接 canonical 来源能力，不注册新的外部数据源。
+修改 `tools/cli/collect-task-facts.mjs`，通过唯一生产入口创建 v2 registry 并传给 collector；若新增 v2 配置模块，默认只声明已批准的空/直接 canonical 来源能力，不注册新的外部数据源。
 
 1. 保持启动参数、StageContext 预检、metrics 的 warn-only 行为和 v1 registry 调用不变；为 v2 使用同一执行 run scope，但不复用 v1 record 或 ID。
 2. 让直接 canonical adapters 仅通过 TaskHandle/TaskKernel 可验证记录读取并验证 task、stage、attempt 和对象身份，再公开最小字段；不能泄露 review 原始输出、测试日志、对话正文、私有会话位置或完整 actor/调用内容。

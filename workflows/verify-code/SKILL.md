@@ -21,7 +21,7 @@ integration review. Missing, unchecked, stale, or hash-mismatched evidence is
 ## Runtime contract
 
 The stable Runner interface is the seven-behavior facade in
-`core/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
+`runtime/interface/runtime-facade.mjs`: `doctor`, `status`, `run`, `review`, `verify`,
 `confirm`, and `authorize`. Commands below are delegated compatibility locators,
 not additional public Runner behaviors.
 
@@ -292,16 +292,16 @@ idempotent. Other attempts against a closed stage remain rejected.
    do not display it in the public decision card.
    Never reuse the verify-code confirmation ref.
    For a legacy task without `runner_root`, do not edit `task.json`. First run
-   `node scripts/task-migrate-runner-root.mjs --task-path=<task-path>
+   `node tools/cli/task-migrate-runner-root.mjs --task-path=<task-path>
    --project=<project> --task=<task> --runner-root=<runner-root>
    --stage=verify-code`, then authenticate the existing task read-only with
-   `node scripts/task-bootstrap.mjs --task-path=<task-path> --project=<project>
+   `node tools/cli/task-bootstrap.mjs --task-path=<task-path> --project=<project>
    --task=<task> --runner-root=<runner-root> --stage=verify-code`. The public
    `stage-runtime.mjs` authenticates its own runner root and forbids caller
    injection; do not pass `--runner-root` to it.
    If `prepare` rejects the recorded target because it is not the real checked-out
    target branch, do not edit `task.json`. Use the official
-   `node scripts/task-migrate-target-repo.mjs --project=<project> --task=<task>
+   `node tools/cli/task-migrate-target-repo.mjs --project=<project> --task=<task>
    --target-repo-root=<main-checkout> --target-branch=<branch>` entrypoint. It
    requires the same Git common directory as the accepted workspace, records
    immutable migration lineage, atomically updates the target identity, and must

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { resolveStorageRoot } from "../storage-root.mjs";
+import { resolveStorageRoot } from "../../runtime/evidence/storage-root.mjs";
 
 const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
 const temporaryDirs = [];

@@ -13,7 +13,7 @@ beforeAll(async () => {
       validatePlanTaskContract,
       validateExecutablePlanTaskMinimum,
       buildPlanTaskContract,
-    } = await import("../core/stage-content-contracts.mjs"));
+    } = await import("../runtime/stage/stage-content-contracts.mjs"));
   } catch (error) {
     moduleLoadError = error;
   }
@@ -23,7 +23,7 @@ function requireApi() {
   expect(moduleLoadError).toBeUndefined();
   expect(
     validatePlanTaskContract,
-    "core/stage-content-contracts.mjs must provide the accepted plan/tasks validator",
+    "runtime/stage/stage-content-contracts.mjs must provide the accepted plan/tasks validator",
   ).toBeTypeOf("function");
   expect(buildPlanTaskContract).toBeTypeOf("function");
   expect(validateExecutablePlanTaskMinimum).toBeTypeOf("function");
@@ -239,7 +239,7 @@ describe("plan-task-contract.v1 complete fixture", () => {
 
 describe("accepted stage-content-contracts artifacts", () => {
   it("parses and compiles the published plan-task JSON Schema", () => {
-    const schema = JSON.parse(readFileSync("core/schemas/plan-task-contract.v1.json", "utf8"));
+    const schema = JSON.parse(readFileSync("runtime/schemas/plan-task-contract.v1.json", "utf8"));
     expect(() => new Ajv2020({ strict: false }).compile(schema)).not.toThrow();
   });
 
