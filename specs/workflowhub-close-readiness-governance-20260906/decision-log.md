@@ -2,7 +2,7 @@
 
 > 生成日期：2026-09-06
 > 任务材料路径：specs/workflowhub-close-readiness-governance-20260906/（认证 worktree）
-> 当前 stage：make-decision（step 10-v4 detail-advice 完成，43 条 findings 处置中；下一步 step 11-v4 approve-decision）
+> 当前 stage：make-decision（第二轮 R-011 已收口 accepted，2026-09-06；用户确认停在 build-spec 前；下一步=用户指示后按 III-1 冻结校验重开 build-spec）
 
 ## 原始需求
 
@@ -18,6 +18,7 @@
 | R-008 | 诊断 build-spec/build-plan 阶段 token 消耗巨大（"好几亿"）的根因，并给出优化；评估是否可做 make-decision 式上下文管理与子代理派发优化 | 用户原话："到了build-spec和build-plan阶段缺花费了大量的时间和token，一个任务的spec和plan阶段要花费好几亿token...为什么会这样？应该如何优化？是不是也可以进行类似make-decision一样的上下文管理和子代理派发优化？" | 已分析（F-034~F-036；research-Q2）；优化机制经 Talk R1/R2 收敛（T-014~T-020） |
 | R-009 | 评估"高智力模型做 spec/plan 设计、低智力模型做 code/verify 执行"思路的效果；**用户澄清后真实含义**=四材料（decision-log/spec/plan/tasks）是否足够清晰、专业、详细，足以让低智力模型在 build-code/verify-code 也保证交付质量 | 用户原话1："我目前的workflowhub流程主要靠make-decision阶段把需求彻底确定，然后靠着高智力模型在build-spec和build-plan阶段设计详细的执行方案，后面build-code和verify-code阶段派出智力一般的模型来执行...请帮我看看目前这个思路执行的效果如何？"；用户原话2（Q4 澄清）："我只是让你分析一下目前decision-log、spec、plan、tasks是否足够清晰专业详细，足够后面build-code和verify-code使用低智力模型也能保证交付质量，不是让你记录和建议各个stage的模型使用。" | 已分析（F-037~F-039；research-Q3）；模板升级经 Talk R2 收敛（T-017~T-018） |
 | R-010 | 三问分析结论作为新需求放入当前任务一起开发；且新需求必须按 make-decision 完整流程收敛（Talk→审查→辩论→Grill→确认），保持与既有 verify-code 质量问题治理同等质量 | 用户原话："请基于上述三个问题帮我仔细分析，可以从make-decision第一步开始，重新收敛一些新需求，放在当前任务的里一起开发"+"我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍，保证这些需求能和之前的verify-code质量问题保持一样的质量" | 本文件继续 make-decision：R-007~R-009 进入同一决策收敛环（本轮） |
+| R-011 | 本次 build-spec 调研暴露的"阶段治理闭环"缺口必须在 make-decision 中作为新需求收敛，并在当前任务中实现：build-spec/build-plan 应基于冻结 decision-log 高效设计，避免重复做决策收敛 | 用户原话："好的，基于调研出的这些问题，我们先回到make-decision阶段，看看是否需要新增一些改进需求，避免以后build-spec和build-plan继续浪费时间做决策收敛的工作，让build-spec和build-plan能更高效的基于冻结的decision-log进行规格和计划设计。这次调研发现的问题，我们都在make-decision中想办法解决或设计新的需求，在当前任务中实现！" | 本文件继续 make-decision 第二轮：调研收敛见本文件既有章节"第二轮 step 记录（本文件）"与 N-008/N-009、T-025~T-035（无独立"第二轮调研问题"章节） |
 
 ### 需求框架（function/research 先选一类）
 
@@ -34,11 +35,14 @@
 | N-005 | 新问题：build-spec/build-plan 阶段 token 消耗巨大+无度量 | confirmed | ready | 取证子代理（b12b32f9） | 无（F-033~F-035；research-Q2） |
 | N-006 | 新论断：四材料质量对"低智力执行"保障=中；三缺口（标签错位/拒绝条件无表达位/verify 不验材料） | confirmed | ready | 取证子代理（a4d19fdd/f2368ca8） | 无（F-036~F-039；research-Q3） |
 | N-007 | 新裁决：质量-成本治理增量（模板升级+verify 独立性+上下文优化） | confirmed | ready | 用户 | 无（T-013~T-020；本卡第 II 部分） |
+| N-008 | 新问题（第二轮）：build-spec 本次执行暴露方向级/规格级问题只在 review 后被发现并反复重审，决策收敛发生在 build-spec，无冻结校验与 findings 路由闭环 | confirmed | ready | 主会话（本次 build-spec 复盘） | 无（第二轮调研；T-025~T-031） |
+| N-009 | 新裁决（第二轮）：阶段治理闭环 III=决策冻结前置校验+findings 分类强制路由+needs_human 暂停态+review 预算+轻量 usage 记录+跨阶段统一回退（增量决策局部继续） | confirmed | ready | 用户 | 无（T-025~T-031；进入再次审查） |
 
 ## 目标
 
 - 目标（已确认，T-001/T-002/T-006）：①交付经独立核实诊断（以 task store 核查为准，非总结文件原样）；②落地聚焦治理改造（收口预检链+唯一缺口源[弱义]+边界校验+状态分层）；③本任务 dogfood 验证（后期阶段真实使用改造后机制）。
 - 目标（新增，T-013~T-023 确认）：④交付三问诊断报告（research-Q1/Q2/Q3+综合，问题 1/2/3 分析结论）；⑤落地质量-成本治理（材料质量升级+verify 独立性+全阶段 Execution model）；⑥新需求与既有收口治理同等质量（完整 make-decision 流程：talk→审查→辩论→grill→detail→确认）。
+- 目标（第二轮，T-025~T-031 确认）：⑦落地阶段治理闭环 III（决策冻结前置校验、findings 分类强制路由、needs_human 暂停态、review 预算、轻量 usage 记录、跨阶段统一回退=增量决策+局部继续），让 build-spec/build-plan 基于冻结 decision-log 高效设计，不再在规格化中做决策收敛。
 
 ## 成功/失败边界
 
@@ -46,11 +50,21 @@
   - 诊断：每条根因结论能指认代码/事实位置（或"未验证"如实标注）；诊断含认知差异说明（用户主诉"风险 close" vs 事实：任务1=标准 close 且用户接受 quality incomplete；M17=manual-risk-close delivered_with_risk）；
   - 改造：9 字段收口最小合同+覆盖边界声明、预检三态只读、确认消缺、同快照确定性 gap_id+渲染层聚合、E 边界校验（协议不一致拒绝/语义缺失记录不阻断）、六状态分层展示、quality_status 独立来源；
   - 验收：每条已核查根因至少一条可证伪负向夹具/oracle；本任务后期 phase（D/E/F/G）真实使用新机制，观察到同一缺口不再重复；用户确认。
+- 成功边界（v4.3 补充，方向卡"成功/失败边界"节，II/III 部分）：
+  - 诊断交付：R-007~R-009 三问各有核实结论、证据引用与用户确认记录，可独立复核；
+  - 材料质量：spec 的 AC 四段式（验证/通过/失败/证据）与 tasks 任务卡 oracle（pass/reject）分别经各自校验器检查通过；占位符被拒绝；spec 期"证据"字段=预期证据契约（证据类型/产出物声明），实际运行证据由 verify-code 回填校验；
+  - verify 独立性：本任务 verify 发起独立审查请求并留下三态事实记录（unavailable=如实记录）；独立审查三态不参与 product_release_status 派生、不阻断 release；
+  - 上下文：主会话侧采用导航+摘要+按需与派发规范执行，留代理观测记录（主会话 read 重读轮次/子代理输入字节/材料包字节）；审查包保持全量 file_only 冻结链（字节不减、零新文件），"审查包 token 下降"为非承诺项（T-034），无下降证据如实写"未证明下降"；
+  - 阶段治理闭环：build-spec 重开先通过决策冻结校验（approval_binding=accepted 且与正文"最终确认"节及 step 11 记录三方一致、绑定当前材料、无方向级未决）；review finding 分类强制路由并绑问答出口（direction_change→增量决策记录、spec_ambiguity→用户答复绑定）；review 轮次守预算（一次初始+材料变化后一次 focused+窄域核销出口）；review attempt 有 usage 落盘或 unavailable 标注。
 - 失败边界（已确认）：
   - 把未核实论断当事实（总结文件 5 条断言已证伪，未再引入）；
   - 新增违宪控制面（新 public 入口/新 store/持久 selector/新 gate/第二状态机/双写/永久 bridge）；
   - 假绿（findings:[] 绕过 provenance、unavailable 改写成通过、测试收据不绑当前快照仍算 fresh）；
   - 用户未确认就进入 build-spec。
+- 失败边界（v4.3 补充，方向卡"成功/失败边界"节）：
+  - 把 needs_human 当终态继续正式交接（III-3 违例）；
+  - 回退演变为整阶段重跑（违反 T-031）；
+  - 把独立审查当 pass（attempt 层 failed/unavailable 改写成通过/空 findings）。
 
 ## 范围
 
@@ -60,12 +74,14 @@
 - 页面范围：non_ui（三输入规则核实，见 UI applicability 节）。
 - 数据状态（已确认）：六状态从既有事实派生、分离展示；预检三态只读；gap_id 域=单次渲染快照；缺口投影消费 confirmations；底层投影来源保留（去重仅渲染层）。
 - **新增范围（新需求，T-013~T-023 确认）**：在多 phase 内叠加"质量-成本治理"增量（方向卡 v4.1 第 II 部分）——①材料质量升级（spec/plan/tasks 模板与校验器对齐+四段式（全部 AC、四段非空）+负向 oracle 法定化（oracle 结构化 {pass,reject}；机读判定=RED/GREEN 配对任务）+verify 入口材料 4 项轻量只读校验）；②verify 独立性（发起异源独立审查请求+三态事实记录 executed/failed/unavailable）；③上下文优化（Execution model 移植（step×M/S/B 矩阵+上下文守恒 6 条）+材料导航节（材料文件头部内嵌）+M/S/B/P 派发扩展+审查材料包内容分层（投递链保持 file_only 冻结链不变）+模板口径单源）；不改变 I 部分任何语义（v3 收口治理原样保留）；**非目标（新增）**：不做 token 度量机制、不做模型-阶段强制绑定/模型使用记录、不做"task_dir 直读"审查改造、不做审查"瘦身/切片实验"；交付物含三问分析报告（research-Q1/Q2/Q3+综合，作为本任务诊断交付的组成部分）。
+- **新增范围（第二轮,T-025~T-031 确认）**：追加 III 部分"阶段治理闭环"——①决策冻结前置校验（build-spec 入口验证 decision-log 唯一批准状态、approval_binding 绑当前材料、无方向级未决；不合格暂停并回 make-decision，不开始规格化）；②findings 分类+强制路由（实现级=当前阶段自修；规格歧义=spec-clarify 大白话问用户一次；方向级=增量决策：问用户一次→追加 1 条 D→重新冻结→build-spec 从受影响节继续，已确认部分不重跑不重写；环境/provider 不可用=如实记录 unavailable）；③needs_human 只能作暂停态（必须附 next_action=问用户或回上游，禁止作为正式完成/最终处置；完成的唯一出口=user_decided/fixed/rejected_invalid/accepted_risk）；④review 预算（一次初始 review+材料实际变化后一次 focused review；无变化禁重审；provider 失败/空桩如实记录，不改为空 findings）；⑤轻量 usage 记录（provider 返回的 usage 尽量落盘到 review attempt 事实，无则标 unavailable；不做预算机制）；⑥跨阶段统一回退协议（五阶段共用 owner/consumer/next_action 路由，避免各 stage 各写一套）。
 - 非目标/延期：见非目标节；延期项=预检载体形态（lens 复用 vs 新只读 profile）build-spec 按控制面登记规则验证、phase 精确边界归 build-plan、重放验证另立后续任务、diagnostic fixture schema 细节归 build-spec；**新增延期**=材料索引载体形态与"不新增持久对象"兼容判定（DEFERRED-005）、四阶段统一上下文机制（DEFERRED-006）。
 
 ## 非目标（已确认，T-008/T-012 + T-015/T-017/T-023）
 
 - 不改历史任务记录（只读案例）；不重放真实外部任务验证（另立后续任务）；不做页面/前端 UI（本次为 CLI/JSON 展示改进）；不改宪法 close 三义；不新增公共入口/新 store/持久 selector 对象/新 gate/第五材料；外部 provider 不可用时如实记录 unavailable，不伪造通过；不做完整状态矩阵（归 build-spec 转译）；不做完整端到端流程设计（方向卡只补骨架与展示位表）；不"每阶段重跑预检"。
 - **新增非目标（新需求确认）**：不做 token 度量机制（用户自见用量，T-015）；不做模型-阶段强制绑定/模型使用记录机制（T-017 澄清，模型分工仅背景事实）；不做"task_dir 直读"审查改造（T-023a，破坏冻结链/零路径暴露/可复现）；不做审查"瘦身/切片实验"（机制已存在 F-041，T-023a）；不改五阶段顺序；make-decision 执行规范不动（已有）；历史材料不回溯迁移（仅新生成材料适用新模板）。
+- **新增非目标（第二轮确认）**：不新增 token 预算预警机制（保持 T-015；仅做 provider 已返回 usage 的轻量落盘与 unavailable 如实标注）；"增量决策"不重跑既有已确认决策的完整 Talk/审查/辩论/Grill 序列（仅针对新缺口做一次真实问答+一条 D 决策记录）；不改变"记录事实不阻断"总原则（冻结校验与路由属于阶段性完成条件检查，不新增公共 gate 或第二状态机）。
 
 ## 决定
 
@@ -79,7 +95,7 @@
 - recommendation/plain_language: 推荐；不算报告也不只改机制，而是"先查明再修好"
 - decision: 新建独立治理任务，产出经核实的根因诊断与聚焦改造（代码+测试）
 - source_type/reference/exact_excerpt: 用户原话"请检查这些任务的过程以及总结文件…看看workflowhub是出了什么问题？"+ Talk R1 ①② 回复
-- approval_binding: pending（step 11）
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-005~F-008、F-010~F-016；宪法边界
 - Logic: 历史任务在 verify/close 堆缺口 → 需先核实根因（避免把总结文件当事实）→ 再聚焦改造 → 后续任务受益
 - choice_reason/impact: 用户确认；影响=本任务全仓库治理机制面
@@ -99,7 +115,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；免任务间交接收口
 - decision: 本任务内 build-code 分 phase（预检链/唯一缺口源+状态分层/边界校验），每 phase 独立开发测试验收审查
 - source_type/reference/exact_excerpt: Talk R2/Q4 回复"① 一个任务多 phase（推荐）"
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 宪法"同任务修复"；历史任务跨任务交接断裂模式（共同模式 5）
 - Logic: 改造面跨 5 处 → 多 phase 分而治之 → 但同一任务内切换无交接
 - choice_reason/impact: 用户确认；影响=本任务结构
@@ -121,7 +137,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；总结文件是"上一任务自己写的分析"，有 5 条断言与 task store 不符
 - decision: 诊断=已核实事实（F-010~F-029）+总结文件框架结论（经核查支持部分）+认知差异说明（B-03）
 - source_type/reference/exact_excerpt: 核查报告（F 表核实表/共同模式/总体判断）；用户选"只做内部文献调研"
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 框架结论成立、5 条断言证伪（核实表）
 - Logic: 断言证伪 → 不能直接引用总结文件 → 以核查为准 → 诊断可信
 - choice_reason/impact: 用户"两个都要"；影响=诊断交付物内容
@@ -143,7 +159,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；覆盖"前置暴露+状态可信"双痛点且不过度
 - decision: 按裁决书 7 组裁决执行（blocked 移除/确认消缺/gap_id 弱义/预检收窄/状态展示层/E 边界/负向验收）
 - source_type/reference/exact_excerpt: Talk R2/Q3 回复"① 聚焦改造"+R3 四项"①按裁决…"×4
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-017~F-023（无预检 ADR/无唯一 gap 源/别名契约固化/测试收据漏洞/桥接无相等校验/宪法禁持久 selector）
 - Logic: 双痛点 → 聚焦四项机制 → 每项对应已核查根因 → 可证伪夹具验收
 - choice_reason/impact: 用户确认；影响=workflows/skills/runtime/tests/tools 展示
@@ -163,7 +179,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；带缺口可 close 是宪法既有语义，缺的是记录/展示清楚
 - decision: close 仍允许质量/发布缺口；但完成记录必须抄写 quality/发布状态，展示分层，同一 gap 只出现一次
 - source_type/reference/exact_excerpt: Talk R2/Q1 回复"① 保持现状语义，但如实说清（推荐）"
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-012（任务1 normal close 无质量字段）；ADR 0020（抄写不裁判）；宪法 close 三义
 - Logic: 历史 close 记录丢语义 → 保持路径不变 → 记录与展示补语义 → 状态可信
 - choice_reason/impact: 用户确认；影响=close 记录与展示
@@ -183,7 +199,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；与核查事实一致、不产生新门禁
 - decision: 预检=只读展示位；不接触 can_continue/physical_close/close 三义；不每阶段重跑
 - source_type/reference/exact_excerpt: 裁决书组 A/D；Talk R3/Q1、Q4 回复
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-016（无 blocked 记录）；用户"不改 close 三义"；聚焦范围
 - Logic: blocked 无生产者 → 移除 → 三态只读 → 不阻断 → 无门禁
 - choice_reason/impact: 用户确认；影响=预检输出与状态展示
@@ -203,7 +219,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；边界写死，防止隐性扩大
 - decision: 非目标=不改历史记录/不重放执行/无页面 UI/不改宪法/不新增控制面/不伪造通过/不做完整状态矩阵与端到端流程/不每阶段重跑；延期=lens 兼容验证、phase 边界、重放验证另立任务
 - source_type/reference/exact_excerpt: Talk R2/Q5 回复"① 全部接受"；裁决书"驳回与保留"
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 宪法 F8/F10/F11；核查非目标
 - Logic: 边界写死 → 无隐性扩大 → 与"聚焦"一致
 - choice_reason/impact: 用户确认；影响=范围控制
@@ -221,9 +237,9 @@ artifacts: []
 ### D-205
 - question/final_option: 唯一缺口源的语义定稿？同快照确定性派生+渲染层聚合+确认消缺（detail 审查修正：聚合键=规范化缺口内容，投影源仅作 provenance）
 - recommendation/plain_language: 推荐；修正"聚合键含投影源导致同缺口跨源不同 id"的缺陷
-- decision: gap_id=规范化缺口内容的同快照确定性派生（不含投影源）；投影源作为每条投影 provenance 保留（去重仅渲染层）；已确认项消缺优先级最高；派生缺口记录绑 snapshot/material、带来源与 owner；现有别名输出（quality_gaps/release_gaps/product_release_reasons/close_preparation_gaps）收敛到同一派生源（列出全部生产者/消费者与移除条件，实现归 build-spec）
+- decision: gap_id=规范化缺口内容的同快照确定性派生（不含投影源）；投影源作为每条投影 provenance 保留（去重仅渲染层）；已确认项消缺优先级最高；派生缺口记录绑 snapshot/material、带来源与 owner；现有别名输出（quality_gaps/release_gaps/product_release_reasons/close_preparation_gaps）收敛到同一派生源（列出全部生产者/消费者与移除条件，实现归 build-spec）；**v4.3 冻结算法**=规范化字段元组固定（四身份字段：task/material 身份+缺口类别+规范化内容正文）、字段序固定、去首尾/连续空白、UTF-8 SHA-256 全值哈希、算法版本号（跨投影/字段序/空白/快照变化与冲突的固定样例由 build-spec 落盘）；**human-confirmation 确认事实必须绑定 gap_id+snapshot+material**（防同快照多缺口错配消费）
 - source_type/reference/exact_excerpt: 裁决书组 C/B-02；detail 审查 #17/#37
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-013/F-018/F-019；宪法禁持久对象
 - Logic: 聚合键含投影源 → 跨源不同 id → 无法去重；修正→内容规范化键→跨源聚合→去重生效；确认消缺→已确认项不再报 missing
 - choice_reason/impact: 用户确认 D（T-010）；影响=派生层与展示层实现
@@ -243,7 +259,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；区分"写错"与"没证据"
 - decision: bridge 写入时 agent_run_id !== attempt_id → 拒绝；测试收据不绑当前 snapshot/material → 拒绝；unavailable/无证据 → 记录+缺口投影
 - source_type/reference/exact_excerpt: 裁决书组 F；Talk R2（E 在聚焦范围内）
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-010/F-020/F-021；宪法 F9（记录事实不阻断）
 - Logic: 结构性不一致=协议错误 → fail-loud 拒绝；事实缺失=可用性缺口 → 记录不阻断
 - choice_reason/impact: 用户确认；影响=写入口与证据校验链
@@ -263,7 +279,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；只做展示层分离，不做新状态机
 - decision: 六状态从既有事实派生、互不推导、分离展示；quality_status 唯一来源=独立质量决议（预检/收口投影不得写入或推导之）；stale/unavailable 如实展示；完整值域/转换矩阵归 build-spec 转译（方向期为"可执行矩阵"，见数据状态节）
 - source_type/reference/exact_excerpt: 裁决书组 E；Talk R2（两个都要）
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 宪法禁第二状态机；ADR 0020（quality 独立）；F-017
 - Logic: 状态可信痛点 → 分离展示 → 单源 quality_status → 不耦合 → 可证伪（六状态独立变化夹具）
 - choice_reason/impact: 用户确认；影响=展示层/status 输出
@@ -285,7 +301,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；可证伪，不靠"本任务顺利执行"自证
 - decision: 成功标准=每条已核查根因至少一条负向夹具（bridge 不匹配拒绝/旧快照收据拒绝/unknown-unavailable 语义保留/findings:[] 无 provenance 不得绕过/确认消缺/六状态独立变化，**共七项**，见"验收细节"映射表）+合成多投影样本；dogfood 覆盖后期 phase 并按观察合同（阶段/样本/独立观察者/窗口/判定，见"验收细节"节）；风险节补自证风险与独立观察口径；**II 部分（质量-成本治理）新增 7 项负向夹具映射（见"验收细节"表新增行）**
 - source_type/reference/exact_excerpt: Talk R3/Q3 回复"① 负向夹具为主 + dogfood 补充（推荐）"
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 裁决书组 G；辩论丁队 D-05（虚假共识处置）
 - Logic: dogfood 自证 → 负向夹具可证伪 → 主回收窄 → 验收可信
 - choice_reason/impact: 用户确认；影响=验收标准
@@ -305,7 +321,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；满足"不依赖 build-spec 补需求"（字段已锁）且不违宪
 - decision: 9 字段清单+语义入方向卡；spec.md 的 AC 记录扩展承载单 AC 值；预检只读消费
 - source_type/reference/exact_excerpt: 裁决书组 D；B-01；Talk R3/Q4
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 宪法禁第五材料；四材料为唯一真相
 - Logic: 字段清单方向期锁定 → build-spec 填值为转译 → 不越权不补需求
 - choice_reason/impact: 用户确认；影响=spec.md 结构与预检读法
@@ -319,7 +335,7 @@ derived_from: [D-201]
 artifacts: []
 ```
 
-### M5 质量-成本治理（新需求增量，方向卡 v4 第 II 部分；approval_binding 全部 pending）
+### M5 质量-成本治理（新需求增量，方向卡 v4 第 II 部分；approval_binding 全部 accepted——第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06 收口已发生）
 
 ```text
 ### D-301
@@ -327,7 +343,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；免任务间交接；与既有 D-002 多 phase 形态一致
 - decision: 本任务范围扩展：I 收口治理（v3 不变）+ II 质量-成本治理（模板升级/verify 独立性/上下文优化）；build-code 分 phase 实施，每 phase 独立开发测试验收审查
 - source_type/reference/exact_excerpt: Talk R1（新）/Q1 "分析+落地（推荐）"；R-007~R-010
-- approval_binding: pending（step 11 整体确认）
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-031~F-040；宪法边界（索引非材料/不持久，见 D-305）
 - Logic: 三问分析→机制缺口清单→与既有收口治理同属"质量可信+成本可控"一轴→统一任务统一验收
 - choice_reason/impact: 用户确认；影响=本任务周期与范围（两轮治理）
@@ -345,16 +361,16 @@ artifacts: []
 ### D-302
 - question/final_option: 材料质量缺口处置？审计+模板升级（负向 oracle/拒绝条件法定化+校验器对齐，用户 Q5）
 - recommendation/plain_language: 推荐；"低智力执行保质量"的核心机制
-- decision: ①spec-specify AC 模板改 plain `验证：` 与校验器对齐+四段式（验证/通过/失败/证据）全部 AC 强制；②校验器四段式存在性校验+AC"失败："段非空；③任务卡 oracle 结构化 `{pass, reject}`（reject=可证伪拒绝断言；行为变更类任务校验 oracle.reject 非空；不采用关键词/语法规则判型）；④verify-code 入口材料轻量只读校验 4 项（材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定，非 gate）；⑤AC 写法模板统一（三套→一套）
+- decision: ①spec-specify AC 模板改 plain `验证：` 与校验器对齐+四段式（验证/通过/失败/证据）全部 AC 强制；②校验器四段式存在性校验+AC"失败："段非空；③任务卡 oracle 结构化 `{pass, reject}`（reject=可证伪拒绝断言；仅 verification_role=RED 且 paired_task≠N/A 的配对测试任务强制 oracle.reject 非空；GREEN 仅要求配对关联+oracle.pass 非空；非配对行为任务提供 reject 表达位不强制；聚合/非行为类 N/A 不强制；不采用关键词/语法规则判型）；④verify-code 入口材料轻量只读校验 4 项（材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定，非 gate）；⑤AC 写法模板统一（三套→一套）
 - source_type/reference/exact_excerpt: Talk R2（新）/Q5 "审计+模板升级（推荐）"；research-Q3 F-037~F-039
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 模板/校验器=既有机制修正（非新控制面）；宪法"记录事实而非阻断"
 - Logic: 缺口①②③为"材料不达标却不知情/无法表达拒绝语义"→模板+校验器对齐即从根修；verify 材料校验=事实校验
 - choice_reason/impact: 用户确认；影响=spec/plan/tasks 模板+stage-content-contracts+verify-code 步骤
 - consequences_and_risks: 存量 spec 合规波动（RISK-004）；迁移面=仅新生成 spec；历史 spec 不回溯
 - rejected_alternatives: 仅审计报告（机制不变）；+dogfood（用户未选，范围控制）
 - unresolved_items/owner: 四段式精确格式/拒绝条件字段 schema 归 build-spec 转译
-- Supersedes: none
+- Supersedes: none（注：本 decision ③ 的"GREEN 强制 reject"旧语义由 T-032 修正作废，v4.3 语义=仅 RED 强制，见本条目 decision ③）
 module: 质量-成本治理
 requirement_ids: [R-009, R-010]
 derived_from: [D-301]
@@ -367,7 +383,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；直击 verify 洪流源头（执行率≈0 已证实，F-035/F-038）
 - decision: verify-code 阶段发起异源独立审查请求（复用既有 verify E2E/dsh-code-review 通道，不新增公共入口）+三态事实记录（executed/failed/unavailable）+阶段汇报如实声明；非步骤完成条件/收口条件/pass 门槛（记录事实不阻断）；异源判定=既有身份校验链（provider_identities/source_id 比对执行者身份）；unavailable/failed=如实记录（不算失败/不阻塞/不替代自查）；**OPEN-004 配置修复=实施前置环境动作**（修改 3rd-review config 的 source_id 绑定，用户侧配置，build-plan 前置执行、用户授权后动）
 - source_type/reference/exact_excerpt: Talk R2（新）/Q6 "纳入本任务（推荐）"；裁决书 round-2 裁决 3；T-019
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 审查=质量事实非推进许可证（宪法）；AGENTS.md 质量裁决独立来源；F-042 身份校验链沿革
 - Logic: 低智力自查≠独立审查→verify 洪流→发起独立审查+三态记录（事实层面闭合，不设 gate）
 - choice_reason/impact: 用户确认；影响=verify-code SKILL/steps/验证链
@@ -385,9 +401,9 @@ artifacts: []
 ### D-304
 - question/final_option: 上下文优化范围与形态？全阶段 Execution model 移植（用户 Q3/Q7/T-023：完整移植执行规范）
 - recommendation/plain_language: 推荐；覆盖消耗大头（WH 587KB、审查 28.2 万字符×5×2）且与 make-decision 同构
-- decision: ①build-spec/build-plan SKILL 各加"Execution model"章节（step×M/S/B 矩阵+上下文守恒 6 条：全量落盘/主会话只留 ref+sha256+摘要≤500字/S 回传≤500字且 severity|位置|问题|建议一行一条/并行上限 调研≤4-debate≤4-审查=2role/交互 M 独占/每步只依赖上一步摘要+ref 不回塞全文；复用 make-decision L279-313 规则壳）；②spec-specify/spec-plan/spec-tasks 输入契约从"Read the current…全文"改"收冻结 packet"（对齐 spec-research）；③材料分层索引（载体=材料文件头部内嵌"材料导航"节：节列表+每节 1 句摘要+读取时机；零新文件/随材料更新/可再生/非权威；读法=节标题锚点 grep→offset 片段；生成时机=起草即生成+定稿更新）；④子代理派发扩展（findings 处置/终检复查/调研子代理化，主会话只审摘要）；⑤审查材料包内容分层（投递链保持 file_only 冻结链不变=F-041；包内导航/摘要文件+按需详细文件）；⑥simplicity-guard/plan-eng-review inline 声明与执行位置对齐
+- decision: ①build-spec/build-plan SKILL 各加"Execution model"章节（step×M/S/B 矩阵+上下文守恒 6 条：全量落盘/主会话只留 ref+sha256+摘要≤500字/S 回传≤500字且 severity|位置|问题|建议一行一条/并行上限 调研≤4-debate≤4-审查=2role/交互 M 独占/每步只依赖上一步摘要+ref 不回塞全文；复用 make-decision L279-313 规则壳）；②spec-specify/spec-plan/spec-tasks 输入契约从"Read the current…全文"改"收冻结 packet"（对齐 spec-research）；③材料分层索引（载体=材料文件头部内嵌"材料导航"节：节列表+每节 1 句摘要+读取时机；零新文件/随材料更新/可再生/非权威；读法=节标题锚点 grep→offset 片段；生成时机=起草即生成+定稿更新）；④子代理派发扩展（findings 处置/终检复查/调研子代理化，主会话只审摘要）；⑤审查材料包内容分层（v4.3 口径，T-034：投递链保持 file_only 冻结链不变=审查包字节不减、零新文件，仅升级既有 review-instructions.md 引导内容=引导先读导航/摘要材料、再按需读详细材料；"审查包 token 下降"列为非承诺项）；⑥simplicity-guard/plan-eng-review inline 声明与执行位置对齐
 - source_type/reference/exact_excerpt: Talk R1（新）/Q3 "索引+派发组合（推荐）"、R2/Q7 "spec+plan 为主"、R3/T-023 "完整移植执行规范（推荐）"；F-043
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: F-033~F-035、F-041~F-043；导航节=只读派生（非权威/可再生/不持久，AGENTS.md vNext 边界）
 - Logic: 成本大头=主会话全量重读+阶段内子代理独立上下文+审查材料包全量→执行规范+导航节+派发化+包组织=四管齐下；审查者本就读冻结包（file_only），无需改投递链
 - choice_reason/impact: 用户确认；影响=build-spec/build-plan SKILL+三输入契约+审查材料管线的组织+主会话执行模型
@@ -407,7 +423,7 @@ artifacts: []
 - recommendation/plain_language: 关键，防止违宪
 - decision: 材料索引=只读派生视图（非第五材料/非权威/可再生/不持久）；verify 材料校验=只读事实校验（非质量裁决/非 gate/不阻断）；verify 独立审查=复用既有通道（不新增公共入口）；模板+校验器=既有机制修正。新机制一律按"控制面登记规则"在 build-spec 验证（唯一 consumer/owner/删除条件）
 - source_type/reference/exact_excerpt: AGENTS.md vNext 边界；CONSTITUTION F8/F9/F10/F11、Q2/Q3
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 宪法禁新持久对象/第五材料/新 gate/新公共入口
 - Logic: 所有新增形态先做"身份判定"再实施→违宪风险前置消灭
 - choice_reason/impact: 方向约束；影响=build-spec 验证清单
@@ -427,7 +443,7 @@ artifacts: []
 - recommendation/plain_language: 推荐；先保"低智力可执行"底线再省成本
 - decision: phase 顺序原则=①材料质量（模板/校验器+负向 oracle）→ ②执行模型/索引/派发/审查包分层（上下文优化）→ ③verify 独立性；每 phase 独立验收；精确边界 build-plan 锁定
 - source_type/reference/exact_excerpt: Talk R2（新）/Q8 "先质量后效率"
-- approval_binding: pending
+- approval_binding: accepted（第一轮确认回执 quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json，2026-09-06）
 - facts_and_constraints: 依赖关系：模板先行走新 spec；上下文优化依赖模板稳定（不互相污染）
 - Logic: 质量底线优先于成本优化；成本优化的效果在质量稳定后可测量
 - choice_reason/impact: 用户确认；影响=build-plan phase 划分
@@ -441,7 +457,147 @@ derived_from: [D-301]
 artifacts: []
 ```
 
-## UI applicability（已核实，非草案）
+### M6 阶段治理闭环（第二轮增量，方向卡 v4.3 第 III 部分；approval_binding 已 accepted（第二轮确认回执 f1e28231，2026-09-06））
+
+```text
+### D-501
+- question/final_option: 决策冻结前置校验？build-spec 开始前校验 decision-log 冻结状态（用户 Q2=强制前置校验+回退）
+- recommendation/plain_language: 推荐；堵住"上游未定→build-spec 翻译中做决策→多轮 review 不收敛"的实测根因
+- decision: build-spec 开始前校验：①头部 approval_binding.status=accepted 与正文最终确认节及 step 11 记录三方一致；②approval_binding 绑定当前材料 revision/snapshot；③无方向级未决。任一不满足→暂停并回 make-decision 补齐，不开始规格化；增量决策追加 D 时同步增量 approval_binding 续签（基线确认+增量增补链，不对历史全量重确认）；冻结包合同要求 decision-log 覆盖用户流程/数据状态/成败边界/非目标且 spec 与 decision 绑同一 revision；build-plan 入口对同一冻结版本重校验。检查结果=阶段完成条件事实（非公共 gate、非第二状态机）
+- source_type/reference/exact_excerpt: R-011/R1-Q2（T-026）；方向审查 v5 组E/组17（续签链、三方一致）；落点审计（现无运行期冻结校验器）
+- approval_binding: accepted（第二轮确认回执 quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json，2026-09-06）
+- facts_and_constraints: 本次实测故障=头部 awaiting/pending 与正文 accepted 并存（kimi blocking）；check-decision-log-chain 只查文本链字段非冻结校验
+- Logic: 上游状态不唯一→build-spec 只能推断→review 暴露方向问题→浪费；冻结校验把"未定"拦截在入口
+- choice_reason/impact: 用户确认；影响=stage-runtime 入口校验+decision-log 维护规范
+- consequences_and_risks: 校验过严=误阻断（用三方一致+续签链缓解，RISK-009）；校验为完成条件检查不阻断修复推进
+- rejected_alternatives: 只读事实不阻断（重演浪费）；仅文档约定（不可证伪）
+- unresolved_items/owner: 校验器实现细节/续签链载体归 build-spec
+- Supersedes: none
+module: 阶段治理闭环
+requirement_ids: [R-011]
+derived_from: [D-002]
+artifacts: []
+```
+
+```text
+### D-502
+- question/final_option: findings 分类+强制路由？实现级自修/规格歧义问用户/方向级回 make-decision（用户 Q3=分类+强制路由；Q7 追问=增量决策局部继续）
+- recommendation/plain_language: 推荐；"该问就问、该修就修、不猜"的机制化
+- decision: finding 处置前分类（互斥+优先级：direction_change>spec_ambiguity>implementation_defect>invalid_finding；environment_unavailable 属 attempt 执行层状态不进 finding 分类）；每条分类附影响维度清单+证据，缺依据/命中方向维度/无法互斥→不得以 fixed 完成；runtime 校验 disposition 与分类路由匹配（spec_ambiguity→用户答复绑定；direction_change→增量决策记录）；路由错误=阻断阶段正式完成、不阻断修复推进。增量决策：方向级缺口→问用户 1 问题→追加 1 条 D→增量 approval_binding 续签→重新冻结→build-spec 从受影响闭包继续（共享状态/接口/验收边界/跨材料键相关节做一次 focused review，其余已确认部分不重跑不重写）
+- source_type/reference/exact_excerpt: R-011/R1-Q3+Q7（T-027/T-031）；方向审查 v5 组L/组M/组O/组15
+- approval_binding: accepted（第二轮确认回执 quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json，2026-09-06）
+- facts_and_constraints: 落点审计=disposition 无分类字段、无路由校验；result.schema finding 有 disposition(actionable|nonblocking_minor|...)与 evidence_status 可复用
+- Logic: 本次 build-spec 把 needs_human 当终点且方向问题自己猜=主因；分类+路由让每个 finding 有确定处理方与出口
+- choice_reason/impact: 用户确认；影响=stage-review-disposition 扩展+阶段 handler 路由校验
+- consequences_and_risks: 分类误判=绕行（判定依据+方向维度硬禁 fixed 缓解）；回退重跑浪费（增量闭包继续，T-031）
+- rejected_alternatives: 只分方向/非方向（规格歧义与实现缺陷混同）；不做分类（主会话自由判断，本轮问题重演）
+- unresolved_items/owner: 分类判定维度清单/答复载体（human-confirmation 扩展 finding 绑定）归 build-spec
+- Supersedes: none
+module: 阶段治理闭环
+requirement_ids: [R-011]
+derived_from: [D-002, D-303]
+artifacts: []
+```
+
+```text
+### D-503
+- question/final_option: needs_human 语义收紧？（用户 Q4=只能作为暂停态）
+- recommendation/plain_language: 推荐；needs_human 表示"真实问题等待用户"，不是"已处理完"
+- decision: needs_human 只能作暂停态：附 next_action（ask_user/return_to_make_decision/return_to_spec），禁止作为正式完成终态；阶段完成只允许 fixed/rejected_invalid/user_decided/accepted_risk（accepted_risk 必须绑用户授权回执+风险记录）；needs_human 存在时 completion=incomplete 并如实汇报；出口=用户答复后转 user_decided（绑 finding_id/card_hash/reply_ref）或增量决策后处置；review attempt 可用性（executed/failed/unavailable）与 finding 处置分离为两层事实
+- source_type/reference/exact_excerpt: R-011/R1-Q4（T-028）；方向审查 v5 组H/codex#1；落点审计（validateReportableFindingDispositions L120-123 漏洞：needs_human 判 recorded 不判 incomplete）
+- approval_binding: accepted（第二轮确认回执 quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json，2026-09-06）
+- facts_and_constraints: 运行时现状=needs_human 无绑定回复也可判 recorded；userReply 转 user_decided 已存在但无持久化载体
+- Logic: needs_human 当终点=没问用户就标完成；收紧后每个 needs_human 必须有下一步与出口
+- choice_reason/impact: 用户确认；影响=disposition validator 终态集与 completion 判定
+- consequences_and_risks: 收紧后阶段完成更严格（如实 incomplete）；误把可自修项标 needs_human=多余问答（分类路由缓解）
+- rejected_alternatives: needs_human 作为最终处置（本轮问题重演）；移除该状态（失去"真实未决"表达位）
+- unresolved_items/owner: userReply 持久化载体归 build-spec
+- Supersedes: none
+module: 阶段治理闭环
+requirement_ids: [R-011]
+derived_from: [D-002]
+artifacts: []
+```
+
+```text
+### D-504
+- question/final_option: review 预算与收敛路由？（用户 Q5=一次初始+一次 focused；Q6 追问=窄域核销+明确终态）
+- recommendation/plain_language: 推荐；限轮次+给每个状态确定出口，同时避免 16 轮不收敛与死锁/假绿
+- decision: 预算按同一 review 目标计数：同一材料同一冻结 revision=一次初始 review（含 role/provider 调用与单次重试）；材料实际变化后最多一次 focused review（只复核变化范围）；无变化禁重审；build-code 每 phase 既有 phase 审查=独立目标不计入；每次增量续签产生新 focused 配额。耗尽路由：focused 后残留→实现级再修一次+窄域 diff 核销一次→仍不收敛或方向级→问用户或 accepted_risk（带授权回执）；provider 失败/空桩/超时=attempt 层 unavailable 记录，不算 pass、不改写空 findings；空 findings 须有可信 provenance
+- source_type/reference/exact_excerpt: R-011/R1-Q5+Q6（T-029/T-033）；方向审查 v5 组B/组D/组6/组12/组P
+- approval_binding: accepted（第二轮确认回执 quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json，2026-09-06）
+- facts_and_constraints: 本次 build-spec 13+ 轮不收敛、2 次 TIMEOUT、1 次空输出、4 轮 antigravity 空桩；verify-code 已有"最多四动作"纪律可复用
+- Logic: 不收敛=无预算+provider 退化仍继续；限轮次+核销出口让每轮有目的、每个状态有出路
+- choice_reason/impact: 用户确认；影响=各阶段 review 调用纪律+attempt 记录
+- consequences_and_risks: 预算内修复未经全量复核（窄域核销缓解）；误用预算=漏审（budget 计数单位明确缓解）
+- rejected_alternatives: 严格硬上限（残留缺陷无审查验证出口）；不设预算（重演 16 轮）
+- unresolved_items/owner: 预算计数实现（stage/material/attempt 维度）归 build-spec
+- Supersedes: none
+module: 阶段治理闭环
+requirement_ids: [R-011]
+derived_from: [D-303]
+artifacts: []
+```
+
+```text
+### D-505
+- question/final_option: token/成本观测口径？（用户 T-030=轻量记录；T-035 追问=扩展代理指标范围）
+- recommendation/plain_language: 推荐；不建预算机制，但让"浪费在哪"可回答
+- decision: 不做 token 预算/计费机制（维持 T-015 精神）；观测两层：①provider usage（input/output/cached tokens、duration、失败原因）有则落盘到 review attempt 事实、无则标 unavailable（回答 review 调用消耗）；②字符级代理指标=主会话 read 重读轮次、阶段内子代理输入字节、材料包字节（回答主会话/子代理/材料包浪费在哪）；成功边界不承诺 token 总量下降，无证据如实写"未证明下降"
+- source_type/reference/exact_excerpt: R-011/R1-Q6+Q7（T-030/T-035）；方向审查 v5 组Q
+- approval_binding: accepted（第二轮确认回执 quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json，2026-09-06）
+- facts_and_constraints: 落点审计=attempt.schema 已有 usage 字段但无消费方（review-record-route.mjs L110 写入后无人读）；本次 completed provider usage 全 null
+- Logic: 无记录→"浪费在哪"不可回答；provider usage+字符代理两层组合覆盖成本结构可归因部分
+- choice_reason/impact: 用户确认（重开 T-015 观察部分）；影响=review attempt 落盘+stage outcome 观察记录
+- consequences_and_risks: provider 不返回 usage=部分不可答（unavailable 如实）；代理指标非 token=口径差异（如实声明）
+- rejected_alternatives: 维持完全不做（"浪费在哪"继续不可答）；完整预算机制（触碰不新增持久对象边界）
+- unresolved_items/owner: 观测记录字段归 build-spec/build-plan
+- Supersedes: none
+module: 阶段治理闭环
+requirement_ids: [R-011]
+derived_from: [D-304]
+artifacts: []
+```
+
+```text
+### D-506
+- question/final_option: 跨阶段统一回退协议？（用户 T-031=统一协议+增量决策局部继续）
+- recommendation/plain_language: 推荐；五阶段共一套路由，避免各 stage 各写一套回退条文
+- decision: 五阶段共用 owner/consumer/next_action 路由：实现级=当前阶段自修；规格歧义=返回 build-spec（build-plan 走 spec-clarify 通道）问一次；方向级=回 make-decision 增量决策（D-502）；材料 gap=对应 owner 阶段；环境不可用=attempt 层如实记录。runtime 校验"该回退的没回退"=完成条件不满足；不新建阶段/公开入口/门；各阶段 SKILL 统一引用协议
+- source_type/reference/exact_excerpt: R-011/R1-Q7 追问（T-031）；方向审查 v5 组B 跨阶段部分
+- approval_binding: accepted（第二轮确认回执 quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json，2026-09-06）
+- facts_and_constraints: 现状=各 stage SKILL 各自描述回退（build-plan 回 make-decision、build-code 交 owner、verify-code 只报风险）无统一 runtime 校验
+- Logic: 统一协议让"回退"可执行可校验；增量决策+闭包继续让回退成本最小（T-031）
+- choice_reason/impact: 用户确认；影响=各阶段 handler 完成条件校验
+- consequences_and_risks: 路由校验误伤=修复受阻（只约束正式完成声明，不阻断同任务修复）
+- rejected_alternatives: 各 stage 维持现状条文（执行靠纪律）；完整重跑回退（浪费，被 T-031 拒绝）
+- unresolved_items/owner: 路由校验落点（各 handler dispositions 后 addCompletion 前）归 build-spec
+- Supersedes: none
+module: 阶段治理闭环
+requirement_ids: [R-011]
+derived_from: [D-002, D-502]
+artifacts: []
+```
+
+### D-507：phase 用户验收事实（本次增量决策）
+
+- question/final_option: 保留每个开发 phase 的独立用户验收事实，并补为正式增量决策。
+- recommendation/plain_language: 保留此前已选语义，补齐决策来源；只修改受影响规格与验收条款，不重跑完整阶段。
+- decision: 在当前任务实现各开发 phase 的用户验收事实记录：接受、拒绝、暂缓或交互/回执不可用，以及对应下一步恢复建议。复用既有确认/交互载体，不新增独立账本、store、自动阻断或第二状态机；不改变产品发布条件或 close 语义。用户未答不得推断接受，风险接收不能替代验收。事实记录不等同逐 AC 验证通过。
+- source_type/reference/exact_excerpt: 本次主会话 ask_user_question，question_id=phase-acceptance-incremental-decision；真实选择原文：“保留并补一条增量决策（推荐）”。旧 a71319ff 回执仅保留为历史佐证，不替代本次批准。
+- approval_binding: accepted；本次真实选择已由公共 confirm 发布 human-confirmation.v3：quality/confirmations/3358c2d06135bd5ae8ec5a78247c11696d6876e440d7151108804986d7266437.json。绑定本条批准时的 material_revision=revision-e199652637f7aa4e7d99818fad7ce4c0dc872c6dbb3a2e216666dfa95d009ccb、snapshot_tree=f37830316eab0992019890190838c1ed70338565；reply_text 原样为“保留并补一条增量决策（推荐）”。本行仅回填刚发布的绑定事实，不把该回执冒充后续规格修改的当前快照确认。
+- facts_and_constraints: canonical-reconciliation-current.md 中 phase 相关原 findings 尚未核销；本条补齐其方向来源，不直接宣称规格、审查或阶段完成。
+- Logic: 原确认真实存在但未进入冻结决策；以一次真实增量选择补齐权威来源，再进行局部规格修复。
+- choice_reason/impact: 用户选择保留；影响 FR-FLOW-003、对应 AC、phase 验收事实与恢复建议的引用和实现责任。
+- consequences_and_risks: 增加一项明确的实现与验证责任；必须避免把记录状态变成自动推进门或新增发布条件。
+- rejected_alternatives: 删除单独 phase 用户验收记录要求（范围更小，但不能统一呈现各 phase 用户验收状态）。
+- unresolved_items/owner: 当前确认已发布；受影响规格及原 findings 核销由主会话继续执行，尚未完成；确认不替代阶段末分析与完成记录。
+- Supersedes: FR-FLOW-003 仅以旧 build-spec 回执充当冻结决策依据的做法；不替换其他已批准决策。
+- module: 阶段治理闭环
+- requirement_ids: [R-010, R-011]
+- derived_from: [D-301, D-502, D-506]
+
+## UI applicability
 
 ```json
 {
@@ -501,6 +657,10 @@ artifacts: []
 | F-041 | **审查投递已是 file_only 模式（用户质疑"禁读文件"的答案核心）**：simple-review runner 生成 `.wh-review-packets/simple-*/` 材料包（review-instructions.md + materials/*.md，逐条 hash），broker 以 `attachment-delivery` 投递，attachments.json 中 `embed:false`=材料**不嵌入 prompt**，作为冻结只读副本复制到 provider 私有 bundle 供审查者按需读取；"禁访问仓库/宿主路径"的真实语义=**材料投递边界**（只能读 broker 投递的冻结材料包，不能读仓库全貌/宿主任意路径），**不是"审查者不能读文件"**；用户方案（审查专用文件放 task_dir 供审查调用）与现有 packet/bundle 机制**同构**，差距=材料包内容未做"导航+摘要+按需"分层 | /var/folders/.../T/wh-review-public-*/attachments.json + 3rd-review/SKILL.md file_only 段 | 已核实 |
 | F-042 | **异源审查隔离设计（调研 E）**：隔离=多层叠加（调用方指令 simple-review-runner.mjs:143 + adapter 自带 reviewInstruction + cursor deny Read(**)/claude-code allowedTools Read(bundle/**)/kimi 契约 bundle 相对路径 + 临时目录冻结副本（/tmp/3rd-review/<rt>/workspace/<p>/bundle/，chmod 400/500，复验）+ 路径防泄漏（material_id 基于脱敏值、绝对路径 fail-closed））；设计意图=防①污染/越权②不可复现③宿主路径泄露④递归调用；文档明示"材料投递边界，不声称替代 OS sandbox"；用户"task_dir 直读"会破坏②③；正确姿势=宿主读 task_dir→materials 值传入→自动脱敏冻结→审查者仍只读副本（=现有链）；取舍核心=宿主侧脱敏冻结后选 always_embed（小）或 file_only（大/需行号锚点） | 3rd-review 调研（7675f08d） | 已核实 |
 | F-043 | **spec/plan 全流程上下文现状（调研 F）**：build-spec 15 步+build-plan 13 步均无 step×执行者矩阵、无上下文守恒 6 条（全量落盘/主会话只留 ref+sha256+摘要≤500字/S 回传≤500字/并行上限/交互 M 独占/每步依赖上一步摘要）、无争议分级（findings 全由 M 直接处置）、无索引/导航规范（build-spec L222 仅一句"build a source/decision index"）；重载步骤=build-spec 1(读decision-log全文)/4(spec-specify)/11-13、build-plan 1(读四材料全文)/4(spec-plan)/6(plan-eng-review)/8(spec-tasks)/9-11；**make-decision SKILL L279-313 Execution model 规则壳可复用**；改造面=两 SKILL 加 Execution model 章节+spec-specify/spec-plan/spec-tasks 输入契约改"收冻结 packet"+simplicity-guard/plan-eng-review inline 声明对齐 | build-spec/build-plan SKILL+steps.json+skill-deps 调研（54e31ea2） | 已核实 |
+| F-044 | **第二轮 build-spec 复盘事实（R-011 调研）**：build-spec 阶段 wall≈5.3 小时（13:35-18:52）、纯审查约 76 分钟、review 执行约 16 次（≥48 provider 调用）findings 18→13→17→11→10→12→12→10→12→5→5→4 不收敛；2 次 broker TIMEOUT、1 次 0 字节空输出、多轮 kimi RATE_LIMITED、多轮 antigravity 空 findings 桩；completed provider usage 全 null；spec.md 最终 141KB/24 FR/24 AC；根因=①上游 approval 状态不唯一②方向/规格问题到 review 才暴露、build-spec 翻译中做决策③needs_human 当终点④无 review 预算⑤无 usage 记录 | 主会话复盘+quality/reviews+stage-outcomes（子代理 60c26e70） | 已核实 |
+| F-045 | **落点审计（R-011 六机制现网差距）**：无运行期冻结校验器（check-decision-log-chain 只查文本链字段）；finding disposition 无分类字段（仅 severity/evidence_status/disposition(actionable 等)）；validateReportableFindingDispositions L120-123 漏洞=needs_human 判 recorded 不判 incomplete；attempt.schema 有 usage 字段但无消费方（review-record-route.mjs L110 写入后无人读）；human-confirmation.v3 无 finding_id（材料级）、risk-acceptance 唯一绑 finding 但仅 accept-risk、userReply 无独立持久化；路由校验插入点=各 handler dispositions 后 addCompletion 前 | 子代理 acef9f09 只读审计 | 已核实 |
+| F-046 | **方向审查 v5 真实执行（第二轮）**：status=available-with-failures、pair partial（蓝方 kimi/coding provider process exited with 1，如实记录）；27 条 findings（major 为主，归组 A-S）；方向级四组（reject 范围/预算耗尽/审查包/效率口径）经 Talk R2 用户裁决（T-032~T-035），其余自修入方向卡 v4.3 | worktree evidence/direction-review/input-v5.json+result-v5.json | 已核实 |
+| F-047 | **detail 审查 v5 真实执行（第二轮）**：status=available-with-failures、pair partial（grok/pi 身份未绑定同 F-030 模式 + kimi 蓝方进程退出）；29 条 findings（3 blocking+26 major/minor），全部=第二轮裁决未同步回填 decision-log 正式区（决定条目缺失/approval_binding pending 未回填/D-302·D-304 旧语义/状态矩阵/成败边界/验收映射/失败分支/风险延期/R-011 悬空引用），无新方向级争议；修复=M6 D-501~D-506 补条目+全文同步 v4.3（子代理 48527eab） | worktree evidence/detail-review/input-v5.json+result-v5.json | 已核实 |
 
 ## 总结文件核实表（与 task store 对账）
 
@@ -554,6 +714,18 @@ artifacts: []
 | T-021 | 规模知情（debate round-2 裁决 5）：本任务=I 收口治理+II 质量-成本治理（约 8-10 phase 单语义维度拆分）| 周期最长；拆出=多一次交接（历史上交接断裂发生过多次） | ① 确认继续（推荐） | 无新增；phase 拆解归 build-plan | R3/Q1 结构化问答（2026-09-06） |
 | T-022 | 审查输入取舍（裁决 2 初稿）：全量 vs 切片对照 | 用户质疑隔离设计（"异源审查不也是普通 CLI 吗？为什么禁读文件？能否审查前整理专用文件放 task_dir 供审查调用？"）并要求覆盖**整个 build-spec/build-plan 阶段**的上下文管理（不只审查） | ⏳ 调研中：①异源审查隔离设计与 packet 机制（子代理 7675f08d）②spec/plan 全流程上下文现状（子代理 54e31ea2）；结果后重询 | 开放项→T-023 | R3/Q2 用户自定义答复（重大方向补充） |
 | T-023 | 调研后最终取舍：①审查投递形态 ②全阶段上下文规范程度 | 调研结论：隔离=材料投递边界（防污染/不可复现/路径泄露/递归调用）；审查者本就读冻结包文件（file_only）；"task_dir 直读"会破坏冻结链；build-spec/plan 无 Execution model/上下文守恒/索引规范，make-decision L279-313 规则壳可复用 | ① 保持冻结链+包内容分层（推荐）；② 完整移植执行规范（推荐） | 无新增开放问题；方向收敛（进入 grill+草稿+detail review） | R3/Q3+Q4 结构化问答（2026-09-06） |
+| T-024 | 全貌复述确认（第一轮收口）：用户要求先收到 decision-log 大白话全貌复述再确认 | 复述=用户可验证整体方案合理性的必要输入 | 用户答复"好的，收口吧，在build-spec前停下"（复述后确认） | 第一轮 make-decision 收口；停在 build-spec 前 | step 11-v4 记录；confirmation da1b2e45 |
+| T-025 | 第二轮范围：本次调研的治理闭环问题是否全部纳入当前任务（I+II 之外追加 III） | I+II 约 8-10 phase；全部纳入=范围最大但免交接断裂；部分纳入=更快且核心机制先行 | ① 全部纳入当前任务（推荐） | 无新增；后续问题围绕 III 设计 | R-011/R1-Q1 结构化问答（2026-09-06） |
+| T-026 | 决策冻结校验：build-spec 入口如何保证"基于冻结 decision-log" | 强制前置校验+回退=治本（不合格暂停回 make-decision）；只读事实=成本低但可能重演本次浪费；仅文档=不可证伪 | ① 强制前置校验+回退（推荐） | 与"回退成本"联动→T-031 | R-011/R1-Q2 结构化问答 |
+| T-027 | findings 分类路由机制程度 | 分类+强制路由：实现级自修/规格歧义→spec-clarify/方向级→make-decision/环境 unavailable；runtime 校验路由正确性 | ① 分类+强制路由（推荐） | 无新增；跨阶段部分→T-030 | R-011/R1-Q3 结构化问答 |
+| T-028 | needs_human 语义收紧 | 只能作暂停态：必须附 next_action=问用户或回上游、禁止正式完成；允许记录但并行 clarify=风险由汇报承载 | ① 只能作为暂停态（推荐） | 无新增开放问题 | R-011/R1-Q4 结构化问答 |
+| T-029 | review 重跑收敛规则 | 一次初始+一次 focused；无变化禁重审；provider 失败/空桩如实记录不改写为空 findings；全阶段统一 vs 仅 spec/plan | ① 一次初始+一次 focused（推荐） | 无新增开放问题 | R-011/R1-Q5 结构化问答 |
+| T-030 | token/成本 telemetry 是否重新考虑（T-015 曾否"不做度量机制"） | 轻量记录 usage：provider 有则尽量落盘、无则 unavailable，不建预算机制；维持用户自见；完整预算=触碰边界 | ① 轻量记录 usage（推荐） | 无新增开放问题 | R-011/R1-Q6 结构化问答（T-015 的"不做"关于预算机制，轻量事实记录不冲突） |
+| T-031 | 跨阶段回退协议与用户对"重跑"的担忧 | 用户想选统一协议，但担心方向级/规格级回退导致整阶段重跑浪费；补充问题：回退成本语义 | ① 增量决策+局部继续（推荐）：发现方向级缺口→只问 1 个问题→追加 1 条 D→重新冻结→build-spec 从受影响节继续；已确认部分不重跑不重写；规格歧义同样只问 1 个问题 | 无新增开放问题；统一协议（T-027 跨阶段扩展）经此确认 | R-011/R1-Q7 自定义答复+追问（2026-09-06） |
+| T-032 | 负向 oracle.reject 强制范围（方向审查 v5 组C） | 只 RED 强制 reject：符合 TDD 职责（GREEN=实现侧，oracle.pass 即可）；维持既有 RED+GREEN 都强制=违反职责倒错；全部行为任务强制=对纯正向任务无意义 | ① 只 RED 强制 reject（推荐）：verification_role=RED 的配对测试任务强制 oracle.reject 非空；GREEN 仅要求配对关联+oracle.pass 非空；非配对行为任务提供 oracle.reject 表达位但不强制 | 修正既有 FND-V4-10/D-302"RED/GREEN 都强制"语义 | 方向审查 v5 组C；R-011/R2-Q1 结构化问答 |
+| T-033 | review 预算耗尽后的收敛路由（方向审查 v5 组D） | 硬上限无出口=死锁或假绿；无限重审=重演 16 轮不收敛 | ① 窄域核销+明确终态（推荐）：预算=一次初始+材料变化后一次 focused；focused 后仍有残留：实现级再修一次后做窄域 diff 核销一次；仍不收敛或方向级→转问用户或 accepted_risk（带授权回执）；provider 不可用=unavailable 记录、不算 pass | 补 III-4 出口规则 | 方向审查 v5 组D；R-011/R2-Q2 结构化问答 |
+| T-034 | 外部审查包 token 取舍（方向审查 v5 组F） | 无交互投递链上"导航引导按需读"无法降字节；物理分切=推翻 T-023"保持冻结链+不做切片"两项确认 | ① 审查包维持全量、列为非承诺（推荐）：外部异源审查维持全量 file_only 冻结链（一致性优先）；"审查包 token 下降"从目标降为非承诺项；上下文优化只作用于主会话侧（导航+摘要+派发） | II-3.5 与成功边界修订：删除审查包降 token 承诺 | 方向审查 v5 组F；R-011/R2-Q3 结构化问答 |
+| T-035 | 效率验收口径与"不做 token 度量"的边界（方向审查 v5 组K/Q） | 收窄目标=不可全回答"浪费在哪"；扩展代理指标=部分触碰非目标；完整度量=推翻 T-015 | ② 扩展代理指标范围：不做 token 预算机制不变；观察指标扩到主会话重读轮次/子代理输入/材料包字节（字符级代理指标），回答"浪费在哪"；provider usage 有则落盘无则 unavailable | 重开 T-015/T-023 中"不做度量"的观察部分：代理指标非 token 预算，非目标修订为"不做 token 预算/计费机制" | 方向审查 v5 组K/Q；R-011/R2-Q4 结构化问答（自定义扩展） |
 
 ## 调研
 
@@ -567,6 +739,7 @@ artifacts: []
 | --- | --- | --- | --- | --- |
 | G-001 | 术语冲突：无（"收口预检"复用"阶段收口/预检"既有词，无新领域术语） | 挑战后无改变方向的未决缺口；隐藏前提（gap_id 矛盾/多 phase 自洽/dogfood 自证）已由四队辩论钉出并处置（见裁决书） | ADR=不创建（可逆、无"无背景会意外"架构决策、取舍已入 decision-log D 系列）；四项退出 check 全 pass | 裁决书.md；CONTEXT.md:73/77/331 核实 |
 | G-002 | 术语冲突：无新增。新机制用词沿用既有（"执行模型"=make-decision M/S/B/P 同名词；"冻结 packet"=spec-research 既有描述；"材料导航节"=既有"source/decision index"（build-spec SKILL L222）的显式化，不引入新领域术语） | 挑战后无改变方向的未决缺口；**隐藏前提 3 项**：①审查者按需读 bundle（kimi 适配器指令="Read only these relative bundle paths"——按清单读，读多少取决于 review-instructions 引导强度，分层效果为不确定量，记 RISK-007）②校验器四段式/reject 升级不破坏既有 20 个 contract 测试（构建期验证，先写 RED）③执行模型移植与既有 inline/independent 声明不冲突（F-043 已核对；simplicity-guard 实际走 provider packet lens 路径需在实施期对齐，记 DEFERRED-008） | ADR=不创建（可逆=新机制可回退；无"无背景会意外"=语义均沿用既有；取舍已完整记录于裁决书 round-2 与 D-30x）；四项退出 check 全 pass | F-042 调研 + kimi.mjs:40 + build-spec SKILL L222 |
+| G-003 | 术语冲突：无新增（"增量决策/续签/窄域核销/attempt 层状态"均为既有词组合，无新领域术语） | 挑战后无改变方向的未决缺口；**隐藏前提 2 项（已就地解决）**：①III-1 冻结校验与 III-2 增量决策互锁→已由"增量 approval_binding 续签链"解决（v4.3 组E）；②findings→用户答复的绑定载体（human-confirmation.v3 无 finding_id、risk-acceptance 范围窄、userReply 无独立持久化）——属字段/载体细节，归 build-spec 落盘（方向已锁：复用既有 human-confirmation 扩展 finding 绑定，不新增 store）；③attempt 层 unavailable 与 finding 处置层分离已写入 III-3 | ADR=不创建；四项退出 check 全 pass（方向期已锁最小语义，细节归 build-spec） | 第二轮 grill（内部挑战，2026-09-06）；落点审计（子代理 acef9f09） |
 
 ### step 6 direction-advice（completed, 2026-09-06）
 
@@ -713,22 +886,22 @@ artifacts: []
 | FND-V4-07（major #67×2） | 成本成功标准无基线/计数口径/回退条件（且不做 token 度量） | 优化效果不可判 | 修正：观察口径=审查注入字符数对比 convergence 基线（28.2 万→目标百分比）+主会话重读轮次（read 调用次数记录）；下降无阈值则诚实记录"未达预期"；回退=恢复全量注入 | 方向卡 v4.1 | owner=主会话 |
 | FND-V4-08（major #3） | R-007~R-010 未建 talk→审查→grill 覆盖映射 | 流程不闭合 | 已补：T-013~T-020 + 本审查（v4 方向）+ 辩论 round-2 + T-021~T-023 + grill round-2 记录（本文件） | 本文件 | owner=主会话 |
 | FND-V4-09（major #53） | 六状态契约外置 decision-log（不在审查提交材料） | 方向卡自身无法提供实现和验收核心契约 | 方向卡 v4.1 摘要嵌入六状态要点表（详细矩阵仍指 decision-log） | 方向卡 v4.1 | owner=主会话 |
-| FND-V4-10（major #23/#64/#25） | 负向 oracle 分类无元数据规范/校验器无法确定性判定 | 法定化不可执行 | 方向期锁定最小规范：AC 卡四段式（验证/通过/失败/证据）全部 AC 强制+四段非空；任务卡 oracle 结构化 {pass, reject}（reject=可证伪拒绝断言）；**机读判定=verification_role∈{RED,GREEN} 且 paired_task≠N/A 的任务强制 oracle.reject 非空**（复用现成字段，无新增分类元数据；聚合/非行为类=N/A 不强制）；**不采用关键词/语法规则判型** | 裁决书 round-2 组A；方向卡 v4.1 II-1 | owner=主会话 |
+| FND-V4-10（major #23/#64/#25） | 负向 oracle 分类无元数据规范/校验器无法确定性判定 | 法定化不可执行 | 方向期锁定最小规范：AC 卡四段式（验证/通过/失败/证据）全部 AC 强制+四段非空；任务卡 oracle 结构化 {pass, reject}（reject=可证伪拒绝断言）；**机读判定=verification_role∈{RED,GREEN} 且 paired_task≠N/A 的任务强制 oracle.reject 非空**（复用现成字段，无新增分类元数据；聚合/非行为类=N/A 不强制）；**不采用关键词/语法规则判型**（GREEN 强制部分已由 T-032 作废，以 D-302 v4.3 语义为准） | 裁决书 round-2 组A；方向卡 v4.1 II-1 | owner=主会话 |
 | FND-V4-11（minor #73 DEFERRED-005） | 索引载体判定延期=违反"不跳阶段" | 同上（并入 FND-V4-04，不再延期） | fixed（并入 v4.1 锁定） | 方向卡 v4.1 | owner=主会话 |
 | FND-V4-12（major #33 异源判定） | II-2"异源"要求与非目标"不做模型绑定"表面冲突 | 语义矛盾 | 澄清：异源=审查 provider 身份与执行者不同（既有审查机制语义），非"模型智力分级/绑定"；非目标只管"不记录建议模型使用" | 方向卡 v4.1 | owner=主会话 |
 | FND-V4-13（minor #25/#64） | 范围小节补记/结构性表述 | 文本小项 | fixed（随 v4.1 统一修订） | 方向卡 v4.1 | owner=主会话 |
 | FND-D11（blocking #5/头部 + #44/#65 目标映射） | 文档头部状态陈旧+II 部分未入目标/成败/验收映射（blocking×2=头部矛盾+II 验收缺失） | 下游无法判断可进入 approve；II 验收不可证伪 | fixed（头部 v4 轮状态；目标节补④⑤⑥；验收细节补 II 7 行；D-401 七项修正） | 本文件各处 | owner=主会话 |
 | FND-D12（v3 残留聚合：#61 范围/#426 D-306/#771 9 字段表/#689 FND-V4-10/#62 DEFERRED-005） | "审查瘦身/blocked 残留/关键词驱逐式/DEFERRED-005"未同步 v4.1 裁决 | 把已废弃方案重新带入 build-plan | fixed（全部改为 v4.1 语义：包内容分层/报 unavailable+原因/机读判定 paired_task≠N/A/DEFERRED-005 消除） | 本文件+方向卡 | owner=主会话 |
 | FND-D13（#804 失败分支/#4 四段式/#7 failed 语义/#3 stage_status 值域/#11 零新文件矛盾/#110 成本口径） | 新增机制缺失败分支与语义补全 | 实现任意化 | fixed（失败分支表补 2 行；四段式四段非空；verify failed=一次重试不阻塞；stage_status 补 failed/timeout/cancelled；审查包澄清零新文件=四材料导航节+review-instructions 为既有包文件；成本无阈值=如实结论） | 方向卡 v4.1+失败分支表 | owner=主会话 |
-| FND-D14（#749 D-303 OPEN-004/#346 机读分类/#95 gap_id 规范化/#110 六项七行） | 归属/判定字段/规范化算法/数量不一致 | 实现歧义 | fixed（OPEN-004=实施前置环境动作用户授权；机读判定=verification_role∈{RED,GREEN}&&paired_task≠N/A；gap_id 规范化=去空白/字段序归一+等价=规范化后相等；数量=七项） | 方向卡+D 系列 | owner=主会话 |
+| FND-D14（#749 D-303 OPEN-004/#346 机读分类/#95 gap_id 规范化/#110 六项七行） | 归属/判定字段/规范化算法/数量不一致 | 实现歧义 | fixed（OPEN-004=实施前置环境动作用户授权；机读判定=verification_role∈{RED,GREEN}&&paired_task≠N/A（GREEN 强制部分已由 T-032 作废，以 D-302 v4.3 语义为准）；gap_id 规范化=去空白/字段序归一+等价=规范化后相等；数量=七项） | 方向卡+D 系列 | owner=主会话 |
 | FND-D15（#58 用户流程/#5 头部/#569 结构断裂/#6 二材料漂移） | 材料内部结构与跨材料同步 | 消费混淆 | fixed（头部/step 记录定位说明：step 6-11 简录在"grill"节后为 v3 轮迁移保留，"Step 记录"区为全量记录；方向卡含流程骨架+六状态摘要，decision-log 指向） | 本文件 | owner=主会话（结构说明已注，不迁移大文本） |
 
-## 最终确认
+## 最终确认（第一轮 v3+v4，保留）
 
 - 状态：**accepted（用户确认收口）**——用户答复："好的，收口吧，在build-spec前停下"（此前一轮："确认收口，请你用大白话把整个 decision-log 简要的复述一遍，我要知道整体方案是否合理"→主会话完成全貌复述）。
 - 确认回执：quality/confirmations/da1b2e458c4f6d75455fc8ce5bd03b53e971b4b721f4158819657da118999642.json（human-confirmation.v3，decision=accepted，material_revision=revision-e7dae267…，snapshot_tree=f89fa1dc…，reply_text=用户原话）。
 - 交互聚合：quality/evidence/interactions/553d26a515c2eec683e16afe55226c22e1052f6a2b910a8c9d23332952ed0ad9.json（workflowhub-interaction-aggregate.v1：7 轮 Talk（R1-R7 全量问题/选项/答复原样转录）、clarify 无方向变更歧义、decision/confirmation 绑定）。
-- 处理：make-decision **收口完成**，停在 build-spec 前（用户要求）。approval_binding 已通过确认回执+聚合绑定；后续阶段（build-spec）等用户指令。
+- 处理：第一轮 make-decision **收口完成**，停在 build-spec 前（用户要求）。approval_binding 已通过确认回执+聚合绑定；后续阶段（build-spec）等用户指令。
 
 ## step 11 记录（completed，2026-09-06 收口）
 
@@ -739,7 +912,28 @@ artifacts: []
 - 完成动作：确认回执发布（quality/confirmations/da1b2e45….json，human-confirmation.v3 accepted）；交互聚合组装（质量聚合 553d26a5….json，7 轮 Talk 真实转录）；decision-log 最终确认节更新；**make-decision 收口完成，停在 build-spec 前**。
 - 未完成/跳过：无（外部 provider grok/pi 身份未绑定=OPEN-004 已转实施前置动作，如实记录；detail review pair partial 已如实记录）。
 
-## 拒绝方案
+## 第二轮 step 记录（R-011 阶段治理闭环，2026-09-06 追加）
+
+- **触发**：用户指令回到 make-decision，把本次 build-spec 调研暴露的"阶段治理闭环"缺口设计成新需求并在当前任务实现（R-011 原话见 R 表）。第一轮 build-spec 曾因上游状态冲突、无冻结校验、findings 处置闭环缺失而 5.3 小时不收敛（N-008），本次作为第二轮 make-decision 收敛。
+- **step 记录（第二轮）**：
+  - Talk R1（R-011）：七问+追问（T-025~T-031）全部按推荐确认：范围=全部纳入当前任务（III 部分）；冻结=强制前置校验+回退；findings=分类+强制路由；needs_human=只能作为暂停态；review=一次初始+一次 focused；usage=轻量记录；跨阶段=统一协议+**增量决策+局部继续**（用户担忧重跑浪费，追问确认）。
+  - 落点审计（子代理 acef9f09，只读）：无运行期冻结校验器（check-decision-log-chain 只查文本链字段）；finding disposition 无分类字段；needs_human 被判 recorded 非 incomplete（L120-123 漏洞）；attempt schema 有 usage 字段但无消费方；human-confirmation.v3 无 finding_id（材料级）；路由校验插入点=各 handler dispositions 之后、addCompletion 之前。
+  - direction-advice v5（红蓝，真实执行）：status=available-with-failures、pair partial（蓝方 kimi/coding provider process exited with 1，如实记录）；27 条 findings（无 blocking，major 为主）归并为组 A-S。
+  - Talk R2（R-011，T-032~T-035）：四项方向级裁决全部收到真实答复——①reject 强制范围=只 RED（修正 FND-V4-10/D-302 旧语义）②预算耗尽路由=窄域核销+明确终态 ③审查包 token=维持全量、列为非承诺 ④效率口径=扩展字符级代理指标（重开"不做度量"的观察部分，不做 token 预算/计费）。
+  - 方向卡修订 v4.3：按 27 条 findings+4 项裁决修复（II-1 reject 范围/占位符/证据字段阶段语义、II-3 审查包口径、III-1 三方一致+增量续签+冻结包合同、III-2 互斥分类+判定依据+依赖闭包、III-3 执行层状态分离、III-4 预算单位/耗尽路由、III-5 双层观测、成功/失败边界补诊断验收；I 部分 gap_id 算法冻结+确认消费绑 gap_id）。
+  - grill（第二轮，G-003）：内部挑战无改变方向的未决缺口；findings→用户答复载体细节归 build-spec。
+  - detail-advice v5（红蓝，真实执行）：status=available-with-failures、pair partial（grok/pi 身份未绑定同 OPEN-004、kimi 蓝方进程退出）；29 条 findings（3 blocking+26 major/minor）全部=第二轮裁决未同步回填 decision-log 正式区，无新方向级争议；处置=新增 M6/D-501~D-506+全文 12 项同步 v4.3（子代理 48527eab，21 次 edit）+M6 回填 accepted。
+  - **approve-decision（第二轮，completed）**：向用户呈递第二轮大白话全貌确认卡（I+II+III 全貌、III 六机制、已修复项、如实披露、下一步）；用户答复"确认收口（推荐）"→发布确认回执 f1e28231（human-confirmation.v3 accepted，绑 revision-e9bc49bc/snapshot e94e3cee）；M6 六条目 approval_binding 回填 accepted；头部状态更新。
+  - 下一步：用户指示后按 III-1 冻结校验重开 build-spec。
+
+## 第二轮状态（R-011，截至当前记录）
+
+- 当前 stage：make-decision（第二轮 **completed/accepted**；Talk R1/R2 完成、方向审查 v5 处置、方向卡 v4.3、detail 审查 v5 处置、全文同步 v4.3、用户最终确认收口）
+- **第二轮确认回执**：quality/confirmations/f1e2823181f9c7d39419466c19456757f2f90d06d4fbb33ad5896ae5509a0dc3.json（human-confirmation.v3，decision=accepted，material_revision=revision-e9bc49bc…，snapshot_tree=e94e3cee…，reply_text="确认收口（第二轮）"——代表第二轮大白话确认卡"确认收口（推荐）"选项选择，2026-09-06）
+- 未完成/跳过：detail-advice v5 pair partial（grok/pi 身份未绑定同 OPEN-004 模式、kimi 蓝方进程退出，语义结果已由 antigravity/codex 红蓝 4 成员产出）；第一轮遗留 OPEN-004（provider 身份配置）仍为实施前置动作（build-plan 前置、用户授权后动）；官方 reflect action 交互宿主不可用（同既有记录，如实标注）；第二轮 Talk 问答（ask_user_question 两次、11 项真实答复）已逐项转录 T-025~T-035，但宿主未提供 reply_ref/reply_hash 注册绑定、未另组装 interaction aggregate v2——如实记录（不伪造 transcript），决策绑定以确认回执 f1e28231+决策区 D 条目为准。
+- **下一步（待用户指示）**：重新冻结 decision-log（含 III 部分）后，按 III-1 决策冻结校验重开 build-spec；build-spec 输入决策=本 decision-log 当前 revision-e9bc49bc 绑定版本。
+
+## 拒绝方案（第一轮保留 + 第二轮新增）
 
 | 选项 | 拒绝理由 | 关联 D |
 | --- | --- | --- |
@@ -753,6 +947,10 @@ artifacts: []
 | 每阶段重跑预检 / 预检作为 gate | 范围放大、仍不覆盖后期缺口；违反"不新增 gate" | D-203/D-204 |
 | dogfood 为主验收 / 故意保留缺口 | 自证不可证伪 / 污染本任务质量事实 | D-401 |
 | 收口合同整体延后 build-spec（连字段清单都延后） | 等于依赖 build-spec 补需求；方向期锁定字段清单与语义 | D-402 |
+| 第二轮：治理闭环部分纳入/另立任务 | 用户确认全部纳入当前任务（T-025） | 本文件第二轮 |
+| 第二轮：方向级缺口回退=完整重跑 make-decision | 浪费时空与 token，与用户担忧相反 | T-031 |
+| 第二轮：needs_human 作为最终处置记录 | 等于"没问用户就标完成"，本轮问题重演 | T-028 |
+| 第二轮：审查包物理分切降 token | 推翻 T-023 两项已确认（冻结链不变/不做切片） | T-034 |
 | 完整状态矩阵/端到端流程入方向卡 | 实现契约，归 build-spec 转译；方向期提供可执行矩阵 | D-207 |
 
 ## 风险与延期交接
@@ -765,13 +963,16 @@ artifacts: []
 | RISK-004 | 模板/校验器对齐引发存量 spec 合规波动 | 仅新生成 spec 受影响；本任务 spec 是首个新消费者（改错即自卡） | 构建期先写 RED 测试再改校验器；历史 spec 不回溯 |
 | RISK-005 | verify 独立审查在 provider 不可用时 frequent unavailable | 约 40-75% 通道成功率（F-035） | 三态事实记录+如实声明；不阻塞（裁决 3）；多通道并发（红蓝 6/6 实证） |
 | RISK-006 | 执行规范移植流程变更面（两 SKILL+三输入契约+20 测试交叉） | 改错无法归因 | build-plan 按"一个 phase 一个语义维度"拆分（裁决 5） |
-| RISK-007 | 审查材料包分层效果依赖 review-instructions 引导强度（审查者按清单读，读多少取决于引导） | 分层省 token 效果不确定 | dogfood 观察：本任务审查包记录 review-instructions 与材料包字节；效果不足则引导加强（可逆） |
+| RISK-007 | III 路由校验与"记录事实不阻断"张力（方向卡 v4.3 新含义；旧含义"审查包分层引导效果"已被 v4.3 取代——审查包 token 下降列为非承诺项 T-034，引导升级为 review-instructions 内容优化并纳入上下文成功口径） | 路由校验误伤修复推进 | 只约束正式完成声明（路由错误=完成条件不满足，不禁止修复推进）；处理阶段=build-spec/build-plan 完成条件校验（D-502/D-506），owner=build-spec |
+| RISK-008 | usage 轻量落盘依赖 provider 返回 usage（方向卡 v4.3） | provider 不返回 usage 时"浪费在哪"部分不可答 | 如实标注 unavailable（III-5/T-030），不承诺完整；owner=build-spec |
+| RISK-009 | 增量决策续签与冻结校验的交互复杂度（方向卡 v4.3） | 续签链实现错误=误放行/误阻断 | 用负向夹具覆盖（验收细节 III 行）；owner=build-spec |
 | DEFERRED-001 | 预检载体形态：spec-analyze lens 复用 vs 新只读 profile | 需在 build-spec 验证与现有只读分析通道兼容性；不兼容则按控制面登记规则（唯一 consumer/owner/删除条件） | build-spec 验证，owner=build-spec |
 | DEFERRED-002 | phase 精确边界（每 phase 交付物/切换条件） | build-plan 锁定 | build-plan，owner=build-plan |
 | DEFERRED-003 | 真实任务重放验证（M17/T09 同型） | 依赖外部 provider/宿主 | 另立后续任务，owner=用户 |
 | DEFERRED-004 | 完整状态矩阵值域/转换/过期表；夹具与 oracle 明细；9 字段 schema 细节 | 实现契约（方向期语义已锁定） | build-spec/build-plan 转译 |
 | DEFERRED-006 | 四阶段统一上下文机制（build-code/verify-code 也装执行模型+导航节） | 先 spec+plan 验证效果（T-023/Q7） | 后续任务，owner=用户 |
 | DEFERRED-008 | simplicity-guard/plan-eng-review 的"provider packet lens"路径与 build-plan 直接调用位置对齐 | 执行模型移植时需核实实际执行路径（F-043 标记） | build-spec/build-plan 实施期验证，owner=build-spec |
+| DEFERRED-009 | 非配对行为任务的 reject 语义扩展（当前仅表达位不强制，是否对纯正向任务豁免） | 需真实任务使用后评估 | dogfood 后评估，owner=用户（方向卡 v4.3） |
 
 ## 未决项
 
@@ -787,10 +988,10 @@ artifacts: []
 | 状态 | 唯一来源 | 值域 | 过期/stale 语义 | 展示位 |
 | --- | --- | --- | --- | --- |
 | can_continue | 执行事实（工作区可读+材料可读） | true/false | 随当前材料重算 | status |
-| stage_status | 当前 stage outcome/completion 派生 | completed/in_progress（+unavailable 记录） | outcome 过期=conflict/stale 如实展示 | status |
+| stage_status | 当前 stage outcome/completion 派生 | completed/in_progress/failed/timeout/cancelled（+unavailable 记录） | outcome 过期=conflict/stale 如实展示 | status |
 | quality_status | 独立质量决议（spec-analyze/review 事实） | passed/incomplete/unknown | 事实缺失=incomplete；不得由预检/收口投影写入或推导 | status/close |
 | acceptance_status | 逐 AC 验收证据 | pass/fail/unknown/deferred/not_applicable | 证据不绑当前 snapshot=stale | status/close |
-| product_release_status | deriveProductRelease（五阶段 current completion+AC+verify 确认） | released/not_released | 输入非 current → not_released | status/close |
+| product_release_status | deriveProductRelease（五阶段 current completion+AC+既有 verify human-confirmation receipt；独立审查三态事实不参与派生） | released/not_released | 输入非 current → not_released | status/close |
 | physical_close_status | close 物理事实（commit/archive/merge/push/cleanup 读回） | not_closed/closed（+失败原因） | 只读物理结果 | close |
 
 - 禁展示层推导新状态机；六状态互不推导；同一 gap 只显示一次（渲染层聚合）。
@@ -830,6 +1031,12 @@ artifacts: []
 | verify 独立性≈0（F-035） | verify 阶段无独立审查事实→阶段汇报"未能提供独立审查事实"如实声明（三态夹具） |
 | 主会话全量重读/无执行规范（F-043） | 执行规范后：阶段内主会话只读导航节+摘要（导航节存在性断言）；findings 处置由子代理回传（≤500 字回传契约夹具） |
 | 审查材料包无分层（F-041） | 材料包含导航/引导文件（review-instructions 引导声明断言） |
+| III-1 决策冻结校验三方不一致（头部 approval_binding 与正文"最终确认"节/step 11 记录矛盾、绑定非当前材料） | 夹具：头部 pending+正文 accepted→冻结校验拒绝（build-spec 不开始规格化）；拒绝夹具 |
+| III-2 finding 分类路由不匹配 | 夹具：spec_ambiguity 无用户答复绑定/direction_change 无增量决策记录→阻断阶段正式完成（不阻断修复）；阻断完成夹具 |
+| III-3 needs_human 作为终态（无 next_action/当正式完成） | 夹具：disposition 校验拒绝，阶段 completion 保持 incomplete；拒绝夹具 |
+| III-4 超预算重审（同 revision 无变化重审/超一次 focused） | 夹具：同冻结 revision 重复初始 review→预算校验拒绝；focused 后残留无核销出口→拒绝放行；拒绝夹具 |
+| III-5 review attempt usage 缺失 | 夹具：provider 未返回 usage→attempt 事实标 unavailable（不算 pass、不伪造）；unavailable 标注夹具 |
+| 增量续签链误放行/误阻断（RISK-009） | 夹具：缺用户答复回执仍 accepted=误放行→拒绝；合法增量增补被拒=误阻断→负向夹具覆盖 |
 
 ### dogfood 观察合同
 
@@ -851,6 +1058,10 @@ artifacts: []
 | 收据/事实与当前 snapshot 不符 | 视为历史（stale） | 不参与当前完成判断；重跑受影响检查 |
 | verify 材料 4 项校验不通过（缺材料/身份未绑/占位符/零 digest） | 视为材料不完整（如实记录） | 记录原因+保留 incomplete 展示；不阻断进行修复（修复后重验） |
 | verify 独立审查 failed | 已发起但执行失败 | 记录失败原因；允许一次重试；不再重试则如实声明"无独立审查事实"（不阻塞 close 判定，由用户决定） |
+| 决策冻结校验不通过（approval_binding 非 accepted/与正文最终确认节及 step 11 三方不一致/绑定非当前材料/有方向级未决） | 阶段不可正式开展（III-1 完成条件检查，非公共 gate） | 暂停 build-spec 并回 make-decision 补齐，不开始规格化 |
+| finding 路由错误（disposition 与分类路由不匹配） | 完成条件不满足 | 阻断该阶段正式完成；不阻断同任务修复推进（III-2） |
+| review 预算耗尽（focused 后仍有残留/方向级） | 预算不制造死锁，各状态有确定出口 | 实现级再修一次+窄域 diff 核销一次；仍不收敛→问用户或 accepted_risk（带授权回执）（III-4/T-033） |
+| needs_human（真实问题等待用户） | 暂停态，非最终处置 | 保持 completion=incomplete+附 next_action（ask_user/return_to_make_decision/return_to_spec）；答复后转 user_decided（III-3） |
 
 ## 质量边界
 
@@ -921,3 +1132,36 @@ artifacts: []
 - 用户答复：close 语义=①保持现状但如实说清；验证=①测试绿+本任务 dogfood；范围=①聚焦改造；实施形态=①一个任务多 phase；非目标=①全部接受（T-004~T-008）。
 - 队列变化：无新增开放问题；"方向"已收敛为：诊断 + 聚焦改造（A/B 预检链、D 唯一缺口源、E 边界校验、F 状态分层；C/G 并入阶段要求）。
 - 后果/风险：改造横跨 build-spec/build-plan/runtime/展示/测试 5 处，任务周期为最长的部分；已向用户明示；剩余风险移交 direction-advice 与 talk round 3。
+
+- 指引：step 6~step 14 的既有完整记录位于上文"grill"节之后的 ### step 6 direction-advice 至 ### step 14-v4 stage-reflection 记录节（含 step 6b/7~10 与 v4 轮 step 6-v4~step 14-v4；step 11 收口记录见"## step 11 记录"节、第二轮记录见"## 第二轮 step 记录"节），本"Step 记录"区只保留 step 1-5 全量记录，不再重复搬运大文本。
+
+---
+
+## 增量决策 R-012 / D-508：移除 verify-code 重复人工确认（2026-09-07）
+
+### 触发与证据
+
+近期任务在 verify-code 卡住的直接原因不是代码审查本身，而是同一个“当前代码审查结论”被同时要求作为 completion predicate、`approve-verification` 步骤产物、Stage Agent closure step 绑定和 product release 输入。真实 close confirmation、`accepted_risk`、当前 snapshot/material/review binding 是不同语义，不能一起删除。证据：`runtime/stage/completion-predicates.mjs`、`runtime/stage/stage-runner.mjs`、`runtime/stage/stage-agent-outcome-adapter.mjs`、`core/task-close.mjs` 及本次 focused tests。
+
+### 用户裁决
+
+- 删除 verify-code 对“人工确认当前代码审查结论”的要求；verify-code 改为 automatic acceptance mode。
+- 代码审查仍必须绑定当前 task、stage、material revision、snapshot、dsh-code-review 和质量 review ref/hash。
+- review `unavailable`、过期/错绑证据、未修复 actionable serious finding 仍保持 `incomplete`，不能改写为 pass，也不冻结同 task 修复。
+- product release 不再要求重复的 `verify_confirmation`；仍要求五阶段当前 completion、当前 acceptance facts、无冲突且有绑定证据。
+- close-plan 的人工确认和不可逆操作授权不变；manual-risk-close 仍保留 `delivered_with_risk`/`not_released` 边界。
+
+### 实施边界
+
+将 `approve-verification` 改为自动 `finalize-code-review`，不新增 public command、store、持久 selector、第二状态机或第五材料。旧历史 confirmation 只读保留，不参与当前 verify completion/release projection。
+
+### 验收
+
+- 无 verify-code confirmation 时，当前 code review 完整且绑定正确即可完成 verify-code 和进入 close preparation。
+- 无 verify-code confirmation 时，product release projection 不再产生 `verify_confirmation_missing`。
+- 缺 review、review unavailable、旧 snapshot、错 material、未修复 serious finding 仍 fail-closed。
+- close-plan 仍要求 plan-bound confirmation；风险接受仍要求 finding、risk record 和 authorization receipt。
+
+### 交接
+
+本增量修改使当前材料发生变化，之前基于旧材料 revision 的阶段证据只作历史事实；修改后的 focused contract、integration 和 syntax/diff checks 重新绑定新快照。进入下一阶段前仍需按当前四份材料重新认证其 outcome，不能复用旧 completion 结论。

@@ -3,12 +3,10 @@ import { isMaterialOnlySnapshotDelta, isStageMaterialOnlySnapshotDelta, material
 import { CURRENT_MATERIAL_FILES } from "../task/material-workspace.mjs";
 import { validateVerifyLeaves } from "../evidence/quality-store.mjs";
 import { validateAcceptanceEvidence } from "../evidence/acceptance-evidence-validator.mjs";
-import { isHumanConfirmationVersion } from "../evidence/canonical-evidence-validators.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const DERIVED = new WeakSet();
 const SHA256 = /^[a-f0-9]{64}$/;
-const OID = /^[a-f0-9]{40,64}$/;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 // A stage may only depend on materials that exist at that point in the
@@ -100,7 +98,6 @@ export const STAGE_PREDICATES = Object.freeze({
   }),
   "verify-code": Object.freeze({
     code_review: "review",
-    human_confirmation: "confirmation",
   }),
 });
 
@@ -117,6 +114,58 @@ export const STAGE_ADVISORY_PREDICATES = Object.freeze({
   // remains owned by the dsh stage outcome and its bound quality_review ref.
   "verify-code": Object.freeze({ independent_review: "review" }),
 });
+
+const FINDING_TERMINAL_STATUSES = new Set(["fixed", "rejected_invalid", "user_decided", "accepted_risk"]);
+const FINDING_NEXT_ACTIONS = new Set(["ask_user", "return_to_make_decision", "return_to_spec"]);
+const ATTEMPT_STATUSES = new Set(["executed", "failed", "unavailable"]);
+
+/**
+ * Validate the finding-level state machine without creating a new persisted
+ * state machine. `needs_human` is observable pause state only; completion can
+ * be reached through the four explicitly bound terminal routes.
+ */
+export function validateFindingDispositionState(disposition = {}, { authorizedRiskFindingIds = [] } = {}) {
+  const value = disposition && typeof disposition === "object" && !Array.isArray(disposition) ? disposition : {};
+  const errors = [];
+  const status = value.status;
+  if (status === "needs_human") {
+    if (!FINDING_NEXT_ACTIONS.has(value.next_action)) errors.push("needs_human_requires_next_action");
+    if (value.completion_status === "completed" || value.formally_complete === true) errors.push("needs_human_cannot_be_formally_complete");
+  } else if (!FINDING_TERMINAL_STATUSES.has(status)) {
+    errors.push("finding_disposition_status_is_not_terminal");
+  }
+  if (status === "accepted_risk") {
+    if (!new Set(authorizedRiskFindingIds).has(value.finding_id)) errors.push("accepted_risk_requires_authorized_finding");
+    if (typeof value.risk_acceptance_ref !== "string" || value.risk_acceptance_ref.trim() === "") errors.push("accepted_risk_requires_authorization_receipt");
+    if (typeof value.risk_ref !== "string" || value.risk_ref.trim() === "") errors.push("accepted_risk_requires_risk_record");
+  }
+  if (status === "user_decided") {
+    if (typeof value.finding_id !== "string" || value.finding_id.trim() === "") errors.push("user_decided_requires_finding_id");
+    if (!/^[a-f0-9]{64}$/.test(value.card_hash ?? "")) errors.push("user_decided_requires_card_hash");
+    if (typeof value.reply_ref !== "string" || value.reply_ref.trim() === "") errors.push("user_decided_requires_reply_ref");
+  }
+  const uniqueErrors = [...new Set(errors)];
+  return Object.freeze({
+    ok: uniqueErrors.length === 0,
+    status: uniqueErrors.length > 0 ? "incomplete" : status === "needs_human" ? "paused" : "terminal",
+    completion_status: uniqueErrors.length > 0 || status === "needs_human" ? "incomplete" : "completed",
+    errors: Object.freeze(uniqueErrors),
+  });
+}
+
+/** Keep provider/attempt availability separate from finding disposition facts. */
+export function separateAttemptFindingFacts({ attempt_status, attempt_error = null, findings = [] } = {}) {
+  const errors = [];
+  const status = ATTEMPT_STATUSES.has(attempt_status) ? attempt_status : "unavailable";
+  if (!ATTEMPT_STATUSES.has(attempt_status)) errors.push("attempt_status_is_invalid");
+  const safeFindings = Array.isArray(findings) ? findings : [];
+  if (status === "unavailable" && safeFindings.length > 0) errors.push("attempt_unavailable_does_not_create_findings");
+  return Object.freeze({
+    attempt: Object.freeze({ status, ...(attempt_error ? { error: attempt_error } : {}) }),
+    findings: Object.freeze(status === "unavailable" ? [] : [...safeFindings]),
+    errors: Object.freeze(errors),
+  });
+}
 
 export function qualityPredicateSatisfied(fact, kind, { stage = fact?.stage, subject = fact?.subject, review_status: reviewStatus, review_source: reviewSource } = {}) {
   if (kind === "review") {
@@ -502,7 +551,9 @@ export function deriveStageOutcomeStatuses({
  * `acceptance_results` follows the same shape and accepts the existing
  * acceptance result vocabulary. An explicitly non-applicable/deferred item
  * is excluded only when the input says it is non-applicable; no omission is
- * inferred. `verify_confirmation` must be the current accepted confirmation.
+ * inferred. Verify-code does not require a second human confirmation of the
+ * code-review result; irreversible close authorization is handled by the
+ * close-plan path instead.
  */
 export function deriveProductRelease({
   stage_completions: stageCompletionsInput,
@@ -513,8 +564,6 @@ export function deriveProductRelease({
   productResults,
   expected_acceptance_ids: expectedAcceptanceIdsInput,
   expectedAcceptanceIds,
-  verify_confirmation: verifyConfirmationInput,
-  verifyConfirmation,
 } = {}) {
   const stageInput = stageCompletionsInput ?? stageCompletions;
   const acceptanceInput = acceptanceResultsInput ?? acceptanceResults ?? productResultsInput ?? productResults;
@@ -652,33 +701,6 @@ export function deriveProductRelease({
     }
   }
 
-  const confirmation = verifyConfirmationInput ?? verifyConfirmation;
-  if (confirmation === undefined || confirmation === null) {
-    productReason(reasons, "verify_confirmation_missing");
-  } else {
-    productObject(confirmation, "verify_confirmation");
-    if (!productCurrent(confirmation)) productReason(reasons, "verify_confirmation_not_current");
-    if (isHumanConfirmationVersion(confirmation) && !isHumanConfirmationVersion(confirmation, { current: true })) {
-      // v1 is intentionally readable but has no material/snapshot provenance;
-      // preserve it as historical input without promoting it to a release.
-      productReason(reasons, "verify_confirmation_legacy_v1_not_current");
-    }
-    if (!isHumanConfirmationVersion(confirmation, { current: true })
-        || typeof confirmation.task_id !== "string" || confirmation.task_id.trim() === ""
-        || confirmation.stage !== "verify-code"
-        || !/^revision-[a-f0-9]{64}$/.test(confirmation.material_revision ?? "")
-        || !OID.test(confirmation.snapshot_tree ?? "")
-        || !Number.isFinite(Date.parse(confirmation.confirmed_at))) {
-      productReason(reasons, "verify_confirmation_identity_invalid");
-    }
-    productIdentityExpected = productIdentity(confirmation, "verify_confirmation", productIdentityExpected, reasons);
-    const decision = confirmation.decision ?? confirmation.status;
-    if (decision !== "accepted") productReason(reasons, `verify_confirmation_not_accepted:${String(decision ?? "missing")}`);
-    const binding = productBinding(confirmation);
-    if (!binding) productReason(reasons, "verify_confirmation_unbound");
-    else addInputBinding(binding, "verify_confirmation");
-  }
-
   const result = Object.freeze({
     producer: "deriveProductRelease",
     status: reasons.length === 0 ? "released" : "not_released",
@@ -709,7 +731,6 @@ export function deriveCurrentProductRelease({
   if (typeof read !== "function") throw new TypeError("product-release quality fact reader is required");
   const stageObservations = new Map(STAGES.map((stage) => [stage, []]));
   const acceptanceCandidates = new Map();
-  const confirmationCandidates = new Map();
   for (const ref of refs) {
     if (typeof ref !== "string" || ref.trim() === "") continue;
     let raw;
@@ -768,44 +789,7 @@ export function deriveCurrentProductRelease({
       candidates.push({ source: "stage-fact", value, ref, hash });
       acceptanceCandidates.set(value.subject, candidates);
     }
-    if (freshness.authenticated === true
-        && freshness.status === "current"
-        && value.kind === "confirmation" && value.stage === "verify-code"
-        && value.subject === "human_confirmation" && value.status === "passed") {
-      const binding = value.evidence?.[0];
-      if (!binding) continue;
-      try {
-        const human = JSON.parse(read(binding.ref));
-        if (isHumanConfirmationVersion(human, { current: true })
-            && human.task_id === taskId
-            && human.stage === "verify-code"
-            && human.decision === "accepted"
-            && human.material_revision === materialRevision
-            && (human.snapshot_tree === snapshotTree
-              || (snapshotRoot && isMaterialOnlySnapshotDelta(snapshotRoot, human.snapshot_tree, snapshotTree, taskId)))) {
-          const candidate = {
-            ...human,
-            material_revision: materialRevision,
-            snapshot_tree: snapshotTree,
-            current: true,
-            ref: binding.ref,
-            hash: binding.sha256,
-          };
-          confirmationCandidates.set(`${binding.ref}:${binding.sha256}`, candidate);
-        }
-      } catch {
-        // Malformed confirmation evidence cannot participate in the current
-        // selection. A distinct valid confirmation still keeps its own
-        // provenance and is handled by the ambiguity check below.
-      }
-    }
   }
-  // A product projection must not choose an arbitrary accepted confirmation
-  // when two distinct current proofs exist. Keep the release input absent so
-  // the existing `verify_confirmation_missing` reason remains fail-closed.
-  const confirmation = confirmationCandidates.size === 1
-    ? [...confirmationCandidates.values()][0]
-    : null;
   const stageCompletions = STAGES.map((stage) => {
     const observations = stageObservations.get(stage) ?? [];
     const completion = deriveStageCompletion(stage, observations, {
@@ -926,7 +910,6 @@ export function deriveCurrentProductRelease({
     stage_completions: stageCompletions,
     acceptance_results: acceptanceResults,
     expected_acceptance_ids: expectedAcceptanceIds,
-    verify_confirmation: confirmation,
   });
 }
 

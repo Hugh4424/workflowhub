@@ -10,6 +10,15 @@ Input is decision/scope content plus controlled `readArtifact(name)` and
 does not receive task identity, storage configuration, workspace paths, or an
 ambient shell location.
 
+When the host provides a stage-input packet, consume only that frozen packet:
+retain its `task_id`, stage, `material_revision`, `snapshot_tree`, source
+digests, packet hash, and short summary. Do not read the task directory or
+re-read full source material outside the packet. New `spec.md` output must
+include a regenerable, non-authoritative `## 材料导航` section near the top;
+each row names a section, one-line summary, and suggested M/S/B/P read timing.
+If packet assembly or binding is unavailable, return the explicit unavailable
+reason and do not claim a context optimization.
+
 Use `templates/spec-template.md`. Produce a testable, readable specification
 covering user outcomes, urgency, scope, scenarios, edge states, requirements,
 assumptions, risks, acceptance, business impact, regression paths, and explicit
@@ -22,6 +31,12 @@ method, oracle, and failure condition. A generated spec must be parseable as-is;
 the host must not repair labels, statuses, or oracle text by hand after this
 skill returns. Legacy compact labels remain read-only migration input and never
 change the current strict profile.
+
+For every new AC, use four plain, unindented labels in this exact order:
+`验证：`, `通过：`, `失败：`, `证据：`. Each label's body must be non-empty;
+do not use bullet/bold legacy labels such as `- **验证方法**`. A line whose
+entire content is `TBD`, `TODO`, or `待填写` is invalid. `证据：` declares the
+expected evidence type or artifact only; verify-code supplies execution facts.
 
 ## Artifact responsibility
 

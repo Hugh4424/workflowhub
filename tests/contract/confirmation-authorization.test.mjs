@@ -131,8 +131,8 @@ function factsFor(stage) {
 }
 
 describe("confirmation and authorization boundary", () => {
-  it("does not treat authorization as human confirmation", () => {
-    const facts = factsFor("verify-code").filter(({ fact }) => fact.value.subject !== "human_confirmation");
+  it("does not require a human confirmation for verify-code completion", () => {
+    const facts = factsFor("verify-code");
     facts.push({
       fact: {
         ref: "authorization/decision.json",
@@ -142,12 +142,12 @@ describe("confirmation and authorization boundary", () => {
       authenticated: true,
     });
 
-    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({ status: "in_progress", missing: ["human_confirmation"] });
+    expect(deriveStageCompletion("verify-code", facts)).toMatchObject({ status: "completed", missing: [] });
   });
 
-  it("keeps confirmation requirements separate from automatic stage acceptance", () => {
-    expect(acceptanceModeFor("verify-code")).toBe("human");
-    expect(requiresHumanConfirmation("verify-code")).toBe(true);
+  it("keeps close authorization separate from automatic verify-code acceptance", () => {
+    expect(acceptanceModeFor("verify-code")).toBe("automatic");
+    expect(requiresHumanConfirmation("verify-code")).toBe(false);
     expect(acceptanceModeFor("build-code")).toBe("automatic");
     expect(requiresHumanConfirmation("build-code")).toBe(false);
   });

@@ -1,0 +1,239 @@
+{
+  "result": {
+    "status": "available",
+    "stage": "build-spec",
+    "review_track": null,
+    "review_kind": null,
+    "material_id": "eb2fd474934226c00af180bdc1a7c15ba345a6fbf8e677102f6a9dbec8ec1561",
+    "runtime_id": "930e3856-fa00-47f8-ab8b-a1847b0ff2cd",
+    "outcome": "completed",
+    "minimum_heterologous": 1,
+    "provider_selection": {
+      "providers": [
+        "kimi/coding",
+        "antigravity/flash",
+        "codex/luna"
+      ],
+      "provider_identities": {
+        "kimi/coding": {
+          "source_id": "kimi/coding",
+          "config_id": "0ee93fd24d36dbef5f110eb6e59f9935d9ce092612178721946720fb535c519b"
+        },
+        "antigravity/flash": {
+          "source_id": "antigravity/flash",
+          "config_id": "5ba41c80161607da5076d431c6a44c6670a069415d02dc1ed3097df2a2903172"
+        },
+        "codex/luna": {
+          "source_id": "codex/luna",
+          "config_id": "0a2e6a47d93a7f6e251b8edc1d89f029bd960ac0291ff0fd7d44eaf6e23c3898"
+        }
+      }
+    },
+    "provider_results": [
+      {
+        "provider": "kimi/coding",
+        "status": "completed",
+        "identity": {
+          "provider": "kimi/coding",
+          "adapter": "kimi",
+          "model": "kimi-for-coding/kimi-for-coding",
+          "source_id": "kimi/coding",
+          "config_id": "0ee93fd24d36dbef5f110eb6e59f9935d9ce092612178721946720fb535c519b"
+        },
+        "session_id": "session_ca8e9846-1062-4bcd-9605-ffb14e23ec48",
+        "error": null,
+        "timing": {
+          "started_at_ms": 1788685128878,
+          "completed_at_ms": 1788685681190,
+          "duration_ms": 552312
+        },
+        "usage": null,
+        "evidence_anchor_valid": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "provider": "antigravity/flash",
+        "status": "completed",
+        "identity": {
+          "provider": "antigravity/flash",
+          "adapter": "antigravity",
+          "model": "gemini-3.8-flash-high",
+          "source_id": "antigravity/flash",
+          "config_id": "5ba41c80161607da5076d431c6a44c6670a069415d02dc1ed3097df2a2903172"
+        },
+        "session_id": null,
+        "error": null,
+        "timing": {
+          "started_at_ms": 1788685128905,
+          "completed_at_ms": 1788685354695,
+          "duration_ms": 225790
+        },
+        "usage": null,
+        "evidence_anchor_valid": []
+      },
+      {
+        "provider": "codex/luna",
+        "status": "completed",
+        "identity": {
+          "provider": "codex/luna",
+          "adapter": "codex",
+          "model": "gpt-5.6-luna",
+          "source_id": "codex/luna",
+          "config_id": "0a2e6a47d93a7f6e251b8edc1d89f029bd960ac0291ff0fd7d44eaf6e23c3898"
+        },
+        "session_id": "01a075f1-18aa-7880-ab09-91881d6d873e",
+        "error": null,
+        "timing": {
+          "started_at_ms": 1788685128931,
+          "completed_at_ms": 1788685374676,
+          "duration_ms": 245745
+        },
+        "usage": null,
+        "evidence_anchor_valid": [
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "line": 772,
+        "issue": "AC-MATERIAL-003 标题与失败条款按「材料存在、身份绑定、非占位符、非零 digest、当前 snapshot 绑定」五个信号描述「四项」检查，而 FR-MATERIAL-003（L375）锁定的是四个检查项（存在性/身份绑定/内容完整性/快照新鲜度，占位符与 digest 只是③的 subcheck），且与 decision-log FND-V4-05 方向期锁定的 4 项构成（材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定）不一致。检查器输出 schema（4 项还是 5 项、{status,reason,subchecks} 挂在哪些项上）以及六值优先级序列（missing→identity_mismatch→stale_snapshot→zero_digest→digest_mismatch→placeholder）与四项结构的映射均无法确定性实现，预检/验收直接歧义。",
+        "recommendation": "统一 FR 与 AC 的检查项清单与输出 schema（明确每项的 status/subchecks 结构及优先级与检查项的映射），并使检查项构成回溯到 decision-log FND-V4-05 锁定的四项语义。",
+        "evidence_kind": "direct",
+        "evidence": "L772「对材料存在、身份绑定、非占位符、非零 digest 与当前 snapshot 绑定四项事实逐项报告」（实为五个信号）；L778 失败条款「把五个信号混成无法判定的字段」；L375 FR 定义四个检查项且「subchecks 只在内容完整性项中使用」；materials/02-approved_decision.md L711 FND-V4-05 锁定「材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定」。",
+        "root_cause": "FR 按「检查项+subcheck」重组了决策锁定的四项信号，AC 标题沿用决策原文的五信号表述，两处未对齐。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "line": 289,
+        "issue": "FR-FLOW-003 定义了决策材料中不存在的新交互机制：phase 验收四态（accepted/rejected/deferred/unavailable）、固定恢复路径（rejected 修复重问、deferred 等待、unavailable 仅可重试一次）以及 attempt_id/attempt_no/replaces_attempt_ref 重试链 current 选择算法（另见 L540-542、L788）。D-301 只确认「每 phase 独立开发测试验收审查」，未定义验收状态机、重试上限或 current 选择规则。这触及本任务自己的红线「不依赖 build-spec 补需求」（R-003、D-402、FND-V4-01），且「unavailable 仅重试一次」与 decision-log 失败分支表「恢复时按公共合同重请求」（无次数上限）不一致。",
+        "recommendation": "确认 phase 验收状态机与重试链是产品需求还是实施约定：若是产品需求，回 make-decision 补决策后再入 spec；若否，从 FR/AC 降级为 build-plan 转译约定；并统一 unavailable 的重试语义。",
+        "evidence_kind": "direct",
+        "evidence": "L289 FR-FLOW-003 四态+恢复路径+「可按既有交互通道重试一次」；L541「当前事实只取同一绑定下 attempt_no 最大且已到终态的记录」；materials/02-approved_decision.md L328 D-301 仅「每 phase 独立开发测试验收审查」；同文件 L847 失败分支表 unavailable「记录真实原因；恢复时按公共合同重请求」。",
+        "root_cause": "spec 把实施级交互机制提升为产品级 FR/AC，越过决策材料锁定的语义边界。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "line": 353,
+        "issue": "FR-STATUS-002 新增 pre-close/post-close 两阶段 close 记录机制：写 close 前先形成 pre-close 记录且 physical_close_status 固定抄写 not_closed，授权物理动作完成后再以动作后 snapshot/material 追加 post-close 读回事实。D-202 只决定「完成记录必须抄写 quality/发布状态、展示分层、同一 gap 只出现一次」，未定义两阶段记录结构或「动作后换 snapshot 再读回」的流程。这是 build-spec 新创的产品行为，同样违反「build-spec 不补需求」红线，并直接决定 AC-STATUS-002 的通过/失败判据。",
+        "recommendation": "确认 pre/post-close 结构是否为用户可见的产品需求：若是，回 make-decision 补决策；若只是实现建议，移出 FR 正文，改写为由 build-plan 决定的验收证据组织方式。",
+        "evidence_kind": "direct",
+        "evidence": "L353「写 close 记录前先形成 pre-close 记录，physical_close_status 固定抄写当时的 not_closed；授权物理动作完成后，再以动作后的 snapshot/material 追加 post-close 读回事实」；materials/02-approved_decision.md L164 D-202 仅「完成记录必须抄写 quality/发布状态，展示分层，同一 gap 只出现一次」。",
+        "root_cause": "与 FR-FLOW-003 同根因：spec 转译时新增决策未定义的行为机制。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "major",
+        "path": "materials/02-approved_decision.md",
+        "line": 5,
+        "issue": "文档头部仍写「当前 stage：make-decision（step 10-v4 detail-advice 完成，43 条 findings 处置中；下一步 step 11-v4 approve-decision）」，与本文档 step 11-v4 completed（L661）和最终确认 accepted（L728）直接矛盾；FND-D11（L720）声称「fixed（头部已更新）」但与实际字节不符。该 decision-log 是 accepted 的权威材料，头部陈旧状态会误导按头部解析 stage 状态的下游消费者——这正是本任务要治理的「头部状态陈旧」类问题在材料自身上的复发。",
+        "recommendation": "更新头部为收口完成状态（或注明以「最终确认」节为唯一当前状态），并核对 FND-D11 处置记录与实际修复一致。",
+        "evidence_kind": "direct",
+        "evidence": "L5「下一步 step 11-v4 approve-decision」 vs L661「step 11-v4 approve-decision（completed, 2026-09-06）」、L728「状态：accepted（用户确认收口）」、L720 FND-D11「fixed（头部 v4 轮状态）」。",
+        "root_cause": "step 11-v4 完成后未同步文档头部，处置记录先于实际修改落笔。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 123,
+        "issue": "SCN-005 写「未答项标为 deferred 且 reason=user_cancelled」，把「未答」与「用户取消」混为同一 reason；FR-FLOW-003（L289）明确区分未答、取消、回执缺失三种情形，但全文未定义 reason 值域，实现会对未答项错标 user_cancelled，造成验收时对取消路径的误判。",
+        "recommendation": "将 SCN-005 改为区分「未答项 deferred（reason=user_no_response 或等价值）」与「取消项 deferred（reason=user_cancelled）」，或在 FR-FLOW-003 中统一定义 reason 值域。",
+        "evidence_kind": "direct",
+        "evidence": "L123「未答项标为 deferred 且 reason=user_cancelled」 vs L289「用户未答、取消或回执缺失保持 deferred/unavailable」。",
+        "root_cause": "场景描述复用了取消语义，未与 FR-FLOW-003 的状态定义对齐。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 402,
+        "issue": "FR-CONTEXT-001 把效率观察基线固定为 `evidence/context-baseline.json` 中的 282170 字符，但三份材料中没有任何位置定义该文件由谁、在哪个 stage 生成；同时 AC-CONTEXT-001 收口合同「命令=unavailable(reason=deferred_to_build_plan)」，若命令仍为 unavailable，固定格式观察（packet_injected_chars、full_reread_count、baseline_chars 等）无法执行，基线引用成为悬空依赖。",
+        "recommendation": "在 spec 或交接节明确 context-baseline.json 的生产者、生成时机和内容 schema；或把基线数值与来源（decision-log F-034）直接写入 FR，去掉对未定义载体的依赖。",
+        "evidence_kind": "direct",
+        "evidence": "L402「固定基线为 evidence/context-baseline.json 中 convergence build-plan 282170 字符」；L813 AC-CONTEXT-001 命令=unavailable；全文检索不到 context-baseline.json 的生产者定义。",
+        "root_cause": "观察合同锁定了基线载体路径，却未给载体分配生产者与生成时点。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 40,
+        "issue": "来源与决策映射表中 FR-STATUS-001/002 行列出的决策为 D-201/D-203/D-204/D-402，未包含两个 FR 依据节自述的 D-202/D-207（L349/L355）；而 L46 声称「每条 FR 和 AC 都能回到本表」，此处回溯断链，下游无法经映射表核实状态分层决策来源。",
+        "recommendation": "在该行补充 D-202、D-207（可替换 D-203/D-204 中未直接支撑 STATUS 的条目）。",
+        "evidence_kind": "direct",
+        "evidence": "L40 行决策列「D-201、D-203、D-204、D-402」；L349 FR-STATUS-001 依据「D-202、D-207」；L355 FR-STATUS-002 依据「D-202、D-207」。",
+        "root_cause": "v4 轮增改 FR 依据后未同步来源映射表。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "minor",
+        "path": "materials/03-draft_spec.md",
+        "line": 363,
+        "issue": "FR-MATERIAL-001 新增「spec 中的 fr_id/ac_id 是跨材料稳定主键；plan 必须原样继承；tasks 每个 oracle 恰好映射一个当前 AC 且 ac_id/fr_id 必须在当前 spec/plan 中存在且不重复」等强约束，并直接进入 AC-MATERIAL-001 的通过/失败判据（L755）。D-302 的五项决定中没有任何 fr_id/ac_id 或跨材料键继承规则，该约束属于 spec 新增的验收要求，traceability 断裂。",
+        "recommendation": "确认该键约束是否为已确认需求：若是，在来源映射中补充对应决策条目；若否，标注为 build-plan 转译建议或回 make-decision 补确认，再保留在通过/失败判据中。",
+        "evidence_kind": "direct",
+        "evidence": "L363「fr_id/ac_id 是跨材料稳定主键；plan 必须原样继承…均判材料不完整」；materials/02-approved_decision.md L348 D-302 五项决定无 fr_id/ac_id 键约束；L755 AC-MATERIAL-001 通过判据含主键/继承/恰好映射。",
+        "root_cause": "材料 schema 转译时引入决策未定义的跨材料完整性规则。",
+        "provider": "kimi/coding"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "FR-BOUND-002要求材料检查不完整、provider不可用或独立审查失败进入缺口或incomplete投影，但FR-GAP-001只定义质量决议、发布派生、发布解释和收口预检四类缺口生产者；FR-STATUS-001又禁止独立审查直接写入quality_status，导致这些失败事实没有确定的canonical展示路径。",
+        "recommendation": "补充材料检查失败、review failed/unavailable、provider unavailable和unknown到gap_kind、状态、owner、consumer及阶段汇报的规范映射，并同步更新AC-BOUND-002、AC-GAP-001和AC-REVIEW-001。",
+        "evidence_kind": "direct",
+        "evidence": "FR-BOUND-002写明“必须进入缺口或 incomplete 投影”；FR-GAP-001仅列出四类既有producer；FR-STATUS-001写明独立审查结果除非被质量决议消费，否则不参与质量或发布派生。",
+        "root_cause": "失败事实记录与canonical缺口/状态投影分别定义，未建立跨模块映射。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "FR-REVIEW-001对unavailable的定义互相冲突：前文限定为通道不可用或请求未发起，后文又规定身份缺失、reviewer与executor相同或无法证明异源时review_result必须为unavailable；请求可能已经发起后才发现身份无效，dispatch_attempt与review_result因此无法确定性组合。",
+        "recommendation": "明确invalid_identity是发起前拒绝还是“dispatch_attempt=attempted、review_result=unavailable”的例外，并统一FR-REVIEW-001、FR-REVIEW-002、SCN-012及相关AC的转换和重试规则。",
+        "evidence_kind": "direct",
+        "evidence": "FR-REVIEW-001同时出现“unavailable只有在通道不可用或请求未能发起时成立”和“身份字段缺失或关系无法证明时review_result=unavailable、reason=invalid_identity”。",
+        "root_cause": "unavailable的来源分类没有统一优先级和状态转换。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "核心AC大量将命令和oracle保留为deferred_to_build_plan；FR-PREF-001还允许build-plan保留unavailable且用户仍可在缺口存在时close。规格没有规定哪些核心AC必须在tasks冻结前具备可执行fixture/oracle，也没有定义保留unavailable时的phase交接和验收结果，因而可以在没有可测试验收的情况下进入build-code。",
+        "recommendation": "增加明确的build-plan交接不变量：核心行为AC在tasks冻结前必须具备可执行命令、fixture和oracle；确实不可用的例外须逐项列出原因、owner、重试触发和“不接受/不宣称质量通过”的后果，并增加对应验收。",
+        "evidence_kind": "direct",
+        "evidence": "多个AC的收口合同均写明“命令=unavailable(reason=deferred_to_build_plan...)”和“oracle=unavailable(...)”；FR-PREF-001允许build-plan保留unavailable，同时允许用户继续close。",
+        "root_cause": "产品级AC延期转译没有最低可测试性门槛或逐项例外清单。",
+        "provider": "codex/luna"
+      },
+      {
+        "severity": "major",
+        "path": "materials/03-draft_spec.md",
+        "issue": "close包含commit、archive、merge、push、cleanup等多个不可逆动作，但physical_close_status只有not_closed/closed；FR-STATUS-002只定义pre-close和post-close，没有部分动作已完成、某一步失败后的剩余动作、重试幂等性或再次授权路径，无法覆盖部分close失败的恢复场景。",
+        "recommendation": "增加部分完成/动作失败的事实结构和恢复规则（已完成动作、待执行动作、失败原因、是否可安全重试及是否需要重新授权），或明确所有close动作的原子性与幂等性，并补充对应场景和AC。",
+        "evidence_kind": "direct",
+        "evidence": "SCN-007列出多项不可逆close动作；第8节状态契约仅允许physical_close_status为not_closed/closed；SCN-004和AC-STATUS-002没有部分动作失败的下一步或恢复判定。",
+        "root_cause": "多步骤物理close被压缩为二值状态，未定义失败恢复模型。",
+        "provider": "codex/luna"
+      }
+    ]
+  }
+}

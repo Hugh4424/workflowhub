@@ -1,0 +1,9 @@
+{
+  "attempt_id": "attempt-build-plan-20260907-continue",
+  "receipts": {
+    "stage_outcomes": "quality/evidence/stage-outcomes/build-plan/120a26dceaeac74056b6842668f7b1f7b840427275e569da60348ed2581a0d16.json",
+    "review": "quality/reviews/attempts/6aaa375f-36bb-40f4-af99-12e645454f3a/attempt.json",
+    "confirmation": "quality/confirmations/210d58879a013fb2100d7b90caef1e45776c055c59734e36362c80a9da83db03.json"
+  },
+  "finding_dispositions": []
+}

@@ -579,7 +579,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
         stage_completions: [],
         acceptance_results: [],
         expected_acceptance_ids: activeAcceptanceCriterionIds(materials["spec.md"] ?? ""),
-        verify_confirmation: null,
       });
     const statusGroups = deriveStatusGroups({ stage: values.stage, quality, productRelease, observations });
     return Object.freeze({
@@ -686,9 +685,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2), { services 
     if (input !== undefined && (typeof input !== "object" || Array.isArray(input))) {
       throw new TypeError("run input must be an object when supplied");
     }
-    const allowedRunFields = new Set(values.stage === "build-code"
-      ? ["receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts"]
-      : ["receipts", "attempt_id", "finding_dispositions", "contract_facts"]);
+    const allowedRunFields = new Set([
+      "receipts", "attempt_id", "acceptance_coverage", "finding_dispositions", "contract_facts",
+      "fallback_protocol", "review_budget", "user_reply",
+      ...(values.stage === "build-spec" || values.stage === "build-plan" ? ["decision_freeze"] : []),
+    ]);
     const suppliedInput = input ?? {};
     const unknownRunFields = Object.keys(suppliedInput).filter((key) => !allowedRunFields.has(key));
     if (unknownRunFields.length) throw new TypeError(`run input has unknown fields: ${unknownRunFields.join(", ")}`);

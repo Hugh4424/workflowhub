@@ -1,0 +1,15 @@
+# v6.2→v6.3 修复机器验证工件（v62 六 findings 处置后）
+日期：2026-09-06；范围：spec.md 全量
+validateSpecContentProfile: PASS
+validateAcceptanceDesignMinimum: PASS
+validateSpecClarifyAndDirectionFidelity: PASS
+validateSpecFailureConditions: PASS (0 errors)
+字段序 subject_id 第 1 字段: ✓
+algorithm_version 存在: ✓
+元组数组保序: ✓
+gap owner 字段: ✓
+hash preimage 确定性: ✓
+恢复不回灌主会话: ✓
+内嵌导航节强制结构: ✓
+取消映射谓词: ✓
+旧矛盾句清零: ✓ 已清

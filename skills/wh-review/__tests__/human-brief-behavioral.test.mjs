@@ -14,16 +14,16 @@ describe("v2 human boundary summaries", () => {
     }
   });
 
-  it("keeps verification confirmation separate from irreversible close authorization", () => {
+  it("keeps automatic verification separate from irreversible close authorization", () => {
     const verifyCode = readStage("verify-code");
     const steps = readJson("workflows/verify-code/steps.json").steps;
-    const confirmation = steps.find(({ step_slug }) => step_slug === "approve-verification");
+    const finalize = steps.find(({ step_slug }) => step_slug === "finalize-code-review");
     const handoff = steps.find(({ step_slug }) => step_slug === "publish-verification-result");
 
-    expect(confirmation.observable_result).toMatch(/确认[\s\S]*(?:不等于|不授权)[\s\S]*close/i);
+    expect(finalize.observable_result).toMatch(/自动|不再等待重复人工确认/i);
     expect(handoff.observable_result).toMatch(/close[\s\S]*(?:独立|separate)/i);
     expect(steps.some(({ step_slug }) => /authorize|commit|push|merge|archive|cleanup/i.test(step_slug))).toBe(false);
-    expect(verifyCode).toMatch(/确认[\s\S]{0,160}不授权[\s\S]{0,160}(?:commit|push|merge|archive|cleanup)/i);
+    expect(verifyCode).toMatch(/不再要求.*确认[\s\S]{0,260}(?:close|commit|push|merge|archive|cleanup)/i);
   });
 
   it("review records preserve real provider outcomes and provenance", () => {

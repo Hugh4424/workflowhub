@@ -75,7 +75,7 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | verify-code | 7 | run-final-code-check-and-handoff | handoff | run final check and preserve unknown |
 | verify-code | 8 | publish-code-review-fact | review facts | retain code review facts |
 | verify-code | 9 | handoff-code-review | handoff | explain code review conclusion and remaining risks |
-| verify-code | 10 | approve-verification | confirmation | record actual user conclusion |
+| verify-code | 10 | finalize-code-review | review | automatically record current code-review conclusion |
 | verify-code | 11 | publish-verification-result | handoff | close remains separate authorization |
 | verify-code | 12 | stage-reflection | on-stage-end | write judgment-layer reflection; failure is recorded and non-blocking |
 

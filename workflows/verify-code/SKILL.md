@@ -1,10 +1,17 @@
 ---
 name: verify-code
 description: 对当前实现做一次高质量代码审查，检查真实消费者、生命周期、安全、失败边界和测试强度。
-version: 5.1.0
+version: 5.2.0
 ---
 
 # Verify Code：代码审查
+
+## 统一回退协议
+
+五个正式 stage 共用 `runtime/stage/stage-content-contracts.mjs` 的
+`validateFallbackProtocol`。实现级问题留在当前 stage 修复；规格歧义回
+`build-spec`；方向级问题回 `make-decision` 做增量决策；材料缺口回对应
+owner；环境不可用只记录 attempt。错配只让正式完成事实保持 `incomplete`，保留同 task 修复，禁止整阶段重跑；不新增 stage、public command、store 或 gate。
 
 ## 阶段末遗漏披露
 
@@ -32,7 +39,7 @@ verify-code 只审查代码，不做材料审计、AC 覆盖审计或证据树�
 - 是否新增了重复控制面、无 consumer 的抽象或不必要的兼容分支；
 - 测试是否走真实入口、关键分支、外部状态和失败边界，而不是只让 mock 或绿色命令通过。
 
-`decision-log.md`、`spec.md`、`plan.md`、`tasks.md`由上游 stage 负责形成和收尾。verify-code 可以把它们作为背景理解代码意图，但不重新检查其完整性，不补写它们，不要求 AC、测试 receipt、verification receipt、requirement replay 或 finding-disposition receipt。当前代码审查结束后仍必须取得一次绑定当前 task、stage、subject、材料身份和快照的真实用户确认；不能从 review、测试或授权推断同意。
+`decision-log.md`、`spec.md`、`plan.md`、`tasks.md`由上游 stage 负责形成和收尾。verify-code 可以把它们作为背景理解代码意图，但不重新检查其完整性，不补写它们，不要求 AC、测试 receipt、verification receipt、requirement replay 或 finding-disposition receipt。当前代码审查结束后自动记录绑定当前 task、stage、subject、材料身份和快照的结果；不能从 review、测试或授权推断代码质量，缺失或不可用仍保持不完整。
 
 材料问题应在发现它的 stage 由 `spec-analyze` 和该 stage 自己修复；verify-code 发现材料疑点时只报告“上游材料风险”，不把它变成最后阶段的代码门禁。
 
@@ -80,10 +87,11 @@ review 结果只是质量事实，不是继续工作的许可证。缺质量事�
 3. **异源代码审查一次**：只审查当前实现和未决代码风险，一次 broker 请求；不审查 receipt、AC coverage、task completion、历史 lineage 或材料完整性。
 4. **主 Agent 收尾一次**：处理这一次异源 findings，跑必要的受影响检查或真实入口 smoke；不再开启第三轮 review，不为了 verify-code 重跑全量测试。
 
-收尾后向用户说明当前代码审查结论，并通过现有 `confirm` 入口取得真实
-verify-code 确认。确认只表达用户是否接受当前代码审查结果，不授权
-commit、push、merge、archive、cleanup 或 close；拒绝、过期、错绑和缺失
-确认保持阶段不完整，但允许同一 task 继续修复。
+收尾后直接由当前 WorkflowHub session 发布绑定当前 task、stage、材料和快照的
+代码审查结果。verify-code 不再要求用户重复确认同一份代码审查结论，也不把
+`human_confirmation` 作为阶段完成或 product release 的前置条件。`unavailable`、
+未修复 finding、过期或错绑证据仍保持 `incomplete`，但不冻结同一 task 的继续修复。
+commit、push、merge、archive、cleanup 和 close 仍只由独立 close-plan 授权流程处理。
 
 ## 范围边界
 
@@ -107,6 +115,6 @@ Before submission, optionally run `stage-runtime.mjs run --action=preflight --st
 
 ## 阶段末交接
 
-用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和用户确认说明“现在交付什么”。
+用大白话说明：检查了哪些代码入口和 consumer、修了哪些代码问题、异源 review 有哪些 findings、每条 finding 如何处置、必要检查的真实结果、剩余代码风险和上游材料风险。审查绑定的旧快照只说明“当时看了什么”；修复、当前检查和阶段结果说明“现在交付什么”。
 
-不要求用户重复 Talk/Grill，不要求用户补交 verify-code 证据；只要求用户对当前代码审查结论作一次真实确认。这个确认不是 close 授权，也不授权 commit、push、merge、archive 或 cleanup。
+不要求用户重复 Talk/Grill，不要求用户补交 verify-code 证据，也不要求对当前代码审查结论再次确认。阶段交接只报告当前审查事实、质量状态和剩余风险；close 授权仍是独立动作。

@@ -364,7 +364,7 @@ export function writeStageOutcomeFixture({ task, kernel, artifacts, workspace, c
         stage,
         snapshot_tree: snapshot.tree,
         material_revision: revision,
-        step_slug: "approve-verification",
+        step_slug: "finalize-code-review",
         skill_id: "dsh-code-review",
         ...(qualityReview ? {
           quality_review_ref: qualityReview.ref ?? qualityReview.resultRef,

@@ -28,7 +28,7 @@
 | `build-spec` | 原始需求、decision-log | `spec.md` | build-plan 的行为规格 |
 | `build-plan` | 原始需求、decision-log、spec | `plan.md`、`tasks.md` | build-code 的实施任务 |
 | `build-code` | 四份材料、真实工作区 | 实现、测试、review、AC 证据 | verify-code 的当前实现 |
-| `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 用户确认；随后才谈 close |
+| `verify-code` | 当前实现、真实 consumer、相关测试上下文、代码风险 | 一次代码 review findings 和处置 | 自动记录结果；随后单独谈 close 授权 |
 
 每个 stage 还会产生既有 `quality/facts/`、`quality/evidence/`、`quality/tests/`、
 `quality/reviews/results/` 或 `quality/reviews/attempts/`，以及 stage outcome 事实。前四 stage 的 `spec-analyze` 结果由现有 stage
@@ -39,7 +39,7 @@ publication 原子写入对应的 quality fact 和 acceptance evidence。它们�
 
 四个视角只从当前事实即时派生：`work_progress` 看能否继续修复，`stage_quality` 看本阶段
 质量是否闭合，`product_release` 由 `completion-predicates.mjs` 的
-`deriveProductRelease()` 读取五阶段 current completion、逐 AC 结果和 verify-code 当前确认，
+`deriveProductRelease()` 读取五阶段 current completion、逐 AC 结果和 verify-code 当前代码审查结果，
 同时接收批准 spec 的完整适用 AC ID 集合；缺失、重复、意外、非 current 或身份未绑定的输入
 只能得到 `not_released`，延期/不适用项不能被猜成通过。
 `physical_delivery` 只看 close 的真实物理结果。它们不是新状态机，也不是继续工作的许可证。
@@ -313,8 +313,8 @@ push、merge、cleanup 不在 build-code 中自动执行。
 7. `run-final-code-check-and-handoff`：做必要的最终代码检查并交接剩余代码风险。
 8. `publish-code-review-fact`：写入当前代码 review 质量事实。
 9. `handoff-code-review`：用大白话交接代码入口、consumer、修复和风险。
-10. `approve-verification`：整理一次代码审查结论并取得 verify-code 确认；不补材料、不补 AC、不补证据树。
-11. `publish-verification-result`：汇报代码审查结果并在 close 前停下。
+10. `finalize-code-review`：自动记录绑定当前 task、材料和快照的代码审查结论；不再等待重复人工确认，不补材料、不补 AC、不补证据树。
+11. `publish-verification-result`：汇报代码审查结果、质量缺口和剩余风险并在 close 前停下。
 
 ### 产物、完成与失败边界
 

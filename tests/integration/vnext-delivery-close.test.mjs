@@ -260,7 +260,7 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDispo
   ]) {
     if (omitSubjects.includes(subject)) continue;
     if (subject === "human_confirmation") {
-      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code", reply_text: "fixture accepted verify-code", step_slug: "approve-verification" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code", reply_text: "fixture accepted verify-code", step_slug: "finalize-code-review" });
       continue;
     }
     const ref = `quality/evidence/verify-code/${subject}.json`;
@@ -273,8 +273,8 @@ function fixture({ testVariant = "valid", reviewStatus = "recorded", reviewDispo
   }
   if (duplicateHumanConfirmation) {
     if (!omitSubjects.includes("human_confirmation")) {
-      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-old", reply_text: "fixture accepted verify-code old", step_slug: "approve-verification" });
-      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new", reply_text: "fixture accepted verify-code new", step_slug: "approve-verification" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-old", reply_text: "fixture accepted verify-code old", step_slug: "finalize-code-review" });
+      kernel.publishHumanConfirmation("verify-code", { decision: "accepted", subject_ref: "verify-code-new", reply_text: "fixture accepted verify-code new", step_slug: "finalize-code-review" });
     }
   }
   seedProductReleasePrerequisites({ task, kernel, artifacts, snapshot });
@@ -307,6 +307,20 @@ describe("vNext formal delivery close", () => {
     expect(result.plan.delivery).toMatchObject({
       task_commit: state.snapshot.commit, target_baseline: targetBaseline, remote_target_baseline: targetBaseline,
     });
+  });
+
+  it("prepares close without a verify-code human confirmation", () => {
+    const state = fixture({ omitSubjects: ["human_confirmation"] });
+    const prepared = prepareDeliveryClosePlan({
+      task: state.task,
+      kernel: state.kernel,
+      delivery: {
+        remote: "origin", task_branch: `task/WorkflowHub/${state.taskId}`, target_branch: "main",
+        task_commit: state.snapshot.commit, spec_source_path: `specs/${state.taskId}`,
+        spec_archive_path: `specs/archive/${state.taskId}`,
+      },
+    });
+    expect(prepared.plan.delivery.quality_gaps.join("\n")).not.toMatch(/human_confirmation|verify_confirmation/);
   });
 
   it("materializes a dirty delivery snapshot for a fresh close process", () => {

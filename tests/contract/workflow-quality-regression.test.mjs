@@ -72,7 +72,9 @@ describe("workflow quality regression and historical replay", () => {
       expect(analyzer.completion_evidence.some((item) => item.kind === "stage_outcome")).toBe(true);
     }
     const verify = json("workflows/verify-code/steps.json");
-    expect(verify.steps.find((step) => step.step_slug === "approve-verification")).toBeTruthy();
+    expect(verify.steps.find((step) => step.step_slug === "finalize-code-review")).toMatchObject({
+      completion_evidence: expect.arrayContaining([{ kind: "review", uri_or_path: "quality/reviews/results/" }]),
+    });
     expect(verify.steps.find((step) => step.step_slug === "stage-end-spec-analyze")).toBeUndefined();
   });
 

@@ -1,0 +1,25 @@
+{
+  "stage": "build-spec",
+  "task_id": "workflowhub-close-readiness-governance-20260906",
+  "purpose": "真实 freeze-spec 结构校验事实（非语义通过、非阶段完成）",
+  "command": "node --input-type=module（主会话直接调用 runtime/stage/stage-content-contracts.mjs 正确签名）",
+  "started_at_ms": 1788707271330,
+  "ended_at_ms": 1788707271405,
+  "duration_ms": 76,
+  "materials": {
+    "spec.md": {"sha256": "3b43984ef13dd50096a6e45331ea27986c5f7ac100cb0df662ea183c4a477c0d", "bytes_hint": "199063"},
+    "decision-log.md": {"sha256": "d2bbf7f058b45d9af182bebea415070ab47eca4e81fef4fb1617aeaae3a07f15", "bytes_hint": "160887"}
+  },
+  "results": {
+    "validateSpecContentProfile": {"ok": true, "errors": []},
+    "validateAcceptanceDesignMinimum": {"ok": true, "errors": []},
+    "validateSpecClarifyAndDirectionFidelity": {"ok": true, "errors": [], "clarify": {"trigger": false, "reason": "no material ambiguity detected by contract check", "open_direction_changing_questions": 0}},
+    "validateSpecFailureConditions": {"len": 0, "errors": []}
+  },
+  "exit_code": 0,
+  "honest_limits": [
+    "四项结构校验只证明文本结构事实，不证明语义独立审查通过",
+    "freeze-spec 今日尚未以正式 stage outcome 发布；本文件仅记录结构校验证据",
+    "固定向量、补救审查、阶段末 spec-analyze、正式发布仍待完成"
+  ]
+}

@@ -1,0 +1,12 @@
+# v6.1→v6.2 修复机器验证工件（FND-V61-08 响应）
+日期：2026-09-06；范围：spec.md 全量；搜索方式：Node regex 全文件
+GREEN 强制 reject 残留-1: zero-match(✓)
+GREEN 强制 reject 残留-2: zero-match(✓)
+GREEN 强制 reject 残留-3: zero-match(✓)
+collision 旧判定残留: zero-match(✓)
+四段弱化残留（适用 AC）: zero-match(✓)
+
+validateSpecContentProfile: PASS
+validateAcceptanceDesignMinimum: PASS
+validateSpecClarifyAndDirectionFidelity: PASS
+validateSpecFailureConditions: PASS (0 errors)

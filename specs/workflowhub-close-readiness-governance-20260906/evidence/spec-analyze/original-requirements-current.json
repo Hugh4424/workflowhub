@@ -1,0 +1,172 @@
+{
+  "task_id": "workflowhub-close-readiness-governance-20260906",
+  "purpose": "原始需求与决定来源的数据提取索引；供主会话稍后逐条实际语义对照，不是 spec-analyze 执行或质量裁决。",
+  "source": {
+    "worktree": "/Users/Hugh/Hugh/Project/workflowhub-workflowhub-close-readiness-governance-20260906",
+    "path": "specs/workflowhub-close-readiness-governance-20260906/decision-log.md",
+    "sha256": "d2bbf7f058b45d9af182bebea415070ab47eca4e81fef4fb1617aeaae3a07f15",
+    "hash_basis": "decision-log.md 实际文件字节的 SHA-256；不是 git commit 或批准状态判断",
+    "requirements_lines": [11, 21],
+    "decision_mapping_lines": [93, 598]
+  },
+  "extraction_notes": [
+    "original_requirement_text 与 source_excerpt 分别逐字保留原始需求表第 2、3 列；保留 Markdown 与用户引文中的省略号，不补写不存在的原话。",
+    "related_decision_ids 为原始需求表明确 D 引用与 D 条目 requirement_ids 的并集；两种映射分别保留，不沿 derived_from 推断新的直接需求归属。",
+    "原表处理状态不复制为 coverage 结果；未读取 spec.md、plan.md、tasks.md，未作语义覆盖判断，未生成场景或验证判据。",
+    "边界仅摘录 decision 原文。共享排除边界不人为分摊到单条 R；延期表实际条目完整保留，已消除条目不冒充有效延期。",
+    "本文件是非权威、可再生的执行证据索引；owner/consumer=委派主会话的逐条语义对照；可由同一来源重新提取替换或在对照结束后删除，不替代四份当前材料。"
+  ],
+  "requirements": [
+    {
+      "original_id": "R-001",
+      "source_line": 11,
+      "original_requirement_text": "最近执行 WorkflowHub 任务时，任务执行到最后都有问题：verify-code 时会发现一大堆问题导致任务无法继续，最终只能进行风险 close",
+      "source_excerpt": "用户原话：\"我最近在执行workflowhub任务的时候，发现这些任务执行到最后都有一些问题，verify-code时会发现一大堆问题导致任务无法继续，最终只能进行风险close\"",
+      "table_decision_ids": ["D-001", "D-101", "D-202"],
+      "decision_requirement_ids_backlinks": ["D-001", "D-202", "D-206"],
+      "related_decision_ids": ["D-001", "D-101", "D-202", "D-206"]
+    },
+    {
+      "original_id": "R-002",
+      "source_line": 12,
+      "original_requirement_text": "检查这些任务的过程以及总结文件，找到 workflowhub 出了什么问题",
+      "source_excerpt": "用户原话：\"请检查这些任务的过程以及'/Users/Hugh/Downloads/workflowhub-m17-missing-stage-close-analysis-20260905.md'的总结文件，帮我看看workflowhub是出了什么问题？\"",
+      "table_decision_ids": ["D-001", "D-101"],
+      "decision_requirement_ids_backlinks": ["D-001", "D-101"],
+      "related_decision_ids": ["D-001", "D-101"]
+    },
+    {
+      "original_id": "R-003",
+      "source_line": 13,
+      "original_requirement_text": "必须按标准 WorkflowHub 流程执行：先创建 worktree、从 make-decision 开始、不跳阶段、不依赖 build-spec 补需求",
+      "source_excerpt": "用户原话：\"请按标准 WorkflowHub 开始这个任务吧，先创建worktree，然后从 make-decision 开始，不要跳阶段，也不要依赖 build-spec 补需求\"",
+      "table_decision_ids": ["D-002", "D-402"],
+      "decision_requirement_ids_backlinks": ["D-002", "D-402"],
+      "related_decision_ids": ["D-002", "D-402"]
+    },
+    {
+      "original_id": "R-004",
+      "source_line": 14,
+      "original_requirement_text": "在 make-decision 过程中与用户一起仔细梳理：完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项",
+      "source_excerpt": "用户原话：\"先基于原始需求，在make-decision的过程中和我一起仔细梳理完整用户流程、页面范围、数据状态、成功/失败边界、非目标和延期项\"",
+      "table_decision_ids": ["D-203", "D-204"],
+      "decision_requirement_ids_backlinks": ["D-203", "D-204", "D-205", "D-207"],
+      "related_decision_ids": ["D-203", "D-204", "D-205", "D-207"]
+    },
+    {
+      "original_id": "R-005",
+      "source_line": 15,
+      "original_requirement_text": "Talk 用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接",
+      "source_excerpt": "用户原话：\"Talk 请用大白话说明选项、后果和风险；decision-log 记录原始需求、关键事实、选择、理由和延期交接\"",
+      "table_decision_ids": ["D-401"],
+      "decision_requirement_ids_backlinks": ["D-401"],
+      "related_decision_ids": ["D-401"]
+    },
+    {
+      "original_id": "R-006",
+      "source_line": 16,
+      "original_requirement_text": "总结文件里给出的推荐改造方案（canonical gap/current selector/close-readiness 预检/状态分层等）是否作为本任务方向，由 make-decision 与用户收敛后确认",
+      "source_excerpt": "来源：总结文件\"推荐实施顺序\"一段；建议，非已确认需求",
+      "table_decision_ids": ["D-201", "D-202", "D-203", "D-204"],
+      "decision_requirement_ids_backlinks": ["D-201", "D-202", "D-203", "D-204", "D-205", "D-206", "D-207", "D-402"],
+      "related_decision_ids": ["D-201", "D-202", "D-203", "D-204", "D-205", "D-206", "D-207", "D-402"]
+    },
+    {
+      "original_id": "R-007",
+      "source_line": 17,
+      "original_requirement_text": "评估 requirement-convergence-depth 任务（make-decision 强升级）的实现效果",
+      "source_excerpt": "用户原话：\"我们之前一起做了...把make-decision阶段做了很强的更新升级，请你基于当前make-decision的执行情况，帮我看看这个任务实现的效果如何？\"",
+      "table_decision_ids": [],
+      "decision_requirement_ids_backlinks": ["D-301"],
+      "related_decision_ids": ["D-301"],
+      "other_table_source_refs": ["F-031~F-033", "research-Q1"]
+    },
+    {
+      "original_id": "R-008",
+      "source_line": 18,
+      "original_requirement_text": "诊断 build-spec/build-plan 阶段 token 消耗巨大（\"好几亿\"）的根因，并给出优化；评估是否可做 make-decision 式上下文管理与子代理派发优化",
+      "source_excerpt": "用户原话：\"到了build-spec和build-plan阶段缺花费了大量的时间和token，一个任务的spec和plan阶段要花费好几亿token...为什么会这样？应该如何优化？是不是也可以进行类似make-decision一样的上下文管理和子代理派发优化？\"",
+      "table_decision_ids": [],
+      "decision_requirement_ids_backlinks": ["D-301", "D-304"],
+      "related_decision_ids": ["D-301", "D-304"],
+      "other_table_source_refs": ["F-034~F-036", "research-Q2", "T-014~T-020"]
+    },
+    {
+      "original_id": "R-009",
+      "source_line": 19,
+      "original_requirement_text": "评估\"高智力模型做 spec/plan 设计、低智力模型做 code/verify 执行\"思路的效果；**用户澄清后真实含义**=四材料（decision-log/spec/plan/tasks）是否足够清晰、专业、详细，足以让低智力模型在 build-code/verify-code 也保证交付质量",
+      "source_excerpt": "用户原话1：\"我目前的workflowhub流程主要靠make-decision阶段把需求彻底确定，然后靠着高智力模型在build-spec和build-plan阶段设计详细的执行方案，后面build-code和verify-code阶段派出智力一般的模型来执行...请帮我看看目前这个思路执行的效果如何？\"；用户原话2（Q4 澄清）：\"我只是让你分析一下目前decision-log、spec、plan、tasks是否足够清晰专业详细，足够后面build-code和verify-code使用低智力模型也能保证交付质量，不是让你记录和建议各个stage的模型使用。\"",
+      "table_decision_ids": [],
+      "decision_requirement_ids_backlinks": ["D-301", "D-302"],
+      "related_decision_ids": ["D-301", "D-302"],
+      "other_table_source_refs": ["F-037~F-039", "research-Q3", "T-017~T-018"]
+    },
+    {
+      "original_id": "R-010",
+      "source_line": 20,
+      "original_requirement_text": "三问分析结论作为新需求放入当前任务一起开发；且新需求必须按 make-decision 完整流程收敛（Talk→审查→辩论→Grill→确认），保持与既有 verify-code 质量问题治理同等质量",
+      "source_excerpt": "用户原话：\"请基于上述三个问题帮我仔细分析，可以从make-decision第一步开始，重新收敛一些新需求，放在当前任务的里一起开发\"+\"我希望这些新需求也能按照make-decision的步骤从talk到审查到grill都完整进行一遍，保证这些需求能和之前的verify-code质量问题保持一样的质量\"",
+      "table_decision_ids": [],
+      "decision_requirement_ids_backlinks": ["D-301", "D-302", "D-303", "D-304", "D-305", "D-306", "D-507"],
+      "related_decision_ids": ["D-301", "D-302", "D-303", "D-304", "D-305", "D-306", "D-507"],
+      "other_table_source_refs": ["R-007~R-009"]
+    },
+    {
+      "original_id": "R-011",
+      "source_line": 21,
+      "original_requirement_text": "本次 build-spec 调研暴露的\"阶段治理闭环\"缺口必须在 make-decision 中作为新需求收敛，并在当前任务中实现：build-spec/build-plan 应基于冻结 decision-log 高效设计，避免重复做决策收敛",
+      "source_excerpt": "用户原话：\"好的，基于调研出的这些问题，我们先回到make-decision阶段，看看是否需要新增一些改进需求，避免以后build-spec和build-plan继续浪费时间做决策收敛的工作，让build-spec和build-plan能更高效的基于冻结的decision-log进行规格和计划设计。这次调研发现的问题，我们都在make-decision中想办法解决或设计新的需求，在当前任务中实现！\"",
+      "table_decision_ids": [],
+      "decision_requirement_ids_backlinks": ["D-501", "D-502", "D-503", "D-504", "D-505", "D-506", "D-507"],
+      "related_decision_ids": ["D-501", "D-502", "D-503", "D-504", "D-505", "D-506", "D-507"],
+      "other_table_source_refs": ["第二轮 step 记录（本文件）", "N-008/N-009", "T-025~T-035"]
+    }
+  ],
+  "decision_source_mapping": [
+    {"id":"D-001","lines":[93,109],"requirement_ids":["R-001","R-002"],"derived_from":[]},
+    {"id":"D-002","lines":[113,129],"requirement_ids":["R-003"],"derived_from":["D-001"]},
+    {"id":"D-101","lines":[135,151],"requirement_ids":["R-002"],"derived_from":["D-001"]},
+    {"id":"D-201","lines":[157,173],"requirement_ids":["R-006"],"derived_from":["D-001"]},
+    {"id":"D-202","lines":[177,193],"requirement_ids":["R-001","R-006"],"derived_from":["D-201"]},
+    {"id":"D-203","lines":[197,213],"requirement_ids":["R-006","R-004"],"derived_from":["D-201"]},
+    {"id":"D-204","lines":[217,233],"requirement_ids":["R-004","R-006"],"derived_from":["D-201"]},
+    {"id":"D-205","lines":[237,253],"requirement_ids":["R-006","R-004"],"derived_from":["D-201"]},
+    {"id":"D-206","lines":[257,273],"requirement_ids":["R-001","R-006"],"derived_from":["D-201"]},
+    {"id":"D-207","lines":[277,293],"requirement_ids":["R-004","R-006"],"derived_from":["D-201"]},
+    {"id":"D-401","lines":[299,315],"requirement_ids":["R-005"],"derived_from":["D-201"]},
+    {"id":"D-402","lines":[319,335],"requirement_ids":["R-003","R-006"],"derived_from":["D-201"]},
+    {"id":"D-301","lines":[341,357],"requirement_ids":["R-007","R-008","R-009","R-010"],"derived_from":["D-001","D-002"]},
+    {"id":"D-302","lines":[361,377],"requirement_ids":["R-009","R-010"],"derived_from":["D-301"]},
+    {"id":"D-303","lines":[381,397],"requirement_ids":["R-010"],"derived_from":["D-301"]},
+    {"id":"D-304","lines":[401,417],"requirement_ids":["R-008","R-010"],"derived_from":["D-301"]},
+    {"id":"D-305","lines":[421,437],"requirement_ids":["R-010"],"derived_from":["D-301"]},
+    {"id":"D-306","lines":[441,457],"requirement_ids":["R-010"],"derived_from":["D-301"]},
+    {"id":"D-501","lines":[463,479],"requirement_ids":["R-011"],"derived_from":["D-002"]},
+    {"id":"D-502","lines":[483,499],"requirement_ids":["R-011"],"derived_from":["D-002","D-303"]},
+    {"id":"D-503","lines":[503,519],"requirement_ids":["R-011"],"derived_from":["D-002"]},
+    {"id":"D-504","lines":[523,539],"requirement_ids":["R-011"],"derived_from":["D-303"]},
+    {"id":"D-505","lines":[543,559],"requirement_ids":["R-011"],"derived_from":["D-304"]},
+    {"id":"D-506","lines":[563,579],"requirement_ids":["R-011"],"derived_from":["D-002","D-502"]},
+    {"id":"D-507","lines":[582,598],"requirement_ids":["R-010","R-011"],"derived_from":["D-301","D-502","D-506"]}
+  ],
+  "shared_exclusion_boundaries": [
+    {"source_line":82,"text":"不改历史任务记录（只读案例）；不重放真实外部任务验证（另立后续任务）；不做页面/前端 UI（本次为 CLI/JSON 展示改进）；不改宪法 close 三义；不新增公共入口/新 store/持久 selector 对象/新 gate/第五材料；外部 provider 不可用时如实记录 unavailable，不伪造通过；不做完整状态矩阵（归 build-spec 转译）；不做完整端到端流程设计（方向卡只补骨架与展示位表）；不\"每阶段重跑预检\"。"},
+    {"source_line":83,"text":"**新增非目标（新需求确认）**：不做 token 度量机制（用户自见用量，T-015）；不做模型-阶段强制绑定/模型使用记录机制（T-017 澄清，模型分工仅背景事实）；不做\"task_dir 直读\"审查改造（T-023a，破坏冻结链/零路径暴露/可复现）；不做审查\"瘦身/切片实验\"（机制已存在 F-041，T-023a）；不改五阶段顺序；make-decision 执行规范不动（已有）；历史材料不回溯迁移（仅新生成材料适用新模板）。"},
+    {"source_line":84,"text":"**新增非目标（第二轮确认）**：不新增 token 预算预警机制（保持 T-015；仅做 provider 已返回 usage 的轻量落盘与 unavailable 如实标注）；\"增量决策\"不重跑既有已确认决策的完整 Talk/审查/辩论/Grill 序列（仅针对新缺口做一次真实问答+一条 D 决策记录）；不改变\"记录事实不阻断\"总原则（冻结校验与路由属于阶段性完成条件检查，不新增公共 gate 或第二状态机）。"},
+    {"source_line":546,"decision_id":"D-505","text":"不做 token 预算/计费机制（维持 T-015 精神）；观测两层：①provider usage（input/output/cached tokens、duration、失败原因）有则落盘到 review attempt 事实、无则标 unavailable（回答 review 调用消耗）；②字符级代理指标=主会话 read 重读轮次、阶段内子代理输入字节、材料包字节（回答主会话/子代理/材料包浪费在哪）；成功边界不承诺 token 总量下降，无证据如实写\"未证明下降\""},
+    {"source_line":586,"decision_id":"D-507","text":"在当前任务实现各开发 phase 的用户验收事实记录：接受、拒绝、暂缓或交互/回执不可用，以及对应下一步恢复建议。复用既有确认/交互载体，不新增独立账本、store、自动阻断或第二状态机；不改变产品发布条件或 close 语义。用户未答不得推断接受，风险接收不能替代验收。事实记录不等同逐 AC 验证通过。"}
+  ],
+  "deferred_boundaries": [
+    {"id":"DEFERRED-001","source_line":969,"text":"预检载体形态：spec-analyze lens 复用 vs 新只读 profile","trigger_or_consequence":"需在 build-spec 验证与现有只读分析通道兼容性；不兼容则按控制面登记规则（唯一 consumer/owner/删除条件）","handoff":"build-spec 验证，owner=build-spec"},
+    {"id":"DEFERRED-002","source_line":970,"text":"phase 精确边界（每 phase 交付物/切换条件）","trigger_or_consequence":"build-plan 锁定","handoff":"build-plan，owner=build-plan"},
+    {"id":"DEFERRED-003","source_line":971,"text":"真实任务重放验证（M17/T09 同型）","trigger_or_consequence":"依赖外部 provider/宿主","handoff":"另立后续任务，owner=用户"},
+    {"id":"DEFERRED-004","source_line":972,"text":"完整状态矩阵值域/转换/过期表；夹具与 oracle 明细；9 字段 schema 细节","trigger_or_consequence":"实现契约（方向期语义已锁定）","handoff":"build-spec/build-plan 转译"},
+    {"id":"DEFERRED-006","source_line":973,"text":"四阶段统一上下文机制（build-code/verify-code 也装执行模型+导航节）","trigger_or_consequence":"先 spec+plan 验证效果（T-023/Q7）","handoff":"后续任务，owner=用户"},
+    {"id":"DEFERRED-008","source_line":974,"text":"simplicity-guard/plan-eng-review 的\"provider packet lens\"路径与 build-plan 直接调用位置对齐","trigger_or_consequence":"执行模型移植时需核实实际执行路径（F-043 标记）","handoff":"build-spec/build-plan 实施期验证，owner=build-spec"},
+    {"id":"DEFERRED-009","source_line":975,"text":"非配对行为任务的 reject 语义扩展（当前仅表达位不强制，是否对纯正向任务豁免）","trigger_or_consequence":"需真实任务使用后评估","handoff":"dogfood 后评估，owner=用户（方向卡 v4.3）"}
+  ],
+  "source_boundary_notes": [
+    {"lines":[78,894,1090],"text":"源文件 L78 仍提及 DEFERRED-005；L894 记录 DEFERRED-005 消除，L1090 记录 DEFERRED-005/007 已消除。保留来源差异，不将其新增为有效延期，不修改源文。"},
+    {"lines":[83,546],"text":"源文件非目标节保留不做 token 度量机制，D-505 明确两层轻量观测与非承诺边界；同时提供原文，不在提取阶段裁决其语义。"}
+  ]
+}

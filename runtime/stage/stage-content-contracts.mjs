@@ -52,6 +52,294 @@ function object(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+const FREEZE_PACKET_COVERAGE = Object.freeze([
+  "user_flow",
+  "data_states",
+  "success_failure_boundaries",
+  "non_goals",
+]);
+const FINDING_CLASSIFICATIONS = Object.freeze([
+  "direction_change",
+  "spec_ambiguity",
+  "implementation_defect",
+  "invalid_finding",
+]);
+const DIRECTION_DIMENSIONS = new Set(["direction_change", "product_direction", "scope_change", "acceptance_boundary_change"]);
+
+function normalizedValue(value) {
+  return typeof value === "string" ? value.normalize("NFC").trim().replace(/\s+/g, " ") : value;
+}
+
+function decisionFreezeModel(value) {
+  if (object(value)) return value;
+  if (typeof value !== "string") return {};
+  const active = value.match(/### M6[\s\S]*?(?=\n### |\n## |$)/i)?.[0] ?? value;
+  const status = active.match(/approval_binding\s*(?:status\s*)?(?::|：|已)?\s*([a-z_]+)/i)?.[1]?.toLowerCase() ?? null;
+  const confirmationSection = value.match(/##\s*最终确认[\s\S]*?(?=\n##\s|$)/i)?.[0] ?? "";
+  const step11Section = value.match(/##\s*step 11[\s\S]*?(?=\n##\s|$)/i)?.[0] ?? "";
+  const confirmationStatus = /(?:状态|status)\s*[:：]\s*\**accepted\b/i.test(confirmationSection) ? "accepted" : null;
+  const step11Status = step11Section.match(/(?:状态|status)\s*[:：]\s*\**(accepted|pending|rejected)\b/i)?.[1]?.toLowerCase() ?? null;
+  const sectionBinding = (section, sectionStatus) => ({
+    status: sectionStatus,
+    material_revision: section.match(/material_revision\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    snapshot_tree: section.match(/snapshot_tree\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+  });
+  const coverage = FREEZE_PACKET_COVERAGE.filter((item) => {
+    const aliases = {
+      user_flow: /用户流程|user.?flow/i,
+      data_states: /数据状态|data.?states/i,
+      success_failure_boundaries: /成功[／/]失败边界|成败边界|success.?failure/i,
+      non_goals: /非目标|non.?goals?/i,
+    };
+    return aliases[item].test(active);
+  });
+  const unresolved = (active.match(/(?:方向级|direction)[^\n]*(?:未决|open|unresolved)/gi) ?? []);
+  const binding = {
+    status,
+    decision_id: active.match(/decision_id\s*[=:：]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    material_revision: active.match(/material_revision\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+    snapshot_tree: active.match(/snapshot_tree\s*[=:]\s*([A-Za-z0-9._-]+)/i)?.[1] ?? null,
+  };
+  return {
+    approval_binding: binding,
+    final_confirmation: sectionBinding(confirmationSection, confirmationStatus),
+    step_11: sectionBinding(step11Section, step11Status),
+    unresolved_direction_questions: unresolved,
+    freeze_packet: { coverage },
+  };
+}
+
+function freezeSource(value) {
+  if (!object(value)) return { status: null };
+  return {
+    status: typeof value.status === "string" ? value.status.toLowerCase() : null,
+    decision_id: value.decision_id ?? value.decisionId ?? null,
+    material_revision: value.material_revision ?? value.materialRevision ?? null,
+    snapshot_tree: value.snapshot_tree ?? value.snapshotTree ?? null,
+  };
+}
+
+/**
+ * Validate the read-only decision freeze contract used by build-spec and
+ * build-plan. This returns a completion fact and does not create a public
+ * command or second state machine. Callers decide how the fact affects stage
+ * completion. Parsed decision logs or their Markdown text are accepted.
+ */
+export function validateDecisionFreeze({ decisionLog, material_revision, snapshot_tree, currentMaterialRevision, currentSnapshotTree } = {}) {
+  const model = decisionFreezeModel(decisionLog);
+  const current = {
+    material_revision: currentMaterialRevision ?? material_revision ?? null,
+    snapshot_tree: currentSnapshotTree ?? snapshot_tree ?? null,
+  };
+  const errors = [];
+  const binding = freezeSource(model.approval_binding);
+  const confirmation = freezeSource(model.final_confirmation ?? model.finalConfirmation);
+  const step11 = freezeSource(model.step_11 ?? model.step11);
+  const sources = [binding, confirmation, step11];
+  if (sources.some((source) => source.status !== "accepted")) errors.push("freeze approval is not accepted by all three sources");
+  if (typeof binding.decision_id !== "string" || binding.decision_id.trim() === "") errors.push("approval binding is missing decision_id");
+  if (current.material_revision === null || current.material_revision === "") errors.push("current material revision is missing");
+  if (current.snapshot_tree === null || current.snapshot_tree === "") errors.push("current snapshot is missing");
+  for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+    if (source.material_revision === null || source.material_revision === "") errors.push(`${name} is missing material revision`);
+    if (source.snapshot_tree === null || source.snapshot_tree === "") errors.push(`${name} is missing snapshot`);
+  }
+  if (new Set(sources.map((source) => `${source.status}:${source.material_revision}:${source.snapshot_tree}`)).size > 1) {
+    errors.push("freeze approval sources are inconsistent");
+  }
+  for (const [name, source] of [["approval binding", binding], ["final confirmation", confirmation], ["step 11", step11]]) {
+    if (current.material_revision !== null && source.material_revision !== null && source.material_revision !== current.material_revision) {
+      errors.push(`${name} is not for the current material revision`);
+    }
+    if (current.snapshot_tree !== null && source.snapshot_tree !== null && source.snapshot_tree !== current.snapshot_tree) {
+      errors.push(`${name} is not for the current snapshot`);
+    }
+  }
+  const openDirection = Array.isArray(model.unresolved_direction_questions)
+    ? model.unresolved_direction_questions.filter((entry) => entry !== null && String(entry).trim() !== "")
+    : [];
+  if (openDirection.length > 0) errors.push("direction-level questions remain unresolved");
+  const coverage = Array.isArray(model.freeze_packet?.coverage) ? model.freeze_packet.coverage : [];
+  for (const required of FREEZE_PACKET_COVERAGE) if (!coverage.includes(required)) errors.push(`freeze packet is missing ${required}`);
+  const renewals = Array.isArray(model.incremental_renewals) ? model.incremental_renewals : [];
+  for (const renewal of renewals) {
+    if (!object(renewal) || renewal.status !== "accepted") {
+      errors.push("incremental renewal is not accepted");
+      continue;
+    }
+    if (typeof renewal.decision_id !== "string" || renewal.decision_id.trim() === "") errors.push("incremental renewal is missing decision_id");
+    if (typeof renewal.reply_ref !== "string" || renewal.reply_ref.trim() === "") errors.push("incremental renewal is missing reply_ref");
+    if (renewal.material_revision !== current.material_revision || renewal.snapshot_tree !== current.snapshot_tree) errors.push("incremental renewal is not current");
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    status: errors.length === 0 ? "passed" : "paused",
+    reason_codes: Object.freeze(errors.map((error) => error.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "").toLowerCase())),
+    errors: Object.freeze([...new Set(errors)]),
+    material_revision: current.material_revision,
+    snapshot_tree: current.snapshot_tree,
+    decision_id: binding.decision_id,
+    coverage: Object.freeze([...coverage]),
+    renewal_count: renewals.length,
+    next_action: errors.length === 0 ? null : "return_to_make_decision",
+  });
+}
+
+function findingDimensions(finding) {
+  return Array.from(new Set([
+    ...(Array.isArray(finding?.impact_dimensions) ? finding.impact_dimensions : []),
+    ...(Array.isArray(finding?.dimensions) ? finding.dimensions : []),
+  ].map((entry) => normalizedValue(entry)).filter(Boolean)));
+}
+
+/** Classify a finding from explicit kind/dimension/evidence facts, never keywords. */
+export function classifyFinding(finding = {}) {
+  if (!object(finding)) return Object.freeze({ classification: "invalid_finding", reason: "finding must be an object" });
+  if (["environment_unavailable", "provider_unavailable", "review_unavailable"].includes(finding.kind) || finding.attempt_status === "unavailable") {
+    return Object.freeze({ classification: null, status: "attempt_unavailable", reason: "environment/provider unavailability belongs to attempt execution facts" });
+  }
+  const dimensions = findingDimensions(finding);
+  if (finding.evidence_status === "invalid_anchor") {
+    return Object.freeze({ classification: "invalid_finding", status: "classified", dimensions: Object.freeze(dimensions), reason: "finding evidence anchor is invalid" });
+  }
+  let classification = null;
+  if (dimensions.some((dimension) => DIRECTION_DIMENSIONS.has(dimension))) classification = "direction_change";
+  else if (finding.kind === "spec_ambiguity" || dimensions.includes("spec_ambiguity")) classification = "spec_ambiguity";
+  else if (finding.kind === "implementation_defect" || dimensions.includes("implementation_defect")) classification = "implementation_defect";
+  else if (finding.kind === "invalid_finding") classification = "invalid_finding";
+  const hasEvidence = (Array.isArray(finding.evidence_refs) && finding.evidence_refs.some((ref) => typeof ref === "string" && ref.trim() !== ""))
+    || (object(finding.evidence_anchor) && Object.keys(finding.evidence_anchor).length > 0)
+    || (typeof finding.evidence_ref === "string" && finding.evidence_ref.trim() !== "");
+  if (!classification || !hasEvidence) {
+    return Object.freeze({ classification: "invalid_finding", status: "incomplete", reason: !hasEvidence ? "finding requires evidence" : "finding classification is not mutually determined", dimensions: Object.freeze(dimensions) });
+  }
+  return Object.freeze({ classification, status: "classified", dimensions: Object.freeze(dimensions) });
+}
+
+/** Check that a disposition follows the classified finding's required route. */
+export function validateFindingRouting({ finding = {}, classification, disposition = {} } = {}) {
+  const inferred = classifyFinding(finding);
+  const selected = classification ?? inferred.classification;
+  const errors = [];
+  if (inferred.status === "attempt_unavailable") return Object.freeze({ ok: true, status: "attempt_unavailable", classification: null, route: "record_attempt_unavailable", errors: Object.freeze([]) });
+  if (!FINDING_CLASSIFICATIONS.includes(selected)) errors.push("finding classification is invalid");
+  if (inferred.classification !== selected) errors.push("finding classification does not match its evidence-backed dimensions");
+  const status = disposition?.status;
+  if (status === "needs_human") errors.push("needs_human is a pause state, not a terminal disposition");
+  if (selected === "direction_change") {
+    if (status !== "user_decided" && status !== "accepted_risk") errors.push("direction_change requires incremental decision or accepted risk route");
+    if (status === "user_decided" && (typeof (disposition.incremental_decision_ref ?? disposition.decision_ref) !== "string" || (disposition.incremental_decision_ref ?? disposition.decision_ref).trim() === "")) errors.push("direction_change user_decided requires incremental decision ref");
+  } else if (selected === "spec_ambiguity") {
+    if (status !== "user_decided") errors.push("spec_ambiguity requires user_decided route");
+    if (typeof disposition.reply_ref !== "string" || disposition.reply_ref.trim() === "") errors.push("spec_ambiguity user_decided requires reply_ref");
+  } else if (selected === "implementation_defect") {
+    if (!["fixed", "rejected_invalid", "accepted_risk"].includes(status)) errors.push("implementation_defect requires fixed, rejected_invalid, or accepted_risk");
+  } else if (selected === "invalid_finding" && status !== "rejected_invalid") {
+    errors.push("invalid_finding requires rejected_invalid route");
+  }
+  return Object.freeze({ ok: errors.length === 0, classification: selected, route: selected === "direction_change" ? "return_to_make_decision" : selected === "spec_ambiguity" ? "return_to_spec" : "stay_current_stage", errors: Object.freeze([...new Set(errors)]) });
+}
+
+const FORMAL_STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const FALLBACK_CLASSIFICATIONS = Object.freeze([
+  "implementation_defect",
+  "spec_ambiguity",
+  "direction_change",
+  "material_gap",
+  "environment_unavailable",
+]);
+const FALLBACK_ROUTE_RULES = Object.freeze({
+  implementation_defect: { owner: "current", next_action: "repair_current_stage" },
+  spec_ambiguity: { owner: "build-spec", next_action: "clarify_once" },
+  direction_change: { owner: "make-decision", next_action: "incremental_decision" },
+  material_gap: { owner: "declared", next_action: "repair_material_owner" },
+  environment_unavailable: { owner: "current", next_action: "record_attempt_unavailable" },
+});
+
+/**
+ * Validate the one fallback route contract shared by all five formal stages.
+ * This is a completion fact only: an invalid route leaves completion
+ * incomplete while keeping same-task repair available.
+ */
+export function validateFallbackProtocol({ stage, finding = {}, route = {}, completion = {} } = {}) {
+  const errors = [];
+  const classification = route.classification ?? finding.classification ?? finding.kind;
+  if (!FORMAL_STAGES.includes(stage)) errors.push("fallback stage is not a formal stage");
+  if (!FALLBACK_CLASSIFICATIONS.includes(classification)) errors.push("fallback classification is invalid");
+  const rule = FALLBACK_ROUTE_RULES[classification];
+  const ownerStage = route.owner_stage;
+  if (rule?.owner === "current" && ownerStage !== stage) errors.push("fallback owner must be the current stage");
+  if (rule?.owner && !["current", "declared"].includes(rule.owner) && ownerStage !== rule.owner) {
+    errors.push(`fallback owner must be ${rule.owner}`);
+  }
+  if (rule?.owner === "declared" && !FORMAL_STAGES.includes(ownerStage)) errors.push("material gap requires a formal owner stage");
+  if (rule && route.next_action !== rule.next_action) errors.push(`fallback next_action must be ${rule.next_action}`);
+  if (route.rerun_scope !== "same_task_local") errors.push("fallback cannot request a full-stage rerun");
+  if (route.continuation_allowed !== true) errors.push("fallback must preserve same-task continuation");
+  if (completion.status !== "incomplete") errors.push("fallback completion must remain incomplete");
+  const unique = [...new Set(errors)];
+  return Object.freeze({
+    ok: unique.length === 0,
+    status: "incomplete",
+    reason: unique.length === 0 ? null : "fallback_mismatch",
+    continuation_allowed: true,
+    classification: classification ?? null,
+    route: Object.freeze({
+      owner_stage: ownerStage ?? null,
+      next_action: route.next_action ?? null,
+      rerun_scope: "same_task_local",
+      continuation_allowed: true,
+    }),
+    errors: Object.freeze(unique),
+  });
+}
+
+const DIAGNOSTIC_SECTIONS = Object.freeze(["research-Q1", "research-Q2", "research-Q3", "综合结论"]);
+const DIAGNOSTIC_FIELDS = Object.freeze(["source", "evidence", "impact", "conclusion"]);
+
+/** Validate the derived four-part diagnostic report without making it a material. */
+export function validateDiagnosticReport(markdown, { required_context: context } = {}) {
+  const errors = [];
+  if (typeof markdown !== "string" || markdown.trim() === "") {
+    return Object.freeze({ ok: false, status: "incomplete", sections: 0, errors: Object.freeze(["diagnostic report is empty"]) });
+  }
+  const normalized = markdown.replace(/\r\n?/g, "\n");
+  const starts = DIAGNOSTIC_SECTIONS.map((section) => ({ section, index: normalized.search(new RegExp(`^##\\s+${section.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*$`, "mi")) }));
+  for (const entry of starts) if (entry.index < 0) errors.push(`missing diagnostic section: ${entry.section}`);
+  const ranges = starts.filter(({ index }) => index >= 0).sort((left, right) => left.index - right.index);
+  for (const [position, entry] of ranges.entries()) {
+    const end = ranges[position + 1]?.index ?? normalized.length;
+    const block = normalized.slice(entry.index, end);
+    for (const field of DIAGNOSTIC_FIELDS) {
+      const value = block.match(new RegExp(`^${field}\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? "";
+      if (!value || PLACEHOLDER_LINE.test(value)) errors.push(`${entry.section} missing ${field} binding`);
+    }
+  }
+  if (context !== undefined) {
+    for (const field of ["task_id", "material_revision", "stage"]) {
+      if (typeof context?.[field] !== "string" || context[field].trim() === "") errors.push(`missing_${field}`);
+    }
+    if (typeof context?.snapshot_tree !== "string" || !/^[a-f0-9]{40}$/i.test(context.snapshot_tree)) errors.push("missing_snapshot_binding");
+    if (context?.confirmation_ref === null || context?.confirmation_ref === undefined || String(context.confirmation_ref).trim() === "") errors.push("missing_confirmation_receipt");
+  }
+  const unique = [...new Set(errors)];
+  return Object.freeze({ ok: unique.length === 0, status: unique.length === 0 ? "ready" : "incomplete", sections: ranges.length, errors: Object.freeze(unique) });
+}
+
+export function normalizeGapReasons(reasons = []) {
+  const values = Array.isArray(reasons) ? reasons : [reasons];
+  return Object.freeze([...new Set(values.map((value) => normalizedValue(value)).filter((value) => typeof value === "string" && value !== ""))].sort((left, right) => left.localeCompare(right)));
+}
+
+/** Derive a same-snapshot gap identity from a fixed four-field v1 tuple. */
+export function deriveGapId({ task_id, material_revision, gap_kind, content } = {}) {
+  const fields = [task_id, material_revision, gap_kind, content].map((value) => normalizedValue(value));
+  const invalid = fields.some((value) => typeof value !== "string" || value === "");
+  if (invalid) return Object.freeze({ ok: false, gap_id: null, reason: "invalid_gap_identity", canonical_payload: null });
+  const canonical_payload = JSON.stringify(["gap-id.v1", ...fields]);
+  return Object.freeze({ ok: true, gap_id: `gap-id.v1-${sha256(canonical_payload)}`, canonical_payload, algorithm: "gap-id.v1" });
+}
+
 export const UI_APPLICABILITY_INPUTS = Object.freeze([
   "raw_requirement",
   "project_inventory",
@@ -2960,6 +3248,122 @@ export function validateAcceptanceDesignMinimum(markdown) {
     }
   }
   return result(errors);
+}
+
+const AC_CARD_LABELS = Object.freeze(["验证", "通过", "失败", "证据"]);
+const ORACLE_ROLES = new Set(["RED", "GREEN", "N/A"]);
+const ORACLE_SEMANTIC_STATUSES = new Set(["completed", "incomplete", "unavailable"]);
+const PLACEHOLDER_LINE = /^(?:TBD|TODO|待填写)$/i;
+
+function materialContractResult(errors, status, extras = {}) {
+  const unique = [...new Set(errors)];
+  return Object.freeze({ ok: unique.length === 0, status: unique.length === 0 ? status : "incomplete", errors: Object.freeze(unique), ...extras });
+}
+
+function acHeading(line) {
+  return line.match(/^###\s+(AC-[A-Za-z0-9_-]+)\b/i)?.[1]
+    ?? line.match(/^\s*-\s*\[[ xX]\]\s*\*\*(AC-[A-Za-z0-9_-]+)\*\*/i)?.[1]
+    ?? null;
+}
+
+/** Validate the four plain, ordered, non-empty AC segments used by new materials. */
+export function validateAcFourSegmentCards(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") return materialContractResult(["AC material is empty"], "incomplete", { cards: [] });
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const errors = lines.filter((line) => PLACEHOLDER_LINE.test(line.trim())).map((line) => `whole-line placeholder is not allowed: ${line.trim()}`);
+  const starts = lines.map(acHeading);
+  const cards = [];
+  for (let index = 0; index < starts.length; index += 1) {
+    if (!starts[index]) continue;
+    const end = lines.findIndex((line, offset) => offset > index && (/^##\s+/.test(line) || Boolean(acHeading(line))));
+    const blockLines = lines.slice(index + 1, end < 0 ? lines.length : end);
+    const sections = new Map();
+    let active = null;
+    for (const line of blockLines) {
+      const label = line.match(/^(验证|通过|失败|证据)[：:](.*)$/)?.[1] ?? null;
+      if (label) {
+        if (sections.has(label)) errors.push(`${starts[index]} has duplicate ${label} segment`);
+        sections.set(label, []);
+        active = label;
+        const inline = line.match(/^(?:验证|通过|失败|证据)[：:](.*)$/)?.[1] ?? "";
+        if (inline.trim() !== "") sections.get(label).push(inline.trim());
+      } else if (active !== null) {
+        sections.get(active).push(line);
+      }
+    }
+    const values = Object.fromEntries(AC_CARD_LABELS.map((label) => [label, (sections.get(label) ?? []).join("\n").trim()]));
+    for (const label of AC_CARD_LABELS) if (!sections.has(label) || values[label] === "") errors.push(`${starts[index]} ${label} segment is missing or empty`);
+    const labels = [...sections.keys()];
+    if (labels.some((label, position) => label !== AC_CARD_LABELS[position])) errors.push(`${starts[index]} segments must be ordered 验证/通过/失败/证据`);
+    cards.push(Object.freeze({ id: starts[index], segments: Object.freeze(values) }));
+  }
+  if (cards.length === 0) return materialContractResult(errors, "not_applicable", { cards: [] });
+  return materialContractResult(errors, "ready", { cards: Object.freeze(cards) });
+}
+
+function taskField(body, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return body.match(new RegExp(`^\\s*-\\s+\\*\\*${escaped}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "mi"))?.[1]?.trim() ?? null;
+}
+
+function nonPlaceholderText(value) {
+  return typeof value === "string" && value.trim() !== "" && !PLACEHOLDER_LINE.test(value.trim());
+}
+
+/** Validate task oracle shape, including RED-only reject and semantic review facts. */
+export function validateTaskOracleContract(markdown) {
+  if (typeof markdown !== "string" || markdown.trim() === "") return materialContractResult(["tasks material is empty"], "incomplete", { tasks: [] });
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const starts = lines.map((line, index) => /^####\s+(T[A-Za-z0-9_-]+)/.test(line) ? index : -1).filter((index) => index >= 0);
+  if (starts.length === 0) return materialContractResult([], "not_applicable", { tasks: [] });
+  const errors = [];
+  const tasks = [];
+  for (const [position, start] of starts.entries()) {
+    const body = lines.slice(start + 1, starts[position + 1] ?? lines.length).join("\n");
+    const id = lines[start].match(/^####\s+(T[A-Za-z0-9_-]+)/)?.[1];
+    const role = taskField(body, "verification_role");
+    const paired = taskField(body, "paired_task");
+    const oracleRaw = taskField(body, "oracle")?.replace(/^`|`$/g, "") ?? "";
+    const oracleId = oracleRaw.match(/^([A-Z][A-Z0-9_-]+)\b/)?.[1] ?? null;
+    const oracleJson = oracleRaw.slice(oracleId ? oracleId.length : 0).trim();
+    let oracle = null;
+    try { oracle = JSON.parse(oracleJson); } catch { errors.push(`${id} oracle must contain a JSON object`); }
+    if (!ORACLE_ROLES.has(role)) errors.push(`${id} verification_role is invalid`);
+    if (paired === null || paired.trim() === "") errors.push(`${id} paired_task is missing`);
+    if (role === "N/A" && !/^N\/A\s+[—-]\s+\S/i.test(paired ?? "")) errors.push(`${id} N/A task requires a paired_task reason`);
+    if (!oracleId || !oracle || typeof oracle !== "object" || Array.isArray(oracle)) errors.push(`${id} oracle identity or object is missing`);
+    if (oracle && !nonPlaceholderText(oracle.pass)) errors.push(`${id} oracle.pass is missing or placeholder`);
+    const needsReject = role === "RED" && paired !== null && !/^N\/A\s+[—-]/i.test(paired);
+    if (needsReject) {
+      for (const field of ["input", "expected_rejection", "observation"]) {
+        if (!nonPlaceholderText(oracle?.reject?.[field])) errors.push(`${id} oracle.reject.${field} is missing`);
+      }
+    }
+    if (role === "RED" || role === "GREEN") {
+      const semanticStatus = taskField(body, "semantic_review_status");
+      if (!ORACLE_SEMANTIC_STATUSES.has(semanticStatus)) errors.push(`${id} semantic_review_status is invalid`);
+      if (!nonPlaceholderText(taskField(body, "semantic_review_ref"))) errors.push(`${id} semantic_review_ref is missing`);
+      if (!nonPlaceholderText(taskField(body, "semantic_review_reason"))) errors.push(`${id} semantic_review_reason is missing`);
+    }
+    tasks.push(Object.freeze({ id, verification_role: role, paired_task: paired, oracle_id: oracleId, oracle: oracle ? Object.freeze(oracle) : null }));
+  }
+  return materialContractResult(errors, "ready", { tasks: Object.freeze(tasks) });
+}
+
+/** Shared producer/consumer check for spec/plan AC cards and task oracles. */
+export function validateMaterialOracleContract({ spec, plan, tasks } = {}) {
+  const specResult = validateAcFourSegmentCards(spec);
+  const planResult = validateAcFourSegmentCards(plan);
+  const tasksResult = validateTaskOracleContract(tasks);
+  const errors = [
+    ...specResult.errors.map((error) => `spec: ${error}`),
+    ...planResult.errors.map((error) => `plan: ${error}`),
+    ...tasksResult.errors.map((error) => `tasks: ${error}`),
+  ];
+  const specPayload = JSON.stringify(specResult.cards.map(({ id, segments }) => [id, segments]));
+  const planPayload = JSON.stringify(planResult.cards.map(({ id, segments }) => [id, segments]));
+  if (specResult.cards.length > 0 && planResult.cards.length > 0 && specPayload !== planPayload) errors.push("plan AC cards drift from spec AC cards");
+  return materialContractResult(errors, "ready", { spec: specResult, plan: planResult, tasks: tasksResult });
 }
 
 const PLAN_SECTIONS = Object.freeze([

@@ -414,6 +414,6 @@ describe("spec-analyze completeness contract", () => {
     }
     const verifySteps = JSON.parse(readFileSync(new URL("../../workflows/verify-code/steps.json", import.meta.url), "utf8")).steps;
     expect(verifySteps.find(({ step_slug }) => step_slug === "stage-end-spec-analyze")).toBeUndefined();
-    expect(verifySteps.find(({ step_slug }) => step_slug === "approve-verification")).toBeDefined();
+    expect(verifySteps.find(({ step_slug }) => step_slug === "finalize-code-review")).toBeDefined();
   });
 });

@@ -26,3 +26,14 @@
 
 - 宪法：公共入口仅七类（doctor/status/run/review/verify/confirm/authorize）；禁新 store、持久 selector 对象、compatibility bridge、第二状态机、历史 runtime branch、第五材料；质量裁决独立来源；记录事实不阻断推进；简单优先可证伪；推进/不可逆操作经人确认。
 - 本任务不修改历史任务记录；不做页面/前端 UI；不改宪法 close 三义。
+
+## 第二轮需求（R-011，2026-09-06 用户追加）
+
+11. "好的，基于调研出的这些问题，我们先回到make-decision阶段，看看是否需要新增一些改进需求，避免以后build-spec和build-plan继续浪费时间做决策收敛的工作，让build-spec和build-plan能更高效的基于冻结的decision-log进行规格和计划设计。这次调研发现的问题，我们都在make-decision中想办法解决或设计新的需求，在当前任务中实现！"
+12. （Talk R1 确认答复，T-025~T-031）：范围=全部纳入当前任务；决策冻结=强制前置校验+回退；findings=分类+强制路由；needs_human=只能作为暂停态；review=一次初始+一次focused；usage=轻量记录无预算机制；跨阶段=统一协议，但用户明确担忧"回退重跑整阶段太浪费"→ 确认=增量决策+局部继续（方向级缺口：问用户1个问题→追加1条D→重新冻结→从受影响节继续；已确认部分不重跑不重写）。
+
+## 本次 build-spec 复盘事实（第二轮调研依据）
+
+- build-spec 阶段 wall≈5.3 小时（13:35-18:52），纯审查约 76 分钟；review 执行约 16 次（≥48 provider 调用），findings 18→13→17→11→10→12→12→10→12→5→5→4 不收敛；2 次 broker TIMEOUT、1 次 0 字节空输出、多轮 kimi RATE_LIMITED、多轮 antigravity 空 findings 桩。
+- 根因：①上游 decision-log 批准状态不唯一（头部 awaiting vs 正文 accepted）；②方向级/规格级问题在 review 才暴露，build-spec 自己"翻译中做决策"；③needs_human 被当处置终点；④无 review 预算/收敛规则；⑤completed provider usage=null，无法回答"浪费在哪"。
+- 相关事实来源：任务 store quality/reviews、quality/evidence/stage-outcomes、spec.md 当前 141KB/24 FR/24 AC。

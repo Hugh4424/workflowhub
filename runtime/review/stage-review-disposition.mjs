@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { separateAttemptFindingFacts, validateFindingDispositionState } from "../stage/completion-predicates.mjs";
 
 const STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const HASH = /^[a-f0-9]{64}$/;
@@ -8,6 +9,11 @@ const FINDING_DISPOSITION_STATUSES = new Set(["fixed", "rejected_invalid", "acce
 const FINDING_DISPOSITION_FIELDS = new Set([
   "finding_id", "original_fact", "source", "consequence", "status", "next_action",
   "evidence_ref", "owner", "consumer", "retain_or_delete",
+]);
+const FINDING_DISPOSITION_OPTIONAL_FIELDS = new Set([
+  "classification", "kind", "impact_dimensions", "dimensions", "evidence_refs",
+  "reply_ref", "incremental_decision_ref", "decision_ref", "gap", "reasons",
+  "card_hash", "risk_acceptance_ref", "risk_ref", "completion_status", "formally_complete",
 ]);
 
 function object(value, label) {
@@ -93,16 +99,20 @@ export function validateReportableFindingDispositions({ result, dispositions, au
     if (index < 0) throw new Error(`user reply finding is not in finding_dispositions: ${replyFindingId}`);
     const current = dispositions[index];
     if (current?.status !== "needs_human") throw new Error(`user reply requires needs_human disposition: ${replyFindingId}`);
+    if (!HASH.test(current.card_hash ?? "")) throw new TypeError("needs_human disposition must preserve the authenticated finding card_hash");
     normalizedDispositions = dispositions.map((entry, entryIndex) => entryIndex === index
-      ? { ...entry, status: "user_decided", source: "user_reply", evidence_ref: replyRef }
+      ? { ...entry, status: "user_decided", source: "user_reply", evidence_ref: replyRef, reply_ref: replyRef, card_hash: current.card_hash }
       : entry);
     replyBinding = Object.freeze({ finding_id: replyFindingId, reply_ref: replyRef, reply_hash: reply.reply_hash });
   }
+  const authorized = new Set(authorizedRiskFindingIds);
+  const stateErrors = [];
+  const pausedFindingIds = [];
   const seen = new Set();
   const items = normalizedDispositions.map((entry, index) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new TypeError(`finding_dispositions[${index}] must be an object`);
     for (const key of Object.keys(entry)) {
-      if (!FINDING_DISPOSITION_FIELDS.has(key)) throw new Error(`finding_dispositions[${index}] has unknown field ${key}`);
+      if (!FINDING_DISPOSITION_FIELDS.has(key) && !FINDING_DISPOSITION_OPTIONAL_FIELDS.has(key)) throw new Error(`finding_dispositions[${index}] has unknown field ${key}`);
     }
     for (const key of FINDING_DISPOSITION_FIELDS) requiredText(entry[key], `finding_dispositions[${index}].${key}`);
     if (!FINDING_DISPOSITION_STATUSES.has(entry.status)) throw new Error(`finding_dispositions[${index}].status is invalid`);
@@ -111,21 +121,25 @@ export function validateReportableFindingDispositions({ result, dispositions, au
     }
     if (seen.has(entry.finding_id)) throw new Error(`duplicate finding disposition: ${entry.finding_id}`);
     seen.add(entry.finding_id);
+    const state = validateFindingDispositionState(entry, { authorizedRiskFindingIds: [...authorized] });
+    if (!state.ok) stateErrors.push(`finding ${entry.finding_id} disposition is incomplete: ${state.errors.join("; ")}`);
+    if (state.status === "paused") pausedFindingIds.push(entry.finding_id);
     return Object.freeze({ ...entry });
   });
   const missing = ids.filter((id) => !seen.has(id));
   const extra = [...seen].filter((id) => !ids.includes(id));
   if (extra.length) throw new Error(`finding_dispositions contains unknown finding: ${extra.join(", ")}`);
-  const authorized = new Set(authorizedRiskFindingIds);
   const unauthorizedRisk = items
     .filter((item) => item.status === "accepted_risk" && !authorized.has(item.finding_id))
     .map((item) => item.finding_id);
-  const unresolved = [...new Set([...missing, ...unauthorizedRisk])];
+  const unresolved = [...new Set([...missing, ...unauthorizedRisk, ...pausedFindingIds, ...stateErrors])];
   return Object.freeze({
     facts: Object.freeze({ status: unresolved.length ? "incomplete" : "recorded", items }),
     missing_items: Object.freeze([
       ...(missing.length ? [`finding disposition is missing for: ${missing.join(", ")}`] : []),
       ...(unauthorizedRisk.length ? [`accepted_risk requires an authenticated user risk receipt for: ${unauthorizedRisk.join(", ")}`] : []),
+      ...(pausedFindingIds.length ? [`needs_human remains paused for: ${pausedFindingIds.join(", ")}`] : []),
+      ...stateErrors,
     ]),
     ...(replyBinding ? { reply_bindings: Object.freeze([replyBinding]) } : {}),
   });

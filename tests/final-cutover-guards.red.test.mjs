@@ -1050,10 +1050,10 @@ ${task("T002", "contract GREEN", 0, "T001")}
         evidence_ref: "evidence/ac1.json", owner: "task owner", consumer: "verify-code", retain_or_delete: "retain",
       }],
     });
-    expect(result.facts.finding_dispositions).toMatchObject({ status: "recorded", items: [{ finding_id: finding.id, status: "needs_human" }] });
+    expect(result.facts.finding_dispositions).toMatchObject({ status: "incomplete", items: [{ finding_id: finding.id, status: "needs_human" }] });
     expect(result.facts.review.status).toBe("recorded");
     expect(result.facts.review).not.toHaveProperty("verdict");
-    expect(result.missing_items).not.toEqual(expect.arrayContaining([expect.stringMatching(/finding disposition is missing/i)]));
+    expect(result.missing_items).toEqual(expect.arrayContaining([expect.stringMatching(/disposition is incomplete/i)]));
   });
 
   it("keeps an authenticated unavailable integration review visible without blocking build-code publication", async () => {
@@ -1190,7 +1190,7 @@ ${task("T002", "contract GREEN", 0, "T001")}
     });
   });
 
-  it.each(["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
+  it.each(["PROCESS_TIMEOUT", "REVIEW_EXECUTION_TIMEOUT", "BROKER_EXIT_NONZERO"])("keeps a group-level %s with no dispatched providers as an incomplete verify fact", async (errorCode) => {
     const stage = "verify-code", attemptRef = "quality/reviews/attempts/verify-group-timeout/attempt.json";
     const values = {
       [attemptRef]: {

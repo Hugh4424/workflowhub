@@ -10,6 +10,15 @@ Write only `plan.md`. Product direction and user-visible behavior remain owned
 by the current decision and specification; this skill chooses the smallest
 engineering solution and does not reopen either one.
 
+The host must assemble a stage-input packet before this skill runs. Consume the
+packet's frozen materials, manifest, navigation/summary, and explicitly listed
+non-authoritative derived files only; do not scan the task directory or inject
+full materials back into the main context. Preserve packet hash, material
+revision, snapshot, and source digests in execution facts. New `plan.md`
+output includes a regenerable `## 材料导航` section near the top with section,
+summary, and M/S/B/P timing columns. Packet or binding failure is recorded as
+unavailable with owner and next action, not treated as an empty input or pass.
+
 Use `templates/plan-template.md`. The generated document must contain real
 content: no authoring comments, empty headings, filler, or unresolved
 placeholders. When a conditional section does not apply, write one factual

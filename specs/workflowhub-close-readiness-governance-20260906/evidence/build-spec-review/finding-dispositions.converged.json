@@ -1,0 +1,150 @@
+{
+  "stage": "build-spec",
+  "review_result_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+  "dispositions": [
+    {
+      "finding_id": "F-07dc2f19ad08",
+      "original_fact": "核心AC大量将命令和oracle保留为deferred_to_build_plan；FR-PREF-001还允许build-plan保留unavailable且用户仍可在缺口存在时close。规格没有规定哪些核心AC必须在tasks冻结前具备可执行fixture/oracle，也没有定义保留unavailable时的phase交接和验收结果，因而可以在没有可测试验收的情况下进入build-code。",
+      "source": "independent_review:codex/luna:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "若无人确认，部分核心 AC 仍只能以 unavailable 进入 build-plan，不能宣称可执行验收已就绪。",
+      "status": "needs_human",
+      "next_action": "用户决定是否把“核心 AC 在 tasks 冻结前必须具备可执行命令/fixture/oracle”作为新产品约束；在确认前 build-plan 不得把 deferred 合同误报 ready。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-0b4034bb56f9",
+      "original_fact": "FR-BOUND-002要求材料检查不完整、provider不可用或独立审查失败进入缺口或incomplete投影，但FR-GAP-001只定义质量决议、发布派生、发布解释和收口预检四类缺口生产者；FR-STATUS-001又禁止独立审查直接写入quality_status，导致这些失败事实没有确定的canonical展示路径。",
+      "source": "independent_review:codex/luna:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "失败事实可见但 canonical 缺口展示路径未完全锁定。",
+      "status": "needs_human",
+      "next_action": "用户确认材料检查、review 和 provider 失败是否新增 canonical gap_kind 展示映射；未确认前这些事实只在阶段汇报中保留。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "status/close/build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-0bc76f7f6b1c",
+      "original_fact": "FR-MATERIAL-001 新增「spec 中的 fr_id/ac_id 是跨材料稳定主键；plan 必须原样继承；tasks 每个 oracle 恰好映射一个当前 AC 且 ac_id/fr_id 必须在当前 spec/plan 中存在且不重复」等强约束，并直接进入 AC-MATERIAL-001 的通过/失败判据（L755）。D-302 的五项决定中没有任何 fr_id/ac_id 或跨材料键继承规则，该约束属于 spec 新增的验收要求，traceability 断裂。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "跨材料键约束可能需要在下一轮 make-decision 补齐。",
+      "status": "needs_human",
+      "next_action": "用户确认 fr_id/ac_id 跨材料稳定主键是否作为产品合同；未确认前 build-plan 只能按现有 ac_id/fr_id 映射，不把该扩展写成已批准方向。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-4aca155cecde",
+      "original_fact": "FR-CONTEXT-001 把效率观察基线固定为 `evidence/context-baseline.json` 中的 282170 字符，但三份材料中没有任何位置定义该文件由谁、在哪个 stage 生成；同时 AC-CONTEXT-001 收口合同「命令=unavailable(reason=deferred_to_build_plan)」，若命令仍为 unavailable，固定格式观察（packet_injected_chars、full_reread_count、baseline_chars 等）无法执行，基线引用成为悬空依赖。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "成本观察基线引用尚未成为稳定的生产合同。",
+      "status": "needs_human",
+      "next_action": "用户确认 context-baseline.json 是否作为正式观察输入及生产者/生成时机；当前文件只是本任务证据草稿。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-60217bda5f62",
+      "original_fact": "SCN-005 写「未答项标为 deferred 且 reason=user_cancelled」，把「未答」与「用户取消」混为同一 reason；FR-FLOW-003（L289）明确区分未答、取消、回执缺失三种情形，但全文未定义 reason 值域，实现会对未答项错标 user_cancelled，造成验收时对取消路径的误判。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "未答与取消的 reason 区分未完全机读化。",
+      "status": "needs_human",
+      "next_action": "用户确认 phase 验收 reason 值域（user_no_response/user_cancelled/receipt_missing）后再锁定实现；当前只保留 deferred 事实。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-90387d663f10",
+      "original_fact": "FR-STATUS-002 新增 pre-close/post-close 两阶段 close 记录机制：写 close 前先形成 pre-close 记录且 physical_close_status 固定抄写 not_closed，授权物理动作完成后再以动作后 snapshot/material 追加 post-close 读回事实。D-202 只决定「完成记录必须抄写 quality/发布状态、展示分层、同一 gap 只出现一次」，未定义两阶段记录结构或「动作后换 snapshot 再读回」的流程。这是 build-spec 新创的产品行为，同样违反「build-spec 不补需求」红线，并直接决定 AC-STATUS-002 的通过/失败判据。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "close 记录顺序仍可能是未确认的产品语义。",
+      "status": "needs_human",
+      "next_action": "用户确认 pre-close/post-close 是否是产品行为；若不是，build-plan 应把它降级为证据组织方式而不是 FR。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan/verify-code",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-a85423951bc1",
+      "original_fact": "来源与决策映射表中 FR-STATUS-001/002 行列出的决策为 D-201/D-203/D-204/D-402，未包含两个 FR 依据节自述的 D-202/D-207（L349/L355）；而 L46 声称「每条 FR 和 AC 都能回到本表」，此处回溯断链，下游无法经映射表核实状态分层决策来源。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "状态域的来源追溯表存在一处可读性缺口。",
+      "status": "needs_human",
+      "next_action": "用户确认映射表是否补 D-202/D-207；这是材料追溯修正，不改变行为。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-bacdc7cff022",
+      "original_fact": "AC-MATERIAL-003 标题与失败条款按「材料存在、身份绑定、非占位符、非零 digest、当前 snapshot 绑定」五个信号描述「四项」检查，而 FR-MATERIAL-003（L375）锁定的是四个检查项（存在性/身份绑定/内容完整性/快照新鲜度，占位符与 digest 只是③的 subcheck），且与 decision-log FND-V4-05 方向期锁定的 4 项构成（材料存在/身份绑定/非占位符/非零 digest+当前 snapshot 绑定）不一致。检查器输出 schema（4 项还是 5 项、{status,reason,subchecks} 挂在哪些项上）以及六值优先级序列（missing→identity_mismatch→stale_snapshot→zero_digest→digest_mismatch→placeholder）与四项结构的映射均无法确定性实现，预检/验收直接歧义。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "检查项分组与输出 schema 需要进一步锁定。",
+      "status": "needs_human",
+      "next_action": "用户确认 verify 材料检查的四项语义是按 decision-log 原词还是按本规格的“内容完整性 subcheck”结构；确认后统一 FR/AC。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan/verify-code",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-cecddb4d3c45",
+      "original_fact": "close包含commit、archive、merge、push、cleanup等多个不可逆动作，但physical_close_status只有not_closed/closed；FR-STATUS-002只定义pre-close和post-close，没有部分动作已完成、某一步失败后的剩余动作、重试幂等性或再次授权路径，无法覆盖部分close失败的恢复场景。",
+      "source": "independent_review:codex/luna:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "不处理该越界建议；本期不改变 close 三义或恢复机制。",
+      "status": "rejected_invalid",
+      "next_action": "不进入 build-spec；部分 close 失败恢复和动作幂等性属于既有 runtime/close 恢复设计，超出本任务已接受的 close 记录抄写范围。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "后续独立任务",
+      "consumer": "用户/未来 make-decision",
+      "retain_or_delete": "retain as rejected invalid review fact; do not implement"
+    },
+    {
+      "finding_id": "F-e0272fe4b669",
+      "original_fact": "FR-REVIEW-001对unavailable的定义互相冲突：前文限定为通道不可用或请求未发起，后文又规定身份缺失、reviewer与executor相同或无法证明异源时review_result必须为unavailable；请求可能已经发起后才发现身份无效，dispatch_attempt与review_result因此无法确定性组合。",
+      "source": "independent_review:codex/luna:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "异源身份异常的确定转换仍需产品级确认。",
+      "status": "needs_human",
+      "next_action": "用户确认 invalid_identity 是发起前拒绝还是 attempted+unavailable 的例外；未确认前不新增状态。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan/verify-code",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    },
+    {
+      "finding_id": "F-ef870f358fbc",
+      "original_fact": "文档头部仍写「当前 stage：make-decision（step 10-v4 detail-advice 完成，43 条 findings 处置中；下一步 step 11-v4 approve-decision）」，与本文档 step 11-v4 completed（L661）和最终确认 accepted（L728）直接矛盾；FND-D11（L720）声称「fixed（头部已更新）」但与实际字节不符。该 decision-log 是 accepted 的权威材料，头部陈旧状态会误导按头部解析 stage 状态的下游消费者——这正是本任务要治理的「头部状态陈旧」类问题在材料自身上的复发。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "避免在 build-spec 中越权改写已接受材料。",
+      "status": "rejected_invalid",
+      "next_action": "不回溯改写已冻结 decision-log；spec 第 8 节已把上游头部标为历史 provenance，并以本规格当前状态契约为下游权威。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "build-spec 主会话",
+      "consumer": "build-plan/verify-code",
+      "retain_or_delete": "retain as rejected invalid review fact; do not implement"
+    },
+    {
+      "finding_id": "F-fee2113dbea5",
+      "original_fact": "FR-FLOW-003 定义了决策材料中不存在的新交互机制：phase 验收四态（accepted/rejected/deferred/unavailable）、固定恢复路径（rejected 修复重问、deferred 等待、unavailable 仅可重试一次）以及 attempt_id/attempt_no/replaces_attempt_ref 重试链 current 选择算法（另见 L540-542、L788）。D-301 只确认「每 phase 独立开发测试验收审查」，未定义验收状态机、重试上限或 current 选择规则。这触及本任务自己的红线「不依赖 build-spec 补需求」（R-003、D-402、FND-V4-01），且「unavailable 仅重试一次」与 decision-log 失败分支表「恢复时按公共合同重请求」（无次数上限）不一致。",
+      "source": "independent_review:kimi/coding:quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "consequence": "phase 验收状态机仍需要用户级方向确认。",
+      "status": "needs_human",
+      "next_action": "用户确认 phase 验收四态、恢复路径和 current 重试链是否进入产品合同；未确认前 build-plan 不得把它实现为机制化 gate。",
+      "evidence_ref": "quality/reviews/results/build-spec-simple-e56221fc-1618-4a06-80c6-00d3b1a10b75.json",
+      "owner": "用户 / 后续 make-decision",
+      "consumer": "build-plan",
+      "retain_or_delete": "retain as unresolved human-decision fact; do not silently close"
+    }
+  ]
+}

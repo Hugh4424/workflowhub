@@ -95,6 +95,23 @@ describe("explicit host outcome bridge contract", () => {
     })).rejects.toThrow(/agent_run_id/i);
   });
 
+  it("rejects every missing identity field before the bridge writer", async () => {
+    const state = fixture("host-outcome-identity-fields");
+    const valid = readFixture("valid-unavailable.json");
+    for (const field of ["project_name", "task_id", "task_path", "stage", "attempt_id", "agent_run_id"]) {
+      const payload = {
+        ...valid,
+        task_path: state.task.taskPath,
+        task_id: state.task.identity.taskId,
+        stage: "build-code",
+        attempt_id: `attempt-missing-${field}`,
+        agent_run_id: `agent-missing-${field}`,
+      };
+      delete payload[field];
+      await expect(workflowHubBridgeMain(payload)).rejects.toThrow(new RegExp(field));
+    }
+  });
+
   it("publishes unavailable verify-code reviews bound to the current identity", async () => {
     const state = fixture("host-outcome-verify-code");
     const valid = readFixture("valid-unavailable.json");

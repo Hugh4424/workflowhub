@@ -282,7 +282,7 @@ describe("status is derived from current quality facts", () => {
     expect(groups).not.toHaveProperty("close_blockers");
   });
 
-  it("derives released only from five current completions, AC results, and verify confirmation", () => {
+  it("derives released from five current completions and AC results without verify confirmation", () => {
     const hash = "a".repeat(64);
     const identity = {
       task_id: "task",
@@ -310,20 +310,10 @@ describe("status is derived from current quality facts", () => {
         freshness: { status: "current" },
       }],
       expected_acceptance_ids: ["AC-001"],
-      verify_confirmation: {
-        schema_version: "human-confirmation.v2",
-        ...identity,
-        stage: "verify-code",
-        decision: "accepted",
-        confirmed_at: "2026-08-20T00:00:00.000Z",
-        ref: "quality/confirmations/verify.json",
-        hash,
-        freshness: { status: "current" },
-      },
     });
 
     expect(result).toMatchObject({ producer: "deriveProductRelease", status: "released", reasons: [] });
-    expect(result.input_refs).toHaveLength(7);
+    expect(result.input_refs).toHaveLength(6);
     expect(result.input_refs.every((entry) => entry.ref && entry.hash === hash)).toBe(true);
   });
 
@@ -339,9 +329,8 @@ describe("status is derived from current quality facts", () => {
       "stage_completion_unbound:make-decision",
       "stage_completion_missing:build-spec",
       "acceptance_result_unbound:AC-001",
-      "verify_confirmation_not_accepted:rejected",
-      "verify_confirmation_unbound",
     ]));
+    expect(result.reasons).not.toContain("verify_confirmation_not_accepted:rejected");
     expect(result.input_refs).toEqual([]);
   });
 
@@ -436,7 +425,7 @@ describe("status is derived from current quality facts", () => {
       evaluate_freshness: () => ({ status: "current", authenticated: true }),
     });
     expect(buildOnlyResult.status).toBe("not_released");
-    expect(buildOnlyResult.reasons).toContain("verify_confirmation_missing");
+    expect(buildOnlyResult.reasons).not.toContain("verify_confirmation_missing");
   });
 
   it("projects the newest timestamped current AC fact after a repair", () => {
@@ -638,7 +627,7 @@ describe("status is derived from current quality facts", () => {
     expect(result.reasons).toContain("acceptance_result_missing:AC-001");
   });
 
-  it("requires explicit current freshness and a bound verify confirmation", () => {
+  it("requires explicit current freshness for release inputs", () => {
     const hash = "a".repeat(64);
     const stage_completions = [
       "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
@@ -658,8 +647,6 @@ describe("status is derived from current quality facts", () => {
     expect(result.status).toBe("not_released");
     expect(result.reasons).toEqual(expect.arrayContaining([
       "acceptance_result_not_current:AC-001",
-      "verify_confirmation_not_current",
-      "verify_confirmation_identity_invalid",
     ]));
   });
 });

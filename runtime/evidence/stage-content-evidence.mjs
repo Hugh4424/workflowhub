@@ -17,6 +17,7 @@ import completionSchema from "../schemas/stage-completion-facts.v1.json" with { 
 import browserQaSchema from "../schemas/browser-qa-evidence.v1.json" with { type: "json" };
 import { validateAmbiguityLedgerV2, validateInteractionQuestionBatch } from "../stage/stage-content-contracts.mjs";
 import { assertTaskHandle } from "../task/task-handle.mjs";
+import { canonicalJson } from "./canonical-source.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const TREE = /^[a-f0-9]{40}$/i;
@@ -248,6 +249,187 @@ function validatePayload(kind, payload) {
 export function validateBrowserQaEvidence(value) {
   validatePayload("browser-qa-evidence.v1", value);
   return Object.freeze(value);
+}
+
+const REVIEW_BUDGET_KINDS = new Set(["initial", "focused", "narrow_diff", "phase"]);
+const REVIEW_ATTEMPT_STATUSES = new Set(["completed", "executed", "failed", "unavailable"]);
+const SNAPSHOT = /^[a-f0-9]{40}$/i;
+const REVIEW_ATTEMPT_REF = /^quality\/reviews\/attempts\/[A-Za-z0-9][A-Za-z0-9._-]*\/attempt\.json$/;
+
+function nonNegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function reviewBudgetResult({ ok, reason = null, route = null, budget_scope = "material", attempt_created = false, counts, errors = [] }) {
+  return Object.freeze({
+    ok,
+    status: ok ? "ready" : "incomplete",
+    ...(reason ? { reason } : {}),
+    ...(route ? { route } : {}),
+    budget_scope,
+    attempt_created,
+    counts: Object.freeze({ ...counts }),
+    errors: Object.freeze([...errors]),
+  });
+}
+
+/**
+ * Check the review-round budget without creating a new gate or persistent
+ * counter. The caller supplies the immutable attempt facts for the current
+ * frozen revision; phase reviews use their own target namespace.
+ */
+export function validateReviewBudget({ material_revision, attempts = [], canonical_attempts = null, request = {} } = {}) {
+  const errors = [];
+  if (typeof material_revision !== "string" || material_revision.trim() === "") errors.push("material_revision_missing");
+  if (!Array.isArray(attempts)) errors.push("attempts_must_be_array");
+  const suppliedAttempts = Array.isArray(attempts) ? attempts : [];
+  suppliedAttempts.forEach((attempt, index) => {
+    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt)) {
+      errors.push(`attempt_${index + 1}_must_be_object`);
+      return;
+    }
+    if (typeof attempt.attempt_id !== "string" || attempt.attempt_id.trim() === "") errors.push(`attempt_${index + 1}_id_missing`);
+    if (!REVIEW_ATTEMPT_REF.test(attempt.attempt_ref ?? "")) errors.push(`attempt_${index + 1}_ref_invalid`);
+    if (!HASH.test(attempt.attempt_hash ?? "")) errors.push(`attempt_${index + 1}_hash_invalid`);
+    if (!REVIEW_ATTEMPT_STATUSES.has(attempt.status)) errors.push(`attempt_${index + 1}_status_invalid`);
+  });
+  const canonicalAttempts = canonical_attempts === null ? null : (Array.isArray(canonical_attempts) ? canonical_attempts : []);
+  if (canonical_attempts !== null && !Array.isArray(canonical_attempts)) errors.push("canonical_attempts_must_be_array");
+  if (canonicalAttempts !== null) {
+    const canonicalByRef = new Map(canonicalAttempts.map((attempt) => [attempt?.attempt_ref, attempt]));
+    for (const attempt of suppliedAttempts) {
+      const canonical = canonicalByRef.get(attempt?.attempt_ref);
+      if (!canonical || canonical.attempt_hash !== attempt.attempt_hash || canonical.attempt_id !== attempt.attempt_id) {
+        errors.push("attempt_not_bound_to_canonical_record");
+      }
+    }
+    const currentCanonical = canonicalAttempts.filter((attempt) => attempt?.material_revision === material_revision);
+    const suppliedRefs = new Set(suppliedAttempts.map((attempt) => attempt?.attempt_ref));
+    if (currentCanonical.some((attempt) => !suppliedRefs.has(attempt.attempt_ref))) errors.push("attempt_history_incomplete");
+  }
+  if (!request || typeof request !== "object" || Array.isArray(request)) errors.push("request_must_be_object");
+  const kind = request?.kind ?? "initial";
+  if (!REVIEW_BUDGET_KINDS.has(kind)) errors.push("review_kind_invalid");
+  const currentAttempts = suppliedAttempts.filter((attempt) => attempt?.material_revision === material_revision);
+  if (currentAttempts.length !== suppliedAttempts.length) errors.push("material_revision_mismatch");
+  const counts = {
+    initial: currentAttempts.filter((attempt) => attempt?.kind === "initial").length,
+    focused: currentAttempts.filter((attempt) => attempt?.kind === "focused").length,
+    narrow_diff: currentAttempts.filter((attempt) => attempt?.kind === "narrow_diff").length,
+    phase: currentAttempts.filter((attempt) => attempt?.kind === "phase" && attempt?.phase_id === request?.phase_id).length,
+  };
+  if (errors.length) return reviewBudgetResult({ ok: false, reason: "budget_input_invalid", budget_scope: kind === "phase" ? "phase" : "material", counts, errors });
+  if (kind === "phase") {
+    if (typeof request.phase_id !== "string" || request.phase_id.trim() === "") {
+      return reviewBudgetResult({ ok: false, reason: "phase_id_missing", budget_scope: "phase", counts, errors: ["phase_id_missing"] });
+    }
+    if (counts.phase > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", budget_scope: "phase", counts });
+    return reviewBudgetResult({ ok: true, route: "phase_review", budget_scope: "phase", counts });
+  }
+  if (kind === "initial") {
+    if (counts.initial > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
+    return reviewBudgetResult({ ok: true, route: "initial_review", counts });
+  }
+  if (kind === "focused") {
+    if (request.changed !== true) return reviewBudgetResult({ ok: false, reason: "no_material_change_for_focused_review", route: "ask_user", counts });
+    if (counts.focused > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "narrow_diff", counts });
+    return reviewBudgetResult({ ok: true, route: "focused_review", counts });
+  }
+  if (kind === "narrow_diff") {
+    const changedPaths = Array.isArray(request.changed_paths) ? request.changed_paths : [];
+    const allowedPaths = new Set(Array.isArray(request.allowed_paths) ? request.allowed_paths : []);
+    const pathError = changedPaths.length === 0
+      ? "narrow_diff_paths_missing"
+      : changedPaths.some((path) => typeof path !== "string" || path.trim() === "" || path.startsWith("/") || path.split("/").includes(".."))
+        ? "narrow_diff_path_invalid"
+        : changedPaths.some((path) => !allowedPaths.has(path)) ? "narrow_diff_out_of_scope" : null;
+    if (pathError) return reviewBudgetResult({ ok: false, reason: pathError, route: "ask_user", counts });
+    if (counts.narrow_diff > 0) return reviewBudgetResult({ ok: false, reason: "budget_exceeded", route: "ask_user", counts });
+    return reviewBudgetResult({ ok: true, route: "narrow_diff_reconciled", counts });
+  }
+  return reviewBudgetResult({ ok: false, reason: "review_kind_invalid", counts, errors: ["review_kind_invalid"] });
+}
+
+function proxyMetricBindings(events, label, field, expected_material_revision = null, expected_snapshot_tree = null) {
+  const errors = [];
+  if (!Array.isArray(events)) return [`${label}_events_must_be_array`];
+  events.forEach((event, index) => {
+    if (!event || typeof event !== "object" || Array.isArray(event)) {
+      errors.push(`${label}[${index}]_must_be_object`);
+      return;
+    }
+    if (typeof event.material_revision !== "string" || event.material_revision.trim() === "") errors.push(`${label}[${index}]_material_revision_missing`);
+    if (!SNAPSHOT.test(event.snapshot_tree ?? "")) errors.push(`${label}[${index}]_snapshot_tree_invalid`);
+    if (expected_material_revision !== null && event.material_revision !== expected_material_revision) errors.push(`${label}[${index}]_material_revision_mismatch`);
+    if (expected_snapshot_tree !== null && event.snapshot_tree !== expected_snapshot_tree) errors.push(`${label}[${index}]_snapshot_tree_mismatch`);
+    if (!nonNegativeInteger(event[field])) errors.push(`${label}[${index}]_${field}_invalid`);
+  });
+  return errors;
+}
+
+/** Derive the three character-level context proxies from bound stage events. */
+export function deriveContextProxyMetrics({ packet_events = [], full_reread_events = [], subagent_input_bytes, review_material_bytes, baseline_chars, expected_material_revision = null, expected_snapshot_tree = null } = {}) {
+  const errors = [
+    ...proxyMetricBindings(packet_events, "packet", "packet_injected_chars", expected_material_revision, expected_snapshot_tree),
+    ...proxyMetricBindings(full_reread_events, "reread", "read_chars", expected_material_revision, expected_snapshot_tree),
+  ];
+  if (!nonNegativeInteger(subagent_input_bytes)) errors.push("subagent_input_bytes_invalid");
+  if (!nonNegativeInteger(review_material_bytes)) errors.push("review_material_bytes_invalid");
+  if (!nonNegativeInteger(baseline_chars)) errors.push("baseline_chars_invalid");
+  if (errors.length) return Object.freeze({ status: "incomplete", errors: Object.freeze([...new Set(errors)]) });
+  const packetInjected = packet_events.reduce((total, event) => total + event.packet_injected_chars, 0);
+  const rereadChars = full_reread_events.reduce((total, event) => total + event.read_chars, 0);
+  const currentChars = packetInjected + rereadChars;
+  return Object.freeze({
+    status: "recorded",
+    packet_injected_chars: packetInjected,
+    full_reread_count: full_reread_events.length,
+    baseline_chars,
+    current_chars: currentChars,
+    subagent_input_bytes,
+    review_material_bytes,
+    conclusion: currentChars < baseline_chars ? "observed_lower" : "not_proven_decrease",
+    event_hash: createHash("sha256").update(canonicalJson({ packet_events, full_reread_events }), "utf8").digest("hex"),
+    errors: Object.freeze([]),
+  });
+}
+
+/** Keep provider usage truthfully separate from semantic review status. */
+export function validateReviewAttemptObservation({ attempt, proxy_metrics = null, expected_material_revision = null, expected_snapshot_tree = null } = {}) {
+  const value = attempt && typeof attempt === "object" && !Array.isArray(attempt) ? attempt : {};
+  const providers = Array.isArray(value.provider_results)
+    ? value.provider_results
+    : Array.isArray(value.provider_attempts) ? value.provider_attempts : [];
+  const errors = [];
+  const usage = providers.map((provider, index) => {
+    const name = typeof provider?.provider === "string" && provider.provider.trim() !== "" ? provider.provider : `provider-${index + 1}`;
+    if (!provider || typeof provider !== "object" || !REVIEW_ATTEMPT_STATUSES.has(provider.status)) {
+      errors.push(`provider_${index + 1}_status_invalid`);
+      return { provider: name, status: "unavailable", reason: "provider_status_invalid" };
+    }
+    if (provider.usage === null || provider.usage === undefined || (typeof provider.usage === "object" && !Array.isArray(provider.usage) && Object.keys(provider.usage).length === 0)) {
+      return { provider: name, status: "unavailable", reason: provider.status === "completed" ? "usage_missing" : "attempt_unavailable" };
+    }
+    if (typeof provider.usage !== "object" || Array.isArray(provider.usage)) {
+      errors.push(`${name}_usage_invalid`);
+      return { provider: name, status: "unavailable", reason: "usage_invalid" };
+    }
+    return { provider: name, status: "recorded", usage: Object.freeze({ ...provider.usage }) };
+  });
+  if (providers.length === 0) errors.push("provider_attempts_missing");
+  const usageUnavailable = usage.some((entry) => entry.status === "unavailable");
+  const proxy = proxy_metrics === null ? null : deriveContextProxyMetrics({
+    ...proxy_metrics,
+    expected_material_revision,
+    expected_snapshot_tree,
+  });
+  if (proxy?.status !== "recorded") errors.push(...(proxy?.errors ?? ["proxy_metrics_missing"]));
+  return Object.freeze({
+    status: errors.length || usageUnavailable ? "incomplete" : "recorded",
+    usage: Object.freeze(usage),
+    ...(proxy ? { proxy_metrics: proxy } : {}),
+    errors: Object.freeze([...new Set(errors)]),
+  });
 }
 
 function validateValue(value) {

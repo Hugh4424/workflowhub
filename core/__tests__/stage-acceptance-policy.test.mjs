@@ -8,7 +8,7 @@ describe("stage acceptance policy", () => {
     ["build-spec", "automatic"],
     ["build-plan", "human"],
     ["build-code", "automatic"],
-    ["verify-code", "human"],
+    ["verify-code", "automatic"],
   ])("maps %s to %s acceptance", (stage, mode) => {
     expect(acceptanceModeFor(stage)).toBe(mode);
     expect(requiresHumanConfirmation(stage)).toBe(mode === "human");

@@ -431,9 +431,9 @@ function buildAnalyzer({ execution, taskId, stage, snapshot, materials, manifest
 
 function buildCodeReviewOutcome({ execution, stage, snapshot, materials, manifest, skills }) {
   const input = object(execution.code_review, "execution.code_review");
-  const reviewStep = manifest.steps.find((step) => step.step_slug === "approve-verification");
+  const reviewStep = manifest.steps.find((step) => step.step_slug === "finalize-code-review");
   const reviewSkill = skills.skills?.find((skill) => skill.name === "dsh-code-review");
-  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare dsh-code-review and approve-verification");
+  if (!reviewStep || !reviewSkill) throw new Error("verify-code manifests must declare dsh-code-review and finalize-code-review");
   const result = object(input.result, "execution.code_review.result");
   const allowed = new Set(["status", "findings", "summary", "focus", "repairs"]);
   const unknown = Object.keys(result).filter((key) => !allowed.has(key));
@@ -524,7 +524,7 @@ function unavailableExecution({ stage, host, sourceId, sourceFamily, agentRunId,
         stage,
         snapshot_tree: snapshotTree,
         material_revision: materialRevision,
-        step_slug: "approve-verification",
+        step_slug: "finalize-code-review",
         skill_id: "dsh-code-review",
         result: { status: "unavailable", findings: [], summary: `Stage Agent 未提供代码审查结果：${safeReason}` },
       },
