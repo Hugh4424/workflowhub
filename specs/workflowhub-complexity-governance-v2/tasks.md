@@ -65,14 +65,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增 delivery-tree inventory、复杂度 reporter、inventory TSV、复杂度基线与合同测试；inventory 支持 alternate index 与自稳定 hash，baseline 分离 formal/support tests，并可复算 persistent families、bundle violations、Node/npm runtime contract。
+- **executed_commands**：`node tools/architecture/inventory.mjs --check && node tools/architecture/complexity-report.mjs --check-hard-gates && node tools/architecture/deletion-proof.mjs --check && ./node_modules/.bin/vitest run tests/contract/repository-inventory.test.mjs tests/contract/deletion-proof.test.mjs && npx markdownlint-cli2 'specs/workflowhub-complexity-governance-v2/*.md' && npm ci --ignore-scripts --dry-run && test "$(git ls-files node_modules | wc -l | tr -d ' ')" = 0`
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/c0487baf565b33dfbe40c68a7a31a12237594c6e357f7c6868cb6db127933520.json","sha256":"f8cf07ddde139de5dfe3aab5add66d2bf4b80a4a91cc60629655cf175681cb6e"},{"ref":"receipts/build-tests-phase-0-pass.json","sha256":"c0b829a06574592e83537ec53fe4a5d82a402b5e4a4c3947385e8fd8fdb3c1c5"},{"ref":"reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json","sha256":"7f92794436f944c1b668df752217d4ae7649888a68700633c0aa76bc389ade68"}]`
+- **covered_ac**：AC-13、AC-14
+- **review_fact**：`reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json`
+- **completed_at**：2026-07-30T16:32:01Z
 
 #### T002 — 先证明缺字段 deletion proof 会失败
 
@@ -103,14 +103,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增 deletion proof 合同测试，证明缺实现或 proof 字段不完整时必须失败并保持 KEEP。
+- **executed_commands**：`node tools/architecture/inventory.mjs --check && node tools/architecture/complexity-report.mjs --check-hard-gates && node tools/architecture/deletion-proof.mjs --check && ./node_modules/.bin/vitest run tests/contract/repository-inventory.test.mjs tests/contract/deletion-proof.test.mjs && npx markdownlint-cli2 'specs/workflowhub-complexity-governance-v2/*.md' && npm ci --ignore-scripts --dry-run && test "$(git ls-files node_modules | wc -l | tr -d ' ')" = 0`
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/c0487baf565b33dfbe40c68a7a31a12237594c6e357f7c6868cb6db127933520.json","sha256":"f8cf07ddde139de5dfe3aab5add66d2bf4b80a4a91cc60629655cf175681cb6e"},{"ref":"receipts/build-tests-phase-0-pass.json","sha256":"c0b829a06574592e83537ec53fe4a5d82a402b5e4a4c3947385e8fd8fdb3c1c5"},{"ref":"reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json","sha256":"7f92794436f944c1b668df752217d4ae7649888a68700633c0aa76bc389ade68"}]`
+- **covered_ac**：AC-06、AC-07
+- **review_fact**：`reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json`
+- **completed_at**：2026-07-30T16:32:01Z
 
 #### T003 — 实现 deletion proof 校验与 12 类候选清单
 
@@ -141,14 +141,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：新增 deletion proof validator 与 12 类候选清单；proof 绑定候选路径和 evidence，缺字段或错配时 fail closed 为 KEEP。
+- **executed_commands**：`node tools/architecture/inventory.mjs --check && node tools/architecture/complexity-report.mjs --check-hard-gates && node tools/architecture/deletion-proof.mjs --check && ./node_modules/.bin/vitest run tests/contract/repository-inventory.test.mjs tests/contract/deletion-proof.test.mjs && npx markdownlint-cli2 'specs/workflowhub-complexity-governance-v2/*.md' && npm ci --ignore-scripts --dry-run && test "$(git ls-files node_modules | wc -l | tr -d ' ')" = 0`
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/c0487baf565b33dfbe40c68a7a31a12237594c6e357f7c6868cb6db127933520.json","sha256":"f8cf07ddde139de5dfe3aab5add66d2bf4b80a4a91cc60629655cf175681cb6e"},{"ref":"receipts/build-tests-phase-0-pass.json","sha256":"c0b829a06574592e83537ec53fe4a5d82a402b5e4a4c3947385e8fd8fdb3c1c5"},{"ref":"reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json","sha256":"7f92794436f944c1b668df752217d4ae7649888a68700633c0aa76bc389ade68"}]`
+- **covered_ac**：AC-06、AC-07
+- **review_fact**：`reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json`
+- **completed_at**：2026-07-30T16:32:01Z
 
 #### T004 — 证明 node_modules 只是可重建本地缓存
 
@@ -179,14 +179,14 @@
 
 ##### 执行状态填写区（唯一完成权威）
 
-- [ ] **任务完成**
-- **status**：`pending`
-- **actual_changes**：N/A — not started
-- **executed_commands**：N/A — not started
-- **evidence_refs**：N/A — not started
-- **covered_ac**：N/A — not started
-- **review_fact**：N/A — build-code Phase review not executed
-- **completed_at**：N/A — not completed
+- [x] **任务完成**
+- **status**：`completed`
+- **actual_changes**：复杂度基线记录 node_modules tracked=0、gitignore 边界、lockfile hash 与 Node/npm runtime contract；Phase gate 验证 clean-install dry-run 可重建。
+- **executed_commands**：`node tools/architecture/inventory.mjs --check && node tools/architecture/complexity-report.mjs --check-hard-gates && node tools/architecture/deletion-proof.mjs --check && ./node_modules/.bin/vitest run tests/contract/repository-inventory.test.mjs tests/contract/deletion-proof.test.mjs && npx markdownlint-cli2 'specs/workflowhub-complexity-governance-v2/*.md' && npm ci --ignore-scripts --dry-run && test "$(git ls-files node_modules | wc -l | tr -d ' ')" = 0`
+- **evidence_refs**：`[{"ref":"receipts/revisions/implementation/c0487baf565b33dfbe40c68a7a31a12237594c6e357f7c6868cb6db127933520.json","sha256":"f8cf07ddde139de5dfe3aab5add66d2bf4b80a4a91cc60629655cf175681cb6e"},{"ref":"receipts/build-tests-phase-0-pass.json","sha256":"c0b829a06574592e83537ec53fe4a5d82a402b5e4a4c3947385e8fd8fdb3c1c5"},{"ref":"reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json","sha256":"7f92794436f944c1b668df752217d4ae7649888a68700633c0aa76bc389ade68"}]`
+- **covered_ac**：AC-10
+- **review_fact**：`reviews/results/build-code-default-8e8762f30fd7d4d5fe4e9a6efe2817f849015998-67d18ae7-8fed-4c3f-808e-1a8575dc9fa5.json`
+- **completed_at**：2026-07-30T16:32:01Z
 
 ### Verify
 
