@@ -1,0 +1,3 @@
+# Missing the required registry key — load-config must throw (FR-CFG-001).
+external_deps:
+  - js-yaml

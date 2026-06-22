@@ -1,0 +1,13 @@
+# Full static config: registry + 4 placeholder keys + task_dir.
+# None of these is a runtime-state field, so it must be accepted.
+registry:
+  - component_id: noop
+    workflow: demo
+external_deps:
+  - js-yaml
+metrics_path: metrics/
+cli_map:
+  lint: run-lint
+path_guard:
+  - core/
+task_dir: tasks/

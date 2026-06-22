@@ -1,0 +1,7 @@
+# registry present, but the config carries a runtime-state field (`current_stage`)
+# which must never enter the global static config — load-config rejects it
+# (FR-CFG-003, decision 8: avoid global-single-pointer concurrency cross-talk).
+registry:
+  - component_id: noop
+    workflow: demo
+current_stage: apply

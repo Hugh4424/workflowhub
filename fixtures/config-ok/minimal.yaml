@@ -1,0 +1,4 @@
+# Minimal valid config: registry is the only required key.
+registry:
+  - component_id: noop
+    workflow: demo

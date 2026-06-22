@@ -1,0 +1,7 @@
+# registry present, but the `cli_map` placeholder is a list instead of a map —
+# shape check must fail (FR-CFG-002, not a runtime-state rejection).
+registry:
+  - component_id: noop
+    workflow: demo
+cli_map:
+  - lint

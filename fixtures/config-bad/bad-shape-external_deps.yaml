@@ -1,0 +1,6 @@
+# registry present, but the `external_deps` placeholder is a scalar instead of a
+# list — shape check must fail (FR-CFG-002, not a runtime-state rejection).
+registry:
+  - component_id: noop
+    workflow: demo
+external_deps: "this-should-be-a-list"
