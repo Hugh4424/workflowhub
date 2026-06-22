@@ -119,22 +119,22 @@ describe("kernel scenario 6: output component_id mismatch → failure (FR-CORE-0
   });
 });
 
-// Scenario 7: Shipped default config shape-only contract (M2 / AC1 evidence).
-// config/workflowhub.yaml is a shape-only skeleton — it has component_id + workflow
-// (the M2-minimum registry fields per plan.md lines 90-91 / decision 14) but no
-// runtime path, because M2 forbids host-inferred paths (AC8 / FR-CORE-003) and ships
-// no component scripts. "定位" (locate) succeeds; dispatch fails as expected.
-describe("kernel scenario 7: shipped config shape-only — locate PASS, dispatch fails (M2 contract)", () => {
+// Scenario 7: Shipped default config end-to-end contract (M2 / AC1 evidence).
+// config/workflowhub.yaml ships a noop registry entry with path: scripts/noop.mjs,
+// proving both locate (component_id + workflow) and dispatch (runKernel succeeds).
+describe("kernel scenario 7: shipped config — locate PASS, dispatch PASS (M2 contract)", () => {
   const shippedConfigPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../config/workflowhub.yaml");
 
-  it("shipped config resolves noop entry with component_id and workflow (shape-only locate)", () => {
+  it("shipped config resolves noop entry with component_id, workflow, and path", () => {
     const config = loadConfig(shippedConfigPath);
     const entry = resolveComponent(config, "demo");
     expect(entry.component_id).toBe("noop");
     expect(entry.workflow).toBe("demo");
+    expect(typeof entry.path).toBe("string");
   });
 
-  it("shipped config dispatch fails (no runtime path — M2 defers dispatch wiring to M3+)", async () => {
-    await expect(runKernel(shippedConfigPath, "demo")).rejects.toThrow();
+  it("shipped config dispatch succeeds — noop component returns component_id", async () => {
+    const result = await runKernel(shippedConfigPath, "demo");
+    expect(result.component_id).toBe("noop");
   });
 });
