@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "validated_by_stage": null,
+  "validated_by_stage": "intake->design",
   "required_fields": [
     {"name": "component_id", "type": "string"},
     {"name": "output_path", "type": "string"}
