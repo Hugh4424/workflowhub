@@ -4,6 +4,8 @@ import { dirname, resolve, join } from "node:path";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import os from "node:os";
 import { runKernel } from "../kernel.mjs"; // does not exist yet — RED
+import { loadConfig } from "../load-config.mjs";
+import { resolveComponent } from "../resolve-component.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
@@ -114,5 +116,25 @@ describe("kernel scenario 5: output missing component_id → failure (FR-CORE-00
 describe("kernel scenario 6: output component_id mismatch → failure (FR-CORE-002 / D14)", () => {
   it("rejects when component exits 0 but output component_id does not match registry entry", async () => {
     await expect(runKernel(configPath, "test-wrong-id")).rejects.toThrow();
+  });
+});
+
+// Scenario 7: Shipped default config shape-only contract (M2 / AC1 evidence).
+// config/workflowhub.yaml is a shape-only skeleton — it has component_id + workflow
+// (the M2-minimum registry fields per plan.md lines 90-91 / decision 14) but no
+// runtime path, because M2 forbids host-inferred paths (AC8 / FR-CORE-003) and ships
+// no component scripts. "定位" (locate) succeeds; dispatch fails as expected.
+describe("kernel scenario 7: shipped config shape-only — locate PASS, dispatch fails (M2 contract)", () => {
+  const shippedConfigPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../config/workflowhub.yaml");
+
+  it("shipped config resolves noop entry with component_id and workflow (shape-only locate)", () => {
+    const config = loadConfig(shippedConfigPath);
+    const entry = resolveComponent(config, "demo");
+    expect(entry.component_id).toBe("noop");
+    expect(entry.workflow).toBe("demo");
+  });
+
+  it("shipped config dispatch fails (no runtime path — M2 defers dispatch wiring to M3+)", async () => {
+    await expect(runKernel(shippedConfigPath, "demo")).rejects.toThrow();
   });
 });
