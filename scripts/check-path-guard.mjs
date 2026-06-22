@@ -32,8 +32,6 @@
 // ponytail: flat array sufficient for current scale; convert to pattern-match
 // (glob/regex) if path count exceeds ~20 or wildcard semantics are needed.
 const PROTECTED_PATHS = [
-  // Core configuration / schema
-  "config/workflowhub.yaml",
   // Constitution — source of truth for design constraints
   "CONSTITUTION.md",
   // Agent contract files

@@ -49,19 +49,19 @@ describe("check-path-guard — protected path triggers violation (FR-PATHG-001)"
   it("protected file in --files list → exit 1", () => {
     // The guard ships a built-in list; pick a known protected path.
     // We pass the filename string, not an actual on-disk file.
-    const result = run(["--files", "config/workflowhub.yaml"]);
+    const result = run(["--files", "CONSTITUTION.md"]);
     expect(result.code).toBe(1);
   });
 
   it("stdout reports the violating path", () => {
-    const result = run(["--files", "config/workflowhub.yaml"]);
-    expect(result.stdout + result.stderr).toMatch(/workflowhub\.yaml/);
+    const result = run(["--files", "CONSTITUTION.md"]);
+    expect(result.stdout + result.stderr).toMatch(/CONSTITUTION\.md/);
   });
 
   it("multiple files: protected + clean → still exit 1", () => {
     const result = run([
       "--files",
-      "config/workflowhub.yaml",
+      "CONSTITUTION.md",
       "README.md",
     ]);
     expect(result.code).toBe(1);
@@ -102,8 +102,8 @@ describe("check-path-guard — non-protected path passes (FR-PATHG-001 pass-thro
 // ---------------------------------------------------------------------------
 describe("check-path-guard — idempotent (FR-PATHG-002)", () => {
   it("two runs on protected path → same exit code", () => {
-    const r1 = run(["--files", "config/workflowhub.yaml"]);
-    const r2 = run(["--files", "config/workflowhub.yaml"]);
+    const r1 = run(["--files", "CONSTITUTION.md"]);
+    const r2 = run(["--files", "CONSTITUTION.md"]);
     expect(r1.code).toBe(r2.code);
   });
 
@@ -129,7 +129,7 @@ describe("check-path-guard — idempotent (FR-PATHG-002)", () => {
     try {
       execFileSync(
         process.execPath,
-        [checkPathGuard, "--files", "config/workflowhub.yaml"],
+        [checkPathGuard, "--files", "CONSTITUTION.md"],
         { encoding: "utf8", cwd: tmpDir, env: { ...process.env } }
       );
     } catch (_) {
@@ -139,7 +139,7 @@ describe("check-path-guard — idempotent (FR-PATHG-002)", () => {
     try {
       execFileSync(
         process.execPath,
-        [checkPathGuard, "--files", "config/workflowhub.yaml"],
+        [checkPathGuard, "--files", "CONSTITUTION.md"],
         { encoding: "utf8", cwd: tmpDir, env: { ...process.env } }
       );
     } catch (_) {
