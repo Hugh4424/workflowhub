@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "validated_by_stage": null,
+  "required_fields": [
+    {"name": "component_id", "type": "string"},
+    {"name": "output_path", "type": "string"}
+  ]
+}
