@@ -34,7 +34,7 @@ function run(args = [], opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// FR-CI-001: Aggregation — normal repo → exit 0, all three checkers invoked
+// FR-CI-001: Aggregation — normal repo → exit 0, all four checkers invoked
 // ---------------------------------------------------------------------------
 
 describe("FR-CI-001: aggregate mode (no args)", () => {
@@ -58,6 +58,11 @@ describe("FR-CI-001: aggregate mode (no args)", () => {
     // On a clean committed repo it may be skipped; run-checks must say so.
     const r = run();
     expect(r.output).toMatch(/check-path-guard/);
+  });
+
+  test("stdout mentions check-contract (checker was invoked)", () => {
+    const r = run();
+    expect(r.output).toMatch(/check-contract/);
   });
 });
 

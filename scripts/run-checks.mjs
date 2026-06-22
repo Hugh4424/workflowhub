@@ -1,10 +1,11 @@
 /**
  * run-checks.mjs  (FR-CI-001 / FR-CI-002 / FR-CI-003)
  *
- * Unified check entry point. Aggregates three checkers:
+ * Unified check entry point. Aggregates four checkers:
  *   - check-anti-host    (FR-GUARD-001/002)
  *   - check-extensibility (FR-EXT-001/002)
  *   - check-path-guard   (FR-PATHG-001/002)
+ *   - check-contract     (FR-NC-005)
  *
  * Modes:
  *   node scripts/run-checks.mjs            — aggregate mode (default)
@@ -198,6 +199,13 @@ function runAggregate() {
     if (pgCode !== 0) {
       failures.push({ name: "check-path-guard", code: pgCode });
     }
+  }
+
+  // 4. check-contract (FR-NC-005 path-only constraint)
+  console.log("[run-checks] running check-contract ...");
+  const contractCode = runChecker("check-contract", []);
+  if (contractCode !== 0) {
+    failures.push({ name: "check-contract", code: contractCode });
   }
 
   if (failures.length === 0) {
