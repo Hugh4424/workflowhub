@@ -1,0 +1,1 @@
+{"version":"1.0.0","validated_by_stage":"design","required_fields":[{"name":"execution_id","type":"string"},{"name":"progress","type":"object"},{"name":"facts","type":"object"},{"name":"metrics","type":"object"},{"name":"feedback","type":"object"},{"name":"boundary_decisions","type":"object"},{"name":"trace_index","type":"object"}]}
