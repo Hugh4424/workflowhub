@@ -12,3 +12,9 @@ registry:
 # resolver (FR-CFG-004) in a later phase, and its runtime semantics (how records
 # are written) are deferred to M3+. It is NOT a runtime-state field.
 task_dir: tasks/
+
+# metrics_path: global flat metrics store (M4, FR-COLLECT-006/007). Default is a
+# user-level path OUTSIDE the repo so cross-task aggregation is not committed to VCS.
+# Configurable; CI smoke overrides it with a temp dir (FR-CI-002). load-config.mjs
+# already whitelists this key (M2 ALLOWED_KEYS) — only the value is filled here.
+metrics_path: ~/.workflowhub/metrics/global-metrics.jsonl
