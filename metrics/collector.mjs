@@ -78,7 +78,7 @@ function writeAll(path, records, cfg) {
 }
 
 // Upsert one record by execution_id into a jsonl store (re-locate from disk + merge).
-function upsert(path, execution_id, patch, cfg) {
+export function upsert(path, execution_id, patch, cfg) {
   const records = readAll(path);
   const idx = records.findIndex((r) => r.execution_id === execution_id);
   if (idx === -1) {

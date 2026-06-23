@@ -1,3 +1,6 @@
+import { fileURLToPath } from "url";
+import { resolve } from "path";
+
 /**
  * check-path-guard.mjs  (FR-PATHG-001 / FR-PATHG-002 / FR-PATHG-003)
  *
@@ -94,7 +97,7 @@ function normalisePath(p) {
  * precise relative paths, not suffix patterns.  A file at docs/AGENTS.md must
  * NOT match the protected entry "AGENTS.md" (FR-PATHG-001 pass-through).
  */
-function findViolation(changedFile) {
+export function findViolation(changedFile) {
   const normalised = normalisePath(changedFile);
   for (const protected_ of PROTECTED_PATHS) {
     if (normalised === protected_) {
@@ -187,4 +190,6 @@ function main() {
   process.exit(1);
 }
 
-main();
+const isMain =
+  process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+if (isMain) main();
