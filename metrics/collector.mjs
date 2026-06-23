@@ -18,6 +18,7 @@
 import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { homedir } from "os";
+import { spawnSync } from "child_process";
 
 const GAP = "gap";
 
@@ -77,7 +78,7 @@ function writeAll(path, records, cfg) {
 }
 
 // Upsert one record by execution_id into a jsonl store (re-locate from disk + merge).
-function upsert(path, execution_id, patch, cfg) {
+export function upsert(path, execution_id, patch, cfg) {
   const records = readAll(path);
   const idx = records.findIndex((r) => r.execution_id === execution_id);
   if (idx === -1) {
@@ -155,7 +156,71 @@ export function updateOwnResult(execution_id, patch, cfg) {
   upsert(cfg.taskMetricsPath, execution_id, resolved, cfg);
   const current = readRecord(execution_id, cfg);
   if (current) upsert(cfg.globalMetricsPath, execution_id, toGlobalRow(current, cfg), cfg);
+  collectFacts(execution_id, patch, cfg);
   return current;
+}
+
+/**
+ * collectFacts — FR-FACT-001/002/003: write 4 physical facts into the task record.
+ * Derives facts from real zero-cost sources (patch for exit_code, git for sha/files,
+ * readRecord for review_invoked). Never throws (FR-GUARD-001). On any error emits stderr warn.
+ * ponytail: review_invoked derived from execution-record fields; future journal integration
+ * can add richer signals without changing the signature. Ceiling: integrate with journal
+ * transcript when review-phase records become available.
+ */
+export function collectFacts(execution_id, factSeed, cfg) {
+  try {
+    const patch = factSeed ?? {};
+
+    // exit_code: host supplies via patch (real value at skill end); anything non-numeric -> null.
+    const exit_code = typeof patch.exit_code === "number" ? patch.exit_code : null;
+
+    // git_sha: zero-cost read of HEAD commit sha.
+    let git_sha = null;
+    try {
+      const cwd = cfg.repoRoot ?? process.cwd();
+      const r = spawnSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" });
+      if (r.status === 0 && r.stdout) git_sha = r.stdout.trim();
+    } catch (_) { /* non-git env: leave null */ }
+
+    // files_changed: zero-cost list of changed paths relative to HEAD.
+    let files_changed = null;
+    try {
+      const cwd = cfg.repoRoot ?? process.cwd();
+      const r = spawnSync("git", ["diff", "--name-only", "HEAD"], { cwd, encoding: "utf8" });
+      if (r.status === 0 && r.stdout != null) {
+        files_changed = r.stdout.split("\n").filter(Boolean);
+      }
+    } catch (_) { /* non-git env: leave null */ }
+
+    // review_invoked: read back current execution-record and derive from it.
+    // If no reliable signal is present, emit a warn and write literal false (not null).
+    let review_invoked = false;
+    const record = readRecord(execution_id, cfg);
+    if (record && typeof record.review_invoked === "boolean") {
+      review_invoked = record.review_invoked;
+    } else if (patch && typeof patch.review_invoked === "boolean") {
+      // Fallback: patch carries it explicitly (e.g. from test or direct call).
+      review_invoked = patch.review_invoked;
+    } else {
+      process.stderr.write(
+        `[collectFacts warn] review_invoked not derivable for ${execution_id}; defaulting to false.\n`
+      );
+      review_invoked = false;
+    }
+
+    const facts = { exit_code, git_sha, files_changed, review_invoked };
+    const ok = upsert(cfg.taskMetricsPath, execution_id, { facts }, cfg);
+    if (ok === false) {
+      process.stderr.write(
+        `[collectFacts warn] fact write failed for ${execution_id}\n`
+      );
+    }
+  } catch (err) {
+    process.stderr.write(
+      `[collectFacts warn] fact collection failed for ${execution_id}: ${err.message}\n`
+    );
+  }
 }
 
 /**

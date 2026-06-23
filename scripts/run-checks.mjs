@@ -216,6 +216,13 @@ function runAggregate() {
     failures.push({ name: "check-metrics-schema", code: metricsSchemaCode });
   }
 
+  // 6. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
+  console.log("[run-checks] running check-stage-quality ...");
+  const stageQualityCode = runChecker("check-stage-quality", []);
+  if (stageQualityCode !== 0) {
+    failures.push({ name: "check-stage-quality", code: stageQualityCode });
+  }
+
   if (failures.length === 0) {
     console.log("[run-checks] ALL CHECKS PASSED");
     process.exit(0);
