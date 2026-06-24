@@ -7,18 +7,18 @@ description: Implement each task phase by phase using TDD, collecting RED and GR
 
 ## Goal
 
-Implement the change described by the upstream stage-result. The upstream may be `build-plan` (full path) or `make-decision` directly (slim path — small tasks that skip design and planning). Read the upstream `stage-result` first; consume its `facts` keys to understand the scope and constraints. Do not assume `tasks.md` exists — it is only present when the upstream is `build-plan`.
+Implement the change described by the upstream stage-result. The upstream may be `build-plan` (full path) or `make-decision` directly (slim path — small tasks that skip design and planning). Read the upstream `stage-result` first and consume its `facts` keys to understand scope and constraints.
 
-Each phase follows a strict RED → implement → GREEN cycle. No phase is considered done without both evidence files.
+Each phase follows a strict RED → implement → GREEN cycle. No phase is done without both evidence files.
 
 ## What to do
 
 ### 1. Read upstream stage-result
 
-Read the `stage-result` produced by the previous stage. Extract the relevant `facts`:
+Read the `stage-result` produced by the previous stage and extract the relevant `facts`:
 
-- If upstream is **`build-plan`**: read `facts.plan_ref` and `facts.tasks` — then read `tasks.md` for the phase list.
-- If upstream is **`make-decision`** (slim path): read `facts.decision` and `facts.scope` — derive the implementation work directly from these. Do not look for `tasks.md` or `plan.md`; they do not exist on the slim path.
+- If upstream is **`build-plan`**: read `facts.plan_ref` and `facts.tasks`, then read `tasks.md` for the phase list.
+- If upstream is **`make-decision`** (slim path): read `facts.decision` and `facts.scope` — derive implementation work directly from these. `tasks.md` and `plan.md` do not exist on the slim path.
 
 ### 2. TDD cycle per phase
 

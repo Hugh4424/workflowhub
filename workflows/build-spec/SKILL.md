@@ -12,23 +12,23 @@ Translate the decision log from `make-decision` into a full spec. The spec becom
 ## What to do
 
 1. Read the decision log and any existing platform constraints before writing.
-2. Cross-check the proposed change against existing architecture documents. Call out any conflict in the spec under "non-goals" or "out of scope".
+2. Cross-check the proposed change against existing architecture documents. Call out any conflict under "non-goals" or "out of scope".
 3. Write a spec with at minimum: core scenarios (Given/When/Then), functional requirements (FR), explicit non-goals, acceptance criteria, and affected areas.
 4. Every requirement must have at least one scenario. Every acceptance criterion must be verifiable by hand or by a command.
 5. Record the spec location (facts key: `spec_ref`) and a summary of requirements (facts key: `requirements`).
 
-## F10 Anti-over-engineering gate (apply before finalising the spec)
+## F10 anti-over-engineering gate (apply before finalising the spec)
 
 Before writing any new mechanism, validation, CI check, gate, schema, dependency, or automation into the spec, answer all four questions. If you cannot answer all four, exclude it from scope.
 
-1. **What real threat does this defend against?** — Name a specific, observed failure mode (not "it could happen"). If the threat is hypothetical, the mechanism is premature.
+1. **What real threat does this defend against?** — Name a specific, observed failure mode (not "it could happen"). Hypothetical threats do not justify new infrastructure.
 2. **Does any existing mechanism already cover it?** — Check what is already in the codebase, config, or workflow before proposing something new. Duplication is waste.
-3. **Can it be bypassed, making it security-theatre rather than real protection?** — If yes and the bypass is trivial, the mechanism blocks only honest actors and costs more than it protects.
+3. **Can it be bypassed, making it security-theatre?** — If yes and the bypass is trivial, the mechanism blocks only honest actors and costs more than it protects.
 4. **What is the long-term maintenance cost?** — Every mechanism added here must be maintained across all future changes. If the cost exceeds the benefit, exclude it.
 
-If the answer to question 1 is "none in particular" or the answer to question 4 is "high and ongoing", stop — do not write the mechanism into the spec.
+If the answer to Q1 is "none in particular" or the answer to Q4 is "high and ongoing", stop — do not write the mechanism into the spec.
 
-This gate reflects constitution rule F10: automation and validation are added for real benefit, not to make things machine-checkable for its own sake. The cautionary example: a predecessor system chased "everything machine-verifiable" and accumulated ~95,000 lines of gate code with over a dozen recorded deadlocks. Do not repeat that pattern.
+This gate reflects constitution rule F10: automation and validation are added for real benefit, not to make things machine-checkable for its own sake. Cautionary example: a predecessor system accumulated ~95,000 lines of gate code with over a dozen deadlocks by chasing "everything machine-verifiable". Do not repeat that pattern.
 
 ## Produce a stage-result
 

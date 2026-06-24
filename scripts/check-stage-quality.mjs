@@ -171,6 +171,92 @@ const V6_3_UNMEASURABLE_AUTOBLOCK = {
 const CLASSES = [V6_1_FACT_COLLECT_BLOCK, V6_2_STAGE_RESULT_RUNTIME_BLOCK, V6_3_UNMEASURABLE_AUTOBLOCK];
 
 // ---------------------------------------------------------------------------
+// FR-METRIC-002: skill metric-wiring detection
+// ---------------------------------------------------------------------------
+
+/**
+ * scanSkillMetrics — check whether a single SKILL.md has both recordSkeleton
+ * AND updateOwnResult instructions (i.e. is correctly wired to metrics/collector.mjs).
+ *
+ * A skill is "wired" when its SKILL.md contains BOTH tokens:
+ *   - `recordSkeleton`  (call at stage start)
+ *   - `updateOwnResult` (call at stage end)
+ *
+ * Missing either token → { found: true, missingSkill: <name> }.
+ * Both present       → { found: false }.
+ *
+ * The skill name is derived from the SKILL.md path: the parent directory name
+ * (workflows/<name>/SKILL.md).
+ */
+export function scanSkillMetrics(skillPath) {
+  // Derive skill name from parent directory
+  const skillName = skillPath.split("/").slice(-2, -1)[0] ?? skillPath;
+
+  let content;
+  try {
+    content = readFileSync(skillPath, "utf8");
+  } catch (err) {
+    // Unreadable — treat as missing wiring so it surfaces as a finding
+    return { found: true, missingSkill: skillName, reason: `cannot read: ${err.message}` };
+  }
+
+  const hasRecordSkeleton = /\brecordSkeleton\b/.test(content);
+  const hasUpdateOwnResult = /\bupdateOwnResult\b/.test(content);
+
+  if (hasRecordSkeleton && hasUpdateOwnResult) {
+    return { found: false };
+  }
+
+  const missing = [];
+  if (!hasRecordSkeleton) missing.push("recordSkeleton");
+  if (!hasUpdateOwnResult) missing.push("updateOwnResult");
+
+  return { found: true, missingSkill: skillName, reason: `missing: ${missing.join(", ")}` };
+}
+
+// collectSkillPaths — enumerate workflows/<name>/SKILL.md from the repo root.
+// Returns an array of absolute paths.
+function collectSkillPaths() {
+  const workflowsDir = join(repoRoot, "workflows");
+  let entries;
+  try {
+    entries = readdirSync(workflowsDir, { withFileTypes: true });
+  } catch {
+    return []; // workflows/ dir doesn't exist — nothing to scan
+  }
+
+  const paths = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    // Skip spike/draft dirs
+    if (entry.name.startsWith("_")) continue;
+    const skillMd = join(workflowsDir, entry.name, "SKILL.md");
+    try {
+      statSync(skillMd); // throws if absent
+      paths.push(skillMd);
+    } catch {
+      // No SKILL.md in this dir — skip
+    }
+  }
+  return paths;
+}
+
+/**
+ * scanAllSkillMetrics — run metric-wiring check over all discovered SKILL.md files.
+ * Returns array of findings: { skillPath, skillName, reason }.
+ */
+export function scanAllSkillMetrics(skillPaths) {
+  const findings = [];
+  for (const skillPath of skillPaths) {
+    const result = scanSkillMetrics(skillPath);
+    if (result.found) {
+      findings.push({ skillPath, skillName: result.missingSkill, reason: result.reason });
+    }
+  }
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
 // File collection: metrics/ + scripts/, exclude self
 // ---------------------------------------------------------------------------
 
@@ -261,8 +347,15 @@ function runScan() {
 
   const findings = scanFiles(files);
 
-  if (findings.length === 0) {
-    console.log(`[check-stage-quality] PASS — quality-class blocking gates = 0`);
+  // FR-METRIC-002: also check all SKILL.md files for metrics wiring
+  const skillPaths = collectSkillPaths();
+  console.log(`[check-stage-quality] scanning ${skillPaths.length} SKILL.md file(s) for metrics wiring ...`);
+  const metricFindings = scanAllSkillMetrics(skillPaths);
+
+  const totalViolations = findings.length + metricFindings.length;
+
+  if (totalViolations === 0) {
+    console.log(`[check-stage-quality] PASS — quality-class blocking gates = 0, metric wiring = complete`);
     process.exit(0);
   }
 
@@ -270,7 +363,11 @@ function runScan() {
     const rel = relative(repoRoot, f.file);
     console.error(`[check-stage-quality] VIOLATION ${f.cls} (${f.fr}): ${rel}  →  ${f.match}`);
   }
-  console.error(`[check-stage-quality] FAIL — ${findings.length} quality-class blocking violation(s) found`);
+  for (const f of metricFindings) {
+    const rel = relative(repoRoot, f.skillPath);
+    console.error(`[check-stage-quality] VIOLATION V6④ (FR-METRIC-002): ${rel}  →  skill "${f.skillName}" ${f.reason}`);
+  }
+  console.error(`[check-stage-quality] FAIL — ${totalViolations} violation(s) found`);
   process.exit(1);
 }
 

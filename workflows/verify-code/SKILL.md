@@ -11,18 +11,18 @@ Confirm that the implementation satisfies every acceptance criterion in the spec
 
 ## Scope boundary: verify-code vs verify-change
 
-**`verify-code`** is this skill — stage 5, test-acceptance. It reads the spec's acceptance criteria and the implementation produced by `build-code`, runs the test suite, and writes `final-test-report.md` and `test-acceptance/summary.md`.
+**`verify-code`** is this skill — stage 5, test-acceptance. It reads the spec's acceptance criteria and the implementation from `build-code`, runs the test suite, and writes `final-test-report.md` and `test-acceptance/summary.md`.
 
-**`verify-change`** is a different concept — it refers to verifying a diff at code-review time (e.g. checking whether a proposed change is safe to merge). That is not this skill's responsibility. Do not conflate the two: `verify-code` checks whether the code meets the spec, not whether the diff is reviewable. If you are asked to "verify the change", confirm which meaning is intended before proceeding.
+**`verify-change`** is a different concept — verifying a diff at code-review time (checking whether a proposed change is safe to merge). That is not this skill's responsibility. `verify-code` checks whether the code meets the spec; `verify-change` checks whether the diff is reviewable. If you are asked to "verify the change", confirm which meaning is intended before proceeding.
 
 ## What to do
 
-1. Read the spec acceptance criteria (chapter 10 or equivalent) and the test designs from each phase in tasks.md.
+1. Read the spec acceptance criteria (chapter 10 or equivalent) and the test designs from each phase in `tasks.md`.
 2. Execute each acceptance criterion in order — do not skip any.
 3. Run the full test suite and record the outcome.
 4. Produce `final-test-report.md`: one row per criterion, result (pass/fail), and evidence (command output, screenshot, or log snippet).
 5. Write `test-acceptance/summary.md` with an overall verdict and any outstanding issues.
-6. If any criterion fails, document it clearly — do not mark the stage as success while failures remain.
+6. If any criterion fails, document it clearly in the report.
 7. Record the overall verdict (facts key: `verdict`) and the evidence location (facts key: `evidence_ref`).
 
 ## Produce a stage-result
