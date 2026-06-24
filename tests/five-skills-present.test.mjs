@@ -229,6 +229,42 @@ describe("build-code SKILL.md contains slim path / stage-result / make-decision 
   });
 });
 
+// --- scope-triage component skill (Phase 1, FR-SCOPE-001) ---
+// Independent literal tests — do NOT add scope-triage to SKILL_DIRS loop above.
+test("workflows/scope-triage/SKILL.md exists", () => {
+  const p = join(REPO_ROOT, "workflows", "scope-triage", "SKILL.md");
+  assert.ok(existsSync(p), `Missing: ${p}`);
+});
+
+test('workflows/scope-triage/SKILL.md has name="scope-triage" and non-empty description', () => {
+  const p = join(REPO_ROOT, "workflows", "scope-triage", "SKILL.md");
+  assert.ok(existsSync(p), `Missing: ${p}`);
+  const content = readFileSync(p, "utf8");
+  const fm = extractFrontmatter(content);
+  assert.ok(fm, "No valid YAML frontmatter in workflows/scope-triage/SKILL.md");
+  assert.equal(fm.name, "scope-triage", `frontmatter.name should be "scope-triage", got "${fm.name}"`);
+  assert.ok(
+    typeof fm.description === "string" && fm.description.trim().length > 0,
+    "frontmatter.description must be a non-empty string in workflows/scope-triage/SKILL.md"
+  );
+});
+
+test('registry contains component_id "scope-triage"', () => {
+  const configPath = join(REPO_ROOT, "config", "workflowhub.yaml");
+  let registeredIds = [];
+  try {
+    const raw = readFileSync(configPath, "utf8");
+    const matches = raw.matchAll(/component_id:\s*(\S+)/g);
+    registeredIds = Array.from(matches).map((m) => m[1]);
+  } catch (_) {
+    registeredIds = [];
+  }
+  assert.ok(
+    registeredIds.includes("scope-triage"),
+    `"scope-triage" not found in registry component_ids: ${JSON.stringify(registeredIds)}`
+  );
+});
+
 // --- Content checks: verify-code vs verify-change boundary (D5) ---
 describe("verify-code SKILL.md contains verify-change boundary explanation (D5)", () => {
   const skillPath = join(REPO_ROOT, "workflows", "verify-code", "SKILL.md");
