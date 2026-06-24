@@ -164,7 +164,7 @@ describe("boundary-confirm irreversible ops", () => {
 
 describe("boundary-confirm findViolation reuse", () => {
   it("delete on a CONSTITUTION.md (protected path) records needs_manual_confirm", () => {
-    // CONSTITUTION.md is in PROTECTED_PATHS per check-path-guard.mjs.
+    // CONSTITUTION.md is in PROTECTED_PATHS per core/protected-paths.mjs.
     // If boundary-confirm used a home-grown checker with a different list,
     // this test would fail (the assertion is on the specific protected list entry).
     const execution_id = "exec-protected-path";
@@ -180,7 +180,7 @@ describe("boundary-confirm findViolation reuse", () => {
     // Protected path → must record needs_manual_confirm flag
     expect(bd.needs_manual_confirm).toBe(true);
     // Protected path string comes from findViolation — must be CONSTITUTION.md
-    // (proving the real PROTECTED_PATHS list from check-path-guard was used)
+    // (proving the real PROTECTED_PATHS list from core/protected-paths was used)
     expect(bd.protected_path).toBe("CONSTITUTION.md");
   });
 

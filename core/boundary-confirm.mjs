@@ -3,13 +3,13 @@
  *
  * FR-BOUND-001: missing/failed/unknown states all pass through (never block).
  * FR-BOUND-002: decisions written into boundary_decisions (source-gated, non-orphan).
- * FR-BOUND-003: findViolation reused from check-path-guard (no home-grown checker).
+ * FR-BOUND-003: findViolation reused from core/protected-paths (no home-grown checker).
  * FR-GATE-003/004: all outcomes (confirmed/rejected/timeout) continue — never block.
  * FR-GUARD-001: never throws; wrap in try/catch, stderr warn on failure.
  */
 
 import { upsert } from "../metrics/collector.mjs";
-import { findViolation } from "../scripts/check-path-guard.mjs";
+import { findViolation } from "./protected-paths.mjs";
 
 const IRREVERSIBLE_OPS = new Set(["delete", "push", "merge", "archive"]);
 const SOURCE_TAG = "boundary-confirm@m5";

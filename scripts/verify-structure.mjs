@@ -11,12 +11,12 @@ const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 const ghSlug = (t) =>
   t.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
 
-const EXPECTED_ARTICLES = 20;
+const EXPECTED_ARTICLES = 21;
 const DENYLIST = ["Wish","Dispatcher","harness","host","checkpoint","runtime","metering","observability","email-reply"];
 const FIVE_STAGES = ["intake","design","plan","apply","test-acceptance"];
 const FOUR_PARTS = ["定义","最佳实践解释","正例","反例"];
 
-// ── AC-2: 宪法 20 条，每条四段非空 ──
+// ── AC-2: 宪法 21 条，每条四段非空 ──
 const con = read("CONSTITUTION.md");
 const slugSet = new Set();
 if (!con) fail("CONSTITUTION.md 不存在");
@@ -27,7 +27,7 @@ else {
     fail(`宪法条目数=${titles.length}，应为 ${EXPECTED_ARTICLES}`);
   // 编号集合须严格等于 F1-F9 / Q1-Q3 / S1-S8（防未来同步误改编号仍绿）
   const EXPECTED_IDS = new Set([
-    ...Array.from({length:9},(_,i)=>`F${i+1}`),
+    ...Array.from({length:10},(_,i)=>`F${i+1}`),
     ...Array.from({length:3},(_,i)=>`Q${i+1}`),
     ...Array.from({length:8},(_,i)=>`S${i+1}`),
   ]);
@@ -48,7 +48,7 @@ else {
   });
 }
 
-// ── AC-3: checklist 20 条，每条锚点回指真实存在的宪法条款 ──
+// ── AC-3: checklist 21 条，每条锚点回指真实存在的宪法条款 ──
 const chk = read("constitution-checklist.md");
 if (!chk) fail("constitution-checklist.md 不存在");
 else {

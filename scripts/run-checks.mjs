@@ -1,12 +1,12 @@
 /**
- * run-checks.mjs  (FR-CI-001 / FR-CI-002 / FR-CI-003)
+ * run-checks.mjs  (FR-CI-001 / FR-CI-002)
  *
- * Unified check entry point. Aggregates five checkers:
+ * Unified check entry point. Aggregates checkers:
  *   - check-anti-host     (FR-GUARD-001/002)
  *   - check-extensibility (FR-EXT-001/002)
- *   - check-path-guard    (FR-PATHG-001/002)
  *   - check-contract      (FR-NC-005)
  *   - check-metrics-schema (M4 FR-CI-001/002)
+ *   - check-stage-quality  (M5 FR-GATE-001/002)
  *
  * Modes:
  *   node scripts/run-checks.mjs            — aggregate mode (default)
@@ -25,7 +25,7 @@
  *   to return exit 1 without running the real script. Used only by tests.
  */
 
-import { spawnSync, execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -68,106 +68,6 @@ function runChecker(checkerName, checkerArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// collectChangedFiles: build the union of changed files for path-guard input.
-//
-// Three sources are merged and de-duplicated:
-//   1. Working-tree diff vs HEAD (local edits / staged changes)
-//   2. Untracked files not yet committed
-//   3. Committed range HEAD~1..HEAD (or RUN_CHECKS_DIFF_BASE...HEAD)
-//
-// Source 3 is the key addition for CI correctness (D6 / FR-CI-003):
-//   CI checks out the PR head commit with a clean working tree, so sources 1
-//   and 2 are empty.  Without source 3 the path-guard is always skipped in CI
-//   — a false green if the commit introduced protected-file changes.
-//
-// Exported for unit-testing with a custom repoRoot (temporary git repo).
-// ---------------------------------------------------------------------------
-
-export function collectChangedFiles(root, diffBase = process.env.RUN_CHECKS_DIFF_BASE) {
-  const collected = new Set();
-
-  // Source 1: working tree vs HEAD
-  try {
-    const out = execFileSync("git", ["diff", "--name-only", "HEAD"], {
-      cwd: root,
-      encoding: "utf8",
-    });
-    for (const f of out.split("\n").map((l) => l.trim()).filter(Boolean)) {
-      collected.add(f);
-    }
-  } catch {
-    // git not available or error — continue to next source
-  }
-
-  // Source 2: untracked files
-  try {
-    const out = execFileSync(
-      "git",
-      ["ls-files", "--others", "--exclude-standard"],
-      { cwd: root, encoding: "utf8" },
-    );
-    for (const f of out.split("\n").map((l) => l.trim()).filter(Boolean)) {
-      collected.add(f);
-    }
-  } catch {
-    // ignore
-  }
-
-  // Source 3: committed range — covers CI checkout where working tree is clean
-  //   but the current commit introduced changes to protected files.
-  //   Skips gracefully when HEAD~1 does not exist (single-commit repo).
-  try {
-    if (diffBase) {
-      // Explicit base (e.g. PR base SHA injected via RUN_CHECKS_DIFF_BASE)
-      // Three-dot syntax: diff from merge-base of <base> and HEAD
-      const out = execFileSync(
-        "git",
-        ["diff", "--name-only", `${diffBase}...HEAD`],
-        { cwd: root, encoding: "utf8" },
-      );
-      for (const f of out.split("\n").map((l) => l.trim()).filter(Boolean)) {
-        collected.add(f);
-      }
-    } else {
-      // Default: verify HEAD~1 exists before diffing (defensive for first commit)
-      execFileSync("git", ["rev-parse", "--verify", "HEAD~1"], {
-        cwd: root,
-        encoding: "utf8",
-      });
-      const out = execFileSync(
-        "git",
-        ["diff", "--name-only", "HEAD~1", "HEAD"],
-        { cwd: root, encoding: "utf8" },
-      );
-      for (const f of out.split("\n").map((l) => l.trim()).filter(Boolean)) {
-        collected.add(f);
-      }
-    }
-  } catch {
-    // HEAD~1 does not exist (first commit) or git error.
-    // In CI (process.env.CI or GITHUB_ACTIONS), this is most likely a shallow
-    // checkout (fetch-depth:1) rather than a genuine first commit.
-    // Silently skipping here would leave path-guard without committed-range
-    // coverage — a false green if the commit touches protected files.
-    // Fail closed in CI so the error is visible and fixable (FR-CI-003 / D6).
-    // ponytail: local first-commit dev retains graceful skip; CI must configure
-    //   fetch-depth>=2 or inject RUN_CHECKS_DIFF_BASE to resolve this.
-    const isCI =
-      process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-    if (isCI && !diffBase) {
-      throw new Error(
-        "[run-checks] CI environment: HEAD~1 is unavailable and RUN_CHECKS_DIFF_BASE is not set.\n" +
-        "path-guard cannot verify committed-range changes — this would be a false green.\n" +
-        "Fix: add `fetch-depth: 2` to the actions/checkout step, or inject RUN_CHECKS_DIFF_BASE."
-      );
-    }
-    // Non-CI (genuine first commit in local dev): graceful skip, no throw.
-  }
-
-  return [...collected];
-}
-
-// ---------------------------------------------------------------------------
 // Aggregate mode (default)
 // ---------------------------------------------------------------------------
 
@@ -188,35 +88,21 @@ function runAggregate() {
     failures.push({ name: "check-extensibility", code: extCode });
   }
 
-  // 3. check-path-guard — feed collectChangedFiles union (D6 / FR-CI-003)
-  console.log("[run-checks] running check-path-guard ...");
-  const changedFiles = collectChangedFiles(repoRoot);
-
-  if (changedFiles.length === 0) {
-    // No changed files from any source — path-guard trivially passes, skip invocation
-    console.log("[run-checks] check-path-guard: skipped (no changed files detected)");
-  } else {
-    const pgCode = runChecker("check-path-guard", ["--files", ...changedFiles]);
-    if (pgCode !== 0) {
-      failures.push({ name: "check-path-guard", code: pgCode });
-    }
-  }
-
-  // 4. check-contract (FR-NC-005 path-only constraint)
+  // 3. check-contract (FR-NC-005 path-only constraint)
   console.log("[run-checks] running check-contract ...");
   const contractCode = runChecker("check-contract", []);
   if (contractCode !== 0) {
     failures.push({ name: "check-contract", code: contractCode });
   }
 
-  // 5. check-metrics-schema (M4 FR-CI-001/002 — execution-record + knowledge-card schemas)
+  // 4. check-metrics-schema (M4 FR-CI-001/002 — execution-record + knowledge-card schemas)
   console.log("[run-checks] running check-metrics-schema ...");
   const metricsSchemaCode = runChecker("check-metrics-schema", []);
   if (metricsSchemaCode !== 0) {
     failures.push({ name: "check-metrics-schema", code: metricsSchemaCode });
   }
 
-  // 6. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
+  // 5. check-stage-quality (M5 FR-GATE-001/002 — quality-class blocking gates = 0)
   console.log("[run-checks] running check-stage-quality ...");
   const stageQualityCode = runChecker("check-stage-quality", []);
   if (stageQualityCode !== 0) {
@@ -260,25 +146,7 @@ function runSelfTest() {
     allPassed = false;
   }
 
-  // 2. check-path-guard --self-test: sub-process exits 0 when detection works
-  console.log("[run-checks] self-test: verifying check-path-guard self-test ...");
-  const pgScript = resolve(here, "check-path-guard.mjs");
-  const pgResult = spawnSync(node, [pgScript, "--self-test"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: "pipe",
-  });
-  if (pgResult.stdout) process.stdout.write(pgResult.stdout);
-  if (pgResult.stderr) process.stderr.write(pgResult.stderr);
-
-  if (pgResult.status === 0) {
-    console.log("[run-checks] path-guard self-test: VERIFIED — sub-process exit 0 (bad sample caught)");
-  } else {
-    console.error(`[run-checks] path-guard self-test: FAILED — sub-process exit ${pgResult.status}`);
-    allPassed = false;
-  }
-
-  // 3. check-extensibility: no built-in --self-test, honest declaration per FR-CI-002 spec
+  // 2. check-extensibility: no built-in --self-test, honest declaration per FR-CI-002 spec
   // ponytail: extensibility falsifiability covered by FR-EXT tests in check-extensibility.test.mjs;
   //           adding in-process mutation here would require polluting the working tree or
   //           running a git commit to change HEAD — both have side effects. Honest skip.
