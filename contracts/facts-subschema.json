@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "description": "Per-stage facts sub-schema (FR-CONTRACT-002 / D11). Each stage must have the listed required_keys present and non-empty in facts.",
+  "stages": {
+    "make-decision": {
+      "required_keys": ["decision", "scope"],
+      "semantics": {
+        "decision": "Direction/conclusion decided (slim-path anchor for build-code)",
+        "scope": "Scope boundary — what is in and what is out"
+      }
+    },
+    "build-spec": {
+      "required_keys": ["spec_ref", "requirements"],
+      "semantics": {
+        "spec_ref": "Locator of the produced spec (anchor for downstream build-plan)",
+        "requirements": "Functional requirements list or count"
+      }
+    },
+    "build-plan": {
+      "required_keys": ["plan_ref", "tasks"],
+      "semantics": {
+        "plan_ref": "Locator of the produced plan",
+        "tasks": "Decomposed task list or count"
+      }
+    },
+    "build-code": {
+      "required_keys": ["changed", "tests"],
+      "semantics": {
+        "changed": "List of changed artifacts from this stage",
+        "tests": "Test execution conclusion (pass/fail counts)"
+      }
+    },
+    "verify-code": {
+      "required_keys": ["verdict", "evidence_ref"],
+      "semantics": {
+        "verdict": "Acceptance verdict",
+        "evidence_ref": "Locator of acceptance evidence"
+      }
+    }
+  }
+}
