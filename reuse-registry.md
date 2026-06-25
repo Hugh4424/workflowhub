@@ -9,3 +9,6 @@
 | verify-code | 自研 | none |
 | scope-triage | 外部改造适配 | packages/core/agenthub/skills/scope-triage/SKILL.md |
 | decision-log | 外部改造适配 | packages/core/agenthub/skills/decision-log/SKILL.md |
+| Worker-Mode | 外部依赖 | ~/.claude/plugins/worker-mode/ |
+| 3rd-review | 外部依赖 | packages/core/agenthub/skills/3rd-review |
+| TDD 件（capture.mjs） | 外部改造适配 | tdd-red-green skill |

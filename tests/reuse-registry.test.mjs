@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const ENUM = ["外部改造适配", "自研", "其他平台原生"];
+const ENUM = ["外部改造适配", "自研", "其他平台原生", "外部依赖"];
 const EXPECTED = [
   ["make-decision", "自研", "none"],
   ["build-spec", "自研", "none"],
@@ -14,6 +14,9 @@ const EXPECTED = [
   ["verify-code", "自研", "none"],
   ["scope-triage", "外部改造适配"],
   ["decision-log", "外部改造适配"],
+  ["Worker-Mode", "外部依赖"],
+  ["3rd-review", "外部依赖"],
+  ["TDD 件（capture.mjs）", "外部改造适配"],
 ];
 
 describe("reuse-registry.md (FR-REG-001/002)", () => {
