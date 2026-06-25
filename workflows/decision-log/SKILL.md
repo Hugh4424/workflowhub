@@ -1,6 +1,6 @@
 ---
 name: decision-log
-description: Converge all intake inputs into a structured decision log, producing the single authoritative requirement source for all downstream phases.
+description: Converge all make-decision inputs into a structured decision log, producing the single authoritative requirement source for all downstream phases.
 ---
 
 <!-- component skill — physically independent, can be invoked independently by foreman or subagent -->
@@ -12,7 +12,7 @@ This is a **component skill**. It does NOT produce its own `stage-result`. The c
 
 ## Goal
 
-Read all intake inputs (original requirement text, upstream conversations, direction-confirmation exchanges) and converge them into a single structured decision log file `tasks/<task-id>/decision-log.md`. This file becomes the **sole authoritative requirement source** for all downstream phases (design / plan / apply / test-acceptance). Downstream phases do not re-read the raw intake inputs — decision-log already captures every load-bearing claim and its reasoning chain.
+Read all make-decision inputs (original requirement text, upstream conversations, direction-confirmation exchanges) and converge them into a single structured decision log file `tasks/<task-id>/decision-log.md`. This file becomes the **sole authoritative requirement source** for all downstream phases (build-spec / build-plan / build-code / verify-code). Downstream phases do not re-read the raw make-decision inputs — decision-log already captures every load-bearing claim and its reasoning chain.
 
 ## Input
 
@@ -40,7 +40,7 @@ At least one decision record in section 3 MUST carry a non-empty `来源证据` 
 
 ## What to do
 
-1. Collect all intake input sources listed above.
+1. Collect all make-decision input sources listed above.
 2. For each decision or constraint identified, classify it (`原文要求` / `衍生` / `新增`) and record the evidence.
 3. Resolve ambiguous items: ask ONE focused question per item; do not assume.
 4. Write the 7-section `tasks/<task-id>/decision-log.md` file.
