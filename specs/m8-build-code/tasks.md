@@ -1,7 +1,7 @@
 ---
 milestone: m8-build-code
-stage: plan
-status: draft
+stage: test-acceptance
+status: completed
 ui_change: false
 total_phases: 5
 total_tasks: 16
