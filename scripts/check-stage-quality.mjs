@@ -203,13 +203,50 @@ export function scanSkillMetrics(skillPath) {
   const hasRecordSkeleton = /\brecordSkeleton\b/.test(content);
   const hasUpdateOwnResult = /\bupdateOwnResult\b/.test(content);
 
-  if (hasRecordSkeleton && hasUpdateOwnResult) {
+  // T019 check 1: component skills must reference collector.mjs explicitly by path.
+  // Rationale: token names alone (recordSkeleton/updateOwnResult) could appear in docs
+  // without the actual import path — collector.mjs is the canonical reference signal.
+  const hasCollectorMjs = content.includes("collector.mjs");
+
+  // T019 check 2: stage value in the metric-record JSON block must match the skill dir name.
+  // Real SKILL.md files embed stage inside a fenced ```json block as `"stage": "value"`.
+  // We extract the stage from inside a fenced JSON code block to avoid matching prose
+  // mentions of `"stage": "..."` (e.g. explanatory text on the same line).
+  // Only applies when a `"stage":` key is found inside a fenced JSON block; if absent it
+  // is not flagged here (recordSkeleton/updateOwnResult checks already catch unwired skills).
+  // ponytail: scans all fenced json blocks and takes the first "stage" key found inside one.
+  // Upgrade if files use non-fenced JSON or multiple metric blocks with different stages.
+  let stageFieldPresent = false;
+  let actualStage = null;
+  const fencedJsonBlockRe = /```json\s*([\s\S]*?)```/g;
+  let blockMatch;
+  while ((blockMatch = fencedJsonBlockRe.exec(content)) !== null) {
+    const blockBody = blockMatch[1];
+    const stageInBlock = blockBody.match(/"stage"\s*:\s*"([^"]+)"/);
+    if (stageInBlock) {
+      stageFieldPresent = true;
+      actualStage = stageInBlock[1];
+      break; // use first JSON block that has a "stage" key
+    }
+  }
+  // Wrong stage: JSON block stage field exists but doesn't match the dir name.
+  const stageWrong = stageFieldPresent && actualStage !== skillName;
+
+  // B1 fix: wired skills (recordSkeleton + updateOwnResult + collector.mjs all present)
+  // MUST also declare a "stage" key in their fenced JSON metric block. An absent stage
+  // field is a violation — it would otherwise silently pass (false-green).
+  const stageAbsent = hasRecordSkeleton && hasUpdateOwnResult && hasCollectorMjs && !stageFieldPresent;
+
+  if (hasRecordSkeleton && hasUpdateOwnResult && hasCollectorMjs && !stageWrong && !stageAbsent) {
     return { found: false };
   }
 
   const missing = [];
   if (!hasRecordSkeleton) missing.push("recordSkeleton");
   if (!hasUpdateOwnResult) missing.push("updateOwnResult");
+  if (!hasCollectorMjs) missing.push("collector.mjs reference");
+  if (stageWrong) missing.push(`stage literal wrong (got "${actualStage}", expected "${skillName}")`);
+  if (stageAbsent) missing.push("missing stage field in metric block");
 
   return { found: true, missingSkill: skillName, reason: `missing: ${missing.join(", ")}` };
 }

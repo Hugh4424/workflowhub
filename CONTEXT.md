@@ -36,3 +36,15 @@
 
 **异源审查（cross-source review）**：
 由独立来源、在独立上下文中对交付物做的审查，用于质量把关，禁止自审自判。
+
+## 组件 skill
+
+**组件 skill（Component Skill）**：
+从属于某一顶层 skill 的可独立调起子流程。
+
+约束：
+
+- 不单独产 stage-result（stage-result 一段一张，由顶层 stage 产），只产 collector 指标记录。
+- 由顶层 skill 提示词正文显式写路径字符串声明（引用其 SKILL.md 路径）。
+
+合宪依据：S7 约束 stage 级 skill；stage 内可复用的组件不与 S7 冲突（D-M7-2）。

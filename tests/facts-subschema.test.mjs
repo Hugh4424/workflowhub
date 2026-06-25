@@ -28,10 +28,14 @@ function base() {
 // ── make-decision ─────────────────────────────────────────────────────────────
 
 describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
-  it("positive: decision + scope non-empty → ok", () => {
+  it("positive: decision + scope + decision_log_path non-empty → ok", () => {
     const artifact = {
       ...base(),
-      facts: { decision: "ship now", scope: "backend only" },
+      facts: {
+        decision: "ship now",
+        scope: "backend only",
+        decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+      },
     };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
@@ -76,10 +80,53 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
   it("positive: extra keys in facts are allowed (additionalProperties)", () => {
     const artifact = {
       ...base(),
-      facts: { decision: "go", scope: "minimal", extra_note: "fyi" },
+      facts: {
+        decision: "go",
+        scope: "minimal",
+        decision_log_path: "tasks/t1/decision-log.md",
+        extra_note: "fyi",
+      },
     };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
+  });
+
+  it("positive: decision + scope + decision_log_path all non-empty → ok", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        decision: "ship now",
+        scope: "backend only",
+        decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+      },
+    };
+    const result = validateStageResult("make-decision", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
+  });
+
+  it("negative: missing 'decision_log_path' key → fails", () => {
+    // Literal: only decision + scope, decision_log_path key absent
+    const artifact = {
+      ...base(),
+      facts: { decision: "ship now", scope: "backend only" },
+    };
+    const result = validateStageResult("make-decision", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/decision_log_path/);
+  });
+
+  it("negative: 'decision_log_path' present but empty string → fails", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        decision: "ship now",
+        scope: "backend only",
+        decision_log_path: "",
+      },
+    };
+    const result = validateStageResult("make-decision", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/decision_log_path/);
   });
 });
 

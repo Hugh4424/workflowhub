@@ -3,10 +3,11 @@
   "description": "Per-stage facts sub-schema (FR-CONTRACT-002 / D11). Each stage must have the listed required_keys present and non-empty in facts.",
   "stages": {
     "make-decision": {
-      "required_keys": ["decision", "scope"],
+      "required_keys": ["decision", "scope", "decision_log_path"],
       "semantics": {
         "decision": "Direction/conclusion decided (slim-path anchor for build-code)",
-        "scope": "Scope boundary — what is in and what is out"
+        "scope": "Scope boundary — what is in and what is out",
+        "decision_log_path": "Path to the produced decision log, e.g. tasks/<task>/decision-log.md; consumed downstream by M8."
       }
     },
     "build-spec": {
