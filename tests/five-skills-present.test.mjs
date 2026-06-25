@@ -29,33 +29,45 @@ const SKILL_DIRS = [
   "verify-code",
 ];
 
-// --- Existence checks ---
-describe("five skill directories have SKILL.md", () => {
-  for (const dir of SKILL_DIRS) {
-    test(`workflows/${dir}/SKILL.md exists`, () => {
-      const p = join(REPO_ROOT, "workflows", dir, "SKILL.md");
-      assert.ok(existsSync(p), `Missing: ${p}`);
-    });
-  }
+// --- Helpers for existence / frontmatter (called with a hard-coded literal per test) ---
+function assertSkillExists(name) {
+  const p = join(REPO_ROOT, "workflows", name, "SKILL.md");
+  assert.ok(existsSync(p), `Missing: ${p}`);
+}
+
+function assertSkillFrontmatter(name) {
+  const p = join(REPO_ROOT, "workflows", name, "SKILL.md");
+  assert.ok(existsSync(p), `Missing: ${p}`);
+  const content = readFileSync(p, "utf8");
+  const fm = extractFrontmatter(content);
+  assert.ok(fm, `No valid YAML frontmatter in workflows/${name}/SKILL.md`);
+  assert.equal(fm.name, name, `frontmatter.name should be "${name}", got "${fm.name}"`);
+  assert.ok(
+    typeof fm.description === "string" && fm.description.trim().length > 0,
+    `frontmatter.description must be a non-empty string in workflows/${name}/SKILL.md`
+  );
+}
+
+// --- Existence checks (7 independent literal tests — no for-of loop) ---
+describe("seven skill directories have SKILL.md", () => {
+  test('workflows/make-decision/SKILL.md exists', () => { assertSkillExists("make-decision"); });
+  test('workflows/build-spec/SKILL.md exists',    () => { assertSkillExists("build-spec"); });
+  test('workflows/build-plan/SKILL.md exists',    () => { assertSkillExists("build-plan"); });
+  test('workflows/build-code/SKILL.md exists',    () => { assertSkillExists("build-code"); });
+  test('workflows/verify-code/SKILL.md exists',   () => { assertSkillExists("verify-code"); });
+  test('workflows/scope-triage/SKILL.md exists',  () => { assertSkillExists("scope-triage"); });
+  test('workflows/decision-log/SKILL.md exists',  () => { assertSkillExists("decision-log"); });
 });
 
-// --- Frontmatter checks ---
+// --- Frontmatter checks (7 independent literal tests — no for-of loop) ---
 describe("SKILL.md files have valid frontmatter", () => {
-  for (const dir of SKILL_DIRS) {
-    test(`workflows/${dir}/SKILL.md has name="${dir}" and non-empty description`, () => {
-      const p = join(REPO_ROOT, "workflows", dir, "SKILL.md");
-      assert.ok(existsSync(p), `Missing: ${p}`);
-      const content = readFileSync(p, "utf8");
-
-      const fm = extractFrontmatter(content);
-      assert.ok(fm, `No valid YAML frontmatter in workflows/${dir}/SKILL.md`);
-      assert.equal(fm.name, dir, `frontmatter.name should be "${dir}", got "${fm.name}"`);
-      assert.ok(
-        typeof fm.description === "string" && fm.description.trim().length > 0,
-        `frontmatter.description must be a non-empty string in workflows/${dir}/SKILL.md`
-      );
-    });
-  }
+  test('workflows/make-decision/SKILL.md has name="make-decision" and non-empty description', () => { assertSkillFrontmatter("make-decision"); });
+  test('workflows/build-spec/SKILL.md has name="build-spec" and non-empty description',       () => { assertSkillFrontmatter("build-spec"); });
+  test('workflows/build-plan/SKILL.md has name="build-plan" and non-empty description',       () => { assertSkillFrontmatter("build-plan"); });
+  test('workflows/build-code/SKILL.md has name="build-code" and non-empty description',       () => { assertSkillFrontmatter("build-code"); });
+  test('workflows/verify-code/SKILL.md has name="verify-code" and non-empty description',     () => { assertSkillFrontmatter("verify-code"); });
+  test('workflows/scope-triage/SKILL.md has name="scope-triage" and non-empty description',   () => { assertSkillFrontmatter("scope-triage"); });
+  test('workflows/decision-log/SKILL.md has name="decision-log" and non-empty description',   () => { assertSkillFrontmatter("decision-log"); });
 });
 
 // --- Registry checks (literal assertions, one per skill name) ---
@@ -229,27 +241,16 @@ describe("build-code SKILL.md contains slim path / stage-result / make-decision 
   });
 });
 
-// --- scope-triage component skill (Phase 1, FR-SCOPE-001) ---
-// Independent literal tests — do NOT add scope-triage to SKILL_DIRS loop above.
-test("workflows/scope-triage/SKILL.md exists", () => {
-  const p = join(REPO_ROOT, "workflows", "scope-triage", "SKILL.md");
-  assert.ok(existsSync(p), `Missing: ${p}`);
-});
+// scope-triage and decision-log existence/frontmatter now covered by
+// "seven skill directories have SKILL.md" and "SKILL.md files have valid frontmatter"
+// describe blocks above (7 independent literal tests each).
 
-test('workflows/scope-triage/SKILL.md has name="scope-triage" and non-empty description', () => {
-  const p = join(REPO_ROOT, "workflows", "scope-triage", "SKILL.md");
-  assert.ok(existsSync(p), `Missing: ${p}`);
-  const content = readFileSync(p, "utf8");
-  const fm = extractFrontmatter(content);
-  assert.ok(fm, "No valid YAML frontmatter in workflows/scope-triage/SKILL.md");
-  assert.equal(fm.name, "scope-triage", `frontmatter.name should be "scope-triage", got "${fm.name}"`);
-  assert.ok(
-    typeof fm.description === "string" && fm.description.trim().length > 0,
-    "frontmatter.description must be a non-empty string in workflows/scope-triage/SKILL.md"
-  );
-});
-
-test('registry contains component_id "scope-triage"', () => {
+// --- AC5: all 7 component_ids present as literals in registry ---
+// Independent literal assertions — falsifiable: removing any one entry makes exactly
+// that named test fail. The 5-skill loop above + scope-triage/decision-log individual
+// tests already cover existence/frontmatter, this consolidates registry membership for
+// all 7 as the AC5 acceptance criterion.
+describe("AC5: registry contains all 7 component_ids (literal per-skill assertions)", () => {
   const configPath = join(REPO_ROOT, "config", "workflowhub.yaml");
   let registeredIds = [];
   try {
@@ -259,46 +260,115 @@ test('registry contains component_id "scope-triage"', () => {
   } catch (_) {
     registeredIds = [];
   }
-  assert.ok(
-    registeredIds.includes("scope-triage"),
-    `"scope-triage" not found in registry component_ids: ${JSON.stringify(registeredIds)}`
-  );
+
+  // Each of the 7 skills is asserted independently by name literal.
+  // Not a loop — removing one entry makes exactly that named test fail.
+  test('AC5: registry contains "make-decision"', () => {
+    assert.ok(registeredIds.includes("make-decision"),
+      `"make-decision" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
+  test('AC5: registry contains "build-spec"', () => {
+    assert.ok(registeredIds.includes("build-spec"),
+      `"build-spec" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
+  test('AC5: registry contains "build-plan"', () => {
+    assert.ok(registeredIds.includes("build-plan"),
+      `"build-plan" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
+  test('AC5: registry contains "build-code"', () => {
+    assert.ok(registeredIds.includes("build-code"),
+      `"build-code" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
+  test('AC5: registry contains "verify-code"', () => {
+    assert.ok(registeredIds.includes("verify-code"),
+      `"verify-code" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
+  test('AC5: registry contains "scope-triage"', () => {
+    assert.ok(registeredIds.includes("scope-triage"),
+      `"scope-triage" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
+  test('AC5: registry contains "decision-log"', () => {
+    assert.ok(registeredIds.includes("decision-log"),
+      `"decision-log" not in registry: ${JSON.stringify(registeredIds)}`);
+  });
 });
 
-// --- decision-log component skill (Phase 2, FR-DLOG-001) ---
-// Independent literal tests — do NOT add decision-log to SKILL_DIRS loop above.
-test("workflows/decision-log/SKILL.md exists", () => {
-  const p = join(REPO_ROOT, "workflows", "decision-log", "SKILL.md");
-  assert.ok(existsSync(p), `Missing: ${p}`);
+// --- AC5 B2: make-decision SKILL.md path literal references (B2a) ---
+// Independent literal test — falsifiable: removing either path ref from make-decision/SKILL.md
+// makes this test fail.
+describe("AC5 B2a: make-decision SKILL.md references scope-triage and decision-log paths", () => {
+  const skillPath = join(REPO_ROOT, "workflows", "make-decision", "SKILL.md");
+
+  test("make-decision SKILL.md references workflows/scope-triage/SKILL.md path literal", () => {
+    const content = readFileSync(skillPath, "utf8");
+    assert.ok(
+      content.includes("workflows/scope-triage/SKILL.md"),
+      "make-decision/SKILL.md must include the literal string 'workflows/scope-triage/SKILL.md'"
+    );
+  });
+
+  test("make-decision SKILL.md references workflows/decision-log/SKILL.md path literal", () => {
+    const content = readFileSync(skillPath, "utf8");
+    assert.ok(
+      content.includes("workflows/decision-log/SKILL.md"),
+      "make-decision/SKILL.md must include the literal string 'workflows/decision-log/SKILL.md'"
+    );
+  });
 });
 
-test('workflows/decision-log/SKILL.md has name="decision-log" and non-empty description', () => {
-  const p = join(REPO_ROOT, "workflows", "decision-log", "SKILL.md");
-  assert.ok(existsSync(p), `Missing: ${p}`);
-  const content = readFileSync(p, "utf8");
-  const fm = extractFrontmatter(content);
-  assert.ok(fm, "No valid YAML frontmatter in workflows/decision-log/SKILL.md");
-  assert.equal(fm.name, "decision-log", `frontmatter.name should be "decision-log", got "${fm.name}"`);
-  assert.ok(
-    typeof fm.description === "string" && fm.description.trim().length > 0,
-    "frontmatter.description must be a non-empty string in workflows/decision-log/SKILL.md"
-  );
-});
+// --- AC5 B2: reuse-registry.md row-format for ALL 7 skills (B2b) ---
+// 7 independent literal tests (one per skill). Rules per AC4/AC6:
+//   category ∈ {外部改造适配, 自研, 其他平台原生}
+//   外部改造适配 → source non-empty AND ≠ "none"
+//   自研          → source === "none"
+// Falsifiable: blanking or mis-categorising any single row makes exactly that test red.
+describe("AC5 B2b: reuse-registry.md row-format for all 7 skills (category enum + source rule)", () => {
+  const registryPath = join(REPO_ROOT, "reuse-registry.md");
+  const VALID_CATEGORIES = ["外部改造适配", "自研", "其他平台原生"];
 
-test('registry contains component_id "decision-log"', () => {
-  const configPath = join(REPO_ROOT, "config", "workflowhub.yaml");
-  let registeredIds = [];
-  try {
-    const raw = readFileSync(configPath, "utf8");
-    const matches = raw.matchAll(/component_id:\s*(\S+)/g);
-    registeredIds = Array.from(matches).map((m) => m[1]);
-  } catch (_) {
-    registeredIds = [];
+  // Private helper — each test() invocation passes a hard-coded literal.
+  function assertRegistryRow(skillName, expectedCategory) {
+    const content = readFileSync(registryPath, "utf8");
+    const lines = content.split("\n");
+    const row = lines.find((l) => new RegExp(`\\|\\s*${skillName}\\s*\\|`).test(l));
+    assert.ok(row, `reuse-registry.md must contain a row for ${skillName}`);
+    // (a) category cell must be a legal enum value
+    const cells = row.split("|").map((c) => c.trim()).filter(Boolean);
+    // cells[0]=skill name, cells[1]=category, cells[2]=source
+    const category = cells[1];
+    assert.ok(
+      VALID_CATEGORIES.includes(category),
+      `${skillName} category must be one of [${VALID_CATEGORIES.join(", ")}], got: "${category}"`
+    );
+    assert.equal(
+      category,
+      expectedCategory,
+      `${skillName} expected category "${expectedCategory}", got "${category}"`
+    );
+    // (b) source rule: 外部 → non-empty AND ≠ none; 自研 → exactly "none"
+    const source = cells[2] ?? "";
+    if (expectedCategory === "外部改造适配") {
+      assert.ok(
+        source && source !== "none",
+        `${skillName} (外部改造适配) source must be non-empty and not "none", got: "${source}"`
+      );
+    } else {
+      // 自研 (or 其他平台原生 if ever used): source must be "none"
+      assert.equal(
+        source,
+        "none",
+        `${skillName} (${expectedCategory}) source must be "none", got: "${source}"`
+      );
+    }
   }
-  assert.ok(
-    registeredIds.includes("decision-log"),
-    `"decision-log" not found in registry component_ids: ${JSON.stringify(registeredIds)}`
-  );
+
+  test('reuse-registry.md make-decision row: category=自研, source="none"',    () => { assertRegistryRow("make-decision", "自研"); });
+  test('reuse-registry.md build-spec row: category=自研, source="none"',       () => { assertRegistryRow("build-spec",    "自研"); });
+  test('reuse-registry.md build-plan row: category=自研, source="none"',       () => { assertRegistryRow("build-plan",    "自研"); });
+  test('reuse-registry.md build-code row: category=自研, source="none"',       () => { assertRegistryRow("build-code",    "自研"); });
+  test('reuse-registry.md verify-code row: category=自研, source="none"',      () => { assertRegistryRow("verify-code",   "自研"); });
+  test('reuse-registry.md scope-triage row: category=外部改造适配, source≠none', () => { assertRegistryRow("scope-triage",  "外部改造适配"); });
+  test('reuse-registry.md decision-log row: category=外部改造适配, source≠none', () => { assertRegistryRow("decision-log",  "外部改造适配"); });
 });
 
 // --- Content checks: verify-code vs verify-change boundary (D5) ---
@@ -356,4 +426,34 @@ describe("SKILL.md metrics examples use M4 record-schema core fields", () => {
       );
     });
   }
+});
+
+// --- AC6 predicate ②: facts-subschema.json declares make-decision required_keys ---
+// Three independent literal tests — falsifiable: removing any one key from
+// make-decision.required_keys makes exactly that test red (not the others).
+describe("AC6 ②: facts-subschema.json make-decision required_keys contract shape", () => {
+  const schemaPath = join(REPO_ROOT, "contracts", "facts-subschema.json");
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
+  const requiredKeys = schema.stages["make-decision"].required_keys;
+
+  test('facts-subschema.json make-decision.required_keys includes "decision"', () => {
+    assert.ok(
+      requiredKeys.includes("decision"),
+      `make-decision.required_keys must include "decision", got: ${JSON.stringify(requiredKeys)}`
+    );
+  });
+
+  test('facts-subschema.json make-decision.required_keys includes "scope"', () => {
+    assert.ok(
+      requiredKeys.includes("scope"),
+      `make-decision.required_keys must include "scope", got: ${JSON.stringify(requiredKeys)}`
+    );
+  });
+
+  test('facts-subschema.json make-decision.required_keys includes "decision_log_path"', () => {
+    assert.ok(
+      requiredKeys.includes("decision_log_path"),
+      `make-decision.required_keys must include "decision_log_path", got: ${JSON.stringify(requiredKeys)}`
+    );
+  });
 });

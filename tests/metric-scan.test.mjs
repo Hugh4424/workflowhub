@@ -79,7 +79,9 @@ Do some work and produce a result.
 When stage complete, write \`stage-result\` record with the usual fields.
 `;
 
-// A minimal SKILL.md WITH correct metrics wiring
+// A minimal SKILL.md WITH correct metrics wiring (recordSkeleton + updateOwnResult +
+// collector.mjs reference + "stage" key in fenced JSON block).
+// The skill dir is named "good-skill" in tests so the stage value must match.
 const SKILL_WITH_METRICS = `---
 name: fake-skill
 description: A skill with proper metrics wiring.
@@ -97,6 +99,14 @@ Also record metrics entry via collector. Call \`recordSkeleton\` at stage start
 and \`updateOwnResult\` at stage end, passing at minimum the core fields.
 
 Use \`metrics/collector.mjs\` — do not hand-write a raw jsonl line.
+
+Example metric record:
+\`\`\`json
+{
+  "stage": "good-skill",
+  "execution_id": "abc-123"
+}
+\`\`\`
 `;
 
 // ---------------------------------------------------------------------------
@@ -198,5 +208,153 @@ describe("real SKILL.md files — all five skills have metrics wiring", () => {
     const result = runScan([]);
     expect(result.status).toBe(0);
     expect(result.stdout + result.stderr).toMatch(/PASS/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEG-C: wired skill (recordSkeleton + updateOwnResult + collector.mjs) BUT
+// no "stage" key in any fenced JSON block → must be flagged (B1 absent-stage fix).
+// FALSIFIABLE: removing the stageAbsent check in scanSkillMetrics makes this go green.
+// ---------------------------------------------------------------------------
+
+describe("NEG-C — wired skill with absent stage field in metric block (B1 fix)", () => {
+  it("NEG-C: SKILL.md with recordSkeleton+updateOwnResult+collector.mjs but NO stage key in JSON block → found:true", async () => {
+    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const skillDir = join(workDir, "workflows", "no-stage-key");
+    mkdirSync(skillDir, { recursive: true });
+    const skillPath = join(skillDir, "SKILL.md");
+    writeFileSync(skillPath, `---
+name: no-stage-key
+description: A fully wired skill but metric block has no "stage" key.
+---
+
+# no-stage-key
+
+## Metrics
+
+Call \`recordSkeleton\` at stage start and \`updateOwnResult\` at stage end.
+Use \`metrics/collector.mjs\` — do not hand-write a raw jsonl line.
+
+Example metric record:
+\`\`\`json
+{
+  "skill": "no-stage-key",
+  "execution_id": "abc-123"
+}
+\`\`\`
+`, "utf8");
+
+    const result = scanSkillMetrics(skillPath);
+    // Must return found:true because "stage" key is absent from the JSON metric block.
+    // FALSIFIABLE: removing the stageAbsent check makes this return found:false (test goes red).
+    expect(result.found).toBe(true);
+    expect(result.reason).toMatch(/missing stage field/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T018 Phase 5 (FR-METRIC-003): scope-triage + decision-log positive wiring checks
+// ---------------------------------------------------------------------------
+
+describe("T018 — scope-triage and decision-log positive wiring (FR-METRIC-003)", () => {
+  it("scope-triage/SKILL.md passes full scanSkillMetrics (recordSkeleton + updateOwnResult + collector.mjs + correct stage)", async () => {
+    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const skillPath = join(repoRoot, "workflows", "scope-triage", "SKILL.md");
+    const result = scanSkillMetrics(skillPath);
+    expect(result.found, `scope-triage missing wiring: ${result.reason ?? ""}`).toBe(false);
+  });
+
+  it("decision-log/SKILL.md passes full scanSkillMetrics (recordSkeleton + updateOwnResult + collector.mjs + correct stage)", async () => {
+    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const skillPath = join(repoRoot, "workflows", "decision-log", "SKILL.md");
+    const result = scanSkillMetrics(skillPath);
+    expect(result.found, `decision-log missing wiring: ${result.reason ?? ""}`).toBe(false);
+  });
+
+  it("integration: all 7 skills pass scanSkillMetrics (no missing wiring)", async () => {
+    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const ALL_SEVEN = [
+      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
+      "scope-triage", "decision-log",
+    ];
+    for (const skill of ALL_SEVEN) {
+      const skillPath = join(repoRoot, "workflows", skill, "SKILL.md");
+      const result = scanSkillMetrics(skillPath);
+      expect(result.found, `${skill} missing wiring: ${result.reason ?? ""}`).toBe(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T018 FALSIFIABLE NEGATIVES — verified to go RED before T019 impl
+// ---------------------------------------------------------------------------
+
+describe("T018 — falsifiable negatives (FR-METRIC-003)", () => {
+  // Negative A: content has recordSkeleton + updateOwnResult but MISSING collector.mjs string.
+  // After T019 is implemented, scanSkillMetrics must return found:true (flags it).
+  // This test is falsifiable: if T019 doesn't check collector.mjs, removing that line wouldn't
+  // make this test go RED — and this test itself would wrongly pass.
+  it("NEG-A: SKILL.md with recordSkeleton+updateOwnResult but NO collector.mjs → found:true (FR-METRIC-003)", async () => {
+    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    const skillDir = join(workDir, "workflows", "wired-no-collector");
+    mkdirSync(skillDir, { recursive: true });
+    const skillPath = join(skillDir, "SKILL.md");
+    writeFileSync(skillPath, `---
+name: wired-no-collector
+stage: wired-no-collector
+description: A skill that has recordSkeleton and updateOwnResult but lacks collector reference.
+---
+
+# wired-no-collector
+
+## Metrics
+
+Call \`recordSkeleton\` at stage start and \`updateOwnResult\` at stage end.
+But this skill incorrectly hand-writes a raw jsonl line instead of using the collector path.
+`, "utf8");
+
+    const result = scanSkillMetrics(skillPath);
+    // Must return found:true because collector.mjs string is absent.
+    // FALSIFIABLE: if scanSkillMetrics doesn't check collector.mjs, this test fails (returns found:false).
+    expect(result.found).toBe(true);
+    expect(result.reason).toMatch(/collector\.mjs/);
+  });
+
+  // Negative B: content has correct collector.mjs reference but WRONG stage value
+  // inside the JSON metric block (scope-triage-context dir but `"stage": "make-decision"`).
+  // Uses the real JSON-block form (not frontmatter `stage:`) — mirrors how actual SKILL.md files are written.
+  // After T019 is implemented, scanSkillMetrics must return found:true.
+  it("NEG-B: SKILL.md with correct collector.mjs but wrong stage in JSON metric block (\"stage\":\"make-decision\" in scope-triage-ctx dir) → found:true (FR-METRIC-003)", async () => {
+    const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
+    // Dir named "scope-triage" → expected stage is "scope-triage", but JSON block says "make-decision"
+    const skillDir = join(workDir, "workflows", "scope-triage");
+    mkdirSync(skillDir, { recursive: true });
+    const skillPath = join(skillDir, "SKILL.md");
+    writeFileSync(skillPath, `---
+name: scope-triage
+description: A scope-triage skill but with wrong stage value in JSON metric block.
+---
+
+# scope-triage
+
+## Metrics
+
+Call \`recordSkeleton\` at stage start and \`updateOwnResult\` at stage end.
+Use \`metrics/collector.mjs\` — do not hand-write raw jsonl line.
+
+Example metric record:
+\`\`\`json
+{
+  "stage": "make-decision",
+  "skill": "scope-triage"
+}
+\`\`\`
+`, "utf8");
+
+    const result = scanSkillMetrics(skillPath);
+    // Must return found:true because "stage" JSON value is "make-decision" instead of "scope-triage".
+    // FALSIFIABLE: if scanSkillMetrics doesn't check stage, this test fails (returns found:false).
+    expect(result.found).toBe(true);
+    expect(result.reason).toMatch(/stage/);
   });
 });
