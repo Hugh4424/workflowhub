@@ -265,6 +265,42 @@ test('registry contains component_id "scope-triage"', () => {
   );
 });
 
+// --- decision-log component skill (Phase 2, FR-DLOG-001) ---
+// Independent literal tests — do NOT add decision-log to SKILL_DIRS loop above.
+test("workflows/decision-log/SKILL.md exists", () => {
+  const p = join(REPO_ROOT, "workflows", "decision-log", "SKILL.md");
+  assert.ok(existsSync(p), `Missing: ${p}`);
+});
+
+test('workflows/decision-log/SKILL.md has name="decision-log" and non-empty description', () => {
+  const p = join(REPO_ROOT, "workflows", "decision-log", "SKILL.md");
+  assert.ok(existsSync(p), `Missing: ${p}`);
+  const content = readFileSync(p, "utf8");
+  const fm = extractFrontmatter(content);
+  assert.ok(fm, "No valid YAML frontmatter in workflows/decision-log/SKILL.md");
+  assert.equal(fm.name, "decision-log", `frontmatter.name should be "decision-log", got "${fm.name}"`);
+  assert.ok(
+    typeof fm.description === "string" && fm.description.trim().length > 0,
+    "frontmatter.description must be a non-empty string in workflows/decision-log/SKILL.md"
+  );
+});
+
+test('registry contains component_id "decision-log"', () => {
+  const configPath = join(REPO_ROOT, "config", "workflowhub.yaml");
+  let registeredIds = [];
+  try {
+    const raw = readFileSync(configPath, "utf8");
+    const matches = raw.matchAll(/component_id:\s*(\S+)/g);
+    registeredIds = Array.from(matches).map((m) => m[1]);
+  } catch (_) {
+    registeredIds = [];
+  }
+  assert.ok(
+    registeredIds.includes("decision-log"),
+    `"decision-log" not found in registry component_ids: ${JSON.stringify(registeredIds)}`
+  );
+});
+
 // --- Content checks: verify-code vs verify-change boundary (D5) ---
 describe("verify-code SKILL.md contains verify-change boundary explanation (D5)", () => {
   const skillPath = join(REPO_ROOT, "workflows", "verify-code", "SKILL.md");
