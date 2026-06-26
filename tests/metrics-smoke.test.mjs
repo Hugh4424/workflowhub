@@ -27,6 +27,9 @@ describe("metrics-writer.mjs smoke", () => {
     
     if (typeof fn === "function") {
       await fn({ taskDir: REPO_ROOT, taskId: "m10-smoke" });
+      expect(existsSync(outPath)).toBe(true);
+      const content = readFileSync(outPath, "utf-8");
+      expect(content.length).toBeGreaterThan(0);
     }
   });
 });
