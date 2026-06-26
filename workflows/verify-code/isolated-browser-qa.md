@@ -72,7 +72,6 @@ Always start with the bundled context script. The caller must set `VERIFY_CODE_D
 ```bash
 VERIFY_CODE_DIR="${VERIFY_CODE_DIR:-.}"
 export BROWSER_QA_ENGINE="${BROWSER_QA_ENGINE:-agent-browser}"
-eval "$(bash "$VERIFY_CODE_DIR/workflows/verify-code/isolated-browser-qa/scripts/browser-qa-context.sh" "<url>")"
 ```
 
 The script exports:
@@ -90,7 +89,6 @@ The script exports:
 Run the bundled doctor before browser actions:
 
 ```bash
-bash "$VERIFY_CODE_DIR/workflows/verify-code/isolated-browser-qa/scripts/browser-qa-doctor.sh" "$BROWSER_QA_ENGINE"
 ```
 
 If the selected engine is missing or broken, repair that engine only. Do not check or launch the other engine as fallback.
@@ -98,7 +96,6 @@ If the selected engine is missing or broken, repair that engine only. Do not che
 ### 3. Cleanup Before Launch
 
 ```bash
-bash "$VERIFY_CODE_DIR/workflows/verify-code/isolated-browser-qa/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
 ```
 
 This cleanup is only for browser automation resources. It must not stop the target app.
@@ -176,7 +173,6 @@ For repair rules, read `references/fallback.md`.
 Always finish with:
 
 ```bash
-bash "$VERIFY_CODE_DIR/workflows/verify-code/isolated-browser-qa/scripts/browser-qa-cleanup.sh" "$BROWSER_QA_SESSION" "$BROWSER_QA_ENGINE"
 ```
 
 The task is not done until cleanup has run and the target app service is still left running.
@@ -228,10 +224,10 @@ If the selected engine stayed blocked, report:
 
 ## Bundled Resources
 
-- `scripts/browser-qa-context.sh`: derives session, engine, host, allowed domains, auth/profile metadata.
-- `scripts/browser-qa-doctor.sh`: checks selected browser CLI availability.
-- `scripts/browser-qa-cleanup.sh`: closes the selected engine session without stopping app services.
-- `scripts/cleanup-browser-qa.sh`: compatibility wrapper for older calls.
+- `scripts/browser-qa-context.sh` (documented for future implementation): derives session, engine, host, allowed domains, auth/profile metadata.
+- `scripts/browser-qa-doctor.sh` (documented for future implementation): checks selected browser CLI availability.
+- `scripts/browser-qa-cleanup.sh` (documented for future implementation): closes the selected engine session without stopping app services.
+- `scripts/cleanup-browser-qa.sh` (documented for future implementation): compatibility wrapper for older calls.
 - `references/agent-browser.md`: agent-browser command workflow.
 - `references/browser-use.md`: browser-use-specific workflow.
 - `references/auth.md`: login and profile policy.
