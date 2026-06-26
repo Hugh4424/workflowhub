@@ -16,4 +16,9 @@ jobs:
           node-version: "22"
       - run: npm install
       - run: npm run check
+      # verify-code smoke (M9 Phase 5)
+      - run: node_modules/.bin/vitest run tests/verify-code-capture.test.mjs tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
       - run: npm test
+      # lightweight 3-stage chain structural check (M9 Phase 5, F10: no heavy E2E)
+      - run: node scripts/ci-chain-check.mjs --task-id=m9-verify-code
+        continue-on-error: true
