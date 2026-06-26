@@ -167,7 +167,7 @@ function computeReviewExecutionRate(events) {
  */
 function computeReworkRounds(events) {
   const checkpoints = events.filter((e) => e.event === "checkpoint_request");
-  if (checkpoints.length === 0) return null;
+  if (checkpoints.length === 0) return 0;
 
   const counts = {};
   for (const e of checkpoints) {
