@@ -115,7 +115,7 @@ Write the result into `stage-result` under the `facts.review` key. The `buildRev
 When all phases are complete, write the stage-result with a structured facts package (FR-PKG-001/002/003). The three required keys are:
 
 - `facts.changed` — **array** of changed file paths (one entry per file, not a comma-joined string).
-- `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...] }`.
+- `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...] }`. Must include `command` field (the test command string that was executed) for verify-code downstream consumption (M9 C1).
 - `facts.review` — **struct** produced by `buildReviewFact` (see §8 above).
 
 Write the stage-result to a durable task path (not a temp file) so downstream stages can read it. The exact path follows the project convention: `specs/{task-id}/stage-result-build-code.json`.
@@ -129,7 +129,7 @@ Example shape:
   "retryable": false,
   "facts": {
     "changed": ["core/text-utils.mjs", "tests/text-utils.test.mjs"],
-    "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"] },
+    "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"], "command": "pnpm exec vitest run tests/text-utils.test.mjs" },
     "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "specs/{task-id}/reviews/build-code-phase-1.md" }
   },
   "missing_items": [],

@@ -12,6 +12,10 @@ export function validateFacts(facts) {
   if (facts.review != null && facts.review.status == null) {
     missing.push('review.status');
   }
+  // C1 (M9): command field is optional but if present must be string
+  if (facts.tests != null && facts.tests.command !== undefined && typeof facts.tests.command !== 'string') {
+    missing.push('tests.command');
+  }
   return { valid: missing.length === 0, missing };
 }
 
@@ -31,7 +35,6 @@ export function buildReviewFact({ status, source, verdict, artifactPath }) {
     }
     return { status, source, verdict, artifact_path: artifactPath };
   }
-  // not_executed
   return { status };
 }
 
