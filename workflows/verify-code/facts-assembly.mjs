@@ -7,33 +7,34 @@ const METRIC_KEYS = [
   'human_intervention', 'friction_ref',
 ];
 
-/**
- * Extract command from build-code facts. Throws on missing command.
- */
 export function readCommand(buildResult) {
   if (!buildResult.facts || !buildResult.facts.tests) {
     const err = new Error('facts.tests not found in build result');
     err.retryable = true;
     throw err;
   }
-  if (!buildResult.facts.tests.command) {
+  const cmd = buildResult.facts.tests.command;
+  if (!cmd) {
     const err = new Error('command field missing in facts.tests — build-code must include command in facts output');
     err.retryable = true;
     throw err;
   }
-  return buildResult.facts.tests.command;
+  if (typeof cmd !== 'string') {
+    const err = new Error(`facts.tests.command must be a string, got ${typeof cmd}`);
+    err.retryable = true;
+    throw err;
+  }
+  return cmd;
 }
 
-/**
- * Assemble a 7-key stage-result object.
- */
 export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable }) {
-  const strippedRef = evidenceRef.startsWith('specs/')
-    ? evidenceRef.replace(/^specs\/[^/]+\//, '')
-    : evidenceRef;
+  // FR-PATH-003: evidence_ref must be relative path WITHOUT specs/{task-id}/ prefix
+  if (evidenceRef.startsWith('specs/')) {
+    throw new Error(`evidence_ref must be a relative path without 'specs/{task-id}/' prefix, got: ${evidenceRef}`);
+  }
   return {
     verdict,
-    evidence_ref: strippedRef,
+    evidence_ref: evidenceRef,
     anomaly_flags: anomalyFlags,
     missing_items: missingItems,
     user_decision: userDecision,
@@ -42,18 +43,12 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
   };
 }
 
-/**
- * Write stage-result JSON to specs/{taskId}/stage-result-verify-code.json.
- */
-export function writeStageResult(taskSpecDir, taskId, result) {
+export function writeStageResult(taskSpecDir, result) {
   mkdirSync(taskSpecDir, { recursive: true });
   const path = join(taskSpecDir, 'stage-result-verify-code.json');
   writeFileSync(path, JSON.stringify(result, null, 2), 'utf-8');
 }
 
-/**
- * Validate a metric record has all 10 required keys.
- */
 export function validateMetricRecord(record) {
   const missing = METRIC_KEYS.filter(k => !(k in (record || {})));
   return { valid: missing.length === 0, missing };
