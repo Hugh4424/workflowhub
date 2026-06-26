@@ -67,7 +67,7 @@ Do not use Playwright MCP as a fallback from either CLI. Playwright MCP is outsi
 
 ### 1. Context
 
-Always start with the bundled context script. The caller must set `VERIFY_CODE_DIR` to the directory containing this workflow (e.g., the repo root or a workflows directory).
+The source skill provides a bundled context script. When browser QA scripts become available, the caller sets:
 
 ```bash
 VERIFY_CODE_DIR="${VERIFY_CODE_DIR:-.}"
@@ -86,17 +86,13 @@ The script exports:
 
 ### 2. Doctor
 
-Run the bundled doctor before browser actions:
+The source skill provides a doctor check. When available, run before browser actions:
 
-```bash
-```
 
 If the selected engine is missing or broken, repair that engine only. Do not check or launch the other engine as fallback.
 
-### 3. Cleanup Before Launch
+### 3. Cleanup Before Launch (Planned)
 
-```bash
-```
 
 This cleanup is only for browser automation resources. It must not stop the target app.
 It closes only the selected engine. For `agent-browser`, cleanup uses the saved session metadata, kills every daemon bound to the session socket, removes stale runtime files, then removes stale browser temp directories and Playwright MCP residuals. If cleanup still reports session residuals or exits non-zero, stop and resolve that state before launching a new browser session.
@@ -172,8 +168,6 @@ For repair rules, read `references/fallback.md`.
 
 Always finish with:
 
-```bash
-```
 
 The task is not done until cleanup has run and the target app service is still left running.
 Do not use broad `agent-browser close --all` during normal QA cleanup. Use the derived session cleanup script, which applies command timeouts, PID-file fallback, and stale temporary directory cleanup.
@@ -196,7 +190,7 @@ For details, read `references/auth.md`.
 - Cap page output when supported.
 - Do not upload, download, run arbitrary `eval`, or leave the target domain unless required by the task.
 - Do not attach to live Chrome unless the user explicitly asks.
-- Do not use repo-local cleanup or context scripts when this skill provides bundled scripts.
+- Do not use repo-local cleanup or context scripts. Bundled scripts are planned for future implementation.
 - Do not run `make stop-worktree`, `make stop`, `scripts/stop-services.sh`, or similar shutdown commands as part of browser QA cleanup.
 - Do not run `agent-browser`, `browser-use`, and Playwright MCP in the same QA run.
 
@@ -222,7 +216,7 @@ If the selected engine stayed blocked, report:
 - repair steps attempted
 - why the run stopped
 
-## Bundled Resources
+## Planned Resources (not yet implemented — documented from source skill)
 
 - `scripts/browser-qa-context.sh` (documented for future implementation): derives session, engine, host, allowed domains, auth/profile metadata.
 - `scripts/browser-qa-doctor.sh` (documented for future implementation): checks selected browser CLI availability.
