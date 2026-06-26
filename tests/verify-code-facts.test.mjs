@@ -59,9 +59,26 @@ describe('assembleStageResult', () => {
       .toThrow(/specs/);
   });
 
+  it('should throw when evidence_ref is an absolute path', () => {
+    expect(() => assembleStageResult({ ...baseOpts, evidenceRef: '/tmp/evidence.json' }))
+      .toThrow(/absolute/);
+  });
+
+  it('should throw when evidence_ref contains ../ traversal', () => {
+    expect(() => assembleStageResult({ ...baseOpts, evidenceRef: '../evidence.json' }))
+      .toThrow(/traversal/);
+    expect(() => assembleStageResult({ ...baseOpts, evidenceRef: 'evidence/../../secret.json' }))
+      .toThrow(/traversal/);
+  });
+
   it('should accept evidence_ref without specs/ prefix', () => {
     const r = assembleStageResult({ ...baseOpts, evidenceRef: 'evidence/fresh-capture.json' });
     expect(r.evidence_ref).toBe('evidence/fresh-capture.json');
+  });
+
+  it('should accept valid relative path with ./ prefix', () => {
+    const r = assembleStageResult({ ...baseOpts, evidenceRef: './evidence/fresh-capture.json' });
+    expect(r.evidence_ref).toBe('./evidence/fresh-capture.json');
   });
 
   it('user_decision must be present (falsifiable)', () => {

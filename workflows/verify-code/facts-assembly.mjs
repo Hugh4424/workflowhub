@@ -29,6 +29,12 @@ export function readCommand(buildResult) {
 
 export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable }) {
   // FR-PATH-003: evidence_ref must be relative path WITHOUT specs/{task-id}/ prefix
+  if (evidenceRef.startsWith('/')) {
+    throw new Error(`evidence_ref must be a relative path, absolute paths are not allowed, got: ${evidenceRef}`);
+  }
+  if (evidenceRef.includes('../')) {
+    throw new Error(`evidence_ref must not contain path traversal (../), got: ${evidenceRef}`);
+  }
   if (evidenceRef.startsWith('specs/')) {
     throw new Error(`evidence_ref must be a relative path without 'specs/{task-id}/' prefix, got: ${evidenceRef}`);
   }
