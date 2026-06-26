@@ -23,7 +23,7 @@ export async function runMetricsWriter({ taskDir, taskId, verdict } = {}) {
   }, cfg);
 
   if (verdict) {
-    updateOwnResult({ execution_id: executionId, verdict }, cfg);
+    updateOwnResult(executionId, { verdict }, cfg);
   }
 
   return { executionId };

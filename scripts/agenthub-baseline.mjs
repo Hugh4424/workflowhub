@@ -125,7 +125,7 @@ function computeTestExecutionRate(events) {
   // Phases with at least one phase_pre_review
   const preReviewPhases = new Set();
   for (const e of events) {
-    if (e.event === "phase_pre_review") {
+    if (e.event === "phase_pre_review" && e.stage === "apply") {
       preReviewPhases.add(e.phase ?? null);
     }
   }
