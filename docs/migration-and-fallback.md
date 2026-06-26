@@ -3,11 +3,11 @@
 ## 四分支判定（D8/D11）
 
 | 输入 | 判定 | 动作 |
-|------|:----:|------|
-| bad_count < 2 | **switch** | 继续用 workflowhub |
-| bad_count ≥ 2 且根因≠workflowhub | **hold** | 暂停自举 task，排查 task 自身问题 |
-| bad_count ≥ 2 且根因=workflowhub | **rollback** | 执行回滚步骤 |
-| 任一核心指标倒退>2×基线 | **manual_review** | 降为需人工复核（D12） |
+| --- | :---: | --- |
+| bad_count < 2 | switch | 继续用 workflowhub |
+| bad_count ≥ 2 且根因≠workflowhub | hold | 暂停自举 task，排查 task 自身问题 |
+| bad_count ≥ 2 且根因=workflowhub | rollback | 执行回滚步骤 |
+| 任一核心指标倒退>2×基线 | manual_review | 降为需人工复核（D12） |
 
 ## 回滚步骤
 
