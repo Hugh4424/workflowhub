@@ -26,6 +26,8 @@ The full path exposes a richer fact surface; the slim path is intentionally lean
 
 For each implementation unit (phase), enforce TDD via the external `capture.mjs` harness. Do **not** run test commands directly — always route through `capture.mjs` so evidence is machine-readable and anomaly-detected.
 
+> **Delegation:** For multi-file or non-trivial phases, dispatch the RED/GREEN capture to a subagent — it runs `capture.mjs` in its own context and returns only the evidence file path + exit code. The orchestrator does not run capture commands in the main context for these. Trivial single-file phases may be run directly.
+
 Sequence per phase:
 
 1. **Write tests first** — ensure the test file exists and the assertions describe the intended behavior before any implementation code is written.
@@ -54,6 +56,8 @@ When any of these conditions hold, surface a **non-blocking warning** to the use
 ### 4. diff-only 越界检测
 
 After each phase's implementation, run:
+
+> **Delegation:** Scanning the diff is a read-heavy action — dispatch it to a subagent (e.g. an explore worker) that runs `diff-scanner.mjs` and returns only the violation list. The orchestrator does not run the scan itself.
 
 ```
 node workflows/build-code/diff-scanner.mjs scanDiff
