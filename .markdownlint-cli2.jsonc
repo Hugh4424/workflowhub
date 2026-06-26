@@ -5,5 +5,5 @@
     "MD033": false,
     "MD041": false
   },
-  "ignores": ["node_modules", "specs/archive", "specs/m7-intake-v1"]
+  "ignores": ["node_modules", "specs/archive", "specs/m7-intake-v1", ".omc", "specs/m9-verify-code"]
 }

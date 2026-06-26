@@ -33,7 +33,7 @@ Sequence per phase:
 1. **Write tests first** — ensure the test file exists and the assertions describe the intended behavior before any implementation code is written.
 2. **Collect RED evidence** — run:
 
-   ```
+   ```bash
    node workflows/build-code/capture.mjs <testcmd> <outputPath>
    ```
 
@@ -47,6 +47,7 @@ Sequence per phase:
 After both RED and GREEN evidence files are written, compare their `content_hash` fields. If `RED.content_hash === GREEN.content_hash`, the test output did not change between runs — this is a suspected false-green.
 
 Inspect the `anomaly_flags` array in each evidence file for any of:
+
 - `suspicious_red_exit` — RED exited 0 (tests should have failed)
 - `suspicious_green_exit` — GREEN exited non-zero (tests should have passed)
 - `green_test_files_empty` — no test files were discovered in the GREEN run
@@ -59,7 +60,7 @@ After each phase's implementation, run:
 
 > **Delegation:** Scanning the diff is a read-heavy action — dispatch it to a subagent (e.g. an explore worker) that runs `diff-scanner.mjs` and returns only the violation list. The orchestrator does not run the scan itself.
 
-```
+```bash
 node workflows/build-code/diff-scanner.mjs scanDiff
 ```
 
@@ -78,6 +79,7 @@ If `worktree_root` is absent from the caller config, fail fast with a clear erro
 Use Worker-Mode to spawn an implementer worker for the actual code-writing work. Worker-Mode is an external semver dependency — version-pin it in the skill config and do not inline its logic.
 
 When dispatching to the worker:
+
 - Pass **ABSOLUTE paths** for all file references (source files, evidence output paths, task dir).
 - Explicitly forbid the worker from running `git commit` — include the instruction `DO NOT commit. Leave changes in the working tree.` in the worker prompt (FR-SUB-002).
 - The worker returns its output; the orchestrating skill (this SKILL.md) reads it and proceeds to the next step.
@@ -87,6 +89,7 @@ When dispatching to the worker:
 After GREEN evidence is confirmed for a phase, call the **3rd-review standalone entry**. Feed the real `git diff` output (not a natural-language description of the change — using prose triggers the same-source downgrade path in 3rd-review's classifier).
 
 Consume the 3-state verdict:
+
 - `pass` — proceed to the next phase.
 - `revise_required` — return to implementation and address findings before re-running GREEN + 3rd-review.
 - `escalate_to_human` — halt and present the finding summary to the user; do not auto-resolve.
