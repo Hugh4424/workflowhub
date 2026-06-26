@@ -88,11 +88,9 @@ The script exports:
 
 The source skill provides a doctor check. When available, run before browser actions:
 
-
 If the selected engine is missing or broken, repair that engine only. Do not check or launch the other engine as fallback.
 
 ### 3. Cleanup Before Launch (Planned)
-
 
 This cleanup is only for browser automation resources. It must not stop the target app.
 It closes only the selected engine. For `agent-browser`, cleanup uses the saved session metadata, kills every daemon bound to the session socket, removes stale runtime files, then removes stale browser temp directories and Playwright MCP residuals. If cleanup still reports session residuals or exits non-zero, stop and resolve that state before launching a new browser session.
@@ -167,7 +165,6 @@ For repair rules, read `references/fallback.md`.
 ### 7. Finish Cleanly
 
 Always finish with:
-
 
 The task is not done until cleanup has run and the target app service is still left running.
 Do not use broad `agent-browser close --all` during normal QA cleanup. Use the derived session cleanup script, which applies command timeouts, PID-file fallback, and stale temporary directory cleanup.

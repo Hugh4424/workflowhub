@@ -32,3 +32,6 @@ coverage/
 .vscode/
 *.swp
 Thumbs.db
+
+# OMC operational artifacts
+.omc/

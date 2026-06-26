@@ -13,6 +13,7 @@ upstream: spec.md + decision-log.md (approved 2026-06-26)
 **执行环境**：multica-agenthub vibecoding harness（自举），Node 22 / ESM，vitest 2.1.9
 **上游依赖**：M8 已交付（build-code v1 / facts-schema.mjs / metrics/collector.mjs 可用）；M7 已交付（make-decision skill 可用）
 **外部依赖**：
+
 - isolated-browser-qa skill（`~/.claude/skills/isolated-browser-qa`，抄入 workflowhub 并改造去除 agenthub 硬编码路径）
 - metrics/collector.mjs — M4 已交付，直接调用 recordSkeleton / updateOwnResult
 
@@ -49,6 +50,7 @@ upstream: spec.md + decision-log.md (approved 2026-06-26)
 | S8 可独立调用可搬运 | YES | SKILL.md + 脚本均不绑死宿主，相对路径从调用参数传入 |
 
 **关键合宪确认**：
+
 - D-M9-2 freshness=record-not-block → F5 YES：鲜度校验仅写 anomaly_flags，绝不 blocking
 - FR-METRICS-001~004 → F3 YES：metrics 双写记事实，写失败 warn 不 throw
 - F10 YES：D-M9-7 明确不堆 E2E 基建，M9 自举实跑本身就是端到端验证
@@ -90,12 +92,14 @@ upstream: spec.md + decision-log.md (approved 2026-06-26)
 **阶梯结论**：最小切口 = 3 个 .mjs 脚本（capture/freshness/facts-assembly）+ SKILL.md 升级 + isolated-browser-qa 一份文件 copy + C1 build-code 侧 command 字段 + CI 冒烟配置 + reuse-registry 更新。STOP。
 
 **不可简化红线**：
+
 - capture.mjs 必须是外部进程，不能用 LLM 自报 exit 码（F9 可证伪性红线）
 - freshness 校验绝不 BLOCK，只写 anomaly_flags（C2，D-M9-2，D5/D7）
 - 合并/删分支前必须有明文停顿（C3，FR-CLOSE-001）
 - isolated-browser-qa 抄入后必须去除所有 agenthub 硬编码路径（FR-BROWSER-001，C4）
 
 **非显然取舍**：
+
 - `freshness.mjs` 单独拆出 vs 合入 capture.mjs：拆出使鲜度逻辑（anomaly_flags 构造）可独立单测，代价是多一个文件。选拆出（FR-TEST-001 要求三脚本各有单测）。
 - isolated-browser-qa 复制单文件 vs 引入子目录：skill 原本是目录形式，但 workflowhub 只需 SKILL.md 描述行为，无需完整目录结构。按 F8 简单优先，v1 只复制 SKILL.md 一个文件，命名为 `workflows/verify-code/isolated-browser-qa.md`，去除 agenthub 路径。实现时须确认原 skill 无脚本/资源类运行依赖（如有，一并处理或显式记录豁免）；agenthub 硬编码路径替换是 Task 4.2 的显式工作项。
 
@@ -103,7 +107,7 @@ upstream: spec.md + decision-log.md (approved 2026-06-26)
 
 ## 项目文件结构
 
-```
+```text
 workflowhub/
 ├── workflows/
 │   ├── verify-code/
