@@ -21,4 +21,3 @@ jobs:
       - run: npm test
       # lightweight 3-stage chain structural check (M9 Phase 5, F10: no heavy E2E)
       - run: node scripts/ci-chain-check.mjs --task-id=m9-verify-code
-        continue-on-error: true
