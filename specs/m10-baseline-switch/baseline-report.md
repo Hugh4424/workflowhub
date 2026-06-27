@@ -99,4 +99,4 @@
 
 1. 基线已从4个历史 task 计算完成，5项指标均可复算
 2. 对照数据源：verify-code 段有真采集（task-metrics.jsonl），其余4段代理推导
-3. 达标判定留待实际运行（五局三胜 + 人工异常条款，D12）
+3. 达标判定留待实际 task 运行时对照（五局三胜 + 人工异常条款，D12）。**M10 产出的是基线快照**，对照（direction/verdict/workflowhub_value）发生在后续每个 task 的 test-acceptance 阶段，由 agenthub-baseline.mjs --report 产出。

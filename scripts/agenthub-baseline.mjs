@@ -49,6 +49,10 @@ function extractTaskId(path) {
 
 function parseJournal(path) {
   if (!existsSync(path)) {
+    console.error(`agenthub-baseline: journal not found: ${path}`);
+    return [];
+  }
+  if (!existsSync(path)) {
     return [];
   }
   const text = readFileSync(path, "utf8");
