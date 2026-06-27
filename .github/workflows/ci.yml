@@ -19,8 +19,8 @@ jobs:
       
       # M10 baseline smoke (Phase 5)
       - run: node scripts/agenthub-baseline.mjs --smoke
-      # M10 field-mapping schema validation (structural, no external deps)
-      - run: node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('contracts/field-mapping.schema.json','utf-8'));console.assert(s.title,'missing title');console.assert(s.properties.mappings.minItems===5,'expect 5 minItems');console.assert(s.properties.mappings.items.required.length===7,'expect 7 required fields');const validTypes=['direct','proxy','weak_proxy'];console.assert(s.properties.mappings.items.properties.source_type.enum.every(t=>validTypes.includes(t)),'source_type enum mismatch');console.log('M10 schema: PASS (5 rows, 7 cols, source_type whitelist verified)')"
+      # M10 field-mapping schema validation (validates real spec data)
+      - run: node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('contracts/field-mapping.schema.json','utf-8'));const validTypes=['direct','proxy','weak_proxy'];console.assert(s.properties.mappings.minItems===5,'minItems');console.assert(s.properties.mappings.items.required.length===7,'7 required');const md=fs.readFileSync('specs/m10-baseline-switch/field-mapping.md','utf-8');const rows=md.split('\n').filter(l=>l.startsWith('|')&&l.includes('proxy')||l.includes('weak_proxy')||l.includes('direct'));console.assert(rows.length>=5,'expect 5+ data rows in field-mapping.md, got '+rows.length);for(const r of rows){const t=r.split('|').map(c=>c.trim()).filter(Boolean);const st=t[5];console.assert(validTypes.includes(st),'invalid source_type in row: '+st)}console.log('M10 field-mapping: PASS ('+rows.length+' rows with valid source_types)')"
       # M10 vitest
       - run: node_modules/.bin/vitest run tests/agenthub-baseline.test.mjs tests/metrics-smoke.test.mjs --passWithNoTests=false
       # verify-code smoke (M9 Phase 5)

@@ -19,7 +19,13 @@ export async function runMetricsWriter({ taskDir, taskId, verdict, executionId: 
     execution_id: executionId,
     skill_or_stage: "verify-code",
     stage: "test-acceptance",
+    skill_version: null,
     executed: true,
+    tokens: null,
+    duration_ms: null,
+    rework_rounds: null,
+    human_intervention: false,
+    friction_ref: null,
   }, cfg);
 
   if (verdict) {

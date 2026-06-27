@@ -17,10 +17,14 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Import DERIVED_METRICS from metrics/baseline.mjs (ESM)
-const { DERIVED_METRICS } = await import(
-  join(__dirname, "..", "metrics", "baseline.mjs")
-);
+// Inline metric names from decision-log D9/D10 (FR-BASE-004: no import of baseline.mjs core)
+const DERIVED_METRICS = [
+  "missed_step_rate",
+  "test_execution_rate",
+  "review_execution_rate",
+  "rework_rounds",
+  "defect_count",  // renamed to rework_proxy_count on output (D10)
+];
 
 // ---------------------------------------------------------------------------
 // Hard-coded journal paths (FR-BASELINE-002 source task set)
@@ -49,7 +53,7 @@ function extractTaskId(path) {
 
 function parseJournal(path) {
   if (!existsSync(path)) {
-    console.error(`agenthub-baseline: journal not found: ${path}`);
+    process.stderr.write(`agenthub-baseline: ERROR journal not found: ${path}\n`);
     return [];
   }
   if (!existsSync(path)) {
@@ -274,6 +278,7 @@ function runSmoke() {
 
 function main() {
   if (process.argv.includes("--smoke")) { runSmoke(); return; }
+  const reportMode = process.argv.includes("--report");
   const baselineOnly = process.argv.includes("--baseline-only");
 
   const taskResults = [];

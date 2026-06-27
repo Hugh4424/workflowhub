@@ -94,7 +94,7 @@ The stage-result record has this structure:
 
 ### 9. metrics 结束
 
-Call `updateOwnResult` to finalize the metrics record. Metrics write failure only warns — it does not throw (FR-METRICS-002, F3).
+Call `updateOwnResult` to finalize the metrics record, then call `import("./metrics-writer.mjs").then(m => m.runMetricsWriter({ taskDir, taskId, verdict, executionId }))` to record task-metrics.jsonl for M10 baseline comparison. Metrics write failure only warns — it does not throw (FR-METRICS-002, F3).
 
 ## Produce a stage-result
 
