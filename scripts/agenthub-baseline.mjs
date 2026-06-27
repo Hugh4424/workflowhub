@@ -54,8 +54,10 @@ function extractTaskId(path) {
 function parseJournal(path) {
   if (!existsSync(path)) {
     process.stderr.write(`agenthub-baseline: ERROR journal not found: ${path}\n`);
+    process.exitCode = 1;
     return [];
   }
+  let malformedLines = 0;
   if (!existsSync(path)) {
     return [];
   }
@@ -68,6 +70,10 @@ function parseJournal(path) {
     } catch {
       // skip malformed lines
     }
+  }
+  if (malformedLines > 0) {
+    process.stderr.write(`agenthub-baseline: ${malformedLines} malformed line(s) in ${path}\n`);
+    process.exitCode = 1;
   }
   return events;
 }
@@ -278,7 +284,6 @@ function runSmoke() {
 
 function main() {
   if (process.argv.includes("--smoke")) { runSmoke(); return; }
-  const reportMode = process.argv.includes("--report");
   const baselineOnly = process.argv.includes("--baseline-only");
 
   const taskResults = [];
