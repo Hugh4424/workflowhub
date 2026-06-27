@@ -16,6 +16,13 @@ jobs:
           node-version: "22"
       - run: npm install
       - run: npm run check
+      
+      # M10 baseline smoke (Phase 5)
+      - run: node scripts/agenthub-baseline.mjs --smoke
+      # M10 field-mapping schema validation
+      - run: node scripts/validate-field-mapping.mjs
+      # M10 vitest
+      - run: node_modules/.bin/vitest run tests/agenthub-baseline.test.mjs tests/metrics-smoke.test.mjs --passWithNoTests=false
       # verify-code smoke (M9 Phase 5)
       - run: node_modules/.bin/vitest run tests/verify-code-capture.test.mjs tests/verify-code-freshness.test.mjs tests/verify-code-facts.test.mjs --passWithNoTests=false
       - run: npm test

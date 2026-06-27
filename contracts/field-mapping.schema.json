@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "M10 Field Mapping Schema",
+  "description": "Validates 5-row x 7-column field mapping for agenthub→workflowhub baseline comparison",
+  "type": "object",
+  "properties": {
+    "mappings": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["metric_name", "journal_event", "workflowhub_field", "formula", "polarity", "source_type", "missing_behavior"],
+        "properties": {
+          "metric_name": { "type": "string" },
+          "journal_event": { "type": "string" },
+          "workflowhub_field": { "type": "string" },
+          "formula": { "type": "string" },
+          "polarity": { "enum": ["↑ better", "↓ better"] },
+          "source_type": { "enum": ["direct", "proxy", "weak_proxy"] },
+          "missing_behavior": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["mappings"],
+  "additionalProperties": false
+}

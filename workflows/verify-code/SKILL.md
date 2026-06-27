@@ -94,7 +94,7 @@ The stage-result record has this structure:
 
 ### 9. metrics 结束
 
-Call `updateOwnResult` to finalize the metrics record. Metrics write failure only warns — it does not throw (FR-METRICS-002, F3).
+Call `updateOwnResult` to finalize the metrics record, then call `import("./metrics-writer.mjs").then(m => m.runMetricsWriter({ taskDir, taskId, verdict, executionId }))` to record task-metrics.jsonl for M10 baseline comparison. Metrics write failure only warns — it does not throw (FR-METRICS-002, F3).
 
 ## Produce a stage-result
 
@@ -116,6 +116,8 @@ When verification is complete, write a `stage-result` record with:
 ```
 
 Also record a metrics entry via the collector. Call `recordSkeleton` at stage start and `updateOwnResult` at stage end, passing at minimum:
+
+> **M10 wiring**: After calling `recordSkeleton` and `updateOwnResult`, also call `../../workflows/verify-code/metrics-writer.mjs` `runMetricsWriter({ taskDir, taskId, verdict, executionId })` to record task-metrics.jsonl for baseline comparison (FR-COLL-001).
 
 ```json
 {
