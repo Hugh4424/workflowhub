@@ -68,6 +68,7 @@ function parseJournal(path) {
     try {
       events.push(JSON.parse(line));
     } catch {
+      malformedLines++;
       // skip malformed lines
     }
   }

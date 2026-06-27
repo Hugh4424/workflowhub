@@ -11,17 +11,18 @@ if (schema.properties.mappings.items.required.length !== 7) { console.error("FAI
 const enumOk = schema.properties.mappings.items.properties.source_type.enum.every(t => VALID_TYPES.includes(t));
 if (!enumOk) { console.error("FAIL: source_type enum mismatch"); process.exit(1); }
 
-// 2. Validate real field-mapping.md has 5 data rows with valid source_types
+// 2. Validate real field-mapping.md has exactly 5 data rows × 7 columns
 const md = readFileSync("specs/m10-baseline-switch/field-mapping.md", "utf-8");
 const rows = md.split("\n").filter(l => {
   const t = l.trim();
   return t.startsWith("|") && VALID_TYPES.some(v => t.includes(v));
 });
-if (rows.length < 5) { console.error(`FAIL: expected 5+ data rows, got ${rows.length}`); process.exit(1); }
+if (rows.length !== 5) { console.error(`FAIL: expected exactly 5 data rows, got ${rows.length}`); process.exit(1); }
 for (const r of rows) {
   const cols = r.split("|").map(c => c.trim()).filter(Boolean);
+  if (cols.length !== 7) { console.error(`FAIL: expected 7 columns, got ${cols.length} in row: ${cols.slice(0,2).join("|")}`); process.exit(1); }
   const st = cols[5]; // source_type is 6th column
   if (!VALID_TYPES.includes(st)) { console.error(`FAIL: invalid source_type "${st}"`); process.exit(1); }
 }
 
-console.log(`M10 field-mapping: PASS (schema valid, ${rows.length} rows with valid source_types)`);
+console.log(`M10 field-mapping: PASS (schema valid, ${rows.length} rows × ${rows[0]?.split("|").map(c=>c.trim()).filter(Boolean).length||"?"} cols with valid source_types)`);
