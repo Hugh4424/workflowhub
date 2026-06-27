@@ -1,0 +1,9 @@
+{
+  "feature": "m2-microkernel",
+  "task_id": "m2-microkernel",
+  "change_id": "m2-microkernel",
+  "archived_at": "2026-06-22T13:10:00Z",
+  "branch": "main",
+  "commit": "9061e740d9fb6413ccfda857f45a2183292e34ee",
+  "artifacts": ["spec.md", "plan.md", "tasks.md"]
+}

@@ -35,3 +35,6 @@ Thumbs.db
 
 # OMC operational artifacts
 .omc/
+
+# Worker-mode runtime state
+.worker-mode/
