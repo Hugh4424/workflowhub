@@ -1,4 +1,4 @@
-本表登记 workflowhub 7 个 skill 的复用来源，方便溯源与外部依赖更新检查（承接 D15/D16）。
+本表登记 workflowhub 各 skill 的复用来源，方便溯源与外部依赖更新检查（承接 D15/D16）。
 
 | skill 名 | 复用类别 | 来源路径 |
 |---|---|---|
@@ -13,3 +13,5 @@
 | 3rd-review | 外部依赖 | packages/core/agenthub/skills/3rd-review |
 | TDD 件（capture.mjs） | 外部改造适配 | tdd-red-green skill |
 | `isolated-browser-qa` | 改造适配 | `~/.claude/skills/isolated-browser-qa` |
+| spec-specify | 外部改造适配 | ~/.claude/skills/speckit-specify/SKILL.md |
+| spec-clarify | 外部改造适配 | ~/.claude/skills/speckit-clarify/SKILL.md |

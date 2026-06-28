@@ -1,0 +1,33 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "changed": [
+      "workflows/spec-specify/SKILL.md",
+      "workflows/spec-specify/templates/spec-template.md",
+      "workflows/spec-clarify/SKILL.md",
+      "workflows/build-spec/SKILL.md",
+      "reuse-registry.md",
+      "config/workflowhub.yaml"
+    ],
+    "tests": {
+      "passed": 475,
+      "total": 475,
+      "files": [
+        "tests/ (35 files)",
+        "specs/m11-build-spec-v1/verify/phase-{1,2,3,4}.sh"
+      ],
+      "command": "npm test"
+    },
+    "review": {
+      "status": "executed",
+      "source": "third_party",
+      "verdict": "pass",
+      "artifact_path": "specs/m11-build-spec-v1/reviews/build-code-phase-3-r2-pass.md"
+    }
+  },
+  "missing_items": [],
+  "user_decision": false,
+  "reason": "build-code 完成 M11 4 phase：Phase1 spec-specify(SKILL.md+模板) / Phase2 spec-clarify(SKILL.md) / Phase3 build-spec 升 v1(串 spec-specify→spec-clarify→宪法检查→baseline→F10门→人审编排) / Phase4 注册(reuse-registry+config/workflowhub.yaml)。每 phase RED→GREEN evidence 落盘(hash 差异确认非假绿) + diff-scan clean + codex 异源审查。Phase3 codex R1 revise_required(B1 F10门顺序违 F7 / B2 baseline 算法假绿违 F9)→修复→R2 pass。Phase4 codex pass。全量 npm test 475/475 + stage-quality scanner PASS(修复 spec-specify/spec-clarify 缺 stage 字段 metric block 回归)。"
+}

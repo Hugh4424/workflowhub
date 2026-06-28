@@ -1,0 +1,15 @@
+{
+  "command": "bash specs/m11-build-spec-v1/verify/phase-3.sh",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "fc142b066ee05627f244e6ac6257398932336b69",
+  "exit_code": 0,
+  "timestamp": "2026-06-28T14:07:25.100Z",
+  "test_files_line": null,
+  "content_hash": "90578eb4d55d2578da8aed25ff9df282f3c7b2a1771336dcda5e4fa0a7d760ae",
+  "stdout_path": "specs/m11-build-spec-v1/evidence/phase-3-GREEN.json.stdout",
+  "stderr_path": "specs/m11-build-spec-v1/evidence/phase-3-GREEN.json.stderr",
+  "anomaly_flags": [
+    "green_test_files_empty"
+  ],
+  "warning": "anomalies: green_test_files_empty"
+}
