@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "verdict": "pass",
+    "evidence_ref": "test/final-test-report.md",
+    "anomaly_flags": []
+  },
+  "missing_items": [
+    "browser-acceptance: no UI acceptance items",
+    "AC7: zero-clone end-to-end execution deferred to manual QA (structural constraints verified)"
+  ],
+  "user_decision": false,
+  "reason": "verify-code 执行完成。npm test 35/35 pass, freshness clean, constitution 21/21 comply。AC 核对最终结论：9 PASS (AC1/AC2/AC3/AC4/AC5/AC6/AC8/AC9/AC10)，1 PENDING (AC7: 结构约束满足，端到端实跑需人工 QA)。AC2/AC3 重判：constitution-check.md 21/21 全 [x]+判据 0空条→PASS；baseline-report.md 5行4列非空 unknown附据→PASS。诚实标注不假绿。merge/删分支留人确认。"
+}

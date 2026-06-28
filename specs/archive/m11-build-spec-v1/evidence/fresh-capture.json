@@ -1,0 +1,9 @@
+{
+  "command": "npm test",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "50b9c42fd1293d79fede0e57ce1273be89c95ebc",
+  "exit_code": 0,
+  "timestamp": "2026-06-28T14:37:17.352Z",
+  "test_files_line": "Test Files  35 passed (35)",
+  "content_hash": "eef393147516875da21cc8ff71a5c2777b7902ffff8bd5f397483dc3a78dab41"
+}
