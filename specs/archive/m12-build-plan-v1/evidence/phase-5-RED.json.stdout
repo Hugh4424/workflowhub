@@ -1,0 +1,60 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/m12-cross-artifact-analyze.test.mjs (25 tests | 25 failed) 6ms
+   × cross-artifact-analyze SKILL.md existence and frontmatter > workflows/cross-artifact-analyze/SKILL.md exists 3ms
+     → Missing: /Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md
+   × cross-artifact-analyze SKILL.md existence and frontmatter > frontmatter has name="cross-artifact-analyze" 0ms
+     → Missing: /Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md
+   × cross-artifact-analyze SKILL.md existence and frontmatter > frontmatter has non-empty description 0ms
+     → Missing: /Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md
+   × cross-artifact-analyze SKILL.md covers 4 problem types > body mentions 'inconsistency' (不一致) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md covers 4 problem types > body mentions 'duplicate' (重复) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md covers 4 problem types > body mentions 'ambiguity' (歧义) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md covers 4 problem types > body mentions 'underdefined' (欠定义) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md requires 5 finding fields > body mentions 'type' as a required finding field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md requires 5 finding fields > body mentions 'source_artifact' as a required finding field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md requires 5 finding fields > body mentions 'target_artifact' as a required finding field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md requires 5 finding fields > body mentions 'fr_or_task_id' as a required finding field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md requires 5 finding fields > body mentions 'line_or_anchor' as a required finding field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md requires 5 finding fields > body states missing-field finding is invalid/non-compliant 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md non-blocking + read-only semantics > body states report is read-only (只读/read-only) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md non-blocking + read-only semantics > body states report does not block downstream (不阻断/does not block) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md non-blocking + read-only semantics > body contains "无一致性问题" (zero-problems summary path) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md artifact location: task-id derivation > body references "specs/{task-id}/" path pattern for artifact location 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md artifact location: task-id derivation > body does NOT contain .specify/ (no .specify/ scaffold dependency) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md artifact location: task-id derivation > body does NOT contain git branch inference commands (git checkout/branch/fetch) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md output path and stage-result reference > body references output path "specs/{task-id}/cross-artifact-analysis.md" 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md output path and stage-result reference > body references "facts.analysis_ref" for stage-result integration 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md is NOT named speckit-analyze > frontmatter name is NOT "speckit-analyze" 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md is NOT named speckit-analyze > body does NOT use 'speckit-analyze' as a skill identifier in workflow steps 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md input contract: 3 artifacts required > body requires spec.md, plan.md, and tasks.md all exist (fail-loud) 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+   × cross-artifact-analyze SKILL.md input contract: 3 artifacts required > body states fail-loud if any artifact is missing 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/cross-artifact-analyze/SKILL.md'
+
+ Test Files  1 failed (1)
+      Tests  25 failed (25)
+   Start at  09:54:12
+   Duration  153ms (transform 13ms, setup 0ms, collect 11ms, tests 6ms, environment 0ms, prepare 33ms)
+

@@ -21,7 +21,7 @@ At stage start, call `metrics/collector.mjs` `recordSkeleton` with stage `build-
 
 ### 2. spec-specify: first-draft spec
 
-Invoke `workflows/spec-specify/SKILL.md` (spec-specify):
+Invoke `skills/spec-specify/SKILL.md` (spec-specify):
 
 - **Input**: task-id (from the current stage context) and the functional description text extracted from the decision-log.
 - **Expected output**: `specs/{task-id}/spec.md` (first draft) and `specs/{task-id}/checklists/requirements.md` (quality checklist).
@@ -29,7 +29,7 @@ Invoke `workflows/spec-specify/SKILL.md` (spec-specify):
 
 ### 3. spec-clarify: ambiguity scan and interactive refinement
 
-Invoke `workflows/spec-clarify/SKILL.md` (spec-clarify):
+Invoke `skills/spec-clarify/SKILL.md` (spec-clarify):
 
 - **Input**: task-id (or the explicit spec path `specs/{task-id}/spec.md`).
 - **Expected behaviour**: 10-dimension ambiguity scan, up to 5 interactive clarification questions (one at a time), incremental spec updates after each accepted answer, and a coverage summary at completion.

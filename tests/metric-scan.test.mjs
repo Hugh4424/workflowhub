@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -259,26 +259,29 @@ Example metric record:
 describe("T018 — scope-triage and decision-log positive wiring (FR-METRIC-003)", () => {
   it("scope-triage/SKILL.md passes full scanSkillMetrics (recordSkeleton + updateOwnResult + collector.mjs + correct stage)", async () => {
     const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
-    const skillPath = join(repoRoot, "workflows", "scope-triage", "SKILL.md");
+    const skillPath = join(repoRoot, "skills", "scope-triage", "SKILL.md");
     const result = scanSkillMetrics(skillPath);
     expect(result.found, `scope-triage missing wiring: ${result.reason ?? ""}`).toBe(false);
   });
 
   it("decision-log/SKILL.md passes full scanSkillMetrics (recordSkeleton + updateOwnResult + collector.mjs + correct stage)", async () => {
     const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
-    const skillPath = join(repoRoot, "workflows", "decision-log", "SKILL.md");
+    const skillPath = join(repoRoot, "skills", "decision-log", "SKILL.md");
     const result = scanSkillMetrics(skillPath);
     expect(result.found, `decision-log missing wiring: ${result.reason ?? ""}`).toBe(false);
   });
 
   it("integration: all 7 skills pass scanSkillMetrics (no missing wiring)", async () => {
     const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
-    const ALL_SEVEN = [
-      "make-decision", "build-spec", "build-plan", "build-code", "verify-code",
-      "scope-triage", "decision-log",
-    ];
-    for (const skill of ALL_SEVEN) {
+    const STAGE_SKILLS = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+    const AUX_SKILLS = ["scope-triage", "decision-log"];
+    for (const skill of STAGE_SKILLS) {
       const skillPath = join(repoRoot, "workflows", skill, "SKILL.md");
+      const result = scanSkillMetrics(skillPath);
+      expect(result.found, `${skill} missing wiring: ${result.reason ?? ""}`).toBe(false);
+    }
+    for (const skill of AUX_SKILLS) {
+      const skillPath = join(repoRoot, "skills", skill, "SKILL.md");
       const result = scanSkillMetrics(skillPath);
       expect(result.found, `${skill} missing wiring: ${result.reason ?? ""}`).toBe(false);
     }
@@ -357,4 +360,53 @@ Example metric record:
     expect(result.found).toBe(true);
     expect(result.reason).toMatch(/stage/);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Hardening: real stage skills must NOT carry the sub-skill exclusion marker
+// (FR-SKELETON-002). If any REAL stage skill SKILL.md frontmatter contains
+// "kind: sub-skill", it would be silently excluded from metrics enforcement
+// — a low-confidence MEDIUM abuse vector with no test coverage until now.
+// FALSIFIABLE: adding "kind: sub-skill" frontmatter to any of the 7 real
+// stage skills makes this test fail with that skill's name in the message.
+// ---------------------------------------------------------------------------
+
+describe("hardening — real stage skills lack kind: sub-skill marker (FR-SKELETON-002)", () => {
+  const REAL_STAGE = [
+    ["make-decision", "workflows"],
+    ["build-spec",     "workflows"],
+    ["build-plan",     "workflows"],
+    ["build-code",     "workflows"],
+    ["verify-code",    "workflows"],
+    ["scope-triage",   "skills"],
+    ["decision-log",   "skills"],
+  ];
+
+  /**
+   * Parse frontmatter block from SKILL.md content.
+   * Returns the text between the first pair of --- fences, or null.
+   */
+  function parseFrontmatter(raw) {
+    const match = raw.match(/^---\n([\s\S]*?)\n---/);
+    return match ? match[1] : null;
+  }
+
+  for (const [skill, dir] of REAL_STAGE) {
+    it(`${skill}/SKILL.md frontmatter does NOT contain kind: sub-skill`, () => {
+      const skillPath = join(repoRoot, dir, skill, "SKILL.md");
+      const raw = readFileSync(skillPath, "utf8");
+      const fm = parseFrontmatter(raw);
+
+      // Non-vacuous: assert we actually found frontmatter
+      expect(fm, `${skill}/SKILL.md has no frontmatter block (--- fences)`).not.toBeNull();
+
+      const kindMatch = fm.match(/^kind:\s*([^\s#]+)/m);
+      const fmKind = kindMatch ? kindMatch[1].replace(/^["']|["']$/g, "") : null;
+
+      // The assertion that FAILS if a real stage skill carries the marker
+      expect(fmKind,
+        `${skill}/SKILL.md carries kind: sub-skill — real stage skills MUST NOT have this marker (FR-SKELETON-002)`
+      ).not.toBe("sub-skill");
+    });
+  }
 });

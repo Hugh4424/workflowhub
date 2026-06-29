@@ -13,7 +13,7 @@ Work with the user to surface the real problem, agree on the narrowest viable sc
 
 This stage inlines the logic of two component skills:
 
-### Phase A — Scope triage (see `workflows/scope-triage/SKILL.md` for full detail)
+### Phase A — Scope triage (see `skills/scope-triage/SKILL.md` for full detail)
 
 1. Research the current landscape (existing code, docs, constraints) before asking questions.
 2. Ask focused questions to pin down: what is broken or missing, who is affected, what the smallest deliverable is, and what the biggest unknowns are.
@@ -23,12 +23,12 @@ This stage inlines the logic of two component skills:
 4. Propose a direction in plain language — what will change, why, and what "done" looks like.
 5. Wait for the user to confirm the direction before moving on.
 
-### Phase B — Decision log (see `workflows/decision-log/SKILL.md` for full detail)
+### Phase B — Decision log (see `skills/decision-log/SKILL.md` for full detail)
 
-Follow the canonical 7-section structure defined in `workflows/decision-log/SKILL.md` exactly:
+Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.md` exactly:
 
 1. Converge the confirmed direction and scope into a structured decision log file.
-2. Write the file to `tasks/<task>/decision-log.md` using the canonical 7 Chinese sections from `workflows/decision-log/SKILL.md`:
+2. Write the file to `tasks/<task>/decision-log.md` using the canonical 7 Chinese sections from `skills/decision-log/SKILL.md`:
    1. **原始需求（原文）** — verbatim user requirement text.
    2. **问题与目标** — the core problem being solved and the explicit goal.
    3. **决策记录** — one entry per decision; each entry MUST carry a non-empty `来源证据` field. The chosen direction maps to facts key `decision`.

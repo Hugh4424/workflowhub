@@ -30,21 +30,21 @@ const SKILL_DIRS = [
 ];
 
 // --- Helpers for existence / frontmatter (called with a hard-coded literal per test) ---
-function assertSkillExists(name) {
-  const p = join(REPO_ROOT, "workflows", name, "SKILL.md");
+function assertSkillExists(name, baseDir = "workflows") {
+  const p = join(REPO_ROOT, baseDir, name, "SKILL.md");
   assert.ok(existsSync(p), `Missing: ${p}`);
 }
 
-function assertSkillFrontmatter(name) {
-  const p = join(REPO_ROOT, "workflows", name, "SKILL.md");
+function assertSkillFrontmatter(name, baseDir = "workflows") {
+  const p = join(REPO_ROOT, baseDir, name, "SKILL.md");
   assert.ok(existsSync(p), `Missing: ${p}`);
   const content = readFileSync(p, "utf8");
   const fm = extractFrontmatter(content);
-  assert.ok(fm, `No valid YAML frontmatter in workflows/${name}/SKILL.md`);
+  assert.ok(fm, `No valid YAML frontmatter in ${baseDir}/${name}/SKILL.md`);
   assert.equal(fm.name, name, `frontmatter.name should be "${name}", got "${fm.name}"`);
   assert.ok(
     typeof fm.description === "string" && fm.description.trim().length > 0,
-    `frontmatter.description must be a non-empty string in workflows/${name}/SKILL.md`
+    `frontmatter.description must be a non-empty string in ${baseDir}/${name}/SKILL.md`
   );
 }
 
@@ -55,8 +55,8 @@ describe("seven skill directories have SKILL.md", () => {
   test('workflows/build-plan/SKILL.md exists',    () => { assertSkillExists("build-plan"); });
   test('workflows/build-code/SKILL.md exists',    () => { assertSkillExists("build-code"); });
   test('workflows/verify-code/SKILL.md exists',   () => { assertSkillExists("verify-code"); });
-  test('workflows/scope-triage/SKILL.md exists',  () => { assertSkillExists("scope-triage"); });
-  test('workflows/decision-log/SKILL.md exists',  () => { assertSkillExists("decision-log"); });
+  test('skills/scope-triage/SKILL.md exists',  () => { assertSkillExists("scope-triage", "skills"); });
+  test('skills/decision-log/SKILL.md exists',  () => { assertSkillExists("decision-log", "skills"); });
 });
 
 // --- Frontmatter checks (7 independent literal tests — no for-of loop) ---
@@ -66,8 +66,8 @@ describe("SKILL.md files have valid frontmatter", () => {
   test('workflows/build-plan/SKILL.md has name="build-plan" and non-empty description',       () => { assertSkillFrontmatter("build-plan"); });
   test('workflows/build-code/SKILL.md has name="build-code" and non-empty description',       () => { assertSkillFrontmatter("build-code"); });
   test('workflows/verify-code/SKILL.md has name="verify-code" and non-empty description',     () => { assertSkillFrontmatter("verify-code"); });
-  test('workflows/scope-triage/SKILL.md has name="scope-triage" and non-empty description',   () => { assertSkillFrontmatter("scope-triage"); });
-  test('workflows/decision-log/SKILL.md has name="decision-log" and non-empty description',   () => { assertSkillFrontmatter("decision-log"); });
+  test('skills/scope-triage/SKILL.md has name="scope-triage" and non-empty description',   () => { assertSkillFrontmatter("scope-triage", "skills"); });
+  test('skills/decision-log/SKILL.md has name="decision-log" and non-empty description',   () => { assertSkillFrontmatter("decision-log", "skills"); });
 });
 
 // --- Registry checks (literal assertions, one per skill name) ---
@@ -299,19 +299,19 @@ describe("AC5: registry contains all 7 component_ids (literal per-skill assertio
 describe("AC5 B2a: make-decision SKILL.md references scope-triage and decision-log paths", () => {
   const skillPath = join(REPO_ROOT, "workflows", "make-decision", "SKILL.md");
 
-  test("make-decision SKILL.md references workflows/scope-triage/SKILL.md path literal", () => {
+  test("make-decision SKILL.md references skills/scope-triage/SKILL.md path literal", () => {
     const content = readFileSync(skillPath, "utf8");
     assert.ok(
-      content.includes("workflows/scope-triage/SKILL.md"),
-      "make-decision/SKILL.md must include the literal string 'workflows/scope-triage/SKILL.md'"
+      content.includes("skills/scope-triage/SKILL.md"),
+      "make-decision/SKILL.md must include the literal string 'skills/scope-triage/SKILL.md'"
     );
   });
 
-  test("make-decision SKILL.md references workflows/decision-log/SKILL.md path literal", () => {
+  test("make-decision SKILL.md references skills/decision-log/SKILL.md path literal", () => {
     const content = readFileSync(skillPath, "utf8");
     assert.ok(
-      content.includes("workflows/decision-log/SKILL.md"),
-      "make-decision/SKILL.md must include the literal string 'workflows/decision-log/SKILL.md'"
+      content.includes("skills/decision-log/SKILL.md"),
+      "make-decision/SKILL.md must include the literal string 'skills/decision-log/SKILL.md'"
     );
   });
 });

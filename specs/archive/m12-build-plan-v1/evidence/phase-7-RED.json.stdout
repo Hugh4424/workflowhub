@@ -1,0 +1,49 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/m12-reuse-registry.test.mjs (15 tests | 12 failed) 4ms
+   × Phase 7 US5: reuse-registry.md contains plan-generate row with correct format > plan-generate row exists in reuse-registry.md 2ms
+     → reuse-registry.md must contain a row for plan-generate
+   × Phase 7 US5: reuse-registry.md contains plan-generate row with correct format > plan-generate category is 外部改造适配 0ms
+     → plan-generate category must be "外部改造适配", got "undefined"
++ actual - expected
+
++ undefined
+- '外部改造适配'
+
+   × Phase 7 US5: reuse-registry.md contains plan-generate row with correct format > plan-generate source path is non-empty 0ms
+     → plan-generate source must be non-empty, got "undefined"
+   × Phase 7 US5: reuse-registry.md contains plan-generate row with correct format > plan-generate source path points at speckit-plan SKILL.md 0ms
+     → plan-generate source must reference speckit-plan/SKILL.md, got "undefined"
+   × Phase 7 US5: reuse-registry.md contains tasks-generate row with correct format > tasks-generate row exists in reuse-registry.md 0ms
+     → reuse-registry.md must contain a row for tasks-generate
+   × Phase 7 US5: reuse-registry.md contains tasks-generate row with correct format > tasks-generate category is 外部改造适配 0ms
+     → tasks-generate category must be "外部改造适配", got "undefined"
++ actual - expected
+
++ undefined
+- '外部改造适配'
+
+   × Phase 7 US5: reuse-registry.md contains tasks-generate row with correct format > tasks-generate source path is non-empty 0ms
+     → tasks-generate source must be non-empty, got "undefined"
+   × Phase 7 US5: reuse-registry.md contains tasks-generate row with correct format > tasks-generate source path points at speckit-tasks SKILL.md 0ms
+     → tasks-generate source must reference speckit-tasks/SKILL.md, got "undefined"
+   × Phase 7 US5: reuse-registry.md contains cross-artifact-analyze row with correct format > cross-artifact-analyze row exists in reuse-registry.md 0ms
+     → reuse-registry.md must contain a row for cross-artifact-analyze
+   × Phase 7 US5: reuse-registry.md contains cross-artifact-analyze row with correct format > cross-artifact-analyze category is 外部改造适配 0ms
+     → cross-artifact-analyze category must be "外部改造适配", got "undefined"
++ actual - expected
+
++ undefined
+- '外部改造适配'
+
+   × Phase 7 US5: reuse-registry.md contains cross-artifact-analyze row with correct format > cross-artifact-analyze source path is non-empty 0ms
+     → cross-artifact-analyze source must be non-empty, got "undefined"
+   × Phase 7 US5: reuse-registry.md contains cross-artifact-analyze row with correct format > cross-artifact-analyze source path points at speckit-analyze SKILL.md 0ms
+     → cross-artifact-analyze source must reference speckit-analyze/SKILL.md, got "undefined"
+
+ Test Files  1 failed (1)
+      Tests  12 failed | 3 passed (15)
+   Start at  10:41:13
+   Duration  164ms (transform 12ms, setup 0ms, collect 9ms, tests 4ms, environment 0ms, prepare 40ms)
+

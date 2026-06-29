@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run tests/m12-cross-artifact-analyze.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "59372b2c99cb55ce321afb814c0358c8ceacda25",
+  "exit_code": 0,
+  "timestamp": "2026-06-29T02:11:18.614Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "bb8b9e190a3e45928f78598240b8ffaa9030639e01fbf1c2f47a3ce00aeb680c",
+  "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub/specs/m12-build-plan-v1/evidence/phase-5-GREEN-r2.json.stdout",
+  "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub/specs/m12-build-plan-v1/evidence/phase-5-GREEN-r2.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

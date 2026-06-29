@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run tests/m12-tasks-generate.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "59372b2c99cb55ce321afb814c0358c8ceacda25",
+  "exit_code": 0,
+  "timestamp": "2026-06-29T01:55:36.756Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "4fd65bdcc6067b568609ebb53e06eb1a36a29e9d9875b412e8570cce266a9c16",
+  "stdout_path": "specs/m12-build-plan-v1/evidence/phase-4-GREEN.json.stdout",
+  "stderr_path": "specs/m12-build-plan-v1/evidence/phase-4-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

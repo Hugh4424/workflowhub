@@ -15,3 +15,6 @@
 | `isolated-browser-qa` | 改造适配 | `~/.claude/skills/isolated-browser-qa` |
 | spec-specify | 外部改造适配 | ~/.claude/skills/speckit-specify/SKILL.md |
 | spec-clarify | 外部改造适配 | ~/.claude/skills/speckit-clarify/SKILL.md |
+| spec-plan | 外部改造适配 | ~/.claude/skills/speckit-plan/SKILL.md |
+| spec-tasks | 外部改造适配 | ~/.claude/skills/speckit-tasks/SKILL.md |
+| spec-analyze | 外部改造适配 | ~/.claude/skills/speckit-analyze/SKILL.md |
