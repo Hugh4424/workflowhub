@@ -200,6 +200,23 @@ export function scanSkillMetrics(skillPath) {
     return { found: true, missingSkill: skillName, reason: `cannot read: ${err.message}` };
   }
 
+  // Sub-skill check (marker-gated via frontmatter `kind: sub-skill`):
+  // helper sub-skills invoked within a parent stage's flow do NOT emit their own
+  // stage-result; their metrics are covered by the orchestrator's record. Skipping
+  // them here IS by design — adding fake recordSkeleton/updateOwnResult would
+  // fabricate stage metrics for non-stage skills, contradicting plan S4.
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (fmMatch) {
+    const frontBlock = fmMatch[1];
+    // Extract the first non-whitespace, non-comment token after "kind:".
+    // Handles both "kind: sub-skill" and "kind: sub-skill  # comment".
+    const kindMatch = frontBlock.match(/^kind:\s*([^\s#]+)/m);
+    const fmKind = kindMatch ? kindMatch[1].replace(/^["']|["']$/g, "") : null;
+    if (fmKind === "sub-skill") {
+      return { found: false };
+    }
+  }
+
   const hasRecordSkeleton = /\brecordSkeleton\b/.test(content);
   const hasUpdateOwnResult = /\bupdateOwnResult\b/.test(content);
 
