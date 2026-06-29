@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/m12-tasks-generate.test.mjs (0 test)
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  09:53:45
+   Duration  150ms (transform 9ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 31ms)
+

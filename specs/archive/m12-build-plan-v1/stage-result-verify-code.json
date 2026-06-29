@@ -1,0 +1,11 @@
+{
+  "verdict": "pass",
+  "evidence_ref": "test/final-test-report.md",
+  "anomaly_flags": [],
+  "missing_items": [
+    "browser-acceptance: no UI acceptance items"
+  ],
+  "user_decision": false,
+  "reason": "7/9 PASS, 2 PENDING (AC6/AC9). AC6 PENDING: v1 SKILL.md review object contract verified present, on-disk stage-result hand-regenerated pre-orchestrator (self-bootstrap gap). AC9 PENDING: 2/5 stage-results, make-decision/build-spec not executed (self-bootstrap gap). Per M11 convention: pass with honest self-bootstrap gap recording.",
+  "error_code": ""
+}

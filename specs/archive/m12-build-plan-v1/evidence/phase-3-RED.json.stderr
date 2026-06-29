@@ -1,0 +1,143 @@
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md existence and frontmatter > workflows/plan-generate/SKILL.md exists
+AssertionError: Missing: /Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m12-plan-generate.test.mjs:29:12
+     27| describe("plan-generate SKILL.md existence and frontmatter", () => {
+     28|   test("workflows/plan-generate/SKILL.md exists", () => {
+     29|     assert.ok(existsSync(SKILL_PATH), `Missing: ${SKILL_PATH}`);
+       |            ^
+     30|   });
+     31| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md existence and frontmatter > frontmatter has name="plan-generate"
+AssertionError: Missing: /Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m12-plan-generate.test.mjs:34:12
+     32|   // --- T005b: frontmatter name + description ---
+     33|   test('frontmatter has name="plan-generate"', () => {
+     34|     assert.ok(existsSync(SKILL_PATH), `Missing: ${SKILL_PATH}`);
+       |            ^
+     35|     const fm = extractFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+     36|     assert.ok(fm, "No valid YAML frontmatter in workflows/plan-generat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md existence and frontmatter > frontmatter has non-empty description
+AssertionError: Missing: /Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m12-plan-generate.test.mjs:45:12
+     43| 
+     44|   test("frontmatter has non-empty description", () => {
+     45|     assert.ok(existsSync(SKILL_PATH), `Missing: ${SKILL_PATH}`);
+       |            ^
+     46|     const fm = extractFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+     47|     assert.ok(fm, "No valid YAML frontmatter in workflows/plan-generat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md input contract: task-id required, fail-loud > body mentions "task-id required" (fail-loud for missing task-id)
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:58:21
+     56| describe("plan-generate SKILL.md input contract: task-id required, fai…
+     57|   test('body mentions "task-id required" (fail-loud for missing task-i…
+     58|     const content = readFileSync(SKILL_PATH, "utf8");
+       |                     ^
+     59|     assert.ok(
+     60|       content.includes("task-id required"),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md input contract: task-id required, fail-loud > body marks task-id as required (必填 or 必传 or required with non-zero exit)
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:67:21
+     65|   // Extra structural signal: body uses 必填/必传 or similar Chinese t…
+     66|   test("body marks task-id as required (必填 or 必传 or required with …
+     67|     const content = readFileSync(SKILL_PATH, "utf8");
+       |                     ^
+     68|     const hasRequired =
+     69|       content.includes("必填") ||
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md template loading: internal path, no .specify/ > body references internal template path "workflows/plan-generate/templates/plan-template.md"
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:82:21
+     80| describe("plan-generate SKILL.md template loading: internal path, no .…
+     81|   test('body references internal template path "workflows/plan-generat…
+     82|     const content = readFileSync(SKILL_PATH, "utf8");
+       |                     ^
+     83|     assert.ok(
+     84|       content.includes("workflows/plan-generate/templates/plan-templat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md template loading: internal path, no .specify/ > body does NOT contain .specify/ (no .specify/ scaffold dependency)
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:90:21
+     88| 
+     89|   test("body does NOT contain .specify/ (no .specify/ scaffold depende…
+     90|     const content = readFileSync(SKILL_PATH, "utf8");
+       |                     ^
+     91|     // Exclude the provenance footnote from check — 改造自 speckit-* s…
+     92|     // reference to .specify/ in descriptive context belong in provena…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md is NOT named speckit-plan > frontmatter name is NOT "speckit-plan"
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:110:35
+    108| describe("plan-generate SKILL.md is NOT named speckit-plan", () => {
+    109|   test('frontmatter name is NOT "speckit-plan"', () => {
+    110|     const fm = extractFrontmatter(readFileSync(SKILL_PATH, "utf8"));
+       |                                   ^
+    111|     assert.ok(fm, "No valid YAML frontmatter in workflows/plan-generat…
+    112|     assert.notEqual(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md is NOT named speckit-plan > body does NOT use 'speckit-plan' as a skill identifier in workflow steps
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:122:21
+    120|   // in workflow steps (豁免: provenance footnotes and comments).
+    121|   test("body does NOT use 'speckit-plan' as a skill identifier in work…
+    122|     const content = readFileSync(SKILL_PATH, "utf8");
+       |                     ^
+    123|     // Remove provenance lines (lines containing 改造自 or .specify/ i…
+    124|     const lines = content.split("\n").filter(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  tests/m12-plan-generate.test.mjs > plan-generate SKILL.md has no git-branch inference > body does NOT contain git branch inference commands (git checkout/branch/create-new-feature)
+Error: ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Project/workflowhub/workflows/plan-generate/SKILL.md'
+ ❯ tests/m12-plan-generate.test.mjs:139:21
+    137| describe("plan-generate SKILL.md has no git-branch inference", () => {
+    138|   test("body does NOT contain git branch inference commands (git check…
+    139|     const content = readFileSync(SKILL_PATH, "utf8");
+       |                     ^
+    140|     const hasBranchInference =
+    141|       /git\s+(checkout|branch|fetch|ls-remote)/i.test(content) ||
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+

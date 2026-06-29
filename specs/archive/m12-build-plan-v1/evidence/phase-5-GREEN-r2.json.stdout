@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ✓ tests/m12-cross-artifact-analyze.test.mjs (25 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  10:11:18
+   Duration  150ms (transform 10ms, setup 0ms, collect 10ms, tests 2ms, environment 0ms, prepare 28ms)
+

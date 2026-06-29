@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run tests/m12-reuse-registry.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "59372b2c99cb55ce321afb814c0358c8ceacda25",
+  "exit_code": 1,
+  "timestamp": "2026-06-29T02:41:13.399Z",
+  "test_files_line": " Test Files  1 failed (1)",
+  "content_hash": "d993cd523220b64879d2328c294aa0e0fae8c22c8ac176866f05314bb8b519c9",
+  "stdout_path": "specs/m12-build-plan-v1/evidence/phase-7-RED.json.stdout",
+  "stderr_path": "specs/m12-build-plan-v1/evidence/phase-7-RED.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}
