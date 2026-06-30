@@ -1,0 +1,62 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/m13-make-decision.test.mjs (54 tests | 26 failed) 9ms
+   × T005: SKILL.md — S0 背景扎根 section > S0 section header exists 3ms
+     → SKILL.md must contain S0 背景扎根 section
+   × T005: SKILL.md — S0 背景扎根 section > S0 section mentions loading context (CONTEXT.md / decision-log / task-id) 0ms
+     → S0 section must describe loading background context
+   × T005: SKILL.md — S0 背景扎根 section > S0 journal event s0_context_loaded present 0ms
+     → SKILL.md must specify journal event s0_context_loaded in S0
+   × T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 mentions lite and full tiers 0ms
+     → S0.5 must mention lite tier
+   × T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 lite skips S1 internal research 0ms
+     → SKILL.md lite tier must skip S1 internal research
+   × T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 lite skips S3 external research 0ms
+     → SKILL.md lite tier must skip S3 external research
+   × T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 journal event s0_5_scope present 0ms
+     → SKILL.md must specify journal event s0_5_scope in S0.5
+   × T007: SKILL.md — S1 内部调研 full 档专属 > S1 covers all 5 content categories 0ms
+     → S1 must cover category 1: 领域背景/术语澄清
+   × T007: SKILL.md — S1 内部调研 full 档专属 > S1 produces internal-research-summary.md 0ms
+     → S1 must produce tasks/{task-id}/research/internal-research-summary.md
+   × T007: SKILL.md — S1 内部调研 full 档专属 > S1 handles total failure: s1_all_agents_failed event 0ms
+     → S1 must record s1_all_agents_failed journal event when all sub-agents fail
+   × T007: SKILL.md — S1 内部调研 full 档专属 > S1 continues to S2 even when all agents fail (non-blocking) 0ms
+     → S1 failure must be non-blocking — must continue to S2
+   × T008: SKILL.md — S2 talk#1 > S2 section header exists 0ms
+     → SKILL.md must contain S2 talk#1 section
+   × T008: SKILL.md — S2 talk#1 > S2 asks questions one at a time (一次一问) 0ms
+     → S2 must enforce asking one question at a time (FR-TALK-01)
+   × T008: SKILL.md — S2 talk#1 > S2 mentions three-round structure (三轮结构) 0ms
+     → S2 must be part of three-round talk structure
+   × T008: SKILL.md — S2 talk#1 > S2 presents internal research summary to user first 0ms
+     → S2 must present internal-research-summary.md to user before Q1
+   × T008: SKILL.md — S2 talk#1 > S2 asks Q1 about external research need 0ms
+     → S2 Q1 must ask about need for external research
+   × T008: SKILL.md — S2 talk#1 > S2 sorts questions by impact (按影响排序, FR-TALK-02) 0ms
+     → S2 must sort questions by impact (FR-TALK-02)
+   × T009: SKILL.md — S3 双路外部调研 > S3 section header exists 0ms
+     → SKILL.md must contain S3 外部调研 section
+   × T009: SKILL.md — S3 双路外部调研 > S3 mentions muyu-search-mcp 0ms
+     → S3 must mention muyu-search-mcp as one of the two research paths
+   × T009: SKILL.md — S3 双路外部调研 > S3 mentions anysearch 0ms
+     → S3 must mention anysearch as the second research path
+   × T009: SKILL.md — S3 双路外部调研 > S3 lite skips with skip event 0ms
+     → S3 must record skip event when scope=lite
+   × T009: SKILL.md — S3 双路外部调研 > S3 muyu requires extra_sources 3 0ms
+     → S3 muyu call must pass extra_sources 3 (FR-RESEARCH-01)
+   × T010: SKILL.md — S4 方向收敛 talk#2 > S4 section header exists 0ms
+     → SKILL.md must contain S4 section
+   × T010: SKILL.md — S4 方向收敛 talk#2 > S4 journal event s4_baseline_recorded 0ms
+     → S4 must record journal event s4_baseline_recorded
+   × T010: SKILL.md — S4 方向收敛 talk#2 > S4 produces make-decision-original-context.md (ledger render point 1) 0ms
+     → S4 must produce tasks/{task-id}/artifacts/make-decision-original-context.md (FR-LEDGER-01 render point 1)
+   × T010: SKILL.md — S4 方向收敛 talk#2 > S4 asks Q2 to converge direction 0ms
+     → S4 must ask Q2 to converge direction
+
+ Test Files  1 failed (1)
+      Tests  26 failed | 28 passed (54)
+   Start at  20:28:03
+   Duration  171ms (transform 11ms, setup 0ms, collect 12ms, tests 9ms, environment 0ms, prepare 33ms)
+

@@ -1,0 +1,54 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/m13-make-decision.test.mjs (128 tests | 22 failed) 15ms
+   × T014: SKILL.md S8 台账渲染点② + CONTEXT 同步 > S8 section header exists 4ms
+     → SKILL.md must contain S8 section
+   × T014: SKILL.md S8 台账渲染点② + CONTEXT 同步 > S8 mentions ledger render point 2 (台账渲染点②) 0ms
+     → S8 must mention ledger render point 2 (台账渲染点②)
+   × T014: SKILL.md S8 台账渲染点② + CONTEXT 同步 > S8 requires no '状态未知' entries in ledger (FR-LEDGER-02) 0ms
+     → S8 must enforce no '状态未知' entries and require rejection reasons (FR-LEDGER-02)
+   × T014: SKILL.md S8 台账渲染点② + CONTEXT 同步 > S8 new-idea backtrack produces candidate list (FR-LEDGER-03) 0ms
+     → S8 must produce new-idea candidate list and route via backtrack path (FR-LEDGER-03)
+   × T014: SKILL.md S8 台账渲染点② + CONTEXT 同步 > S8 syncs CONTEXT.md, ADR, project-memory.json 0ms
+     → S8 must sync CONTEXT.md, ADR, and project-memory.json
+   × T014: SKILL.md S8 台账渲染点② + CONTEXT 同步 > S8 journal event s8_context_synced or s8_context_no_change 1ms
+     → S8 must record journal event s8_context_synced or s8_context_no_change
+   × T015: SKILL.md S9 用户批准（唯一硬门） > S9 section header exists 0ms
+     → SKILL.md must contain S9 section
+   × T015: SKILL.md S9 用户批准（唯一硬门） > S9 is the only mandatory hard gate in the flow (FR-ACCEPT-02) 0ms
+     → S9 must be declared the only mandatory hard gate (FR-ACCEPT-02)
+   × T015: SKILL.md S9 用户批准（唯一硬门） > S9 shows full decision summary with ledger checklist (FR-ACCEPT-03) 0ms
+     → S9 must display full decision summary including ledger line items (FR-ACCEPT-03)
+   × T015: SKILL.md S9 用户批准（唯一硬门） > S9 waits indefinitely for user explicit approval 0ms
+     → S9 must wait indefinitely for user explicit approval and must not auto-approve
+   × T015: SKILL.md S9 用户批准（唯一硬门） > S9 skipping to S10 is declared an error 0ms
+     → S9 must explicitly state that skipping S9 directly to S10 is an error
+   × T015: SKILL.md S9 用户批准（唯一硬门） > S9 journal event s9_user_approved: true 0ms
+     → S9 must record journal event s9_user_approved: true
+   × T016: SKILL.md S10 decision-log 落盘 + updateOwnResult > S10 section header exists 0ms
+     → SKILL.md must contain S10 section
+   × T016: SKILL.md S10 decision-log 落盘 + updateOwnResult > S10 pre-commit check: blocking 留痕 requires three-line format before marking complete 0ms
+     → S10 must check blocking 留痕 completeness before marking decision-log complete
+   × T016: SKILL.md S10 decision-log 落盘 + updateOwnResult > S10 produces tasks/{task-id}/decision-log.md with user_decision: true 0ms
+     → S10 must produce tasks/{task-id}/decision-log.md with user_decision: true
+   × T016: SKILL.md S10 decision-log 落盘 + updateOwnResult > S10 decision-log has 7 sections structure 0ms
+     → S10 decision-log must have 7 sections: 原始需求/问题与目标/决策记录/假设/明确不做/开放问题/验收标准
+   × T016: SKILL.md S10 decision-log 落盘 + updateOwnResult > S10 calls metrics/collector.mjs updateOwnResult with M4 10 core fields 0ms
+     → S10 must call metrics/collector.mjs updateOwnResult
+   × T016: SKILL.md S10 decision-log 落盘 + updateOwnResult > S10 collector write failure warns but does not throw 0ms
+     → S10 collector write failure must warn but not throw
+   × T017: SKILL.md journal event stream S0–S10 complete coverage > Journal section exists in SKILL.md 0ms
+     → SKILL.md must contain a Journal event stream section
+   × T017: SKILL.md journal event stream S0–S10 complete coverage > Journal section covers s8 events 0ms
+     → Journal must cover s8 context sync events
+   × T017: SKILL.md journal event stream S0–S10 complete coverage > Journal section covers s9_user_approved 0ms
+     → Journal must cover s9_user_approved
+   × T017: SKILL.md journal event stream S0–S10 complete coverage > Journal section covers s10 event 0ms
+     → Journal must cover s10_ event
+
+ Test Files  1 failed (1)
+      Tests  22 failed | 106 passed (128)
+   Start at  20:57:23
+   Duration  162ms (transform 14ms, setup 0ms, collect 16ms, tests 15ms, environment 0ms, prepare 34ms)
+

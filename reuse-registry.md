@@ -17,4 +17,6 @@
 | spec-clarify | 外部改造适配 | ~/.claude/skills/speckit-clarify/SKILL.md |
 | spec-plan | 外部改造适配 | ~/.claude/skills/speckit-plan/SKILL.md |
 | spec-tasks | 外部改造适配 | ~/.claude/skills/speckit-tasks/SKILL.md |
+| `debate`（make-decision 护城河） | 外部依赖 | 可移植契约：路径由 `MAKE_DECISION_DEBATE_PATH` 决定（始终可选，缺省或不可达均可降级）；默认值 `/Users/Hugh/Hugh/Project/debate` 仅为**本地示例/宿主机迁移默认（host-local，不保证在其他机器上存在）**，不应硬编码为依赖。路径不可达时自动降级（skipped），必须写 `debate_path_invalid: true`，不阻断主流程。canonical skip 事件：S5 第一次 debate 跳过记 `event: "debate_1_skipped", reason: "debate_path_invalid"`（对应 S5 ### 4 节）；S7 第二次 debate 跳过记 `event: "debate_2_skipped", reason: "debate_path_invalid"`（对应 S7 orchestrator 节）；两轮共用 `debate_path_invalid: true`。 |
+| `grill-with-docs-lite`（make-decision S7） | 外部依赖 | 路径由 S7 `grill-with-docs-lite` 调用决定（in-repo 引用 `workflows/make-decision/SKILL.md` S7 节）；路径不可达或调用失败时记录 `s7_grill_done: false`，写入失败原因到 `make-decision-grill-with-docs.md`，不阻断后续 draft 步骤。 |
 | spec-analyze | 外部改造适配 | ~/.claude/skills/speckit-analyze/SKILL.md |

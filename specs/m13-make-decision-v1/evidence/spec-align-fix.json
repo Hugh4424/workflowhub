@@ -1,0 +1,79 @@
+{
+  "task": "M13 make-decision verify-code R2 codex spec/impl alignment fixes",
+  "date": "2026-06-30",
+  "branch": "m13-make-decision-v1",
+  "red_green_evidence": {
+    "before_my_changes": {
+      "command": "git stash && npm test",
+      "m13_tests": "146 failed (test file was new — only pre-existing tests ran)",
+      "five_skills_present": "1 failed (pre-existing regression, unrelated to this task)"
+    },
+    "red_state": {
+      "command": "npx vitest run tests/m13-make-decision.test.mjs",
+      "result": "4 failed | 158 passed (162)",
+      "failing_tests": [
+        "FIX-01: S5 debate gate records debate_triggered_invalid when no artifact-sourced finding IDs",
+        "FIX-01: S5 debate gate passes finding ID list from artifacts to debate skill",
+        "FIX-05: debate_triggered_invalid recorded when no artifact source IDs for debate trigger",
+        "FIX-05: debate_triggered_invalid causes debate skip (not proceed)"
+      ]
+    },
+    "green_state": {
+      "command": "npx vitest run tests/m13-make-decision.test.mjs",
+      "result": "162 passed (162)",
+      "note": "All 162 m13 tests pass"
+    },
+    "full_suite": {
+      "command": "npm test",
+      "result": "1 failed (pre-existing) | 784 passed (785)",
+      "pre_existing_failure": "tests/five-skills-present.test.mjs > make-decision SKILL.md references skills/scope-triage/SKILL.md path literal — was failing before this task's changes"
+    }
+  },
+  "fixes": {
+    "fix_01_debate_gate_s5_s7": {
+      "description": "S5 and S7 debate gates: added debate_triggered_invalid guard (no-source-ID case per FR-DEBATE-01 D4) and explicit finding ID list language. debate 技能 still makes mode decision (五方/单人三档), make-decision only passes finding ID list from artifacts.",
+      "files_changed": ["workflows/make-decision/SKILL.md"],
+      "lines": "S5 section ~line 322-340, S7 section ~line 405-425",
+      "spec_ref": "FR-DEBATE-01, FR-DEBATE-02, D4"
+    },
+    "fix_02_agent_teams_s1": {
+      "description": "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS already correctly described in env table as controlling debate mode only (not S1). S1 uses runtime teams capability auto-detection. SKILL.md line 18 and line 320 already correct — tests confirmed GREEN without code change.",
+      "files_changed": [],
+      "lines": "SKILL.md line 18 env table row",
+      "spec_ref": "env-var-design.md CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
+    },
+    "fix_03_review_dispatch_config": {
+      "description": "REVIEW_DISPATCH_CONFIG already uses config file path semantics (配置文件路径) and records dispatch_config_invalid on failure. SKILL.md lines 17 and 281 already correct — tests confirmed GREEN without code change.",
+      "files_changed": [],
+      "lines": "SKILL.md line 17 env table, line 281 S6 入口检测",
+      "spec_ref": "spec.md ~line 315 REVIEW_DISPATCH_CONFIG"
+    },
+    "fix_04_fr_research_03_dual_empty": {
+      "description": "FR-RESEARCH-03 dual-research-empty already has true stop: writes dual_research_empty: true artifact, writes s3_dual_research_empty journal event, requires explicit user instruction before S4, and guards external-research-summary synthesis with '仅在非双路空时'. Tests confirmed GREEN without code change — was not a false-green.",
+      "files_changed": [],
+      "lines": "SKILL.md lines 161-171 S3 section",
+      "spec_ref": "FR-RESEARCH-03"
+    },
+    "fix_05_debate_triggered_invalid": {
+      "description": "Added debate_triggered_invalid: true guard to both S5 and S7 debate gate sections. When no artifact-based finding IDs exist to pass as 争点来源, debate is skipped with debate_triggered_invalid: true and journal event. Per spec FR-DEBATE-01 D4 — 无来源ID时视为违规，记录debate_triggered_invalid: true并跳过。",
+      "files_changed": ["workflows/make-decision/SKILL.md"],
+      "lines": "S5 ~line 322-340, S7 ~line 405-425",
+      "spec_ref": "FR-DEBATE-01 D4, FR-DEBATE-02"
+    }
+  },
+  "diff_summary": {
+    "workflows/make-decision/SKILL.md": {
+      "s5_debate_gate": "Added 禁止行为(D4) paragraph: debate_triggered_invalid guard + finding ID list requirement. Added step 3 in priority order for no-source-ID case. Step 4 now explicitly says 'ID 列表(争点来源)'.",
+      "s7_debate_gate": "Same pattern as S5: added 禁止行为(D4) paragraph + step 3 for no-source-ID case + step 4 with explicit ID list language."
+    },
+    "tests/m13-make-decision.test.mjs": {
+      "added": "Phase 4 spec-align-fix describe blocks: FIX-01 (3 tests), FIX-02 (1 test), FIX-03 (3 tests), FIX-04 (4 tests), FIX-05 (2 tests) = 13 new tests",
+      "fixed_old_test": "T011 S5 debate gate inline trigger test: removed debate_triggered_invalid from disallowed list (it is now required by FR-DEBATE-01 D4, not an inline trigger)"
+    }
+  },
+  "test_counts": {
+    "before": 149,
+    "after": 162,
+    "new_tests_added": 13
+  }
+}
