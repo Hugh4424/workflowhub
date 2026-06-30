@@ -819,8 +819,8 @@ describe("T003: reuse-registry.md — debate external skill entry", () => {
 
 // ─── Phase 3: S5/S6/S7 护城河动作 assertions (T011–T013) ──────────────────────
 
-// T011: S5 三角度异源盲审 + 第一次 debate 门控
-describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
+// T011: S5 单次独立盲审（3 条建议）+ 第一次 debate 门控
+describe("T011: SKILL.md — S5 单次独立盲审 + debate 门控", () => {
   test("S5 section header exists", () => {
     const content = readSkill();
     const hasS5 =
@@ -831,23 +831,31 @@ describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
     assert.ok(hasS5, "SKILL.md must contain S5 section");
   });
 
-  test("S5 runs three parallel independent 3rd-review chains", () => {
+  test("S5 runs one independent 3rd-review chain", () => {
     const content = readSkill();
-    const hasThreeReview =
-      content.includes("intake-direction-review") &&
-      content.includes("intake-framing-challenge") &&
-      content.includes("intake-scope-review");
-    assert.ok(hasThreeReview, "S5 must mention all three parallel review chains: intake-direction-review, intake-framing-challenge, intake-scope-review");
+    const s5Idx = content.indexOf("## S5");
+    const s5End = content.indexOf("## S6");
+    const s5Section = content.slice(s5Idx, s5End !== -1 ? s5End : s5Idx + 8000);
+    assert.ok(
+      s5Section.includes("intake-decision-review"),
+      "S5 must mention the single review chain: intake-decision-review"
+    );
+    assert.ok(
+      !s5Section.includes("intake-direction-review") &&
+        !s5Section.includes("intake-framing-challenge") &&
+        !s5Section.includes("intake-scope-review"),
+      "S5 must not require the old three review chains"
+    );
   });
 
-  test("S5 requires three agent inputs to be mutually isolated", () => {
+  test("S5 requires the review input to be isolated", () => {
     const content = readSkill();
     const hasIsolation =
       content.includes("隔离") ||
       content.includes("互不可见") ||
       content.includes("isolated") ||
       content.includes("inputs mutually invisible");
-    assert.ok(hasIsolation, "S5 must require three agent inputs to be mutually isolated (互不可见)");
+    assert.ok(hasIsolation, "S5 must require review input isolation");
   });
 
   test("S5 review result contains reviewer_runtime_id field", () => {
@@ -866,22 +874,28 @@ describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
     );
   });
 
-  test("S5 review result contains source_family field", () => {
+  test("S5 does not require source_family", () => {
     const content = readSkill();
+    const s5Idx = content.indexOf("## S5");
+    const s5End = content.indexOf("## S6");
+    const s5Section = content.slice(s5Idx, s5End !== -1 ? s5End : s5Idx + 8000);
     assert.ok(
-      content.includes("source_family"),
-      "S5 review result must contain source_family field"
+      !s5Section.includes("source_family:"),
+      "S5 review result must not require source_family field"
     );
   });
 
-  test("S5 requires three source_family values to be pairwise distinct", () => {
+  test("S5 forbids the old pairwise-distinct source_family gate", () => {
     const content = readSkill();
+    const s5Idx = content.indexOf("## S5");
+    const s5End = content.indexOf("## S6");
+    const s5Section = content.slice(s5Idx, s5End !== -1 ? s5End : s5Idx + 8000);
     const hasPairwiseDistinct =
-      content.includes("两两不同") ||
-      content.includes("pairwise distinct") ||
-      content.includes("三个 source_family 两两不同") ||
-      content.includes("source_family 两两不同");
-    assert.ok(hasPairwiseDistinct, "S5 must require three source_family values to be pairwise distinct (两两不同)");
+      s5Section.includes("两两不同") ||
+      s5Section.includes("pairwise distinct") ||
+      s5Section.includes("三个 source_family 两两不同") ||
+      s5Section.includes("source_family 两两不同");
+    assert.ok(!hasPairwiseDistinct, "S5 must not require three source_family values to be pairwise distinct");
   });
 
   test("S5 review result contains fallback_used field", () => {
@@ -916,6 +930,18 @@ describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
     );
   });
 
+  test("S5 output requires exactly three review suggestions", () => {
+    const content = readSkill();
+    const s5Idx = content.indexOf("## S5");
+    const s5End = content.indexOf("## S6");
+    const s5Section = content.slice(s5Idx, s5End !== -1 ? s5End : s5Idx + 8000);
+    const hasThreeSuggestions =
+      s5Section.includes("恰好 3 条审查建议") ||
+      s5Section.includes("产出 3 条审查建议") ||
+      s5Section.includes("3 条审查建议");
+    assert.ok(hasThreeSuggestions, "S5 must require one review output with exactly three review suggestions");
+  });
+
   test("S5 blocking 留痕 uses fixed three-line format: 反对 X / 决定 Y / 理由 Z", () => {
     const content = readSkill();
     const hasFormat =
@@ -943,7 +969,7 @@ describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
     );
   });
 
-  test("S5 fallback_used:true causes that angle to fail, stops merging, reports to user", () => {
+  test("S5 fallback_used:true causes review failure and reports to user", () => {
     const content = readSkill();
     const s5Idx = content.indexOf("## S5");
     assert.ok(s5Idx !== -1, "SKILL.md must contain S5 section");
@@ -952,12 +978,12 @@ describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
     const hasFallbackField =
       s5Section.includes("fallback_used:true") ||
       s5Section.includes("fallback_used: true");
-    const hasAngleFail =
-      s5Section.includes("视为该角度审查失败") ||
-      s5Section.includes("角度审查失败") ||
-      s5Section.includes("angle failure");
+    const hasReviewFail =
+      s5Section.includes("视为本次审查失败") ||
+      s5Section.includes("审查失败") ||
+      s5Section.includes("review failure");
     const hasMergeStop =
-      s5Section.includes("结果不进合并") ||
+      s5Section.includes("结果不采用") ||
       s5Section.includes("停止合并") ||
       s5Section.includes("stops merging");
     const hasUserReport =
@@ -968,19 +994,21 @@ describe("T011: SKILL.md — S5 三角度异源盲审 + debate 门控", () => {
       s5Section.includes("禁止静默降级") ||
       s5Section.includes("no silent downgrade");
     assert.ok(hasFallbackField, "S5 must mention fallback_used:true field");
-    assert.ok(hasAngleFail, "S5 must state fallback_used:true causes that angle to fail (视为该角度审查失败)");
-    assert.ok(hasMergeStop, "S5 must state angle failure stops merging (结果不进合并)");
+    assert.ok(hasReviewFail, "S5 must state fallback_used:true causes review failure");
+    assert.ok(hasMergeStop, "S5 must state failed review result is not adopted");
     assert.ok(hasUserReport, "S5 must state failure is reported to user immediately (立即停下报告用户)");
     assert.ok(hasNoSilentDowngrade, "S5 must prohibit silent downgrade (禁止静默降级)");
   });
 
-  test("S5 same source_family causes angle failure (no silent downgrade)", () => {
+  test("S5 has no source_family clash gate", () => {
     const content = readSkill();
-    const hasNoSilentDowngrade =
-      content.includes("禁止静默降级") ||
-      content.includes("no silent downgrade") ||
-      (content.includes("source_family") && content.includes("相同"));
-    assert.ok(hasNoSilentDowngrade, "S5 must prohibit silent downgrade when source_family clash");
+    const s5Idx = content.indexOf("## S5");
+    const s5End = content.indexOf("## S6");
+    const s5Section = content.slice(s5Idx, s5End !== -1 ? s5End : s5Idx + 8000);
+    assert.ok(
+      !s5Section.includes("source_family") || s5Section.includes("不要求多个 `source_family`"),
+      "S5 must not gate on source_family clash"
+    );
   });
 
   test("S5 debate gate: delegates trigger decision to debate skill (not inline self-judgement)", () => {
@@ -1058,13 +1086,12 @@ describe("T012: SKILL.md — S6 展示盲审/debate 结果", () => {
     assert.ok(hasIndependent, "S6 must be an independent display step (独立展示步骤)");
   });
 
-  test("S6 shows three-angle blind review findings summary to user", () => {
+  test("S6 shows the single blind review findings summary to user", () => {
     const content = readSkill();
     const hasFindings =
-      (content.includes("S6") && content.includes("三角度") && content.includes("findings")) ||
       (content.includes("S6") && content.includes("盲审") && content.includes("findings")) ||
-      content.includes("三角度盲审 findings 摘要");
-    assert.ok(hasFindings, "S6 must show three-angle blind review findings summary to user");
+      content.includes("3 条审查建议");
+    assert.ok(hasFindings, "S6 must show the blind review findings summary to user");
   });
 
   test("S6 shows direction_divergence status", () => {
