@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "verdict": "pass",
+    "evidence_ref": "test/final-test-report.md",
+    "anomaly_flags": [
+      "stale_sha"
+    ]
+  },
+  "missing_items": [
+    "browser-acceptance: no UI acceptance items"
+  ],
+  "user_decision": false,
+  "needs_human": true,
+  "next_stage": "done",
+  "reason": "All 22 ACs verified. 848/848 tests pass (R3 after AC-16/AC-21 test fixes). 3rd-review test-acceptance-review R3 verdict=pass (codex, heterologous, 2026-06-30). Merge and branch deletion pending user confirmation (FR-CLOSE-001).",
+  "review_ref": "reviews/test-acceptance-review-r3-pass.md",
+  "test_acceptance_summary": "test-acceptance/summary.md"
+}

@@ -297,18 +297,86 @@ describe("Phase 3 / AC-15: [FRICTION] capture format", () => {
   });
 });
 
-describe("Phase 3 / AC-16: D3 deleted items not present as active mechanisms", () => {
+describe("Phase 3 / AC-16: high-risk words not used as execution gate semantics", () => {
+  test("SKILL.md does not use 不能进 as an execution gate (only allowed in blacklist/example context)", () => {
+    const c = skill();
+    // 不能进 may appear in the high-risk-word blacklist enumeration (黑名单) — that is fine.
+    // It must NOT appear as a hard gate controlling execution flow outside that context.
+    const gateLines = c.split("\n").filter(
+      l => l.includes("不能进") && !l.includes("黑名单") && !l.includes("示例") && !l.includes("例如")
+    );
+    assert.ok(gateLines.length === 0,
+      `SKILL.md must not use 不能进 as execution gate (AC-16); found outside blacklist/example context: ${gateLines.join(" | ")}`);
+  });
+  test("SKILL.md does not use Chinese 阻断 as a hard execution gate", () => {
+    const c = skill();
+    // 阻断 may appear as: 不阻断/非阻断 (negated), blacklist listing (黑名单),
+    // detection description (检测阻断), constitution refs (Q1/F3/F4/F5), 而非阻断 (explanatory).
+    // A hard gate like 若X则阻断流程 MUST be rejected.
+    const hardGateLines = c.split("\n").filter(l => {
+      if (!l.includes("阻断")) return false;
+      // Negated forms
+      if (l.includes("不阻断") || l.includes("非阻断") || l.includes("不构成阻断") ||
+          l.includes("不作为阻断") || l.includes("不得阻断") || l.includes("而非阻断")) return false;
+      // Detection / blacklist / explanation context
+      if (l.includes("黑名单") || l.includes("检测阻断") || l.includes("阻断语义") ||
+          l.includes("禁止附加") || l.includes("记录事实")) return false;
+      // Constitution principle references
+      if (l.match(/Q[0-9]|F[0-9]|CONSTITUTION/)) return false;
+      return true;
+    });
+    assert.ok(hardGateLines.length === 0,
+      `SKILL.md must not use 阻断 as hard execution gate (AC-16); suspect lines: ${hardGateLines.slice(0,3).join(" | ")}`);
+  });
+  test("SKILL.md does not use BLOCK or blocking as a hard execution gate (only non-blocking or blacklist context)", () => {
+    const c = skill();
+    // Lines with BLOCK/blocking are fine when negated or in blacklist/explanation context.
+    // Allowed: 不阻断, non-blocking, do not block, NOT block, don't block, 黑名单, 不构成阻断
+    const hardGateLines = c.split("\n").filter(l => {
+      if (!l.match(/\bBLOCK\b|blocking/i)) return false;
+      // Chinese negation forms
+      if (l.includes("不阻断") || l.includes("非阻断") || l.includes("不构成阻断") ||
+          l.includes("不作为阻断") || l.includes("阻断语义") || l.includes("黑名单")) return false;
+      // English negation forms (do not block, NOT block, non-blocking, won't block)
+      if (l.match(/non.?block|not block|do not block|does not block|don.t block|won.t block/i)) return false;
+      // Explanation / principle context (constitution refs, rule notes)
+      if (l.includes("Q1") || l.includes("F3") || l.includes("F4") || l.includes("F5")) return false;
+      return true;
+    });
+    assert.ok(hardGateLines.length === 0,
+      `SKILL.md must not use BLOCK/blocking as hard gate (AC-16); suspect lines: ${hardGateLines.slice(0,3).join(" | ")}`);
+  });
+});
+
+describe("Phase 3 / AC-21: D3 deleted items not present as active mechanisms", () => {
   test("SKILL.md does NOT use gate.sh as an active execution call", () => {
     assert.ok(!skill().includes("gate.sh"),
-      "gate.sh must not appear as active mechanism in SKILL.md (AC-21/AC-16)");
+      "gate.sh must not appear as active mechanism in SKILL.md (AC-21)");
   });
   test("SKILL.md does NOT use post_review_pass as an active gate", () => {
     assert.ok(!skill().includes("post_review_pass"),
-      "post_review_pass must not appear in SKILL.md (AC-21/AC-16)");
+      "post_review_pass must not appear in SKILL.md (AC-21)");
   });
   test("SKILL.md does NOT use [DECOMP] telemetry emission", () => {
     assert.ok(!skill().includes("[DECOMP]"),
       "[DECOMP] must not appear in SKILL.md as mechanism (AC-21)");
+  });
+  test("SKILL.md does NOT contain TodoWrite template call as active mechanism", () => {
+    // TodoWrite is a D3 deleted item — must not appear as an active step/call
+    // (explanatory references to the concept are allowed, same semantics as AC-16)
+    const c = skill();
+    const twLines = c.split("\n").filter(
+      l => l.includes("TodoWrite") && !l.includes("//") && !l.includes("注：") && !l.includes("例如")
+    );
+    assert.ok(twLines.length === 0,
+      `TodoWrite must not appear as active mechanism in SKILL.md (AC-21); found: ${twLines.slice(0,2).join(" | ")}`);
+  });
+  test("SKILL.md does NOT contain duplicate Exit Conditions sections as mechanism steps", () => {
+    // At most one Exit Conditions heading is allowed; a duplicate signals a D3 gate pattern
+    const c = skill();
+    const exitCondMatches = (c.match(/## Exit Conditions|## 退出条件|stage_exit/g) || []);
+    assert.ok(exitCondMatches.length <= 1,
+      `Duplicate Exit Conditions/stage_exit sections detected (${exitCondMatches.length}) — D3 gate pattern violation (AC-21)`);
   });
 });
 
@@ -335,11 +403,20 @@ describe("Phase 3 / AC-17: spec-acceptance-count.json file validity", () => {
 });
 
 describe("Phase 3 / AC-18: all FR numbers use FR-[A-Z]+-[0-9]{3} format", () => {
-  test("build-spec SKILL.md version field exists in frontmatter", () => {
+  test("all FR-* identifiers in SKILL.md match FR-[A-Z]+-[0-9]{3} regex", () => {
+    const c = skill();
+    // Extract every FR-XXX-NNN token (uppercase domain, exactly 3 digits)
+    const allFR = (c.match(/FR-[A-Z0-9]+-[0-9]+/g) || []);
+    const badFR = allFR.filter(fr => !/^FR-[A-Z]+-[0-9]{3}$/.test(fr));
+    assert.ok(badFR.length === 0,
+      `FR numbers not matching FR-[A-Z]+-[0-9]{3}: ${badFR.join(", ")} (AC-18 FR-NUMBERING-001)`);
+    assert.ok(allFR.length > 0, "SKILL.md must contain at least one FR-* identifier (AC-18)");
+  });
+  test("build-spec SKILL.md has version field in frontmatter (S6 version traceability)", () => {
     const c = skill();
     const match = c.match(/^---\n([\s\S]*?)\n---/);
     assert.ok(match, "SKILL.md must have YAML frontmatter");
-    assert.ok(match[1].includes("version"), "SKILL.md frontmatter must have version field (AC-18 / S6 version traceability)");
+    assert.ok(match[1].includes("version"), "SKILL.md frontmatter must have version field (S6 traceability)");
   });
 });
 
