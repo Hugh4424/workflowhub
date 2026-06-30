@@ -74,15 +74,22 @@ The skill accepts a caller-provided `worktree_root` config key that specifies th
 
 If `worktree_root` is absent from the caller config, fail fast with a clear error rather than guessing.
 
-### 6. Worker-Mode 子代理
+### 6. 子任务派发后端
 
-Use Worker-Mode to spawn an implementer worker for the actual code-writing work. Worker-Mode is an external semver dependency — version-pin it in the skill config and do not inline its logic.
+Use the available dispatch backend to run implementation work outside the main coordinator context. The dispatch backend is an implementation detail — do not inline its logic.
 
-When dispatching to the worker:
+Preferred backends:
+
+- In Multica issue mode: create phase child issues under the current build-code issue and assign them to implementation agents.
+- Outside Multica issue mode: use Worker-Mode as the fallback dispatch backend (external semver dependency — version-pin it in the skill config).
+
+When dispatching implementation work, regardless of backend:
 
 - Pass **ABSOLUTE paths** for all file references (source files, evidence output paths, task dir).
-- Explicitly forbid the worker from running `git commit` — include the instruction `DO NOT commit. Leave changes in the working tree.` in the worker prompt (FR-SUB-002).
-- The worker returns its output; the orchestrating skill (this SKILL.md) reads it and proceeds to the next step.
+- Pass the configured `worktree_root`.
+- Include the phase TASK_SLICE, allowed paths, RED/GREEN evidence output paths, and the required PHASE_RESULT format.
+- Explicitly forbid `git commit` — include the instruction `DO NOT commit. Leave changes in the working tree.` (FR-SUB-002).
+- The implementer returns only its PHASE_RESULT summary and artifact paths; the orchestrating skill (this SKILL.md) reads those outputs and proceeds to the next step.
 
 ### 7. 3rd-review standalone
 
