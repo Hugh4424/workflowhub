@@ -1,5 +1,6 @@
 ---
 name: build-spec
+version: 2.0.0
 description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → human review checkpoint.
 ---
 
@@ -9,15 +10,94 @@ description: Turn the agreed direction into a structured spec that is the single
 
 Translate the decision log from `make-decision` into a full spec via an orchestrated pipeline. The spec becomes the sole authority that later stages (plan, code, verify) refer to.
 
+## 全局参数与产出约定
+
+### 环境变量与参数约定（FR-TRACKING-001/002，FR-TASKDIR-001）
+
+#### TASK_TRACKING_ROOT
+
+全局环境变量 `TASK_TRACKING_ROOT` 约定所有阶段跟踪文件的存储根目录：
+
+- **默认值**：`~/Knowledge/workflowhub/`（若变量未设置则使用此默认路径）
+- **降级行为**：若 `TASK_TRACKING_ROOT` 未设置，记录 warn（不停止），继续使用默认路径
+- **目录创建**：若路径不存在，尝试自动 `mkdir -p` 创建；失败时 warn 不停止
+- **禁止绕过（FR-TRACKING-002）**：所有 stage（包括 spec-specify、spec-clarify 等）必须通过 `TASK_TRACKING_ROOT` 获取跟踪文件路径，禁止硬编码绝对跟踪路径
+
+#### --task-dir 参数约定（FR-TASKDIR-001）
+
+`--task-dir` 控制本次运行的任务目录，所有输入/产物路径均基于它推导：
+
+- **路径推导**：`{task-dir}/decision-log.md` 为输入；`specs/{task-id}/` 为产物目录
+- **参数缺失时**：回退到 `tasks/{task-id}/` 默认路径并记录 warn（不依赖 cwd 猜测）
+- **严禁 cwd 猜测**：路径推导不得依赖当前工作目录
+
+---
+
+### Spec 三层结构要求（FR-STRUCTURE-001/002）
+
+build-spec 产出的 spec.md 必须按以下三层结构组织：
+
+- **层 1 — 速读卡**（文件顶部 30 行内）：一句话需求 + 核心改动，让读者 30 秒看懂
+- **层 2 — 正文**：问题陈述 / 背景 / FR / AC / 影响范围
+- **层 3 — 附录**：质量事实契约 / Known Gaps / 设计决策
+
+**Known Gaps 段（FR-STRUCTURE-002）**：spec.md 中 Known Gaps 段必须存在（可为空列表），记录本次有意留白、未覆盖或留待后续的事项。
+
+---
+
+### FR-{DOMAIN}-NNN 编号格式（FR-NUMBERING-001）
+
+build-spec 产出的所有功能需求必须使用 `FR-{DOMAIN}-NNN` 格式：
+
+- **DOMAIN**：大写领域缩写（BUILD/CONTRACT/LADDER/STRUCTURE/SELFCHECK/REVIEW/BEHAV/FRICTION/TASKDIR/TRACKING/NUMBERING/ACCOUNT/ARTIFACT/COMM/SCOPETRIAGE/ALIGN）
+- **NNN**：3 位数字（001 起）
+- **示例**：`FR-BUILD-001`，`FR-SELFCHECK-002`
+
+---
+
+### AC 计数与 spec-acceptance-count.json 产出（FR-ACCOUNT-001）
+
+build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，内容：
+
+```json
+{
+  "ac_count": <int>,
+  "fr_count": <int>,
+  "counted_at": "<ISO8601 string>"
+}
+```
+
+- 三字段（`ac_count`、`fr_count`、`counted_at`）不可为 null
+- `counted_at` 为产出时刻 ISO8601 时间戳
+- 计数方法：grep spec.md 统计 AC- 和 FR- 条目数
+
+---
+
 ## What to do
 
 ### 0. Pre-read: decision-log
 
-Read `tasks/{task-id}/decision-log.md` — the upstream `make-decision` output. Extract the functional description, recorded decisions, and constraints. If the file is missing or the description is empty, stop and report "decision-log missing or empty for {task-id}" before any further work.
+Read `{--task-dir}/decision-log.md` — the upstream `make-decision` output (default path when `--task-dir` absent: `tasks/{task-id}/decision-log.md`, per FR-TASKDIR-001). Extract the functional description, recorded decisions, and constraints. If the file is missing or the description is empty, stop and report "decision-log missing or empty for {task-id}" before any further work.
 
 ### 1. Metrics: stage start
 
 At stage start, call `metrics/collector.mjs` `recordSkeleton` with stage `build-spec`. Pass the M4 10 core fields as seed: `execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`. If metrics write fails, warn but do not block.
+
+### 1.5. spec-ladder 档位判断（FR-LADDER-001/002）
+
+在调用 spec-specify 前，基于 decision-log 描述的功能复杂度做档位判断，输出档位选择依据记入 spec 序言：
+
+- **A 档**（小改动）：单文件或配置调整，影响面窄；速读卡足够，正文后三章可豁免
+- **B 档**（中等）：跨模块改动或新增机制；需完整三层 spec
+- **C 档**（大改动）：跨系统边界、新引入外部依赖或破坏性变更；完整三层 spec + 额外影响范围分析
+
+F10 反过度工程四问（FR-LADDER-002）在档位判断时一并执行，结论记入 spec 序言，不作为阻断条件：
+1. What real threat does this defend against?
+2. Does any existing mechanism already cover it?
+3. Can it be bypassed, making it security-theatre?
+4. What is the long-term maintenance cost?
+
+---
 
 ### 2. spec-specify: first-draft spec
 
@@ -34,6 +114,95 @@ Invoke `skills/spec-clarify/SKILL.md` (spec-clarify):
 - **Input**: task-id (or the explicit spec path `specs/{task-id}/spec.md`).
 - **Expected behaviour**: 10-dimension ambiguity scan, up to 5 interactive clarification questions (one at a time), incremental spec updates after each accepted answer, and a coverage summary at completion.
 - If spec-clarify reports the spec file is not found, stop — run spec-specify first.
+
+### 3.5. scope-triage 高危词浮现（FR-SCOPETRIAGE-001）
+
+spec-specify 产出初稿后，对 `specs/{task-id}/spec.md` 执行高危词 grep，检测阻断语义词：
+
+**高危词黑名单**：`阻断` / `blocking` / `不能进` / `BLOCK` / `强制门` / `必须停止` / `强制完整流程`
+
+命中时：
+- 浮现命中位置 + 建议修改（供人工确认是文档示例还是执行语义）
+- 记录进质量事实契约第 4 项（未解风险）
+- **不构成阻断条件**（CONSTITUTION F4/F5，记录+浮现+人判断）
+
+---
+
+### 3.6. 7 条自检 + Spec-Purity grep（FR-SELFCHECK-001/002）
+
+spec 产出后运行以下 7 条自检，结论（pass/warn/unknown）写入质量事实契约第 2 项（自检结果）：
+
+1. spec-ladder 档位已声明且有依据
+2. 所有 FR 使用 `FR-{DOMAIN}-NNN` 格式
+3. 每个 FR 至少有一条 Given/When/Then 场景
+4. 五章硬门完整（速读卡 / FR / 不做 / 验收 / 影响范围）——A 档可豁免后三章
+5. spec↔decision-log 覆盖率（FR-ALIGN-001）：decision-log 每条 KEEP 决策在 spec FR 中有对应；差异记入质量事实契约第 4 项（未解风险），不阻断
+6. 无 `[NEEDS CLARIFICATION]` 残留（或全部标明已解决/延后理由）
+7. Known Gaps 段存在
+
+**Spec-Purity grep（FR-SELFCHECK-002）**：对 spec.md 运行 grep，检测代码片段（``` 包围块）、具体文件路径（`/Users/` 或 `./` 前缀）、shell 命令（`$`、`&&`、`|` 特征），结论记录（pass = 未发现，warn = 发现并列出命中行），不阻断。文档示例块命中即记 warn + 列出行，由人工确认；不对示例块做自动豁免。
+
+---
+
+### 3.7. 异源 3rd-review 独立审查（FR-REVIEW-001/002）
+
+spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-review 基础设施，单一异源引擎如 codex），在独立上下文产出 verdict + findings：
+
+- 结论记入质量事实契约第 3 项（独立审查摘要路径）
+- 审查失败/不可用时降级记录 unknown + 原因，不阻断
+- **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
+- 可 grep 到 `3rd-review` 或 `异源独立审查`
+
+---
+
+### 3.8. 质量事实契约产出（FR-CONTRACT-001/002）
+
+完成自检和审查后，在 spec.md 末尾附录或独立文件中产出"质量事实契约"段落，包含以下 5 项（字段必须存在，值可为空字符串或 unknown，禁止字段缺失）：
+
+1. **scope 边界**：本次 spec 的 IN/OUT scope 及裁剪机制列表
+2. **自检结果**：7 条自检 + Spec-Purity grep 的 pass/warn/unknown 汇总
+3. **独立审查摘要**：异源 3rd-review 的 verdict + findings 摘要路径
+4. **未解风险**：已知缺口、摩擦记录（`[FRICTION]` 格式，见下节）、scope-triage 高危词命中、spec↔decision-log 差异
+5. **handoff required_reads**：下游阶段必读文件清单
+
+**约束（FR-CONTRACT-002）**：所有 5 项均为"记录+浮现"语义，禁止附加任何"若未通过则停止/不得继续"语义。任何质量检查失败均不阻断推进（CONSTITUTION F4/F5）。
+
+---
+
+### 3.9. 交互规范（FR-COMM-001/002）
+
+build-spec 产出过程中必须遵守以下交互规范：
+
+**REQ-COMM-01（FR-COMM-001）**：对编排者的所有提问或选项，必须使用大白话说明选项后果，不让编排者猜。格式：列出选项 A/B/C + 每个选项的后果一句话。禁止含糊带过选项差异。
+
+**REQ-COMM-02（FR-COMM-002）**：每完成主要步骤后，主动汇报进度：做了什么 / 下一步是什么 / 需要编排者做什么。不等对方追问。
+
+---
+
+### 3.10. 摩擦捕获、Artifact-First 与行为验证要求（FR-FRICTION-001，FR-ARTIFACT-001，FR-BEHAV-001/002）
+
+#### [FRICTION] 摩擦捕获（FR-FRICTION-001）
+
+发现任何流程卡点时，立即记录 `[FRICTION]` 条目：
+
+```
+[FRICTION] <触发时机简述>: <卡点描述> | 建议: <可选>
+```
+
+条目写入质量事实契约第 4 项（未解风险），不阻断推进。
+
+#### Artifact-First 只传路径（FR-ARTIFACT-001）
+
+长报告（> 500 字）、完整日志、大段引用：**写入文件后只传路径**（artifact-first），不内联到回报正文。回报格式：`结论 + 文件路径`。违规时记录为 warn，写入质量事实契约第 2 项（自检结果），浮现给人工；不自动停止 stage（非阻断）。
+
+#### FR 场景行为验证（FR-BEHAV-001/002）
+
+- **FR-BEHAV-001**：spec.md 中每个 FR 至少须有一条 Given/When/Then 格式场景，覆盖正常路径
+- **FR-BEHAV-002**：FR 场景不得含实现细节（框架名、函数名、协议名），只描述用户/系统级行为；meta 场景（描述 build-spec 机制本身的）豁免此要求
+
+以上两项缺失或不符时，记录为 warn 写入质量事实契约第 2 项（自检结果），浮现给人工；不自动停止 stage（非阻断）。
+
+---
 
 ### 4. Constitution compliance check
 
@@ -95,31 +264,31 @@ Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as
 
 ### 6. F10 anti-over-engineering gate (apply before the human review checkpoint, while the spec can still be revised)
 
-This gate runs on the spec produced by spec-specify → spec-clarify, **before** the human review checkpoint — so any pruning it triggers happens to the spec the human will then confirm. The human must confirm the final spec, not an intermediate one (F7).
+This step runs on the spec produced by spec-specify → spec-clarify, **before** the human review checkpoint. It records F10 findings (non-blocking) so the human sees them at the checkpoint and can decide whether to revise. The human confirms the spec as-is; no automatic changes are made before the human sees it (F7).
 
-Before any new mechanism, validation, CI check, gate, schema, dependency, or automation remains in the spec, answer all four questions. If you cannot answer all four for a given mechanism, remove it from the spec.
+Before any new mechanism, validation, CI check, gate, schema, dependency, or automation remains in the spec, answer all four questions. If you cannot answer all four for a given mechanism, **record a warning and surface the finding for human review** — do not auto-remove (non-blocking, FR-LADDER-002).
 
 1. **What real threat does this defend against?** — Name a specific, observed failure mode (not "it could happen"). Hypothetical threats do not justify new infrastructure.
 2. **Does any existing mechanism already cover it?** — Check what is already in the codebase, config, or workflow before keeping something new. Duplication is waste.
 3. **Can it be bypassed, making it security-theatre?** — If yes and the bypass is trivial, the mechanism blocks only honest actors and costs more than it protects.
-4. **What is the long-term maintenance cost?** — Every mechanism kept here must be maintained across all future changes. If the cost exceeds the benefit, remove it.
+4. **What is the long-term maintenance cost?** — Every mechanism kept here must be maintained across all future changes. High ongoing cost is a signal worth surfacing.
 
-If the answer to Q1 is "none in particular" or the answer to Q4 is "high and ongoing", remove the mechanism from the spec.
+If the answer to Q1 is "none in particular" or the answer to Q4 is "high and ongoing", **record the finding in the quality contract (item 4: 未解风险) and surface to human** — do not automatically remove the mechanism. The human at the review checkpoint decides whether to prune.
 
 This gate reflects constitution rule F10: automation and validation are added for real benefit, not to make things machine-checkable for its own sake. Cautionary example: a predecessor system accumulated ~95,000 lines of gate code with over a dozen deadlocks by chasing "everything machine-verifiable". Do not repeat that pattern.
 
 ### 7. Human review checkpoint
 
-After spec-specify output, spec-clarify refinement, the F10 gate, constitution check, and baseline comparison are all complete — but **before** producing the stage-result — pause at the human review checkpoint. By this point the F10 gate has already pruned the spec, so the spec the human sees is final:
+After spec-specify output, spec-clarify refinement, F10 analysis (findings recorded), constitution check, and baseline comparison are all complete — but **before** producing the stage-result — pause at the human review checkpoint. The spec has not been automatically altered; the human sees it as produced by spec-specify → spec-clarify, with F10 findings surfaced alongside for their review:
 
-> **HUMAN_REVIEW_CHECKPOINT** — 以下产物已就绪（F10 反过度工程门已应用，spec 为最终版），请确认后继续：
-> - `specs/{task-id}/spec.md`（经 spec-specify 初稿 + spec-clarify 澄清更新 + F10 门裁剪后的最终 spec）
+> **HUMAN_REVIEW_CHECKPOINT** — 以下产物已就绪（F10 反过度工程分析已完成，findings 已记录），请确认后继续：
+> - `specs/{task-id}/spec.md`（经 spec-specify 初稿 + spec-clarify 澄清更新后的 spec，附 F10 findings 供参考）
 > - 宪法符合性检查清单（constitution-checklist.md 21 条逐条勾选）
 > - M11 vs M10 baseline 对照表（5 项指标）
 >
 > 请确认上述产物是否可接受。回复"确认"继续产出 stage-result；回复修改意见则返回相应步骤修正。
 
-The stage must NOT auto-proceed past this point without explicit human confirmation. If the human rejects or does not confirm, do not advance to stage-result production — loop back to the relevant step. After the human confirms, do not silently re-prune or alter the spec — what the human confirmed is what gets recorded.
+The stage must NOT auto-proceed past this point without explicit human confirmation. If the human rejects or does not confirm, do not advance to stage-result production — loop back to the relevant step. After the human confirms, do not silently alter the spec — what the human confirmed is what gets recorded.
 
 ## Produce a stage-result
 
@@ -147,7 +316,7 @@ Also record a metrics entry via the collector. Call `recordSkeleton` at stage st
   "execution_id": "<uuid>",
   "skill_or_stage": "build-spec",
   "stage": "build-spec",
-  "skill_version": "1.0.0",
+  "skill_version": "2.0.0",
   "executed": true,
   "tokens": null,
   "duration_ms": null,

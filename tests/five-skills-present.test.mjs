@@ -239,6 +239,18 @@ describe("build-code SKILL.md contains slim path / stage-result / make-decision 
       "build-code/SKILL.md must make tasks.md conditional on build-plan being the upstream (D12 slim path)"
     );
   });
+
+  test("build-code consumes facts.tasks_ref as tasks.md path on full path", () => {
+    const content = readFileSync(skillPath, "utf8");
+    assert.ok(
+      content.includes("facts.tasks_ref") && content.includes("path to `tasks.md`"),
+      "build-code/SKILL.md must read facts.tasks_ref as the tasks.md path"
+    );
+    assert.ok(
+      content.includes("facts.tasks") && content.includes("do **not** treat it as a file path"),
+      "build-code/SKILL.md must preserve facts.tasks as summary/count, not a path"
+    );
+  });
 });
 
 // scope-triage and decision-log existence/frontmatter now covered by

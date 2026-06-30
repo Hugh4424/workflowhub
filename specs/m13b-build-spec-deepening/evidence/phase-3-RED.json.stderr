@@ -1,0 +1,40 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-09: artifact-first standard > SKILL.md declares artifact-first / 只传路径 standard
+AssertionError: SKILL.md must declare artifact-first standard (FR-ARTIFACT-001)
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13b-build-spec-deepening.test.mjs:271:12
+    269|   test("SKILL.md declares artifact-first / 只传路径 standard", () => {
+    270|     const c = skill();
+    271|     assert.ok(
+       |            ^
+    272|       c.includes("artifact-first") || c.includes("只传路径") || c.incl…
+    273|       "SKILL.md must declare artifact-first standard (FR-ARTIFACT-001)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-10: REQ-COMM-01/02 communication rules > SKILL.md declares REQ-COMM-01 or 大白话 rule
+AssertionError: SKILL.md must declare REQ-COMM-01 plain language rule (FR-COMM-001)
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13b-build-spec-deepening.test.mjs:280:12
+    278|   test("SKILL.md declares REQ-COMM-01 or 大白话 rule", () => {
+    279|     const c = skill();
+    280|     assert.ok(
+       |            ^
+    281|       c.includes("REQ-COMM-01") || c.includes("FR-COMM-001") || (c.inc…
+    282|       "SKILL.md must declare REQ-COMM-01 plain language rule (FR-COMM-…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

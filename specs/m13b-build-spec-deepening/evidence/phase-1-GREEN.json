@@ -1,0 +1,13 @@
+{
+  "command": "npm test -- tests/m13b-build-spec-deepening.test.mjs --reporter=verbose -t 'Phase 1'",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "da11e45241344909569b88058c3a539fccd0cb58",
+  "exit_code": 0,
+  "timestamp": "2026-06-30T08:23:11.577Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "87aeca5aa0268693bced2a8a301c547eeb22f8e6dfd1615c55fb4950f04f083c",
+  "stdout_path": "specs/m13b-build-spec-deepening/evidence/phase-1-GREEN.json.stdout",
+  "stderr_path": "specs/m13b-build-spec-deepening/evidence/phase-1-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}
