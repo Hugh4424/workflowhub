@@ -1,0 +1,68 @@
+
+> workflowhub@0.0.0 test
+> vitest run tests/m13b-build-spec-deepening.test.mjs --reporter=verbose
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared > SKILL.md contains TASK_TRACKING_ROOT
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared > SKILL.md declares default path ~/Knowledge/workflowhub/
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared > SKILL.md states warn-not-stop behaviour for missing TASK_TRACKING_ROOT
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-13: --task-dir parameter convention > SKILL.md declares --task-dir parameter
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-13: --task-dir parameter convention > SKILL.md states fallback behaviour for missing --task-dir
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-20: three-layer spec structure > SKILL.md declares 速读卡 (layer 1)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-20: three-layer spec structure > SKILL.md declares 附录 (layer 3)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-20: three-layer spec structure > SKILL.md declares 正文 (layer 2)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-14: Known Gaps section requirement > SKILL.md requires Known Gaps section in spec output
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-07: FR-{DOMAIN}-NNN numbering format > SKILL.md declares FR-{DOMAIN}-NNN format
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares spec-acceptance-count.json output step
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares ac_count field
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares fr_count field
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares counted_at field
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md declares 质量事实契约 section
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md includes scope 边界 as contract item 1
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md includes 自检结果 as contract item 2
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md includes 独立审查摘要 as contract item 3
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md includes 未解风险 as contract item 4
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md includes handoff required_reads as contract item 5
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-01: 质量事实契约 5 items > SKILL.md declares contract items are non-blocking (FR-CONTRACT-002)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-02: spec-ladder A/B/C 档 > SKILL.md declares spec-ladder
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-02: spec-ladder A/B/C 档 > SKILL.md defines A 档
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-02: spec-ladder A/B/C 档 > SKILL.md defines B 档
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-02: spec-ladder A/B/C 档 > SKILL.md defines C 档
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-02: spec-ladder A/B/C 档 > SKILL.md declares F10 four-question at ladder stage (FR-LADDER-002)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-19: spec pipeline steps > SKILL.md mentions spec-specify as pipeline step
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-19: spec pipeline steps > SKILL.md mentions spec-clarify as pipeline step
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-19: spec pipeline steps > SKILL.md declares spec pipeline order (spec-specify → spec-clarify → ...)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-03: 7 self-check items > SKILL.md declares 7 self-check (7 条自检)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-03: 7 self-check items > SKILL.md includes self-check item for FR numbering format
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-03: 7 self-check items > SKILL.md includes self-check item for Given/When/Then scenes
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-04: Spec-Purity grep > SKILL.md declares Spec-Purity grep
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-04: Spec-Purity grep > SKILL.md states Spec-Purity is non-blocking
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-05: 异源 3rd-review 独立审查 > SKILL.md declares 3rd-review or 异源独立审查
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-05: 异源 3rd-review 独立审查 > SKILL.md prohibits self-review (FR-REVIEW-002)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-05: 异源 3rd-review 独立审查 > SKILL.md declares review is non-blocking
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-11: scope-triage 高危词浮现 > SKILL.md declares scope-triage high-risk word surfacing
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-11: scope-triage 高危词浮现 > SKILL.md declares scope-triage is non-blocking
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-12: spec↔decision-log 一致性检查 > SKILL.md declares decision-log consistency check
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 2 / AC-12: spec↔decision-log 一致性检查 > SKILL.md declares consistency check is non-blocking
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-09: artifact-first standard > SKILL.md declares artifact-first / 只传路径 standard
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-10: REQ-COMM-01/02 communication rules > SKILL.md declares REQ-COMM-01 or 大白话 rule
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-10: REQ-COMM-01/02 communication rules > SKILL.md declares REQ-COMM-02 or 进度报告 rule
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-15: [FRICTION] capture format > SKILL.md declares [FRICTION] entry format
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-16: D3 deleted items not present as active mechanisms > SKILL.md does NOT use gate.sh as an active execution call
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-16: D3 deleted items not present as active mechanisms > SKILL.md does NOT use post_review_pass as an active gate
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-16: D3 deleted items not present as active mechanisms > SKILL.md does NOT use [DECOMP] telemetry emission
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-17: spec-acceptance-count.json file validity > spec-acceptance-count.json exists
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-17: spec-acceptance-count.json file validity > spec-acceptance-count.json has non-null ac_count
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-17: spec-acceptance-count.json file validity > spec-acceptance-count.json has non-null fr_count
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-17: spec-acceptance-count.json file validity > spec-acceptance-count.json has non-null counted_at ISO8601
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-18: all FR numbers use FR-[A-Z]+-[0-9]{3} format > build-spec SKILL.md version field exists in frontmatter
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-22: TASK_TRACKING_ROOT used, no hardcoded tracking absolute paths > SKILL.md references TASK_TRACKING_ROOT for tracking file paths
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 3 / AC-22: TASK_TRACKING_ROOT used, no hardcoded tracking absolute paths > SKILL.md does not use ~/Knowledge/ as a hardcoded write path (only allowed as default-value declaration)
+
+ Test Files  1 passed (1)
+      Tests  55 passed (55)
+   Start at  16:52:35
+   Duration  201ms (transform 16ms, setup 0ms, collect 18ms, tests 8ms, environment 0ms, prepare 48ms)
+

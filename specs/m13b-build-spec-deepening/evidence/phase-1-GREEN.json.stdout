@@ -1,0 +1,27 @@
+
+> workflowhub@0.0.0 test
+> vitest run tests/m13b-build-spec-deepening.test.mjs --reporter=verbose -t Phase 1
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared > SKILL.md contains TASK_TRACKING_ROOT
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared > SKILL.md declares default path ~/Knowledge/workflowhub/
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared > SKILL.md states warn-not-stop behaviour for missing TASK_TRACKING_ROOT
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-13: --task-dir parameter convention > SKILL.md declares --task-dir parameter
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-13: --task-dir parameter convention > SKILL.md states fallback behaviour for missing --task-dir
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-20: three-layer spec structure > SKILL.md declares 速读卡 (layer 1)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-20: three-layer spec structure > SKILL.md declares 附录 (layer 3)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-20: three-layer spec structure > SKILL.md declares 正文 (layer 2)
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-14: Known Gaps section requirement > SKILL.md requires Known Gaps section in spec output
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-07: FR-{DOMAIN}-NNN numbering format > SKILL.md declares FR-{DOMAIN}-NNN format
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares spec-acceptance-count.json output step
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares ac_count field
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares fr_count field
+ ✓ tests/m13b-build-spec-deepening.test.mjs > Phase 1 / AC-08: spec-acceptance-count.json production > SKILL.md declares counted_at field
+
+ Test Files  1 passed (1)
+      Tests  14 passed | 41 skipped (55)
+   Start at  16:23:11
+   Duration  153ms (transform 10ms, setup 0ms, collect 11ms, tests 2ms, environment 0ms, prepare 26ms)
+

@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "decision": "M13b build-spec 深化方向 = 质量事实契约 + 最小实现（非逐机制照搬 agenthub design）。KEEP：spec 正文/spec-ladder/三层小节/7 条自检+Spec-Purity grep/独立三角度审查/行为验证/摩擦捕获/--task-dir/Known Gaps。CUT：3 个门(MODIFY 块)、TodoWrite 仪式、[DECOMP] 遥测、门绑定自动写、重复行。S5 简化为 1-AI-3-angle 独立三角度审查（非三 source_family）。5 框架外部调研移出（单列任务）。TASK_TRACKING_ROOT 本批完整落地（OQ-1=B：全局环境变量+所有 stage 读取约定）。+REQ-COMM-01 大白话+给选项，REQ-COMM-02 勤报进度。Hugh 8 项全部纳入（D8）：6 项已在 D1/D2/D4，2 项低成本新增(FR-{DOMAIN}-NNN 编号/AC 计数存文件)，0 新增阻断门，高危词为浮现+建议非强制门。全部非阻断，唯一 hard gate=S9 已获 Hugh 'A' 批准。",
+    "scope": "in: 质量事实契约定义+最小实现、独立三角度审查(1-AI-3-angle)、7 条自检+Spec-Purity grep、行为验证、摩擦捕获、handoff required_reads、scope-triage 高危词浮现、spec↔decision-log 一致性、FR-{DOMAIN}-NNN 编号、AC 计数存文件、artifact-first 长报告存路径、TASK_TRACKING_ROOT 全局变量+全 stage 读取约定。out: 5 框架外部调研(单列)、任何阻断式门、逐机制照搬 agenthub design 的死仪式(TodoWrite/[DECOMP]/门绑定自动写/重复行)。",
+    "decision_log_path": "tasks/m13b-build-spec-deepening/decision-log.md"
+  },
+  "missing_items": [],
+  "user_decision": true,
+  "reason": "User (Hugh) confirmed direction and scope with 'A' (approve) on S9 sign-off; OQ-1 resolved to B; 8 additional items folded in (D8). next_stage=build-spec."
+}

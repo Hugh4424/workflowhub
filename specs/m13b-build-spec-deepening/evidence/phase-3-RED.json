@@ -1,0 +1,13 @@
+{
+  "command": "npm test -- tests/m13b-build-spec-deepening.test.mjs --reporter=verbose",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "da11e45241344909569b88058c3a539fccd0cb58",
+  "exit_code": 1,
+  "timestamp": "2026-06-30T08:29:33.506Z",
+  "test_files_line": " Test Files  1 failed (1)",
+  "content_hash": "e8813aec6f18be5b7692de0972cf29f07fe2306349000e7a1042750660bdae0e",
+  "stdout_path": "specs/m13b-build-spec-deepening/evidence/phase-3-RED.json.stdout",
+  "stderr_path": "specs/m13b-build-spec-deepening/evidence/phase-3-RED.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}
