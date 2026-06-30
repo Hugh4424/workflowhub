@@ -1,0 +1,86 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/m13-make-decision.test.mjs (99 tests | 38 failed) 15ms
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 runs three parallel independent 3rd-review chains 4ms
+     → S5 must mention all three parallel review chains: intake-direction-review, intake-framing-challenge, intake-scope-review
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 requires three agent inputs to be mutually isolated 0ms
+     → S5 must require three agent inputs to be mutually isolated (互不可见)
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 review result contains reviewer_runtime_id field 0ms
+     → S5 review result must contain reviewer_runtime_id field
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 review result contains reviewer_source field 0ms
+     → S5 review result must contain reviewer_source field
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 review result contains source_family field 0ms
+     → S5 review result must contain source_family field
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 requires three source_family values to be pairwise distinct 0ms
+     → S5 must require three source_family values to be pairwise distinct (两两不同)
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 review result contains fallback_used field 0ms
+     → S5 review result must contain fallback_used field
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 review result contains input_hash field 0ms
+     → S5 review result must contain input_hash field
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 output contains direction_divergence marker 0ms
+     → S5 output must contain direction_divergence marker
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 output contains findings list 0ms
+     → S5 output must contain findings list
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 blocking 留痕 uses fixed three-line format: 反对 X / 决定 Y / 理由 Z 0ms
+     → S5 blocking 留痕 must use fixed three-line format: 反对 X / 决定 Y / 理由 Z
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 fallback_used:true causes that angle to fail, stops merging, reports to user 0ms
+     → S5 must specify fallback_used:true causes angle failure
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 same source_family causes angle failure (no silent downgrade) 0ms
+     → S5 must prohibit silent downgrade when source_family clash
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 debate gate: no source ID records debate_triggered_invalid:true 0ms
+     → S5 debate gate must record debate_triggered_invalid:true when no source ID
+   × T011: SKILL.md — S5 三角度异源盲审 + debate 门控 > S5 debate gate: triggered output goes to tasks/{task-id}/artifacts/make-decision-debate-1.md 0ms
+     → S5 debate gate must produce tasks/{task-id}/artifacts/make-decision-debate-1.md when triggered
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 section header exists 0ms
+     → SKILL.md must contain S6 section
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 is an independent display step 0ms
+     → S6 must be an independent display step (独立展示步骤)
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 shows three-angle blind review findings summary to user 0ms
+     → S6 must show three-angle blind review findings summary to user
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 shows direction_divergence status 0ms
+     → S6 must display direction_divergence status to user
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 shows debate verdict or skip reason 0ms
+     → S6 must show debate verdict or skip reason
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 records journal event s6_results_shown 0ms
+     → S6 must record journal event s6_results_shown
+   × T012: SKILL.md — S6 展示盲审/debate 结果 > S6 does not wait for user confirmation before continuing 0ms
+     → S6 must not wait for user confirmation before continuing (展示完即继续)
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 executes steps in strict order: talk#3 → grill → draft → orchestrator 0ms
+     → S7 must contain talk#3
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 talk#3 sorts questions Q3 by impact 0ms
+     → S7 talk#3 must sort questions Q3 by impact (按影响排序)
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 talk#3 depends on S5/S6 outputs 0ms
+     → S7 talk#3 must depend on S5/S6 outputs
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 talk#3 must not execute before S7 1ms
+     → S7 must state talk#3 must not execute before S7
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 grill delegates to grill-with-docs-lite (pure delegation) 0ms
+     → S7 grill step must delegate to grill-with-docs-lite
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 grill produces make-decision-grill-with-docs.md 0ms
+     → S7 grill must produce tasks/{task-id}/artifacts/make-decision-grill-with-docs.md
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 draft produces make-decision-decision-log-draft.md 0ms
+     → S7 draft must produce tasks/{task-id}/artifacts/make-decision-decision-log-draft.md
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 draft contains 7 sections (原始需求/问题与目标/决策/假设/明确不做/开放问题/验收标准) 0ms
+     → S7 draft must include section: 原始需求
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 draft body references make-decision-grill-with-docs.md path 0ms
+     → S7 draft must reference make-decision-grill-with-docs.md path in draft body
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 orchestrator blocking triggers debate-2, attaches to draft ## orchestrator-findings 0ms
+     → S7 orchestrator blocking must attach findings to ## orchestrator-findings section of draft
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 orchestrator blocking triggers debate-2 output: make-decision-debate-2.md 0ms
+     → S7 orchestrator blocking must produce make-decision-debate-2.md
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 orchestrator blocking does not overwrite draft body 0ms
+     → S7 orchestrator debate-2 findings must not overwrite draft body
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 journal event s7_talk3_done 0ms
+     → S7 must record journal event s7_talk3_done
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 journal event s7_grill_done 0ms
+     → S7 must record journal event s7_grill_done
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 journal event s7_draft_complete 0ms
+     → S7 must record journal event s7_draft_complete
+   × T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → debate-2 > S7 journal event debate_2_triggered or debate_2_skipped 0ms
+     → S7 must record journal event debate_2_triggered or debate_2_skipped
+
+ Test Files  1 failed (1)
+      Tests  38 failed | 61 passed (99)
+   Start at  20:44:19
+   Duration  181ms (transform 24ms, setup 0ms, collect 18ms, tests 15ms, environment 0ms, prepare 43ms)
+

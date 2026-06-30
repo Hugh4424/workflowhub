@@ -1,0 +1,496 @@
+⎯⎯⎯⎯⎯⎯ Failed Tests 26 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T005: SKILL.md — S0 背景扎根 section > S0 section header exists
+AssertionError: SKILL.md must contain S0 背景扎根 section
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:192:12
+    190|       content.includes("S0: 背景扎根") ||
+    191|       content.includes("### S0");
+    192|     assert.ok(hasS0, "SKILL.md must contain S0 背景扎根 section");
+       |            ^
+    193|   });
+    194| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T005: SKILL.md — S0 背景扎根 section > S0 section mentions loading context (CONTEXT.md / decision-log / task-id)
+AssertionError: S0 section must describe loading background context
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:202:12
+    200|       content.includes("背景") ||
+    201|       content.includes("context");
+    202|     assert.ok(hasContext, "S0 section must describe loading background…
+       |            ^
+    203|   });
+    204| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T005: SKILL.md — S0 背景扎根 section > S0 journal event s0_context_loaded present
+AssertionError: SKILL.md must specify journal event s0_context_loaded in S0
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:207:12
+    205|   test("S0 journal event s0_context_loaded present", () => {
+    206|     const content = readSkill();
+    207|     assert.ok(
+       |            ^
+    208|       content.includes("s0_context_loaded"),
+    209|       "SKILL.md must specify journal event s0_context_loaded in S0"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 mentions lite and full tiers
+AssertionError: S0.5 must mention lite tier
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:227:12
+    225|   test("S0.5 mentions lite and full tiers", () => {
+    226|     const content = readSkill();
+    227|     assert.ok(content.includes("lite"), "S0.5 must mention lite tier");
+       |            ^
+    228|     assert.ok(content.includes("full"), "S0.5 must mention full tier");
+    229|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 lite skips S1 internal research
+AssertionError: SKILL.md lite tier must skip S1 internal research
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:250:12
+    248|       content.includes("lite 档") ||
+    249|       (content.includes("lite") && content.includes("S1") && content.i…
+    250|     assert.ok(hasLiteSkipS1, "SKILL.md lite tier must skip S1 internal…
+       |            ^
+    251|   });
+    252| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 lite skips S3 external research
+AssertionError: SKILL.md lite tier must skip S3 external research
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:260:12
+    258|       content.includes("lite 档仅跳过") ||
+    259|       content.includes("lite 档跳过");
+    260|     assert.ok(hasLiteSkipS3, "SKILL.md lite tier must skip S3 external…
+       |            ^
+    261|   });
+    262| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T006: SKILL.md — S0.5 scope-triage lite/full > S0.5 journal event s0_5_scope present
+AssertionError: SKILL.md must specify journal event s0_5_scope in S0.5
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:265:12
+    263|   test("S0.5 journal event s0_5_scope present", () => {
+    264|     const content = readSkill();
+    265|     assert.ok(
+       |            ^
+    266|       content.includes("s0_5_scope"),
+    267|       "SKILL.md must specify journal event s0_5_scope in S0.5"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T007: SKILL.md — S1 内部调研 full 档专属 > S1 covers all 5 content categories
+AssertionError: S1 must cover category 1: 领域背景/术语澄清
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:313:12
+    311|     const has4 = content.includes("最佳实践") || content.includes("外…
+    312|     const has5 = content.includes("风险") || content.includes("反向案…
+    313|     assert.ok(has1, "S1 must cover category 1: 领域背景/术语澄清");
+       |            ^
+    314|     assert.ok(has2, "S1 must cover category 2: 历史先例/经验教训");
+    315|     assert.ok(has3, "S1 must cover category 3: codebase 相关实现");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T007: SKILL.md — S1 内部调研 full 档专属 > S1 produces internal-research-summary.md
+AssertionError: S1 must produce tasks/{task-id}/research/internal-research-summary.md
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:322:12
+    320|   test("S1 produces internal-research-summary.md", () => {
+    321|     const content = readSkill();
+    322|     assert.ok(
+       |            ^
+    323|       content.includes("internal-research-summary.md"),
+    324|       "S1 must produce tasks/{task-id}/research/internal-research-summ…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T007: SKILL.md — S1 内部调研 full 档专属 > S1 handles total failure: s1_all_agents_failed event
+AssertionError: S1 must record s1_all_agents_failed journal event when all sub-agents fail
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:330:12
+    328|   test("S1 handles total failure: s1_all_agents_failed event", () => {
+    329|     const content = readSkill();
+    330|     assert.ok(
+       |            ^
+    331|       content.includes("s1_all_agents_failed"),
+    332|       "S1 must record s1_all_agents_failed journal event when all sub-…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T007: SKILL.md — S1 内部调研 full 档专属 > S1 continues to S2 even when all agents fail (non-blocking)
+AssertionError: S1 failure must be non-blocking — must continue to S2
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:344:12
+    342|       content.includes("continue") ||
+    343|       content.includes("non-blocking");
+    344|     assert.ok(hasNonBlock, "S1 failure must be non-blocking — must con…
+       |            ^
+    345|   });
+    346| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T008: SKILL.md — S2 talk#1 > S2 section header exists
+AssertionError: SKILL.md must contain S2 talk#1 section
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:357:12
+    355|       content.includes("S2: talk") ||
+    356|       content.includes("### S2");
+    357|     assert.ok(hasS2, "SKILL.md must contain S2 talk#1 section");
+       |            ^
+    358|   });
+    359| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T008: SKILL.md — S2 talk#1 > S2 asks questions one at a time (一次一问)
+AssertionError: S2 must enforce asking one question at a time (FR-TALK-01)
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:367:12
+    365|       content.includes("one question") ||
+    366|       content.includes("one at a time");
+    367|     assert.ok(hasOneAtATime, "S2 must enforce asking one question at a…
+       |            ^
+    368|   });
+    369| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T008: SKILL.md — S2 talk#1 > S2 mentions three-round structure (三轮结构)
+AssertionError: S2 must be part of three-round talk structure
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:379:12
+    377|       content.includes("talk#2") ||
+    378|       content.includes("talk#3");
+    379|     assert.ok(hasThreeRound, "S2 must be part of three-round talk stru…
+       |            ^
+    380|   });
+    381| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T008: SKILL.md — S2 talk#1 > S2 presents internal research summary to user first
+AssertionError: S2 must present internal-research-summary.md to user before Q1
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:390:12
+    388|       content.includes("呈现") ||
+    389|       (content.includes("S2") && content.includes("summary"));
+    390|     assert.ok(hasPresent, "S2 must present internal-research-summary.m…
+       |            ^
+    391|   });
+    392| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T008: SKILL.md — S2 talk#1 > S2 asks Q1 about external research need
+AssertionError: S2 Q1 must ask about need for external research
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:400:12
+    398|       content.includes("external research") ||
+    399|       content.includes("Q1");
+    400|     assert.ok(hasQ1, "S2 Q1 must ask about need for external research"…
+       |            ^
+    401|   });
+    402| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T008: SKILL.md — S2 talk#1 > S2 sorts questions by impact (按影响排序, FR-TALK-02)
+AssertionError: S2 must sort questions by impact (FR-TALK-02)
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:410:12
+    408|       content.includes("impact") ||
+    409|       content.includes("排序");
+    410|     assert.ok(hasSorted, "S2 must sort questions by impact (FR-TALK-02…
+       |            ^
+    411|   });
+    412| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T009: SKILL.md — S3 双路外部调研 > S3 section header exists
+AssertionError: SKILL.md must contain S3 外部调研 section
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:424:12
+    422|       content.includes("S3 双路") ||
+    423|       content.includes("### S3");
+    424|     assert.ok(hasS3, "SKILL.md must contain S3 外部调研 section");
+       |            ^
+    425|   });
+    426| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T009: SKILL.md — S3 双路外部调研 > S3 mentions muyu-search-mcp
+AssertionError: S3 must mention muyu-search-mcp as one of the two research paths
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:429:12
+    427|   test("S3 mentions muyu-search-mcp", () => {
+    428|     const content = readSkill();
+    429|     assert.ok(
+       |            ^
+    430|       content.includes("muyu-search-mcp") || content.includes("muyu"),
+    431|       "S3 must mention muyu-search-mcp as one of the two research path…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T009: SKILL.md — S3 双路外部调研 > S3 mentions anysearch
+AssertionError: S3 must mention anysearch as the second research path
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:437:12
+    435|   test("S3 mentions anysearch", () => {
+    436|     const content = readSkill();
+    437|     assert.ok(
+       |            ^
+    438|       content.includes("anysearch"),
+    439|       "S3 must mention anysearch as the second research path"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T009: SKILL.md — S3 双路外部调研 > S3 lite skips with skip event
+AssertionError: S3 must record skip event when scope=lite
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:449:12
+    447|       content.includes("s3: skipped") ||
+    448|       (content.includes("S3") && content.includes("lite") && content.i…
+    449|     assert.ok(hasSkip, "S3 must record skip event when scope=lite");
+       |            ^
+    450|   });
+    451| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T009: SKILL.md — S3 双路外部调研 > S3 muyu requires extra_sources 3
+AssertionError: S3 muyu call must pass extra_sources 3 (FR-RESEARCH-01)
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:454:12
+    452|   test("S3 muyu requires extra_sources 3", () => {
+    453|     const content = readSkill();
+    454|     assert.ok(
+       |            ^
+    455|       content.includes("extra_sources") || content.includes("extra_sou…
+    456|       "S3 muyu call must pass extra_sources 3 (FR-RESEARCH-01)"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T010: SKILL.md — S4 方向收敛 talk#2 > S4 section header exists
+AssertionError: SKILL.md must contain S4 section
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:470:12
+    468|       content.includes("S4:") ||
+    469|       content.includes("### S4");
+    470|     assert.ok(hasS4, "SKILL.md must contain S4 section");
+       |            ^
+    471|   });
+    472| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T010: SKILL.md — S4 方向收敛 talk#2 > S4 journal event s4_baseline_recorded
+AssertionError: S4 must record journal event s4_baseline_recorded
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:475:12
+    473|   test("S4 journal event s4_baseline_recorded", () => {
+    474|     const content = readSkill();
+    475|     assert.ok(
+       |            ^
+    476|       content.includes("s4_baseline_recorded"),
+    477|       "S4 must record journal event s4_baseline_recorded"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T010: SKILL.md — S4 方向收敛 talk#2 > S4 produces make-decision-original-context.md (ledger render point 1)
+AssertionError: S4 must produce tasks/{task-id}/artifacts/make-decision-original-context.md (FR-LEDGER-01 render point 1)
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:483:12
+    481|   test("S4 produces make-decision-original-context.md (ledger render p…
+    482|     const content = readSkill();
+    483|     assert.ok(
+       |            ^
+    484|       content.includes("make-decision-original-context.md"),
+    485|       "S4 must produce tasks/{task-id}/artifacts/make-decision-origina…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/26]⎯
+
+ FAIL  tests/m13-make-decision.test.mjs > T010: SKILL.md — S4 方向收敛 talk#2 > S4 asks Q2 to converge direction
+AssertionError: S4 must ask Q2 to converge direction
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/m13-make-decision.test.mjs:495:12
+    493|       (content.includes("S4") && content.includes("收敛")) ||
+    494|       (content.includes("S4") && content.includes("方向"));
+    495|     assert.ok(hasQ2, "S4 must ask Q2 to converge direction");
+       |            ^
+    496|   });
+    497| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/26]⎯
+

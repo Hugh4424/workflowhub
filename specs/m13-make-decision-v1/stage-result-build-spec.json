@@ -1,0 +1,22 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "spec_path": "specs/m13-make-decision-v1/spec.md",
+    "spec_summary": "M13 make-decision 深化 spec：FR 覆盖 12 步流程（S0、S0.5、S1-S10）+ FR-RESEARCH-00/01/02/03 双路调研 + FR-REVIEW-01/02 三角度异源盲审 + FR-DEBATE 双调用点委托 debate 技能自判 + FR-TALK-01/02 + FR-GRILL-01 + FR-LEDGER 台账D28 + FR-ENV-01 六环境变量 + FR-METRIC + FR-DRAFT-01 + FR-ACCEPT-01/02/03 验收。全程记录态非阻断，唯一硬门 S9。",
+    "deliverables": [
+      "specs/m13-make-decision-v1/spec.md",
+      "specs/m13-make-decision-v1/checklists/requirements.md",
+      "specs/m13-make-decision-v1/constitution-check.md",
+      "specs/m13-make-decision-v1/baseline-report.md"
+    ],
+    "constitution_check": "21/21 条逐条勾选通过（含 F1-F10、Q1-Q3、S1-S8）",
+    "baseline_report": "M13 vs M10 五指标对照：rework_rounds=0 可算，其余四项 unknown（无 M13 journal 事件流，诚实标未知，不假绿）",
+    "f10_gate": "15 个机制逐条过反过度工程门，零裁剪（每个都答全四问、有真实威胁与收益）",
+    "review_history": "2 轮 codex 异源审查：R1 挑出 3 blocking + 9 major + 2 minor 全修；R2 挑出残留 + 2 新 major 全修。终态自洽无 blocking。"
+  },
+  "missing_items": [],
+  "user_decision": true,
+  "reason": "用户确认 spec（2026-06-29「好的，可以继续了」），HUMAN_REVIEW_CHECKPOINT 通过。spec 经 2 轮 codex 异源审查全部修复，自洽无 blocking。"
+}

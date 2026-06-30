@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run tests/m13-make-decision.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "278ebabd8e791d80bef5512fa7ed40cf29d5aa79",
+  "exit_code": 0,
+  "timestamp": "2026-06-30T01:47:56.639Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "3214a8833502891cd3fbac8e806c377f0eb891d5203f5d8c28cdddf798d57048",
+  "stdout_path": "specs/m13-make-decision-v1/evidence/fix-green.json.stdout",
+  "stderr_path": "specs/m13-make-decision-v1/evidence/fix-green.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}
