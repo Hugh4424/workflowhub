@@ -19,7 +19,7 @@ Confirm that the implementation satisfies every acceptance criterion in the spec
 
 ### 1. 前置读取
 
-Read `specs/{task-id}/stage-result-build-code.json`, extract `facts.tests.command`. If the command field is missing, surface an explicit error and stop. Do not proceed silently without a test command.
+Read `tasks/{task-id}/stage-result-build-code.json`, extract `facts.tests.command`. If the command field is missing, surface an explicit error and stop. Do not proceed silently without a test command.
 
 ### 2. metrics 开始
 
@@ -44,7 +44,7 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 ### 3. fresh 测试执行
 
-Call `node workflows/verify-code/capture.mjs` with the command extracted in step 1. Write the evidence to `specs/{task-id}/evidence/fresh-capture.json`. The capture script records: exit code, git SHA, Test Files line, content hash, timestamp, and command — all durable, externally-verifiable facts.
+Call `node workflows/verify-code/capture.mjs` with the command extracted in step 1. Write the evidence to `tasks/{task-id}/evidence/fresh-capture.json`. The capture script records: exit code, git SHA, Test Files line, content hash, timestamp, and command — all durable, externally-verifiable facts.
 
 ### 4. 鲜度校验
 
@@ -73,7 +73,7 @@ Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not
 
 ### 8. stage-result 落盘
 
-Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the stage-result to `specs/{task-id}/stage-result-verify-code.json` (FR-PATH-001). The `final-test-report.md` goes to `specs/{task-id}/test/` (FR-PATH-002).
+Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the stage-result to `tasks/{task-id}/stage-result-verify-code.json` (FR-PATH-001). The `final-test-report.md` goes to `tasks/{task-id}/test/` (FR-PATH-002).
 
 The stage-result record has this structure:
 

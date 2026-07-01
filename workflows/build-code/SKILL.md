@@ -37,9 +37,9 @@ Sequence per phase:
    node workflows/build-code/capture.mjs <testcmd> <outputPath>
    ```
 
-   where `<outputPath>` is `specs/{task-id}/evidence/phase-N-RED.json`. The command exits non-zero when tests fail (RED is valid); `capture.mjs` records stdout, exit code, content hash, and anomaly flags.
+   where `<outputPath>` is `tasks/{task-id}/evidence/phase-N-RED.json`. The command exits non-zero when tests fail (RED is valid); `capture.mjs` records stdout, exit code, content hash, and anomaly flags.
 3. **Implement** the minimum code needed to make the tests pass. Do not add production code unrelated to the failing tests.
-4. **Collect GREEN evidence** — run capture.mjs again with `<outputPath>` set to `specs/{task-id}/evidence/phase-N-GREEN.json`.
+4. **Collect GREEN evidence** — run capture.mjs again with `<outputPath>` set to `tasks/{task-id}/evidence/phase-N-GREEN.json`.
 5. Do not advance to the next phase until the current one has both RED and GREEN evidence files on disk.
 
 ### 3. 假绿检测
@@ -112,7 +112,7 @@ import { buildReviewFact } from "./facts-schema.mjs";
 // When review ran successfully:
 const reviewFact = buildReviewFact({ status: "executed", source, verdict, artifactPath });
 // source must be "third_party" or "same_source"; verdict must be "pass" | "revise_required" | "escalate_to_human"
-// artifactPath is the durable path to the review report, e.g. "specs/{task-id}/reviews/build-code-phase-N.md"
+// artifactPath is the durable path to the review report, e.g. "tasks/{task-id}/reviews/build-code-phase-N.md"
 
 // When review was skipped or could not run:
 // const reviewFact = buildReviewFact({ status: "not_executed" });
@@ -128,7 +128,7 @@ When all phases are complete, write the stage-result with a structured facts pac
 - `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...] }`. Must include `command` field (the test command string that was executed) for verify-code downstream consumption (M9 C1).
 - `facts.review` — **struct** produced by `buildReviewFact` (see §8 above).
 
-Write the stage-result to a durable task path (not a temp file) so downstream stages can read it. The exact path follows the project convention: `specs/{task-id}/stage-result-build-code.json`.
+Write the stage-result to a durable task path (not a temp file) so downstream stages can read it. The exact path follows the project convention: `tasks/{task-id}/stage-result-build-code.json`.
 
 Example shape:
 
@@ -140,7 +140,7 @@ Example shape:
   "facts": {
     "changed": ["core/text-utils.mjs", "tests/text-utils.test.mjs"],
     "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"], "command": "pnpm exec vitest run tests/text-utils.test.mjs" },
-    "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "specs/{task-id}/reviews/build-code-phase-1.md" }
+    "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "tasks/{task-id}/reviews/build-code-phase-1.md" }
   },
   "missing_items": [],
   "user_decision": false,

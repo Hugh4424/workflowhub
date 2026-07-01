@@ -17,8 +17,8 @@ describe("FR-TASKDIR-001 task_dir parser", () => {
   it("(a) returns task_dir value from explicit config (config/workflowhub.yaml)", () => {
     const configPath = resolve(repoRoot, "config", "workflowhub.yaml");
     const result = parseTaskDir(configPath);
-    // workflowhub.yaml declares: task_dir: tasks/
-    expect(result).toBe("tasks/");
+    // workflowhub.yaml declares: task_dir: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/
+    expect(result).toBe("/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/");
   });
 
   it("(b) falls back to ~/Knowledge/workflowhub/ when config file does not exist", () => {

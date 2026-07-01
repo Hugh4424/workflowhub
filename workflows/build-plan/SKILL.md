@@ -292,3 +292,18 @@ Also record a metrics entry via the collector. Call `recordSkeleton` at stage st
 ```
 
 These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`). Use `metrics/collector.mjs` — do not hand-write a raw jsonl line with only `skill/stage/event/ts`.
+
+## 人工放行摘要（Plain-language summary for human approval）
+
+build-plan 所有产物完成后，在 stage-result comment 或独立文件 `tasks/{task-id}/plan-summary.md` 中写一份给人看的摘要。
+
+**要求**：
+- 用大白话中文，高中生能看懂，不用工程术语
+- 控制在一页以内（400字以内）
+- 结构固定，三段：
+  1. **在解决什么问题**：用一两句话说清楚这个任务是要解决什么问题、为什么要做
+  2. **要做什么东西**（来自 spec）：列出 2-5 个核心要求，白话描述
+  3. **准备怎么做**（来自 plan）：列出实施步骤的大白话版本，几步、各步做什么
+- 写完后在 stage-result 的 comment 里贴出来，供人类审阅后决定是否放行继续执行
+
+这个摘要是人工放行的依据，必须包含，缺少则 stage 不完整。

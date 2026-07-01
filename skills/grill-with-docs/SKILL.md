@@ -11,6 +11,8 @@ Ask the questions one at a time, waiting for feedback on each question before co
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
+**Plain language mandatory**：面向非工程背景的人提问和汇报时用大白话，不堆专业术语；给选项时逐条说明每个选项的含义和选它会导致什么后果，不能只列名词让人自己猜。
+
 </what-to-do>
 
 <supporting-info>
