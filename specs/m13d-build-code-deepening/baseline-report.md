@@ -46,3 +46,19 @@
 
 - M10 基线：`specs/archive/m10-baseline-switch/baseline-report.md`（source_type: historical_agenthub_tasks, source_ref: 4 tasks）
 - M13d 实际值：build-code / verify-code 阶段产出后填充
+
+---
+
+## build-plan 阶段追加对照（2026-07-01）
+
+M13d 此时处于 build-plan 阶段，plan.md/tasks.md 已产出，代码仍未实施。5 项指标定义、来源、non-blocking 规则与上表一致，不重复推导。
+
+| 指标 | 本轮状态 | 说明 |
+|------|---------|------|
+| missed_step_rate | unknown | 无执行数据，待 build-code 运行后由 metrics/capture.mjs 采集 |
+| test_execution_rate | unknown | 同上 |
+| review_execution_rate | unknown | 同上 |
+| rework_rounds | unknown | 全流程未完成，无返工数据 |
+| rework_proxy_count | unknown | 全流程未完成，无代理返工数据 |
+
+阈值仍由人工设定，本表仅记录事实，不阻断 stage-result（F3/Q1）。build-plan 阶段本身不产生可采集的运行时指标，5 项与 build-spec 阶段状态一致（均 unknown），非退化。
