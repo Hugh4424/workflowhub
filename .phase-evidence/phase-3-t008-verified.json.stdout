@@ -1,4 +1,0 @@
-=== skills/simplicity-guard/SKILL.md exists ===
-EXISTS
-=== build-spec simplicity-guard reference ===
-221:- [ ] **F8 简单优先** — 判据：是否选更简单依赖更少的方案、不写掩盖问题的兜底。执行四阶梯判断时调用 `skills/simplicity-guard/SKILL.md`，产物写入 `minimal-path` 字段。

@@ -1,11 +1,17 @@
-import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { describe, it, expect, afterEach } from "vitest";
+import { existsSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname;
+const SMOKE_TASK_DIR = join(tmpdir(), "workflowhub-smoke-test");
 
 describe("metrics-writer.mjs smoke", () => {
+  afterEach(() => {
+    const stale = join(SMOKE_TASK_DIR, "task-metrics.jsonl");
+    if (existsSync(stale)) unlinkSync(stale);
+  });
+
   it("can import metrics-writer.mjs without errors", async () => {
     await import(join(REPO_ROOT, "workflows/verify-code/metrics-writer.mjs"));
   });
@@ -18,7 +24,8 @@ describe("metrics-writer.mjs smoke", () => {
   it("runMetricsWriter throws without executionId", async () => {
     const mod = await import(join(REPO_ROOT, "workflows/verify-code/metrics-writer.mjs"));
     const fn = mod.runMetricsWriter || mod.default;
-    await expect(fn({ taskDir: REPO_ROOT, taskId: "m10-smoke" }))
+    mkdirSync(SMOKE_TASK_DIR, { recursive: true });
+    await expect(fn({ taskDir: SMOKE_TASK_DIR, taskId: "m10-smoke" }))
       .rejects.toThrow("executionId");
   });
 
@@ -28,8 +35,9 @@ describe("metrics-writer.mjs smoke", () => {
     const fn = mod.runMetricsWriter || mod.default;
     
     if (typeof fn === "function") {
+      mkdirSync(SMOKE_TASK_DIR, { recursive: true });
       const result = await fn({
-        taskDir: REPO_ROOT,
+        taskDir: SMOKE_TASK_DIR,
         taskId: "m10-smoke",
         verdict: "pass",
         executionId: "smoke-test-exec-id-001",

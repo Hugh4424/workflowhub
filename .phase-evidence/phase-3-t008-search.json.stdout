@@ -1,8 +1,0 @@
-=== search simplicity-guard SKILL.md under project ===
-/Users/Hugh/Hugh/Project/workflowhub/skills/simplicity-guard/SKILL.md
-=== git ls-files simplicity-guard ===
-NOT_TRACKED
-=== build-spec SKILL.md simplicity-guard in main worktree ===
-221:- [ ] **F8 简单优先** — 判据：是否选更简单依赖更少的方案、不写掩盖问题的兜底。执行四阶梯判断时调用 `skills/simplicity-guard/SKILL.md`，产物写入 `minimal-path` 字段。
-=== build-spec SKILL.md simplicity-guard in m13c worktree ===
-NO_REFERENCE_M13C
