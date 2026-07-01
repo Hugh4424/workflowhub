@@ -105,4 +105,4 @@
 | mtime 防伪时序校验 | **高**（安全剧场风险） | **已移除**（用户决策，非降级） | 否（已决） |
 | 3rd-review 双子代理拆分 | 低 | 保留（用户已批准 S9） | 否 |
 
-**需人工决策的机制：1 项（L2 冒烟外部依赖 test-routing-advisor 来源/维护成本，见 spec.md 附录B Known Gap #5）。mtime 防伪已由用户拍板移除，不再待议。**
+**需人工决策的机制：0 项。test-routing-advisor 来源已在 agenthub 仓库定位（spec.md 附录B Known Gap #5 已关闭）。mtime 防伪已由用户拍板移除，不再待议。**

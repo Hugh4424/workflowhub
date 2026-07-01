@@ -54,7 +54,7 @@ spec_version: 1.0.0
 | 机制 | Q1 防御什么真实威胁 | Q2 是否已有覆盖 | Q3 是否可绕过成为剧场 | Q4 长期维护成本 |
 |---|---|---|---|---|
 | P0-P3 风险定级 | 高风险 phase 缺测试覆盖导致假绿 | 无（现有 TDD 无优先级区分）| 若跳过读 facts.tasks 可绕过，但行为被记录可追溯 | 低：只读字段、写结论，无新基础设施 |
-| L2 集成冒烟 | 单元绿但集成边界失效 | 无（现有只有 L1 TDD）| 可不触发，但结果记入 evidence 留痕 | 中：需维护 test-routing-advisor 三档逻辑（外部依赖，来源待人工补充） |
+| L2 集成冒烟 | 单元绿但集成边界失效 | 无（现有只有 L1 TDD）| 可不触发，但结果记入 evidence 留痕 | 中：需维护 test-routing-advisor 三档逻辑（agenthub 仓库跨仓依赖，来源已定位） |
 | 两阶段独立审查 | 单链审查视角盲区 | 已有单链 3rd-review（不拆分）| 两子代理共用同引擎不构成异源，已用户确认接受 | 中：多一个子代理生命周期 |
 | 原子提交 | phase 产物散落无法追溯 | 现有无提交约束 | orchestrating skill 控制提交时机，实现子代理被禁止 | 低：commit 动作集中在一处 |
 | worktree 预建 | 按需建导致任务间抢 repo | 现有 M13c 方案被用户否决 | 无绕过路径（状态文件为 source of truth）| 低：一次建、四阶段复用 |
@@ -391,7 +391,7 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
 
 3. **独立审查摘要路径**：`specs/m13d-build-code-deepening/evidence/3rd-review-verdict.md`。verdict=**patch is incorrect**（非降级，异源独立审查已完成）。根因：前两次超时是用裸 `codex exec` 跑通用 prompt；诊断后改用正确子命令 `codex exec review --uncommitted`，成功产出 2 条 P2 发现（遗留嵌套 worktree、reuse-registry 验收表与 FR 正文不一致），均已核实并修复。
 
-4. **未解风险**（Known Gaps，见附录 B）：(a)(b) 已关闭——M13c data-contracts 机制已核实生效、reuse-registry 三技能已核实自研无需来源URL；(c) 第二异源审查引擎暂不可用（用户已确认接受单引擎，非阻断）；(d) **已关闭**——3rd-review 本轮用正确子命令成功跑成，verdict=patch is incorrect，发现均已修复；(e) test-routing-advisor 外部依赖来源不明，需人工补充。
+4. **未解风险**（Known Gaps，见附录 B）：(a)(b) 已关闭——M13c data-contracts 机制已核实生效、reuse-registry 三技能已核实自研无需来源URL；(c) 第二异源审查引擎暂不可用（用户已确认接受单引擎，非阻断）；(d) **已关闭**——3rd-review 本轮用正确子命令成功跑成，verdict=patch is incorrect，发现均已修复；(e) **已关闭**——test-routing-advisor 来源已在 agenthub 仓库定位。
 
 5. **rework_proxy_count**：unknown（build-spec 阶段无执行数据，build-code / verify-code 运行后由 metrics/capture.mjs 采集）。M10 基线 rework_proxy_count 均值 25.25（weak_proxy，推导自 checkpoint_request 计数 D10）。
 
@@ -419,10 +419,10 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
    - 根因：前两次用裸 `codex exec "<prompt>"` 跑通用对话式 prompt，90s 超时。诊断（`codex exec review --help`/`codex doctor`）发现正确子命令应为 `codex exec review --uncommitted`（专用于审查 uncommitted 改动），改用后成功产出 verdict（patch is incorrect，2 条 P2 发现），详见 `evidence/3rd-review-verdict.md`
    - 状态：FR-REVIEW-002"禁止自审自判"要求的异源独立审查已真实执行，发现的 2 项问题已修复
 
-5. **test-routing-advisor 具体来源不明**
-   - 事实：已核实该技能不在本仓库 `skills/` 目录下（现有 skills/ 仅含 anysearch/decision-log/grill-with-docs/intake-decision-review/scope-triage/simplicity-guard/spec-* 等，无 test-routing-advisor），是本次唯一真正的外部依赖——与已确认自研的 review-trigger/verdict-handler/checkpoint-protocol 三技能不同类。仓库历史（`specs/archive/m11-build-spec-v1/spec.md` L523）曾将其与 testing-system-blueprint 并列标注"已属 M8/M9 范围"，但未落地为本仓库文件，来源仓库无法定位
-   - 影响：L2 集成冒烟（FR-SMOKE-001）依赖此外部技能，长期维护成本无法评估
-   - 待确认：需人工补充其来源/维护主体，或评估是否有替代方案（pending human confirm）
+5. ~~test-routing-advisor 具体来源不明~~ — **已关闭**
+   - 事实：已核实该技能不在本仓库 `skills/` 目录下，但已在 agenthub 仓库定位到源文件：`multica-agenthub/packages/core/agenthub/skills/test-routing-advisor/SKILL.md`。是同一技术体系（agenthub → workflowhub）内的跨仓库依赖，不是无主外部黑盒
+   - 影响：L2 集成冒烟（FR-SMOKE-001）依赖此技能，维护主体明确为 agenthub 仓库，跨仓库依赖需在 build-plan 阶段声明版本/路径锁定，非无主风险
+   - 状态：来源已定位，不再是待议项
 
 ---
 

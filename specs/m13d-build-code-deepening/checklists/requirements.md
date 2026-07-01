@@ -52,7 +52,7 @@ generated_at: 2026-07-01
 2. reuse-registry.md 技能来源 → Known Gap #2（已关闭：三技能均为本项目自研，无需来源 URL）
 3. 第二异源引擎不可用 → Known Gap #3（用户已确认，关闭状态）
 4. 3rd-review(codex) 两次超时未跑成 → Known Gap #4（待人工排查根因后补跑）
-5. test-routing-advisor 来源不明 → Known Gap #5（待人工补充）
+5. test-routing-advisor 来源已定位（agenthub 仓库）→ Known Gap #5（已关闭）
 
 ---
 
