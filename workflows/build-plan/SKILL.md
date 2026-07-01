@@ -295,7 +295,7 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 ## 人工放行摘要（Plain-language summary for human approval）
 
-build-plan 所有产物完成后，在 stage-result comment 或独立文件 `tasks/{task-id}/plan-summary.md` 中写一份给人看的摘要。
+build-plan 所有产物完成后，在 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md` 中写一份给人看的摘要。（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）
 
 **要求**：
 - 用大白话中文，高中生能看懂，不用工程术语

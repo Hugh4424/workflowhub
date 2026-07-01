@@ -61,13 +61,23 @@ Work with the user to surface the real problem, agree on the narrowest viable sc
 
 ## S0 背景扎根
 
+**task_dir parser (AC-16)**: 在读取或写入任何任务跟踪文件前，必须通过 `core/task-dir-parser.mjs` 获取基础路径，禁止硬编码 `tasks/{task-id}/`。
+
+```javascript
+// AC-16 consumable call — grep: parseTaskDir
+import { parseTaskDir } from "./core/task-dir-parser.mjs";
+const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+```
+
+本 skill 中所有 `tasks/{task-id}/` 路径均为速记写法，运行时必须使用 `path.join(taskDir, taskId, ...)` 构造实际路径。
+
 **目标**：加载当前任务上下文，建立调研基础。
 
 1. 读取以下背景材料（如存在）：
    - `CONTEXT.md`（项目术语与约定）
    - 当前 `task-id` 对应的任务描述与原始输入
    - 已有 decision-log、research 文件（如存在）
-   - `tasks/{task-id}/` 目录下已有产物
+   - `{taskDir}/{task-id}/` 目录下已有产物
 2. 汇总背景要点：问题域、已知约束、核心术语。
 3. 写 journal 事件：`event: "s0_context_loaded"`
 

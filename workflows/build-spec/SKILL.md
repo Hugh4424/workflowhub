@@ -31,6 +31,16 @@ Translate the decision log from `make-decision` into a full spec via an orchestr
 - **参数缺失时**：回退到 `tasks/{task-id}/` 默认路径并记录 warn（不依赖 cwd 猜测）
 - **严禁 cwd 猜测**：路径推导不得依赖当前工作目录
 
+**task_dir parser (AC-16)**: 在读取或写入任何任务跟踪文件前，必须通过 `core/task-dir-parser.mjs` 获取基础路径，禁止硬编码 `tasks/{task-id}/` 或 `specs/{task-id}/`。
+
+```javascript
+// AC-16 consumable call — grep: parseTaskDir
+import { parseTaskDir } from "./core/task-dir-parser.mjs";
+const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+```
+
+本 skill 中所有 `specs/{task-id}/` 路径均为速记写法，运行时必须使用 `path.join(taskDir, taskId, ...)` 构造实际路径。
+
 ---
 
 ### Spec 三层结构要求（FR-STRUCTURE-001/002）
