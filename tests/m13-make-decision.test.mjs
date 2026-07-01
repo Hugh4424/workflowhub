@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const SKILL_PATH = join(REPO_ROOT, "workflows", "make-decision", "SKILL.md");
-const REGISTRY_PATH = join(REPO_ROOT, "reuse-registry.md");
+const REGISTRY_PATH = join(REPO_ROOT, "skills", "reuse-registry.md");
 const YAML_CONFIG_PATH = join(REPO_ROOT, "config", "workflowhub.yaml");
 
 function readSkill() {

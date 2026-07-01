@@ -32,6 +32,10 @@ export async function runCapture(command, outputPath, { cwd, gitSha, redBaseline
   }
 
   const timestamp = new Date().toISOString();
+  const commit_sha = null;
+  const base_sha = null;
+  const head_sha = null;
+  const risk_level = null;
 
   // Auto-create output dir
   mkdirSync(dirname(outputPath), { recursive: true });
@@ -57,6 +61,10 @@ export async function runCapture(command, outputPath, { cwd, gitSha, redBaseline
     command,
     cwd: resolvedCwd,
     git_sha,
+    commit_sha,
+    base_sha,
+    head_sha,
+    risk_level,
     exit_code,
     timestamp,
     test_files_line,

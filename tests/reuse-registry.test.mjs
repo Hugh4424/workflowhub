@@ -5,6 +5,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const REGISTRY_PATH = join(REPO_ROOT, "skills", "reuse-registry.md");
 const ENUM = ["外部改造适配", "自研", "其他平台原生", "外部依赖"];
 const EXPECTED = [
   ["make-decision", "自研", "none"],
@@ -20,11 +21,11 @@ const EXPECTED = [
 ];
 
 describe("reuse-registry.md (FR-REG-001/002)", () => {
-  test("reuse-registry.md exists at repo root", () => {
-    assert.ok(existsSync(join(REPO_ROOT, "reuse-registry.md")), "Missing reuse-registry.md");
+  test("reuse-registry.md exists under skills", () => {
+    assert.ok(existsSync(REGISTRY_PATH), "Missing skills/reuse-registry.md");
   });
   test("registry has all 7 skills with valid 复用类别 enum + non-empty source for external", () => {
-    const content = readFileSync(join(REPO_ROOT, "reuse-registry.md"), "utf-8");
+    const content = readFileSync(REGISTRY_PATH, "utf-8");
     for (const [name, category] of EXPECTED) {
       const row = content.split("\n").find((l) => l.includes(`| ${name} `) || l.includes(`|${name}|`) || l.includes(`| ${name}|`));
       assert.ok(row, `Missing registry row for ${name}`);

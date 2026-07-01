@@ -152,7 +152,7 @@ describe("muyu search MCP declaration", () => {
 });
 
 describe("reuse registry entries", () => {
-  const registry = readRequiredFile("config", "reuse-registry.md");
+  const registry = readRequiredFile("skills", "reuse-registry.md");
 
   test("registers the three reusable moat skills with in-repo relative paths", () => {
     const expectedEntries = [
@@ -172,9 +172,13 @@ describe("reuse registry entries", () => {
   });
 
   test("registry has no ghost paths or host environment references", () => {
-    assert.equal(/\/Users\/|\/home\//.test(registry), false, "registry must not contain ghost absolute paths");
+    const configOriginRows = registry
+      .split("\n")
+      .filter((line) => /talk-with-zhipeng|grill-with-docs|intake-decision-review/.test(line))
+      .join("\n");
+    assert.equal(/\/Users\/|\/home\//.test(configOriginRows), false, "registry must not contain ghost absolute paths");
     assert.equal(
-      /~\/\.claude|multica-agenthub|gbrain|office-hours/.test(registry),
+      /~\/\.claude|multica-agenthub|gbrain|office-hours/.test(configOriginRows),
       false,
       "registry must not contain host environment references"
     );

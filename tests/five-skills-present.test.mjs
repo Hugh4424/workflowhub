@@ -335,7 +335,7 @@ describe("AC5 B2a: make-decision SKILL.md references scope-triage and decision-l
 //   自研          → source === "none"
 // Falsifiable: blanking or mis-categorising any single row makes exactly that test red.
 describe("AC5 B2b: reuse-registry.md row-format for all 7 skills (category enum + source rule)", () => {
-  const registryPath = join(REPO_ROOT, "reuse-registry.md");
+  const registryPath = join(REPO_ROOT, "skills", "reuse-registry.md");
   const VALID_CATEGORIES = ["外部改造适配", "自研", "其他平台原生"];
 
   // Private helper — each test() invocation passes a hard-coded literal.

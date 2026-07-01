@@ -6,12 +6,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const REGISTRY_PATH = join(REPO_ROOT, "skills", "reuse-registry.md");
 
 const VALID_CATEGORIES = ["外部改造适配", "自研", "外部依赖", "改造适配", "其他平台原生"];
 
 // Parse reuse-registry.md markdown table into [{skill, category, source}].
 function parseRegistry() {
-  const content = readFileSync(join(REPO_ROOT, "reuse-registry.md"), "utf8");
+  const content = readFileSync(REGISTRY_PATH, "utf8");
   const rows = [];
   for (const line of content.split("\n")) {
     const m = line.match(/^\|(.+?)\|(.+?)\|(.+?)\|$/);
