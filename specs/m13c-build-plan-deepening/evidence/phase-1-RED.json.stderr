@@ -1,0 +1,23 @@
+npm warn exec The following package was not found and will be installed: vitest@4.1.9
+vitest.config.mjs (1:369) [33m[UNRESOLVED_IMPORT] [0mCould not resolve 'vitest/config' in vitest.config.mjs
+ - Module not found, treating it as an external dependency in vitest.config.mjs at 369..384
+
+failed to load config from /Users/Hugh/Hugh/Project/workflowhub-m13c-build-code/vitest.config.mjs
+
+⎯⎯⎯⎯⎯⎯⎯ Startup Error ⎯⎯⎯⎯⎯⎯⎯⎯
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'vitest' imported from /Users/Hugh/Hugh/Project/workflowhub-m13c-build-code/vitest.config.mjs.timestamp-1782888551219-9bb166f642a72.mjs
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:859:18)
+    at defaultResolve (node:internal/modules/esm/resolve:991:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:719:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:736:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:765:52)
+    at #resolve (node:internal/modules/esm/loader:701:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:621:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+
+

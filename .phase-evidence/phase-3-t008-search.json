@@ -1,0 +1,15 @@
+{
+  "command": "echo '=== search simplicity-guard SKILL.md under project ==='; find /Users/Hugh/Hugh/Project -path '*/skills/simplicity-guard/SKILL.md' -type f 2>/dev/null; echo '=== git ls-files simplicity-guard ==='; cd /Users/Hugh/Hugh/Project/workflowhub && git ls-files | grep simplicity-guard || echo 'NOT_TRACKED'; echo '=== build-spec SKILL.md simplicity-guard in main worktree ==='; grep -n 'simplicity-guard' /Users/Hugh/Hugh/Project/workflowhub/workflows/build-spec/SKILL.md || echo 'NO_REFERENCE_MAIN'; echo '=== build-spec SKILL.md simplicity-guard in m13c worktree ==='; grep -n 'simplicity-guard' /Users/Hugh/Hugh/Project/workflowhub-m13c-build-code/workflows/build-spec/SKILL.md || echo 'NO_REFERENCE_M13C'",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
+  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
+  "exit_code": 0,
+  "timestamp": "2026-07-01T07:36:36.832Z",
+  "test_files_line": null,
+  "content_hash": "adb3637fc8032b8613db41967293f1ddb7d5de857b7048be4f6594a8a7d4934e",
+  "stdout_path": ".phase-evidence/phase-3-t008-search.json.stdout",
+  "stderr_path": ".phase-evidence/phase-3-t008-search.json.stderr",
+  "anomaly_flags": [
+    "green_test_files_empty"
+  ],
+  "warning": "anomalies: green_test_files_empty"
+}

@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run core/task-dir-parser.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
+  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
+  "exit_code": 0,
+  "timestamp": "2026-07-01T07:50:09.726Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "3bbeac6efcdf9016f84e1067f9415e1e424e324b47ca2991766e314c8e86a29e",
+  "stdout_path": ".phase-evidence/phase-4-t009-taskdir-green.json.stdout",
+  "stderr_path": ".phase-evidence/phase-4-t009-taskdir-green.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

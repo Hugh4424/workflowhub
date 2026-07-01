@@ -13,22 +13,56 @@ v1 upgrade: orchestrates three sub-skills (spec-plan, spec-tasks, spec-analyze) 
 
 ## What to do
 
-The v1 build-plan workflow executes the following steps sequentially. Generation steps (Steps 1-7, 9: spec-plan, spec-tasks, spec-analyze, constitution check, baseline comparison, F10 gate, file identification) must complete before moving to the next. Failure in any generation step before the stage-result write results in stage failure (non-zero exit, no success stage-result).
+The v1 build-plan workflow executes the following steps sequentially. Generation steps (Steps 0, 2-7, 9-10: spec-research, data-contracts, spec-plan, spec-tasks, spec-analyze, constitution check, baseline comparison, F10 gate, plan-reviewer, file identification) must complete before moving to the next. Failure in any generation step before the stage-result write results in stage failure (non-zero exit, no success stage-result), with the exception of spec-research, data-contracts, and plan-reviewer failures, which are recorded and escalated non-blocking.
 
 The human review checkpoint (Step 8) is distinct: in non-interactive environments, on explicit skip, or on timeout, `review.state="pending"` is a valid terminal state — stage-result is produced normally. "Pending" is NOT a stage failure.
+
+### Step 0: Call spec-research sub-skill
+
+Call the `spec-research` skill located at `skills/spec-research/SKILL.md`:
+- Pass the explicit `task-id` parameter and a concise `feature_desc` summarising the feature goal.
+- spec-research calls `core/task-dir-parser.mjs` to locate the task directory, then writes `specs/{task-id}/research.md`
+- If `skip_research: true` is provided with a `skip_reason`, record the reason and continue; do not treat skip as failure
+- If spec-research fails, **record the failure and escalate to human** (non-blocking) — do not hard-stop the pipeline. The build-plan stage continues, but the missing research.md must be acknowledged in stage-result `facts.research_ref` or `missing_items`
+- Reference the research output path in stage-result `facts.research_ref` when it exists
 
 ### Step 1: Read upstream inputs
 
 Read the spec from upstream `build-spec`:
 - `specs/{task-id}/spec.md` — the authoritative feature specification
 - If the spec does not exist, fail with clear error: "spec not found at specs/{task-id}/spec.md"
-- Read the decision log (`tasks/{task-id}/decision-log.md` if present) for any constraints the spec may not capture.
+- Read the decision log from the task directory for any constraints the spec may not capture.
+
+**task_dir parser (AC-16)**: Before reading any task-tracking file, call `core/task-dir-parser.mjs` to obtain the base path. Do not hard-code `tasks/{task-id}/`.
+
+```javascript
+// AC-16 consumable call — grep: parseTaskDir
+import { parseTaskDir } from "./core/task-dir-parser.mjs";
+const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+```
 
 The `task-id` must be explicitly provided. If missing, fail with "task-id required" and non-zero exit. No git branch inference fallback.
 
-### Step 2: Call spec-plan sub-skill
+### Step 1.5: Produce data-contracts
 
-Call the `spec-plan` skill located at `skills/spec-plan/SKILL.md`:
+Before decomposing the spec into implementation steps, capture the data contracts that cross the feature boundary:
+- Read `specs/{task-id}/spec.md` and extract every input/output schema, API surface, file format, or shared data structure mentioned
+- Write a concise `specs/{task-id}/data-contracts.md` containing: (a) contract name, (b) owner side, (c) consumer side, (d) required fields/types, (e) validation rules, (f) version or compatibility notes
+- If the spec contains no cross-boundary data contract, write `specs/{task-id}/data-contracts.md` with a single-line statement "No cross-boundary data contracts identified" — the file must still exist so downstream steps can rely on it
+- If extraction fails or the contract is ambiguous, **record the failure and escalate to human** (non-blocking); do not block spec-plan/spec-tasks from continuing
+- Reference the data-contracts path in stage-result `facts.data_contracts_ref`
+
+### Step 2: Simplicity-guard pre-check and call spec-plan sub-skill
+
+**Simplicity-guard pre-check**:
+- Call the `simplicity-guard` skill located at `skills/simplicity-guard/SKILL.md`
+- Pass the explicit `task-id` parameter and the path to `specs/{task-id}/spec.md`
+- simplicity-guard evaluates reuse opportunities against existing skills/workflows and outputs a `minimal-path` field describing the smallest valid implementation path
+- If simplicity-guard is unavailable, record `minimal-path: unavailable` and continue
+- Use the `minimal-path` conclusion as a gating input to spec-plan: spec-plan must not introduce new files or mechanisms that contradict the minimal path without documenting the override rationale
+
+**Call spec-plan sub-skill**:
+- Call the `spec-plan` skill located at `skills/spec-plan/SKILL.md`
 - Pass the explicit `task-id` parameter
 - spec-plan reads `specs/{task-id}/spec.md`, applies its built-in template (`skills/spec-plan/templates/plan-template.md`), and writes `specs/{task-id}/plan.md`
 - The generated plan.md must contain: (a) implementation steps (step-by-step what to do), (b) file list (files to create or modify), (c) acceptance mapping (each step maps to which FR/AC)
@@ -130,19 +164,33 @@ If the answer to Q1 is "none in particular" or the answer to Q4 is "high and ong
 
 This gate reflects constitution rule F10. Cautionary example: a predecessor system accumulated ~95,000 lines of gate code, spent ~50% of commits fixing the gates themselves, and recorded over a dozen deadlocks. Plan tasks for real work, not to feed automation for its own sake.
 
-**If F10 removes or materially alters plan/tasks entries**: re-execute Steps 2-4 (spec-plan, spec-tasks, spec-analyze) to keep cross-artifact consistency aligned with the final artifacts before proceeding to human review.
+**If F10 removes or materially alters plan/tasks entries**: re-execute Steps 2-4 (spec-plan, spec-tasks, spec-analyze) to keep cross-artifact consistency aligned with the final artifacts before proceeding to plan-reviewer and human review.
 
-### Step 8: 人审检查点 (Human review checkpoint)
+### Step 8: Plan-reviewer step
+
+Invoke the independent plan engineering reviewer via the `3rd-review` infrastructure:
+- Before calling, verify that the cross-repository path `/Users/Hugh/Hugh/Project/3rd-review/verifiers/vibecoding/` is accessible (e.g., directory exists and is readable)
+- If the path is not accessible, **record `plan-eng-review.md` as unavailable and escalate to human** (non-blocking); do not block the stage
+- If accessible, call the plan-reviewer with: `specs/{task-id}/plan.md`, `specs/{task-id}/tasks.md`, and `specs/{task-id}/cross-artifact-analysis.md`
+- The reviewer writes `specs/{task-id}/plan-eng-review.md` with an independent engineering verdict
+- If the reviewer call fails or times out, **record the failure and escalate to human** (non-blocking); stage-result still succeeds
+- Reference the plan-eng-review path (or `unavailable`) in stage-result `facts.plan_review_ref`
+
+### Step 9: 人审检查点 (Human review checkpoint)
 
 **停顿等待人工确认 — PAUSE HERE for human review confirmation.**
 
-This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. The following artifacts have been produced, F10-gated, and are ready for review:
+This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. The following artifacts have been produced, F10-gated, plan-reviewed, and are ready for review:
 
 - `specs/{task-id}/plan.md`
 - `specs/{task-id}/tasks.md`
 - `specs/{task-id}/cross-artifact-analysis.md`
+- `specs/{task-id}/research.md` (or a recorded skip reason)
+- `specs/{task-id}/data-contracts.md` (or unavailable record)
+- `specs/{task-id}/plan-eng-review.md` (or unavailable record)
 - Constitution compliance check results (21 clauses)
 - M10 baseline comparison table
+- Simplicity-guard `minimal-path` conclusion
 
 **How to handle the pause**:
 
@@ -172,7 +220,7 @@ This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. 
 
 `review.decision` MUST be non-empty in ALL three states (pending writes the fixed string above).
 
-### Step 9: Identify all files and modules
+### Step 10: Identify all files and modules
 
 Identify all files and modules that will be touched by the plan. For deletions or renames, scan for every reference in code, config, tests, and docs.
 
@@ -191,11 +239,15 @@ When the stage is complete, write a `stage-result` record with:
     "plan_ref": "<relative path to plan.md>",
     "tasks": "<number of tasks or brief list of phase titles>",
     "tasks_ref": "<relative path to tasks.md>",
-    "analysis_ref": "<relative path to cross-artifact-analysis.md>"
+    "analysis_ref": "<relative path to cross-artifact-analysis.md>",
+    "research_ref": "<relative path to research.md or unavailable>",
+    "data_contracts_ref": "<relative path to data-contracts.md or unavailable>",
+    "plan_review_ref": "<relative path to plan-eng-review.md or unavailable>",
+    "minimal_path": "<simplicity-guard minimal-path conclusion or unavailable>"
   },
   "missing_items": [],
   "user_decision": false,
-  "reason": "Plan and task list produced via spec-plan/spec-tasks, cross-artifact analyzed, constitution check completed, baseline comparison recorded, human review checkpoint cleared.",
+  "reason": "Plan and task list produced via spec-plan/spec-tasks, cross-artifact analyzed, constitution check completed, baseline comparison recorded, research/data-contracts/plan-reviewer recorded, simplicity-guard minimal-path captured, human review checkpoint cleared.",
   "review": {
     "state": "<pending|approved|rejected>",
     "reviewer": "",
@@ -212,6 +264,10 @@ When the stage is complete, write a `stage-result` record with:
 - `facts.tasks` — M6 field, kept
 - `facts.tasks_ref` — v1 NEW field (points to tasks.md)
 - `facts.analysis_ref` — v1 NEW field (points to cross-artifact-analysis.md)
+- `facts.research_ref` — v1 NEW field (points to research.md or unavailable)
+- `facts.data_contracts_ref` — v1 NEW field (points to data-contracts.md or unavailable)
+- `facts.plan_review_ref` — v1 NEW field (points to plan-eng-review.md or unavailable)
+- `facts.minimal_path` — v1 NEW field (simplicity-guard minimal-path conclusion or unavailable)
 - `review` — v1 NEW object (with state, reviewer, timestamp, decision, notes)
 
 Do NOT delete or rename any M6 field.

@@ -1,0 +1,89 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "major",
+      "file": "spec.md",
+      "line": 162,
+      "issue": "FR-PLANREVIEW-001 hard-codes reuse of `verifiers/vibecoding/plan-reviewer.md` and `plan-reviewer-contract.md`, but the later risk section says these files do not exist in the current workflowhub repo and the reference mode is unresolved. This makes the required implementation path non-executable as written.",
+      "recommendation": "Resolve the dependency now: either define the exact cross-repo invocation path, copy/symlink strategy, or change the requirement to first add/locate the 3rd-review plan-reviewer contract before build-plan can depend on it."
+    },
+    {
+      "severity": "major",
+      "file": "spec.md",
+      "line": 149,
+      "issue": "FR-DATACONTRACTS-002 says tasks.md must not run until data-contracts.md exists, then says missing data-contracts only records warn, pauses, escalates, and is a `non-blocking escalation`. `must before execute` plus `pause` conflicts with `non-blocking`.",
+      "recommendation": "Choose one behavior. Recommended: make it blocking for tasks.md generation: if data-contracts.md is missing or empty, stop before task decomposition and require human resolution. If it should be non-blocking, remove the `must` and `pause` language and define what tasks.md may use instead."
+    },
+    {
+      "severity": "major",
+      "file": "spec.md",
+      "line": 191,
+      "issue": "FR-TASKS-001 says placeholder findings block subsequent stages until human resolution, but AC-13 later says `blocking item` is only a task-entry marker and not a stage-progression gate. The same condition has two different control-flow meanings.",
+      "recommendation": "Align FR-TASKS-001 and AC-13. Recommended: keep the stronger no-placeholder rule as an actual blocking gate before downstream stages, because the requirement calls it an iron rule and says placeholders are forbidden."
+    },
+    {
+      "severity": "major",
+      "file": "spec.md",
+      "line": 209,
+      "issue": "FR-TASKDIR-001 requires all skills to use a task_dir parser before reading task tracking files, but the spec leaves the parser file path and module interface undefined and AC-16 only asks for grep-able code or documentation. That cannot prove every consumer has stopped hardcoding paths.",
+      "recommendation": "Define the parser module path, function signature, default path behavior, and the concrete consumers that must call it in this milestone. Change AC-16 to require those consumers to import/call the parser, not just mention `task_dir` in docs."
+    },
+    {
+      "severity": "minor",
+      "file": "spec.md",
+      "line": 260,
+      "issue": "AC-17 requires `npm test` to pass, but the spec does not establish that this repository uses npm or that the task_dir parser tests live in a JS test harness. This bakes in a possibly wrong toolchain.",
+      "recommendation": "Replace `npm test` with the repo's actual test command after inspection, or state the exact test harness required by the parser implementation."
+    },
+    {
+      "severity": "minor",
+      "file": "spec.md",
+      "line": 109,
+      "issue": "The scope says D10 big-plain-language updates are out of scope except one `grill-with-docs` change, but that exception is not represented in IN scope, FRs, ACs, or impact range. It is unclear whether this spec requires any D10-related file change.",
+      "recommendation": "Either remove the `只做了 grill-with-docs 一处` exception from this spec, or add a concrete IN-scope requirement and acceptance condition for that one change."
+    }
+  ],
+  "resolutionSummary": "Spec is close, but it still has executable-contract conflicts: plan-reviewer dependency is unresolved, several failure semantics contradict themselves, and task_dir coverage is not concrete enough to implement or verify reliably.",
+  "reviewSnapshot": [
+    {
+      "path": "spec.md",
+      "hash": null,
+      "lines": 376,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "spec.md",
+      "round": 2
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "anti-forgery": "lightweight (no-manifest)",
+  "reportPath": "reviews/report-round-2.md"
+}

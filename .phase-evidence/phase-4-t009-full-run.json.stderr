@@ -1,0 +1,156 @@
+[collectFacts warn] review_invoked not derivable for exec-9; defaulting to false.
+[boundary-confirm warn] boundary decision write failed for exec-bound-writefail
+[collectFacts warn] review_invoked not derivable for exec-cold; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-d; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-h; defaulting to false.
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+[collectFacts warn] review_invoked not derivable for exec-gap; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-facts-001; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-facts-002; defaulting to false.
+[collectFacts warn] fact write failed for exec-facts-003
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+[collectFacts warn] review_invoked not derivable for smoke-test-exec-id-001; defaulting to false.
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+fatal: path 'core/task-dir-parser.mjs' exists on disk, but not in 'HEAD'
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-001: verifySwappability — stub dispatched + core diff empty > resolves successfully with { passed: true }
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:66:27
+     64|   it("resolves successfully with { passed: true }", async () => {
+     65|     const result = await verifySwappability({ configPath, workflowId: …
+     66|     expect(result.passed).toBe(true);
+       |                           ^
+     67|   });
+     68| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports coreDiffEmpty = true (no core files were modified)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:76:34
+     74|   it("reports coreDiffEmpty = true (no core files were modified)", asy…
+     75|     const result = await verifySwappability({ configPath, workflowId: …
+     76|     expect(result.coreDiffEmpty).toBe(true);
+       |                                  ^
+     77|   });
+     78| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-002: verifyExtensibility — new dummy triggered by workflowId only > resolves with { passed: true }
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:155:27
+    153|   it("resolves with { passed: true }", async () => {
+    154|     const result = await verifyExtensibility({ configPath, workflowId:…
+    155|     expect(result.passed).toBe(true);
+       |                           ^
+    156|   });
+    157| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-002: verifyExtensibility — new dummy triggered by workflowId only > reports coreDiffEmpty = true (no core files were modified)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:165:34
+    163|   it("reports coreDiffEmpty = true (no core files were modified)", asy…
+    164|     const result = await verifyExtensibility({ configPath, workflowId:…
+    165|     expect(result.coreDiffEmpty).toBe(true);
+       |                                  ^
+    166|   });
+    167| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-003: independence — each check returns only its own result shape > verifySwappability returns a result with the swap component_id (FR-EXT-001 only)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:271:27
+    269|   it("verifySwappability returns a result with the swap component_id (…
+    270|     const result = await verifySwappability({ configPath: swapConfigPa…
+    271|     expect(result.passed).toBe(true);
+       |                           ^
+    272|     expect(result.componentId).toBe("stub-indep");
+    273|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-003: independence — each check returns only its own result shape > verifyExtensibility returns a result with the ext component_id (FR-EXT-002 only)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:277:27
+    275|   it("verifyExtensibility returns a result with the ext component_id (…
+    276|     const result = await verifyExtensibility({ configPath: extConfigPa…
+    277|     expect(result.passed).toBe(true);
+       |                           ^
+    278|     expect(result.componentId).toBe("dummy-indep");
+    279|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  core/__tests__/run-checks.test.mjs > FR-CI-001: aggregate mode (no args) > exits 0 on a clean repo
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ core/__tests__/run-checks.test.mjs:41:22
+     39|   test("exits 0 on a clean repo", () => {
+     40|     const r = run();
+     41|     expect(r.status).toBe(0);
+       |                      ^
+     42|   });
+     43| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+

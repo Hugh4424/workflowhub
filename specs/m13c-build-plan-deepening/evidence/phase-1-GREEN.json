@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run core/task-dir-parser.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
+  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
+  "exit_code": 0,
+  "timestamp": "2026-07-01T07:11:15.012Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "83edad9b092ae11e2ed74f5e33e34827d138b1776d2cab680e041cdca501ca5e",
+  "stdout_path": "specs/m13c-build-plan-deepening/evidence/phase-1-GREEN.json.stdout",
+  "stderr_path": "specs/m13c-build-plan-deepening/evidence/phase-1-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

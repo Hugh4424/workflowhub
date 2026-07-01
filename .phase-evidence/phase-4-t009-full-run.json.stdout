@@ -1,0 +1,78 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-m13c-build-code
+
+ ✓ tests/m12-spec-plan.test.mjs (17 tests) 4ms
+ ✓ tests/m12-spec-tasks.test.mjs (20 tests) 3ms
+ ✓ tests/m12-spec-analyze.test.mjs (33 tests) 5ms
+ ✓ tests/m12-build-plan-v1.test.mjs (35 tests) 5ms
+ ✓ tests/five-skills-present.test.mjs (59 tests) 7ms
+ ✓ tests/m13b-build-spec-deepening.test.mjs (61 tests) 7ms
+ ✓ tests/build-code-diff-only.test.mjs (23 tests) 4ms
+ ✓ tests/stage-result-contract.test.mjs (17 tests) 4ms
+ ✓ tests/facts-subschema.test.mjs (37 tests) 3ms
+ ✓ tests/m13-make-decision.test.mjs (163 tests) 25ms
+ ✓ tests/metric-scan.test.mjs (24 tests) 91ms
+ ✓ tests/knowledge-card.test.mjs (19 tests) 4ms
+ ✓ tests/baseline.test.mjs (19 tests) 4ms
+ ✓ tests/moat-skills-phase1.test.mjs (10 tests) 3ms
+ ✓ tests/boundary-confirm.test.mjs (10 tests) 12ms
+ ✓ tests/m12-templates.test.mjs (19 tests) 2ms
+ ✓ tests/spike-intake-design.test.mjs (7 tests) 10ms
+ ✓ core/__tests__/parse-framework-config.test.mjs (8 tests) 5ms
+ ✓ tests/stage-quality.test.mjs (7 tests) 109ms
+ ✓ tests/moat-skills.test.mjs (14 tests) 6ms
+ ✓ tests/execution-record.test.mjs (14 tests) 4ms
+ ✓ core/__tests__/resolve-path.test.mjs (12 tests) 3ms
+ ✓ tests/verify-code-facts.test.mjs (19 tests) 5ms
+ ✓ tests/m12-reuse-registry.test.mjs (15 tests) 2ms
+ ✓ tests/metrics-collector.test.mjs (25 tests) 338ms
+ ✓ tests/build-code-review.test.mjs (12 tests) 2ms
+ ✓ tests/moat-skills-phase2.test.mjs (5 tests) 2ms
+ ✓ core/__tests__/validate-contract.test.mjs (7 tests) 2ms
+ ✓ tests/m12-subskill-exclusion.test.mjs (2 tests) 6ms
+ ✓ core/__tests__/load-config.test.mjs (8 tests) 4ms
+ ✓ tests/fact-collector.test.mjs (3 tests) 184ms
+ ✓ core/__tests__/check-contract.test.mjs (13 tests) 405ms
+ ✓ core/__tests__/check-anti-host.test.mjs (17 tests) 407ms
+ ✓ tests/moat-skills-phase3.test.mjs (8 tests) 1ms
+ ✓ core/__tests__/kernel.test.mjs (9 tests) 256ms
+ ✓ tests/build-code-facts.test.mjs (10 tests) 2ms
+ ✓ tests/verify-code-freshness.test.mjs (9 tests) 5ms
+ ✓ tests/contract-freeze.test.mjs (5 tests) 2ms
+ ✓ tests/reuse-registry.test.mjs (3 tests) 1ms
+ ✓ tests/verify-code-capture.test.mjs (15 tests) 444ms
+ ✓ core/__tests__/protected-paths.test.mjs (7 tests) 2ms
+ ✓ core/task-dir-parser.test.mjs (2 tests) 3ms
+ ✓ tests/build-code-target.test.mjs (4 tests) 2ms
+ ✓ tests/smoke.test.mjs (1 test) 1ms
+ ✓ tests/metrics-smoke.test.mjs (4 tests) 67ms
+ ✓ tests/agenthub-baseline.test.mjs (9 tests) 360ms
+ ✓ tests/build-code-capture.test.mjs (23 tests) 1338ms
+ ❯ core/__tests__/check-extensibility.test.mjs (13 tests | 6 failed) 2007ms
+   × FR-EXT-001: verifySwappability — stub dispatched + core diff empty > resolves successfully with { passed: true } 334ms
+     → expected false to be true // Object.is equality
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports component_id matching the stub, not any original component 305ms
+   × FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports coreDiffEmpty = true (no core files were modified) 219ms
+     → expected false to be true // Object.is equality
+   × FR-EXT-002: verifyExtensibility — new dummy triggered by workflowId only > resolves with { passed: true } 138ms
+     → expected false to be true // Object.is equality
+   × FR-EXT-002: verifyExtensibility — new dummy triggered by workflowId only > reports coreDiffEmpty = true (no core files were modified) 127ms
+     → expected false to be true // Object.is equality
+   × FR-EXT-003: independence — each check returns only its own result shape > verifySwappability returns a result with the swap component_id (FR-EXT-001 only) 130ms
+     → expected false to be true // Object.is equality
+   × FR-EXT-003: independence — each check returns only its own result shape > verifyExtensibility returns a result with the ext component_id (FR-EXT-002 only) 119ms
+     → expected false to be true // Object.is equality
+ ❯ core/__tests__/run-checks.test.mjs (11 tests | 1 failed) 2516ms
+   × FR-CI-001: aggregate mode (no args) > exits 0 on a clean repo 606ms
+     → expected 1 to be +0 // Object.is equality
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-anti-host (checker was invoked) 396ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-extensibility (checker was invoked) 311ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-contract (checker was invoked) 345ms
+   ✓ FR-CI-001: non-zero propagation > exits non-zero when a checker signals failure 331ms
+   ✓ FR-CI-001: non-zero propagation > reports which checker failed 332ms
+
+ Test Files  2 failed | 47 passed (49)
+      Tests  7 failed | 880 passed (887)
+   Start at  15:50:15
+   Duration  3.13s (transform 478ms, setup 0ms, collect 1.30s, tests 8.68s, environment 4ms, prepare 1.74s)
+

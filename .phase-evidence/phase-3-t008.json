@@ -1,0 +1,15 @@
+{
+  "command": "echo '=== skills/simplicity-guard/SKILL.md exists ==='; test -f skills/simplicity-guard/SKILL.md && echo 'EXISTS' || echo 'MISSING'; echo '=== build-spec simplicity-guard reference ==='; grep -n 'simplicity-guard' workflows/build-spec/SKILL.md || echo 'NO_REFERENCE'",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
+  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
+  "exit_code": 0,
+  "timestamp": "2026-07-01T07:28:30.033Z",
+  "test_files_line": null,
+  "content_hash": "2a629414c0a98b58fb5308239254c70a4852e8065913ae8b38b4f7d3053b64f9",
+  "stdout_path": ".phase-evidence/phase-3-t008.json.stdout",
+  "stderr_path": ".phase-evidence/phase-3-t008.json.stderr",
+  "anomaly_flags": [
+    "green_test_files_empty"
+  ],
+  "warning": "anomalies: green_test_files_empty"
+}

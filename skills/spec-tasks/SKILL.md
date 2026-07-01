@@ -93,6 +93,53 @@ description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可�
     - 输出 task-id、tasks.md 产物路径、总任务数、各用户故事任务数、并行机会数、各故事独立测试标准、建议 MVP 范围（通常仅 User Story 1）。
     - 格式验证：确认所有任务遵循 checklist 格式（checkbox、TaskID、标签、文件路径）。
 
+### no-placeholder iron rule (FR-TASKS-001)
+
+After generating the task list, scan every task description and the generated `tasks.md` for placeholders:
+- **Forbidden tokens**: `TODO`, `TBD`, `placeholder`, `待定`, `暂缺`, and any literal `<...>` placeholder markers
+- If found:
+  - Mark the task with `blocking_item: true`
+  - Record a friction entry referencing the placeholder location
+  - Set `stage-result.human_intervention = true`
+  - **Do not block the spec-tasks step from completing tasks.md** — the file is still written
+  - **Do not allow that specific task to be decomposed or dispatched downstream** until the placeholder is resolved by a human
+- If no placeholders are found, proceed normally
+
+This rule protects downstream build-code phases from receiving undefined work. The spec-tasks stage itself continues so that the rest of the plan is captured; only the contaminated task is frozen.
+
+### STOP/Knowledge label convention (FR-TASKS-002 soft requirement)
+
+Tasks may carry a label indicating a mandatory validation point:
+- `STOP` — the task must pause at this point and wait for explicit validation before continuing
+- `Knowledge` — the task depends on a piece of external knowledge that must be verified or documented
+
+If a task logically requires a `STOP`/`Knowledge` marker but none is present, write a warning to the quality-contract. This is a soft requirement and does **not** block stage completion.
+
+### upstream_delta field
+
+When a task is derived from upstream research or a previous iteration, record the delta in the task metadata:
+
+```markdown
+- [ ] TXXX 任务描述  FR: FR-XXX-XXX  (upstream_delta: 来自 specs/{task-id}/research.md 的技术选型结论)
+```
+
+`upstream_delta` explains what changed compared to the previous upstream artifact and why. It is optional but recommended for tasks that consume `research.md` or `data-contracts.md` output.
+
+## task_dir 解析器接入（AC-16）
+
+读写任务跟踪文件前调用 `core/task-dir-parser.mjs` 取得路径，不得硬编码。
+
+```javascript
+// AC-16 consumable call — grep: parseTaskDir
+import { parseTaskDir } from "../../core/task-dir-parser.mjs";
+
+const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+```
+
+- `parseTaskDir()` has no third-party dependencies (FR-TASKDIR-001).
+- The returned value is a string path (configured value or `~/Knowledge/workflowhub/`).
+- Parse failures are fail-loud and must not be swallowed.
+
 ## 去耦约束
 
 本 skill 已从 speckit-tasks 解耦，硬性约束如下：
@@ -105,6 +152,29 @@ description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可�
 ## 产出
 
 - `specs/{task-id}/tasks.md`：依赖排序的任务列表（含 checklist 格式、FR 映射、阶段分组）
+
+## stage-result
+
+If spec-tasks produces its own stage-result record, include at least:
+
+```json
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "tasks_ref": "specs/{task-id}/tasks.md",
+    "upstream_delta": "<summary of changes inherited from upstream research or previous iteration>"
+  },
+  "missing_items": [],
+  "user_decision": false,
+  "human_intervention": false,
+  "reason": "tasks.md produced and validated"
+}
+```
+
+- `human_intervention` is set to `true` when the no-placeholder rule detects forbidden tokens. The step still completes and writes `tasks.md`, but the contaminated tasks are marked `blocking_item: true` and must not be decomposed or dispatched until resolved by a human.
+- `upstream_delta` is optional metadata explaining what changed compared to upstream artifacts.
 
 ## 下一步
 

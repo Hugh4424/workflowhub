@@ -1,0 +1,15 @@
+{
+  "command": "echo '=== upstream_delta column ==='; grep -n 'upstream_delta' reuse-registry.md || echo 'NO_UPSTREAM_DELTA'; echo '=== spec-research row ==='; grep -n 'spec-research' reuse-registry.md || echo 'NO_SPEC_RESEARCH_ROW'",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
+  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
+  "exit_code": 0,
+  "timestamp": "2026-07-01T07:27:46.016Z",
+  "test_files_line": null,
+  "content_hash": "8d74ce06ad88c391c90c6180d758961a0b2fa0943d720cadc838dead2f401ed2",
+  "stdout_path": ".phase-evidence/phase-3-red.json.stdout",
+  "stderr_path": ".phase-evidence/phase-3-red.json.stderr",
+  "anomaly_flags": [
+    "green_test_files_empty"
+  ],
+  "warning": "anomalies: green_test_files_empty"
+}

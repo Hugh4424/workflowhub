@@ -1,0 +1,52 @@
+=== workflows/build-plan/SKILL.md ===
+16:The v1 build-plan workflow executes the following steps sequentially. Generation steps (Steps 0, 2-7, 9-10: spec-research, data-contracts, spec-plan, spec-tasks, spec-analyze, constitution check, baseline comparison, F10 gate, plan-reviewer, file identification) must complete before moving to the next. Failure in any generation step before the stage-result write results in stage failure (non-zero exit, no success stage-result), with the exception of spec-research, data-contracts, and plan-reviewer failures, which are recorded and escalated non-blocking.
+24:- spec-research calls `core/task-dir-parser.mjs` to locate the task directory, then writes `specs/{task-id}/research.md`
+36:**task_dir parser (AC-16)**: Before reading any task-tracking file, call `core/task-dir-parser.mjs` to obtain the base path. Do not hard-code `tasks/{task-id}/`.
+39:// AC-16 consumable call — grep: parseTaskDir
+40:import { parseTaskDir } from "./core/task-dir-parser.mjs";
+41:const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+46:### Step 1.5: Produce data-contracts
+50:- Write a concise `specs/{task-id}/data-contracts.md` containing: (a) contract name, (b) owner side, (c) consumer side, (d) required fields/types, (e) validation rules, (f) version or compatibility notes
+51:- If the spec contains no cross-boundary data contract, write `specs/{task-id}/data-contracts.md` with a single-line statement "No cross-boundary data contracts identified" — the file must still exist so downstream steps can rely on it
+53:- Reference the data-contracts path in stage-result `facts.data_contracts_ref`
+58:- Call the `simplicity-guard` skill located at `skills/simplicity-guard/SKILL.md`
+60:- simplicity-guard evaluates reuse opportunities against existing skills/workflows and outputs a `minimal-path` field describing the smallest valid implementation path
+61:- If simplicity-guard is unavailable, record `minimal-path: unavailable` and continue
+62:- Use the `minimal-path` conclusion as a gating input to spec-plan: spec-plan must not introduce new files or mechanisms that contradict the minimal path without documenting the override rationale
+167:**If F10 removes or materially alters plan/tasks entries**: re-execute Steps 2-4 (spec-plan, spec-tasks, spec-analyze) to keep cross-artifact consistency aligned with the final artifacts before proceeding to plan-reviewer and human review.
+174:- If accessible, call the plan-reviewer with: `specs/{task-id}/plan.md`, `specs/{task-id}/tasks.md`, and `specs/{task-id}/cross-artifact-analysis.md`
+189:- `specs/{task-id}/data-contracts.md` (or unavailable record)
+193:- Simplicity-guard `minimal-path` conclusion
+244:    "data_contracts_ref": "<relative path to data-contracts.md or unavailable>",
+246:    "minimal_path": "<simplicity-guard minimal-path conclusion or unavailable>"
+250:  "reason": "Plan and task list produced via spec-plan/spec-tasks, cross-artifact analyzed, constitution check completed, baseline comparison recorded, research/data-contracts/plan-reviewer recorded, simplicity-guard minimal-path captured, human review checkpoint cleared.",
+268:- `facts.data_contracts_ref` — v1 NEW field (points to data-contracts.md or unavailable)
+270:- `facts.minimal_path` — v1 NEW field (simplicity-guard minimal-path conclusion or unavailable)
+=== skills/spec-analyze/SKILL.md ===
+75:For every ambiguity finding, produce an entry in `stage-result.facts.ambiguity_items[]`:
+90:- `ambiguity_items[]` is appended to stage-result `facts` alongside `analysis_ref`.
+186:### 10. facts.analysis_ref 与 ambiguity_items
+194:    "ambiguity_items": [
+205:- `ambiguity_items` lists every ambiguity finding with `description` and optional `escalation_path` (`human_confirm`, `next_iteration`, or `acceptable_ambiguity`).
+228:## task_dir 解析器接入（AC-16）
+230:读写任务跟踪文件前调用 `core/task-dir-parser.mjs` 取得路径，不得硬编码。
+233:// AC-16 consumable call — grep: parseTaskDir
+234:import { parseTaskDir } from "../../core/task-dir-parser.mjs";
+236:const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+239:- `parseTaskDir()` has no third-party dependencies (FR-TASKDIR-001).
+=== skills/spec-tasks/SKILL.md ===
+96:### no-placeholder iron rule (FR-TASKS-001)
+103:  - Set `stage-result.human_intervention = true`
+110:### STOP/Knowledge label convention (FR-TASKS-002 soft requirement)
+118:### upstream_delta field
+123:- [ ] TXXX 任务描述  FR: FR-XXX-XXX  (upstream_delta: 来自 specs/{task-id}/research.md 的技术选型结论)
+126:`upstream_delta` explains what changed compared to the previous upstream artifact and why. It is optional but recommended for tasks that consume `research.md` or `data-contracts.md` output.
+128:## task_dir 解析器接入（AC-16）
+130:读写任务跟踪文件前调用 `core/task-dir-parser.mjs` 取得路径，不得硬编码。
+133:// AC-16 consumable call — grep: parseTaskDir
+134:import { parseTaskDir } from "../../core/task-dir-parser.mjs";
+136:const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+139:- `parseTaskDir()` has no third-party dependencies (FR-TASKDIR-001).
+167:    "upstream_delta": "<summary of changes inherited from upstream research or previous iteration>"
+176:- `human_intervention` is set to `true` when the no-placeholder rule detects forbidden tokens. The step still completes and writes `tasks.md`, but the contaminated tasks are marked `blocking_item: true` and must not be decomposed or dispatched until resolved by a human.
+177:- `upstream_delta` is optional metadata explaining what changed compared to upstream artifacts.

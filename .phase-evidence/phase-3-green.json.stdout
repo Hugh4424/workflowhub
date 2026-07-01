@@ -1,0 +1,4 @@
+=== upstream_delta column ===
+3:| skill 名 | 复用类别 | 来源路径 | upstream_delta |
+=== spec-research row ===
+23:| spec-research | 自研 | none | Phase 0 research skill 新建（FR-RESEARCH-001） |

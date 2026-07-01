@@ -1,0 +1,15 @@
+{
+  "command": "echo '=== workflows/build-plan/SKILL.md ==='; grep -n -E 'task_dir 解析器|core/task-dir-parser\\.mjs|parseTaskDir|data-contracts|plan-reviewer|simplicity-guard|minimal-path' workflows/build-plan/SKILL.md || echo 'NO_MATCH'; echo '=== skills/spec-analyze/SKILL.md ==='; grep -n -E 'task_dir 解析器|core/task-dir-parser\\.mjs|parseTaskDir|ambiguity_items' skills/spec-analyze/SKILL.md || echo 'NO_MATCH'; echo '=== skills/spec-tasks/SKILL.md ==='; grep -n -E 'task_dir 解析器|core/task-dir-parser\\.mjs|parseTaskDir|no-placeholder|upstream_delta|STOP/Knowledge|stage-result.*human_intervention' skills/spec-tasks/SKILL.md || echo 'NO_MATCH'",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
+  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
+  "exit_code": 0,
+  "timestamp": "2026-07-01T07:13:57.400Z",
+  "test_files_line": null,
+  "content_hash": "502f279ec880a8613e5bc929de0f6b8e18f0e936f5498ec1ebbe927f221cd055",
+  "stdout_path": ".phase-evidence/phase-2-red.json.stdout",
+  "stderr_path": ".phase-evidence/phase-2-red.json.stderr",
+  "anomaly_flags": [
+    "green_test_files_empty"
+  ],
+  "warning": "anomalies: green_test_files_empty"
+}

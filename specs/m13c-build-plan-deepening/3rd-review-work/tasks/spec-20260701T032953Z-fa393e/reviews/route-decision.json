@@ -1,0 +1,26 @@
+{
+  "env": "standalone",
+  "contentType": "design-doc",
+  "scope": "small",
+  "selected": "small",
+  "rejected": [
+    {
+      "option": "trivial",
+      "reason": "content has changes / risk beyond trivial"
+    },
+    {
+      "option": "medium",
+      "reason": "scope resolved to 'small' for contentType=design-doc (diffLines=121); 'medium' not selected"
+    },
+    {
+      "option": "large",
+      "reason": "scope resolved to 'small' for contentType=design-doc (diffLines=121); 'large' not selected"
+    }
+  ],
+  "reason": "env=standalone (detection layer, does not narrow scope); contentType=design-doc; scope=small (diff thresholds + risk-keyword escalation per route-rules.json v1.0)",
+  "rulesVersion": "1.0",
+  "providers": [],
+  "level": "same_source_subagent",
+  "basis": "contentType=design-doc, scope=small → R6 same-source (small/pure-doc/docs-only)",
+  "cleanContextRequired": true
+}
