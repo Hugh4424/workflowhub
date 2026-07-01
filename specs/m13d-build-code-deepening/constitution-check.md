@@ -34,19 +34,19 @@
 
 ### F7 人工确认不可逆操作
 - **结论**: pass
-- **依据**: AC-REUSE-003 明确"不可逆操作，在 build-code 实施阶段执行"；FR-ANTIFORGERY-001 时序违反时 escalate_to_human 不自动继续；FR-REVIEW-002 C 类升级同样 escalate_to_human。
+- **依据**: AC-REUSE-003 明确"不可逆操作，在 build-code 实施阶段执行"；FR-REVIEW-002 C 类升级 escalate_to_human，不自动继续。
 
 ### F8 简单优先
-- **结论**: warn
-- **依据**: mtime 防伪校验（FR-ANTIFORGERY-001）和 3rd-review 双子代理拆分（FR-REVIEW-001）是新增机制，增加了系统复杂度。F10 门需人工确认这两项机制是否真实必要（见 f10-findings.md）。warn 不阻断，留待人工决策。
+- **结论**: pass（2026-07-01 复检后由 warn 转 pass）
+- **依据**: 原 warn 依据的两个新增机制中，mtime 防伪校验（FR-ANTIFORGERY-001）已按用户决策整条移除（安全剧场，touch 可绕过）；剩余的 3rd-review 双子代理拆分（FR-REVIEW-001）经 f10-findings.md 四问评估为"低风险，用户已于 S9 批准"，不构成不必要的复杂度。两项触发点均已消解，转 pass。
 
 ### F9 可证伪性
 - **结论**: pass
 - **依据**: 所有 AC 均有明确失败判据（"任一字段缺失"、"值为其他字符串"、"两个文件内容维度重叠"等），检查在"实际为假"时会真报失败。
 
 ### F10 自动化按真实收益添加
-- **结论**: warn
-- **依据**: mtime 防伪校验和 3rd-review 双子代理是本次新增自动化机制，详见 f10-findings.md。其中 mtime 防伪可被绕过（文件系统层面 touch 即可），双子代理拆分增加维护成本。warn 不阻断，findings 已记录供人工决策。
+- **结论**: pass（2026-07-01 复检后由 warn 转 pass）
+- **依据**: f10-findings.md 对每个新增机制逐条走四问。mtime 防伪已被判定为高安全剧场风险并按用户决策移除；3rd-review 双子代理拆分四问结论为"低风险，保留，用户已批准"；P0-P3 风险定级、L2 冒烟四问结论均为低/中风险且有真实防御对象。唯一遗留待人工项是 test-routing-advisor 外部依赖的维护成本评估（见 Known Gap #5），非"是否该建"层面的过度工程问题，故本条转 pass。
 
 ---
 
@@ -57,16 +57,16 @@
 - **依据**: 同 F3，所有质量检查结果均记录不阻断；spec 无任何"必须通过方可继续"的自动门。
 
 ### Q2 独立审查优先
-- **结论**: pass（但 3rd-review 本轮降级为 unknown）
-- **依据**: spec 设计上要求两个独立子代理执行审查，架构符合独立审查原则。本轮 3rd-review 因 codex 超时未完成（降级 unknown），非 spec 设计问题，属执行层降级。
+- **结论**: pass（2026-07-01 复检：3rd-review 本轮已异源跑成，非降级）
+- **依据**: spec 设计上要求两个独立子代理执行审查，架构符合独立审查原则。本轮 3rd-review 用正确子命令 `codex exec review --uncommitted` 独立执行完成，verdict=patch is incorrect（2 条 P2 发现，均已修复），详见 evidence/3rd-review-verdict.md。
 
 ### Q3 禁止自审自判
 - **结论**: pass
-- **依据**: spec 设计中 3rd-review 为外部独立上下文审查子代理，不使用产出方视角。build-spec 阶段本 agent 未对 3rd-review 伪造任何结论（verdict=unknown）。
+- **依据**: spec 设计中 3rd-review 为外部独立上下文审查子代理，不使用产出方视角。本轮已实际跑通异源审查（codex 独立 session），verdict 由 codex 产出而非本 agent 自评；本 agent 仅对其发现项做了核实与落地修复，未干预或伪造裁决内容。
 
 ### Q4 质量裁决独立来源
-- **结论**: pass（架构层面）
-- **依据**: FR-REVIEW-001 明确两个子代理"独立上下文"，产物路径独立，维度正交。执行层本轮降级，架构设计符合原则。
+- **结论**: pass
+- **依据**: FR-REVIEW-001 明确两个子代理"独立上下文"，产物路径独立，维度正交。本轮执行层已用 codex 独立会话产出真实 verdict，架构设计与执行均符合原则。
 
 ---
 
@@ -74,15 +74,15 @@
 
 ### S1 能用外部就不造轮子
 - **结论**: pass
-- **依据**: spec §§复用策略明确 anti-forgery-evidence / review-trigger / verdict-handler / checkpoint-protocol 四个外部来源技能"按需改造后复用"，不新建基础设施文件。
+- **依据**: spec §复用策略明确 review-trigger / verdict-handler / checkpoint-protocol 三个本项目自研技能"按需改造后复用"，不新建基础设施文件（anti-forgery-evidence 随 FR-ANTIFORGERY-001 一并移除，不再纳入复用范围）。
 
 ### S2 外部技能可针对项目改造合宪
 - **结论**: pass
-- **依据**: reuse-registry.md 设计为登记改造记录的汇总文件，外部技能按需改造后以"引用并改造"方式记录来源路径。
+- **依据**: reuse-registry.md 设计为登记改造记录的汇总文件，自研技能按需改造后以"引用并改造"方式记录来源。
 
 ### S3 迭代时保持最新并就地检查
 - **结论**: pass
-- **依据**: FR-REUSE-001 要求 reuse-registry.md 含来源路径字段（来源 URL 或本地绝对路径，待补 URL 明确标注"待补"），AC-REUSE-002 要求每条目含来源路径，可追溯来源。
+- **依据**: FR-REUSE-001 要求 reuse-registry.md 含来源字段（三个技能均标注"本项目自研"，无需外部 URL），AC-REUSE-002 要求每条目含来源字段，可追溯来源。
 
 ### S4 自定义技能必须有指标系统
 - **结论**: pass
@@ -94,7 +94,7 @@
 
 ### S6 自定义技能参考市面方案不闭门造车
 - **结论**: pass
-- **依据**: spec §复用策略明确参考并复用外部来源技能（anti-forgery-evidence 等），reuse-registry.md 的 source_path 字段要求记录外部来源，不封闭设计。
+- **依据**: spec §复用策略明确复用本项目已有自研技能（review-trigger/verdict-handler/checkpoint-protocol）而非另起炉灶，reuse-registry.md 统一登记不封闭设计。
 
 ### S7 一阶段一技能一工作流一文件夹
 - **结论**: pass
@@ -102,7 +102,7 @@
 
 ### S8 自定义技能可独立调用可搬运
 - **结论**: pass
-- **依据**: reuse-registry.md 登记的四个外部技能来源路径字段要求填写，确保可追溯可搬运。FR-REUSE-001 AC-REUSE-002 要求来源路径字段不可缺失。
+- **依据**: reuse-registry.md 登记的三个自研技能来源字段要求填写，确保可追溯可搬运。FR-REUSE-001 AC-REUSE-002 要求来源字段不可缺失。
 
 ---
 
@@ -117,11 +117,11 @@
 | F5 变更可追溯 | pass | |
 | F6 记录事实不裁决 | pass | |
 | F7 人工确认不可逆 | pass | |
-| F8 简单优先 | warn | mtime防伪+双子代理增加复杂度，F10已记录 |
+| F8 简单优先 | pass | mtime防伪已移除，双子代理低风险已批准（原warn转pass） |
 | F9 可证伪性 | pass | |
-| F10 自动化按真实收益 | warn | 见f10-findings.md，待人工决策 |
+| F10 自动化按真实收益 | pass | mtime防伪已移除，其余机制四问评估通过（原warn转pass） |
 | Q1 推进不阻断 | pass | |
-| Q2 独立审查优先 | pass | 本轮3rd-review降级unknown，架构合规 |
+| Q2 独立审查优先 | pass | 本轮3rd-review已异源跑成（codex），非降级 |
 | Q3 禁止自审自判 | pass | |
 | Q4 质量裁决独立来源 | pass | |
 | S1 不造轮子 | pass | |
@@ -133,4 +133,6 @@
 | S7 一阶段一技能 | pass | |
 | S8 可独立调用搬运 | pass | |
 
-**fail 项: 0 | warn 项: 2（F8、F10，均非阻断，待人工决策）| pass 项: 19**
+**fail 项: 0 | warn 项: 0（原 F8/F10 两项已随 mtime 防伪移除复检转 pass）| pass 项: 21**
+
+> 复检时间：2026-07-01（用户反馈后）。复检前状态：0 fail / 2 warn(F8,F10) / 19 pass。
