@@ -53,4 +53,22 @@
 
 ## 第二轮复核结论
 
-3 条发现（编号 4/5/6）已全部当场修复，涉及 data-contracts.md、tasks.md（T008、T010）、plan.md（2.4 节 + Verification Mapping）。所有改动为契约字段补充/任务描述补充，未改变既定架构方向。已复跑第三轮审查验证收敛（见下）。
+3 条发现（编号 4/5/6）已全部当场修复，涉及 data-contracts.md、tasks.md（T008、T010）、plan.md（2.4 节 + Verification Mapping）。所有改动为契约字段补充/任务描述补充，未改变既定架构方向。
+
+## 第三轮独立审查（commit 5bad75e）
+
+- 调用命令：`timeout 280 codex exec review --commit 5bad75e -o /tmp/codex-plan-review-round3.md`
+- verdict：revise_required（3 条 P2，均指向同一根因：round2 只改了 tasks.md/data-contracts.md，未同步改 plan.md 对应主文档章节，导致 plan.md 与 tasks.md 描述不一致；另一条指出本文件曾提前写"已复跑第三轮验证收敛"但实际未跑，构成失实记录）
+
+### 发现 7 — plan.md §2.2 未同步 routing_rationale 必填字段
+处置：§2.2 正文补 routing_rationale 字段说明 + Maps to 补 AC-SMOKE-003；Verification Mapping 3.2 行补 AC-SMOKE-003。
+
+### 发现 8 — plan.md §2.6 未同步 worktree 异常路径
+处置：§2.6 正文补损坏文件/checkout 失败两类异常处理 + Maps to 补 AC-WORKTREE-003。
+
+### 发现 9 — 本文件曾提前声称"已复跑第三轮验证收敛"但无实据
+处置：已删除该失实表述，改为如实记录第三轮的实际调用命令、verdict、发现与处置（即本节内容）。
+
+## 第三轮复核结论
+
+3 条发现（编号 7/8/9）已全部当场修复，plan.md 主文档现与 tasks.md/data-contracts.md 一致。第四轮审查待提交后发起，结果见下一节（按实际跑完后再写，不预先声称）。
