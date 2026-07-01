@@ -71,4 +71,19 @@
 
 ## 第三轮复核结论
 
-3 条发现（编号 7/8/9）已全部当场修复，plan.md 主文档现与 tasks.md/data-contracts.md 一致。第四轮审查待提交后发起，结果见下一节（按实际跑完后再写，不预先声称）。
+3 条发现（编号 7/8/9）已全部当场修复，plan.md 主文档现与 tasks.md/data-contracts.md 一致。
+
+## 第四轮独立审查（commit 5451c7e）
+
+- 调用命令：`timeout 280 codex exec review --commit 5451c7e -o /tmp/codex-plan-review-round4.md`
+- verdict：revise_required（2 条：1 P2 + 1 P3）
+
+### 发现 10 — Verification Mapping 2.6 行未列 AC-WORKTREE-003
+处置：表格行补 "AC-WORKTREE-003（checkout 失败不写文件）"。
+
+### 发现 11 — §2.2 措辞误导，暗示 T004 定义了 routing_rationale 字段名
+处置：改措辞，明确字段名由 data-contracts.md/T010 定义，T004 只要求"理由可追溯"不点名字段，不归因给 T004。
+
+## 第四轮复核结论
+
+2 条发现（编号 10/11）已全部当场修复。第五轮审查待提交后发起，结果见下一节（按实际跑完后再写，不预先声称）。
