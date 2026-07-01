@@ -21,12 +21,3 @@ unknown
 ## 建议
 
 人工在后续流程中通过独立上下文（另开 codex/claude session）对 spec.md 执行异源审查，将结果写入本文件替换 unknown verdict。
-
----
-
-## 第二次尝试（2026-07-01，build-code 6项改动实施后）
-
-- 审查范围：SKILL.md §11-14（risk_level/smoke/antiforgery/review+commit）+ capture.mjs 4新字段 + skills/reuse-registry.md
-- 工具：codex exec review，timeout=90s
-- 降级原因：同首次——codex exec 在非交互模式 90s 内未完成（exit 124/143），无法产出独立 verdict
-- verdict：unknown（non-blocking，按 SKILL.md §14 规定记录并继续）
