@@ -1,0 +1,34 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "spec_ref": "specs/m13a-moat-skills/spec.md",
+    "spec_version": "1.1.0",
+    "increment": "ZHI-30 re-entry: appended 2 moat-internalization capabilities as 4 FRs (2 domains x existence+reference) on top of the R6-approved 28 FR baseline. New total: 32 FR / 32 AC.",
+    "requirements": "32 FR across 11 domains (MOAT/TALK/GRILL/REVIEW/MAKEDEC/TEST/TRACKING/COMM/REGISTRY/MCP/SEARCH), 32 AC (AC-01~32); spec-ladder B档 unchanged",
+    "new_frs": "FR-MCP-001 (repo .mcp.json declares muyu-search-mcp server name+command/args, no plaintext secrets) ; FR-MCP-002 (make-decision S3 path-A muyu reference satisfiable in-repo, no host-only sourcing) ; FR-SEARCH-001 (skills/anysearch/ moved in, frontmatter valid, no abs paths, .env.example placeholder only / real .env gitignored) ; FR-SEARCH-002 (make-decision S3 path-B anysearch reference switched to skills/anysearch/ in-repo)",
+    "new_acs": "AC-29 (.mcp.json muyu entry + no plaintext secret), AC-30 (S3 muyu in-repo grep), AC-31 (skills/anysearch/ exists + frontmatter + no abs path + secret hygiene), AC-32 (S3 anysearch in-repo grep)",
+    "ladder_grade": "B",
+    "f10_anti_over_engineering": "PASS — real threat named: cross-machine clone silently skips make-decision S3 dual-path research because muyu-search-mcp lives only in user-level Claude config and anysearch lives only in ~/.claude/skills/. Internalizing to repo (.mcp.json + skills/anysearch/) defends a concrete observed failure mode, not a hypothetical. No existing in-repo mechanism covers it. Not security-theatre (functional dependency). Maintenance cost low (static config + one skill dir).",
+    "constitution_check": "specs/m13a-moat-skills/constitution-check.md (21/21 [x] from prior R6; increment does not introduce blocking gates, record+surface only)",
+    "baseline_report": "specs/m13a-moat-skills/baseline-report.md (5 metrics all unknown/gap, unchanged)",
+    "quality_contract_updated": "FR count 28->32, AC count 28->32, FR<->AC mapping rows added for MCP/SEARCH domains, impact-range table adds .mcp.json (new) + skills/anysearch/ (new)",
+    "make_decision_s3_anchors": "workflows/make-decision/SKILL.md S2 Q1 line 138 (mentions both servers), S3 path-A muyu lines 152-166, S3 path-B anysearch line 168 — switch points for FR-MCP-002 / FR-SEARCH-002 (build-code work)",
+    "heterologous_review_increment": "NOT YET RUN for the 4 new FRs. Prior 28-FR baseline passed codex R6 PASS. Increment is self-checked only (FR/AC numbering continuous, FR<->AC mapping complete, counts consistent, F10 recorded). Recommend异源 3rd-review of the 4 new FRs at human discretion before re-entering build-plan.",
+    "decision_log_path": "tasks/m13a-moat-skills/decision-log.md"
+  },
+  "review": {
+    "state": "pending",
+    "reviewer": "",
+    "approval": "",
+    "timestamp": ""
+  },
+  "missing_items": [
+    "Human review checkpoint for the 4 new FRs (FR-MCP-001/002, FR-SEARCH-001/002) — Agent Identity forbids simulating confirmation; awaiting 志鹏",
+    "Optional: heterologous codex 3rd-review of the increment before build-plan re-entry"
+  ],
+  "user_decision": false,
+  "needs_human": true,
+  "reason": "build-spec increment authored per ZHI-30: 2 moat-internalization capabilities added as 4 FRs (32 FR/32 AC, spec_version 1.1.0). F10 passes (real cross-machine S3-skip threat). Self-check consistent. HUMAN_REVIEW_CHECKPOINT reached but NOT confirmed — Agent Identity forbids direct user prompts and simulated confirmation, so stage stops here with needs_human=true. Issue stays open. After 志鹏 confirms (and optional异源 review), re-enter build-plan (ZHI-29, currently in_review). next_stage=build-plan."
+}

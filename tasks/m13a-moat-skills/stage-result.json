@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "decision": "M13a 内置 3 个护城河 skill（搬 talk-with-zhipeng、搬 grill-with-docs 原版、单次拼装的 intake-decision-review 三角度审查），同批切 make-decision S5/S7/talk 引用到 in-repo 路径，测试断言关键契约，加 TASK_TRACKING_ROOT env，talk/S9 改大白话；make-decision 583 行拆分重构另起 milestone。",
+    "scope": "in: 3 个护城河 skill + make-decision 引用切换 + 测试契约 + env + 大白话改写。out: make-decision 主壳拆分重构、debate 转 in-repo。",
+    "decision_log_path": "tasks/m13a-moat-skills/decision-log.md"
+  },
+  "missing_items": [],
+  "user_decision": true,
+  "reason": "用户 talk#2 选 A 确认方向与范围；异源盲审 direction_divergence=false，blocking F1 已收紧契约解决并留痕。"
+}

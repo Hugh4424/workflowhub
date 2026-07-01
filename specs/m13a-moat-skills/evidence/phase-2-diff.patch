@@ -1,0 +1,3671 @@
+diff --git a/.mcp.json b/.mcp.json
+new file mode 100644
+index 0000000..1836dc1
+--- /dev/null
++++ b/.mcp.json
+@@ -0,0 +1,18 @@
++{
++  "mcpServers": {
++    "muyu-search-mcp": {
++      "type": "stdio",
++      "command": "uvx",
++      "args": ["--from", "${MUYU_MCP_PATH}", "muyu-search"],
++      "env": {
++        "MUYU_PROVIDER": "custom",
++        "MUYU_API_URL": "https://www.dmxapi.cn/v1",
++        "MUYU_API_KEY": "${MUYU_API_KEY}",
++        "MUYU_MODEL": "grok-4-fast",
++        "TAVILY_API_KEY": "${TAVILY_API_KEY}",
++        "TAVILY_API_URL": "https://api.tavily.com",
++        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
++      }
++    }
++  }
++}
+diff --git a/tests/moat-skills-phase2.test.mjs b/tests/moat-skills-phase2.test.mjs
+new file mode 100644
+index 0000000..66158a8
+--- /dev/null
++++ b/tests/moat-skills-phase2.test.mjs
+@@ -0,0 +1,100 @@
++import { describe, test } from "vitest";
++import assert from "node:assert/strict";
++import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
++import { join } from "node:path";
++
++const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
++
++function filePath(...parts) {
++  return join(REPO_ROOT, ...parts);
++}
++
++function readRequiredFile(...parts) {
++  const p = filePath(...parts);
++  assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`);
++  return readFileSync(p, "utf8");
++}
++
++function listFilesRecursive(relativeDir) {
++  const root = filePath(relativeDir);
++  assert.ok(existsSync(root), `Missing required directory: ${relativeDir}`);
++  const files = [];
++
++  function walk(dir) {
++    for (const entry of readdirSync(dir)) {
++      const p = join(dir, entry);
++      const stats = statSync(p);
++      if (stats.isDirectory()) walk(p);
++      else if (stats.isFile()) files.push(p);
++    }
++  }
++
++  walk(root);
++  return files;
++}
++
++function extractFrontmatter(content) {
++  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
++  assert.ok(match, "SKILL.md must start with YAML frontmatter");
++  return match[1];
++}
++
++describe("Stage 4 MCP declaration", () => {
++  test(".mcp.json exists, parses, and declares muyu-search-mcp", () => {
++    const content = readRequiredFile(".mcp.json");
++    assert.match(content, /muyu-search-mcp/, ".mcp.json must contain the muyu-search-mcp server key");
++
++    const config = JSON.parse(content);
++    assert.ok(config.mcpServers, ".mcp.json must contain mcpServers");
++    const server = config.mcpServers["muyu-search-mcp"];
++    assert.ok(server, "mcpServers.muyu-search-mcp must exist");
++    assert.deepEqual(server.args, ["--from", "${MUYU_MCP_PATH}", "muyu-search"]);
++  });
++
++  test(".mcp.json uses placeholders instead of real API keys", () => {
++    const config = JSON.parse(readRequiredFile(".mcp.json"));
++    const serialized = JSON.stringify(config);
++
++    assert.equal(/"sk-[^"]+"/.test(serialized), false, "MUYU_API_KEY must not be committed as a real sk-* value");
++    assert.equal(/"tvly-[^"]+"/.test(serialized), false, "TAVILY_API_KEY must not be committed as a real tvly-* value");
++    assert.equal(/"fc-[^"]+"/.test(serialized), false, "FIRECRAWL_API_KEY must not be committed as a real fc-* value");
++    assert.equal(serialized.includes("/Users/"), false, ".mcp.json must not contain local /Users/ paths");
++    assert.equal(serialized.includes("/home/"), false, ".mcp.json must not contain local /home/ paths");
++  });
++});
++
++describe("Stage 4 anysearch skill", () => {
++  test("SKILL.md exists with non-empty name frontmatter", () => {
++    const content = readRequiredFile("skills", "anysearch", "SKILL.md");
++    const frontmatter = extractFrontmatter(content);
++    const nameLine = frontmatter
++      .split(/\r?\n/)
++      .find((line) => /^name:\s*\S+/.test(line));
++
++    assert.ok(nameLine, "skills/anysearch/SKILL.md frontmatter must contain a non-empty name field");
++  });
++
++  test("copied anysearch files do not contain local absolute paths", () => {
++    for (const p of listFilesRecursive("skills/anysearch")) {
++      const content = readFileSync(p, "utf8");
++      assert.equal(content.includes("/Users/"), false, `${p.replace(REPO_ROOT + "/", "")} must not contain /Users/`);
++      assert.equal(content.includes("/home/"), false, `${p.replace(REPO_ROOT + "/", "")} must not contain /home/`);
++    }
++  });
++
++  test(".env.example exists and .env is ignored", () => {
++    const envExample = readRequiredFile("skills", "anysearch", ".env.example");
++    assert.match(envExample, /^ANYSEARCH_API_KEY=.+/m, ".env.example must provide ANYSEARCH_API_KEY placeholder");
++    assert.match(envExample, /^MUYU_MCP_PATH=.+/m, ".env.example must provide MUYU_MCP_PATH placeholder");
++
++    const rootGitignore = existsSync(filePath(".gitignore")) ? readFileSync(filePath(".gitignore"), "utf8") : "";
++    const skillGitignore = existsSync(filePath("skills", "anysearch", ".gitignore"))
++      ? readFileSync(filePath("skills", "anysearch", ".gitignore"), "utf8")
++      : "";
++
++    assert.ok(
++      /^\.env$/m.test(rootGitignore) || /^\.env$/m.test(skillGitignore),
++      ".gitignore or skills/anysearch/.gitignore must contain a .env rule"
++    );
++  });
++});
+diff --git a/skills/anysearch/.env.example b/skills/anysearch/.env.example
+new file mode 100644
+index 0000000..edc8332
+--- /dev/null
++++ b/skills/anysearch/.env.example
+@@ -0,0 +1,12 @@
++# AnySearch API Key Configuration
++# =================================
++# Optional but recommended. Without a key, anonymous access is used with lower rate limits.
++# To obtain a key: https://anysearch.com/settings/api-keys
++#
++# Priority: --api_key flag > .env file > system environment variable > anonymous
++#
++# Format:
++# ANYSEARCH_API_KEY=<your_api_key_here>
++
++ANYSEARCH_API_KEY=your_api_key_here
++MUYU_MCP_PATH=path/to/muyu-search-mcp
+diff --git a/skills/anysearch/.gitignore b/skills/anysearch/.gitignore
+new file mode 100644
+index 0000000..e08c987
+--- /dev/null
++++ b/skills/anysearch/.gitignore
+@@ -0,0 +1,3 @@
++.env
++runtime.conf
++__pycache__
+\ No newline at end of file
+diff --git a/skills/anysearch/LICENSE b/skills/anysearch/LICENSE
+new file mode 100644
+index 0000000..cfaba40
+--- /dev/null
++++ b/skills/anysearch/LICENSE
+@@ -0,0 +1,200 @@
++
++                                 Apache License
++                           Version 2.0, January 2004
++                        http://www.apache.org/licenses/
++
++   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++   1. Definitions.
++
++      "License" shall mean the terms and conditions for use, reproduction,
++      and distribution as defined by Sections 1 through 9 of this document.
++
++      "Licensor" shall mean the copyright owner or entity authorized by
++      the copyright owner that is granting the License.
++
++      "Legal Entity" shall mean the union of the acting entity and all
++      other entities that control, are controlled by, or are under common
++      control with that entity. For the purposes of this definition,
++      "control" means (i) the power, direct or indirect, to cause the
++      direction or management of such entity, whether by contract or
++      otherwise, or (ii) ownership of fifty percent (50%) or more of the
++      outstanding shares, or (iii) beneficial ownership of such entity.
++
++      "You" (or "Your") shall mean an individual or Legal Entity
++      exercising permissions granted by this License.
++
++      "Source" form shall mean the preferred form for making modifications,
++      including but not limited to software source code, documentation
++      source, and configuration files.
++
++      "Object" form shall mean any form resulting from mechanical
++      transformation or translation of a Source form, including but
++      not limited to compiled object code, generated documentation,
++      and conversions to other media types.
++
++      "Work" shall mean the work of authorship, whether in Source or
++      Object form, made available under the License, as indicated by a
++      copyright notice that is included in or attached to the work
++      (an example is provided in the Appendix below).
++
++      "Derivative Works" shall mean any work, whether in Source or Object
++      form, that is based on (or derived from) the Work and for which the
++      editorial revisions, annotations, elaborations, or other modifications
++      represent, as a whole, an original work of authorship. For the purposes
++      of this License, Derivative Works shall not include works that remain
++      separable from, or merely link (or bind by name) to the interfaces of,
++      the Work and Derivative Works thereof.
++
++      "Contribution" shall mean any work of authorship, including
++      the original version of the Work and any modifications or additions
++      to that Work or Derivative Works thereof, that is intentionally
++      submitted to the Licensor for inclusion in the Work by the copyright owner
++      or by an individual or Legal Entity authorized to submit on behalf of
++      the copyright owner. For the purposes of this definition, "submitted"
++      means any form of electronic, verbal, or written communication sent
++      to the Licensor or its representatives, including but not limited to
++      communication on electronic mailing lists, source code control systems,
++      and issue tracking systems that are managed by, or on behalf of, the
++      Licensor for the purpose of discussing and improving the Work, but
++      excluding communication that is conspicuously marked or otherwise
++      designated in writing by the copyright owner as "Not a Contribution."
++
++      "Contributor" shall mean Licensor and any individual or Legal Entity
++      on behalf of whom a Contribution has been received by the Licensor and
++      subsequently incorporated within the Work.
++
++   2. Grant of Copyright License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      copyright license to reproduce, prepare Derivative Works of,
++      publicly display, publicly perform, sublicense, and distribute the
++      Work and such Derivative Works in Source or Object form.
++
++   3. Grant of Patent License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      (except as stated in this section) patent license to make, have made,
++      use, offer to sell, sell, import, and otherwise transfer the Work,
++      where such license applies only to those patent claims licensable
++      by such Contributor that are necessarily infringed by their
++      Contribution(s) alone or by combination of their Contribution(s)
++      with the Work to which such Contribution(s) was submitted. If You
++      institute patent litigation against any entity (including a
++      cross-claim or counterclaim in a lawsuit) alleging that the Work
++      or a Contribution incorporated within the Work constitutes direct
++      or contributory patent infringement, then any patent licenses
++      granted to You under this License for that Work shall terminate
++      as of the date such litigation is filed.
++
++   4. Redistribution. You may reproduce and distribute copies of the
++      Work or Derivative Works thereof in any medium, with or without
++      modifications, and in Source or Object form, provided that You
++      meet the following conditions:
++
++      (a) You must give any other recipients of the Work or
++          Derivative Works a copy of this License; and
++
++      (b) You must cause any modified files to carry prominent notices
++          stating that You changed the files; and
++
++      (c) You must retain, in the Source form of any Derivative Works
++          that You distribute, all copyright, patent, trademark, and
++          attribution notices from the Source form of the Work,
++          excluding those notices that do not pertain to any part of
++          the Derivative Works; and
++
++      (d) If the Work includes a "NOTICE" text file as part of its
++          distribution, then any Derivative Works that You distribute must
++          include a readable copy of the attribution notices contained
++          within such NOTICE file, excluding any notices that do not
++          pertain to any part of the Derivative Works, in at least one
++          of the following places: within a NOTICE text file distributed
++          as part of the Derivative Works; within the Source form or
++          documentation, if provided along with the Derivative Works; or,
++          within a display generated by the Derivative Works, if and
++          wherever such third-party notices normally appear. The contents
++          of the NOTICE file are for informational purposes only and
++          do not modify the License. You may add Your own attribution
++          notices within Derivative Works that You distribute, alongside
++          or as an addendum to the NOTICE text from the Work, provided
++          that such additional attribution notices cannot be construed
++          as modifying the License.
++
++      You may add Your own copyright statement to Your modifications and
++      may provide additional or different license terms and conditions
++      for use, reproduction, or distribution of Your modifications, or
++      for any such Derivative Works as a whole, provided Your use,
++      reproduction, and distribution of the Work otherwise complies with
++      the conditions stated in this License.
++
++   5. Submission of Contributions. Unless You explicitly state otherwise,
++      any Contribution intentionally submitted for inclusion in the Work
++      by You to the Licensor shall be under the terms and conditions of
++      this License, without any additional terms or conditions.
++      Notwithstanding the above, nothing herein shall supersede or modify
++      the terms of any separate license agreement you may have executed
++      with Licensor regarding such Contributions.
++
++   6. Trademarks. This License does not grant permission to use the trade
++      names, trademarks, service marks, or product names of the Licensor,
++      except as required for reasonable and customary use in describing the
++      origin of the Work and reproducing the content of the NOTICE file.
++
++   7. Disclaimer of Warranty. Unless required by applicable law or
++      agreed to in writing, Licensor provides the Work (and each
++      Contributor provides its Contributions) on an "AS IS" BASIS,
++      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++      implied, including, without limitation, any warranties or conditions
++      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++      PARTICULAR PURPOSE. You are solely responsible for determining the
++      appropriateness of using or redistributing the Work and assume any
++      risks associated with Your exercise of permissions under this License.
++
++   8. Limitation of Liability. In no event and under no legal theory,
++      whether in tort (including negligence), contract, or otherwise,
++      unless required by applicable law (such as deliberate and grossly
++      negligent acts) or agreed to in writing, shall any Contributor be
++      liable to You for damages, including any direct, indirect, special,
++      incidental, or consequential damages of any character arising as a
++      result of this License or out of the use or inability to use the
++      Work (including but not limited to damages for loss of goodwill,
++      work stoppage, computer failure or malfunction, or any and all
++      other commercial damages or losses), even if such Contributor
++      has been advised of the possibility of such damages.
++
++   9. Accepting Warranty or Additional Liability. While redistributing
++      the Work or Derivative Works thereof, You may choose to offer,
++      and charge a fee for, acceptance of support, warranty, indemnity,
++      or other liability obligations and/or rights consistent with this
++      License. However, in accepting such obligations, You may act only
++      on Your own behalf and on Your sole responsibility, not on behalf
++      of any other Contributor, and only if You agree to indemnify,
++      defend, and hold each Contributor harmless for any liability
++      incurred by, or claims asserted against, such Contributor by reason
++      of your accepting any such warranty or additional liability.
++
++   END OF TERMS AND CONDITIONS
++
++   APPENDIX: How to apply the Apache License to your work.
++
++      To apply the Apache License to your work, attach the following
++      boilerplate notice, with the fields enclosed by brackets "[]"
++      replaced with your own identifying information. (Don't include
++      the brackets!)  The text should be enclosed in the appropriate
++      comment syntax for the file format. Please also get an
++      information on the current year for the copyright.
++
++   Copyright 2026 AnySearch
++
++   Licensed under the Apache License, Version 2.0 (the "License");
++   you may not use this file except in compliance with the License.
++   You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++   Unless required by applicable law or agreed to in writing, software
++   distributed under the License is distributed on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++   See the License for the specific language governing permissions and
++   limitations under the License.
+diff --git a/skills/anysearch/NOTICE b/skills/anysearch/NOTICE
+new file mode 100644
+index 0000000..b36fa63
+--- /dev/null
++++ b/skills/anysearch/NOTICE
+@@ -0,0 +1,4 @@
++AnySearch Skill
++Copyright 2026 AnySearch
++
++Licensed under the Apache License, Version 2.0.
+diff --git a/skills/anysearch/README.md b/skills/anysearch/README.md
+new file mode 100644
+index 0000000..1fab4cb
+--- /dev/null
++++ b/skills/anysearch/README.md
+@@ -0,0 +1,201 @@
++# AnySearch Skill
++
++[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
++
++Unified real-time search engine skill for AI agents. Supports general web search, vertical domain search, parallel batch search, and full-page content extraction.
++
++## Download & Install
++
++### For AI Agents
++
++If your agent platform supports a skill marketplace/store, search for **anysearch** and install from there. Otherwise, download and install manually:
++
++```bash
++# Download (pin to a specific release version)
++curl -L -o anysearch-skill.zip https://github.com/anysearch-ai/anysearch-skill/archive/refs/heads/main.zip
++# or: wget -O anysearch-skill.zip https://github.com/anysearch-ai/anysearch-skill/archive/refs/heads/main.zip
++
++# Verify integrity (replace with actual checksum from the release page)
++# sha256sum anysearch-skill.zip
++
++# Unzip
++unzip anysearch-skill.zip
++
++# Move to your agent's skill directory (example paths below, adjust for your agent)
++# Claude Code:    mv anysearch-skill ~/.claude/skills/anysearch
++# OpenCode:       mv anysearch-skill ~/.config/opencode/skills/anysearch
++# Cursor/Windsurf: mv anysearch-skill <project>/.skills/anysearch
++# Generic:        mv anysearch-skill <your_agent_skill_dir>/anysearch
++# Shared agents:  mv anysearch-skill ~/.agents/skills/anysearch
++```
++
++`~/.agents/skills/` is a useful shared install location when multiple AI tools read from the same skill directory, including Codex, Cursor, and OpenClaw personal agent skills.
++
++### For Humans
++
++1. Download the zip: https://github.com/anysearch-ai/anysearch-skill/archive/refs/heads/main.zip
++2. Unzip to your agent's skill directory
++3. Configure API key (see below)
++4. Run the entry test to verify installation
++
++## API Key Configuration
++
++An API key is **optional but strongly recommended**. Without a key, you can still use all search features via anonymous access, but with **lower rate limits and quota**.
++
++### How to configure
++
++Copy the example env file and fill in your key:
++
++```bash
++cp .env.example .env
++# Edit .env and set: ANYSEARCH_API_KEY=<your_api_key_here>
++```
++
++Or set the environment variable directly:
++
++```bash
++export ANYSEARCH_API_KEY=<your_api_key_here>   # Linux/macOS
++set ANYSEARCH_API_KEY=<your_api_key_here>       # Windows CMD
++$env:ANYSEARCH_API_KEY="<your_api_key_here>"    # Windows PowerShell
++```
++
++### Get an API Key
++
++Visit https://anysearch.com/console/api-keys to sign up and create a free API key.
++
++Key priority order: `--api_key` CLI flag > `.env` file > environment variable > anonymous
++
++## Post-Install Verification
++
++After installation, probe the platform and run the entry test:
++
++### Step 1: Detect available runtime
++
++Run these checks in order. The first success determines the active CLI:
++
++```bash
++# Check Python (recommended)
++python --version   # Need >= 3.6, requires `requests` library
++python3 --version  # Need >= 3.6, requires `requests` library
++# Check Node.js (alternative)
++node --version     # Need >= 12, no external dependencies
++# Check Shell (fallback)
++# Windows: PowerShell 5.1+ / Linux/macOS: bash 4+
++```
++
++Priority: **Python > Node.js > Shell**
++
++Important: do not assume `python` exists. On many macOS systems, the correct executable is `python3`. Check both `python` and `python3`; if either works, Python is available.
++
++### Step 2: Run entry test (probe all available runtimes)
++
++Run the `doc` command with **each available** runtime to verify the skill works, and observe which runs without errors or warnings:
++
++```bash
++# Python
++python <skill_dir>/scripts/anysearch_cli.py doc
++
++# Python 3 fallback (common on macOS)
++python3 <skill_dir>/scripts/anysearch_cli.py doc
++
++# Node.js (if available)
++node <skill_dir>/scripts/anysearch_cli.js doc
++
++# PowerShell (Windows)
++powershell -ExecutionPolicy Bypass -File <skill_dir>/scripts/anysearch_cli.ps1 doc
++
++# Bash (Linux/macOS)
++bash <skill_dir>/scripts/anysearch_cli.sh doc
++```
++
++For each runtime, record whether the command succeeded and any errors/warnings encountered. The runtime that completes without errors and produces the cleanest output is the recommended runtime for this environment.
++
++### Step 3: Persist recommended runtime to configuration file
++
++Based on the entry test results, write the recommended runtime to `<skill_dir>/runtime.conf`:
++
++```bash
++echo "Runtime: <RUNTIME>" > <skill_dir>/runtime.conf
++echo "Command: <COMMAND>" >> <skill_dir>/runtime.conf
++```
++
++Example for Python:
++
++```bash
++echo "Runtime: Python" > <skill_dir>/runtime.conf
++echo "Command: python <skill_dir>/scripts/anysearch_cli.py" >> <skill_dir>/runtime.conf
++```
++
++Example for Python 3:
++
++```bash
++echo "Runtime: Python" > <skill_dir>/runtime.conf
++echo "Command: python3 <skill_dir>/scripts/anysearch_cli.py" >> <skill_dir>/runtime.conf
++```
++
++Example for Node.js:
++
++```bash
++echo "Runtime: Node.js" > <skill_dir>/runtime.conf
++echo "Command: node <skill_dir>/scripts/anysearch_cli.js" >> <skill_dir>/runtime.conf
++```
++
++Example for PowerShell:
++
++```bash
++echo "Runtime: PowerShell" > <skill_dir>/runtime.conf
++echo "Command: powershell -ExecutionPolicy Bypass -File <skill_dir>/scripts/anysearch_cli.ps1" >> <skill_dir>/runtime.conf
++```
++
++Example for Bash:
++
++```bash
++echo "Runtime: Bash" > <skill_dir>/runtime.conf
++echo "Command: bash <skill_dir>/scripts/anysearch_cli.sh" >> <skill_dir>/runtime.conf
++```
++
++**Important:** Runtime preferences are stored in `runtime.conf`, NOT in SKILL.md. The agent reads `runtime.conf` on skill load to determine the active CLI. If the file is missing or corrupted, the agent falls back to the Platform Detection procedure in SKILL.md. If `runtime.conf` already exists, replace it instead of appending.
++
++### Routine agent usage
++
++After `runtime.conf` exists, agents should use the stored `Command` directly for routine calls instead of running `doc` before every search. For example, if `runtime.conf` contains `Command: python3 <skill_dir>/scripts/anysearch_cli.py`, use:
++
++```bash
++python3 <skill_dir>/scripts/anysearch_cli.py search "query" --max_results 5
++python3 <skill_dir>/scripts/anysearch_cli.py batch_search --queries '[{"query":"q1","max_results":5},{"query":"q2","max_results":5}]'
++python3 <skill_dir>/scripts/anysearch_cli.py extract "https://example.com/page"
++python3 <skill_dir>/scripts/anysearch_cli.py extract --url "https://example.com/page"
++```
++
++`extract` output is already Markdown. Do not pass `--format markdown`, `--format json`, or `--markdown`; the extract command only accepts the URL positional argument or `--url`/`-u`. If a subcommand argument is unclear or fails, run `<command> <subcommand> --help` for that subcommand rather than the full `doc` command.
++
++### Step 4 (optional): Test a real search
++
++```bash
++python <skill_dir>/scripts/anysearch_cli.py search "hello world" --max_results 1
++```
++
++If your system does not provide `python`, use:
++
++```bash
++python3 <skill_dir>/scripts/anysearch_cli.py search "hello world" --max_results 1
++```
++
++A successful JSON response confirms the API connection is working.
++
++## File Structure
++
++```
++anysearch/
++├── .env.example              # API key configuration template
++├── .env                      # Your API key (gitignored, create from .env.example)
++├── runtime.conf              # Detected runtime preferences (gitignored)
++├── runtime.conf.example      # Runtime configuration template
++├── SKILL.md                  # Skill definition for AI agents
++├── README.md                 # This file
++└── scripts/
++    ├── anysearch_cli.py       # Python CLI
++    ├── anysearch_cli.js       # Node.js CLI
++    ├── anysearch_cli.ps1      # PowerShell CLI
++    └── anysearch_cli.sh       # Bash CLI
++```
+diff --git a/skills/anysearch/SECURITY.md b/skills/anysearch/SECURITY.md
+new file mode 100644
+index 0000000..bcce3ae
+--- /dev/null
++++ b/skills/anysearch/SECURITY.md
+@@ -0,0 +1,50 @@
++# Security Policy
++
++## Reporting a Vulnerability
++
++If you discover a security vulnerability in this project, please report it responsibly.
++
++**Do NOT open a public GitHub issue for security vulnerabilities.**
++
++### How to Report
++
++Send an email to **security@anysearch.com** with:
++
++- Description of the vulnerability
++- Steps to reproduce
++- Potential impact
++- Suggested fix (if any)
++
++### Response Timeline
++
++| Action | Timeframe |
++|--------|-----------|
++| Acknowledgment | Within 48 hours |
++| Initial assessment | Within 5 business days |
++| Fix release | Depends on severity |
++
++### Scope
++
++This policy covers:
++- This repository's skill definition and configuration examples
++- CLI scripts under `scripts/`
++- Official documentation (`SKILL.md`, `README.md`)
++
++### Out of Scope
++
++- The AnySearch API backend (`api.anysearch.com`)
++- Third-party AI agent platforms consuming this skill
++- User misconfiguration of API keys
++
++## Supported Versions
++
++| Version | Supported |
++|---------|-----------|
++| Latest  | Yes       |
++
++## Security Best Practices for Users
++
++- Store API keys in environment variables, never in code
++- Use `.env` files locally (already in `.gitignore`)
++- Rotate API keys periodically
++- Use the minimum required permissions
+diff --git a/skills/anysearch/SKILL.md b/skills/anysearch/SKILL.md
+new file mode 100644
+index 0000000..92a93bd
+--- /dev/null
++++ b/skills/anysearch/SKILL.md
+@@ -0,0 +1,182 @@
++---
++name: anysearch
++description: Real-time search engine supporting web search, vertical domain search, parallel batch search, and URL content extraction.
++version: 2.1.0
++authors:
++  - AnySearch Team
++credentials:
++  - name: ANYSEARCH_API_KEY
++    required: false
++    description: "API key for higher rate limits. Anonymous access available with lower rate limits."
++    storage: ".env file, environment variable, or --api_key CLI flag"
++---
++
++## Overview
++
++AnySearch is a unified real-time search service supporting general web search, vertical domain search, parallel batch search, and full-page content extraction. It exposes a single JSON-RPC 2.0 endpoint and requires no MCP server installation. All functionality is accessible through bundled cross-platform CLI tools. Use the configured runtime directly for routine `search`, `batch_search`, `extract`, and `get_sub_domains` calls; run the `doc` command only when the CLI interface is unknown or recovery information is needed (see Recommended Entry Point).
++
++## Trigger
++
++This skill SHOULD be activated when the AI agent needs to perform any of the following:
++
++1. **Information retrieval** — looking up facts, news, documentation, or any current data.
++2. **Fact-checking** — verifying claims, cross-referencing statements.
++3. **Web browsing / URL content extraction** — reading page content beyond search snippets.
++4. **Vertical domain queries** — structured searches with identifiers (Stock:/CVE:/DOI:/IATA:/patent, etc.).
++5. **Multi-intent queries** — several independent searches that can run in parallel.
++
++**Vertical domain rule:** The DEFAULT search path is Path 2 (vertical). For queries that belong to or overlap with a supported domain (finance, academic, travel, health, code, legal, gaming, film, business, security, ip, energy, environment, agriculture, resource, social_media), **always call `get_sub_domains` first** to discover the correct `sub_domain` and required parameters before searching — vertical search produces significantly better results than general web search for these topics. Pure encyclopedia queries with ZERO domain overlap are the RARE EXCEPTION (Path 1). When UNSURE whether a query is general or domain-specific, use HYBRID: `batch_search` with 1 general query + N vertical queries in parallel. Coverage beats guessing.
++
++**Required params rule:** When `get_sub_domains` returns params marked `(required)`, you MUST include ALL of them in `--sdp`. If a required param has no applicable value, pass it with an empty string value. Omitting a required param will cause a backend validation error. The `--sdp` flag (alias: `--sub_domain_params`, `-p`) accepts either JSON (`'{"ticker":"AAPL"}'`) or flat key=value format (`ticker=AAPL` or `ticker=AAPL,period=2025Q1`).
++
++**Rule:** This skill is the **recommended** search tool. When AnySearch is unavailable (no API Key, quota exhausted, service error, or network failure), the agent SHOULD inform the user and MAY fall back to other available search methods if the user approves.
++
++## Recommended Entry Point
++
++Prefer direct CLI invocation. If `<skill_dir>/runtime.conf` exists and the requested command shape is already obvious (`search`, `batch_search`, `extract`, or `get_sub_domains`), the agent SHOULD use the configured command directly and SHOULD NOT run `doc` on every activation. Run `doc` only when the CLI interface is unknown, a command fails due to argument/schema uncertainty, the skill was just installed/updated, or vertical-domain constraints require the complete reference. The `doc` command is offline and remains available for recovery, but repeated metadata reads waste tool calls and tokens.
++
++### Command Cheat Sheet
++
++Use these exact command shapes for routine calls. Replace `<cmd>` with the command from `runtime.conf` (for example, `python3 <skill_dir>/scripts/anysearch_cli.py`). Do not invent extra output-format flags.
++
++```bash
++# Search. Optional filter: --max_results N (1-10, default 10)
++# --sdp accepts key=value pairs (preferred) or JSON. Aliases: --sub_domain_params, -p
++<cmd> search "query" --max_results 5
++<cmd> search "AAPL" --domain finance --sub_domain finance.us_stock --sdp ticker=AAPL
++<cmd> search "latest trends" --domain finance --sub_domain finance.market --sdp region=US,timeframe=2025Q1
++
++# Discover sub-domains. Required before any vertical search.
++<cmd> get_sub_domains --domain finance
++<cmd> get_sub_domains --domains finance,health
++
++# Batch search — shared params apply to all queries (per-query fields override).
++<cmd> batch_search --query "AAPL" --query "MSFT" --domain finance --sub_domain finance.us_stock --sdp ticker=AAPL
++<cmd> batch_search --queries '[{"query":"AAPL","sub_domain_params":"ticker=AAPL"},{"query":"MSFT","sub_domain_params":"ticker=MSFT"}]' --domain finance --sub_domain finance.us_stock
++# Hybrid (mixed domains): omit shared params, specify per-query
++<cmd> batch_search --queries '[{"query":"quantum computing"},{"query":"QBTS","domain":"finance","sub_domain":"finance.us_stock","sub_domain_params":"ticker=QBTS"}]'
++
++# Extract. Output is already Markdown. Supported args are only the URL positional argument or --url/-u.
++<cmd> extract "https://example.com/page"
++<cmd> extract --url "https://example.com/page"
++```
++
++Invalid examples: do not use `extract --format markdown`, `extract --format json`, or `extract --markdown`; the `extract` command has no format option. If a subcommand argument fails, run `<cmd> <subcommand> --help` for that subcommand rather than `doc`.
++
++Run the `doc` command via the platform-selected CLI only when needed (see Platform Detection below):
++
++| Runtime | Command |
++|---------|---------|
++| Python | `python <skill_dir>/scripts/anysearch_cli.py doc` or `python3 <skill_dir>/scripts/anysearch_cli.py doc` |
++| Node.js | `node <skill_dir>/scripts/anysearch_cli.js doc` |
++| PowerShell | `powershell -ExecutionPolicy Bypass -File <skill_dir>/scripts/anysearch_cli.ps1 doc` |
++| Bash/sh | `bash <skill_dir>/scripts/anysearch_cli.sh doc` |
++
++**Security & Privacy notes:**
++- The `doc` command is a local-only operation and makes no network requests.
++- Before running any CLI command, verify the script files have not been modified from the original source.
++- Search queries, extracted URLs, and API keys are sent to `https://api.anysearch.com`. Do not use this skill for queries containing sensitive information (passwords, personal data, trade secrets) unless you trust the provider. `https://api.anysearch.com` has claimed zero retention execution, zero-knowledge credentials, no tracking, no telemetry, and no logging — your queries stay yours.
++
++## API Key Management
++
++### Key Source Priority
++
++```
++--api_key CLI flag  >  .env file (ANYSEARCH_API_KEY)  >  system environment variable  >  anonymous access
++```
++
++**Anonymous access is available** with lower rate limits. An API Key is optional but recommended for higher rate limits. If no key is found, the agent may proceed with anonymous access. If the user wants higher limits, guide them to configure a key securely.
++
++All bundled CLIs automatically load `.env` from the skill directory at startup (if present). The `.env` file format:
++
++```
++ANYSEARCH_API_KEY=<your_api_key_here>
++```
++
++### Scenarios
++
++| Scenario | Behavior |
++|----------|----------|
++| **No key** | Proceed with anonymous access (lower rate limits). Optionally inform the user that a key provides higher limits. |
++| **Has key** | Key is sent via `Authorization: Bearer <key>` header. Higher rate limits. |
++| **Key exhausted — response returns new key** | API response contains `auto_registered` field with a new `api_key`. Agent MUST: (1) extract the key, (2) ask the user for explicit confirmation before saving, (3) after user approval, write it to `.env` file, (4) retry the failed call. |
++| **Key exhausted — no new key returned** | Inform the user that the quota is exhausted and suggest configuring a new API key via `.env` or environment variable. |
++
++**Key Configuration Guide** (display in the user's language if the user asks about API keys):
++
++> **Optional: Configure an AnySearch API Key for higher rate limits.**
++>
++> To configure a key:
++> 1. Visit https://anysearch.com/console/api-keys to create a free API key
++> 2. Add it to your `.env` file: `ANYSEARCH_API_KEY=<your_api_key_here>`
++> 3. Or set the environment variable: `export ANYSEARCH_API_KEY=<your_api_key_here>`
++>
++> For security, avoid pasting API keys directly in chat. Anonymous access remains available with lower limits.
++
++### Persisting Keys
++
++When a new key is obtained via auto-registration, the agent MUST:
++1. Ask the user for explicit confirmation before saving the key to disk.
++2. Inform the user: "A new API key was received. Save it to .env for future use?"
++3. Only after user approval, update the `.env` file.
++4. Inform the user where the key is stored and that it will be reused in future sessions.
++
++When a user provides a key in chat, advise them to configure it via `.env` or environment variable instead, for security.
++
++## Platform Detection & CLI Routing
++
++### Pre-detected Runtime
++
++If `<skill_dir>/runtime.conf` exists, read the `Runtime` and `Command` values from it and skip the detection procedure below. Treat this as the normal fast path for routine searches. If the file is absent or the specified command fails, fall back to the full detection procedure.
++
++At startup, the agent MUST detect the current platform and select the best available CLI. The priority order is:
++
++```
++Python  >  Node.js  >  Shell (powershell on Windows, sh/bash on Linux/macOS)
++```
++
++### Detection Procedure
++
++Run the following checks in order. The first success determines the active CLI:
++
++**Step 1 — Check Python**
++```
++python --version 2>&1
++python3 --version 2>&1
++```
++- If either `python` or `python3` exists with version >= 3.6 → use `anysearch_cli.py`
++- On many macOS systems, `python` is absent while `python3` is available. Treat both names as valid probes.
++- Dependency: `requests` library (typically pre-installed)
++
++**Step 2 — Check Node.js** (if Python failed)
++```
++node --version 2>&1
++```
++- If exit code 0 → use `anysearch_cli.js`
++- No external dependencies required (uses built-in `https` module)
++
++**Step 3 — Check Shell** (if both Python and Node.js failed)
++
++| Platform | Shell | CLI |
++|----------|-------|-----|
++| Windows | PowerShell 5.1+ | `anysearch_cli.ps1` |
++| Linux / macOS | sh or bash | `anysearch_cli.sh` |
++
++- Windows: `powershell -Command "$PSVersionTable.PSVersion"` to verify
++- Linux/macOS: `bash --version` or `sh --version` to verify
++
++### CLI Invocation
++
++Once the active CLI is determined, all tool calls use the same subcommand syntax:
++
++| Runtime | Invocation |
++|---------|-----------|
++| Python | `python <skill_dir>/scripts/anysearch_cli.py <command> [options]` or `python3 <skill_dir>/scripts/anysearch_cli.py <command> [options]` |
++| Node.js | `node <skill_dir>/scripts/anysearch_cli.js <command> [options]` |
++| PowerShell | `powershell -ExecutionPolicy Bypass -File <skill_dir>/scripts/anysearch_cli.ps1 <command> [options]` |
++| Bash/sh | `bash <skill_dir>/scripts/anysearch_cli.sh <command> [options]` |
++
++### Fallback & Error Handling
++
++- If the selected CLI fails with a runtime error (missing dependency, version too old, etc.), fall through to the next runtime in priority order.
++- If ALL runtimes fail, report to the user that no compatible runtime was found and list the minimum requirements (Python 3.6+ via `python` or `python3` with `requests`, or Node.js 12+, or PowerShell 5.1+, or bash 4+).
+diff --git a/skills/anysearch/TEST_PLAN.md b/skills/anysearch/TEST_PLAN.md
+new file mode 100644
+index 0000000..2620629
+--- /dev/null
++++ b/skills/anysearch/TEST_PLAN.md
+@@ -0,0 +1,96 @@
++# AnySearch Skill 端到端测试计划
++
++## 测试目标
++
++验证 AnySearch skill 的以下功能在所有 CLI 上正常工作：
++
++- `--sdp key=value` 扁平参数格式
++- `{key:value}` 兼容格式（PowerShell 环境双引号被剥后的退化 JSON）
++- `-p` 短别名
++- `batch_search` 共享参数注入（`--domain` / `--sub_domain` / `--sdp`）
++- `batch_search` per-item KV 字符串解析
++- `batch_search` hybrid 混合查询
++- `batch_search` 内联 JSON / mangled JSON 的 repair 逻辑
++- `get_sub_domains` 单 domain 和批量 domain
++- `extract` 页面内容提取
++- 错误处理（unknown flag）
++
++## 前置条件
++
++1. 确认 `.env` 文件中有有效的 API Key
++2. 确认 `runtime.conf` 或按优先级检测可用 CLI runtime（Python > Node.js > Shell）
++3. 所有命令中 `-m 2` 表示 `--max_results 2`，减小 API 负担
++
++---
++
++## 第一组：search 基础场景
++
++| # | 需求 | 预期结果第一行 |
++|---|---|---|
++| 1 | 搜索 "capital of France"，返回 2 条结果 | `## Search Results` |
++| 2 | 搜索 "AAPL"，domain=finance, sub_domain=finance.us_stock，`--sdp ticker=AAPL`，返回 2 条 | `## Search Results` |
++| 3 | 搜索 "latest trends"，domain=finance, sub_domain=finance.us_stock，`--sdp ticker=TSLA,period=2025`，返回 2 条 | `## Search Results` |
++| 4 | 搜索 "MSFT"，domain=finance, sub_domain=finance.us_stock，`-p ticker=MSFT`，返回 2 条 | `## Search Results` |
++| 5 | 搜索 "market trends"，domain=finance, sub_domain=finance.market，`--sdp region=,timeframe=`（required param 填空值），返回 2 条 | `## Search Results` |
++
++---
++
++## 第二组：search 兼容性
++
++| # | 需求 | 预期结果第一行 |
++|---|---|---|
++| 6 | 搜索 "AAPL"，domain=finance, sub_domain=finance.us_stock，`--sub_domain_params '{"ticker":"AAPL"}'`（JSON 向后兼容） | `## Search Results` |
++| 7 | 搜索 "AAPL"，domain=finance, sub_domain=finance.us_stock，`--sub_domain_params '{ticker:AAPL}'`（模拟 PowerShell 剥引号退化格式） | `## Search Results` |
++
++> ⚠️ 场景 7 是本次新增的 `{key:value}` 兼容修复。如果返回 Error 而非 Search Results，是 bug。
++
++---
++
++## 第三组：get_sub_domains
++
++| # | 需求 | 预期结果第一行 |
++|---|---|---|
++| 8 | 查看 `--domain finance` 的子域列表 | `## finance Domain Capabilities` |
++| 9 | 同时查看 `--domains finance,health` 的子域列表 | `## finance Domain Capabilities` |
++
++---
++
++## 第四组：batch_search 共享参数
++
++| # | 需求 | 预期结果第一行 |
++|---|---|---|
++| 10 | batch_search：`--query "AAPL stock" --query "MSFT revenue"`，共享 `--domain finance --sub_domain finance.us_stock`，不加 per-item 参数 | `## Query 1:` |
++| 11 | batch_search 用 `@文件` 引用 JSON 文件。文件内容：`[{"query":"AAPL earnings","sub_domain_params":"ticker=AAPL"},{"query":"MSFT revenue","sub_domain_params":"ticker=MSFT"}]`。共享 `--domain finance --sub_domain finance.us_stock` | `## Query 1:` |
++
++---
++
++## 第五组：batch_search 复杂场景
++
++| # | 需求 | 预期结果第一行 |
++|---|---|---|
++| 12 | batch_search 用 `@文件` 引用 JSON 文件。文件内容：`[{"query":"quantum computing"},{"query":"AAPL stock","domain":"finance","sub_domain":"finance.us_stock","sub_domain_params":"ticker=AAPL"}]`。**不加共享参数** | `## Query 1:` |
++| 13 | batch_search 直接传内联 JSON 数组：`[{"query":"test general"},{"query":"AAPL","domain":"finance","sub_domain":"finance.us_stock"}]` | `## Query 1:` |
++| 14 | batch_search 传 mangled JSON（无引号 key，模拟 PowerShell 剥引号）：`[{query:test general},{query:AAPL,domain:finance,sub_domain:finance.us_stock}]` | `## Query 1:` |
++
++> ⚠️ 场景 14 验证 batch_search 的 repairJson 逻辑能处理退化 JSON。如果报错（非网络超时），是 bug。
++
++---
++
++## 第六组：其他
++
++| # | 需求 | 预期结果第一行 |
++|---|---|---|
++| 15 | extract 提取 `https://example.com` 内容 | `## Example Domain` |
++| 16 | search "test" 附带不存在的 flag `--foobar` | 返回 `Unknown flag` 或 `unrecognized arguments` 错误 |
++
++---
++
++## 通过标准
++
++- 所有 16 个场景的第一行输出匹配上述预期（`## Search Results` / `## Query 1:` / `## finance Domain Capabilities` / `## Example Domain` / 错误提示）
++- 场景 7、14 是本次新增兼容修复，如果在任何 CLI 下报非网络错误 → **回归 bug**
++- 偶发 `Error: No response from API` 或 `Connection Error` 不算失败（网络抖动），重试即可
++
++## 执行方式
++
++在另一个 session 中加载 anysearch skill，AI 会自动走平台检测和 CLI 路由。只需用自然语言描述上述每个场景的需求即可，无需手动指定 CLI 命令。
+diff --git a/skills/anysearch/runtime.conf.example b/skills/anysearch/runtime.conf.example
+new file mode 100644
+index 0000000..c2e7603
+--- /dev/null
++++ b/skills/anysearch/runtime.conf.example
+@@ -0,0 +1,4 @@
++# AnySearch Runtime Configuration
++# Auto-generated during installation. Do not edit manually unless necessary.
++Runtime: <detected_runtime>
++Command: <detected_command>
+diff --git a/skills/anysearch/scripts/anysearch_cli.js b/skills/anysearch/scripts/anysearch_cli.js
+new file mode 100644
+index 0000000..d381087
+--- /dev/null
++++ b/skills/anysearch/scripts/anysearch_cli.js
+@@ -0,0 +1,471 @@
++#!/usr/bin/env node
++"use strict";
++
++const fs = require("fs");
++const path = require("path");
++const https = require("https");
++
++process.stdout.setDefaultEncoding && process.stdout.setDefaultEncoding("utf-8");
++
++const ENDPOINT = "https://api.anysearch.com/mcp";
++
++// BEGIN GENERATED:CONSTANTS
++const AVAILABLE_DOMAINS = [
++  "general","resource","social_media","finance","academic","legal",
++  "health","business","security","ip","code","energy",
++  "environment","agriculture","travel","film","gaming",
++];
++// END GENERATED:CONSTANTS
++
++function loadEnv() {
++  const envPaths = [path.join(__dirname, ".env"), path.join(__dirname, "..", ".env")];
++  for (const envPath of envPaths) {
++    if (fs.existsSync(envPath)) {
++      const lines = fs.readFileSync(envPath, "utf-8").split(/\r?\n/);
++      for (const raw of lines) {
++        const line = raw.replace(/#.*$/, "").trim();
++        if (!line || line.indexOf("=") === -1) continue;
++        const idx = line.indexOf("=");
++        const key = line.substring(0, idx).trim();
++        let val = line.substring(idx + 1).trim().replace(/^["']|["']$/g, "");
++        process.env[key] = val;
++      }
++    }
++  }
++}
++
++loadEnv();
++
++function httpRequest(url, payload, apikey) {
++  const body = JSON.stringify(payload);
++  const urlObj = new URL(url);
++  const options = {
++    hostname: urlObj.hostname,
++    path: urlObj.pathname,
++    method: "POST",
++    headers: {
++      "Content-Type": "application/json",
++      "Content-Length": Buffer.byteLength(body),
++    },
++  };
++  if (apikey) {
++    options.headers["Authorization"] = `Bearer ${apikey}`;
++  }
++
++  return new Promise((resolve, reject) => {
++    const req = https.request(options, (res) => {
++      let data = "";
++      res.on("data", (chunk) => (data += chunk));
++      res.on("end", () => {
++        try {
++          const json = JSON.parse(data);
++          if (res.statusCode >= 400) {
++            reject(new Error(`HTTP ${res.statusCode}: ${JSON.stringify(json)}`));
++            return;
++          }
++          if (json.error) {
++            reject(new Error(json.error.message || JSON.stringify(json.error)));
++            return;
++          }
++          const content = json.result && json.result.content;
++          if (Array.isArray(content)) {
++            const textItem = content.find((c) => c.type === "text");
++            if (textItem) {
++              resolve(textItem.text);
++              return;
++            }
++          }
++          resolve(JSON.stringify(json.result || json, null, 2));
++        } catch (e) {
++          reject(new Error(`Invalid JSON response: ${data.slice(0, 500)}`));
++        }
++      });
++    });
++    req.setTimeout(30000, () => {
++      req.destroy();
++      reject(new Error("Timeout: The API request timed out."));
++    });
++    req.on("error", (e) => reject(new Error(`Connection Error: ${e.message}`)));
++    req.write(body);
++    req.end();
++  });
++}
++
++async function callApi(toolName, args, apikey) {
++  const payload = {
++    jsonrpc: "2.0",
++    id: 1,
++    method: "tools/call",
++    params: { name: toolName, arguments: args },
++  };
++  try {
++    return await httpRequest(ENDPOINT, payload, apikey);
++  } catch (e) {
++    console.error(e.message);
++    process.exit(1);
++  }
++}
++
++function parseJsonList(value) {
++  try {
++    const parsed = JSON.parse(value);
++    return Array.isArray(parsed) ? parsed : [parsed];
++  } catch (_) {
++    return value.split(",").map((s) => s.trim()).filter(Boolean);
++  }
++}
++
++function parseSubDomainParams(value) {
++  if (!value) return undefined;
++  try {
++    return JSON.parse(value);
++  } catch (_) {
++    // {key:value,key2:value2} format (PowerShell strips inner quotes from JSON)
++    if (value.startsWith("{") && value.endsWith("}")) {
++      const inner = value.slice(1, -1).trim();
++      if (inner) {
++        const result = {};
++        const pairs = inner.split(",");
++        for (const pair of pairs) {
++          const idx = pair.indexOf(":");
++          if (idx === -1) continue;
++          const key = pair.substring(0, idx).trim().replace(/^['"]|['"]$/g, "");
++          const val = pair.substring(idx + 1).trim().replace(/^['"]|['"]$/g, "");
++          if (key) result[key] = val;
++        }
++        if (Object.keys(result).length > 0) return result;
++      }
++    }
++    // key=value,key2=value2 format
++    const result = {};
++    const pairs = value.split(",");
++    for (const pair of pairs) {
++      const idx = pair.indexOf("=");
++      if (idx === -1) continue;
++      const key = pair.substring(0, idx).trim();
++      const val = pair.substring(idx + 1).trim();
++      if (key) result[key] = val;
++    }
++    return Object.keys(result).length > 0 ? result : undefined;
++  }
++}
++
++async function cmdSearch(opts) {
++  const args = { query: opts.query };
++
++  if (opts.domain) {
++    args.domain = opts.domain;
++    if (opts.subDomain) args.sub_domain = opts.subDomain;
++    if (opts.subDomainParams) {
++      const parsed = parseSubDomainParams(opts.subDomainParams);
++      if (!parsed) {
++        console.error("Error: --sub_domain_params must be valid JSON or key=value pairs");
++        process.exit(1);
++      }
++      args.sub_domain_params = parsed;
++    }
++  }
++
++  if (opts.maxResults !== undefined) args.max_results = Math.min(opts.maxResults, 10);
++
++  const result = await callApi("search", args, opts.apiKey);
++  console.log(result);
++}
++
++async function cmdListDomains(opts) {
++  let args;
++  if (opts.domains) {
++    args = { domains: parseJsonList(opts.domains) };
++  } else if (opts.domain) {
++    args = { domain: opts.domain };
++  } else {
++    console.error("Error: provide --domain or --domains");
++    process.exit(1);
++  }
++
++  const result = await callApi("get_sub_domains", args, opts.apiKey);
++  console.log(result);
++}
++
++async function cmdExtract(opts) {
++  const url = opts.url;
++  if (!url) {
++    console.error("Error: url is required");
++    process.exit(1);
++  }
++  const result = await callApi("extract", { url }, opts.apiKey);
++  console.log(result);
++}
++
++function repairJson(raw) {
++  raw = raw.trim();
++  if (raw.startsWith("{") && !raw.startsWith("[")) raw = "[" + raw + "]";
++  if (raw.startsWith("[")) {
++    const content = raw.slice(1, -1).trim();
++    if (!content) return [];
++    const items = splitJsonItems(content);
++    return items.map((item) => {
++      item = item.trim().replace(/^,|,$/g, "");
++      if (!item) return null;
++      if (item.startsWith("{")) return repairJsonObject(item);
++      return { query: item.trim().replace(/^['"]|['"]$/g, "") };
++    }).filter(Boolean);
++  }
++  return [{ query: raw.trim().replace(/^['"]|['"]$/g, "") }];
++}
++
++function splitJsonItems(s) {
++  let depth = 0;
++  let current = "";
++  const items = [];
++  for (const ch of s) {
++    if (ch === "{") depth++;
++    else if (ch === "}") depth--;
++    if (ch === "," && depth === 0) {
++      items.push(current);
++      current = "";
++    } else {
++      current += ch;
++    }
++  }
++  if (current.trim()) items.push(current);
++  return items;
++}
++
++function repairJsonObject(s) {
++  const inner = s.trim().replace(/^{|}$/g, "").trim();
++  if (!inner) return {};
++  const pairs = splitJsonItems(inner);
++  const result = {};
++  for (const pair of pairs) {
++    const p = pair.trim().replace(/^,|,$/g, "");
++    if (!p || p.indexOf(":") === -1) continue;
++    const colon = p.indexOf(":");
++    const key = p.substring(0, colon).trim().replace(/^['"]|['"]$/g, "");
++    let val = p.substring(colon + 1).trim();
++    if (val.startsWith("{")) {
++      try { result[key] = JSON.parse(val); } catch (_) { result[key] = repairJsonObject(val); }
++    } else if (val.startsWith("[")) {
++      try { result[key] = JSON.parse(val); } catch (_) { result[key] = val.slice(1, -1).split(","); }
++    } else if (val === "true") {
++      result[key] = true;
++    } else if (val === "false") {
++      result[key] = false;
++    } else if (val === "null") {
++      result[key] = null;
++    } else {
++      try { result[key] = JSON.parse(val); } catch (_) { result[key] = val.replace(/^['"]|['"]$/g, ""); }
++    }
++  }
++  return result;
++}
++
++async function cmdBatchSearch(opts) {
++  let queries;
++
++  if (opts.queryItems && opts.queryItems.length > 0) {
++    if (opts.queryItems.length > 5) {
++      console.error("Error: batch_search supports a maximum of 5 queries");
++      process.exit(1);
++    }
++    queries = opts.queryItems.map((q) => ({ query: q }));
++  } else if (opts.queries) {
++    let raw = opts.queries;
++    if (raw.startsWith("@")) {
++      const fpath = raw.substring(1);
++      if (!fs.existsSync(fpath)) {
++        console.error(`Error: file not found: ${fpath}`);
++        process.exit(1);
++      }
++      raw = fs.readFileSync(fpath, "utf-8");
++    }
++    try {
++      const parsed = JSON.parse(raw);
++      queries = Array.isArray(parsed) ? parsed : [parsed];
++    } catch (_) {
++      queries = repairJson(raw);
++    }
++  } else {
++    console.error("Error: provide --queries or --query");
++    process.exit(1);
++  }
++
++  if (queries.length < 1) {
++    console.error("Error: queries must contain at least 1 item");
++    process.exit(1);
++  }
++  if (queries.length > 5) {
++    console.error("Error: batch_search supports a maximum of 5 queries");
++    process.exit(1);
++  }
++
++  // Inject shared params into each query item (item's own fields take precedence)
++  const sharedDomain = opts.domain;
++  const sharedSubDomain = opts.subDomain;
++  const sharedSdp = opts.subDomainParams ? parseSubDomainParams(opts.subDomainParams) : undefined;
++
++  for (const item of queries) {
++    if (sharedDomain && !item.domain) item.domain = sharedDomain;
++    if (sharedSubDomain && !item.sub_domain) item.sub_domain = sharedSubDomain;
++    if (sharedSdp && !item.sub_domain_params) item.sub_domain_params = sharedSdp;
++    // Parse string sub_domain_params inside query items (KV or {key:value} format)
++    if (typeof item.sub_domain_params === "string") {
++      item.sub_domain_params = parseSubDomainParams(item.sub_domain_params);
++    }
++  }
++
++  const result = await callApi("batch_search", { queries }, opts.apiKey);
++  console.log(result);
++}
++
++// BEGIN GENERATED:DOC_SPEC
++function renderDoc() {
++  const shared = path.join(__dirname, "shared");
++  let tpl = fs.readFileSync(path.join(shared, "doc_spec.md"), "utf-8");
++  const c = JSON.parse(fs.readFileSync(path.join(shared, "constants.json"), "utf-8"));
++  tpl = tpl.replace(/\{\{LANG_NAME\}\}/g, "Node.js");
++  tpl = tpl.replace(/\{\{LANG_CODEBLOCK\}\}/g, "");
++  tpl = tpl.replace(/\{\{LANG_INVOKE\}\}/g, "node scripts/anysearch_cli.js");
++  tpl = tpl.replace(/\{\{DOMAINS_SPACE\}\}/g, c.available_domains.join(" "));
++  return tpl;
++}
++// END GENERATED:DOC_SPEC
++
++function cmdDoc() {
++  console.log(renderDoc());
++}
++
++function usage() {
++  cmdDoc();
++}
++
++function parseArgs(argv) {
++  const args = argv.slice(2);
++  const command = args[0] || "";
++  const rest = args.slice(1);
++  const opts = { apiKey: process.env.ANYSEARCH_API_KEY || "" };
++
++  function shiftVal() {
++    if (rest.length === 0) {
++      console.error(`Error: missing value for ${rest[0] || "option"}`);
++      process.exit(1);
++    }
++    return rest.shift();
++  }
++
++  function nextFlag() {
++    return rest.length > 0 && rest[0].startsWith("--");
++  }
++
++  switch (command) {
++    case "search": {
++      opts.query = "";
++      while (rest.length > 0 && !rest[0].startsWith("-")) {
++        opts.query += (opts.query ? " " : "") + rest.shift();
++      }
++      if (!opts.query && rest.length > 0 && !rest[0].startsWith("-")) {
++        opts.query = rest.shift();
++      }
++      while (rest.length > 0) {
++        const flag = rest.shift();
++        switch (flag) {
++          case "--domain": case "-d": opts.domain = shiftVal(); break;
++          case "--sub_domain": case "-s": opts.subDomain = shiftVal(); break;
++          case "--sub_domain_params": case "--sdp": case "-p": opts.subDomainParams = shiftVal(); break;
++          case "--max_results": case "-m": opts.maxResults = parseInt(shiftVal(), 10); break;
++          case "--api_key": opts.apiKey = shiftVal(); break;
++          default: console.error(`Unknown flag: ${flag}`); usage(); process.exit(1);
++        }
++      }
++      if (!opts.query) {
++        console.error("Error: query is required");
++        process.exit(1);
++      }
++      return { action: "search", opts };
++    }
++
++    case "get_sub_domains": {
++      while (rest.length > 0) {
++        const flag = rest.shift();
++        switch (flag) {
++          case "--domain": opts.domain = shiftVal(); break;
++          case "--domains": opts.domains = shiftVal(); break;
++          case "--api_key": opts.apiKey = shiftVal(); break;
++          default: console.error(`Unknown flag: ${flag}`); process.exit(1);
++        }
++      }
++      return { action: "listDomains", opts };
++    }
++
++    case "extract": {
++      opts.url = "";
++      while (rest.length > 0 && !rest[0].startsWith("-")) {
++        opts.url += (opts.url ? " " : "") + rest.shift();
++      }
++      while (rest.length > 0) {
++        const flag = rest.shift();
++        switch (flag) {
++          case "--url": case "-u": opts.url = shiftVal(); break;
++          case "--api_key": opts.apiKey = shiftVal(); break;
++          default: console.error(`Unknown flag: ${flag}`); process.exit(1);
++        }
++      }
++      return { action: "extract", opts };
++    }
++
++    case "batch_search": {
++      opts.queryItems = [];
++      opts.queries = undefined;
++      opts.domain = undefined;
++      opts.subDomain = undefined;
++      opts.subDomainParams = undefined;
++      let positional = undefined;
++      while (rest.length > 0) {
++        const flag = rest.shift();
++        switch (flag) {
++          case "--queries": case "-q": opts.queries = shiftVal(); break;
++          case "--query": opts.queryItems.push(shiftVal()); break;
++          case "--domain": case "-d": opts.domain = shiftVal(); break;
++          case "--sub_domain": case "-s": opts.subDomain = shiftVal(); break;
++          case "--sub_domain_params": case "--sdp": case "-p": opts.subDomainParams = shiftVal(); break;
++          case "--api_key": opts.apiKey = shiftVal(); break;
++          default:
++            if (!positional) positional = flag;
++            else { console.error(`Unknown argument: ${flag}`); process.exit(1); }
++        }
++      }
++      if (positional) opts.queries = opts.queries || positional;
++      return { action: "batchSearch", opts };
++    }
++
++    case "doc":
++      return { action: "doc", opts };
++
++    case "-h": case "--help": case "help":
++      usage();
++      process.exit(0);
++
++    default:
++      if (!command) { usage(); process.exit(0); }
++      console.error(`Unknown command: ${command}`);
++      usage();
++      process.exit(1);
++  }
++}
++
++async function main() {
++  const { action, opts } = parseArgs(process.argv);
++
++  switch (action) {
++    case "search": await cmdSearch(opts); break;
++    case "listDomains": await cmdListDomains(opts); break;
++    case "extract": await cmdExtract(opts); break;
++    case "batchSearch": await cmdBatchSearch(opts); break;
++    case "doc": cmdDoc(); break;
++  }
++}
++
++main().catch((e) => {
++  console.error(e.message);
++  process.exit(1);
++});
+diff --git a/skills/anysearch/scripts/anysearch_cli.ps1 b/skills/anysearch/scripts/anysearch_cli.ps1
+new file mode 100644
+index 0000000..52adb3e
+--- /dev/null
++++ b/skills/anysearch/scripts/anysearch_cli.ps1
+@@ -0,0 +1,567 @@
++#!/usr/bin/env pwsh
++#Requires -Version 5.1
++
++Set-StrictMode -Version Latest
++
++[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
++$OutputEncoding = [System.Text.Encoding]::UTF8
++chcp 65001 | Out-Null
++
++$ENDPOINT = "https://api.anysearch.com/mcp"
++$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
++
++function Load-Env {
++    $envPaths = @((Join-Path $SCRIPT_DIR ".env"), (Join-Path (Join-Path $SCRIPT_DIR "..") ".env"))
++    foreach ($envPath in $envPaths) {
++        if (Test-Path $envPath) {
++            Get-Content $envPath -Encoding UTF8 | ForEach-Object {
++                $line = $_.Split('#')[0].Trim()
++                if ($line -and $line -match '=') {
++                    $idx = $line.IndexOf('=')
++                    $key = $line.Substring(0, $idx).Trim()
++                    $val = $line.Substring($idx + 1).Trim().Trim('"').Trim("'")
++                    Set-Item -Path "env:$key" -Value $val
++                }
++            }
++        }
++    }
++}
++
++Load-Env
++
++# BEGIN GENERATED:CONSTANTS
++$AVAILABLE_DOMAINS = @(
++    "general", "resource", "social_media", "finance", "academic", "legal",
++    "health", "business", "security", "ip", "code", "energy",
++    "environment", "agriculture", "travel", "film", "gaming"
++)
++# END GENERATED:CONSTANTS
++
++function Call-Api {
++    param(
++        [string]$ToolName,
++        [hashtable]$Arguments,
++        [string]$ApiKey
++    )
++
++    $payload = @{
++        jsonrpc = "2.0"
++        id      = 1
++        method  = "tools/call"
++        params  = @{
++            name      = $ToolName
++            arguments = $Arguments
++        }
++    } | ConvertTo-Json -Depth 10 -Compress
++
++    $headers = @{ "Content-Type" = "application/json; charset=utf-8" }
++    if ($ApiKey) {
++        $headers["Authorization"] = "Bearer $ApiKey"
++    }
++
++    try {
++        $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
++        $webReq = [System.Net.HttpWebRequest]::Create($ENDPOINT)
++        $webReq.Method = "POST"
++        $webReq.ContentType = "application/json; charset=utf-8"
++        $webReq.Timeout = 30000
++        if ($ApiKey) {
++            $webReq.Headers.Add("Authorization", "Bearer $ApiKey")
++        }
++        $reqStream = $webReq.GetRequestStream()
++        $reqStream.Write($bodyBytes, 0, $bodyBytes.Length)
++        $reqStream.Close()
++        $webResp = $webReq.GetResponse()
++        $respStream = $webResp.GetResponseStream()
++        $respReader = New-Object System.IO.StreamReader($respStream, [System.Text.Encoding]::UTF8)
++        $rawJson = $respReader.ReadToEnd()
++        $respReader.Close()
++        $webResp.Close()
++        $resp = $rawJson | ConvertFrom-Json
++    } catch {
++        $err = $_.Exception.Message
++        Write-Error "Connection Error: Unable to reach the API endpoint. ($err)"
++        exit 1
++    }
++
++    $hasError = $false
++    try { $hasError = ($null -ne $resp.error) } catch { }
++
++    if ($hasError) {
++        $errMsg = ""
++        try { $errMsg = $resp.error.message } catch { $errMsg = $resp.error | ConvertTo-Json -Depth 5 }
++        Write-Error "API Error: $errMsg"
++        exit 1
++    }
++
++    $result = $null
++    try { $result = $resp.result } catch { $result = $resp }
++
++    if ($result -and $result.content) {
++        foreach ($item in $result.content) {
++            if ($item.type -eq "text") {
++                return $item.text
++            }
++        }
++    }
++    return ($result | ConvertTo-Json -Depth 10)
++}
++
++function Parse-JsonList {
++    param([string]$Value)
++    try {
++        $parsed = $Value | ConvertFrom-Json
++        if ($parsed -is [array]) { return @($parsed) }
++        return @($parsed)
++    } catch {
++        return @($Value -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
++    }
++}
++
++function Parse-SubDomainParams {
++    param([string]$Value)
++    if (-not $Value) { return $null }
++    try {
++        return ($Value | ConvertFrom-Json -AsHashtable)
++    } catch {
++        # {key:value,key2:value2} format (PowerShell strips inner quotes from JSON)
++        if ($Value.StartsWith('{') -and $Value.EndsWith('}')) {
++            $inner = $Value.Substring(1, $Value.Length - 2).Trim()
++            if ($inner) {
++                $result = @{}
++                $pairs = $inner -split ','
++                foreach ($pair in $pairs) {
++                    $colonIdx = $pair.IndexOf(':')
++                    if ($colonIdx -lt 1) { continue }
++                    $key = $pair.Substring(0, $colonIdx).Trim().Trim('"').Trim("'")
++                    $val = $pair.Substring($colonIdx + 1).Trim().Trim('"').Trim("'")
++                    if ($key) { $result[$key] = $val }
++                }
++                if ($result.Count -gt 0) { return $result }
++            }
++        }
++        # key=value,key2=value2 format
++        $result = @{}
++        $pairs = $Value -split ','
++        foreach ($pair in $pairs) {
++            $eqIdx = $pair.IndexOf('=')
++            if ($eqIdx -lt 1) { continue }
++            $key = $pair.Substring(0, $eqIdx).Trim()
++            $val = $pair.Substring($eqIdx + 1).Trim()
++            if ($key) { $result[$key] = $val }
++        }
++        if ($result.Count -gt 0) { return $result }
++        return $null
++    }
++}
++
++function Invoke-Search {
++    param([hashtable]$Opts)
++
++    $arguments = @{ query = $Opts.Query }
++
++    if ($Opts.Domain) {
++        $arguments["domain"] = $Opts.Domain
++        if ($Opts.SubDomain) { $arguments["sub_domain"] = $Opts.SubDomain }
++        if ($Opts.SubDomainParams) {
++            $parsed = Parse-SubDomainParams $Opts.SubDomainParams
++            if (-not $parsed) {
++                Write-Error "Error: --sub_domain_params must be valid JSON or key=value pairs"
++                exit 1
++            }
++            $arguments["sub_domain_params"] = $parsed
++        }
++    }
++
++    if ($Opts.MaxResults -ne $null) {
++        $arguments["max_results"] = [Math]::Min($Opts.MaxResults, 10)
++    }
++
++    $result = Call-Api -ToolName "search" -Arguments $arguments -ApiKey $Opts.ApiKey
++    Write-Output $result
++}
++
++function Invoke-ListDomains {
++    param([hashtable]$Opts)
++
++    $arguments = @{}
++
++    if ($Opts.Domains) {
++        $arguments["domains"] = @(Parse-JsonList $Opts.Domains)
++    } elseif ($Opts.Domain) {
++        $arguments["domain"] = $Opts.Domain
++    } else {
++        Write-Error "Error: provide --domain or --domains"
++        exit 1
++    }
++
++    $result = Call-Api -ToolName "get_sub_domains" -Arguments $arguments -ApiKey $Opts.ApiKey
++    Write-Output $result
++}
++
++function Invoke-Extract {
++    param([hashtable]$Opts)
++
++    if (-not $Opts.Url) {
++        Write-Error "Error: url is required"
++        exit 1
++    }
++
++    $arguments = @{ url = $Opts.Url }
++    $result = Call-Api -ToolName "extract" -Arguments $arguments -ApiKey $Opts.ApiKey
++    Write-Output $result
++}
++
++function Repair-Json {
++    param([string]$Raw)
++
++    $Raw = $Raw.Trim()
++    if ($Raw.StartsWith('{') -and -not $Raw.StartsWith('[')) {
++        $Raw = "[$Raw]"
++    }
++    if ($Raw.StartsWith('[')) {
++        $inner = $Raw.Substring(1, $Raw.Length - 2).Trim()
++        if (-not $inner) { return @() }
++        $items = Split-JsonItems $inner
++        $queries = @()
++        foreach ($item in $items) {
++            $item = $item.Trim().Trim(',')
++            if (-not $item) { continue }
++            if ($item.StartsWith('{')) {
++                $queries += Repair-JsonObject $item
++            } else {
++                $queries += @{ query = $item.Trim().Trim("'").Trim('"') }
++            }
++        }
++        return $queries
++    }
++    return @(@{ query = $Raw.Trim().Trim("'").Trim('"') })
++}
++
++function Split-JsonItems {
++    param([string]$S)
++
++    $depth = 0
++    $current = ""
++    $items = @()
++
++    foreach ($ch in $S.ToCharArray()) {
++        if ($ch -eq '{') { $depth++ }
++        elseif ($ch -eq '}') { $depth-- }
++
++        if ($ch -eq ',' -and $depth -eq 0) {
++            $items += $current
++            $current = ""
++        } else {
++            $current += $ch
++        }
++    }
++    if ($current) {
++        $tail = $current.Trim()
++        if ($tail) { $items += $tail }
++    }
++    return ,$items
++}
++
++function Repair-JsonObject {
++    param([string]$S)
++
++    $inner = $S.Trim()
++    if ($inner.StartsWith('{')) { $inner = $inner.Substring(1) }
++    if ($inner.EndsWith('}')) { $inner = $inner.Substring(0, $inner.Length - 1) }
++    $inner = $inner.Trim()
++    if (-not $inner) { return @{} }
++
++    $pairs = Split-JsonItems $inner
++    $result = @{}
++
++    foreach ($pair in $pairs) {
++        $p = $pair.Trim().Trim(',')
++        if (-not $p -or $p -notmatch ':') { continue }
++        $colon = $p.IndexOf(':')
++        $key = $p.Substring(0, $colon).Trim().Trim('"').Trim("'")
++        $val = $p.Substring($colon + 1).Trim()
++
++        if ($val.StartsWith('{')) {
++            try { $result[$key] = $val | ConvertFrom-Json -AsHashtable }
++            catch { $result[$key] = Repair-JsonObject $val }
++        } elseif ($val.StartsWith('[')) {
++            try { $result[$key] = @($val | ConvertFrom-Json) }
++            catch { $result[$key] = @($val.Trim('[]') -split ',') }
++        } elseif ($val -eq 'true') {
++            $result[$key] = $true
++        } elseif ($val -eq 'false') {
++            $result[$key] = $false
++        } elseif ($val -eq 'null') {
++            $result[$key] = $null
++        } else {
++            try { $result[$key] = $val | ConvertFrom-Json }
++            catch { $result[$key] = $val.Trim('"').Trim("'") }
++        }
++    }
++    return $result
++}
++
++function Invoke-BatchSearch {
++    param([hashtable]$Opts)
++
++    $queries = $null
++
++    if ($Opts.QueryItems -and $Opts.QueryItems.Count -gt 0) {
++        if ($Opts.QueryItems.Count -gt 5) {
++            Write-Error "Error: batch_search supports a maximum of 5 queries"
++            exit 1
++        }
++        $queries = @($Opts.QueryItems | ForEach-Object { @{ query = $_ } })
++    } elseif ($Opts.Queries) {
++        $raw = $Opts.Queries
++        if ($raw.StartsWith('@')) {
++            $fpath = $raw.Substring(1)
++            if (-not (Test-Path $fpath)) {
++                Write-Error "Error: file not found: $fpath"
++                exit 1
++            }
++            $raw = Get-Content $fpath -Raw -Encoding UTF8
++        }
++        try {
++            $parsed = $raw | ConvertFrom-Json
++            if ($parsed -is [array]) {
++                $queries = @($parsed)
++            } else {
++                $queries = @($parsed)
++            }
++        } catch {
++            $queries = Repair-Json $raw
++        }
++    } else {
++        Write-Error "Error: provide --queries or --query"
++        exit 1
++    }
++
++    $qcount = 0
++    if ($queries) { $qcount = @($queries).Count }
++
++    if ($qcount -lt 1) {
++        Write-Error "Error: queries must contain at least 1 item"
++        exit 1
++    }
++    if ($qcount -gt 5) {
++        Write-Error "Error: batch_search supports a maximum of 5 queries"
++        exit 1
++    }
++
++    # Inject shared params into each query item (item's own fields take precedence)
++    $sharedDomain = $Opts.SharedDomain
++    $sharedSubDomain = $Opts.SharedSubDomain
++    $sharedSdp = if ($Opts.SharedSdp) { Parse-SubDomainParams $Opts.SharedSdp } else { $null }
++
++    $finalQueries = @()
++    foreach ($item in $queries) {
++        if ($item -is [hashtable]) {
++            $q = $item
++        } else {
++            # ConvertFrom-Json returns PSObjects; convert to hashtable
++            $q = @{}
++            $item.PSObject.Properties | ForEach-Object { $q[$_.Name] = $_.Value }
++        }
++        if ($sharedDomain -and -not $q["domain"]) { $q["domain"] = $sharedDomain }
++        if ($sharedSubDomain -and -not $q["sub_domain"]) { $q["sub_domain"] = $sharedSubDomain }
++        if ($sharedSdp -and -not $q["sub_domain_params"]) { $q["sub_domain_params"] = $sharedSdp }
++        # Parse KV string sub_domain_params inside query items
++        if ($q["sub_domain_params"] -is [string]) {
++            $q["sub_domain_params"] = Parse-SubDomainParams $q["sub_domain_params"]
++        }
++        $finalQueries += $q
++    }
++
++    $arguments = @{ queries = @($finalQueries) }
++    $result = Call-Api -ToolName "batch_search" -Arguments $arguments -ApiKey $Opts.ApiKey
++    Write-Output $result
++}
++
++# BEGIN GENERATED:DOC_SPEC
++function Render-Doc {
++    $shared = Join-Path (Split-Path -Parent $MyInvocation.ScriptName) "shared"
++    $tpl = Get-Content (Join-Path $shared "doc_spec.md") -Raw -Encoding UTF8
++    $c = Get-Content (Join-Path $shared "constants.json") -Raw -Encoding UTF8 | ConvertFrom-Json
++    $tpl = $tpl.Replace("{{LANG_NAME}}", "PowerShell")
++    $tpl = $tpl.Replace("{{LANG_CODEBLOCK}}", "powershell")
++    $tpl = $tpl.Replace("{{LANG_INVOKE}}", "powershell -ExecutionPolicy Bypass -File scripts/anysearch_cli.ps1")
++    $tpl = $tpl.Replace("{{DOMAINS_SPACE}}", ($c.available_domains -join " "))
++    return $tpl
++}
++# END GENERATED:DOC_SPEC
++
++function Show-Doc {
++    Write-Output (Render-Doc)
++}
++
++function Show-Usage {
++    Show-Doc
++}
++
++$apiKey = if ($env:ANYSEARCH_API_KEY) { $env:ANYSEARCH_API_KEY } else { "" }
++
++if ($args.Count -eq 0) {
++    Show-Usage
++    exit 0
++}
++
++$command = $args[0]
++if ($args.Count -gt 1) {
++    $rest = [array]$args[1..($args.Count - 1)]
++} else {
++    $rest = [array]@()
++}
++
++switch ($command) {
++    "-h" { Show-Usage; exit 0 }
++    "--help" { Show-Usage; exit 0 }
++    "help" { Show-Usage; exit 0 }
++}
++
++switch ($command) {
++    "search" {
++        $query = ""
++        $domain = ""
++        $subDomain = ""
++        $subDomainParams = ""
++        $maxResults = $null
++
++        $i = 0
++        $positional = @()
++        while ($i -lt $rest.Count) {
++            if ($rest[$i] -match '^-') { break }
++            $positional += $rest[$i]
++            $i++
++        }
++        $query = $positional -join ' '
++
++        while ($i -lt $rest.Count) {
++            switch ($rest[$i]) {
++                "--domain" { $domain = $rest[$i+1]; $i += 2 }
++                "-d"       { $domain = $rest[$i+1]; $i += 2 }
++                "--sub_domain" { $subDomain = $rest[$i+1]; $i += 2 }
++                "-s"       { $subDomain = $rest[$i+1]; $i += 2 }
++                "--sub_domain_params" { $subDomainParams = $rest[$i+1]; $i += 2 }
++                "--sdp"    { $subDomainParams = $rest[$i+1]; $i += 2 }
++                "-p"       { $subDomainParams = $rest[$i+1]; $i += 2 }
++                "--max_results" { $maxResults = [int]$rest[$i+1]; $i += 2 }
++                "-m"       { $maxResults = [int]$rest[$i+1]; $i += 2 }
++                "--api_key" { $apiKey = $rest[$i+1]; $i += 2 }
++                default    { Write-Error "Unknown flag: $($rest[$i])"; exit 1 }
++            }
++        }
++
++        if (-not $query) {
++            Write-Error "Error: query is required"
++            exit 1
++        }
++
++        Invoke-Search @{
++            Query             = $query
++            Domain            = $domain
++            SubDomain         = $subDomain
++            SubDomainParams   = $subDomainParams
++            MaxResults        = $maxResults
++            ApiKey            = $apiKey
++        }
++    }
++
++    "get_sub_domains" {
++        $domain = ""
++        $domains = ""
++
++        $i = 0
++        while ($i -lt $rest.Count) {
++            switch ($rest[$i]) {
++                "--domain"  { $domain = $rest[$i+1]; $i += 2 }
++                "--domains" { $domains = $rest[$i+1]; $i += 2 }
++                "--api_key" { $apiKey = $rest[$i+1]; $i += 2 }
++                default     { Write-Error "Unknown flag: $($rest[$i])"; exit 1 }
++            }
++        }
++
++        Invoke-ListDomains @{
++            Domain = $domain
++            Domains = $domains
++            ApiKey  = $apiKey
++        }
++    }
++
++    "extract" {
++        $url = ""
++        $positional = @()
++        $i = 0
++
++        while ($i -lt $rest.Count) {
++            if ($rest[$i] -match '^-') { break }
++            $positional += $rest[$i]
++            $i++
++        }
++        $url = $positional -join ' '
++
++        while ($i -lt $rest.Count) {
++            switch ($rest[$i]) {
++                "--url" { $url = $rest[$i+1]; $i += 2 }
++                "-u"    { $url = $rest[$i+1]; $i += 2 }
++                "--api_key" { $apiKey = $rest[$i+1]; $i += 2 }
++                default { Write-Error "Unknown flag: $($rest[$i])"; exit 1 }
++            }
++        }
++
++        Invoke-Extract @{ Url = $url; ApiKey = $apiKey }
++    }
++
++    "batch_search" {
++        $queryItems = [System.Collections.Generic.List[string]]::new()
++        $queries = $null
++        $positional = $null
++        $batchDomain = ""
++        $batchSubDomain = ""
++        $batchSdp = ""
++        $i = 0
++
++        while ($i -lt $rest.Count) {
++            switch ($rest[$i]) {
++                "--queries" { $queries = $rest[$i+1]; $i += 2 }
++                "-q"        { $queries = $rest[$i+1]; $i += 2 }
++                "--query"   { $queryItems.Add($rest[$i+1]); $i += 2 }
++                "--domain"  { $batchDomain = $rest[$i+1]; $i += 2 }
++                "-d"        { $batchDomain = $rest[$i+1]; $i += 2 }
++                "--sub_domain" { $batchSubDomain = $rest[$i+1]; $i += 2 }
++                "-s"        { $batchSubDomain = $rest[$i+1]; $i += 2 }
++                "--sub_domain_params" { $batchSdp = $rest[$i+1]; $i += 2 }
++                "--sdp"     { $batchSdp = $rest[$i+1]; $i += 2 }
++                "-p"        { $batchSdp = $rest[$i+1]; $i += 2 }
++                "--api_key" { $apiKey = $rest[$i+1]; $i += 2 }
++                default     {
++                    if (-not $positional) { $positional = $rest[$i] }
++                    else { Write-Error "Unknown argument: $($rest[$i])"; exit 1 }
++                    $i++
++                }
++            }
++        }
++
++        if ($positional -and -not $queries) { $queries = $positional }
++
++        Invoke-BatchSearch @{
++            Queries        = $queries
++            QueryItems     = $queryItems
++            SharedDomain   = $batchDomain
++            SharedSubDomain = $batchSubDomain
++            SharedSdp      = $batchSdp
++            ApiKey         = $apiKey
++        }
++    }
++
++    "doc" {
++        Show-Doc
++    }
++
++    default {
++        Write-Error "Unknown command: $command"
++        Show-Usage
++        exit 1
++    }
++}
+diff --git a/skills/anysearch/scripts/anysearch_cli.py b/skills/anysearch/scripts/anysearch_cli.py
+new file mode 100644
+index 0000000..ad1da63
+--- /dev/null
++++ b/skills/anysearch/scripts/anysearch_cli.py
+@@ -0,0 +1,536 @@
++#!/usr/bin/env python3
++"""AnySearch CLI - Unified search client for AnySearch API."""
++
++import argparse
++import io
++import json
++import os
++import sys
++import requests
++
++if sys.stdout.encoding != "utf-8":
++    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
++if sys.stderr.encoding != "utf-8":
++    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
++
++ENDPOINT = "https://api.anysearch.com/mcp"
++
++def _load_env():
++    """Load API keys from .env files near the skill.
++
++    The documented priority is:
++    --api_key > .env file > environment variable > anonymous.
++
++    Use utf-8-sig so .env files saved by Windows Notepad with a BOM are parsed
++    correctly. The .env value intentionally overrides an existing environment
++    variable to match the documented priority order.
++    """
++    script_dir = os.path.dirname(os.path.abspath(__file__))
++    for env_path in [os.path.join(script_dir, ".env"), os.path.join(script_dir, "..", ".env")]:
++        if os.path.isfile(env_path):
++            with open(env_path, "r", encoding="utf-8-sig") as f:
++                for line in f:
++                    line = line.strip()
++                    if not line or line.startswith("#"):
++                        continue
++                    if "=" not in line:
++                        continue
++                    key, _, value = line.partition("=")
++                    key = key.strip().lstrip(chr(0xFEFF))
++                    value = value.strip().strip("\"'").strip()
++                    if key and value:
++                        os.environ[key] = value
++
++
++_load_env()
++
++
++# BEGIN GENERATED:CONSTANTS
++AVAILABLE_DOMAINS = [
++    "general", "resource", "social_media", "finance", "academic", "legal",
++    "health", "business", "security", "ip", "code", "energy",
++    "environment", "agriculture", "travel", "film", "gaming",
++]
++# END GENERATED:CONSTANTS
++
++
++def _build_headers(api_key: str) -> dict:
++    headers = {"Content-Type": "application/json"}
++    if api_key:
++        headers["Authorization"] = f"Bearer {api_key}"
++    return headers
++
++def _call_api(tool_name: str, arguments: dict, api_key: str) -> str:
++    payload = {
++        "jsonrpc": "2.0",
++        "id": 1,
++        "method": "tools/call",
++        "params": {"name": tool_name, "arguments": arguments},
++    }
++    try:
++        resp = requests.post(ENDPOINT, json=payload, headers=_build_headers(api_key), timeout=30)
++        resp.raise_for_status()
++    except requests.exceptions.HTTPError as e:
++        print(f"HTTP Error: {e}", file=sys.stderr)
++        try:
++            detail = resp.json()
++            print(f"Response: {json.dumps(detail, ensure_ascii=False)}", file=sys.stderr)
++        except Exception:
++            print(f"Response body: {resp.text[:500]}", file=sys.stderr)
++        sys.exit(1)
++    except requests.exceptions.ConnectionError:
++        print("Connection Error: Unable to reach the API endpoint.", file=sys.stderr)
++        sys.exit(1)
++    except requests.exceptions.Timeout:
++        print("Timeout: The API request timed out.", file=sys.stderr)
++        sys.exit(1)
++
++    data = resp.json()
++    if "error" in data:
++        error_msg = data["error"].get("message", str(data["error"]))
++        print(f"API Error: {error_msg}", file=sys.stderr)
++        sys.exit(1)
++    result = data.get("result", {})
++    content = result.get("content", [])
++    for item in content:
++        if item.get("type") == "text":
++            return item.get("text", "")
++    return json.dumps(result, indent=2, ensure_ascii=False)
++
++
++def _parse_json_list(value: str) -> list:
++    try:
++        parsed = json.loads(value)
++        if isinstance(parsed, list):
++            return parsed
++        return [parsed]
++    except json.JSONDecodeError:
++        return [s.strip() for s in value.split(",") if s.strip()]
++
++
++def _parse_sub_domain_params(value: str):
++    """Parse sub_domain_params from JSON, {key:value} or key=value format."""
++    if not value:
++        return None
++    try:
++        return json.loads(value)
++    except json.JSONDecodeError:
++        # {key:value,key2:value2} format (PowerShell strips inner quotes from JSON)
++        if value.startswith("{") and value.endswith("}"):
++            inner = value[1:-1].strip()
++            if inner:
++                result = {}
++                for pair in inner.split(","):
++                    if ":" not in pair:
++                        continue
++                    idx = pair.index(":")
++                    key = pair[:idx].strip().strip("'\"")
++                    val = pair[idx + 1:].strip().strip("'\"")
++                    if key:
++                        result[key] = val
++                if result:
++                    return result
++        # key=value,key2=value2 format
++        result = {}
++        for pair in value.split(","):
++            if "=" not in pair:
++                continue
++            idx = pair.index("=")
++            key = pair[:idx].strip()
++            val = pair[idx + 1:].strip()
++            if key:
++                result[key] = val
++        return result if result else None
++
++
++def cmd_search(args):
++    """Execute search (general or vertical)."""
++    arguments = {"query": args.query}
++
++    if args.domain:
++        arguments["domain"] = args.domain
++        if args.sub_domain:
++            arguments["sub_domain"] = args.sub_domain
++        if args.sub_domain_params:
++            parsed = _parse_sub_domain_params(args.sub_domain_params)
++            if not parsed:
++                print("Error: --sub_domain_params must be valid JSON or key=value pairs", file=sys.stderr)
++                sys.exit(1)
++            arguments["sub_domain_params"] = parsed
++
++    if args.max_results is not None:
++        arguments["max_results"] = min(args.max_results, 10)
++
++    print(_call_api("search", arguments, args.api_key))
++
++
++def cmd_get_sub_domains(args):
++    """List available sub_domains for given domain(s)."""
++    arguments = {}
++    if args.domains:
++        arguments["domains"] = _parse_json_list(args.domains)
++    elif args.domain:
++        arguments["domain"] = args.domain
++    else:
++        print("Error: provide --domain or --domains", file=sys.stderr)
++        sys.exit(1)
++
++    print(_call_api("get_sub_domains", arguments, args.api_key))
++
++
++def cmd_extract(args):
++    """Fetch and extract full page content from a URL."""
++    url = args.url or getattr(args, "url_opt", None)
++    if not url:
++        print("Error: url is required", file=sys.stderr)
++        sys.exit(1)
++    arguments = {"url": url}
++    print(_call_api("extract", arguments, args.api_key))
++
++
++def _repair_json(raw: str) -> list:
++    raw = raw.strip()
++    if raw.startswith("{") and not raw.startswith("["):
++        raw = "[" + raw + "]"
++    if raw.startswith("["):
++        content = raw.strip("[]")
++        if not content:
++            return []
++        items = _split_json_items(content)
++        queries = []
++        for item in items:
++            item = item.strip().strip(",")
++            if not item:
++                continue
++            if item.startswith("{"):
++                d = _repair_json_object(item)
++                queries.append(d)
++            else:
++                s = item.strip().strip("'\"")
++                queries.append({"query": s})
++        return queries
++    return [{"query": raw.strip().strip("'\"")}]
++
++
++def _split_json_items(s: str) -> list:
++    depth = 0
++    current = []
++    items = []
++    for ch in s:
++        if ch == "{":
++            depth += 1
++        elif ch == "}":
++            depth -= 1
++        if ch == "," and depth == 0:
++            items.append("".join(current))
++            current = []
++        else:
++            current.append(ch)
++    if current:
++        tail = "".join(current).strip()
++        if tail:
++            items.append(tail)
++    return items
++
++
++def _repair_json_object(s: str) -> dict:
++    inner = s.strip().strip("{}").strip()
++    if not inner:
++        return {}
++    pairs = _split_json_items(inner)
++    result = {}
++    for pair in pairs:
++        pair = pair.strip().strip(",")
++        if not pair:
++            continue
++        if ":" not in pair:
++            continue
++        colon = pair.index(":")
++        key = pair[:colon].strip().strip("'\"")
++        val = pair[colon + 1:].strip()
++        if val.startswith("{"):
++            try:
++                result[key] = json.loads(val)
++            except json.JSONDecodeError:
++                result[key] = _repair_json_object(val)
++        elif val.startswith("["):
++            try:
++                result[key] = json.loads(val)
++            except json.JSONDecodeError:
++                result[key] = val.strip("[]").split(",")
++        elif val.lower() in ("true", "false"):
++            result[key] = val.lower() == "true"
++        elif val.lower() == "null":
++            result[key] = None
++        else:
++            try:
++                result[key] = json.loads(val)
++            except (json.JSONDecodeError, ValueError):
++                result[key] = val.strip("'\"")
++    return result
++
++
++def cmd_batch_search(args):
++    """Execute multiple search queries in parallel (2-5 queries)."""
++    query_items = getattr(args, "query_items", None) or []
++    raw = args.queries or getattr(args, "queries_opt", None)
++
++    if query_items:
++        queries = [{"query": q} for q in query_items]
++        if len(queries) > 5:
++            print("Error: batch_search supports a maximum of 5 queries", file=sys.stderr)
++            sys.exit(1)
++    elif raw:
++        if raw.startswith("@"):
++            file_path = raw[1:]
++            try:
++                with open(file_path, "r", encoding="utf-8") as f:
++                    raw = f.read()
++            except FileNotFoundError:
++                print(f"Error: file not found: {file_path}", file=sys.stderr)
++                sys.exit(1)
++        try:
++            queries = json.loads(raw)
++            if not isinstance(queries, list):
++                queries = [queries]
++        except json.JSONDecodeError:
++            queries = _repair_json(raw)
++        if len(queries) < 1:
++            print("Error: queries must contain at least 1 item", file=sys.stderr)
++            sys.exit(1)
++        if len(queries) > 5:
++            print("Error: batch_search supports a maximum of 5 queries", file=sys.stderr)
++            sys.exit(1)
++    else:
++        print("Error: provide --queries or --query", file=sys.stderr)
++        sys.exit(1)
++
++    # Inject shared params into each query item (item's own fields take precedence)
++    shared_domain = getattr(args, "batch_domain", None)
++    shared_sub_domain = getattr(args, "batch_sub_domain", None)
++    shared_sdp_raw = getattr(args, "batch_sdp", None)
++    shared_sdp = _parse_sub_domain_params(shared_sdp_raw) if shared_sdp_raw else None
++
++    for item in queries:
++        if shared_domain and not item.get("domain"):
++            item["domain"] = shared_domain
++        if shared_sub_domain and not item.get("sub_domain"):
++            item["sub_domain"] = shared_sub_domain
++        if shared_sdp and not item.get("sub_domain_params"):
++            item["sub_domain_params"] = shared_sdp
++        # Parse KV string sub_domain_params inside query items
++        if isinstance(item.get("sub_domain_params"), str):
++            item["sub_domain_params"] = _parse_sub_domain_params(item["sub_domain_params"])
++
++    arguments = {"queries": queries}
++    print(_call_api("batch_search", arguments, args.api_key))
++
++
++# BEGIN GENERATED:DOC_SPEC
++def _render_doc():
++    import json as _json
++    _dir = os.path.dirname(os.path.abspath(__file__))
++    _shared = os.path.join(_dir, "shared")
++    with open(os.path.join(_shared, "doc_spec.md"), "r", encoding="utf-8") as _f:
++        _tpl = _f.read()
++    with open(os.path.join(_shared, "constants.json"), "r", encoding="utf-8") as _f:
++        _c = _json.load(_f)
++    _tpl = _tpl.replace("{{LANG_NAME}}", "Python")
++    _tpl = _tpl.replace("{{LANG_CODEBLOCK}}", "")
++    _tpl = _tpl.replace("{{LANG_INVOKE}}", "python scripts/anysearch_cli.py")
++    _tpl = _tpl.replace("{{DOMAINS_SPACE}}", " ".join(_c["available_domains"]))
++    return _tpl
++# END GENERATED:DOC_SPEC
++
++
++def cmd_doc(args):
++    print(_render_doc())
++
++
++def build_parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(
++        prog="anysearch",
++        description=(
++            "AnySearch CLI - Unified real-time search client.\n\n"
++            "Supports general search, vertical domain search, batch search,\n"
++            "domain directory lookup, and URL content extraction via the\n"
++            "AnySearch JSON-RPC API."
++        ),
++        formatter_class=argparse.RawDescriptionHelpFormatter,
++        epilog=(
++            "examples:\n"
++            "  anysearch search \"quantum computing\"\n"
++            "  anysearch search \"AAPL\" --domain finance --sub_domain finance.us_stock\n"
++            "  anysearch get_sub_domains --domain finance\n"
++            "  anysearch extract --url https://example.com\n"
++            "  anysearch batch_search --queries '[{\"query\":\"AAPL\"},{\"query\":\"GOOG\"}]'\n"
++        ),
++    )
++
++    parser.add_argument(
++        "--api_key",
++        default=os.environ.get("ANYSEARCH_API_KEY", ""),
++        help="API key for authentication. Read from: --api_key > .env ANYSEARCH_API_KEY > env ANYSEARCH_API_KEY. "
++        "Without a key, anonymous access is used with lower rate limits.",
++    )
++
++    subparsers = parser.add_subparsers(dest="command", help="Available commands")
++
++    search_p = subparsers.add_parser(
++        "search",
++        help="Search the web (general or vertical domain search)",
++        description=(
++            "Execute a search query.\n\n"
++            "Two modes:\n"
++            "  General search:   omit --domain (open-ended natural language queries)\n"
++            "  Vertical search:  specify --domain and --sub_domain for structured queries\n\n"
++            "For vertical search, run 'get_sub_domains' first to discover available\n"
++            "sub_domains and their required query formats."
++        ),
++        formatter_class=argparse.RawDescriptionHelpFormatter,
++    )
++    search_p.add_argument("query", help="Search query string. For vertical search, follow the format returned by get_sub_domains.")
++    search_p.add_argument(
++        "--domain", "-d",
++        choices=AVAILABLE_DOMAINS,
++        help=(
++            "Vertical domain for structured search. "
++            f"Available: {', '.join(AVAILABLE_DOMAINS)}"
++        ),
++    )
++    search_p.add_argument(
++        "--sub_domain", "-s",
++        help="Sub-domain routing key (e.g. finance.us_stock). Required for vertical search; obtain via get_sub_domains.",
++    )
++    search_p.add_argument(
++        "--sub_domain_params", "--sdp", "-p",
++        help="Sub_domain parameters as JSON or key=value pairs (e.g. ticker=AAPL,period=2025). Schema depends on the sub_domain (see get_sub_domains output).",
++    )
++    search_p.add_argument(
++        "--max_results", "-m",
++        type=int,
++        help="Maximum number of results to return (1-10, default 10).",
++    )
++    search_p.set_defaults(func=cmd_search)
++
++    ld_p = subparsers.add_parser(
++        "get_sub_domains",
++        help="Query domain directory for available sub_domains",
++        description=(
++            "List available sub_domains, query formats, and parameter schemas\n"
++            "for one or more vertical domains.\n\n"
++            "MUST be called before performing vertical search to obtain\n"
++            "the correct sub_domain value and query_format.\n\n"
++            "Results are returned as a Markdown table with columns:\n"
++            "domain, sub_domain, description, query_format, params_schema, zone."
++        ),
++        formatter_class=argparse.RawDescriptionHelpFormatter,
++    )
++    ld_p.add_argument(
++        "--domain",
++        choices=AVAILABLE_DOMAINS,
++        help="Single domain to query.",
++    )
++    ld_p.add_argument(
++        "--domains",
++        help=(
++            "Batch query up to 5 domains. Comma-separated or JSON array.\n"
++            f"Available: {', '.join(AVAILABLE_DOMAINS)}\n"
++            "Takes precedence over --domain."
++        ),
++    )
++    ld_p.set_defaults(func=cmd_get_sub_domains)
++
++    ext_p = subparsers.add_parser(
++        "extract",
++        help="Fetch full page content from a URL",
++        description=(
++            "Extract the full content of a web page and return it as Markdown.\n\n"
++            "Use this when search snippets are insufficient, you need to verify\n"
++            "data, or want to extract structured content (tables, code, etc.).\n\n"
++            "Note: Output is truncated at 50,000 characters. Only HTML pages\n"
++            "are supported (not PDFs, images, etc.)."
++        ),
++        formatter_class=argparse.RawDescriptionHelpFormatter,
++    )
++    ext_p.add_argument("url", nargs="?", help="Target URL to extract content from (http(s)://).")
++    ext_p.add_argument("--url", "-u", dest="url_opt", help="Target URL to extract content from (alternative to positional arg).")
++    ext_p.set_defaults(func=cmd_extract)
++
++    batch_p = subparsers.add_parser(
++        "batch_search",
++        help="Execute 2-5 search queries in parallel",
++        description=(
++            "Run multiple independent search queries in a single API call.\n"
++            "Each query follows the same parameter structure as the 'search' command.\n"
++            "A single query failure does not block others; results are merged.\n\n"
++            "Queries are provided as a JSON array of objects. Each object supports\n"
++            "the same fields as 'search': query, domain, sub_domain, max_results."
++        ),
++        formatter_class=argparse.RawDescriptionHelpFormatter,
++        epilog=(
++            "examples:\n"
++            '  anysearch batch_search --query AAPL --query GOOG\n'
++            '  anysearch batch_search --queries \'[{\"query\":\"AAPL\"},{\"query\":\"GOOG\"}]\'\n'
++            '  anysearch batch_search \'[{\"query\":\"AAPL\"},{\"query\":\"GOOG\"}]\'\n'
++            '  anysearch batch_search --queries @queries.json\n'
++        ),
++    )
++    batch_p.add_argument(
++        "queries",
++        nargs="?",
++        help=(
++            'JSON array of search query objects (1-5 items). '
++            'Tolerates PowerShell quote-stripping automatically.\n'
++            'Each object supports: query (required), domain, sub_domain, sub_domain_params, max_results.\n'
++            'Example: \'[{"query":"AAPL"},{"query":"GOOG"}]\''
++        ),
++    )
++    batch_p.add_argument(
++        "--queries", "-q", dest="queries_opt",
++        help="JSON array of search query objects (alternative to positional arg). Prefix @ to read from file.",
++    )
++    batch_p.add_argument(
++        "--query",
++        action="append",
++        dest="query_items",
++        help="Shorthand: repeatable single-query string. Easier for PowerShell. Up to 5.",
++    )
++    batch_p.add_argument(
++        "--domain", "-d",
++        dest="batch_domain",
++        choices=AVAILABLE_DOMAINS,
++        help="Shared domain injected into all query items (item's own domain takes precedence).",
++    )
++    batch_p.add_argument(
++        "--sub_domain", "-s",
++        dest="batch_sub_domain",
++        help="Shared sub_domain injected into all query items (item's own sub_domain takes precedence).",
++    )
++    batch_p.add_argument(
++        "--sub_domain_params", "--sdp", "-p",
++        dest="batch_sdp",
++        help="Shared sub_domain_params as JSON or key=value pairs, injected into all query items.",
++    )
++    batch_p.set_defaults(func=cmd_batch_search)
++
++    doc_p = subparsers.add_parser(
++        "doc",
++        help="Print AI-facing interface specification",
++    )
++    doc_p.set_defaults(func=cmd_doc)
++
++    return parser
++
++
++def main():
++    parser = build_parser()
++    args = parser.parse_args()
++    if args.command is None:
++        print(_render_doc())
++        sys.exit(0)
++    args.func(args)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/skills/anysearch/scripts/anysearch_cli.sh b/skills/anysearch/scripts/anysearch_cli.sh
+new file mode 100644
+index 0000000..6d8faf9
+--- /dev/null
++++ b/skills/anysearch/scripts/anysearch_cli.sh
+@@ -0,0 +1,399 @@
++#!/usr/bin/env bash
++export LANG=en_US.UTF-8
++export LC_ALL=en_US.UTF-8
++
++ENDPOINT="https://api.anysearch.com/mcp"
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++
++if ! command -v jq &>/dev/null; then
++  echo "Error: jq is required but not found. Install it: https://jqlang.github.io/jq/download/" >&2
++  exit 1
++fi
++
++_load_env() {
++  for env_path in "$SCRIPT_DIR/.env" "$SCRIPT_DIR/../.env"; do
++    if [[ -f "$env_path" ]]; then
++      while IFS= read -r line || [[ -n "$line" ]]; do
++        line="${line%%#*}"
++        line="$(echo "$line" | xargs 2>/dev/null || true)"
++        [[ -z "$line" || "$line" != *=* ]] && continue
++        local key="${line%%=*}"
++        local val="${line#*=}"
++        val="$(echo "$val" | sed 's/^["\x27]\|["\x27]$//g')"
++        export "$key=$val"
++      done < "$env_path"
++    fi
++  done
++}
++
++_load_env
++
++API_KEY="${ANYSEARCH_API_KEY:-}"
++
++_parse_sub_domain_params() {
++  local value="$1"
++  if [[ -z "$value" ]]; then
++    echo ""
++    return
++  fi
++  # Try JSON parse first
++  if printf '%s' "$value" | jq empty 2>/dev/null; then
++    printf '%s' "$value"
++    return
++  fi
++  # {key:value,key2:value2} format (PowerShell strips inner quotes from JSON)
++  if [[ "$value" == \{* && "$value" == *\} ]]; then
++    local inner="${value#\{}"
++    inner="${inner%\}}"
++    inner="$(echo "$inner" | xargs 2>/dev/null || echo "$inner")"
++    if [[ -n "$inner" ]]; then
++      local result="{}"
++      IFS=',' read -ra pairs <<< "$inner"
++      for pair in "${pairs[@]}"; do
++        if [[ "$pair" == *:* ]]; then
++          local key="${pair%%:*}"
++          local val="${pair#*:}"
++          key="$(echo "$key" | xargs 2>/dev/null || echo "$key")"
++          val="$(echo "$val" | xargs 2>/dev/null || echo "$val")"
++          key="${key//\"/}"
++          key="${key//\'/}"
++          val="${val//\"/}"
++          val="${val//\'/}"
++          if [[ -n "$key" ]]; then
++            result=$(printf '%s' "$result" | jq --arg k "$key" --arg v "$val" '. + {($k):$v}')
++          fi
++        fi
++      done
++      if [[ "$result" != "{}" ]]; then
++        printf '%s' "$result"
++        return
++      fi
++    fi
++  fi
++  # key=value,key2=value2 format
++  local result="{}"
++  IFS=',' read -ra pairs <<< "$value"
++  for pair in "${pairs[@]}"; do
++    local key="${pair%%=*}"
++    local val="${pair#*=}"
++    key="$(echo "$key" | xargs 2>/dev/null || echo "$key")"
++    val="$(echo "$val" | xargs 2>/dev/null || echo "$val")"
++    if [[ -n "$key" ]]; then
++      result=$(printf '%s' "$result" | jq --arg k "$key" --arg v "$val" '. + {($k):$v}')
++    fi
++  done
++  printf '%s' "$result"
++}
++
++# BEGIN GENERATED:CONSTANTS
++AVAILABLE_DOMAINS=("general" "resource" "social_media" "finance" "academic" "legal" "health" "business" "security" "ip" "code" "energy" "environment" "agriculture" "travel" "film" "gaming")
++# END GENERATED:CONSTANTS
++
++_call_api() {
++  local tool_name="$1"
++  local arguments="$2"
++  local auth_args=()
++  if [[ -n "$API_KEY" ]]; then
++    auth_args+=(-H "Authorization: Bearer $API_KEY")
++  fi
++
++  local payload
++  payload=$(jq -n --arg name "$tool_name" --argjson args "$arguments" \
++    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":$name,"arguments":$args}}')
++
++  local response
++  response=$(curl -s -X POST "$ENDPOINT" \
++    -H "Content-Type: application/json" \
++    "${auth_args[@]}" \
++    -d "$payload" \
++    --max-time 30 2>/dev/null)
++
++  if [[ -z "$response" ]]; then
++    echo "Error: No response from API" >&2
++    exit 1
++  fi
++
++  local error_msg
++  error_msg=$(printf '%s' "$response" | jq -r '.error.message // empty' 2>/dev/null)
++  if [[ -n "$error_msg" ]]; then
++    echo "API Error: $error_msg" >&2
++    exit 1
++  fi
++
++  local text_block
++  text_block=$(printf '%s' "$response" | jq -r '.result.content[0].text // empty' 2>/dev/null)
++  if [[ -n "$text_block" ]]; then
++    printf '%s\n' "$text_block"
++  else
++    printf '%s\n' "$response"
++  fi
++}
++
++_cmd_search() {
++  local query=""
++  local domain=""
++  local sub_domain=""
++  local sub_domain_params=""
++  local max_results=""
++
++  while [[ $# -gt 0 ]]; do
++    case "$1" in
++      --domain|-d)     domain="$2"; shift 2 ;;
++      --sub_domain|-s) sub_domain="$2"; shift 2 ;;
++      --sub_domain_params|--sdp|-p) sub_domain_params="$2"; shift 2 ;;
++      --max_results|-m) max_results="$2"; shift 2 ;;
++      --api_key)       API_KEY="$2"; shift 2 ;;
++      -*)              echo "Unknown flag: $1" >&2; _usage; exit 1 ;;
++      *)               query="$1"; shift ;;
++    esac
++  done
++
++  if [[ -z "$query" ]]; then
++    echo "Error: query is required" >&2
++    exit 1
++  fi
++
++  local args
++  args=$(jq -n --arg q "$query" '{"query":$q}')
++
++  if [[ -n "$domain" ]]; then
++    args=$(printf '%s' "$args" | jq --arg d "$domain" '. + {"domain":$d}')
++    if [[ -n "$sub_domain" ]]; then
++      args=$(printf '%s' "$args" | jq --arg s "$sub_domain" '. + {"sub_domain":$s}')
++    fi
++    if [[ -n "$sub_domain_params" ]]; then
++      local parsed_sdp
++      parsed_sdp=$(_parse_sub_domain_params "$sub_domain_params")
++      if [[ -n "$parsed_sdp" && "$parsed_sdp" != "{}" ]]; then
++        args=$(printf '%s' "$args" | jq --argjson p "$parsed_sdp" '. + {"sub_domain_params":$p}')
++      fi
++    fi
++  fi
++
++  if [[ -n "$max_results" ]]; then
++    if [[ "$max_results" -gt 10 ]]; then
++      max_results=10
++    fi
++    args=$(printf '%s' "$args" | jq --argjson m "$max_results" '. + {"max_results":$m}')
++  fi
++
++  _call_api "search" "$args"
++}
++
++_cmd_get_sub_domains() {
++  local domain=""
++  local domains=""
++
++  while [[ $# -gt 0 ]]; do
++    case "$1" in
++      --domains)       domains="$2"; shift 2 ;;
++      --domain)        domain="$2"; shift 2 ;;
++      --api_key)       API_KEY="$2"; shift 2 ;;
++      -*)              echo "Unknown flag: $1" >&2; exit 1 ;;
++      *)               domain="$1"; shift ;;
++    esac
++  done
++
++  local args
++  if [[ -n "$domains" ]]; then
++    local d_json
++    if [[ "$domains" == \[* ]]; then
++      d_json="$domains"
++    else
++      d_json=$(printf '%s' "$domains" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0))')
++    fi
++    args=$(jq -n --argjson d "$d_json" '{"domains":$d}')
++  elif [[ -n "$domain" ]]; then
++    args=$(jq -n --arg d "$domain" '{"domain":$d}')
++  else
++    echo "Error: provide --domain or --domains" >&2
++    exit 1
++  fi
++
++  _call_api "get_sub_domains" "$args"
++}
++
++_cmd_extract() {
++  local url=""
++
++  while [[ $# -gt 0 ]]; do
++    case "$1" in
++      --url|-u)        url="$2"; shift 2 ;;
++      --api_key)       API_KEY="$2"; shift 2 ;;
++      -*)              echo "Unknown flag: $1" >&2; exit 1 ;;
++      *)               url="$1"; shift ;;
++    esac
++  done
++
++  if [[ -z "$url" ]]; then
++    echo "Error: url is required" >&2
++    exit 1
++  fi
++
++  local args
++  args=$(jq -n --arg u "$url" '{"url":$u}')
++  _call_api "extract" "$args"
++}
++
++_cmd_batch_search() {
++  local queries=""
++  local query_items=()
++  local shared_domain=""
++  local shared_sub_domain=""
++  local shared_sdp=""
++
++  while [[ $# -gt 0 ]]; do
++    case "$1" in
++      --queries|-q)    queries="$2"; shift 2 ;;
++      --query)         query_items+=("$2"); shift 2 ;;
++      --domain|-d)     shared_domain="$2"; shift 2 ;;
++      --sub_domain|-s) shared_sub_domain="$2"; shift 2 ;;
++      --sub_domain_params|--sdp|-p) shared_sdp="$2"; shift 2 ;;
++      --api_key)       API_KEY="$2"; shift 2 ;;
++      -*)              echo "Unknown flag: $1" >&2; exit 1 ;;
++      *)               queries="$1"; shift ;;
++    esac
++  done
++
++  local args
++  if [[ ${#query_items[@]} -gt 0 ]]; then
++    if [[ ${#query_items[@]} -gt 5 ]]; then
++      echo "Error: batch_search supports a maximum of 5 queries" >&2
++      exit 1
++    fi
++    local items_json="[]"
++    for q in "${query_items[@]}"; do
++      items_json=$(printf '%s' "$items_json" | jq --arg q "$q" '. + [{"query":$q}]')
++    done
++    args=$(jq -n --argjson q "$items_json" '{"queries":$q}')
++  elif [[ -n "$queries" ]]; then
++    local raw="$queries"
++    if [[ "$raw" == @* ]]; then
++      local fpath="${raw:1}"
++      if [[ ! -f "$fpath" ]]; then
++        echo "Error: file not found: $fpath" >&2
++        exit 1
++      fi
++      raw=$(cat "$fpath")
++    fi
++    if [[ "$raw" == \[* || "$raw" == \{* ]]; then
++      local json_input="$raw"
++      [[ "$raw" == \{* ]] && json_input="[$raw]"
++      if printf '%s' "$json_input" | jq empty 2>/dev/null; then
++        args=$(jq -n --argjson q "$json_input" '{"queries":$q}')
++      else
++        # Repair mangled JSON (e.g. PowerShell strips inner quotes: {query:AAPL} )
++        # Use jq to parse the repaired structure
++        args=$(printf '%s' "$json_input" | jq -R '
++          # Simple repair: split top-level array items by "},{" then parse each
++          gsub("^\\[|\\]$";"") |
++          split("},{") |
++          map(gsub("^\\{|\\}$";"")) |
++          map(
++            split(",") |
++            map(
++              (index(":") // index("=")) as $idx |
++              if $idx then
++                { (.[0:$idx] | gsub("^\\s+|\\s+$|[\"'"'"']";"")): (.[$idx+1:] | gsub("^\\s+|\\s+$|[\"'"'"']";"")) }
++              else empty end
++            ) | add // {}
++          )
++        ' 2>/dev/null) || true
++        if [[ -z "$args" || "$args" == "null" ]]; then
++          echo "Error: failed to parse queries JSON" >&2
++          exit 1
++        fi
++        args=$(jq -n --argjson q "$args" '{"queries":$q}')
++      fi
++    else
++      local items_json
++      items_json=$(printf '%s' "$raw" | jq -R 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | map({"query":.})')
++      args=$(jq -n --argjson q "$items_json" '{"queries":$q}')
++    fi
++  else
++    echo "Error: provide --queries or --query" >&2
++    exit 1
++  fi
++
++  local count
++  count=$(printf '%s' "$args" | jq '.queries | length')
++  if [[ "$count" -lt 1 ]]; then
++    echo "Error: queries must contain at least 1 item" >&2
++    exit 1
++  fi
++  if [[ "$count" -gt 5 ]]; then
++    echo "Error: batch_search supports a maximum of 5 queries" >&2
++    exit 1
++  fi
++
++  # Inject shared params into each query item (item's own fields take precedence)
++  local parsed_shared_sdp=""
++  if [[ -n "$shared_sdp" ]]; then
++    parsed_shared_sdp=$(_parse_sub_domain_params "$shared_sdp")
++  fi
++
++  if [[ -n "$shared_domain" || -n "$shared_sub_domain" || -n "$parsed_shared_sdp" ]]; then
++    args=$(printf '%s' "$args" | jq \
++      --arg sd "$shared_domain" \
++      --arg ss "$shared_sub_domain" \
++      --argjson sp "${parsed_shared_sdp:-null}" \
++      '.queries = [.queries[] | 
++        (if ($sd != "" and (.domain == null or .domain == "")) then .domain = $sd else . end) |
++        (if ($ss != "" and (.sub_domain == null or .sub_domain == "")) then .sub_domain = $ss else . end) |
++        (if ($sp != null and (.sub_domain_params == null)) then .sub_domain_params = $sp else . end)
++      ]')
++  fi
++
++  # Parse string sub_domain_params inside query items to objects
++  args=$(printf '%s' "$args" | jq '
++    .queries = [.queries[] |
++      if (.sub_domain_params | type) == "string" then
++        if (.sub_domain_params | startswith("{")) then
++          # {key:value} format (PowerShell-mangled JSON)
++          .sub_domain_params = (.sub_domain_params | ltrimstr("{") | rtrimstr("}") | split(",") | map(split(":") | {(.[0] | gsub("^\\s+|\\s+$|[\"'"'"']";"")): (.[1:] | join(":") | gsub("^\\s+|\\s+$|[\"'"'"']";""))}) | add // {})
++        else
++          # key=value format
++          .sub_domain_params = (.sub_domain_params | split(",") | map(split("=") | {(.[0] | gsub("^\\s+|\\s+$";"")): (.[1:] | join("=") | gsub("^\\s+|\\s+$";""))}) | add // {})
++        end
++      else . end
++    ]')
++
++  _call_api "batch_search" "$args"
++}
++
++# BEGIN GENERATED:DOC_SPEC
++_cmd_doc() {
++  local shared="$SCRIPT_DIR/shared"
++  local tpl
++  tpl=$(cat "$shared/doc_spec.md")
++  local domains
++  domains=$(jq -r '.available_domains | join(" ")' "$shared/constants.json")
++  tpl="${tpl//\{\{LANG_NAME\}\}/Bash}"
++  tpl="${tpl//\{\{LANG_CODEBLOCK\}\}/bash}"
++  tpl="${tpl//\{\{LANG_INVOKE\}\}\}/bash scripts/anysearch_cli.sh}"
++  tpl="${tpl//\{\{DOMAINS_SPACE\}\}/$domains}"
++  printf '%s\n' "$tpl"
++}
++# END GENERATED:DOC_SPEC
++
++_usage() {
++  _cmd_doc
++}
++
++main() {
++  local command="${1:-}"
++  shift || true
++
++  case "$command" in
++    search)         _cmd_search "$@" ;;
++    get_sub_domains)   _cmd_get_sub_domains "$@" ;;
++    extract)        _cmd_extract "$@" ;;
++    batch_search)   _cmd_batch_search "$@" ;;
++    doc)            _cmd_doc ;;
++    -h|--help|help) _usage ;;
++    "")             _usage ;;
++    *)              echo "Unknown command: $command" >&2; _usage; exit 1 ;;
++  esac
++}
++
++main "$@"
+diff --git a/skills/anysearch/scripts/generate.py b/skills/anysearch/scripts/generate.py
+new file mode 100644
+index 0000000..6bfe314
+--- /dev/null
++++ b/skills/anysearch/scripts/generate.py
+@@ -0,0 +1,210 @@
++#!/usr/bin/env python3
++"""Code generator for AnySearch CLI scripts.
++
++Reads constants.json from scripts/shared/ and injects the domain list
++and doc command implementation into each CLI script. Eliminates duplication
++across all 4 language implementations.
++
++Usage:
++    python scripts/generate.py          # Generate all scripts
++    python scripts/generate.py --check  # Verify scripts are up-to-date (for CI)
++"""
++
++import json
++import os
++import sys
++
++SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
++SHARED_DIR = os.path.join(SCRIPT_DIR, "shared")
++
++# --- Marker format per language ---
++# Each script uses paired comments to delimit generated sections:
++#   BEGIN GENERATED:<section_name>
++#   ... generated content ...
++#   END GENERATED:<section_name>
++
++MARKERS = {
++    ".py": ("# BEGIN GENERATED:{name}", "# END GENERATED:{name}"),
++    ".js": ("// BEGIN GENERATED:{name}", "// END GENERATED:{name}"),
++    ".ps1": ("# BEGIN GENERATED:{name}", "# END GENERATED:{name}"),
++    ".sh": ("# BEGIN GENERATED:{name}", "# END GENERATED:{name}"),
++}
++
++
++def load_constants():
++    with open(os.path.join(SHARED_DIR, "constants.json"), "r", encoding="utf-8") as f:
++        return json.load(f)
++
++
++def render_constants(ext, constants):
++    """Render constants block in the target language syntax."""
++    domains = constants["available_domains"]
++
++    if ext == ".py":
++        lines = []
++        lines.append("AVAILABLE_DOMAINS = [")
++        for i in range(0, len(domains), 6):
++            chunk = domains[i:i+6]
++            lines.append("    " + ", ".join(f'"{d}"' for d in chunk) + ",")
++        lines.append("]")
++        return "\n".join(lines)
++
++    elif ext == ".js":
++        lines = []
++        lines.append("const AVAILABLE_DOMAINS = [")
++        for i in range(0, len(domains), 6):
++            chunk = domains[i:i+6]
++            lines.append("  " + ",".join(f'"{d}"' for d in chunk) + ",")
++        lines.append("];")
++        return "\n".join(lines)
++
++    elif ext == ".ps1":
++        lines = []
++        lines.append("$AVAILABLE_DOMAINS = @(")
++        chunks = [domains[i:i+6] for i in range(0, len(domains), 6)]
++        for idx, chunk in enumerate(chunks):
++            suffix = "," if idx < len(chunks) - 1 else ""
++            lines.append("    " + ", ".join(f'"{d}"' for d in chunk) + suffix)
++        lines.append(")")
++        return "\n".join(lines)
++
++    elif ext == ".sh":
++        lines = []
++        lines.append("AVAILABLE_DOMAINS=(" + " ".join(f'"{d}"' for d in domains) + ")")
++        return "\n".join(lines)
++
++    raise ValueError(f"Unsupported extension: {ext}")
++
++
++def render_doc_block(ext, constants):
++    """Generate code that reads and renders doc_spec.md at runtime."""
++    if ext == ".py":
++        return '''def _render_doc():
++    import json as _json
++    _dir = os.path.dirname(os.path.abspath(__file__))
++    _shared = os.path.join(_dir, "shared")
++    with open(os.path.join(_shared, "doc_spec.md"), "r", encoding="utf-8") as _f:
++        _tpl = _f.read()
++    with open(os.path.join(_shared, "constants.json"), "r", encoding="utf-8") as _f:
++        _c = _json.load(_f)
++    _tpl = _tpl.replace("{{LANG_NAME}}", "Python")
++    _tpl = _tpl.replace("{{LANG_CODEBLOCK}}", "")
++    _tpl = _tpl.replace("{{LANG_INVOKE}}", "python scripts/anysearch_cli.py")
++    _tpl = _tpl.replace("{{DOMAINS_SPACE}}", " ".join(_c["available_domains"]))
++    return _tpl'''
++
++    elif ext == ".js":
++        return '''function renderDoc() {
++  const shared = path.join(__dirname, "shared");
++  let tpl = fs.readFileSync(path.join(shared, "doc_spec.md"), "utf-8");
++  const c = JSON.parse(fs.readFileSync(path.join(shared, "constants.json"), "utf-8"));
++  tpl = tpl.replace(/\\{\\{LANG_NAME\\}\\}/g, "Node.js");
++  tpl = tpl.replace(/\\{\\{LANG_CODEBLOCK\\}\\}/g, "");
++  tpl = tpl.replace(/\\{\\{LANG_INVOKE\\}\\}/g, "node scripts/anysearch_cli.js");
++  tpl = tpl.replace(/\\{\\{DOMAINS_SPACE\\}\\}/g, c.available_domains.join(" "));
++  return tpl;
++}'''
++
++    elif ext == ".ps1":
++        return '''function Render-Doc {
++    $shared = Join-Path (Split-Path -Parent $MyInvocation.ScriptName) "shared"
++    $tpl = Get-Content (Join-Path $shared "doc_spec.md") -Raw -Encoding UTF8
++    $c = Get-Content (Join-Path $shared "constants.json") -Raw -Encoding UTF8 | ConvertFrom-Json
++    $tpl = $tpl.Replace("{{LANG_NAME}}", "PowerShell")
++    $tpl = $tpl.Replace("{{LANG_CODEBLOCK}}", "powershell")
++    $tpl = $tpl.Replace("{{LANG_INVOKE}}", "powershell -ExecutionPolicy Bypass -File scripts/anysearch_cli.ps1")
++    $tpl = $tpl.Replace("{{DOMAINS_SPACE}}", ($c.available_domains -join " "))
++    return $tpl
++}'''
++
++    elif ext == ".sh":
++        return r'''_cmd_doc() {
++  local shared="$SCRIPT_DIR/shared"
++  local tpl
++  tpl=$(cat "$shared/doc_spec.md")
++  local domains
++  domains=$(jq -r '.available_domains | join(" ")' "$shared/constants.json")
++  tpl="${tpl//\{\{LANG_NAME\}\}/Bash}"
++  tpl="${tpl//\{\{LANG_CODEBLOCK\}\}/bash}"
++  tpl="${tpl//\{\{LANG_INVOKE\}\}\}/bash scripts/anysearch_cli.sh}"
++  tpl="${tpl//\{\{DOMAINS_SPACE\}\}/$domains}"
++  printf '%s\n' "$tpl"
++}'''
++
++    raise ValueError(f"Unsupported extension: {ext}")
++
++
++def replace_marker_section(content, ext, section_name, new_text):
++    """Replace everything between marker comments for section_name with new_text."""
++    begin_tag, end_tag = MARKERS[ext]
++    begin = begin_tag.format(name=section_name)
++    end = end_tag.format(name=section_name)
++
++    if begin not in content:
++        raise ValueError(f"BEGIN marker '{begin_tag.format(name=section_name)}' not found")
++    if end not in content:
++        raise ValueError(f"END marker '{end_tag.format(name=section_name)}' not found")
++
++    before, rest = content.split(begin, 1)
++    _, after = rest.split(end, 1)
++    return before + begin + "\n" + new_text + "\n" + end + after
++
++
++def generate_script(script_path, constants):
++    """Regenerate the constants and doc blocks in a CLI script."""
++    ext = os.path.splitext(script_path)[1]
++    if ext not in MARKERS:
++        raise ValueError(f"Unsupported extension: {ext}")
++
++    with open(script_path, "r", encoding="utf-8") as f:
++        content = f.read()
++
++    constants_text = render_constants(ext, constants)
++    content = replace_marker_section(content, ext, "CONSTANTS", constants_text)
++
++    doc_block = render_doc_block(ext, constants)
++    content = replace_marker_section(content, ext, "DOC_SPEC", doc_block)
++
++    return content
++
++
++def main():
++    import argparse
++
++    parser = argparse.ArgumentParser(description="Generate AnySearch CLI scripts from shared data")
++    parser.add_argument("--check", action="store_true", help="Verify scripts are up-to-date (for CI)")
++    args = parser.parse_args()
++
++    constants = load_constants()
++
++    scripts_changed = False
++
++    for ext in [".py", ".js", ".ps1", ".sh"]:
++        script_name = f"anysearch_cli{ext}"
++        script_path = os.path.join(SCRIPT_DIR, script_name)
++
++        try:
++            new_content = generate_script(script_path, constants)
++            with open(script_path, "r", encoding="utf-8") as f:
++                old_content = f.read()
++
++            if new_content != old_content:
++                scripts_changed = True
++                if not args.check:
++                    with open(script_path, "w", encoding="utf-8") as f:
++                        f.write(new_content)
++                    print(f"Generated: {script_name}")
++                else:
++                    print(f"CHANGED: {script_name} (run generate.py to update)")
++            else:
++                print(f"OK: {script_name}")
++        except Exception as e:
++            print(f"ERROR in {script_name}: {e}", file=sys.stderr)
++            sys.exit(1)
++
++    if args.check and scripts_changed:
++        sys.exit(1)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/skills/anysearch/scripts/shared/constants.json b/skills/anysearch/scripts/shared/constants.json
+new file mode 100644
+index 0000000..e2a80d5
+--- /dev/null
++++ b/skills/anysearch/scripts/shared/constants.json
+@@ -0,0 +1,8 @@
++{
++  "endpoint": "https://api.anysearch.com/mcp",
++  "available_domains": [
++    "general", "resource", "social_media", "finance", "academic",
++    "legal", "health", "business", "security", "ip", "code",
++    "energy", "environment", "agriculture", "travel", "film", "gaming"
++  ]
++}
+diff --git a/skills/anysearch/scripts/shared/doc_spec.md b/skills/anysearch/scripts/shared/doc_spec.md
+new file mode 100644
+index 0000000..dc02aad
+--- /dev/null
++++ b/skills/anysearch/scripts/shared/doc_spec.md
+@@ -0,0 +1,228 @@
++# AnySearch Interface Specification (for AI Agent)
++
++## Protocol
++- Endpoint: POST https://api.anysearch.com/mcp
++- Format: JSON-RPC 2.0, method = "tools/call"
++- Auth: Header "Authorization: Bearer <API_KEY>" (optional, anonymous has lower rate limits)
++
++## CLI Invocation ({{LANG_NAME}})
++
++```{{LANG_CODEBLOCK}}
++{{LANG_INVOKE}} <command> [options]
++```
++
++## Available Commands
++
++### 1. search — Single query search
++Two modes: general (omit --domain) and vertical (requires --domain + --sub_domain).
++
++| Option | Type | Required | Description |
++|--------|------|----------|-------------|
++| query | string | YES | Search query (positional) |
++| --domain, -d | string | no | Vertical domain: {{DOMAINS_SPACE}} |
++| --sub_domain, -s | string | no | Sub-domain routing key (e.g. finance.us_stock). REQUIRED for vertical search |
++| --sdp, --sub_domain_params, -p | string | conditional | Extra params per sub_domain schema. Accepts **key=value pairs** (e.g. `ticker=AAPL` or `ticker=AAPL,period=2025Q1`) or JSON. ALL params marked (required) MUST be included, use empty value for inapplicable ones (e.g. `region=`). Omit entirely if no params are listed. |
++| --max_results, -m | int | no | 1-10, default 10 |
++
++### 2. get_sub_domains — Query vertical domain directory
++MUST be called before vertical search to discover available sub_domains and their required parameters.
++
++| Option | Type | Required | Description |
++|--------|------|----------|-------------|
++| --domain | string | choose one | Single domain to query |
++| --domains | string | choose one | Batch up to 5 domains (comma-separated). Takes precedence over --domain |
++
++Returns a Markdown table grouped by domain. Each sub_domain entry shows: sub_domain, description, and parameters (name, description, whether required).
++
++IMPORTANT: Cache get_sub_domains results per domain within a session. Do NOT call repeatedly.
++
++### 3. batch_search — Execute 2-5 search queries in parallel
++Single failure does not block others; results are merged.
++
++| Option | Type | Required | Description |
++|--------|------|----------|-------------|
++| --query | string | YES (x1-5) | Repeatable single-query shorthand (CLI-only). Each value becomes `{"query":"..."}` — equivalent to the `queries` array with plain query objects |
++| --queries, -q | JSON | YES | JSON array of query objects, or @file.json to read from file |
++| --domain, -d | string | no | Shared domain injected into all query items (per-item domain overrides) |
++| --sub_domain, -s | string | no | Shared sub_domain injected into all query items (per-item sub_domain overrides) |
++| --sdp, --sub_domain_params, -p | string | no | Shared sub_domain_params (key=value or JSON) injected into all query items |
++
++Each query object supports: query (required), domain, sub_domain, sub_domain_params (key=value string or object), max_results.
++Shared --domain/--sub_domain/--sdp are injected into items that lack their own values; per-item fields always take precedence.
++
++### 4. extract — Fetch full page content as Markdown
++Truncated at 50,000 chars. HTML pages only.
++
++| Option | Type | Required | Description |
++|--------|------|----------|-------------|
++| url | string | YES | Target URL (positional or via --url / -u) |
++
++---
++
++## Decision Flow
++
++Search has two paths. Path 1 is a narrow exception for pure encyclopedia only. Path 2 (the DEFAULT) requires `get_sub_domains` before search.
++
++### Path 1 — General query (RARE EXCEPTION)
++ONLY for pure encyclopedia / common knowledge with ZERO domain overlap.
++"How high is Mount Everest?", "Who wrote Hamlet?", "What is gravity?"
++
++→ {{LANG_INVOKE}} search "query" --max_results 10
++
++### Path 2 — Vertical query (THE DEFAULT)
++EVERYTHING that is NOT pure encyclopedia. Structured data, domain-specific topics,
++specialized info, real-time data, locations, or ANY ambiguity.
++
++Step 1: {{LANG_INVOKE}} get_sub_domains --domains domain1,domain2,...
++Step 2: {{LANG_INVOKE}} search "query" --domain X --sub_domain Y [--sdp key=value]
++Step 3 (optional): {{LANG_INVOKE}} extract "url"
++
++**CRITICAL: When UNSURE, use hybrid via batch_search:**
++{{LANG_INVOKE}} batch_search --queries '[{"query":"..."},{"query":"...","domain":"X","sub_domain":"Y","sub_domain_params":"key=val"}]'
++This fires 1 general query + N vertical queries in parallel. Coverage beats guessing.
++
++**Multi-domain intersection:** When a SINGLE topic crosses multiple domains,
++`get_sub_domains` with ALL intersecting domains, then `batch_search` —
++rephrase the SAME core question per domain perspective.
++
++```
++User query
++  |
++  +-- PURE encyclopedia / common knowledge with ZERO domain overlap?
++  |     YES → Path 1: search "query" (no domain)
++  |
++  +-- UNSURE / could benefit from domain sources?
++  |     YES → HYBRID: batch_search (1 general + N vertical)
++  |
++  +-- Clearly domain-specific / has structured identifiers?
++        YES → Path 2: get_sub_domains → search (or batch_search for multi-domain)
++```
++
++---
++
++## Vertical Search Semantic Constraints
++
++Before performing vertical search, you MUST call get_sub_domains for the target domain
++and strictly obey the returned semantic constraints:
++
++1. **params**: Parameters for the sub_domain. get_sub_domains output marks each param
++   as `(required)` or not. You MUST pass ALL required params via `--sdp`,
++   even if they have no meaningful value — use the key with an empty value:
++   `--sdp param1=value,param2=`.
++   Optional params can be omitted if not needed. JSON format also accepted:
++   `--sdp '{"param1":"value","param2":""}'`.
++
++2. **sub_domain selection**: Match the user's intent to the best sub_domain description.
++   Example: for "AAPL earnings report", prefer finance.us_stock over finance.forex.
++
++---
++
++## Scenario Examples (all runnable CLI commands)
++
++### Scenario 1: General web search — look up a factual question
++
++```bash
++{{LANG_INVOKE}} search "What is the capital of France"
++```
++
++```bash
++{{LANG_INVOKE}} search "quantum computing breakthroughs 2025" --max_results 5
++```
++
++### Scenario 2: Vertical search — stock market data (structured identifier)
++
++Step 1: Discover available sub_domains for finance:
++
++```bash
++{{LANG_INVOKE}} get_sub_domains --domain finance
++```
++
++Step 2: Search with the correct sub_domain and required params (use empty value for inapplicable ones):
++
++```bash
++{{LANG_INVOKE}} search "AAPL" --domain finance --sub_domain finance.us_stock --sdp ticker=AAPL --max_results 5
++```
++
++If a param is marked `(required)` but has no meaningful value, pass it with empty value:
++
++```bash
++{{LANG_INVOKE}} search "latest market trends" --domain finance --sub_domain finance.market --sdp region=,timeframe= --max_results 5
++```
++
++### Scenario 3: Vertical search — academic paper lookup
++
++Step 1: Discover sub_domains for academic:
++
++```bash
++{{LANG_INVOKE}} get_sub_domains --domain academic
++```
++
++Step 2: Search with the correct sub_domain:
++
++```bash
++{{LANG_INVOKE}} search "transformer attention mechanism" --domain academic --sub_domain academic.search --max_results 3
++```
++
++### Scenario 4: Vertical search — legal document or case
++
++```bash
++{{LANG_INVOKE}} get_sub_domains --domain legal
++```
++
++```bash
++{{LANG_INVOKE}} search "contract dispute damages" --domain legal --sub_domain legal.case --max_results 5
++```
++
++### Scenario 5: Vertical search — code documentation
++
++```bash
++{{LANG_INVOKE}} search "react:hooks" --domain code --sub_domain code.doc --max_results 5
++```
++
++### Scenario 6: Batch search — multiple independent queries in one call
++
++CLI shorthand with shared domain (`--query` repeatable + shared params):
++
++```bash
++{{LANG_INVOKE}} batch_search --query "AAPL stock price" --query "TSLA earnings 2025" --query "GOOG market cap" --domain finance --sub_domain finance.us_stock
++```
++
++With per-item sub_domain_params as key=value strings:
++
++```bash
++{{LANG_INVOKE}} batch_search --queries '[{"query":"AAPL","sub_domain_params":"ticker=AAPL"},{"query":"MSFT","sub_domain_params":"ticker=MSFT"}]' --domain finance --sub_domain finance.us_stock
++```
++
++Hybrid (mixed domains — no shared params, specify per-query):
++
++```bash
++{{LANG_INVOKE}} batch_search --queries '[{"query":"quantum computing"},{"query":"QBTS","domain":"finance","sub_domain":"finance.us_stock","sub_domain_params":"ticker=QBTS"}]'
++```
++
++From a JSON file:
++
++```bash
++{{LANG_INVOKE}} batch_search --queries @queries.json
++```
++
++### Scenario 7: Extract full page content — read beyond search snippets
++
++```bash
++{{LANG_INVOKE}} extract "https://en.wikipedia.org/wiki/Quantum_computing"
++```
++
++```bash
++{{LANG_INVOKE}} extract --url "https://example.com/news/article-12345"
++```
++
++### Scenario 8: Search with API key
++
++```bash
++{{LANG_INVOKE}} search "climate change policy 2025" --api_key <your_api_key> --max_results 3
++```
++
++---
++
++## Rate Limit Handling
++- On rate limit error with auto_registered api_key in response: present key to user for approval, then save to .env and retry
++- On anonymous quota exhausted: inform user that a key provides higher limits; suggest configuring one via .env or environment variable
+diff --git a/specs/m13a-moat-skills/evidence/phase-2-RED.json b/specs/m13a-moat-skills/evidence/phase-2-RED.json
+new file mode 100644
+index 0000000..5ca073a
+--- /dev/null
++++ b/specs/m13a-moat-skills/evidence/phase-2-RED.json
+@@ -0,0 +1,13 @@
++{
++  "command": "npx vitest run tests/moat-skills-phase2.test.mjs",
++  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
++  "git_sha": "22eb91455f0f31e89b21fe66b80c0b3453396664",
++  "exit_code": 1,
++  "timestamp": "2026-06-30T16:08:59.805Z",
++  "test_files_line": " Test Files  1 failed (1)",
++  "content_hash": "a0d6c0137c8c700db586090504715f65e01b6e3fe952b2bf5b69e016db192c55",
++  "stdout_path": "specs/m13a-moat-skills/evidence/phase-2-RED.json.stdout",
++  "stderr_path": "specs/m13a-moat-skills/evidence/phase-2-RED.json.stderr",
++  "anomaly_flags": [],
++  "warning": ""
++}
+\ No newline at end of file
+diff --git a/specs/m13a-moat-skills/evidence/phase-2-RED.json.stdout b/specs/m13a-moat-skills/evidence/phase-2-RED.json.stdout
+new file mode 100644
+index 0000000..30e035f
+--- /dev/null
++++ b/specs/m13a-moat-skills/evidence/phase-2-RED.json.stdout
+@@ -0,0 +1,20 @@
++
++ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
++
++ ❯ tests/moat-skills-phase2.test.mjs (5 tests | 5 failed) 3ms
++   × Stage 4 MCP declaration > .mcp.json exists, parses, and declares muyu-search-mcp 2ms
++     → Missing required file: .mcp.json
++   × Stage 4 MCP declaration > .mcp.json uses placeholders instead of real API keys 0ms
++     → Missing required file: .mcp.json
++   × Stage 4 anysearch skill > SKILL.md exists with non-empty name frontmatter 0ms
++     → Missing required file: skills/anysearch/SKILL.md
++   × Stage 4 anysearch skill > copied anysearch files do not contain local absolute paths 0ms
++     → Missing required directory: skills/anysearch
++   × Stage 4 anysearch skill > .env.example exists and .env is ignored 0ms
++     → Missing required file: skills/anysearch/.env.example
++
++ Test Files  1 failed (1)
++      Tests  5 failed (5)
++   Start at  00:08:59
++   Duration  160ms (transform 12ms, setup 0ms, collect 8ms, tests 3ms, environment 0ms, prepare 37ms)
++
+diff --git a/specs/m13a-moat-skills/evidence/phase-2-RED.json.stderr b/specs/m13a-moat-skills/evidence/phase-2-RED.json.stderr
+new file mode 100644
+index 0000000..c7b9986
+--- /dev/null
++++ b/specs/m13a-moat-skills/evidence/phase-2-RED.json.stderr
+@@ -0,0 +1,102 @@
++⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
++
++ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 MCP declaration > .mcp.json exists, parses, and declares muyu-search-mcp
++AssertionError: Missing required file: .mcp.json
++
++- Expected
+++ Received
++
++- true
+++ false
++
++ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
++     12| function readRequiredFile(...parts) {
++     13|   const p = filePath(...parts);
++     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
++       |          ^
++     15|   return readFileSync(p, "utf8");
++     16| }
++ ❯ tests/moat-skills-phase2.test.mjs:44:21
++
++⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
++
++ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 MCP declaration > .mcp.json uses placeholders instead of real API keys
++AssertionError: Missing required file: .mcp.json
++
++- Expected
+++ Received
++
++- true
+++ false
++
++ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
++     12| function readRequiredFile(...parts) {
++     13|   const p = filePath(...parts);
++     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
++       |          ^
++     15|   return readFileSync(p, "utf8");
++     16| }
++ ❯ tests/moat-skills-phase2.test.mjs:53:31
++
++⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
++
++ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 anysearch skill > SKILL.md exists with non-empty name frontmatter
++AssertionError: Missing required file: skills/anysearch/SKILL.md
++
++- Expected
+++ Received
++
++- true
+++ false
++
++ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
++     12| function readRequiredFile(...parts) {
++     13|   const p = filePath(...parts);
++     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
++       |          ^
++     15|   return readFileSync(p, "utf8");
++     16| }
++ ❯ tests/moat-skills-phase2.test.mjs:66:21
++
++⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
++
++ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 anysearch skill > copied anysearch files do not contain local absolute paths
++AssertionError: Missing required directory: skills/anysearch
++
++- Expected
+++ Received
++
++- true
+++ false
++
++ ❯ listFilesRecursive tests/moat-skills-phase2.test.mjs:20:10
++     18| function listFilesRecursive(relativeDir) {
++     19|   const root = filePath(relativeDir);
++     20|   assert.ok(existsSync(root), `Missing required directory: ${relativeD…
++       |          ^
++     21|   const files = [];
++     22| 
++ ❯ tests/moat-skills-phase2.test.mjs:76:21
++
++⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
++
++ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 anysearch skill > .env.example exists and .env is ignored
++AssertionError: Missing required file: skills/anysearch/.env.example
++
++- Expected
+++ Received
++
++- true
+++ false
++
++ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
++     12| function readRequiredFile(...parts) {
++     13|   const p = filePath(...parts);
++     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
++       |          ^
++     15|   return readFileSync(p, "utf8");
++     16| }
++ ❯ tests/moat-skills-phase2.test.mjs:84:24
++
++⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
++
+diff --git a/specs/m13a-moat-skills/evidence/phase-2-GREEN.json b/specs/m13a-moat-skills/evidence/phase-2-GREEN.json
+new file mode 100644
+index 0000000..2eb94fb
+--- /dev/null
++++ b/specs/m13a-moat-skills/evidence/phase-2-GREEN.json
+@@ -0,0 +1,13 @@
++{
++  "command": "npx vitest run tests/moat-skills-phase2.test.mjs",
++  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
++  "git_sha": "22eb91455f0f31e89b21fe66b80c0b3453396664",
++  "exit_code": 0,
++  "timestamp": "2026-06-30T16:09:46.463Z",
++  "test_files_line": " Test Files  1 passed (1)",
++  "content_hash": "fff836f5b6dc41891079fedae408997e8043d613df8551c9b167c7c843328234",
++  "stdout_path": "specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stdout",
++  "stderr_path": "specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stderr",
++  "anomaly_flags": [],
++  "warning": ""
++}
+\ No newline at end of file
+diff --git a/specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stdout b/specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stdout
+new file mode 100644
+index 0000000..263b093
+--- /dev/null
++++ b/specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stdout
+@@ -0,0 +1,10 @@
++
++ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
++
++ ✓ tests/moat-skills-phase2.test.mjs (5 tests) 2ms
++
++ Test Files  1 passed (1)
++      Tests  5 passed (5)
++   Start at  00:09:46
++   Duration  141ms (transform 8ms, setup 0ms, collect 7ms, tests 2ms, environment 0ms, prepare 33ms)
++
+diff --git a/specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stderr b/specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stderr
+new file mode 100644
+index 0000000..e69de29
+diff --git a/specs/m13a-moat-skills/evidence/phase-result.json b/specs/m13a-moat-skills/evidence/phase-result.json
+new file mode 100644
+index 0000000..61ba555
+--- /dev/null
++++ b/specs/m13a-moat-skills/evidence/phase-result.json
+@@ -0,0 +1,74 @@
++{
++  "phase_id": "stage-4",
++  "status": "done",
++  "task_ids": [
++    "T009",
++    "T010"
++  ],
++  "worktree_path": "/Users/Hugh/Hugh/Project/workflowhub",
++  "base_before": "22eb91455f0f31e89b21fe66b80c0b3453396664",
++  "head_after": "working-tree",
++  "diff_ref": "specs/m13a-moat-skills/evidence/phase-2-diff.patch",
++  "changed_files": [
++    ".mcp.json",
++    "skills/anysearch/.env.example",
++    "skills/anysearch/.gitignore",
++    "skills/anysearch/LICENSE",
++    "skills/anysearch/NOTICE",
++    "skills/anysearch/README.md",
++    "skills/anysearch/SECURITY.md",
++    "skills/anysearch/SKILL.md",
++    "skills/anysearch/TEST_PLAN.md",
++    "skills/anysearch/runtime.conf.example",
++    "skills/anysearch/scripts/anysearch_cli.js",
++    "skills/anysearch/scripts/anysearch_cli.ps1",
++    "skills/anysearch/scripts/anysearch_cli.py",
++    "skills/anysearch/scripts/anysearch_cli.sh",
++    "skills/anysearch/scripts/generate.py",
++    "skills/anysearch/scripts/shared/constants.json",
++    "skills/anysearch/scripts/shared/doc_spec.md",
++    "tests/moat-skills-phase2.test.mjs",
++    "specs/m13a-moat-skills/evidence/phase-2-RED.json",
++    "specs/m13a-moat-skills/evidence/phase-2-RED.json.stdout",
++    "specs/m13a-moat-skills/evidence/phase-2-RED.json.stderr",
++    "specs/m13a-moat-skills/evidence/phase-2-GREEN.json",
++    "specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stdout",
++    "specs/m13a-moat-skills/evidence/phase-2-GREEN.json.stderr",
++    "specs/m13a-moat-skills/evidence/phase-2-diff.patch",
++    "specs/m13a-moat-skills/evidence/phase-result.json"
++  ],
++  "artifact_paths": {
++    "red": "specs/m13a-moat-skills/evidence/phase-2-RED.json",
++    "green": "specs/m13a-moat-skills/evidence/phase-2-GREEN.json",
++    "diff": "specs/m13a-moat-skills/evidence/phase-2-diff.patch",
++    "phase_result": "specs/m13a-moat-skills/evidence/phase-result.json"
++  },
++  "tests_run": [
++    {
++      "command": "node workflows/build-code/capture.mjs \"npx vitest run tests/moat-skills-phase2.test.mjs\" specs/m13a-moat-skills/evidence/phase-2-RED.json",
++      "exit_code": 0,
++      "captured_exit_code": 1,
++      "result": "RED expected failure"
++    },
++    {
++      "command": "node workflows/build-code/capture.mjs \"npx vitest run tests/moat-skills-phase2.test.mjs\" specs/m13a-moat-skills/evidence/phase-2-GREEN.json",
++      "exit_code": 0,
++      "captured_exit_code": 0,
++      "result": "GREEN pass"
++    },
++    {
++      "command": "node --input-type=module -e scanDiff(...)",
++      "exit_code": 0,
++      "result": "safe=true, violations=[]"
++    },
++    {
++      "command": "rg -n \"/Users/|/home/|sk-|tvly-|fc-\" .mcp.json skills/anysearch",
++      "exit_code": 1,
++      "result": "no matches"
++    }
++  ],
++  "needs_human": false,
++  "reason": "Stage 4 T009/T010 implemented within allowed_paths. RED failed before .mcp.json and skills/anysearch existed; GREEN passed after adding sanitized MCP config and vendored anysearch files. RED.content_hash != GREEN.content_hash, so false-green check passed.",
++  "false_green_check": "RED.content_hash != GREEN.content_hash -> OK",
++  "notes": "No C2 diff-scanner violations. .mcp.json uses env placeholders for local path and secrets. skills/anysearch excludes real .env and contains no local absolute path or secret-prefix residue."
++}

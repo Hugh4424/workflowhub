@@ -1,0 +1,85 @@
+{
+  "task_id": "m13a-moat-skills",
+  "stage": "build-code",
+  "status": "success",
+  "created_at": "2026-07-01T07:47:00Z",
+  "phases": [
+    {
+      "phase_id": "stage-1",
+      "tasks": ["T001", "T002", "T003"],
+      "issue": "ZHI-32",
+      "review_report": "specs/m13a-moat-skills/reviews/build-code-phase-1.md",
+      "verdict": "pass"
+    },
+    {
+      "phase_id": "stage-4",
+      "tasks": ["T009", "T010"],
+      "issue": "ZHI-33",
+      "review_report": "specs/m13a-moat-skills/reviews/build-code-phase-2.md",
+      "verdict": "pass"
+    },
+    {
+      "phase_id": "stage-2",
+      "tasks": ["T004", "T005", "T006"],
+      "issue": "ZHI-34",
+      "review_report": "specs/m13a-moat-skills/reviews/build-code-phase-3.md",
+      "verdict": "pass"
+    },
+    {
+      "phase_id": "stage-3",
+      "tasks": ["T007", "T008"],
+      "issue": "ZHI-35",
+      "review_report": "specs/m13a-moat-skills/reviews/build-code-phase-4.md",
+      "verdict": "pass"
+    },
+    {
+      "phase_id": "regression-fix",
+      "tasks": [],
+      "issue": "ZHI-36",
+      "review_report": null,
+      "verdict": "pass",
+      "notes": "T013 assertions updated to match S7 Chinese rewrite (option A, human-approved)"
+    }
+  ],
+  "facts": {
+    "changed": [
+      "skills/talk-with-zhipeng/SKILL.md",
+      "skills/grill-with-docs/SKILL.md",
+      "skills/grill-with-docs/CONTEXT-FORMAT.md",
+      "skills/grill-with-docs/ADR-FORMAT.md",
+      "skills/intake-decision-review/SKILL.md",
+      "tests/moat-skills-phase1.test.mjs",
+      ".mcp.json",
+      "skills/anysearch/.env.example",
+      "skills/anysearch/.gitignore",
+      "skills/anysearch/SKILL.md",
+      "skills/anysearch/README.md",
+      "skills/anysearch/runtime.conf.example",
+      "skills/anysearch/scripts/anysearch_cli.js",
+      "skills/anysearch/scripts/anysearch_cli.py",
+      "skills/anysearch/scripts/anysearch_cli.sh",
+      "skills/anysearch/scripts/generate.py",
+      "skills/anysearch/scripts/shared/constants.json",
+      "tests/moat-skills-phase2.test.mjs",
+      "workflows/make-decision/SKILL.md",
+      "tests/moat-skills-phase3.test.mjs",
+      "tests/moat-skills.test.mjs",
+      "config/reuse-registry.md",
+      "tests/m13-make-decision.test.mjs"
+    ],
+    "tests": {
+      "passed": 885,
+      "total": 885,
+      "files": ["tests/moat-skills.test.mjs"],
+      "command": "npx vitest run"
+    },
+    "review": {
+      "status": "executed",
+      "source": "third_party",
+      "verdict": "pass",
+      "artifact_path": "specs/m13a-moat-skills/reviews/build-code-phase-4.md"
+    }
+  },
+  "needs_human": false,
+  "next_stage": "verify-code"
+}

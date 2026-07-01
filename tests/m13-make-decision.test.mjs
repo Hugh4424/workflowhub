@@ -1151,15 +1151,15 @@ describe("T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → 
     const content = readSkill();
     const idx7 = content.indexOf("## S7");
     const s7Section = idx7 !== -1 ? content.slice(idx7, idx7 + 5000) : "";
-    const talk3Idx = s7Section.indexOf("talk#3");
+    const thirdTalkIdx = s7Section.indexOf("第三次对话");
     const grillIdx = s7Section.indexOf("grill");
     const draftIdx = s7Section.indexOf("draft");
     const orchIdx = s7Section.indexOf("orchestrator");
-    assert.ok(talk3Idx !== -1, "S7 must contain talk#3");
+    assert.ok(thirdTalkIdx !== -1, "S7 must contain 第三次对话");
     assert.ok(grillIdx !== -1, "S7 must contain grill");
     assert.ok(draftIdx !== -1, "S7 must contain draft");
     assert.ok(orchIdx !== -1, "S7 must contain orchestrator");
-    assert.ok(talk3Idx < grillIdx, "S7 talk#3 must come before grill");
+    assert.ok(thirdTalkIdx < grillIdx, "S7 第三次对话 must come before grill");
     assert.ok(grillIdx < draftIdx, "S7 grill must come before draft");
     assert.ok(draftIdx < orchIdx, "S7 draft must come before orchestrator");
   });
@@ -1168,10 +1168,10 @@ describe("T013: SKILL.md — S7 talk#3 → grill → draft → orchestrator → 
     const content = readSkill();
     const idx7 = content.indexOf("## S7");
     const s7Section = idx7 !== -1 ? content.slice(idx7, idx7 + 5000) : "";
-    const hasQ3Impact =
-      s7Section.includes("Q3") &&
-      (s7Section.includes("按影响排序") || s7Section.includes("impact") || s7Section.includes("排序"));
-    assert.ok(hasQ3Impact, "S7 talk#3 must sort questions Q3 by impact (按影响排序)");
+    assert.ok(
+      s7Section.includes("按影响排序"),
+      "S7 third talk must sort by impact (按影响排序)"
+    );
   });
 
   test("S7 talk#3 depends on S5/S6 outputs", () => {

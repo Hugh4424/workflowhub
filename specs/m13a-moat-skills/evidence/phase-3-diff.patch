@@ -1,0 +1,251 @@
+diff --git a/workflows/make-decision/SKILL.md b/workflows/make-decision/SKILL.md
+index aefa4a9..4ef9810 100644
+--- a/workflows/make-decision/SKILL.md
++++ b/workflows/make-decision/SKILL.md
+@@ -16,6 +16,7 @@ description: Clarify requirements with the user via structured debate/review护
+ | `THIRD_REVIEW_RUNNER` | `run-heterologous-review.mjs` | 自定义 reviewer runner 文件路径；文件不可达时记录 `runner_invalid`，用默认 runner，继续 | `export THIRD_REVIEW_RUNNER=/path/to/runner.mjs` |
+ | `REVIEW_DISPATCH_CONFIG` | （空，走内置默认调度） | 允许值：有效 JSON/YAML **配置文件路径**；文件不可达或解析失败时记录 `dispatch_config_invalid`，用默认调度继续；缺省为空时 3rd-review 使用内部默认调度 | `export REVIEW_DISPATCH_CONFIG=/path/to/dispatch.json` |
+ | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
++| `TASK_TRACKING_ROOT` | `~/Knowledge/workflowhub/` | 所有阶段跟踪文件的存储根目录；未设置时记录 warn 和 `tracking_root_fallback`，继续使用默认路径；目录不存在时尝试 `mkdir -p`，失败也只 warn 不停止 | `export TASK_TRACKING_ROOT=/path/to/workflowhub-tracking` |
+ 
+ ## Metrics — Stage Start（最前置步骤）
+ 
+@@ -123,22 +124,22 @@ Work with the user to surface the real problem, agree on the narrowest viable sc
+ 
+ ---
+ 
+-## S2 talk#1（呈现内部调研摘要，问 Q1）
++## S2 第一次对话（呈现内部调研摘要，询问是否查外部资料）
+ 
+-**目标**：向用户呈现内部调研摘要，收集"是否需要外部双路调研"的判断，完成第一轮 talk。
++**目标**：向用户呈现内部调研摘要，收集"是否需要外部双路调研"的判断，完成第一轮对话。对话执行参照 in-repo skill：`skills/talk-with-zhipeng/SKILL.md`。
+ 
+-**三轮结构（talk#1 / talk#2 / talk#3）**：本阶段为第一轮（Q1），后续 S4 完成 Q2，S7 完成 Q3。
++**三轮结构**：本阶段是第一轮，后续 S4 完成第二轮，S7 完成第三轮；三轮均使用 `skills/talk-with-zhipeng/` 的一次只问一个问题、按影响排序原则。
+ 
+ **执行步骤**：
+ 
+-1. 先向用户呈现 `tasks/{task-id}/research/internal-research-summary.md` 内容摘要
+-   （lite 档时以"内部调研已跳过（scope=lite）"说明）。
+-2. 按影响排序（FR-TALK-02），一次只问一个问题（FR-TALK-01）：
+-   - **lite 档**：跳过 Q1（不询问外部调研需否）——因为 lite 档的 S3 无论如何均跳过，Q1 无意义。直接记录 `s3: skipped: scope=lite`，进入步骤 3 的后续问题（如有）或结束 talk#1。
+-   - **full 档**：问 **Q1**：是否需要外部双路调研（muyu-search-mcp + anysearch）？
+-3. 等待用户回答（仅 full 档）：
+-   - 用户确认需要 → 继续 S3 外部调研。
+-   - 用户跳过或不需要 → 记录 `s3: skipped(user_decision)`，直接进 S4。
++1. 先向用户呈现 `tasks/{task-id}/research/internal-research-summary.md` 的短摘要。
++   - 小范围任务：直接说明"这次范围很小，已跳过内部调研"，不把内部标记暴露给用户。
++2. 按影响排序（FR-TALK-02），一次只问一个问题（FR-TALK-01）。面向用户时只给大白话选项：
++   - **小范围任务**：不再询问是否查外部资料，因为后续本来就会跳过。记录跳过外部调研事件，原因写为"小范围任务"，然后进入下一步。
++   - **需要认真查证的任务**：问用户："要不要再查一轮外部资料来补证据？"
++3. 等待用户回答（仅需要认真查证的任务）：
++   - **推荐：需要查**。后果：多花一点时间，但方向更稳，后面分歧会少一些；用户确认后继续 S3 外部调研。
++   - **可选：不查**。后果：推进更快，但如果背景判断不够全，后面可能返工；记录 `s3: skipped(user_decision)`，直接进 S4。
+ 
+ ---
+ 
+@@ -174,15 +175,18 @@ lite 档无论用户是否同意，均记录 `s3: skipped: scope=lite` 后跳过
+ 
+ ---
+ 
+-## S4 方向收敛 talk#2（台账渲染点①）
++## S4 第二次对话：收拢方向（台账渲染点①）
+ 
+-**目标**：向用户展示调研汇总与初步方向，通过 Q2 收敛方向；完成台账渲染点①。
++**目标**：向用户展示调研汇总与初步方向，通过第二轮对话收拢方向；完成台账渲染点①。对话执行参照 in-repo skill：`skills/talk-with-zhipeng/SKILL.md`。
+ 
+ **执行步骤**：
+ 
+ 1. 汇总 S1/S3 调研产出（或空/跳过说明），向用户展示方向摘要。
+ 2. 按影响排序，**一次只问一个问题**（FR-TALK-01/02）：
+-   **Q2**：是否认同当前方向草案？有无关键约束或范围需调整？
++   向用户询问："你是否认同当前方向草案？有没有必须补充的硬约束，或需要排除的内容？"
++   - **推荐：确认当前方向，并补充必要约束**。后果：后续审查和落盘都有明确依据，返工概率最低。
++   - **可选：先调整方向**。后果：当前流程会多一轮整理，但能避免把不认可的方向写进最终记录。
++   - **可选：暂时拿不准**。后果：先把不确定点记入开放问题，后续在 S9 前必须再次确认。
+ 3. 接收用户回答后，记录 journal 事件 `event: "s4_baseline_recorded"`（非阻断，不等确认直接继续）。
+ 4. **台账渲染点①**：将用户原始需求/聊天原文落盘为：
+    `tasks/{task-id}/artifacts/make-decision-original-context.md`
+@@ -282,7 +286,7 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
+ 
+ 启动一条独立 3rd-review 链：
+ 
+-- `intake-decision-review`：同时审查方向合理性、问题框架设定、范围边界合理性。
++- `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性。
+ 
+ 审查输入必须与主上下文隔离：只给 S4 已落盘产物和必要任务背景，不给本轮 agent 的推理过程或未落盘草稿。
+ 
+@@ -363,31 +367,31 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能
+ 
+ ---
+ 
+-## S7 talk#3 → grill → draft → orchestrator → 第二次 debate
++## S7 第三次对话 → grill → draft → orchestrator → 第二次 debate
+ 
+ **目标**：依序完成深度追问、专项核查、决策日志草稿、orchestrator 审查、第二次 debate 门控。
+ 
+-### 1. talk#3（按影响排序问 Q3）
++### 1. 第三次对话（按影响排序追问）
+ 
+ 依赖 S5/S6 产物，不得在 S7 之前执行（must not execute before S7）。
+ 
+-- 综合 S5 的 3 条审查建议与 S6 展示结论，按影响排序（按影响排序）生成 Q3 追问清单（Q3）。
++- 综合 S5 的 3 条审查建议与 S6 展示结论，按影响排序生成第三轮追问清单；对话执行参照 `skills/talk-with-zhipeng/SKILL.md`。
+ - 一次只问一个问题（FR-TALK-01/02），等待用户回答。
+ 
+ 写 journal 事件：`event: "s7_talk3_done"`
+ 
+-### 2. grill（纯委托 grill-with-docs-lite）
++### 2. grill（纯委托 grill-with-docs）
+ 
+ 退出条件：用户能复述四件事——做了什么 / 为何 / 不做什么 / 怎么验证。
+ 
+-纯委托（pure delegation）给 `grill-with-docs-lite` skill 执行，退出逻辑由其内部控制，不在本 agent 内联展开。
++纯委托（pure delegation）给 `skills/grill-with-docs/SKILL.md` 执行，退出逻辑由其内部控制，不在本 agent 内联展开。
+ 
+ **成功分支**：
+ - 产出：`tasks/{task-id}/artifacts/make-decision-grill-with-docs.md`（grill 会话记录）
+ - 写 journal 事件：`event: "s7_grill_done", s7_grill_done: true`
+ 
+ **失败/不可达分支**（非阻断）：
+-- 当 grill skill 路径不可达或调用失败时：
++- 当 `skills/grill-with-docs/` 路径不可达或调用失败时：
+   1. 创建 `tasks/{task-id}/artifacts/make-decision-grill-with-docs.md`，内容写明失败原因（路径不可达 / 调用错误 / 错误信息）。
+   2. 写 journal 事件：`event: "s7_grill_done", s7_grill_done: false, reason: "<失败原因>"`
+   3. 以该失败产物作为降级输入，继续进入 draft 步骤，不阻断主流程。
+@@ -468,14 +472,14 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
+ 向用户展示完整决策摘要，内容须包含（**FR-ACCEPT-03**）：
+ 
+ - **方向**：已确认的解决方向（一句话）
+-- **范围**：in-scope / out-of-scope 边界
++- **范围**：明确本次做什么、不做什么
+ - **关键约束**：影响实施的硬约束
+ - **待办列表台账**：台账所有条目逐条核对（接受 / 丢弃 / 新想法候选）
+ 
+ ### 2. 等待用户明确确认
+ 
+ - 等待用户明确"同意"或等效确认（如"ok"、"approve"、"确认"、"通过"）。
+-- 用户未确认时**无限等待**，**不得自动通过**，不得以超时为由继续。
++- 用户未确认时**无限等待**；不确认就不继续，**不得自动通过**，不得以超时为由继续。
+ - 写 journal 事件：`event: "s9_user_approved", s9_user_approved: true`
+ 
+ ### 3. 错误声明
+@@ -500,7 +504,15 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
+   ```
+   则**不得**标记"落盘完整"，须先补全三行留痕后再继续。
+ 
+-### 2. 产出 decision-log.md
++### 2. 确定写入根目录
++
++读取 `TASK_TRACKING_ROOT` 来确定本次任务跟踪文件写入根目录：
++
++- 若 `TASK_TRACKING_ROOT` 已设置：使用该值作为跟踪根目录，并基于它推导 `tasks/{task-id}/decision-log.md` 等路径。
++- 若 `TASK_TRACKING_ROOT` 未设置：记录 warn，不停止；使用默认根目录 `~/Knowledge/workflowhub/`，并写 journal 事件 `event: "tracking_root_fallback", default: "~/Knowledge/workflowhub/"`。
++- 若目录不存在：尝试 `mkdir -p`；创建失败时 warn 不停止，并继续按当前可写路径策略记录失败事实。
++
++### 3. 产出 decision-log.md
+ 
+ 产出 `tasks/{task-id}/decision-log.md`，包含 7 节结构 + 执行环境字段：
+ 
+@@ -512,9 +524,10 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
+ 6. **开放问题**——仍存在歧义或待人确认的事项
+ 7. **验收标准**——可验证的验收标准
+ 
+-**执行环境**字段（小节，写在 7 节之后）：记录本次执行中 6 个 env var 的检测结果，包含：
++**执行环境**字段（小节，写在 7 节之后）：记录本次执行中 7 个 env var 的检测结果，包含：
+ - 每个 env var 是否已设置、实际值（未设置时标注"使用默认值"）
+ - 检测过程中触发的降级事件（如 `dispatch_config_invalid`、`debate_path_invalid`、`runner_invalid`）及对应 env var 名称
++- `TASK_TRACKING_ROOT` 是否触发 `tracking_root_fallback`
+ 
+ 文件顶部 frontmatter 包含字段：
+ 
+@@ -522,7 +535,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
+ user_decision: true
+ ```
+ 
+-### 3. 调用 metrics/collector.mjs updateOwnResult
++### 4. 调用 metrics/collector.mjs updateOwnResult
+ 
+ 调用 `metrics/collector.mjs` 的 `updateOwnResult`，写入 M4 十核心字段：
+ 
+diff --git a/tests/moat-skills-phase3.test.mjs b/tests/moat-skills-phase3.test.mjs
+new file mode 100644
+index 0000000..04e252a
+--- /dev/null
++++ b/tests/moat-skills-phase3.test.mjs
+@@ -0,0 +1,75 @@
++import { describe, test } from "vitest";
++import assert from "node:assert/strict";
++import { existsSync, readFileSync } from "node:fs";
++import { join } from "node:path";
++
++const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
++
++function readRequiredFile(...parts) {
++  const p = join(REPO_ROOT, ...parts);
++  assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`);
++  return readFileSync(p, "utf8");
++}
++
++function section(content, heading) {
++  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++  const match = content.match(new RegExp(`## ${escaped}[\\s\\S]*?(?=\\n---\\n|\\n## S\\d|\\n## Journal|$)`));
++  assert.ok(match, `Missing section: ${heading}`);
++  return match[0];
++}
++
++describe("Stage 2 make-decision moat references", () => {
++  const skill = readRequiredFile("workflows", "make-decision", "SKILL.md");
++
++  test("S5 points blind review at the in-repo intake-decision-review skill", () => {
++    assert.match(
++      section(skill, "S5"),
++      /skills\/intake-decision-review/,
++      "S5 must reference skills/intake-decision-review"
++    );
++  });
++
++  test("S7 points grill at the in-repo grill-with-docs skill", () => {
++    assert.match(section(skill, "S7"), /skills\/grill-with-docs/, "S7 must reference skills/grill-with-docs");
++  });
++
++  test("talk rounds point at the in-repo talk-with-zhipeng skill", () => {
++    assert.match(section(skill, "S2"), /skills\/talk-with-zhipeng/, "S2 must reference skills/talk-with-zhipeng");
++    assert.match(section(skill, "S4"), /skills\/talk-with-zhipeng/, "S4 must reference skills/talk-with-zhipeng");
++    assert.match(section(skill, "S7"), /skills\/talk-with-zhipeng/, "S7 must reference skills/talk-with-zhipeng");
++  });
++
++  test("old external talk references are gone", () => {
++    assert.equal(/multica-agenthub.*talk/i.test(skill), false, "must not contain multica-agenthub talk references");
++    assert.equal(/~\/\.claude.*talk/i.test(skill), false, "must not contain ~/.claude talk references");
++  });
++});
++
++describe("Stage 2 make-decision tracking root", () => {
++  const skill = readRequiredFile("workflows", "make-decision", "SKILL.md");
++
++  test("declares TASK_TRACKING_ROOT and records fallback when unset", () => {
++    assert.match(skill, /TASK_TRACKING_ROOT/, "SKILL.md must declare TASK_TRACKING_ROOT");
++    assert.match(skill, /tracking_root_fallback/, "SKILL.md must mention tracking_root_fallback");
++  });
++});
++
++describe("Stage 2 make-decision plain Chinese user communication", () => {
++  const skill = readRequiredFile("workflows", "make-decision", "SKILL.md");
++
++  test("S2 uses recommended plain Chinese options", () => {
++    const s2 = section(skill, "S2");
++    assert.match(s2, /推荐/, "S2 must mark a recommended option");
++    assert.doesNotMatch(s2, /\b(framing|scope)\b/i, "S2 must not expose English framing/scope terms");
++  });
++
++  test("S4 uses recommended plain Chinese options", () => {
++    const s4 = section(skill, "S4");
++    assert.match(s4, /推荐/, "S4 must mark a recommended option");
++    assert.doesNotMatch(s4, /\b(framing|scope)\b/i, "S4 must not expose English framing/scope terms");
++  });
++
++  test("S9 explicitly waits for confirmation before continuing", () => {
++    assert.match(section(skill, "S9"), /不确认|等待确认/, "S9 must say it will wait and not continue without confirmation");
++  });
++});

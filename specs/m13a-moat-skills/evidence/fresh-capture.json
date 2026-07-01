@@ -1,0 +1,9 @@
+{
+  "command": "npx vitest run",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "22eb91455f0f31e89b21fe66b80c0b3453396664",
+  "exit_code": 0,
+  "timestamp": "2026-06-30T23:52:44.091Z",
+  "test_files_line": "Test Files  48 passed (48)",
+  "content_hash": "3b93c817cbef32ec4682a2cb9330f80174ea7e92911126d510a83c86e4997fc4"
+}

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "muyu-search-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "${MUYU_MCP_PATH}", "muyu-search"],
+      "env": {
+        "MUYU_PROVIDER": "custom",
+        "MUYU_API_URL": "https://www.dmxapi.cn/v1",
+        "MUYU_API_KEY": "${MUYU_API_KEY}",
+        "MUYU_MODEL": "grok-4-fast",
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}",
+        "TAVILY_API_URL": "https://api.tavily.com",
+        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
+      }
+    }
+  }
+}

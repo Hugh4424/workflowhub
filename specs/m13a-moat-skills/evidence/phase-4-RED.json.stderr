@@ -1,0 +1,22 @@
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/moat-skills.test.mjs [ tests/moat-skills.test.mjs ]
+AssertionError: Missing required file: config/reuse-registry.md
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ readRequiredFile tests/moat-skills.test.mjs:14:10
+     12| function readRequiredFile(...parts) {
+     13|   const p = filePath(...parts);
+     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
+       |          ^
+     15|   return readFileSync(p, "utf8");
+     16| }
+ ❯ tests/moat-skills.test.mjs:155:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

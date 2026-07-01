@@ -1,0 +1,102 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 MCP declaration > .mcp.json exists, parses, and declares muyu-search-mcp
+AssertionError: Missing required file: .mcp.json
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
+     12| function readRequiredFile(...parts) {
+     13|   const p = filePath(...parts);
+     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
+       |          ^
+     15|   return readFileSync(p, "utf8");
+     16| }
+ ❯ tests/moat-skills-phase2.test.mjs:44:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 MCP declaration > .mcp.json uses placeholders instead of real API keys
+AssertionError: Missing required file: .mcp.json
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
+     12| function readRequiredFile(...parts) {
+     13|   const p = filePath(...parts);
+     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
+       |          ^
+     15|   return readFileSync(p, "utf8");
+     16| }
+ ❯ tests/moat-skills-phase2.test.mjs:53:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 anysearch skill > SKILL.md exists with non-empty name frontmatter
+AssertionError: Missing required file: skills/anysearch/SKILL.md
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
+     12| function readRequiredFile(...parts) {
+     13|   const p = filePath(...parts);
+     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
+       |          ^
+     15|   return readFileSync(p, "utf8");
+     16| }
+ ❯ tests/moat-skills-phase2.test.mjs:66:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 anysearch skill > copied anysearch files do not contain local absolute paths
+AssertionError: Missing required directory: skills/anysearch
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ listFilesRecursive tests/moat-skills-phase2.test.mjs:20:10
+     18| function listFilesRecursive(relativeDir) {
+     19|   const root = filePath(relativeDir);
+     20|   assert.ok(existsSync(root), `Missing required directory: ${relativeD…
+       |          ^
+     21|   const files = [];
+     22| 
+ ❯ tests/moat-skills-phase2.test.mjs:76:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/moat-skills-phase2.test.mjs > Stage 4 anysearch skill > .env.example exists and .env is ignored
+AssertionError: Missing required file: skills/anysearch/.env.example
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ readRequiredFile tests/moat-skills-phase2.test.mjs:14:10
+     12| function readRequiredFile(...parts) {
+     13|   const p = filePath(...parts);
+     14|   assert.ok(existsSync(p), `Missing required file: ${parts.join("/")}`…
+       |          ^
+     15|   return readFileSync(p, "utf8");
+     16| }
+ ❯ tests/moat-skills-phase2.test.mjs:84:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+

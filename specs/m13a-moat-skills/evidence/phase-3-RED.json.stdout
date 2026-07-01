@@ -1,0 +1,24 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ❯ tests/moat-skills-phase3.test.mjs (8 tests | 7 failed) 3ms
+   × Stage 2 make-decision moat references > S5 points blind review at the in-repo intake-decision-review skill 2ms
+     → S5 must reference skills/intake-decision-review
+   × Stage 2 make-decision moat references > S7 points grill at the in-repo grill-with-docs skill 0ms
+     → S7 must reference skills/grill-with-docs
+   × Stage 2 make-decision moat references > talk rounds point at the in-repo talk-with-zhipeng skill 0ms
+     → S2 must reference skills/talk-with-zhipeng
+   × Stage 2 make-decision tracking root > declares TASK_TRACKING_ROOT and records fallback when unset 0ms
+     → SKILL.md must declare TASK_TRACKING_ROOT
+   × Stage 2 make-decision plain Chinese user communication > S2 uses recommended plain Chinese options 0ms
+     → S2 must mark a recommended option
+   × Stage 2 make-decision plain Chinese user communication > S4 uses recommended plain Chinese options 0ms
+     → S4 must mark a recommended option
+   × Stage 2 make-decision plain Chinese user communication > S9 explicitly waits for confirmation before continuing 0ms
+     → S9 must say it will wait and not continue without confirmation
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 1 passed (8)
+   Start at  00:20:45
+   Duration  167ms (transform 11ms, setup 0ms, collect 8ms, tests 3ms, environment 0ms, prepare 34ms)
+

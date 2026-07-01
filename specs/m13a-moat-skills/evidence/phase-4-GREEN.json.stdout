@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub
+
+ ✓ tests/moat-skills.test.mjs (14 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  00:37:15
+   Duration  155ms (transform 9ms, setup 0ms, collect 9ms, tests 6ms, environment 0ms, prepare 28ms)
+

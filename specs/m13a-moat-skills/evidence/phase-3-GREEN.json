@@ -1,0 +1,13 @@
+{
+  "command": "npx vitest run tests/moat-skills-phase3.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
+  "git_sha": "22eb91455f0f31e89b21fe66b80c0b3453396664",
+  "exit_code": 0,
+  "timestamp": "2026-06-30T16:23:10.291Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "83ef089ed876760fd057cfe03ea77e1247452155fa1059a9471affba925510a5",
+  "stdout_path": "specs/m13a-moat-skills/evidence/phase-3-GREEN.json.stdout",
+  "stderr_path": "specs/m13a-moat-skills/evidence/phase-3-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}
