@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export async function runCapture(command, outputPath, { cwd, gitSha, redBaselineHash } = {}) {
+export async function runCapture(command, outputPath, { cwd, gitSha, redBaselineHash, baseSha, headSha, riskLevel } = {}) {
   const resolvedCwd = cwd ?? process.cwd();
 
   // Execute the command
@@ -65,6 +65,10 @@ export async function runCapture(command, outputPath, { cwd, gitSha, redBaseline
     stderr_path,
     anomaly_flags,
     warning,
+    commit_sha: gitSha ?? null,
+    base_sha: baseSha ?? null,
+    head_sha: headSha ?? null,
+    risk_level: riskLevel ?? null,
   };
 
   // Write sidecars first, then main JSON last (partial-write leaves sidecars but JSON only appears fully assembled)
