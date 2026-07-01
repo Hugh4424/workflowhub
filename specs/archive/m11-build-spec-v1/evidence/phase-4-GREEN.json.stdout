@@ -1,9 +1,0 @@
-=== 文件存在性 ===
-=== config registry ===
-=== reuse-registry 格式校验（skill 名锚定 + 类别列 $3 + 来源列 $4） ===
-=== AC6: frontmatter name 不得用 speckit-* 前缀（允许注释中来源注明） ===
-=== 路径引用完整 ===
-=== 三 SKILL.md 均含 collector 指令 ===
-=== M6 骨架不回归 ===
-=== 宪法/baseline 步骤存在性检查（不验完整性，完整性归 verify-code） ===
-PASS: all Phase 4 checks passed

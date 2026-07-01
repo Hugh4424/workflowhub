@@ -1,9 +1,0 @@
-{
-  "command": "npx vitest run tests/m13-make-decision.test.mjs",
-  "cwd": "/Users/Hugh/Hugh/Project/workflowhub",
-  "git_sha": "278ebabd8e791d80bef5512fa7ed40cf29d5aa79",
-  "exit_code": 0,
-  "timestamp": "2026-06-29T14:23:38.721Z",
-  "test_files_line": "Test Files  1 passed (1)",
-  "content_hash": "3025d7e7ea23328698f15b2faab549ff7e2fa68e3cdefd020536e8fe00a09e4c"
-}

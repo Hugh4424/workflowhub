@@ -1,9 +1,0 @@
-{
-  "command": "npx vitest run core/task-dir-parser.test.mjs",
-  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-m13c-build-code",
-  "git_sha": "e59f43e41d52ed61bc94cc6c895216fd4a04d913",
-  "exit_code": 0,
-  "timestamp": "2026-07-01T08:01:50.440Z",
-  "test_files_line": "Test Files  1 passed (1)",
-  "content_hash": "8ef768c129646718e5a519f2feb2108eaa384190b8c0c728440a9bf3875f23ee"
-}
