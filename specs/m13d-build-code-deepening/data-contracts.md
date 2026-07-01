@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|
 | phase-N-RED.json | build-code orchestrating skill | verify-code / M13e 查痕 | phase_id, content_hash, ts, risk_level | risk_level ∈ {P0,P1,P2,P3}；字段必须存在，值可暂缺但不可省字段 | 新增 risk_level，向后兼容旧文件（历史文件无此字段时按缺失处理，不报错） |
 | phase-N-GREEN.json | build-code orchestrating skill | verify-code / M13e 查痕 | phase_id, content_hash, ts, risk_level, commit_sha, base_sha, head_sha | commit_sha 须为合法 git SHA；base_sha/head_sha 成对出现 | 新增四字段（commit_sha/base_sha/head_sha/risk_level），旧字段不变 |
-| l2-integration-test-report.json | build-code（test-routing-advisor 触发） | verify-code / M13e 查痕 | routing_tier, result(pass/fail), ts | routing_tier ∈ {simple,feature,fullstack}；result 失败不阻断 | 新文件，无历史版本 |
+| l2-integration-test-report.json | build-code（test-routing-advisor 触发） | verify-code / M13e 查痕 | routing_tier, routing_rationale, result(pass/fail), ts | routing_tier ∈ {simple,feature,fullstack}；**routing_rationale 为非空字符串，说明为何选此档位（AC-SMOKE-003 可追溯性要求）**；result 失败不阻断 | 新文件，无历史版本 |
 | spec-compliance-verdict.md | 独立审查子代理1（3rd-review） | build-code orchestrating skill / verdict-handler | verdict(pass/revise_required), findings | 仅含 spec 合规性维度，不与 code-quality 交叉 | 新文件 |
 | code-quality-verdict.md | 独立审查子代理2（3rd-review） | build-code orchestrating skill / verdict-handler | verdict(pass/revise_required), findings | 仅含代码质量维度，不与 spec-compliance 交叉 | 新文件 |
 

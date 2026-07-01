@@ -40,7 +40,7 @@
 - [ ] T005 在 `workflows/build-code/SKILL.md` 新增两阶段独立审查拆分：3rd-review 拆两个独立子代理产出 `spec-compliance-verdict.md`/`code-quality-verdict.md`，任一失败不终止另一个 (stage:2, depends:T004) FR: FR-REVIEW-001
 - [ ] T006 在 `workflows/build-code/SKILL.md` 新增 verdict-handler A/B/C 升级分类逻辑：同一子代理连续 3 次 `revise_required` 触发 C 类 escalate_to_human——**escalate_to_human 触发后必须暂停自动推进、等待人工确认**（AC-REVIEW-006 手动停止要求，不可只写记录后自动继续下一轮重试循环），产出结构化升级记录 (stage:2, depends:T005) FR: FR-REVIEW-002
 - [ ] T007 在 `workflows/build-code/SKILL.md` 新增原子提交留痕说明：提交时机收敛在 orchestrating skill，实现子代理禁止自行 commit，`commit_sha`/`base_sha`/`head_sha` 写入 GREEN.json (stage:2, depends:T006,T002) FR: FR-COMMIT-001
-- [ ] T008 在 `workflows/build-code/SKILL.md` 确认/补充 worktree.json 复用协议说明：存在即复用不重复拉取，不存在按 make-decision 规则自建 (stage:2, depends:T007) FR: FR-WORKTREE-001
+- [ ] T008 在 `workflows/build-code/SKILL.md` 确认/补充 worktree.json 复用协议说明：存在即复用不重复拉取，不存在按 make-decision 规则自建；**新增异常路径**——文件内容损坏（JSON 解析失败或 `worktree_root` 字段非法/指向不存在路径）时不得读取损坏内容继续，escalate_to_human 并停止推进；checkout 失败时不得写入半成品 worktree.json（独立审查 round2 发现：原描述只覆盖存在/不存在两种情况，遗漏损坏文件与 checkout 失败两类会导致 build-code 复用错误路径的情形） (stage:2, depends:T007) FR: FR-WORKTREE-001
 
 **Checkpoint**: `workflows/build-code/SKILL.md` 含全部 6 个新章节，字段命名与 data-contracts.md 一致。
 
@@ -51,7 +51,7 @@
 **Purpose**: 收尾核对 + 测试补充（两条任务文件独立，可并行）
 
 - [ ] T009 [P] 核对 `workflows/build-code/SKILL.md` 修订内容与 `data-contracts.md` 五类契约字段命名完全一致，无别名（尤其 `rework_proxy_count` 禁止别名） (stage:3, depends:T008) FR: 跨 FR-RISK-001/FR-SMOKE-001/FR-METRICS-001
-- [ ] T010 [P] 新增 `tests/m13d-build-code-deepening.test.mjs`：断言 evidence **五件套全部**字段存在性 + 枚举值合法性——(a) phase-N-RED.json risk_level 合法值, (b) phase-N-GREEN.json risk_level/commit_sha/base_sha/head_sha 存在, (c) l2-integration-test-report.json routing_tier/result 合法值, (d) spec-compliance-verdict.md verdict(pass/revise_required) + findings 字段存在, (e) code-quality-verdict.md verdict(pass/revise_required) + findings 字段存在（此前遗漏 d/e 两项，独立审查发现后补齐） (stage:3, depends:T008) FR: AC-RISK-001, AC-SMOKE-001, AC-METRICS-001~003, AC-REVIEW-001
+- [ ] T010 [P] 新增 `tests/m13d-build-code-deepening.test.mjs`：断言 evidence **五件套全部**字段存在性 + 枚举值合法性——(a) phase-N-RED.json risk_level 合法值, (b) phase-N-GREEN.json risk_level/commit_sha/base_sha/head_sha 存在, (c) l2-integration-test-report.json routing_tier/routing_rationale(非空)/result 合法值, (d) spec-compliance-verdict.md verdict(pass/revise_required) + findings 字段存在, (e) code-quality-verdict.md verdict(pass/revise_required) + findings 字段存在（此前遗漏 d/e 两项及 routing_rationale 断言，独立审查两轮发现后补齐） (stage:3, depends:T008) FR: AC-RISK-001, AC-SMOKE-001, AC-METRICS-001~003, AC-REVIEW-001, AC-SMOKE-003
 
 **Checkpoint**: `npm test` 全绿，字段一致性核对无发现别名问题。
 
