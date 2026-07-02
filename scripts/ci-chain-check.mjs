@@ -40,7 +40,7 @@ try {
 // 3. verify-code: check 7-key structure at TOP level (aligned with facts-assembly.mjs assembleStageResult)
 try {
   const vc = JSON.parse(readFileSync(`${specsDir}/stage-result-verify-code.json`, 'utf-8'));
-  const required = ['verdict', 'evidence_ref', 'anomaly_flags', 'missing_items', 'user_decision', 'reason', 'error_code'];
+  const required = ['status', 'error_code', 'retryable', 'facts', 'missing_items', 'user_decision', 'reason'];
   const missing = required.filter(k => !(k in vc));
   if (missing.length > 0) {
     console.error(`[FAIL] verify-code: missing top-level keys: ${missing.join(', ')}`);
