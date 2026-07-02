@@ -8,14 +8,14 @@
 
 ## 概述
 
-本计划为 verify-code 阶段打 7 个补丁（D1-D7），提升证据可信度与放行判断可靠性。改动范围：新建 `skills/test-strategy/SKILL.md`、扩展 `skills/verify-code/SKILL.md`（插入 trace-check、test-strategy 调用、stage-summary 双调用、L3 铁律、三色门）、扩展 `freshness.mjs` 至四段校验。所有改动仅限 verify-code 阶段及其子技能，不触碰 build-code / build-plan / make-decision / build-spec。
+本计划为 verify-code 阶段打 7 个补丁（D1-D7），提升证据可信度与放行判断可靠性。改动范围：新建 `skills/test-strategy/SKILL.md`、扩展 `workflows/verify-code/SKILL.md`（插入 trace-check、test-strategy 调用、stage-summary JSONL 写入、L3 铁律、三色门）、扩展 `freshness.mjs` 至四段校验。所有改动仅限 verify-code 阶段及其子技能，不触碰 build-code / build-plan / make-decision / build-spec。
 
 ---
 
 ## Technical Context
 
 **Language/Version**: Markdown, Node.js v20（freshness.mjs 为 ESM）
-**Primary Dependencies**: isolated-browser-qa skill（D4 复用，不改造）; stage-summary skill（D5 调用）
+**Primary Dependencies**: isolated-browser-qa skill（D4 复用，不改造；须在 `workflows/verify-code/isolated-browser-qa.md` 中补充机器可读 JSON 输出契约，含 git_sha/flaky_failure 字段）; stage-summary JSONL（D5：无独立 stage-summary skill，直接在 workflows/verify-code/SKILL.md 中 inline append 写入 evidence/stage-summary.jsonl）
 **Storage**: Filesystem `specs/m13e-verify-code-deepening/`；运行时产物写入 `evidence/`
 **Testing**: 手动执行 verify-code 阶段；机器可查字段通过 JSON/YAML 解析验证
 **Target Platform**: workflowhub agent runtime
@@ -86,7 +86,7 @@
 [x] test-strategy skill 设计参考 AC-to-route 映射的通用测试策略模式；trace-check 参考 evidence traceability 标准实践；freshness 四段校验参考 content_hash + git_sha 交叉验证方案。
 
 ### S7 一阶段一技能、一工作流一文件夹
-[x] 新建 test-strategy skill 落 `skills/test-strategy/SKILL.md`，独立目录；verify-code 修改限于 `skills/verify-code/` 目录；运行时产物落 `evidence/`；核心工作流目录零改动。
+[x] 新建 test-strategy skill 落 `skills/test-strategy/SKILL.md`，独立目录；verify-code 修改限于 `workflows/verify-code/` 目录；运行时产物落 `evidence/`；核心工作流目录零改动。
 
 ### S8 自定义技能可独立调用、可搬运
 [x] test-strategy skill 输入契约自洽（ui_change, risk_level, L2报告摘要），不绑死 verify-code 环境，可在其他 stage 独立调用；freshness.mjs 为可独立运行的 Node.js ESM 模块；isolated-browser-qa 不改造保持原有可搬运性。
@@ -153,32 +153,32 @@ JUSTIFICATION: 独立上下文是宪法硬要求；超时走 yellow 降级路径
 
 **Step 2.1 — 扩展 `freshness.mjs`（D3 四段校验）**
 做什么：在现有 phase-N.md 校验基础上增加段 2（RED报告）、段 3（GREEN报告）、段 4（L2报告）的 git_sha+content_hash 交叉验证；增加 L3 iron-law 专项校验（segment="l3-iron"）；所有违反追加到 `mtime_violations[]`。
-涉及文件：`skills/verify-code/freshness.mjs`（MODIFY）
+涉及文件：`workflows/verify-code/freshness.mjs`（MODIFY）
 映射 FR：FR-FRESH-001, FR-L3IRON-001
 
 **Step 2.2 — 修改 `verify-code/SKILL.md`：插入 trace-check 步骤（D1）**
 做什么：在 test-strategy 步骤之后、L3 之前插入 trace-check 步骤。trace-check 扫描 evidence/ 下各 phase 报告：检查存在性、exit_code==0、git_sha+content_hash 交叉验证；处理 `no_browser_test: true` 跳过留痕；产出 `trace-check-report.json`（含 missing_ac_coverage[]）。增加 FR-TRACE-002 的关联比对可验证步骤。
-涉及文件：`skills/verify-code/SKILL.md`（MODIFY）
+涉及文件：`workflows/verify-code/SKILL.md`（MODIFY）
 映射 FR：FR-TRACE-001, FR-TRACE-002
 
 **Step 2.3 — 修改 `verify-code/SKILL.md`：插入 test-strategy 调用步骤（D2）**
 做什么：在 verify-code 流程中插入 test-strategy skill 调用步骤（子代理方式）；读取 L2 报告摘要、ui_change、risk_level 作为输入；调用完成后触发机器核查（读 spec AC 列表，逐一核对 test-strategy.md ac_routes 字段）；核查失败记入 D7 red 条件。
-涉及文件：`skills/verify-code/SKILL.md`（MODIFY）
+涉及文件：`workflows/verify-code/SKILL.md`（MODIFY）
 映射 FR：FR-STRATEGY-001
 
 **Step 2.4 — 修改 `verify-code/SKILL.md`：L3 复用 isolated-browser-qa（D4）**
 做什么：L3 E2E 步骤改为直接调用 isolated-browser-qa skill；指定截图输出到 `evidence/screenshots/`，报告写入 `l3-e2e-report.json`；调用接口不修改 isolated-browser-qa 本身。
-涉及文件：`skills/verify-code/SKILL.md`（MODIFY）
+涉及文件：`workflows/verify-code/SKILL.md`（MODIFY）
 映射 FR：FR-L3-001
 
 **Step 2.5 — 修改 `verify-code/SKILL.md`：stage-summary 双调用（D5）**
 做什么：在 verify-code 阶段开始插入第一次 stage-summary 调用（phase="start"），在阶段结束插入第二次调用（phase="end"）；两次调用均 append 写入 `evidence/stage-summary.jsonl`；机器验证：统计 "event":"stage_summary" 行数=2，顺序 start→end。
-涉及文件：`skills/verify-code/SKILL.md`（MODIFY）
+涉及文件：`workflows/verify-code/SKILL.md`（MODIFY）
 映射 FR：FR-SUMMARY-001
 
 **Step 2.6 — 修改 `verify-code/SKILL.md`：L3 iron-law + 三色门（D6/D7）**
-做什么：在 L3 执行后增加 iron-law 校验（l3-e2e-report.json git_sha 必须匹配当前 HEAD）；将 stage-result status 从 green/red 扩展为 green/yellow/red 三色，按 FR-COLOR-001 触发条件定义颜色门逻辑；yellow 不阻断，red escalate 等人。
-涉及文件：`skills/verify-code/SKILL.md`（MODIFY）
+做什么：在 L3 执行后增加 iron-law 校验（l3-e2e-report.json git_sha 必须匹配当前 HEAD）；三色门逻辑映射到 stage-result contract 允许值（success|failed|unknown）：全通→success，yellow 条件（flaky_failure=true 等非致命异常）→unknown，red 条件（git_sha 不匹配等致命失败）→failed；不新增 green/yellow/red 枚举，yellow 不阻断，red escalate 等人。
+涉及文件：`workflows/verify-code/SKILL.md`（MODIFY）
 映射 FR：FR-L3IRON-001, FR-COLOR-001
 
 ---
@@ -201,7 +201,7 @@ JUSTIFICATION: 独立上下文是宪法硬要求；超时走 yellow 降级路径
 - `workflows/make-decision/SKILL.md`
 - `workflows/build-spec/SKILL.md`
 - `skills/isolated-browser-qa/SKILL.md`（D4 是复用，不是改造）
-- `skills/stage-summary/SKILL.md`（D5 是调用，不是改造）
+- `workflows/verify-code/SKILL.md`（D5 stage-summary JSONL：无独立 skill，直接 inline append 写入 evidence/stage-summary.jsonl，不改造外部组件）
 - L1/L2 测试逻辑相关文件
 
 ---
@@ -278,15 +278,15 @@ M12 实值说明：本次记录时点为 build-plan 阶段，全流程未完成�
 ### F10-04：stage-summary 双调用（start + end）
 
 1. **真实威胁**：verify-code 当前无阶段摘要机制，缺乏可机器验证的"阶段开始/结束"证据，导致无法判断阶段是否完整执行。FR-SUMMARY-001 记录该问题。
-2. **现有机制是否覆盖**：stage-summary skill 已存在（复用，不改造），verify-code 仅新增两次调用。属于调用现有技能，不是新机制。
+2. **现有机制是否覆盖**：仓库无独立 stage-summary skill，D5 改为在 workflows/verify-code/SKILL.md 中 inline append 写入 evidence/stage-summary.jsonl，不依赖外部组件。属于最小侵入实现，不是新机制。
 3. **是否可轻易绕过**：stage-summary.jsonl 行数=2 且顺序 start→end 为机器可查约束；绕过有可观测后果。
-4. **长期维护成本**：两行调用，依赖现有 stage-summary skill，零新代码。
+4. **长期维护成本**：两行调用，依赖现有 stage-summary skill，零新代码（已修正：仓库无独立 stage-summary skill，D5 改为 inline append）。
 
 **结论**：保留。复用现有 skill，维护成本接近零。
 
 ---
 
-### F10-05：L3 iron-law（git_sha 匹配校验）+ 三色门（green/yellow/red）
+### F10-05：L3 iron-law（git_sha 匹配校验）+ 三色门（success/unknown/failed，对齐 stage-result contract）
 
 1. **真实威胁**：L3 报告可能来自不同 commit（旧 SHA），且现有 red/green 二色门无法区分"flaky 失败"与"真实失败"，导致误阻断或漏放行。FR-L3IRON-001、FR-COLOR-001 记录了该已观察失效。
 2. **现有机制是否覆盖**：现有 verify-code SKILL.md 无 git_sha 校验，无三色门逻辑，无覆盖。
@@ -311,8 +311,8 @@ M12 实值说明：本次记录时点为 build-plan 阶段，全流程未完成�
 
 | 操作 | 文件路径 | 说明 |
 |------|----------|------|
-| MODIFY | `skills/verify-code/SKILL.md` | 插入 trace-check、test-strategy 调用、stage-summary 双调用、L3 iron-law、三色门逻辑（D1-D7 全部） |
-| MODIFY | `skills/verify-code/freshness.mjs` | 扩展段2（RED报告）、段3（GREEN报告）、段4（L2报告）校验 |
+| MODIFY | `workflows/verify-code/SKILL.md` | 插入 trace-check、test-strategy 调用、stage-summary JSONL 写入、L3 iron-law、三色门逻辑（D1-D7 全部） |
+| MODIFY | `workflows/verify-code/freshness.mjs` | 扩展段2（RED报告）、段3（GREEN报告）、段4（L2报告）校验 |
 | CREATE | `skills/test-strategy/SKILL.md` | 新建 test-strategy skill，定义 AC→路由映射协议 |
 
 ### 红线文件确认（禁止触碰）
@@ -324,6 +324,6 @@ M12 实值说明：本次记录时点为 build-plan 阶段，全流程未完成�
 | `workflows/make-decision/SKILL.md` | 未触碰 |
 | `workflows/build-spec/SKILL.md` | 未触碰 |
 | `skills/isolated-browser-qa/SKILL.md` | 未触碰（D4 仅复用调用） |
-| `skills/stage-summary/SKILL.md` | 未触碰（D5 仅复用调用） |
+| `evidence/stage-summary.jsonl` | 运行时产物（D5 inline append 写入，无独立 skill） |
 
-所有改动仅限 `skills/verify-code/` 目录（2个文件）和新建 `skills/test-strategy/SKILL.md`，无禁止文件被触碰。
+所有改动仅限 `workflows/verify-code/` 目录（2个文件）和新建 `skills/test-strategy/SKILL.md`，无禁止文件被触碰。
