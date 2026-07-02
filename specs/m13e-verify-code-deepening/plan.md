@@ -50,7 +50,7 @@
 [x] red/yellow 均 escalate 后等人，不自动放行；iron-law 校验失败直接 red 并等人确认；stage-result 状态变更由人决策，不可逆操作不自动执行。
 
 ### F8 简单优先
-[x] L3 直接复用 isolated-browser-qa（D4），不重新设计执行器；freshness.mjs 扩展现有文件而非新建；stage-summary 复用已有 skill（D5）；无冗余抽象，出错明确报告不兜底。
+[x] L3 直接复用 isolated-browser-qa（D4），不重新设计执行器；freshness.mjs 扩展现有文件而非新建；stage-summary JSONL（D5）直接 inline append 写入，无独立 skill 依赖；无冗余抽象，出错明确报告不兜底。
 
 ### F9 可证伪、不假绿
 [x] 所有校验在"实际为假"时真报失败：freshness 违反写 mtime_violations[]；AC 缺 route 写 MISSING_ROUTE: 错误行；git_sha 不匹配触发 red；缺数据记入 missing_ac_coverage[] 而非假通过。
@@ -68,10 +68,10 @@
 [x] test-strategy skill 在独立子代理上下文产出；颜色门基于机器硬条件（非 LLM 主观打分）；verify-code 不对自身产物打分；trace-check 和 freshness 输出可供第三方验证的 JSON。
 
 ### S1 能用外部就不造轮子
-[x] L3 E2E 直接调用 isolated-browser-qa（D4，不改造）；stage-summary 直接调用已有 skill（D5，不改造）；未为这两个能力另起实现。
+[x] L3 E2E 直接调用 isolated-browser-qa（D4，不改造）；stage-summary JSONL（D5）以最小 inline append 实现，仓库无独立 stage-summary skill，不造轮子也不引入不存在的依赖；未为这两个能力另起复杂实现。
 
 ### S2 外部技能可针对项目改造合宪
-[x] isolated-browser-qa 和 stage-summary 均以调用方式复用，本次未发现需改造之处；freshness.mjs 属自研扩展，不适用本条，登记 N/A。
+[x] isolated-browser-qa 以调用方式复用，本次未发现需改造之处；stage-summary 无独立 skill，D5 为 inline append，N/A；freshness.mjs 属自研扩展，不适用本条，登记 N/A。
 
 ### S3 迭代时保持最新并就地检查
 [x] 本迭代已确认 isolated-browser-qa 和 stage-summary 接口无版本变化；test-strategy 为新建 skill，来源路径在其 SKILL.md 中声明。
@@ -113,8 +113,10 @@ specs/m13e-verify-code-deepening/
 
 ```text
 skills/
-├── test-strategy/
-│   └── SKILL.md                  NEW — D2 独立 test-strategy skill
+└── test-strategy/
+    └── SKILL.md                  NEW — D2 独立 test-strategy skill
+
+workflows/
 └── verify-code/
     ├── SKILL.md                  MODIFY — 插入 D1/D2/D4/D5/D6/D7 步骤
     └── freshness.mjs             MODIFY — D3 四段校验扩展
@@ -126,10 +128,10 @@ skills/
 
 ## Complexity Tracking
 
-**D7 三色 schema 破坏性变更**
-WHY: 需要区分"明确失败"（red）和"偶发不稳定"（yellow），二色无法表达。
-TRADEOFF: 下游消费者需适配新增的 yellow 值，有改动成本。
-JUSTIFICATION: 不引入 yellow 则偶发失败只能走 red 路径，会导致误阻断；三色是最小可行扩展，不引入新状态机。
+**D7 三色门逻辑（对齐现有 contract）**
+WHY: 需要区分"明确失败"和"偶发不稳定"，二值（success/failed）无法表达中间态。
+TRADEOFF: 无破坏性变更——映射到 contracts/stage-result.contract.json 现有允许值（success|failed|unknown），unknown 表达 yellow 中间态，不新增枚举，下游无需适配。
+JUSTIFICATION: 偶发失败走 unknown（不阻断），致命失败走 failed（escalate）；复用现有合约三值，是零 schema 变更的最小可行实现。
 
 **D2 test-strategy 子代理**
 WHY: 需要独立上下文执行策略推导，禁止自审（宪法 Q3）。
