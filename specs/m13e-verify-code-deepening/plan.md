@@ -202,9 +202,10 @@ JUSTIFICATION: 独立上下文是宪法硬要求；超时走 yellow 降级路径
 - `workflows/build-plan/SKILL.md`
 - `workflows/make-decision/SKILL.md`
 - `workflows/build-spec/SKILL.md`
-- `skills/isolated-browser-qa/SKILL.md`（D4 是复用，不是改造）
-- `workflows/verify-code/SKILL.md`（D5 stage-summary JSONL：无独立 skill，直接 inline append 写入 evidence/stage-summary.jsonl，不改造外部组件）
+- `workflows/verify-code/isolated-browser-qa.md` 接口定义（除补充 JSON 输出契约外不改造 isolated-browser-qa 逻辑）
 - L1/L2 测试逻辑相关文件
+
+注：`workflows/verify-code/SKILL.md` 和 `workflows/verify-code/freshness.mjs` 是本次改动的主要目标文件，不在红线列表内。
 
 ---
 
@@ -282,9 +283,9 @@ M12 实值说明：本次记录时点为 build-plan 阶段，全流程未完成�
 1. **真实威胁**：verify-code 当前无阶段摘要机制，缺乏可机器验证的"阶段开始/结束"证据，导致无法判断阶段是否完整执行。FR-SUMMARY-001 记录该问题。
 2. **现有机制是否覆盖**：仓库无独立 stage-summary skill，D5 改为在 workflows/verify-code/SKILL.md 中 inline append 写入 evidence/stage-summary.jsonl，不依赖外部组件。属于最小侵入实现，不是新机制。
 3. **是否可轻易绕过**：stage-summary.jsonl 行数=2 且顺序 start→end 为机器可查约束；绕过有可观测后果。
-4. **长期维护成本**：两行调用，依赖现有 stage-summary skill，零新代码（已修正：仓库无独立 stage-summary skill，D5 改为 inline append）。
+4. **长期维护成本**：两行 inline append，零外部依赖，零新代码。
 
-**结论**：保留。复用现有 skill，维护成本接近零。
+**结论**：保留。最小侵入实现，维护成本接近零。
 
 ---
 
