@@ -39,13 +39,16 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
     throw new Error(`evidence_ref must be a relative path without 'specs/{task-id}/' prefix, got: ${evidenceRef}`);
   }
   return {
-    verdict,
-    evidence_ref: evidenceRef,
-    anomaly_flags: anomalyFlags,
+    status: verdict,
+    retryable: retryable ?? false,
+    facts: {
+      evidence_ref: evidenceRef,
+      anomaly_flags: anomalyFlags,
+    },
     missing_items: missingItems,
     user_decision: userDecision,
     reason,
-    error_code: errorCode,
+    error_code: errorCode ?? '',
   };
 }
 

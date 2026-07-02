@@ -1,6 +1,6 @@
 ---
 name: verify-code
-description: Run a full verification pass against the spec acceptance criteria and produce a final test report and verdict.
+description: Run a full verification pass against the spec acceptance criteria, produce a final test report and verdict, and run an independent 3rd-review audit before stage-result commit.
 ---
 
 # verify-code
@@ -175,9 +175,47 @@ Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not
 ### 10. 收尾执行
 
 - **User confirms**: Execute the merge and branch deletion. Set `user_decision=true`.
-- **User rejects**: Set `user_decision=false`, terminate the skill, and record the reason in the stage-result (FR-CLOSE-002).
+- **User rejects**: Set `user_decision=false`, skip all irreversible operations, continue to step 11 (which will skip 3rd-review) and then step 12 to write the stage-result with the rejection reason (FR-CLOSE-002). Do not exit early.
 
-### 11. stage-result 落盘
+### 11. 3rd-review 独立审查
+
+After step 10 completes (user confirmed or rejected), and only when `user_decision=true`, invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run.
+
+**Dispatch rules:**
+- Run in a separate subagent context (independent from the coordinator).
+- Pass: changed file list, `worktree_root`, task context, and the path `{taskDir}/{task-id}/reviews/verify-code.md` as the output artifact path.
+- Explicitly forbid `git commit` in the subagent instruction.
+
+**When `user_decision=false`** (user rejected in step 10): skip 3rd-review entirely. Record `buildReviewFact({ status: "not_executed" })` and proceed directly to step 12 to write the stage-result with `user_decision=false`. Do not exit without writing stage-result.
+
+**Verdict handling** (only reached when `user_decision=true`):
+
+| Verdict | Action |
+|---|---|
+| `pass` | Proceed to step 12 (stage-result 落盘). |
+| `revise_required` | Surface findings to user. Record `missing_items` entry. Do not write stage-result yet. Agent or user fixes the flagged items, then rerun verify checks (steps 4–8) and rerun 3rd-review. After N=2 failed rerun rounds with no resolution, escalate to human and set `needs_human=true`. |
+| `escalate_to_human` | Surface findings immediately. Set `needs_human=true`. Do not write stage-result until human confirms resolution path. |
+
+If 3rd-review skill is unavailable or unreachable, downgrade gracefully: record `buildReviewFact({ status: "not_executed" })` with a visible warning in the stage-result. Do not block on unavailability.
+
+Record the review outcome in `facts.review` using `buildReviewFact` from `facts-schema.mjs`:
+
+```js
+import { buildReviewFact } from "./facts-schema.mjs";
+// review ran:
+const reviewFact = buildReviewFact({
+  status: "executed",
+  source,          // "third_party" | "same_source"
+  verdict,         // "pass" | "revise_required" | "escalate_to_human"
+  artifactPath: `{taskDir}/{task-id}/reviews/verify-code.md`
+});
+// review skipped (user_decision=false) or unavailable:
+// const reviewFact = buildReviewFact({ status: "not_executed" });
+```
+
+Write `reviewFact` into the stage-result under `facts.review` in step 12. Because `assembleStageResult` does not accept `review` as a parameter, explicitly merge it after assembly: `stageResult.facts.review = reviewFact` before calling `writeStageResult`.
+
+### 12. stage-result 落盘
 
 Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the stage-result to `{taskDir}/{task-id}/stage-result-verify-code.json` (FR-PATH-001). The `final-test-report.md` goes to `{taskDir}/{task-id}/test/` (FR-PATH-002). Both paths resolved via `parseTaskDir` — see step 1.
 
@@ -211,14 +249,17 @@ L3 git_sha mismatch, non-skipped missing L3 report, `missing_ac_coverage[]`
 containing a critical AC, and `test-strategy 机器核查失败`. Yellow conditions
 include `flaky_failure=true`, a test-strategy timeout or missing
 `test-strategy.md`, or explicitly non-critical missing coverage when no red
-condition exists. unknown/yellow does not block progression by itself and does
+condition exists. A browser-acceptance SKIP due to no UI scope in the spec is
+not a yellow condition — it is a scope exclusion (recorded in `missing_items`
+for traceability only) and does not change the color; if all other checks pass,
+the result is `success`. unknown/yellow does not block progression by itself and does
 not auto-approve irreversible actions. failed/red escalates for human confirmation and waits; do not automatically continue past a failed/red result.
 
-### 12. metrics 结束
+### 13. metrics 结束
 
 Call `updateOwnResult` to finalize the metrics record, then call `import("./metrics-writer.mjs").then(m => m.runMetricsWriter({ taskDir, taskId, verdict, executionId }))` to record task-metrics.jsonl for M10 baseline comparison. Metrics write failure only warns — it does not throw (FR-METRICS-002, F3).
 
-### 13. 阶段结束 trace
+### 14. 阶段结束 trace
 
 After the stage-result and metrics end steps, append the final JSON line to
 `evidence/stage-summary.jsonl`:
