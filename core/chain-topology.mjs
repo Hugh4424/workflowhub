@@ -3,9 +3,19 @@
  *
  * Topology traversal — pure functions, no I/O.
  * Uses the FIRST-exit view to discover which steps are on the canonical chain.
- * The first-exit / latest-exit separation is the core design invariant:
- *   - chain-topology always uses firstByStepId (topology must not shift on retries)
- *   - audit-aggregator uses latestByStepId for counting (reflect most-recent outcome)
+ *
+ * Design invariant:
+ *   - chain-topology uses firstByStepAndEntry (keyed by step_id::journal_entry_id)
+ *     so repeated attempts of the same step_id remain distinguishable.
+ *   - audit-aggregator uses latestByStepAndEntry for counting (most-recent outcome).
+ *
+ * ChainNode shape:
+ *   {
+ *     step_id: string,
+ *     journal_entry_id: string,   // from the selected STEP_ENTRY
+ *     attempt_index: number,       // 0-based occurrence of step_id in this chain
+ *     exit_journal_entry_id: string | null  // from the first matching STEP_EXIT, null if absent
+ *   }
  */
 
 // ---- private helpers ----
@@ -43,8 +53,33 @@ function firstEntryForStepId(entryEvents, stepId) {
 // ---- public exports ----
 
 /**
- * Build a Map keyed by step_id from the first occurrence of each exit event.
+ * Build a Map keyed by `${step_id}::${journal_entry_id}` from the FIRST occurrence
+ * of each (step_id, journal_entry_id) pair in exitEvents.
+ *
+ * The journal_entry_id is read from the exit event's own `exit_journal_entry_id` field,
+ * which must have been written by writeExitReceipt (bound to the matching STEP_ENTRY).
+ *
  * Used exclusively for topology discovery (not for counting).
+ *
+ * @param {object[]} exitEvents
+ * @returns {Map<string, object>}
+ */
+export function firstByStepAndEntry(exitEvents) {
+  const map = new Map();
+  for (const event of exitEvents) {
+    const entryId = event.exit_journal_entry_id ?? null;
+    const key = `${event.step_id}::${entryId}`;
+    if (!map.has(key)) {
+      map.set(key, event);
+    }
+  }
+  return map;
+}
+
+/**
+ * Build a Map keyed by step_id from the first occurrence of each exit event.
+ * Kept for backward compatibility with code that has not yet migrated to
+ * firstByStepAndEntry. New code should use firstByStepAndEntry.
  *
  * @param {object[]} exitEvents
  * @returns {Map<string, object>}
@@ -60,38 +95,69 @@ export function firstByStepId(exitEvents) {
 }
 
 /**
- * Discover the canonical chain of step IDs by traversing entry/exit pointers.
- * Uses the first-exit view (exitByStepId must be the result of firstByStepId()).
+ * Discover the canonical chain of steps by traversing entry/exit pointers.
+ * Returns ChainNode objects that carry both step_id and journal_entry_id so
+ * repeated attempts of the same step_id are physically distinct.
+ *
+ * exitByStepAndEntry MUST be the result of firstByStepAndEntry() — never
+ * latestByStepId() — to preserve the topology-must-not-shift-on-retries invariant.
  *
  * @param {object[]} entryEvents - All STEP_ENTRY events for the current run+stage
- * @param {Map<string,object>} exitByStepId - First exit per step_id (from firstByStepId())
+ * @param {Map<string,object>} firstExitByStepAndEntry
+ *   Key format: `${step_id}::${journal_entry_id}` (from firstByStepAndEntry())
  * @param {string} stageSlug
- * @returns {{ stepIds: string[], selectedEntries: Map<string,object>, warnings: string[] }}
+ * @returns {{ chainNodes: ChainNode[], warnings: string[] }}
  */
-export function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
+export function discoverChainNodes(entryEvents, firstExitByStepAndEntry, stageSlug) {
   const warnings = [];
   const heads = orderedDistinctHeads(entryEvents, stageSlug);
   const head = heads[0];
-  if (!head) return { stepIds: [], selectedEntries: new Map(), warnings: ["missing_chain_head"] };
+  if (!head) return { chainNodes: [], warnings: ["missing_chain_head"] };
   if (heads.length > 1) warnings.push("duplicate_chain_heads");
 
-  const stepIds = [];
-  const selectedEntries = new Map();
-  const visited = new Set();
+  /** @type {ChainNode[]} */
+  const chainNodes = [];
+  // visited keyed by journal_entry_id (not step_id) to allow step_id retries
+  const visitedEntryIds = new Set();
+  // step_id attempt counter
+  const attemptsByStepId = new Map();
   let topologyEntry = head;
 
   while (topologyEntry) {
     const currentStepId = topologyEntry.step_id;
-    if (visited.has(currentStepId)) {
+    const currentEntryId = topologyEntry.journal_entry_id ?? null;
+
+    // Cycle guard: same entry ID seen twice means a real loop
+    if (currentEntryId !== null && visitedEntryIds.has(currentEntryId)) {
+      warnings.push(`cycle_detected:${currentStepId}`);
+      break;
+    }
+    // Fallback cycle guard when journal_entry_id is absent (shouldn't happen post-fix)
+    if (currentEntryId === null && visitedEntryIds.has(`step_id:${currentStepId}`)) {
       warnings.push(`cycle_detected:${currentStepId}`);
       break;
     }
 
-    visited.add(currentStepId);
-    stepIds.push(currentStepId);
-    selectedEntries.set(currentStepId, topologyEntry);
+    if (currentEntryId !== null) {
+      visitedEntryIds.add(currentEntryId);
+    } else {
+      visitedEntryIds.add(`step_id:${currentStepId}`);
+    }
 
-    const exit = exitByStepId.get(currentStepId);
+    const attemptIndex = attemptsByStepId.get(currentStepId) ?? 0;
+    attemptsByStepId.set(currentStepId, attemptIndex + 1);
+
+    // Look up the first exit for this specific (step_id, journal_entry_id) pair
+    const exitKey = `${currentStepId}::${currentEntryId}`;
+    const exit = firstExitByStepAndEntry.get(exitKey) ?? null;
+    const exitEntryId = exit?.exit_journal_entry_id ?? null;
+
+    chainNodes.push({
+      step_id: currentStepId,
+      journal_entry_id: currentEntryId,
+      attempt_index: attemptIndex,
+      exit_journal_entry_id: exitEntryId,
+    });
 
     if (!Object.prototype.hasOwnProperty.call(topologyEntry, "next_step_id")) {
       warnings.push(`missing_entry_next_step_id:${currentStepId}`);
@@ -119,13 +185,48 @@ export function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
       continue;
     }
 
-    const nextCandidateEntries = orderedDistinctUnvisitedNextEntries(entryEvents, currentStepId, visited);
+    // No explicit next pointer — fall back to implicit (prev_step_id) scan
+    // Build a visited set of step_ids already in chain for dedup
+    const visitedStepIds = new Set(chainNodes.map((n) => n.step_id));
+    const nextCandidateEntries = orderedDistinctUnvisitedNextEntries(entryEvents, currentStepId, visitedStepIds);
     if (nextCandidateEntries.length === 0) break;
     if (nextCandidateEntries.length > 1) {
       warnings.push(`duplicate_next:${currentStepId}`);
       break;
     }
     topologyEntry = nextCandidateEntries[0];
+  }
+
+  return { chainNodes, warnings };
+}
+
+/**
+ * Backward-compat shim: wraps discoverChainNodes and returns the legacy
+ * { stepIds, selectedEntries, warnings } shape expected by older callers.
+ *
+ * @param {object[]} entryEvents
+ * @param {Map<string,object>} exitByStepId - result of firstByStepId()
+ * @param {string} stageSlug
+ * @returns {{ stepIds: string[], selectedEntries: Map<string,object>, warnings: string[] }}
+ */
+export function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
+  // Build a firstByStepAndEntry-compatible map from the legacy firstByStepId map.
+  // Since old exit events have no exit_journal_entry_id, key becomes step_id::null.
+  const firstExitByStepAndEntry = new Map();
+  for (const [stepId, exitEvent] of exitByStepId) {
+    const entryId = exitEvent.exit_journal_entry_id ?? null;
+    const key = `${stepId}::${entryId}`;
+    firstExitByStepAndEntry.set(key, exitEvent);
+  }
+
+  const { chainNodes, warnings } = discoverChainNodes(entryEvents, firstExitByStepAndEntry, stageSlug);
+
+  const stepIds = chainNodes.map((n) => n.step_id);
+  const selectedEntries = new Map();
+  // Re-derive selectedEntries from entryEvents to preserve original shape
+  for (const node of chainNodes) {
+    const entry = entryEvents.find((e) => e.journal_entry_id === node.journal_entry_id || e.step_id === node.step_id);
+    if (entry) selectedEntries.set(node.step_id, entry);
   }
 
   return { stepIds, selectedEntries, warnings };

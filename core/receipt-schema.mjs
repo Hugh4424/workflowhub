@@ -80,7 +80,18 @@ function validateJudgementPayload(payload) {
   assertBoolean(payload.judgement.retry_eligible, "judgement.retry_eligible");
 }
 
-function validateReviewPayload(review) {
+/**
+ * Validate the review sub-structure of an exit payload.
+ * Exported so tests can cover both shapes (executed=true / executed=false) directly.
+ *
+ * executed=true  — source, provider, true_cross_engine, report_path, raw_result_path,
+ *                  fix_status are all required.
+ * executed=false — all fields optional; if supplied as non-null they must be valid
+ *                  types/enum values (no field is forced required).
+ *
+ * @param {object} review
+ */
+export function validateReviewPayload(review) {
   assertObject(review, "review");
   if (review.skill !== "3rd-review") {
     throw new TypeError('review.skill must be "3rd-review"');
@@ -88,11 +99,11 @@ function validateReviewPayload(review) {
   if (typeof review.executed !== "boolean") {
     throw new TypeError("review.executed must be a boolean");
   }
-  assertEnum(review.verdict, REVIEW_VERDICTS, "review.verdict");
   assertIntegerAtLeastOne(review.round, "review.round");
 
   if (review.executed) {
     // executed=true: all fields required
+    assertEnum(review.verdict, REVIEW_VERDICTS, "review.verdict");
     assertNonEmptyString(review.source, "review.source");
     assertNonEmptyString(review.provider, "review.provider");
     if (typeof review.true_cross_engine !== "boolean") {
@@ -102,15 +113,15 @@ function validateReviewPayload(review) {
     assertNonEmptyString(review.raw_result_path, "review.raw_result_path");
     assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
   } else {
-    // executed=false: optional fields — validate only if supplied (non-null/non-undefined)
+    // executed=false: validate only when supplied as non-null
+    if (review.verdict != null) {
+      assertEnum(review.verdict, REVIEW_VERDICTS, "review.verdict");
+    }
     if (review.source != null) {
       assertNonEmptyString(review.source, "review.source");
     }
     if (review.provider != null) {
       assertNonEmptyString(review.provider, "review.provider");
-    }
-    if (review.fix_status != null) {
-      assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
     }
     if (review.true_cross_engine != null) {
       if (typeof review.true_cross_engine !== "boolean") {
@@ -122,6 +133,9 @@ function validateReviewPayload(review) {
     }
     if (review.raw_result_path != null) {
       assertNonEmptyString(review.raw_result_path, "review.raw_result_path");
+    }
+    if (review.fix_status != null) {
+      assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
     }
   }
 }
@@ -159,7 +173,8 @@ export function validateEntryPayload(payload) {
 }
 
 /**
- * Validate exit receipt payload, including review sub-structure (two shapes).
+ * Validate exit receipt payload.
+ * exit_journal_entry_id is optional; if present must be a non-empty string.
  * Throws TypeError on failure; returns undefined on success.
  * @param {object} payload
  */
@@ -167,6 +182,10 @@ export function validateExitPayload(payload) {
   assertObject(payload, "exitReceiptPayload");
   assertStepId(payload.step_id);
   assertNonEmptyString(payload.workflow_run_id, "workflow_run_id");
+  // exit_journal_entry_id is optional; validate format only when present
+  if (payload.exit_journal_entry_id != null) {
+    assertNonEmptyString(payload.exit_journal_entry_id, "exit_journal_entry_id");
+  }
   assertEnum(payload.verdict, EXIT_VERDICTS, "verdict");
   assertNonEmptyString(payload.executor_namespace, "executor_namespace");
   assertNullableStepId(payload.prev_step_id, "prev_step_id");

@@ -213,7 +213,7 @@ describe("receipt writer", () => {
           },
         }),
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ journal_entry_id: expect.any(String) });
 
     await expect(
       writeEntryReceipt(

@@ -8,7 +8,7 @@
  */
 
 import { AUDIT_SUMMARY_FIELDS, JOURNAL_EVENT_TYPES } from "./journal-schema.mjs";
-import { discoverChainStepIds, firstByStepId } from "./chain-topology.mjs";
+import { discoverChainNodes, firstByStepAndEntry } from "./chain-topology.mjs";
 
 const STAGE_SLUGS = new Set(["bs", "bp", "bc", "vc", "md"]);
 
@@ -32,7 +32,7 @@ function assertNonEmptyString(value, name) {
 
 /**
  * Build a Map keyed by step_id from the latest occurrence of each exit event.
- * Used exclusively for counting (not for topology discovery).
+ * Compat helper — used by tests and legacy callers that don't need attempt-level granularity.
  *
  * @param {object[]} events
  * @returns {Map<string, object>}
@@ -46,9 +46,9 @@ export function latestByStepId(events) {
 }
 
 /**
- * Build a Map keyed by `${step_id}::${journal_entry_id}` from the latest
- * occurrence of each (step_id, journal_entry_id) pair.
- * Reserved for future fine-grained attempt-level counting.
+ * Build a Map keyed by `${step_id}::${exit_journal_entry_id}` from the latest
+ * occurrence of each (step_id, exit_journal_entry_id) pair.
+ * Used by the main counting path to limit counting to the chain-selected attempt.
  *
  * @param {object[]} exitEvents
  * @returns {Map<string, object>}
@@ -56,7 +56,7 @@ export function latestByStepId(events) {
 export function latestByStepAndEntry(exitEvents) {
   const map = new Map();
   for (const event of exitEvents) {
-    const entryId = event.exit_journal_entry_id ?? event.step_id;
+    const entryId = event.exit_journal_entry_id ?? null;
     const key = `${event.step_id}::${entryId}`;
     map.set(key, event);
   }
@@ -66,8 +66,8 @@ export function latestByStepAndEntry(exitEvents) {
 /**
  * Build the full audit_summary from all journal events for a given run+stage.
  *
- * - Topology discovery uses firstByStepId (chain-topology module).
- * - Counting uses latestByStepId (latest-exit view).
+ * - Topology discovery uses firstByStepAndEntry + discoverChainNodes (chain-topology module).
+ * - Counting uses latestByStepAndEntry keyed by (step_id, exit_journal_entry_id).
  * - receipt_write_warn events carrying original_exit_payload are treated as
  *   virtual STEP_EXIT events so write failures never silently drop a step count.
  *
@@ -98,13 +98,15 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
 
   // Recover virtual exit events from receipt_write_warn events that carry original_exit_payload.
   // These fill in for STEP_EXIT events that failed to write (non-blocking write path).
-  // Normal write takes priority: only use warn payload if no real exit exists for this step.
+  // Filter by original_exit_payload.workflow_run_id (warn event top-level may differ).
+  // Normal write takes priority: only use warn payload if no real exit exists for this step+entry.
   const warnExitEvents = [];
   for (const event of events) {
     if (event?.event !== "receipt_write_warn") continue;
-    if (!sameRun(event)) continue;
     const payload = event.original_exit_payload;
-    if (!payload || !sameStageStep(payload.step_id)) continue;
+    // Use original_exit_payload.workflow_run_id for run filtering (not event top-level).
+    if (!payload || payload.workflow_run_id !== workflowRunId) continue;
+    if (!sameStageStep(payload.step_id)) continue;
     // Check if a real STEP_EXIT already exists for this step — if so, prefer it.
     const alreadyHasRealExit = exitEvents.some((e) => e.step_id === payload.step_id);
     if (!alreadyHasRealExit) {
@@ -114,28 +116,36 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
 
   const effectiveExitEvents = [...exitEvents, ...warnExitEvents];
 
-  // Topology uses FIRST exit so retry attempts don't alter the visible chain.
-  const firstExitByStepId = firstByStepId(effectiveExitEvents);
-  const { stepIds, warnings } = discoverChainStepIds(entryEvents, firstExitByStepId, stageSlug);
-  const reachable = new Set(stepIds);
+  // Topology uses FIRST exit keyed by (step_id, journal_entry_id) so retry attempts don't alter chain.
+  const firstExitMap = firstByStepAndEntry(effectiveExitEvents);
+  const { chainNodes, warnings } = discoverChainNodes(entryEvents, firstExitMap, stageSlug);
 
-  // Counting uses LATEST exit so retried steps reflect most-recent outcome.
-  const latestReachableEntries = latestByStepId(entryEvents.filter((e) => reachable.has(e.step_id)));
-  const latestExitByStepId = latestByStepId(effectiveExitEvents.filter((e) => reachable.has(e.step_id)));
+  // Counting uses LATEST exit keyed by (step_id, exit_journal_entry_id) to reflect most-recent outcome
+  // for each chain-selected attempt, without cross-attempt overwrite.
+  const latestExitByStepAndEntry = latestByStepAndEntry(effectiveExitEvents);
+  const latestEntryByStepId = latestByStepId(entryEvents);
 
   let passed_step_count = 0;
   let blocked_step_count = 0;
   let skipped_step_count = 0;
 
-  for (const stepId of stepIds) {
-    const entry = latestReachableEntries.get(stepId);
-    const exit = latestExitByStepId.get(stepId);
+  for (const node of chainNodes) {
+    const entry = latestEntryByStepId.get(node.step_id);
+    // Look up exit keyed by (step_id, exit_journal_entry_id).
+    // node.exit_journal_entry_id comes from the first-exit discovered in topology,
+    // and matches the key stored in latestByStepAndEntry (exit_journal_entry_id ?? null).
+    const exitKey = `${node.step_id}::${node.exit_journal_entry_id}`;
+    const exit = latestExitByStepAndEntry.get(exitKey) ?? null;
+
     if (entry?.check_status === "skipped") skipped_step_count += 1;
     if (exit?.verdict === "passed") passed_step_count += 1;
     if (entry?.check_status === "blocked" || entry?.judgement?.status === "blocked" || exit?.verdict === "blocked") {
       blocked_step_count += 1;
     }
   }
+
+  const stepIds = chainNodes.map((n) => n.step_id);
+  const reachable = new Set(stepIds);
 
   let rollback_count = 0;
   for (const event of events) {
