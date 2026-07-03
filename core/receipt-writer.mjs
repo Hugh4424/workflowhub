@@ -17,7 +17,7 @@ const JUDGEMENT_STATUSES = new Set(["blocked"]);
 const REVIEW_VERDICTS = new Set(["passed", "revise_required", "escalate_to_human", "unknown"]);
 const FIX_STATUSES = new Set(["fixed", "not_required", "pending", "unknown"]);
 const STEP_ID_PATTERN =
-  /^(?:bc\.(?:work|review|check)\.(?:ph\d+(?:\.\d+)?|\d+)|(?:bs|bp|vc|md)\.(?:work|review|check)\.(?:ph\d+|\d+))$/;
+  /^(?:bc\.(?:work|review|check)\.(?:ph\d+(?:\.\d+)?|\d+)|(?:bs|bp|vc|md)\.(?:work|review|check)\.\d+)$/;
 
 function assertObject(value, name) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -256,10 +256,11 @@ function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
   const warnings = [];
   const heads = orderedDistinctHeads(entryEvents, stageSlug);
   const head = heads[0];
-  if (!head) return { stepIds: [], warnings: ["missing_chain_head"] };
+  if (!head) return { stepIds: [], selectedEntries: new Map(), warnings: ["missing_chain_head"] };
   if (heads.length > 1) warnings.push("duplicate_chain_heads");
 
   const stepIds = [];
+  const selectedEntries = new Map();
   const visited = new Set();
   let topologyEntry = head;
 
@@ -272,6 +273,7 @@ function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
 
     visited.add(currentStepId);
     stepIds.push(currentStepId);
+    selectedEntries.set(currentStepId, topologyEntry);
 
     const exit = exitByStepId.get(currentStepId);
     if (!Object.prototype.hasOwnProperty.call(topologyEntry, "next_step_id")) {
@@ -308,7 +310,7 @@ function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
     topologyEntry = nextCandidateEntries[0];
   }
 
-  return { stepIds, warnings };
+  return { stepIds, selectedEntries, warnings };
 }
 
 export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId } = {}) {
@@ -328,16 +330,18 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
   );
   const exitByStepId = latestByStepId(exitEvents);
   const firstExitByStepId = firstByStepId(exitEvents);
-  const entryByStepId = latestByStepId(entryEvents);
   const { stepIds, warnings } = discoverChainStepIds(entryEvents, firstExitByStepId, stageSlug);
   const reachable = new Set(stepIds);
+  // Final-status counts use the LATEST reachable entry per step_id (SKILL.md: "final-status counters use latest reachable entry").
+  // Chain topology traversal already used the first journal-order entry for pointer following; only status lookup uses latest.
+  const latestReachableEntries = latestByStepId(entryEvents.filter((e) => reachable.has(e.step_id)));
 
   let passed_step_count = 0;
   let blocked_step_count = 0;
   let skipped_step_count = 0;
 
   for (const stepId of stepIds) {
-    const entry = entryByStepId.get(stepId);
+    const entry = latestReachableEntries.get(stepId);
     const exit = exitByStepId.get(stepId);
     if (entry?.check_status === "skipped") skipped_step_count += 1;
     if (exit?.verdict === "passed") passed_step_count += 1;

@@ -59,6 +59,7 @@ This document captures all cross-boundary data structures exchanged between the 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | `step_id` | string | same as paired entry_receipt | Links exit to entry |
+| `workflow_run_id` | string | non-empty | Run instance ID; must match paired entry_receipt (audit_summary aggregation scoped to this ID) |
 | `verdict` | string | enum: `passed`, `blocked`, `skipped`, `unknown` | Overall step outcome (FR-SGA-002) |
 | `executor_namespace` | string | non-empty | Identity of the step executor (for self-review detection per FR-SGA-008) |
 | `prev_step_id` | string \| null | mirrors entry | Maintained for traversal consistency |
@@ -73,7 +74,7 @@ This document captures all cross-boundary data structures exchanged between the 
 | `review.source` | string | — | Description of review source |
 | `review.provider` | string | — | Review engine provider (e.g. `codex`, `claude`) |
 | `review.true_cross_engine` | boolean | — | Whether truly cross-engine |
-| `review.verdict` | string | enum: `passed`, `revise_required`, `unknown` | Review outcome |
+| `review.verdict` | string | enum: `passed`, `revise_required`, `escalate_to_human`, `unknown` | Review outcome |
 | `review.round` | integer | >= 1 | Which review round (starting from 1) |
 | `review.report_path` | string | — | Path to review report |
 | `review.raw_result_path` | string | — | Path to raw result output |

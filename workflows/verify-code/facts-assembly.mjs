@@ -88,7 +88,7 @@ export function readCommand(buildResult) {
   return cmd;
 }
 
-export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable }) {
+export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable, workflowRunId }) {
   // FR-PATH-003: evidence_ref must be relative path WITHOUT specs/{task-id}/ prefix
   if (evidenceRef.startsWith('/')) {
     throw new Error(`evidence_ref must be a relative path, absolute paths are not allowed, got: ${evidenceRef}`);
@@ -110,6 +110,7 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
     user_decision: userDecision,
     reason,
     error_code: errorCode ?? '',
+    ...(workflowRunId != null ? { workflow_run_id: workflowRunId } : {}),
   };
 }
 
