@@ -187,6 +187,12 @@ function validateReviewPayload(review) {
         throw new TypeError("review.true_cross_engine must be a boolean");
       }
     }
+    if (review.report_path != null) {
+      assertNonEmptyString(review.report_path, "review.report_path");
+    }
+    if (review.raw_result_path != null) {
+      assertNonEmptyString(review.raw_result_path, "review.raw_result_path");
+    }
   }
 }
 

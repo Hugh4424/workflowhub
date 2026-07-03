@@ -1089,4 +1089,47 @@ describe("receipt writer", () => {
       ),
     ).resolves.toBeUndefined();
   });
+
+  it("regression fix-7: writeExitReceipt rejects malformed report_path when executed=false but supplied", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, report_path: 123 },
+        }),
+      ),
+    ).rejects.toThrow("review.report_path");
+  });
+
+  it("regression fix-7: writeExitReceipt rejects malformed raw_result_path when executed=false but supplied", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, raw_result_path: "" },
+        }),
+      ),
+    ).rejects.toThrow("review.raw_result_path");
+  });
+
+  it("regression fix-7: writeExitReceipt accepts valid report_path and raw_result_path when executed=false", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: {
+            skill: "3rd-review",
+            executed: false,
+            verdict: "passed",
+            round: 1,
+            report_path: "reviews/report.md",
+            raw_result_path: "reviews/raw.json",
+          },
+        }),
+      ),
+    ).resolves.toBeUndefined();
+  });
 });
