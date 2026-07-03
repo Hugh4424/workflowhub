@@ -77,22 +77,21 @@ Then 记录 warn 到 journal，step 结果不受影响，审计链标记该 step
 
 ---
 
-### FR-SGA-003 before-step BLOCKED 直接回退（不升人工）
+### FR-SGA-003 before-step BLOCKED 出judgement（回退由 runner 执行）
 
-**描述**：before-step 检查发现 `check_status=blocked` 时，直接回退到上一个 step（re-run 上一 step），不升级为人工干预。
+**描述**：before-step 检查发现 `check_status=blocked` 时，audit 组件产出 judgement `{status: "blocked", reason: "<原因>", retry_eligible: true/false}`，**不自行执行 rollback**——rollback 动作由 runner/workflow 层根据 judgement 执行（D8：audit 不做自动 rollback 只出 judgement）。
 
-回退触发条件（`check_status=blocked`）：
-- entry_receipt 写入失败（FR-SGA-001 fail-closed）
-- 上游 step 的 exit_receipt 缺失或 `verdict=blocked`
-- rollback 计数在同一 `workflow_run_id` 下达到阈值时（阈值见 FR-SGA-006）
+runner/workflow 层收到 judgement 后的行为（D9）：
+- 连续 rollback < 2 次：自动回退到上一 step，重新执行
+- 连续 rollback 达到 2 次仍无效：升级为人工干预（不再自动回退）
 
-回退行为：重新执行上一 step（不是整个 stage），最多回退至 stage 第一个 step。
+回退范围：上一 step（不是整个 stage），最多回退至 stage 第一个 step。
 
 **验收场景**：
 
 Given before-step 检查发现上游 exit_receipt verdict=blocked
 When entry_receipt 写入时
-Then check_status=blocked，当前 step 不执行，触发回退到上一 step
+Then check_status=blocked，audit 产出 judgement，当前 step 不执行，runner 执行回退到上一 step
 
 Given 当前 step 是 stage 第一个 step，before-step 仍检测到 blocked
 When 回退触发
@@ -102,20 +101,26 @@ Then 记录 blocked 到 journal，不再向前回退，stage 标记为 blocked�
 
 ### FR-SGA-004 receipt 并入统一落盘底座
 
-**描述**：entry_receipt / exit_receipt 必须写入现有统一落盘底座（journal / stage-result），不引入第三套独立格式。具体：
-- receipt 作为 journal 的事件条目（event type: `step_entry` / `step_exit`）
+**描述**：entry_receipt / exit_receipt 必须写入现有统一落盘底座，不引入第三套独立格式。具体：
+- receipt 作为 `journal.jsonl` 的事件条目（event_type: `step_entry` / `step_exit`）
 - 字段并入现有 journal schema，通过 schema 版本号区分新旧
+- `stage-result.json` 新增 `audit_summary` 聚合字段（decision-log section 7 AC），汇总当前 stage 的 receipt 统计
 - 禁止创建独立的 `receipts/` 目录或单独的 receipt 文件格式
+- receipt 逐 step 写入 journal，audit_summary 在 stage 结束时汇总写入 stage-result
 
 **验收场景**：
 
 Given after-step 触发
 When exit_receipt 写入
-Then 写入路径为现有 journal 文件，event_type 字段值为 `step_exit`，不创建新格式文件
+Then 写入路径为现有 journal.jsonl，event_type 字段值为 `step_exit`，不创建新格式文件
 
 Given 查询某 step 的 receipt 记录
-When 读取 journal
+When 读取 journal.jsonl
 Then 可通过 event_type=`step_entry`/`step_exit` + step_id 过滤出对应 receipt
+
+Given stage 执行完成
+When stage-result.json 写入
+Then stage-result.json 包含 `audit_summary` 聚合字段，含本 stage 所有 step 的统计
 
 ---
 
@@ -147,15 +152,17 @@ Then rollback_count=2，blocked_step_count 仍为各自实际值，两者不要�
 
 ### FR-SGA-006 rollback 计数与阈值（workflow_run_id 隔离）
 
-**描述**：rollback 计数按 `workflow_run_id` 隔离，同一 workflow_run_id 下累计 rollback 次数超过阈值（默认 3）时，停止回退并升级到 stage 层处理（记录 blocked，等人确认）。
+**描述**：rollback 计数按 `workflow_run_id` 隔离。runner/workflow 层执行自动回退时，同一 workflow_run_id 下连续 rollback 达到 **2 次**仍无效，升级为人工干预（D9："连续两次rollback仍无效才升级人工"）。
 
 `workflow_run_id` 由本次工作流运行启动时生成，贯穿该运行内所有 step 的 entry_receipt / exit_receipt。
 
+audit_summary 中的 `rollback_count` 记录本 workflow_run_id 下累计触发的回退次数（由 runner 在执行回退时写入 journal，event_type: `step_auto_rollback`）。
+
 **验收场景**：
 
-Given 同一 workflow_run_id 下 rollback 已累计 3 次
-When before-step 再次检测到 blocked
-Then 不再回退，stage 标记为 blocked，写入 journal 并等待 stage 层处理
+Given 同一 workflow_run_id 下连续 rollback 已达 2 次仍无效
+When runner 收到第 3 次 audit judgement blocked
+Then 不再自动回退，升级人工，journal 记录 `step_auto_rollback` 事件，stage 标记为 blocked
 
 Given 新的 workflow_run_id 启动（重新触发整个工作流）
 When rollback 计数初始化
@@ -163,23 +170,34 @@ Then 新 workflow_run_id 的 rollback_count 从 0 开始，不继承上次运行
 
 ---
 
-### FR-SGA-007 after-step 调用 3rd-review 技能
+### FR-SGA-007 after-step 调用 3rd-review 技能（review 作为一等 step）
 
-**描述**：每个 step 执行后，after-step 钩子调用 `skills/3rd-review/SKILL.md` 进行异源审查，审查结论写入 exit_receipt 的 `review_verdict` 字段。
+**描述**：每个 step 执行后，after-step 钩子调用 `skills/3rd-review/SKILL.md` 进行异源审查（D4：不强制异源，由技能自行判断）。review 作为一等 step 纳入 receipt 链（D3），exit_receipt 中包含以下 9 个 review 字段：
 
-- 审查成功：写入 `review_verdict`（passed / revise_required）
-- 审查失败/技能不可用：`review_verdict=unknown`，记录原因，不阻断 step 推进
-- **禁止自审自判（FR-SGA-008）**：通过 writer_namespace vs executor_namespace 对比检验，防止写入方和执行方为同一命名空间
+| 字段 | 说明 |
+|------|------|
+| skill | 调用的 review 技能标识（`3rd-review`） |
+| executed | 是否真正执行（true/false） |
+| source | 审查来源描述 |
+| provider | 审查引擎提供方（如 codex、claude 等） |
+| true_cross_engine | 是否真异源引擎（true/false） |
+| round | 本 step 的第几轮审查（从 1 起） |
+| verdict | 审查结论（passed / revise_required / unknown） |
+| report_path | 审查报告路径 |
+| raw_result_path | 原始结果路径 |
+| fix_status | 修订状态（fixed / not_required / pending / unknown） |
+
+审查失败/技能不可用时：所有 review 字段写 unknown/false/null，记录原因，不阻断 step 推进（D4）。
 
 **验收场景**：
 
 Given step 执行完成
 When after-step 调用 3rd-review 技能
-Then 技能在独立上下文执行，review_verdict 写入 exit_receipt
+Then 技能在独立上下文执行，exit_receipt 包含全部 9 个 review 字段，verdict 有明确值
 
 Given 3rd-review 技能调用失败（超时/不可用）
 When after-step 钩子触发
-Then review_verdict=unknown，原因记录到 journal，step 推进不受阻断
+Then verdict=unknown，executed=false，原因记录到 journal，step 推进不受阻断
 
 ---
 
@@ -310,6 +328,22 @@ Given 无授权方标记、check_status 未填
 When entry_receipt 写入
 Then check_status 不得默认为 skipped，必须为 ok 或 blocked
 
+### FR-SGA-015 不建全局 step 位置表（D1 负向约束）
+
+**描述**：receipt 链采用 local-pointer 设计——每个 step 的 receipt 只记录直接前驱/后继指针（prev_step_id / next_step_id），**禁止建立全局 step 位置表**（decision-log D1）。
+
+理由：全局位置表的变更会牵动全局所有 step，违反"变更只影响相邻 prev/next"原则。
+
+**验收场景**：
+
+Given spec 或实现中存在全局 step 位置表（如 step_registry / step_index 等全局索引结构）
+When 代码审查
+Then 该设计视为违反 D1，应拒绝合并
+
+Given step receipt 需要定位到"当前 stage 的第 N 个 step"
+When 实现
+Then 通过遍历 journal.jsonl 中的 prev/next 指针链推断位置，不依赖全局表
+
 ---
 
 ## 二、不做（Out Scope）
@@ -327,17 +361,18 @@ Then check_status 不得默认为 skipped，必须为 ok 或 blocked
 
 | AC# | 验收条件 | 对应 FR |
 |-----|---------|---------|
-| AC-001 | 任意 stage 任意 step 执行前，journal 中存在对应 entry_receipt，包含 5 个必填字段 | FR-SGA-001 |
-| AC-002 | 任意 stage 任意 step 执行后，journal 中存在对应 exit_receipt，包含 5 个必填字段（含 verdict） | FR-SGA-002 |
-| AC-003 | before-step 检测到 blocked 时，当前 step 不执行，上一 step 重跑 | FR-SGA-003 |
-| AC-004 | receipt 写入路径为现有 journal 文件，不存在独立 receipts/ 目录或格式 | FR-SGA-004 |
+| AC-001 | 任意 stage 任意 step 执行前，journal.jsonl 中存在对应 entry_receipt，包含 5 个必填字段 | FR-SGA-001 |
+| AC-002 | 任意 stage 任意 step 执行后，journal.jsonl 中存在对应 exit_receipt，包含 5 个必填字段（含 verdict）及 9 个 review 字段 | FR-SGA-002/007 |
+| AC-003 | before-step 检测到 blocked 时，audit 产出 judgement，当前 step 不执行，runner 执行回退到上一 step | FR-SGA-003 |
+| AC-004 | receipt 写入路径为现有 journal.jsonl，stage-result.json 含 audit_summary 聚合字段，不存在独立 receipts/ 目录或格式 | FR-SGA-004 |
 | AC-005 | exit_receipt.audit_summary 含 5 个独立计数字段，blocked_step_count 和 rollback_count 不要求相等 | FR-SGA-005 |
-| AC-006 | 同一 workflow_run_id 下 rollback 累计超过阈值（3）时，stage 标记 blocked，不再继续回退 | FR-SGA-006 |
-| AC-007 | after-step 调用 3rd-review 技能，结论写入 exit_receipt.review_verdict | FR-SGA-007 |
+| AC-006 | 同一 workflow_run_id 下连续 rollback 达 2 次仍无效时，升级人工，不再自动回退 | FR-SGA-006 |
+| AC-007 | after-step 调用 3rd-review 技能，exit_receipt 包含全部 9 个 review 字段 | FR-SGA-007 |
 | AC-008 | writer_namespace == executor_namespace 时，记录 warn，不阻断 | FR-SGA-008 |
 | AC-009 | 5 个 stage 均实现 before-step / after-step 钩子，step_id 前缀匹配 stage_slug | FR-SGA-009/010 |
 | AC-010 | entry_receipt 写失败 fail-closed；exit_receipt 写失败 warn-only | FR-SGA-013 |
 | AC-011 | check_status=skipped 必须有授权方且 skip_reason 非空 | FR-SGA-014 |
+| AC-012 | 无全局 step 位置表，step 定位通过 journal.jsonl 的 prev/next 指针链推断 | FR-SGA-015 |
 
 ---
 
@@ -370,7 +405,7 @@ Then check_status 不得默认为 skipped，必须为 ok 或 blocked
 
 ## 五、Known Gaps
 
-1. **rollback 阈值配置化**：当前硬编码为 3，后续需要运行时可配置（留 build-plan）
+1. **rollback 阈值配置化**：当前硬编码为 2（D9），后续需要运行时可配置（留 build-plan）
 2. **skipped 授权方机制**：FR-SGA-014 仅定义"必须有授权方"，具体角色/审批链设计留 build-plan
 3. **phase-manifest 并发写**：build-code 多 phase 并发时 phase-manifest 的并发写保护不在本次范围
 4. **executor_namespace 强隔离**：FR-SGA-008 的 runner 层是否真正隔离写入路径，依赖 build-plan 阶段补强
@@ -393,7 +428,7 @@ OUT scope：journal schema 向后兼容层，3rd-review 技能实现，receipt �
 | 2 | 所有 FR 使用 FR-{DOMAIN}-NNN 格式 | warn（使用 FR-SGA-NNN，SGA 为任务专属域，非 SKILL.md 预设域列表内，功能等价） |
 | 3 | 每个 FR 至少有一条 Given/When/Then 场景 | pass |
 | 4 | 五章硬门完整（速读卡/FR/不做/验收/影响范围） | pass |
-| 5 | spec 覆盖 decision-log 每条 KEEP 决策 | warn（D1"不建全局位置表"负向约束仅在 Known Gaps 隐含，未在 FR 中显式写出） |
+| 5 | spec 覆盖 decision-log 每条 KEEP 决策 | pass（spec-clarify 后 D1"不建全局位置表"已显式写入 FR-SGA-015；D9 rollback 阈值已修正为 2；D3 review 9 字段已写入 FR-SGA-007；D8 audit-only-judgement 已写入 FR-SGA-003） |
 | 6 | 无 [NEEDS CLARIFICATION] 残留 | pass |
 | 7 | Known Gaps 段存在 | pass |
 
@@ -401,7 +436,7 @@ OUT scope：journal schema 向后兼容层，3rd-review 技能实现，receipt �
 
 **FR-BEHAV-002 检查**：pass（所有场景描述系统/用户级行为，无框架名/函数名）
 
-自检汇总：**5 pass，2 warn，0 unknown**
+自检汇总：**6 pass，1 warn，0 unknown**
 
 ### 3. 独立审查
 
@@ -492,8 +527,8 @@ OUT scope：journal schema 向后兼容层，3rd-review 技能实现，receipt �
 3. 绕过：不适用
 4. 维护成本：低 → 通过
 
-**机制 6：rollback 阈值（workflow_run_id 隔离）**
-1. 真实威胁：无限回退导致死循环
+**机制 6：rollback 阈值 2 次（workflow_run_id 隔离）**
+1. 真实威胁：无限回退导致死循环（D9 明确要求连续两次仍无效才升级人工）
 2. 现有覆盖：无
 3. 绕过：可绕过（伪造 workflow_run_id），但属执行层问题
 4. 维护成本：低 → 通过
