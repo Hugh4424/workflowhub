@@ -97,11 +97,17 @@ async function appendReceiptWriteWarn(taskId, writeError) {
     reason: writeError instanceof Error ? writeError.message : String(writeError),
   };
 
+  // If the warn append also fails, propagate the combined error so the
+  // caller has a reliable failure signal rather than silent data loss.
   try {
     await appendJournalLine(taskId, warnEvent);
   } catch (warnError) {
     const reason = warnError instanceof Error ? warnError.message : String(warnError);
-    console.warn(`receipt_write_warn could not be written: ${reason}`);
+    const combined = new Error(
+      `receipt_write_warn could not be written (${reason}); original error: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+    );
+    combined.cause = writeError;
+    throw combined;
   }
 }
 
@@ -313,6 +319,19 @@ function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
   return { stepIds, selectedEntries, warnings };
 }
 
+/**
+ * Returns the canonical journal path for a resolved task spec directory.
+ * Exported so callers (e.g. facts-assembly) reuse the same single source of
+ * truth instead of independently computing `join(dir, "journal.jsonl")`.
+ *
+ * @param {string} taskSpecDir - Absolute path to the task's spec directory
+ *   (i.e. the result of join(parseTaskDir(), taskId)).
+ * @returns {string} Absolute path to journal.jsonl inside that directory.
+ */
+export function journalPathForTaskDir(taskSpecDir) {
+  return join(taskSpecDir, "journal.jsonl");
+}
+
 export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId } = {}) {
   if (!Array.isArray(events)) {
     throw new TypeError("events must be an array");
@@ -328,12 +347,12 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
   const exitEvents = events.filter(
     (event) => event?.event_type === JOURNAL_EVENT_TYPES.STEP_EXIT && sameRun(event) && sameStageStep(event.step_id),
   );
-  const exitByStepId = latestByStepId(exitEvents);
+  // Use first journal-order exit for both topology and status counts so the
+  // two oracles stay consistent under retry scenarios (fix #3 / round-2 finding).
   const firstExitByStepId = firstByStepId(exitEvents);
   const { stepIds, warnings } = discoverChainStepIds(entryEvents, firstExitByStepId, stageSlug);
   const reachable = new Set(stepIds);
   // Final-status counts use the LATEST reachable entry per step_id (SKILL.md: "final-status counters use latest reachable entry").
-  // Chain topology traversal already used the first journal-order entry for pointer following; only status lookup uses latest.
   const latestReachableEntries = latestByStepId(entryEvents.filter((e) => reachable.has(e.step_id)));
 
   let passed_step_count = 0;
@@ -342,7 +361,7 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
 
   for (const stepId of stepIds) {
     const entry = latestReachableEntries.get(stepId);
-    const exit = exitByStepId.get(stepId);
+    const exit = firstExitByStepId.get(stepId);
     if (entry?.check_status === "skipped") skipped_step_count += 1;
     if (exit?.verdict === "passed") passed_step_count += 1;
     if (entry?.check_status === "blocked" || entry?.judgement?.status === "blocked" || exit?.verdict === "blocked") {

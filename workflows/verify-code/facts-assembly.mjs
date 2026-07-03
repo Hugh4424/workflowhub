@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { AUDIT_SUMMARY_FIELDS } from '../../core/journal-schema.mjs';
-import { buildAuditSummaryFromJournalEvents } from '../../core/receipt-writer.mjs';
+import { buildAuditSummaryFromJournalEvents, journalPathForTaskDir } from '../../core/receipt-writer.mjs';
 
 const METRIC_KEYS = [
   'execution_id', 'skill_or_stage', 'stage', 'skill_version',
@@ -46,7 +46,9 @@ function appendAuditWarnings(result, warnings) {
 function withAuditSummary(taskSpecDir, result, { workflowRunId, stageSlug = 'vc' } = {}) {
   const warnings = [];
   let auditSummary = emptyAuditSummary();
-  const journalPath = join(taskSpecDir, 'journal.jsonl');
+  // Use the shared path helper from receipt-writer so both sides always
+  // point to the same file (fix #1 / round-2 finding — path unification).
+  const journalPath = journalPathForTaskDir(taskSpecDir);
   const resolvedWorkflowRunId = workflowRunId ?? result.workflow_run_id ?? result.workflowRunId;
 
   if (!resolvedWorkflowRunId) {
@@ -54,15 +56,13 @@ function withAuditSummary(taskSpecDir, result, { workflowRunId, stageSlug = 'vc'
   } else if (!existsSync(journalPath)) {
     warnings.push('audit_summary_omitted:missing_journal');
   } else {
-    try {
-      const events = parseJournalJsonl(journalPath);
-      const summary = buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId: resolvedWorkflowRunId });
-      auditSummary = summary.audit_summary;
-      warnings.push(...summary.warnings);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      warnings.push(`audit_summary_omitted:${message}`);
-    }
+    // Malformed journal (parse error) must not be silently swallowed into a
+    // zero audit_summary — re-throw so the caller sees an explicit failure
+    // (fix #4 / round-2 finding).
+    const events = parseJournalJsonl(journalPath);
+    const summary = buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId: resolvedWorkflowRunId });
+    auditSummary = summary.audit_summary;
+    warnings.push(...summary.warnings);
   }
 
   return appendAuditWarnings({ ...result, audit_summary: auditSummary }, warnings);
