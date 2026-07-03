@@ -107,8 +107,13 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
     // Use original_exit_payload.workflow_run_id for run filtering (not event top-level).
     if (!payload || payload.workflow_run_id !== workflowRunId) continue;
     if (!sameStageStep(payload.step_id)) continue;
-    // Check if a real STEP_EXIT already exists for this step — if so, prefer it.
-    const alreadyHasRealExit = exitEvents.some((e) => e.step_id === payload.step_id);
+    // Check if a real STEP_EXIT already exists for this step+entry pair — if so, prefer it.
+    // Must match on exit_journal_entry_id so a real exit for one attempt doesn't suppress
+    // warn recovery for a different attempt of the same step_id.
+    const pairKey = `${payload.step_id}::${payload.exit_journal_entry_id ?? null}`;
+    const alreadyHasRealExit = exitEvents.some(
+      (e) => `${e.step_id}::${e.exit_journal_entry_id ?? null}` === pairKey,
+    );
     if (!alreadyHasRealExit) {
       warnExitEvents.push(payload);
     }
@@ -123,14 +128,25 @@ export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRu
   // Counting uses LATEST exit keyed by (step_id, exit_journal_entry_id) to reflect most-recent outcome
   // for each chain-selected attempt, without cross-attempt overwrite.
   const latestExitByStepAndEntry = latestByStepAndEntry(effectiveExitEvents);
-  const latestEntryByStepId = latestByStepId(entryEvents);
+  // Entry lookup keyed by journal_entry_id so the exact chain-selected attempt is used,
+  // not the globally latest entry for that step_id.
+  const entryByJournalEntryId = new Map();
+  for (const e of entryEvents) {
+    if (e.journal_entry_id != null) entryByJournalEntryId.set(e.journal_entry_id, e);
+  }
 
   let passed_step_count = 0;
   let blocked_step_count = 0;
   let skipped_step_count = 0;
 
+  // Legacy fallback: entry events without journal_entry_id, keyed by step_id.
+  const entryByStepId = latestByStepId(entryEvents);
+
   for (const node of chainNodes) {
-    const entry = latestEntryByStepId.get(node.step_id);
+    // Prefer exact journal_entry_id match; fall back to step_id for legacy events without it.
+    const entry = node.journal_entry_id != null
+      ? (entryByJournalEntryId.get(node.journal_entry_id) ?? null)
+      : (entryByStepId.get(node.step_id) ?? null);
     // Look up exit keyed by (step_id, exit_journal_entry_id).
     // node.exit_journal_entry_id comes from the first-exit discovered in topology,
     // and matches the key stored in latestByStepAndEntry (exit_journal_entry_id ?? null).

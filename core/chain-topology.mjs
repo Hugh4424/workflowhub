@@ -33,14 +33,22 @@ function orderedDistinctHeads(entryEvents, stageSlug) {
   return heads;
 }
 
-function orderedDistinctUnvisitedNextEntries(entryEvents, currentStepId, visited) {
+/**
+ * Returns unvisited entries whose prev_step_id === currentStepId.
+ * De-duplicates by journal_entry_id (not step_id) so repeated attempts of
+ * the same step_id can both appear as distinct candidates.
+ * visitedEntryIds is the set of already-consumed journal_entry_id values
+ * (or `step_id:<id>` sentinels for legacy events without journal_entry_id).
+ */
+function orderedDistinctUnvisitedNextEntries(entryEvents, currentStepId, visitedEntryIds) {
   const entries = [];
-  const seenStepIds = new Set();
+  const seenEntryIds = new Set();
   for (const event of entryEvents) {
     if (event.prev_step_id !== currentStepId) continue;
-    if (visited.has(event.step_id)) continue;
-    if (seenStepIds.has(event.step_id)) continue;
-    seenStepIds.add(event.step_id);
+    const eid = event.journal_entry_id ?? `step_id:${event.step_id}`;
+    if (visitedEntryIds.has(eid)) continue;
+    if (seenEntryIds.has(eid)) continue;
+    seenEntryIds.add(eid);
     entries.push(event);
   }
   return entries;
@@ -176,19 +184,23 @@ export function discoverChainNodes(entryEvents, firstExitByStepAndEntry, stageSl
     if (exit && explicitNext === null) break;
     if (explicitNext != null) {
       if (!isStageStepId(explicitNext, stageSlug)) break;
-      const nextEntry = firstEntryForStepId(entryEvents, explicitNext);
-      if (!nextEntry) {
+      // Resolve by prev_step_id scan restricted to the explicit next step_id,
+      // so repeated attempts of the same step_id are resolved by journal order
+      // among unvisited entries — not by firstEntryForStepId which ignores attempts.
+      const nextCandidates = entryEvents.filter(
+        (e) => e.step_id === explicitNext && !visitedEntryIds.has(e.journal_entry_id ?? `step_id:${e.step_id}`),
+      );
+      if (nextCandidates.length === 0) {
         warnings.push(`missing_link:${currentStepId}->${explicitNext}`);
         break;
       }
-      topologyEntry = nextEntry;
+      topologyEntry = nextCandidates[0];
       continue;
     }
 
-    // No explicit next pointer — fall back to implicit (prev_step_id) scan
-    // Build a visited set of step_ids already in chain for dedup
-    const visitedStepIds = new Set(chainNodes.map((n) => n.step_id));
-    const nextCandidateEntries = orderedDistinctUnvisitedNextEntries(entryEvents, currentStepId, visitedStepIds);
+    // No explicit next pointer — fall back to implicit (prev_step_id) scan.
+    // Pass visitedEntryIds so dedup operates on journal_entry_id identity.
+    const nextCandidateEntries = orderedDistinctUnvisitedNextEntries(entryEvents, currentStepId, visitedEntryIds);
     if (nextCandidateEntries.length === 0) break;
     if (nextCandidateEntries.length > 1) {
       warnings.push(`duplicate_next:${currentStepId}`);
@@ -223,9 +235,16 @@ export function discoverChainStepIds(entryEvents, exitByStepId, stageSlug) {
 
   const stepIds = chainNodes.map((n) => n.step_id);
   const selectedEntries = new Map();
-  // Re-derive selectedEntries from entryEvents to preserve original shape
+  // Re-derive selectedEntries: use exact journal_entry_id match when present;
+  // fall back to step_id only when journal_entry_id is absent (legacy events).
   for (const node of chainNodes) {
-    const entry = entryEvents.find((e) => e.journal_entry_id === node.journal_entry_id || e.step_id === node.step_id);
+    let entry;
+    if (node.journal_entry_id != null) {
+      entry = entryEvents.find((e) => e.journal_entry_id === node.journal_entry_id);
+    }
+    if (!entry) {
+      entry = entryEvents.find((e) => e.step_id === node.step_id && e.journal_entry_id == null);
+    }
     if (entry) selectedEntries.set(node.step_id, entry);
   }
 
