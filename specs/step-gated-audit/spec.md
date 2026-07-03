@@ -36,6 +36,8 @@
 | timestamp | ISO8601 | 写入时刻 |
 | check_status | enum | `ok` / `blocked` / `skipped` |
 | writer_namespace | string | 写入方命名空间（用于防止自审自判，配合 executor_namespace） |
+| prev_step_id | string \| null | 直接前驱 step_id（首 step 为 null；用于 local-pointer 链，见 FR-SGA-015） |
+| next_step_id | string \| null | 直接后继 step_id（末 step 为 null；写入时如未知可填 null，后继 step 写入时回填） |
 
 写入失败时：**fail-closed** —— 记录错误到 journal，当前 step 不得继续执行，返回 `check_status=blocked` 并触发回退逻辑（FR-SGA-003）。
 
@@ -134,7 +136,7 @@ Then stage-result.json 包含 `audit_summary` 聚合字段，含本 stage 所有
 | blocked_step_count | 本 stage 到目前为止 verdict=blocked 的 step 数 |
 | skipped_step_count | 本 stage 到目前为止 verdict=skipped 的 step 数 |
 | rollback_count | 本 `workflow_run_id` 下触发过的回退次数 |
-| review_verdict | 本 step 关联的 3rd-review 审查结论（passed / revise_required / unknown） |
+| review_conclusion | 本 step 关联的 3rd-review 审查结论（passed / revise_required / unknown）；与 exit_receipt 主结构的 `verdict`（step 整体出口状态）语义不同，`review_conclusion` 专指 3rd-review 技能的审查裁决 |
 
 **注意**：`blocked_step_count` 和 `rollback_count` 是两个独立概念，一次回退可能对应多次 blocked 计数，不要求两者相等。
 
@@ -172,7 +174,7 @@ Then 新 workflow_run_id 的 rollback_count 从 0 开始，不继承上次运行
 
 ### FR-SGA-007 after-step 调用 3rd-review 技能（review 作为一等 step）
 
-**描述**：每个 step 执行后，after-step 钩子调用 `skills/3rd-review/SKILL.md` 进行异源审查（D4：不强制异源，由技能自行判断）。review 作为一等 step 纳入 receipt 链（D3），exit_receipt 中包含以下 9 个 review 字段：
+**描述**：每个 step 执行后，after-step 钩子调用 `skills/3rd-review/SKILL.md` 进行异源审查（D4：不强制异源，由技能自行判断）。review 作为一等 step 纳入 receipt 链（D3），exit_receipt 中包含以下 10 个 review 字段：
 
 | 字段 | 说明 |
 |------|------|
@@ -193,7 +195,7 @@ Then 新 workflow_run_id 的 rollback_count 从 0 开始，不继承上次运行
 
 Given step 执行完成
 When after-step 调用 3rd-review 技能
-Then 技能在独立上下文执行，exit_receipt 包含全部 9 个 review 字段，verdict 有明确值
+Then 技能在独立上下文执行，exit_receipt 包含全部 10 个 review 字段，verdict 有明确值
 
 Given 3rd-review 技能调用失败（超时/不可用）
 When after-step 钩子触发
@@ -351,7 +353,7 @@ Then 通过遍历 journal.jsonl 中的 prev/next 指针链推断位置，不依�
 - 不修改 journal / stage-result schema 的向后兼容层（由 build-plan 阶段处理）
 - 不引入新的签名基建或密钥管理
 - 不修改 3rd-review 技能本身的实现（FR-SGA-007 是调用，不是改造）
-- 不定义 rollback 阈值的运行时配置机制（阈值硬编码为 3，后续可配置化）
+- 不定义 rollback 阈值的运行时配置机制（阈值硬编码为 2，后续可配置化，见 D9 / Known Gaps）
 - receipt 的加密/防篡改机制不在本次范围（decision-log D8 明确）
 - skipped 标记的角色/审批链详细设计不在本次范围（FR-SGA-014 仅定义必须有授权方，细节留待 build-plan）
 
@@ -361,13 +363,13 @@ Then 通过遍历 journal.jsonl 中的 prev/next 指针链推断位置，不依�
 
 | AC# | 验收条件 | 对应 FR |
 |-----|---------|---------|
-| AC-001 | 任意 stage 任意 step 执行前，journal.jsonl 中存在对应 entry_receipt，包含 5 个必填字段 | FR-SGA-001 |
-| AC-002 | 任意 stage 任意 step 执行后，journal.jsonl 中存在对应 exit_receipt，包含 5 个必填字段（含 verdict）及 9 个 review 字段 | FR-SGA-002/007 |
+| AC-001 | 任意 stage 任意 step 执行前，journal.jsonl 中存在对应 entry_receipt，包含 7 个必填字段（含 prev_step_id / next_step_id 指针） | FR-SGA-001/015 |
+| AC-002 | 任意 stage 任意 step 执行后，journal.jsonl 中存在对应 exit_receipt，包含 5 个必填字段（含 verdict）及 10 个 review 字段 | FR-SGA-002/007 |
 | AC-003 | before-step 检测到 blocked 时，audit 产出 judgement，当前 step 不执行，runner 执行回退到上一 step | FR-SGA-003 |
 | AC-004 | receipt 写入路径为现有 journal.jsonl，stage-result.json 含 audit_summary 聚合字段，不存在独立 receipts/ 目录或格式 | FR-SGA-004 |
 | AC-005 | exit_receipt.audit_summary 含 5 个独立计数字段，blocked_step_count 和 rollback_count 不要求相等 | FR-SGA-005 |
 | AC-006 | 同一 workflow_run_id 下连续 rollback 达 2 次仍无效时，升级人工，不再自动回退 | FR-SGA-006 |
-| AC-007 | after-step 调用 3rd-review 技能，exit_receipt 包含全部 9 个 review 字段 | FR-SGA-007 |
+| AC-007 | after-step 调用 3rd-review 技能，exit_receipt 包含全部 10 个 review 字段 | FR-SGA-007 |
 | AC-008 | writer_namespace == executor_namespace 时，记录 warn，不阻断 | FR-SGA-008 |
 | AC-009 | 5 个 stage 均实现 before-step / after-step 钩子，step_id 前缀匹配 stage_slug | FR-SGA-009/010 |
 | AC-010 | entry_receipt 写失败 fail-closed；exit_receipt 写失败 warn-only | FR-SGA-013 |
@@ -397,7 +399,7 @@ Then 通过遍历 journal.jsonl 中的 prev/next 指针链推断位置，不依�
 
 ### 不受影响
 
-- stage-result schema（receipt 不写入 stage-result，仅写 journal）
+- stage-result schema 的向后兼容层（破坏性变更由 build-plan 处理；stage-result.json 需新增 audit_summary 聚合字段，见 FR-SGA-004 / AC-004）
 - 3rd-review 技能本身实现
 - 现有 metrics/collector.mjs 接口
 
