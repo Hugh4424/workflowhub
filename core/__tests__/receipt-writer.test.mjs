@@ -996,4 +996,28 @@ describe("receipt writer", () => {
     });
     await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
   });
+
+  it("regression fix-5: writeExitReceipt is non-blocking when both exit append and warn append fail", async () => {
+    const appendFile = vi.fn(async () => {
+      throw new Error("disk full");
+    });
+    const mkdir = vi.fn(async () => {});
+    const { writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir });
+
+    // Must resolve (not reject) even when both appends throw
+    await expect(writeExitReceipt(TASK_ID, validExitPayload())).resolves.toBeUndefined();
+  });
+
+  it("regression fix-6: writeExitReceipt accepts review with executed=false (provider/source optional)", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    const payload = validExitPayload({
+      review: {
+        skill: "3rd-review",
+        executed: false,
+        verdict: "passed",
+        round: 1,
+      },
+    });
+    await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
+  });
 });

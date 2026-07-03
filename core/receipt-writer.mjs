@@ -97,17 +97,15 @@ async function appendReceiptWriteWarn(taskId, writeError) {
     reason: writeError instanceof Error ? writeError.message : String(writeError),
   };
 
-  // If the warn append also fails, propagate the combined error so the
-  // caller has a reliable failure signal rather than silent data loss.
+  // Best-effort: if the warn append also fails, emit to stderr but do not throw.
+  // AC-010 / FR-SGA-013: exit_receipt write failure must never block step completion.
   try {
     await appendJournalLine(taskId, warnEvent);
   } catch (warnError) {
     const reason = warnError instanceof Error ? warnError.message : String(warnError);
-    const combined = new Error(
-      `receipt_write_warn could not be written (${reason}); original error: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+    process.stderr.write(
+      `[receipt-writer] receipt_write_warn could not be written (${reason}); original error: ${writeError instanceof Error ? writeError.message : String(writeError)}\n`,
     );
-    combined.cause = writeError;
-    throw combined;
   }
 }
 
@@ -157,16 +155,21 @@ function validateReviewPayload(review) {
   if (typeof review.executed !== "boolean") {
     throw new TypeError("review.executed must be a boolean");
   }
-  assertNonEmptyString(review.source, "review.source");
-  assertNonEmptyString(review.provider, "review.provider");
-  if (typeof review.true_cross_engine !== "boolean") {
-    throw new TypeError("review.true_cross_engine must be a boolean");
-  }
   assertEnum(review.verdict, REVIEW_VERDICTS, "review.verdict");
   assertIntegerAtLeastOne(review.round, "review.round");
-  assertNonEmptyString(review.report_path, "review.report_path");
-  assertNonEmptyString(review.raw_result_path, "review.raw_result_path");
-  assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
+
+  // When executed=false the review tool did not run; provider/source/report
+  // fields are optional in that shape and must not be required.
+  if (review.executed) {
+    assertNonEmptyString(review.source, "review.source");
+    assertNonEmptyString(review.provider, "review.provider");
+    if (typeof review.true_cross_engine !== "boolean") {
+      throw new TypeError("review.true_cross_engine must be a boolean");
+    }
+    assertNonEmptyString(review.report_path, "review.report_path");
+    assertNonEmptyString(review.raw_result_path, "review.raw_result_path");
+    assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
+  }
 }
 
 function validateExitPayload(payload) {
