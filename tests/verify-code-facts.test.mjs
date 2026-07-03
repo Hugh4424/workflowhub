@@ -42,14 +42,14 @@ describe('assembleStageResult', () => {
 
   it('should return 7-key stage-result object', () => {
     const r = assembleStageResult(baseOpts);
-    expect(r.verdict).toBe('pass');
-    expect(r.evidence_ref).toBe('evidence/fresh-capture.json');
+    expect(r.status).toBe('pass');
+    expect(r.facts.evidence_ref).toBe('evidence/fresh-capture.json');
     expect('user_decision' in r).toBe(true);
   });
 
   it('should preserve all passed values', () => {
     const r = assembleStageResult({ ...baseOpts, anomalyFlags: ['stale_sha'], userDecision: true });
-    expect(r.anomaly_flags).toEqual(['stale_sha']);
+    expect(r.facts.anomaly_flags).toEqual(['stale_sha']);
     expect(r.user_decision).toBe(true);
   });
 
@@ -73,12 +73,12 @@ describe('assembleStageResult', () => {
 
   it('should accept evidence_ref without specs/ prefix', () => {
     const r = assembleStageResult({ ...baseOpts, evidenceRef: 'evidence/fresh-capture.json' });
-    expect(r.evidence_ref).toBe('evidence/fresh-capture.json');
+    expect(r.facts.evidence_ref).toBe('evidence/fresh-capture.json');
   });
 
   it('should accept valid relative path with ./ prefix', () => {
     const r = assembleStageResult({ ...baseOpts, evidenceRef: './evidence/fresh-capture.json' });
-    expect(r.evidence_ref).toBe('./evidence/fresh-capture.json');
+    expect(r.facts.evidence_ref).toBe('./evidence/fresh-capture.json');
   });
 
   it('user_decision must be present (falsifiable)', () => {
@@ -91,13 +91,13 @@ describe('writeStageResult', () => {
     const r = assembleStageResult({ verdict: 'pass', evidenceRef: 'ev/1.json', anomalyFlags: [], missingItems: [], userDecision: null, reason: '', errorCode: null, retryable: false });
     writeStageResult(tmpDir, r);
     const raw = readFileSync(join(tmpDir, 'stage-result-verify-code.json'), 'utf-8');
-    expect(JSON.parse(raw).verdict).toBe('pass');
+    expect(JSON.parse(raw).status).toBe('pass');
   });
 
   it('should create directory if not exists', () => {
     const nested = join(tmpDir, 'nested-specs', 'm9-deep');
     writeStageResult(nested, assembleStageResult({ verdict: 'pass', evidenceRef: 'e.json', anomalyFlags: [], missingItems: [], userDecision: null, reason: '', errorCode: null, retryable: false }));
-    expect(JSON.parse(readFileSync(join(nested, 'stage-result-verify-code.json'), 'utf-8')).verdict).toBe('pass');
+    expect(JSON.parse(readFileSync(join(nested, 'stage-result-verify-code.json'), 'utf-8')).status).toBe('pass');
   });
 });
 

@@ -1,0 +1,199 @@
+/**
+ * core/audit-aggregator.mjs
+ *
+ * Audit counting — pure functions, no I/O.
+ * Uses the LATEST-exit view for counting final step outcomes.
+ * Consumes receipt_write_warn events that carry original_exit_payload so that
+ * a write failure never silently drops a step from the count.
+ */
+
+import { AUDIT_SUMMARY_FIELDS, JOURNAL_EVENT_TYPES } from "./journal-schema.mjs";
+import { discoverChainNodes, firstByStepAndEntry } from "./chain-topology.mjs";
+
+const STAGE_SLUGS = new Set(["bs", "bp", "bc", "vc", "md"]);
+
+function isStageStepId(stepId, stageSlug) {
+  return typeof stepId === "string" && stepId.startsWith(`${stageSlug}.`);
+}
+
+function assertEnum(value, allowed, name) {
+  if (!allowed.has(value)) {
+    throw new TypeError(`${name} must be one of: ${Array.from(allowed).join(", ")}`);
+  }
+}
+
+function assertNonEmptyString(value, name) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(`${name} must be a non-empty string`);
+  }
+}
+
+// ---- public exports ----
+
+/**
+ * Build a Map keyed by step_id from the latest occurrence of each exit event.
+ * Compat helper — used by tests and legacy callers that don't need attempt-level granularity.
+ *
+ * @param {object[]} events
+ * @returns {Map<string, object>}
+ */
+export function latestByStepId(events) {
+  const map = new Map();
+  for (const event of events) {
+    map.set(event.step_id, event);
+  }
+  return map;
+}
+
+/**
+ * Build a Map keyed by `${step_id}::${exit_journal_entry_id}` from the latest
+ * occurrence of each (step_id, exit_journal_entry_id) pair.
+ * Used by the main counting path to limit counting to the chain-selected attempt.
+ *
+ * @param {object[]} exitEvents
+ * @returns {Map<string, object>}
+ */
+export function latestByStepAndEntry(exitEvents) {
+  const map = new Map();
+  for (const event of exitEvents) {
+    const entryId = event.exit_journal_entry_id ?? null;
+    const key = `${event.step_id}::${entryId}`;
+    map.set(key, event);
+  }
+  return map;
+}
+
+/**
+ * Build the full audit_summary from all journal events for a given run+stage.
+ *
+ * - Topology discovery uses firstByStepAndEntry + discoverChainNodes (chain-topology module).
+ * - Counting uses latestByStepAndEntry keyed by (step_id, exit_journal_entry_id).
+ * - receipt_write_warn events carrying original_exit_payload are treated as
+ *   virtual STEP_EXIT events so write failures never silently drop a step count.
+ *
+ * @param {object[]} events - All parsed journal.jsonl events
+ * @param {string} stageSlug
+ * @param {string} workflowRunId
+ * @returns {{ audit_summary: object, warnings: string[] }}
+ */
+export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRunId) {
+  if (!Array.isArray(events)) {
+    throw new TypeError("events must be an array");
+  }
+  assertEnum(stageSlug, STAGE_SLUGS, "stageSlug");
+  assertNonEmptyString(workflowRunId, "workflowRunId");
+
+  const sameRun = (event) => event?.workflow_run_id === workflowRunId;
+  const sameStageStep = (stepId) => isStageStepId(stepId, stageSlug);
+
+  const entryEvents = events.filter(
+    (event) =>
+      event?.event_type === JOURNAL_EVENT_TYPES.STEP_ENTRY && sameRun(event) && sameStageStep(event.step_id),
+  );
+
+  const exitEvents = events.filter(
+    (event) =>
+      event?.event_type === JOURNAL_EVENT_TYPES.STEP_EXIT && sameRun(event) && sameStageStep(event.step_id),
+  );
+
+  // Recover virtual exit events from receipt_write_warn events that carry original_exit_payload.
+  // These fill in for STEP_EXIT events that failed to write (non-blocking write path).
+  // Filter by original_exit_payload.workflow_run_id (warn event top-level may differ).
+  // Normal write takes priority: only use warn payload if no real exit exists for this step+entry.
+  const warnExitEvents = [];
+  for (const event of events) {
+    if (event?.event !== "receipt_write_warn") continue;
+    const payload = event.original_exit_payload;
+    // Use original_exit_payload.workflow_run_id for run filtering (not event top-level).
+    if (!payload || payload.workflow_run_id !== workflowRunId) continue;
+    if (!sameStageStep(payload.step_id)) continue;
+    // Check if a real STEP_EXIT already exists for this step+entry pair — if so, prefer it.
+    // Must match on exit_journal_entry_id so a real exit for one attempt doesn't suppress
+    // warn recovery for a different attempt of the same step_id.
+    const pairKey = `${payload.step_id}::${payload.exit_journal_entry_id ?? null}`;
+    const alreadyHasRealExit = exitEvents.some(
+      (e) => `${e.step_id}::${e.exit_journal_entry_id ?? null}` === pairKey,
+    );
+    if (!alreadyHasRealExit) {
+      warnExitEvents.push(payload);
+    }
+  }
+
+  const effectiveExitEvents = [...exitEvents, ...warnExitEvents];
+
+  // Topology uses FIRST exit keyed by (step_id, journal_entry_id) so retry attempts don't alter chain.
+  const firstExitMap = firstByStepAndEntry(effectiveExitEvents);
+  const { chainNodes, warnings } = discoverChainNodes(entryEvents, firstExitMap, stageSlug);
+
+  // Counting uses LATEST exit keyed by (step_id, exit_journal_entry_id) to reflect most-recent outcome
+  // for each chain-selected attempt, without cross-attempt overwrite.
+  const latestExitByStepAndEntry = latestByStepAndEntry(effectiveExitEvents);
+  // Entry lookup keyed by journal_entry_id so the exact chain-selected attempt is used,
+  // not the globally latest entry for that step_id.
+  const entryByJournalEntryId = new Map();
+  for (const e of entryEvents) {
+    if (e.journal_entry_id != null) entryByJournalEntryId.set(e.journal_entry_id, e);
+  }
+
+  let passed_step_count = 0;
+  let blocked_step_count = 0;
+  let skipped_step_count = 0;
+
+  // Legacy fallback: entry events without journal_entry_id, keyed by step_id.
+  const entryByStepId = latestByStepId(entryEvents);
+
+  for (const node of chainNodes) {
+    // Prefer exact journal_entry_id match; fall back to step_id for legacy events without it.
+    const entry = node.journal_entry_id != null
+      ? (entryByJournalEntryId.get(node.journal_entry_id) ?? null)
+      : (entryByStepId.get(node.step_id) ?? null);
+    // Look up exit keyed by (step_id, exit_journal_entry_id).
+    // node.exit_journal_entry_id comes from the first-exit discovered in topology,
+    // and matches the key stored in latestByStepAndEntry (exit_journal_entry_id ?? null).
+    const exitKey = `${node.step_id}::${node.exit_journal_entry_id}`;
+    const exit = latestExitByStepAndEntry.get(exitKey) ?? null;
+
+    if (entry?.check_status === "skipped") skipped_step_count += 1;
+    if (exit?.verdict === "passed") passed_step_count += 1;
+    if (entry?.check_status === "blocked" || entry?.judgement?.status === "blocked" || exit?.verdict === "blocked") {
+      blocked_step_count += 1;
+    }
+  }
+
+  const stepIds = chainNodes.map((n) => n.step_id);
+  const reachable = new Set(stepIds);
+
+  let rollback_count = 0;
+  for (const event of events) {
+    if (event?.event_type !== JOURNAL_EVENT_TYPES.STEP_AUTO_ROLLBACK || !sameRun(event)) continue;
+    if (!sameStageStep(event.affected_step_id) || !reachable.has(event.affected_step_id)) continue;
+    rollback_count += 1;
+    if (
+      !sameStageStep(event.rollback_from_step_id) ||
+      !sameStageStep(event.rollback_to_step_id) ||
+      !reachable.has(event.rollback_from_step_id) ||
+      !reachable.has(event.rollback_to_step_id)
+    ) {
+      warnings.push(`rollback_pointer_outside_chain:${event.affected_step_id}`);
+    }
+  }
+
+  const audit_summary = {
+    total_step_count: stepIds.length,
+    passed_step_count,
+    blocked_step_count,
+    skipped_step_count,
+    rollback_count,
+  };
+
+  for (const field of AUDIT_SUMMARY_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(audit_summary, field)) {
+      throw new TypeError(`audit_summary missing schema field: ${field}`);
+    }
+  }
+
+  return {
+    audit_summary,
+    warnings,
+  };
+}

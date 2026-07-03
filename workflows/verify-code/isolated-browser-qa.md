@@ -206,6 +206,30 @@ Report only:
 - cleanup completion
 - whether the app service was left running
 
+## Machine-Readable JSON Output Contract
+
+When verify-code invokes this workflow for L3 browser acceptance, also write a
+machine-readable `l3-e2e-report.json` into the current task evidence directory.
+Screenshots collected during the run must be stored under `evidence/screenshots/`.
+
+Required JSON fields:
+
+- `git_sha: string` — the current HEAD SHA used for this L3 run.
+- `flaky_failure: boolean` — `true` only when the failure appears intermittent
+  rather than a deterministic product or test failure.
+
+Recommended supporting fields:
+
+- `tested_url`: URL or route under test.
+- `selected_engine`: `agent-browser` or `browser-use`.
+- `session`: derived browser QA session.
+- `screenshots`: array of paths under `evidence/screenshots/`.
+- `result`: `pass`, `fail`, or `blocked`.
+- `cleanup_completed`: boolean.
+
+Do not claim L3 completion in verify-code unless `l3-e2e-report.json` exists
+and includes at least `git_sha` and `flaky_failure`.
+
 If the selected engine stayed blocked, report:
 
 - selected engine
