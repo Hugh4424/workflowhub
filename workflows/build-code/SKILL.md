@@ -315,10 +315,11 @@ Run this hook before every build-code phase step that performs work, review, or 
 3. Set `check_status`:
    - `ok` when the previous step passed and the current phase step may run.
    - `blocked` when required upstream output, phase-manifest data, approval, or receipt state is missing or failed.
-   - `skipped` only when an explicit skip has been authorized; never default to `skipped`.
-4. Call `receipt-writer.writeEntryReceipt(taskId, entryReceiptPayload)` before the step body runs. The payload must include `step_id`, `stage_slug: "bc"`, `step_type`, `step_seq`, `check_status`, `prev_step_id`, `next_step_id`, `writer_namespace`, and `workflow_run_id`. Include `skip_reason` when `check_status` is `skipped`.
-5. If entry receipt writing fails, fail closed: do not run the step.
-6. If `check_status` is `blocked`, emit a `judgement` object and stop this step:
+   - `skipped` only when an explicit skip has been authorized; never default to `skipped`. The authorization must name an `authorized_by` party and a non-empty `skip_reason`.
+4. Call `receipt-writer.writeEntryReceipt(taskId, entryReceiptPayload)` before the step body runs. The payload must include `step_id`, `stage_slug: "bc"`, `step_type`, `step_seq`, `check_status`, `prev_step_id`, `next_step_id`, `writer_namespace`, and `workflow_run_id`. Include `authorized_by` and non-empty `skip_reason` when `check_status` is `skipped`. `next_step_id` may be `null` for terminal steps or when the next step is not known at entry time; the later entry/exit receipt that knows the next step records the matching pointer.
+5. Treat `prev_step_id` and `next_step_id` as the only step-position source. `step_seq` labels the local step identity and is not an ordering authority for audit reconstruction. Do not create or consult any global step position table; reconstruct order by traversing the local pointer chain in `journal.jsonl`.
+6. If entry receipt writing fails, fail closed: do not run the step.
+7. If `check_status` is `blocked`, emit a `judgement` object and stop this step:
 
 ```json
 {
@@ -328,7 +329,7 @@ Run this hook before every build-code phase step that performs work, review, or 
 }
 ```
 
-The runner handles rollback policy: rollback when `rollback_count < 2` and `retry_eligible=true`, escalate to human when rollback is exhausted, and escalate immediately when there is no previous step.
+The audit hook only emits `judgement`; it does not execute rollback and does not mutate `rollback_count`. The runner owns rollback policy and scopes `rollback_count` to `workflow_run_id`: each new `workflow_run_id` starts at 0, each runner-emitted `step_auto_rollback` increments the count for that run only, and counts never carry across runs. Roll back when the same blocked `step_id` has fewer than 2 consecutive ineffective rollback attempts and `retry_eligible=true`; reset that consecutive-attempt chain after successful progress or a different blocked `step_id`. After 2 consecutive ineffective rollback attempts for the same blocked `step_id` in the same `workflow_run_id`, escalate to human. Escalate immediately when there is no previous step. `skipped` steps do not trigger rollback.
 
 ## After-Step Hook
 
@@ -337,7 +338,7 @@ Run this hook after every build-code phase step that performs work, review, or c
 1. Call `3rd-review` against the concrete step output, artifact, or diff where applicable. A review failure or timeout is recorded as `review.executed=false` and `review.verdict=unknown`; it does not block step completion.
 2. Compare `writer_namespace` from the paired entry receipt with `executor_namespace`. If they match, append a warning to the journal and note `potential self-review risk` in `review.source`; still call `3rd-review`.
 3. Call `receipt-writer.writeExitReceipt(taskId, exitReceiptPayload)` with the paired `step_id`. Exit receipt write failure is warn-only and must not discard the step result.
-4. The exit payload must include `step_id`, `verdict`, `executor_namespace`, `prev_step_id`, `next_step_id`, and a `review` record with all 10 required fields:
+4. The exit payload must include `step_id`, `workflow_run_id`, `verdict`, `executor_namespace`, `prev_step_id`, `next_step_id`, and a `review` record with all 10 required fields:
    - `review.skill` = `3rd-review`
    - `review.executed`
    - `review.source`
@@ -348,3 +349,21 @@ Run this hook after every build-code phase step that performs work, review, or c
    - `review.report_path`
    - `review.raw_result_path`
    - `review.fix_status`
+
+## Stage-Result Audit Summary
+
+When writing the stage-result, append a top-level `audit_summary` object without changing or removing any existing stage-result fields. Read `journal.jsonl`, parse each JSON line in append order, call `buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId })`, and attach the returned `audit_summary` at the stage-result top level. If `warnings` is non-empty, append the warning strings to an existing `reason` or `notes` field; if neither field exists, create `notes` for the warnings while preserving all existing fields.
+
+Implementation note: import `buildAuditSummaryFromJournalEvents` from `../../core/receipt-writer.mjs` relative to this workflow directory, and read `{taskDir}/{task-id}/journal.jsonl`. If the journal is missing or malformed, fail visibly in the existing stage-result path by recording an `audit_summary` omission warning in `reason` or `notes`; do not silently omit the field, do not delete existing stage-result fields, and do not create a new shared stage-result writer when none exists.
+
+Populate the summary from entries scoped to the current `workflow_run_id` and the `bc.*` phase local pointer chain only. Start from the first `bc.*` entry whose `prev_step_id` is `null` or outside `bc.*`; follow `next_step_id` when present, otherwise discover the next entry by matching `prev_step_id` to the current `step_id` in journal append order. Count each distinct `step_id` once. On duplicate links, missing links, or cycles, stop traversal at the malformed edge, record a warning in the stage-result reason/notes, and preserve the partial counts.
+
+For retried duplicate `step_id` entries, final-status counters use the latest reachable entry and latest reachable exit for that `step_id`. Historical rollback events remain event-counted only when their affected `step_id` is in the discovered local pointer chain, and they are not collapsed into final status.
+
+- `total_step_count`: count of audited build-code phase steps observed for this run.
+- `passed_step_count`: distinct `step_id` count whose `exitReceiptPayload.verdict` is `passed`.
+- `blocked_step_count`: distinct `step_id` count whose entry `check_status` is `blocked`, whose emitted `judgement.status` is `blocked`, or whose `exitReceiptPayload.verdict` is `blocked`; never double count the same step.
+- `skipped_step_count`: distinct `step_id` count whose latest reachable entry `check_status` is `skipped`.
+- `rollback_count`: count of runner-owned `step_auto_rollback` events for this `workflow_run_id` whose affected `step_id` belongs to the `bc.*` local pointer chain.
+
+`blocked_step_count` and `rollback_count` are independent counters and must not be inferred from one another. `audit_summary` is additive only; unknown-field readers must continue to work.

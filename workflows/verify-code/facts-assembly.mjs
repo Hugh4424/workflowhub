@@ -1,11 +1,72 @@
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { AUDIT_SUMMARY_FIELDS } from '../../core/journal-schema.mjs';
+import { buildAuditSummaryFromJournalEvents } from '../../core/receipt-writer.mjs';
 
 const METRIC_KEYS = [
   'execution_id', 'skill_or_stage', 'stage', 'skill_version',
   'executed', 'tokens', 'duration_ms', 'rework_rounds',
   'human_intervention', 'friction_ref',
 ];
+
+function emptyAuditSummary() {
+  return Object.fromEntries(AUDIT_SUMMARY_FIELDS.map((field) => [field, 0]));
+}
+
+function parseJournalJsonl(journalPath) {
+  const raw = readFileSync(journalPath, 'utf-8').trim();
+  if (!raw) return [];
+  return raw.split('\n').map((line, index) => {
+    try {
+      return JSON.parse(line);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`journal.jsonl line ${index + 1} is malformed: ${message}`);
+    }
+  });
+}
+
+function appendAuditWarnings(result, warnings) {
+  if (warnings.length === 0) return result;
+  const suffix = `audit_summary warnings: ${warnings.join(', ')}`;
+
+  if (typeof result.notes === 'string' && result.notes.trim() !== '') {
+    return { ...result, notes: `${result.notes}; ${suffix}` };
+  }
+  if (typeof result.notes === 'string') {
+    return { ...result, notes: suffix };
+  }
+  if (typeof result.reason === 'string' && result.reason.trim() !== '') {
+    return { ...result, reason: `${result.reason}; ${suffix}` };
+  }
+  return { ...result, reason: suffix };
+}
+
+function withAuditSummary(taskSpecDir, result, { workflowRunId, stageSlug = 'vc' } = {}) {
+  const warnings = [];
+  let auditSummary = emptyAuditSummary();
+  const journalPath = join(taskSpecDir, 'journal.jsonl');
+  const resolvedWorkflowRunId = workflowRunId ?? result.workflow_run_id ?? result.workflowRunId;
+
+  if (!resolvedWorkflowRunId) {
+    warnings.push('audit_summary_omitted:missing_workflow_run_id');
+  } else if (!existsSync(journalPath)) {
+    warnings.push('audit_summary_omitted:missing_journal');
+  } else {
+    try {
+      const events = parseJournalJsonl(journalPath);
+      const summary = buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId: resolvedWorkflowRunId });
+      auditSummary = summary.audit_summary;
+      warnings.push(...summary.warnings);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      warnings.push(`audit_summary_omitted:${message}`);
+    }
+  }
+
+  return appendAuditWarnings({ ...result, audit_summary: auditSummary }, warnings);
+}
 
 export function readCommand(buildResult) {
   if (!buildResult.facts || !buildResult.facts.tests) {
@@ -52,10 +113,10 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
   };
 }
 
-export function writeStageResult(taskSpecDir, result) {
+export function writeStageResult(taskSpecDir, result, auditOptions = {}) {
   mkdirSync(taskSpecDir, { recursive: true });
   const path = join(taskSpecDir, 'stage-result-verify-code.json');
-  writeFileSync(path, JSON.stringify(result, null, 2), 'utf-8');
+  writeFileSync(path, JSON.stringify(withAuditSummary(taskSpecDir, result, auditOptions), null, 2), 'utf-8');
 }
 
 export function validateMetricRecord(record) {

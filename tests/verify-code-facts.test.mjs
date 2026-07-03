@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readCommand, assembleStageResult, writeStageResult, validateMetricRecord } from '../workflows/verify-code/facts-assembly.mjs';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -98,6 +98,107 @@ describe('writeStageResult', () => {
     const nested = join(tmpDir, 'nested-specs', 'm9-deep');
     writeStageResult(nested, assembleStageResult({ verdict: 'pass', evidenceRef: 'e.json', anomalyFlags: [], missingItems: [], userDecision: null, reason: '', errorCode: null, retryable: false }));
     expect(JSON.parse(readFileSync(join(nested, 'stage-result-verify-code.json'), 'utf-8')).status).toBe('pass');
+  });
+
+  it('should attach audit_summary from verify-code journal events', () => {
+    const taskDir = mkdtempSync(join(tmpDir, 'audit-summary-'));
+    const events = [
+      {
+        event_type: 'step_entry',
+        workflow_run_id: 'run-123',
+        step_id: 'vc.work.1',
+        check_status: 'ok',
+        prev_step_id: null,
+        next_step_id: 'vc.check.1',
+      },
+      {
+        event_type: 'step_exit',
+        workflow_run_id: 'run-123',
+        step_id: 'vc.work.1',
+        verdict: 'passed',
+        prev_step_id: null,
+        next_step_id: 'vc.check.1',
+      },
+      {
+        event_type: 'step_entry',
+        workflow_run_id: 'run-123',
+        step_id: 'vc.check.1',
+        check_status: 'blocked',
+        prev_step_id: 'vc.work.1',
+        next_step_id: null,
+      },
+      {
+        event_type: 'step_auto_rollback',
+        workflow_run_id: 'run-123',
+        affected_step_id: 'vc.check.1',
+        rollback_from_step_id: 'vc.check.1',
+        rollback_to_step_id: 'vc.work.1',
+        attempt_seq: 1,
+        ineffective: true,
+        reason: 'blocked check',
+      },
+      {
+        event_type: 'step_entry',
+        workflow_run_id: 'other-run',
+        step_id: 'vc.work.1',
+        check_status: 'skipped',
+        prev_step_id: null,
+        next_step_id: null,
+      },
+    ];
+    writeFileSync(join(taskDir, 'journal.jsonl'), `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
+
+    writeStageResult(
+      taskDir,
+      assembleStageResult({
+        verdict: 'pass',
+        evidenceRef: 'e.json',
+        anomalyFlags: [],
+        missingItems: [],
+        userDecision: null,
+        reason: '',
+        errorCode: null,
+        retryable: false,
+      }),
+      { workflowRunId: 'run-123' },
+    );
+
+    const written = JSON.parse(readFileSync(join(taskDir, 'stage-result-verify-code.json'), 'utf-8'));
+    expect(written.audit_summary).toEqual({
+      total_step_count: 2,
+      passed_step_count: 1,
+      blocked_step_count: 1,
+      skipped_step_count: 0,
+      rollback_count: 1,
+    });
+    expect(written.reason).toBe('');
+  });
+
+  it('should record an audit_summary warning instead of silently omitting audit_summary', () => {
+    const taskDir = mkdtempSync(join(tmpDir, 'audit-summary-missing-run-'));
+    writeStageResult(
+      taskDir,
+      assembleStageResult({
+        verdict: 'pass',
+        evidenceRef: 'e.json',
+        anomalyFlags: [],
+        missingItems: [],
+        userDecision: null,
+        reason: 'done',
+        errorCode: null,
+        retryable: false,
+      }),
+    );
+
+    const written = JSON.parse(readFileSync(join(taskDir, 'stage-result-verify-code.json'), 'utf-8'));
+    expect(written.audit_summary).toEqual({
+      total_step_count: 0,
+      passed_step_count: 0,
+      blocked_step_count: 0,
+      skipped_step_count: 0,
+      rollback_count: 0,
+    });
+    expect(written.reason).toContain('audit_summary_omitted:missing_workflow_run_id');
   });
 });
 

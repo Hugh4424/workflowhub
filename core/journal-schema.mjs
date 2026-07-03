@@ -11,3 +11,21 @@ export const JOURNAL_EVENT_TYPES = Object.freeze({
 });
 
 export const JOURNAL_EVENT_TYPE_VALUES = Object.freeze(Object.values(JOURNAL_EVENT_TYPES));
+
+export const STEP_AUTO_ROLLBACK_REQUIRED_FIELDS = Object.freeze([
+  "workflow_run_id",
+  "affected_step_id",
+  "rollback_from_step_id",
+  "rollback_to_step_id",
+  "attempt_seq",
+  "ineffective",
+  "reason",
+]);
+
+export const AUDIT_SUMMARY_FIELDS = Object.freeze([
+  "total_step_count",
+  "passed_step_count",
+  "blocked_step_count",
+  "skipped_step_count",
+  "rollback_count",
+]);
