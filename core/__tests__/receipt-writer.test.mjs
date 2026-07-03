@@ -1020,4 +1020,73 @@ describe("receipt writer", () => {
     });
     await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
   });
+
+  it("regression fix-7: writeExitReceipt rejects malformed source when executed=false but source is supplied", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, source: 123 },
+        }),
+      ),
+    ).rejects.toThrow("review.source");
+  });
+
+  it("regression fix-7: writeExitReceipt rejects empty provider when executed=false but provider is supplied", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, provider: "" },
+        }),
+      ),
+    ).rejects.toThrow("review.provider");
+  });
+
+  it("regression fix-7: writeExitReceipt rejects invalid fix_status when executed=false but fix_status is supplied", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, fix_status: "bad_value" },
+        }),
+      ),
+    ).rejects.toThrow("review.fix_status");
+  });
+
+  it("regression fix-7: writeExitReceipt rejects non-boolean true_cross_engine when executed=false but field is supplied", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, true_cross_engine: "yes" },
+        }),
+      ),
+    ).rejects.toThrow("review.true_cross_engine");
+  });
+
+  it("regression fix-7: writeExitReceipt accepts valid optional fields when executed=false", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    await expect(
+      writeExitReceipt(
+        TASK_ID,
+        validExitPayload({
+          review: {
+            skill: "3rd-review",
+            executed: false,
+            verdict: "passed",
+            round: 1,
+            source: "third_party",
+            provider: "codex",
+            fix_status: "not_required",
+            true_cross_engine: false,
+          },
+        }),
+      ),
+    ).resolves.toBeUndefined();
+  });
 });

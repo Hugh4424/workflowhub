@@ -160,6 +160,8 @@ function validateReviewPayload(review) {
 
   // When executed=false the review tool did not run; provider/source/report
   // fields are optional in that shape and must not be required.
+  // However, if an optional field IS present (non-null/non-undefined), it must
+  // still have a valid format — supply-but-malformed is always an error.
   if (review.executed) {
     assertNonEmptyString(review.source, "review.source");
     assertNonEmptyString(review.provider, "review.provider");
@@ -169,6 +171,22 @@ function validateReviewPayload(review) {
     assertNonEmptyString(review.report_path, "review.report_path");
     assertNonEmptyString(review.raw_result_path, "review.raw_result_path");
     assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
+  } else {
+    // Validate optional fields only when they are explicitly supplied.
+    if (review.source != null) {
+      assertNonEmptyString(review.source, "review.source");
+    }
+    if (review.provider != null) {
+      assertNonEmptyString(review.provider, "review.provider");
+    }
+    if (review.fix_status != null) {
+      assertEnum(review.fix_status, FIX_STATUSES, "review.fix_status");
+    }
+    if (review.true_cross_engine != null) {
+      if (typeof review.true_cross_engine !== "boolean") {
+        throw new TypeError("review.true_cross_engine must be a boolean");
+      }
+    }
   }
 }
 
