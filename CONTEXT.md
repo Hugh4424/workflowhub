@@ -40,6 +40,17 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 **异源审查（cross-source review）**：
 由独立来源、在独立上下文中对交付物做的审查，用于质量把关，禁止自审自判。
 
+## verify-code 深化术语（m13e）
+
+**查痕（trace-check）**：
+verify-code 新增步骤，位于 test-strategy 之后、L3 之前。扫描 evidence/ 目录下各 phase 已产出的报告，核对是否存在、exit_code=0、以及是否通过 git_sha/content_hash 交叉验证（与 P0-3 freshness 校验同一套交叉验证逻辑，不单独只看 mtime）。缺口写入 `trace-check-report.json`，并把没有证据覆盖的验收标准写入 `missing_ac_coverage[]`。
+
+**phase-report**：
+verify-code 各阶段（RED/GREEN/L2/L3 等）各自产出的阶段性报告文件（如 `l2-report.json`、`l3-e2e-report.json`），是查痕步骤读取比对的对象。
+
+**AC（验收标准 / acceptance criteria）**：
+沿用既有定义，指 spec 文档里列出的验收标准条目（见 verify-code/SKILL.md）。`missing_ac_coverage[]` 记录哪些 AC 条目在已产出的 phase-report 里找不到对应证据。
+
 ## 组件 skill
 
 **组件 skill（Component Skill）**：
@@ -51,3 +62,15 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 - 由顶层 skill 提示词正文显式写路径字符串声明（引用其 SKILL.md 路径）。
 
 合宪依据：S7 约束 stage 级 skill；stage 内可复用的组件不与 S7 冲突（D-M7-2）。
+
+## 人机交互规范（跨 5 阶段通用，2026-07-02 用户要求）
+
+**适用范围**：make-decision / build-spec / build-plan / build-code / verify-code 这 5 个 stage 的所有 executor，跟用户对话时都要遵守，不是某一个 stage 单独的规矩。
+
+**规则**：
+1. 不用内部编号当称呼。决策草稿里的 D1/D7 这类字段名、内部代号，只能出现在写盘的文件里，跟用户说话时必须换成大白话描述这件事本身（比如不说"D7 的 yellow 判据"，要说"结果分三档，中间那档具体啥情况才算"）。
+2. 不堆工程黑话。出现专业术语（比如"偶发失败"“交叉验证”）要么换成大白话解释，要么先说人话再补一句术语对照，不能让不懂技术的人看不懂问题在问什么。
+3. 给选项必须讲清楚"选它是什么意思、选了会怎样"，不能只甩几个选项名字让用户自己猜。
+4. 这条规矩不是"记住就行"，是每次组织给用户看的内容之前，自查一遍有没有漏网的编号/术语。
+
+**为什么要写在这里**：这条规矩之前只在全局个人偏好里出现过，但 stage-executor 实际执行时会被"结构化留痕"的习惯带跑偏（比如为了方便追溯，直接把内部字段名甩给用户）。写进 CONTEXT.md 是为了让 5 个 stage 都能读到同一份要求，不靠单次对话里记住。

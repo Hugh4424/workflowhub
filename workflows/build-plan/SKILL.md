@@ -15,7 +15,7 @@ v1 upgrade: orchestrates three sub-skills (spec-plan, spec-tasks, spec-analyze) 
 
 The v1 build-plan workflow executes the following steps sequentially. Generation steps (Steps 0, 2-7, 9-10: spec-research, data-contracts, spec-plan, spec-tasks, spec-analyze, constitution check, baseline comparison, F10 gate, plan-reviewer, file identification) must complete before moving to the next. Failure in any generation step before the stage-result write results in stage failure (non-zero exit, no success stage-result), with the exception of spec-research, data-contracts, and plan-reviewer failures, which are recorded and escalated non-blocking.
 
-The human review checkpoint (Step 8) is distinct: in non-interactive environments, on explicit skip, or on timeout, `review.state="pending"` is a valid terminal state — stage-result is produced normally. "Pending" is NOT a stage failure.
+The human review checkpoint (Step 9) is distinct: it is the single hard gate in this workflow. It blocks unconditionally until a human returns an explicit decision (继续 / 修改后继续 / 暂停). There is no non-interactive, skip, or timeout bypass — the stage does not produce a stage-result until the decision is obtained.
 
 ### Step 0: Call spec-research sub-skill
 
@@ -178,9 +178,9 @@ Invoke the independent plan engineering reviewer via the `3rd-review` infrastruc
 
 ### Step 9: 人审检查点 (Human review checkpoint)
 
-**停顿等待人工确认 — PAUSE HERE for human review confirmation.**
+**停顿等待人工确认 — PAUSE HERE for human review confirmation. This is a hard gate (FR-ACCEPT-02 风格): it blocks unconditionally. There is no non-interactive bypass, no explicit-skip bypass, and no timeout bypass. Stage-result is NOT produced until a human returns an explicit decision.**
 
-This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. The following artifacts have been produced, F10-gated, plan-reviewed, and are ready for review:
+This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. All artifacts have been produced, F10-gated, and plan-reviewed:
 
 - `specs/{task-id}/plan.md`
 - `specs/{task-id}/tasks.md`
@@ -192,33 +192,49 @@ This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. 
 - M10 baseline comparison table
 - Simplicity-guard `minimal-path` conclusion
 
-**How to handle the pause**:
+**唯一确认界面：大白话七要素摘要 + 请确认块。** 不得另外展示旧的 artifact 路径列表当作确认依据——上面这份 artifact 清单只是本步骤内部核对用的产物清单，人看到的必须是下面这份七要素摘要，按 `docs/human-brief-template.md` 的"七要素 + A. 决策 gate 阶段结尾"格式输出：全篇大白话中文（当对方是高中生），不出现内部产物名/字段名/编号（如 `plan.md`、`stage-result`、`plan-eng-review.md` 等——要提就翻成人话）。
 
-- **Interactive mode** (terminal available, stdin readable): Present the artifacts to the human reviewer and prompt for: approve, reject, or skip. Wait for their response before continuing.
-- **Non-interactive mode** (no terminal, stdin not readable): Record `review.state="pending"` immediately and continue. Do NOT block indefinitely.
-- **Explicit skip**: If the human or runtime explicitly signals "skip", record pending and continue.
-- **Timeout**: If no response is received within a reasonable time (judged by the executor, not hardcoded), record pending and continue.
+**七要素**：
+1. **这阶段做了什么**：用一两句话说清楚这次把方案排成了怎样的可执行步骤清单
+2. **审了几次、结论是什么**：外部审查/独立审查过了几轮、每轮提了什么问题、有没有改完、最终结论——内部代号（如具体审查工具名）只能出现在 stage-result 的机器字段里，不能出现在这份大白话摘要正文
+3. **这个 task 要解决什么**：用一两句话说清楚这个任务是要解决什么问题、为什么要做
+4. **准备怎么做**（来自 plan）：列出实施步骤的大白话版本，几步、各步做什么
+5. **原始需求覆盖情况**：对照 spec 里的原始需求，哪些覆盖了、有没有遗漏、有没有审查建议加的额外项
+6. **现在结果**：产物是否都齐、审查是否通过、当前状态
+7. **下一步**：确认后进入哪个阶段
 
-`review.state="pending"` IS a valid terminal state — it records that the checkpoint was reached but confirmation was not obtained. Stage-result is produced normally with pending. "Pending" is NOT a stage failure.
+七要素之后，按模板 A 类结尾加"请确认"块：
+```
+请确认：
+- **推荐：继续** —— 后果：<继续会发生什么，如"排定的步骤清单和任务列表进入下一阶段实施">
+- 修改后继续 —— 后果：<会按你的意见重做哪部分>
+- 暂停 —— 后果：<不推进，保留什么>
+```
 
-**Review object** — after receiving confirmation (or resolving to pending), populate the `review` object in stage-result JSON:
+**如何处理停顿**：
+
+- 展示七要素摘要 + 请确认块后，**无限等待**人工明确回应；不确认就不继续，**不得自动通过**，不得以非交互环境、显式跳过信号或超时为由自动放行。
+- 若运行环境本身不可交互（无终端、stdin 不可读），这不是继续的理由——按 SKILL.md 契约，本步骤应停止并向上级/leader 报告 `needs_human=true` + 待确认事项，由人工在可交互渠道完成确认后本步骤才能恢复，不得就地记 `pending` 后自行放行。
+- 人工选"修改后继续"或"暂停"：按人工意见处理后再回到本步骤重新展示七要素摘要，等待新一轮确认。
+- 人工选"继续"：视为批准，进入下面的 Review 对象记录 + Step 10。
+
+**Review object** — only after an explicit human decision is obtained, populate the `review` object in stage-result JSON:
 
 ```json
 "review": {
-  "state": "<pending|approved|rejected>",
-  "reviewer": "<name or agent identifier, empty string if pending>",
-  "timestamp": "<RFC3339 timestamp of confirmation, empty string if pending>",
+  "state": "<approved|rejected>",
+  "reviewer": "<name or agent identifier>",
+  "timestamp": "<RFC3339 timestamp of confirmation>",
   "decision": "<non-empty human-readable decision description>",
   "notes": "<free-text notes, can be empty string>"
 }
 ```
 
 **Review state rules**:
-- **approved**: Human confirmed approval. `review.state="approved"`. `review.reviewer` and `review.timestamp` must be non-empty. `review.decision` describes the approval reason (e.g. "plan/tasks 产物通过、宪法检查无不符项、baseline 对照阈值符合预期"). Stage-result `status` determined by process result (can be success).
-- **rejected**: Human confirmed rejection. `review.state="rejected"`. `review.reviewer` and `review.timestamp` must be non-empty. `review.decision` describes the rejection reason. Stage-result `status="failure"`, `reason` records the rejection. This is a factual record, not a blocking gate — human decides whether to re-run.
-- **pending**: No human confirmation received (non-interactive environment, explicit skip, or timeout). `review.state="pending"`. `review.reviewer` and `review.timestamp` may be empty strings. `review.decision` MUST be: "检查点已触达但未获确认". `review.notes` may be empty. Stage-result is still produced normally — `pending` IS a valid state, do NOT omit stage-result because review is pending.
+- **approved**: 人工选择"继续"。`review.state="approved"`。`review.reviewer` 与 `review.timestamp` must be non-empty。`review.decision` describes the approval reason (e.g. "plan/tasks 产物通过、宪法检查无不符项、baseline 对照阈值符合预期")。Stage-result `status` determined by process result (can be success)。
+- **rejected**: 人工选择"暂停"或"修改后继续"且不再回到本步骤重新确认时的最终记录。`review.state="rejected"`。`review.reviewer` 与 `review.timestamp` must be non-empty。`review.decision` describes the reason。Stage-result `status="failure"`，`reason` records it。This is a factual record, not a blocking gate beyond this checkpoint — human decides whether to re-run。
 
-`review.decision` MUST be non-empty in ALL three states (pending writes the fixed string above).
+There is no `pending` state. The checkpoint either has not yet resolved (in which case no stage-result is written and the stage remains halted with `needs_human=true` reported), or it has resolved to `approved`/`rejected`. `review.decision` MUST be non-empty in both terminal states.
 
 ### Step 10: Identify all files and modules
 
@@ -247,16 +263,18 @@ When the stage is complete, write a `stage-result` record with:
   },
   "missing_items": [],
   "user_decision": false,
-  "reason": "Plan and task list produced via spec-plan/spec-tasks, cross-artifact analyzed, constitution check completed, baseline comparison recorded, research/data-contracts/plan-reviewer recorded, simplicity-guard minimal-path captured, human review checkpoint cleared.",
+  "reason": "Plan and task list produced via spec-plan/spec-tasks, cross-artifact analyzed, constitution check completed, baseline comparison recorded, research/data-contracts/plan-reviewer recorded, simplicity-guard minimal-path captured, human review checkpoint resolved by explicit human decision.",
   "review": {
-    "state": "<pending|approved|rejected>",
-    "reviewer": "",
-    "timestamp": "",
-    "decision": "检查点已触达但未获确认",
+    "state": "<approved|rejected>",
+    "reviewer": "<name or agent identifier>",
+    "timestamp": "<RFC3339 timestamp of confirmation>",
+    "decision": "<non-empty human-readable decision description>",
     "notes": ""
   }
 }
 ```
+
+This stage-result is only written AFTER Step 9 resolves to an explicit human decision (approved or rejected). If Step 9 has not resolved, no stage-result is produced — the stage remains halted with `needs_human=true` reported instead.
 
 **Field preservation (M6 contract — FR-BP-003, FR-SKELETON-002)**:
 - `status`, `error_code`, `retryable`, `missing_items`, `user_decision`, `reason` — M6 fields, preserved unchanged
@@ -268,7 +286,7 @@ When the stage is complete, write a `stage-result` record with:
 - `facts.data_contracts_ref` — v1 NEW field (points to data-contracts.md or unavailable)
 - `facts.plan_review_ref` — v1 NEW field (points to plan-eng-review.md or unavailable)
 - `facts.minimal_path` — v1 NEW field (simplicity-guard minimal-path conclusion or unavailable)
-- `review` — v1 NEW object (with state, reviewer, timestamp, decision, notes)
+- `review` — v1 NEW object (with state, reviewer, timestamp, decision, notes; only `approved`/`rejected`, no `pending`)
 
 Do NOT delete or rename any M6 field.
 
@@ -295,15 +313,6 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 ## 人工放行摘要（Plain-language summary for human approval）
 
-build-plan 所有产物完成后，在 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md` 中写一份给人看的摘要。（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）
+七要素摘要 + 请确认块的完整定义已并入 Step 9（人审检查点）——那是人工拍板前看到的唯一界面，本节不重复内容，避免两份摘要打架。摘要落盘位置：写入 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md`（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）。
 
-**要求**：
-- 用大白话中文，高中生能看懂，不用工程术语
-- 控制在一页以内（400字以内）
-- 结构固定，三段：
-  1. **在解决什么问题**：用一两句话说清楚这个任务是要解决什么问题、为什么要做
-  2. **要做什么东西**（来自 spec）：列出 2-5 个核心要求，白话描述
-  3. **准备怎么做**（来自 plan）：列出实施步骤的大白话版本，几步、各步做什么
-- 写完后在 stage-result 的 comment 里贴出来，供人类审阅后决定是否放行继续执行
-
-这个摘要是人工放行的依据，必须包含，缺少则 stage 不完整。
+摘要展示本身以及等待人工确认，是 Step 9 的硬门，无条件阻断，不接受任何旁路。

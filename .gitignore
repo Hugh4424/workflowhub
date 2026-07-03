@@ -39,3 +39,10 @@ Thumbs.db
 # Worker-mode runtime state
 .worker-mode/
 reply.md
+
+# Local tool-state dirs (not project deliverables)
+.agent_context/
+.agents/
+.claude/
+.multica/
+.specify/

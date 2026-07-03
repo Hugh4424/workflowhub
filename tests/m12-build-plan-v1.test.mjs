@@ -297,21 +297,21 @@ describe("T017: human review checkpoint — exactly ONE pause marker", () => {
   });
 });
 
-// T017(e): review object fields (state/reviewer/timestamp/decision/notes) documented; pending is valid
+// T017(e): review object fields (state/reviewer/timestamp/decision/notes) documented;
+// pending-as-auto-continue bypass removed — only approved|rejected are valid terminal states.
 describe("T017(e): review object fields — state, reviewer, timestamp, decision, notes", () => {
-  test("review object state field documented with pending|approved|rejected", () => {
+  test("review object state field documented with approved|rejected (no pending bypass)", () => {
     const content = readSkill();
     assert.ok(
       content.includes("review") && content.includes("state"),
       "SKILL.md must document review object with state field"
     );
     const hasStates =
-      (content.includes("pending") || content.includes("待确认")) &&
       (content.includes("approved") || content.includes("批准") || content.includes("通过")) &&
       (content.includes("rejected") || content.includes("拒绝"));
     assert.ok(
       hasStates,
-      "SKILL.md must document review.state values: pending, approved, rejected"
+      "SKILL.md must document review.state values: approved, rejected"
     );
   });
 
@@ -359,23 +359,35 @@ describe("T017(e): review object fields — state, reviewer, timestamp, decision
     );
   });
 
-  test("pending state is valid (produces valid stage-result, no omission)", () => {
+  test("no non-interactive/skip/timeout auto-continue bypass; checkpoint blocks unconditionally", () => {
     const content = readSkill();
-    // pending must be described as a valid state that does NOT prevent stage-result production
-    const pendingValid =
-      (content.includes("pending") && (
-        content.includes("有效") ||
-        content.includes("valid") ||
-        content.includes("正常产出") ||
-        content.includes("不因") ||
-        content.includes("仍产出") ||
-        content.includes("缺省")
-      )) ||
-      content.includes("pending 本身是有效状态") ||
-      content.includes("pending") && content.includes("不可缺");
+    // FALSIFIABLE: this must FAIL against the old bypass wording (non-interactive/skip/timeout
+    // resolving to pending and continuing) and PASS against the new blocking wording.
+    const declaresNoBypass =
+      content.includes("没有非交互") ||
+      content.includes("不得以非交互环境") ||
+      content.includes("没有") && content.includes("bypass") ||
+      content.includes("There is no `pending` state");
     assert.ok(
-      pendingValid,
-      "SKILL.md must state that pending is a valid review state producing valid stage-result"
+      declaresNoBypass,
+      "SKILL.md must explicitly state there is no non-interactive/skip/timeout bypass for the human review checkpoint"
+    );
+
+    const blocksUnconditionally =
+      content.includes("无限等待") ||
+      content.includes("blocks unconditionally") ||
+      content.includes("不得自动通过");
+    assert.ok(
+      blocksUnconditionally,
+      "SKILL.md must state the checkpoint blocks unconditionally until an explicit human decision"
+    );
+
+    // The old bypass phrasing must be gone: pending is no longer reachable via
+    // non-interactive mode / explicit skip / timeout as an auto-continue path.
+    const oldBypassPhrase = /non-interactive mode.{0,80}record\s+`?review\.state="pending"`?\s+immediately and continue/is;
+    assert.ok(
+      !oldBypassPhrase.test(content),
+      "SKILL.md must NOT contain the old non-interactive-mode auto-continue-to-pending bypass wording"
     );
   });
 });

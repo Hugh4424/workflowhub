@@ -1,7 +1,7 @@
 ---
 name: build-spec
 version: 2.0.0
-description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → human review checkpoint.
+description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → auto-advance on 3rd-review pass (auto-advance stage, no human pause).
 ---
 
 # build-spec
@@ -159,7 +159,7 @@ spec 产出后运行以下 7 条自检，结论（pass/warn/unknown）写入质�
 spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-review 基础设施，单一异源引擎如 codex），在独立上下文产出 verdict + findings：
 
 - 结论记入质量事实契约第 3 项（独立审查摘要路径）
-- 审查失败/不可用时降级记录 unknown + 原因，不阻断
+- 审查失败/不可用时降级记录 unknown + 原因——**这里的"不阻断"仅指记录该事实本身不阻断**（F3/Q1：物理事实机器采集浮现到边界，记录动作不卡死推进）。stage 是否继续推进是另一个独立决策，由第 7 节 auto-advance 判断点裁定：`unknown` 在那里必须停下，不产出 stage-result，转人工确认（needs_human=true）。见第 7 节。
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
 - 可 grep 到 `3rd-review` 或 `异源独立审查`
 
@@ -272,9 +272,9 @@ Compare the current M11 task execution against the M10 baseline using 5 metrics 
 
 Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as a standalone file `specs/{task-id}/baseline-report.md`.
 
-### 6. F10 anti-over-engineering gate (apply before the human review checkpoint, while the spec can still be revised)
+### 6. F10 anti-over-engineering gate (apply while the spec can still be revised, before the 3rd-review pass in step 7)
 
-This step runs on the spec produced by spec-specify → spec-clarify, **before** the human review checkpoint. It records F10 findings (non-blocking) so the human sees them at the checkpoint and can decide whether to revise. The human confirms the spec as-is; no automatic changes are made before the human sees it (F7).
+This step runs on the spec produced by spec-specify → spec-clarify, **before** the auto-advance step (step 7). It records F10 findings (non-blocking) so they are carried into the 3rd-review pass and the plain-language brief. No automatic changes are made to the spec content itself (F7) — findings are recorded, not auto-applied.
 
 Before any new mechanism, validation, CI check, gate, schema, dependency, or automation remains in the spec, answer all four questions. If you cannot answer all four for a given mechanism, **record a warning and surface the finding for human review** — do not auto-remove (non-blocking, FR-LADDER-002).
 
@@ -283,26 +283,32 @@ Before any new mechanism, validation, CI check, gate, schema, dependency, or aut
 3. **Can it be bypassed, making it security-theatre?** — If yes and the bypass is trivial, the mechanism blocks only honest actors and costs more than it protects.
 4. **What is the long-term maintenance cost?** — Every mechanism kept here must be maintained across all future changes. High ongoing cost is a signal worth surfacing.
 
-If the answer to Q1 is "none in particular" or the answer to Q4 is "high and ongoing", **record the finding in the quality contract (item 4: 未解风险) and surface to human** — do not automatically remove the mechanism. The human at the review checkpoint decides whether to prune.
+If the answer to Q1 is "none in particular" or the answer to Q4 is "high and ongoing", **record the finding in the quality contract (item 4: 未解风险) and surface it in the plain-language brief** — do not automatically remove the mechanism. Whether to prune is decided downstream (by a later review pass or by whoever reads the surfaced finding), not by this stage auto-pruning.
 
 This gate reflects constitution rule F10: automation and validation are added for real benefit, not to make things machine-checkable for its own sake. Cautionary example: a predecessor system accumulated ~95,000 lines of gate code with over a dozen deadlocks by chasing "everything machine-verifiable". Do not repeat that pattern.
 
-### 7. Human review checkpoint
+### 7. Auto-advance on independent review pass
 
-After spec-specify output, spec-clarify refinement, F10 analysis (findings recorded), constitution check, and baseline comparison are all complete — but **before** producing the stage-result — pause at the human review checkpoint. The spec has not been automatically altered; the human sees it as produced by spec-specify → spec-clarify, with F10 findings surfaced alongside for their review:
+build-spec is an **auto-advance stage** (自动放行阶段，见 `docs/plain-language-mechanism-design.md` 一/2.3): once spec-specify output, spec-clarify refinement, F10 analysis (findings recorded), constitution check, and baseline comparison are all complete, quality gating is the 3rd-review 异源独立审查 from step 3.7 — not a human pause.
 
-> **HUMAN_REVIEW_CHECKPOINT** — 以下产物已就绪（F10 反过度工程分析已完成，findings 已记录），请确认后继续：
-> - `specs/{task-id}/spec.md`（经 spec-specify 初稿 + spec-clarify 澄清更新后的 spec，附 F10 findings 供参考）
-> - 宪法符合性检查清单（constitution-checklist.md 21 条逐条勾选）
-> - M11 vs M10 baseline 对照表（5 项指标）
->
-> 请确认上述产物是否可接受。回复"确认"继续产出 stage-result；回复修改意见则返回相应步骤修正。
+Only a clean `pass` verdict may auto-advance. `revise_required` loops back internally as before. `unknown` does **not** auto-advance — it stops once and escalates to a human (see below).
 
-The stage must NOT auto-proceed past this point without explicit human confirmation. If the human rejects or does not confirm, do not advance to stage-result production — loop back to the relevant step. After the human confirms, do not silently alter the spec — what the human confirmed is what gets recorded.
+- If the 3rd-review verdict is `revise_required`, loop back to the relevant step and fix, same as before (no change to this path).
+- If the 3rd-review verdict is `pass`, do **not** stop for human confirmation. Instead:
+  1. Produce a plain-language progress brief using `docs/human-brief-template.md`'s 七要素 (seven elements), ending with template 结尾 B（自动放行结尾）: state that the stage **passed independent review** and is auto-advancing to build-plan — nothing more is needed from the human. Do not append a "请确认" section.
+  2. In the brief, translate internal artifact names into plain language rather than naming them directly — e.g. describe "spec.md 经过澄清后的完整需求" instead of saying `spec.md`, describe the constitution checklist and M11/M10 baseline comparison as "跑了几项内部合规和对比检查，结果都记录了" inside the "审了几次、结论是什么" element, rather than listing `constitution-checklist.md` or "M11 vs M10 baseline" verbatim.
+  3. Produce the stage-result immediately after the brief (see below) and proceed to build-plan.
+- If the 3rd-review verdict degrades to `unknown` per 3.7's non-blocking fallback (review failed/unavailable), do **not** auto-advance. This is a one-time stop for a human decision, not a quality gate on the spec content itself. Instead:
+  1. Produce the plain-language brief stating plainly that the independent review could not be completed this time (异源审查未完成/结果不可用) and record the reason — do not claim "已通过异源审查" or otherwise imply the review passed (that would be a fabricated result, F9).
+  2. Record `unknown` + reason in the quality contract's 独立审查摘要 (item 3), same as 3.7's existing non-blocking fallback convention for facts recording.
+  3. **Do not produce the auto-advance stage-result and do not proceed to build-plan.** Instead, halt the stage and report `needs_human=true` to the orchestrator/leader along with the pending decision (reuse the same halt-and-report pattern used elsewhere in this pipeline for a one-time human checkpoint, e.g. build-plan's Step 9 "无限等待人工明确回应" convention) — the pending decision is: continue anyway (re-run build-spec's auto-advance path once review becomes available, or accept the current state and proceed manually), or wait for the review tooling to be fixed and re-run 3.7. No stage-result is written until the human responds; this is not a new mechanism, it is the existing "record unknown, do not silently claim pass, stop for a human call" convention applied at the auto-advance boundary instead of being absorbed into it.
+  4. Once the human responds, act on their explicit choice (continue now / wait and retry 3.7) and only then produce the stage-result reflecting the outcome actually reached.
+
+The spec is not silently altered by this step — what spec-specify/spec-clarify produced (plus recorded F10/constitution/baseline findings) is exactly what gets carried into the brief and the stage-result.
 
 ## Produce a stage-result
 
-When the stage is complete (all steps above done and human review checkpoint confirmed), write a `stage-result` record with:
+When the stage is complete (all steps above done and 3rd-review verdict is `pass`, plain-language brief produced per step 7), write a `stage-result` record with:
 
 ```json
 {
@@ -315,7 +321,7 @@ When the stage is complete (all steps above done and human review checkpoint con
   },
   "missing_items": [],
   "user_decision": false,
-  "reason": "Spec written via spec-specify → spec-clarify → constitution check → baseline comparison, confirmed at human review checkpoint."
+  "reason": "Spec written via spec-specify → spec-clarify → constitution check → baseline comparison, auto-advanced after 3rd-review pass (build-spec is an auto-advance stage). If the 3rd-review verdict is unknown, this stage-result is not written — the stage halts and reports needs_human=true instead."
 }
 ```
 

@@ -22,6 +22,8 @@ Read the `stage-result` produced by the previous stage and extract the relevant 
 
 The full path exposes a richer fact surface; the slim path is intentionally leaner. Adapt accordingly and never assume a key exists — check before reading.
 
+**补读上游（handoff 累积）：** Regardless of which path was taken, unconditionally also read `specs/{task-id}/spec.md` and the decision-log under the current task directory. These are supplementary context on top of `plan.md`/`tasks.md` (or `decision`/`scope` on the slim path) — they do not replace the `facts` keys above and do not change the existing facts-consumption logic. If `spec.md` or the decision-log is missing, log a non-blocking note and continue; this is additive context, not a new gate.
+
 ### 2. TDD 外部强制
 
 For each implementation unit (phase), enforce TDD via the external `capture.mjs` harness. Do **not** run test commands directly — always route through `capture.mjs` so evidence is machine-readable and anomaly-detected.
@@ -126,15 +128,15 @@ Write the result into `stage-result` under the `facts.review` key. The `buildRev
 
 ### 9. 事实包产出
 
-When all phases are complete, write the stage-result with a structured facts package (FR-PKG-001/002/003). The three required keys are:
+When all phases are complete, assemble the stage-result content as a structured facts package in memory (a draft — do **not** write it to disk yet) (FR-PKG-001/002/003). The three required keys are:
 
 - `facts.changed` — **array** of changed file paths (one entry per file, not a comma-joined string).
 - `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...], command: <string>, risk_level: <P0|P1|P2|P3|null> }`. The `command` field is required for verify-code downstream consumption (M9 C1). For multi-phase tasks, also include `phases: [{ phase_id, risk_level }, ...]` so each phase's risk level is traceable (FR-RISK-001).
 - `facts.review` — **struct** produced by `buildReviewFact` (see §8 above).
 
-Write the stage-result to a durable task path (not a temp file) so downstream stages can read it. The path must be resolved via `parseTaskDir` (AC-16): `{taskDir}/{task-id}/stage-result-build-code.json`. Do not hard-code `tasks/{task-id}/`.
+This draft is held in memory and carried forward; it is **not** persisted here. The actual file write happens exactly once, at §16 step 5, after §15's atomic-commit-evidence-capture has completed (so the final `commit_sha`/`base_sha`/`head_sha` can be included). The durable path, resolved via `parseTaskDir` (AC-16), is `{taskDir}/{task-id}/stage-result-build-code.json`. Do not hard-code `tasks/{task-id}/`, and do not write this file at this step.
 
-Example shape:
+Example shape (the content to assemble now, to be written later at §16):
 
 ```json
 {
@@ -286,7 +288,23 @@ Explicit instruction to pass to every implementation subagent:
 
 These fields are required by the evidence contract (see §11). When the coordinator finally commits, it should also record `commit_sha`, `base_sha`, and `head_sha` in the stage-result notes or in a dedicated `commit_record` fact.
 
-### 16. worktree.json 复用协议 (FR-WORKTREE-001)
+**This commit-evidence capture must complete before §16's stage-result write and before advancing to `verify-code`.** The final stage-result written in §16 records the resulting `commit_sha`/`base_sha`/`head_sha`, so the commit must already be finalized by the time §16 runs.
+
+### 16. 自动进度摘要（人向，问题 1+2）
+
+This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** the atomic commit in §15 has completed.
+
+When that condition holds:
+
+1. Produce a plain-language progress brief for the human using `docs/human-brief-template.md`'s **七要素 (seven elements)** only:
+   1. 这阶段做了什么 / 2. 审了几次、结论是什么 / 3. 这个 task 要解决什么 / 4. 准备怎么做（或已怎么做）/ 5. 原始需求覆盖情况 / 6. 现在结果 / 7. 下一步。
+2. Do not use the "请确认" (decision-gate) ending — build-code is an auto-advance stage, not a decision gate. Close the brief with exactly the **B-type ending** from the template:
+   > 本阶段已通过异源审查，自动进入下一阶段。以上仅供你了解进度，无需操作。
+3. Follow the template's hard rules: plain Chinese a high-schooler can follow, no internal artifact names/field names/IDs (translate them into human terms).
+4. **Landing point (explicit):** write the brief text to `{taskDir}/{task-id}/build-code-summary.md`. This is the durable artifact. (Consistent with how other build-code artifacts resolve under `{taskDir}/{task-id}/...` via `parseTaskDir`, e.g. the stage-result path below.)
+5. This brief is informational only — it is not a quality gate and does not block advancing. **This is the single point where the stage-result is persisted to disk.** Take the in-memory facts draft assembled in §9, fill in the `commit_sha`/`base_sha`/`head_sha` commit evidence now available from §15, and write the final stage-result to `{taskDir}/{task-id}/stage-result-build-code.json` (resolved via `parseTaskDir`, AC-16). Then proceed automatically into `verify-code`.
+
+### 17. worktree.json 复用协议 (FR-WORKTREE-001)
 
 Before starting implementation, locate the worktree descriptor at `{taskDir}/{task-id}/worktree.json`.
 
