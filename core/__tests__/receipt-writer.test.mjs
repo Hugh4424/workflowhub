@@ -926,6 +926,58 @@ describe("receipt writer", () => {
     });
   });
 
+  it("regression round3-fix1: retried step uses LATEST exit verdict for count, first exit for topology", async () => {
+    // Scenario: bc.work.ph1 is tried twice.
+    // First exit: blocked → topology sees bc.check.ph1 as next (first exit wins for chain).
+    // Second exit: passed → count must use LATEST exit, so passed_step_count=1 not 0.
+    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
+    const events = [
+      {
+        event_type: "step_entry",
+        workflow_run_id: "run-123",
+        step_id: "bc.work.ph1",
+        check_status: "ok",
+        prev_step_id: null,
+        next_step_id: "bc.check.ph1",
+      },
+      {
+        event_type: "step_exit",
+        workflow_run_id: "run-123",
+        step_id: "bc.work.ph1",
+        verdict: "blocked",
+        prev_step_id: null,
+        next_step_id: "bc.check.ph1",
+      },
+      {
+        event_type: "step_exit",
+        workflow_run_id: "run-123",
+        step_id: "bc.work.ph1",
+        verdict: "passed",
+        prev_step_id: null,
+        next_step_id: "bc.check.ph1",
+      },
+      {
+        event_type: "step_entry",
+        workflow_run_id: "run-123",
+        step_id: "bc.check.ph1",
+        check_status: "ok",
+        prev_step_id: "bc.work.ph1",
+        next_step_id: null,
+      },
+    ];
+
+    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
+      audit_summary: {
+        total_step_count: 2,
+        passed_step_count: 1,
+        blocked_step_count: 0,
+        skipped_step_count: 0,
+        rollback_count: 0,
+      },
+      warnings: [],
+    });
+  });
+
   it("regression fix-4: writeExitReceipt accepts review verdict escalate_to_human", async () => {
     const { writeExitReceipt } = await importWriter(makeTaskDir());
     const payload = validExitPayload({

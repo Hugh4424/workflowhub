@@ -200,6 +200,30 @@ describe('writeStageResult', () => {
     });
     expect(written.reason).toContain('audit_summary_omitted:missing_workflow_run_id');
   });
+
+  it('should catch malformed journal and record audit_summary_omitted:malformed_journal without throwing', () => {
+    const taskDir = mkdtempSync(join(tmpDir, 'audit-summary-malformed-'));
+    // Write a journal.jsonl that is syntactically invalid JSON
+    writeFileSync(join(taskDir, 'journal.jsonl'), 'not-valid-json\n{broken');
+    writeStageResult(
+      taskDir,
+      assembleStageResult({
+        verdict: 'pass',
+        evidenceRef: 'e.json',
+        anomalyFlags: [],
+        missingItems: [],
+        userDecision: null,
+        reason: '',
+        errorCode: null,
+        retryable: false,
+      }),
+      { workflowRunId: 'run-123' },
+    );
+    const written = JSON.parse(readFileSync(join(taskDir, 'stage-result-verify-code.json'), 'utf-8'));
+    expect(written.reason).toContain('audit_summary_omitted:malformed_journal');
+    // stage-result must still be written (not interrupted by the parse error)
+    expect(written.status).toBe('pass');
+  });
 });
 
 describe('validateMetricRecord', () => {

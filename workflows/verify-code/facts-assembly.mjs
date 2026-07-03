@@ -56,13 +56,17 @@ function withAuditSummary(taskSpecDir, result, { workflowRunId, stageSlug = 'vc'
   } else if (!existsSync(journalPath)) {
     warnings.push('audit_summary_omitted:missing_journal');
   } else {
-    // Malformed journal (parse error) must not be silently swallowed into a
-    // zero audit_summary — re-throw so the caller sees an explicit failure
-    // (fix #4 / round-2 finding).
-    const events = parseJournalJsonl(journalPath);
-    const summary = buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId: resolvedWorkflowRunId });
-    auditSummary = summary.audit_summary;
-    warnings.push(...summary.warnings);
+    // A malformed journal must not interrupt writeStageResult — catch parse
+    // errors, record the warning, and continue with an empty audit_summary
+    // (SKILL.md fault-tolerance contract / round-3 finding).
+    try {
+      const events = parseJournalJsonl(journalPath);
+      const summary = buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId: resolvedWorkflowRunId });
+      auditSummary = summary.audit_summary;
+      warnings.push(...summary.warnings);
+    } catch (err) {
+      warnings.push('audit_summary_omitted:malformed_journal');
+    }
   }
 
   return appendAuditWarnings({ ...result, audit_summary: auditSummary }, warnings);

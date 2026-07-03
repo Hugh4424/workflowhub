@@ -347,13 +347,15 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
   const exitEvents = events.filter(
     (event) => event?.event_type === JOURNAL_EVENT_TYPES.STEP_EXIT && sameRun(event) && sameStageStep(event.step_id),
   );
-  // Use first journal-order exit for both topology and status counts so the
-  // two oracles stay consistent under retry scenarios (fix #3 / round-2 finding).
+  // Topology chain discovery uses FIRST exit per step_id so retry attempts don't
+  // alter which steps are visible in the chain (fix #3 / round-2 finding).
   const firstExitByStepId = firstByStepId(exitEvents);
   const { stepIds, warnings } = discoverChainStepIds(entryEvents, firstExitByStepId, stageSlug);
   const reachable = new Set(stepIds);
-  // Final-status counts use the LATEST reachable entry per step_id (SKILL.md: "final-status counters use latest reachable entry").
+  // Final-status COUNTS use LATEST exit and entry per step_id so retried steps
+  // reflect their most-recent outcome (not their first attempt).
   const latestReachableEntries = latestByStepId(entryEvents.filter((e) => reachable.has(e.step_id)));
+  const latestExitByStepId = latestByStepId(exitEvents.filter((e) => reachable.has(e.step_id)));
 
   let passed_step_count = 0;
   let blocked_step_count = 0;
@@ -361,7 +363,7 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
 
   for (const stepId of stepIds) {
     const entry = latestReachableEntries.get(stepId);
-    const exit = firstExitByStepId.get(stepId);
+    const exit = latestExitByStepId.get(stepId);
     if (entry?.check_status === "skipped") skipped_step_count += 1;
     if (exit?.verdict === "passed") passed_step_count += 1;
     if (entry?.check_status === "blocked" || entry?.judgement?.status === "blocked" || exit?.verdict === "blocked") {
