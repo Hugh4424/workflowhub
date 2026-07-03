@@ -121,7 +121,7 @@ This document captures all cross-boundary data structures exchanged between the 
 |------------|---------|------------|
 | `step_entry` | before-step hook fires | entry_receipt payload |
 | `step_exit` | after-step hook fires | exit_receipt payload |
-| `step_auto_rollback` | runner executes rollback | step_id, workflow_run_id, rollback_count, reason |
+| `step_auto_rollback` | runner executes rollback | workflow_run_id, affected_step_id, rollback_from_step_id, rollback_to_step_id, attempt_seq, ineffective, reason |
 
 ### Compatibility
 

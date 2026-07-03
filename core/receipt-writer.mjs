@@ -14,7 +14,7 @@ const STEP_TYPES = new Set(["work", "review", "check"]);
 const CHECK_STATUSES = new Set(["ok", "blocked", "skipped"]);
 const EXIT_VERDICTS = new Set(["passed", "blocked", "skipped", "unknown"]);
 const JUDGEMENT_STATUSES = new Set(["blocked"]);
-const REVIEW_VERDICTS = new Set(["passed", "revise_required", "unknown"]);
+const REVIEW_VERDICTS = new Set(["passed", "revise_required", "escalate_to_human", "unknown"]);
 const FIX_STATUSES = new Set(["fixed", "not_required", "pending", "unknown"]);
 const STEP_ID_PATTERN =
   /^(?:bc\.(?:work|review|check)\.(?:ph\d+(?:\.\d+)?|\d+)|(?:bs|bp|vc|md)\.(?:work|review|check)\.(?:ph\d+|\d+))$/;
@@ -77,10 +77,10 @@ function journalPathForTask(taskId) {
 
 function buildJournalEvent(eventType, payload) {
   return {
+    ...payload,
     schema_version: JOURNAL_SCHEMA_VERSION,
     event_type: eventType,
     ts: new Date().toISOString(),
-    ...payload,
   };
 }
 
@@ -212,6 +212,16 @@ function latestByStepId(events) {
   return map;
 }
 
+function firstByStepId(events) {
+  const map = new Map();
+  for (const event of events) {
+    if (!map.has(event.step_id)) {
+      map.set(event.step_id, event);
+    }
+  }
+  return map;
+}
+
 function orderedDistinctHeads(entryEvents, stageSlug) {
   const heads = [];
 
@@ -317,8 +327,9 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
     (event) => event?.event_type === JOURNAL_EVENT_TYPES.STEP_EXIT && sameRun(event) && sameStageStep(event.step_id),
   );
   const exitByStepId = latestByStepId(exitEvents);
+  const firstExitByStepId = firstByStepId(exitEvents);
   const entryByStepId = latestByStepId(entryEvents);
-  const { stepIds, warnings } = discoverChainStepIds(entryEvents, exitByStepId, stageSlug);
+  const { stepIds, warnings } = discoverChainStepIds(entryEvents, firstExitByStepId, stageSlug);
   const reachable = new Set(stepIds);
 
   let passed_step_count = 0;

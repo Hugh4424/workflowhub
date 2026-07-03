@@ -876,4 +876,72 @@ describe("receipt writer", () => {
       warnings: ["pointer_mismatch:bc.work.ph1"],
     });
   });
+
+  it("regression fix-1: same step_id two exits different next_step_id uses first exit for topology, not latest", async () => {
+    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
+    const events = [
+      {
+        event_type: "step_entry",
+        workflow_run_id: "run-123",
+        step_id: "bc.work.ph1",
+        check_status: "ok",
+        prev_step_id: null,
+        next_step_id: "bc.check.ph1",
+      },
+      {
+        event_type: "step_exit",
+        workflow_run_id: "run-123",
+        step_id: "bc.work.ph1",
+        verdict: "passed",
+        prev_step_id: null,
+        next_step_id: "bc.check.ph1",
+      },
+      {
+        event_type: "step_exit",
+        workflow_run_id: "run-123",
+        step_id: "bc.work.ph1",
+        verdict: "passed",
+        prev_step_id: null,
+        next_step_id: "bc.review.ph1",
+      },
+      {
+        event_type: "step_entry",
+        workflow_run_id: "run-123",
+        step_id: "bc.check.ph1",
+        check_status: "ok",
+        prev_step_id: "bc.work.ph1",
+        next_step_id: null,
+      },
+    ];
+
+    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
+      audit_summary: {
+        total_step_count: 2,
+        passed_step_count: 1,
+        blocked_step_count: 0,
+        skipped_step_count: 0,
+        rollback_count: 0,
+      },
+      warnings: [],
+    });
+  });
+
+  it("regression fix-4: writeExitReceipt accepts review verdict escalate_to_human", async () => {
+    const { writeExitReceipt } = await importWriter(makeTaskDir());
+    const payload = validExitPayload({
+      review: {
+        skill: "3rd-review",
+        executed: true,
+        source: "third_party",
+        provider: "codex",
+        true_cross_engine: true,
+        verdict: "escalate_to_human",
+        round: 1,
+        report_path: "/tmp/report.md",
+        raw_result_path: "/tmp/raw.json",
+        fix_status: "pending",
+      },
+    });
+    await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
+  });
 });
