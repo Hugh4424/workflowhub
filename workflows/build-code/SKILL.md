@@ -301,3 +301,50 @@ Before starting implementation, locate the worktree descriptor at `{taskDir}/{ta
 4. **Checkout failure:** If creating the worktree fails, do **not** write a half-baked `worktree.json` file. Leave the file absent or keep the previous valid version, surface the error, and stop.
 
 The `worktree_root` config key passed to this skill (see §5) must always match the path recorded in `worktree.json`. Never resolve upward to the host agenthub repo directory.
+
+## Before-Step Hook
+
+Run this hook before every build-code phase step that performs work, review, or checks. For build-code, this hook fires only after the phase-manifest has been loaded and the current phase number is known.
+
+1. Assign a step identifier with format `bc.{step_type}.ph{N}` for the phase-level audited step. If a phase has multiple audited steps of the same type, append a local sequence as `bc.{step_type}.ph{N}.{seq}`:
+   - `step_type` must be one of `work`, `review`, or `check`.
+   - `ph{N}` comes from the loaded phase-manifest phase sequence.
+   - `seq` starts at `1` within the phase only when the extended form is needed.
+   - Example: `bc.work.ph1`, `bc.review.ph2`, `bc.check.ph3`, `bc.work.ph3.2`.
+2. Read the previous step's `exit_receipt` from `journal.jsonl` when `prev_step_id` is not null.
+3. Set `check_status`:
+   - `ok` when the previous step passed and the current phase step may run.
+   - `blocked` when required upstream output, phase-manifest data, approval, or receipt state is missing or failed.
+   - `skipped` only when an explicit skip has been authorized; never default to `skipped`.
+4. Call `receipt-writer.writeEntryReceipt(taskId, entryReceiptPayload)` before the step body runs. The payload must include `step_id`, `stage_slug: "bc"`, `step_type`, `step_seq`, `check_status`, `prev_step_id`, `next_step_id`, `writer_namespace`, and `workflow_run_id`. Include `skip_reason` when `check_status` is `skipped`.
+5. If entry receipt writing fails, fail closed: do not run the step.
+6. If `check_status` is `blocked`, emit a `judgement` object and stop this step:
+
+```json
+{
+  "status": "blocked",
+  "reason": "<why this phase step cannot run>",
+  "retry_eligible": true
+}
+```
+
+The runner handles rollback policy: rollback when `rollback_count < 2` and `retry_eligible=true`, escalate to human when rollback is exhausted, and escalate immediately when there is no previous step.
+
+## After-Step Hook
+
+Run this hook after every build-code phase step that performs work, review, or checks.
+
+1. Call `3rd-review` against the concrete step output, artifact, or diff where applicable. A review failure or timeout is recorded as `review.executed=false` and `review.verdict=unknown`; it does not block step completion.
+2. Compare `writer_namespace` from the paired entry receipt with `executor_namespace`. If they match, append a warning to the journal and note `potential self-review risk` in `review.source`; still call `3rd-review`.
+3. Call `receipt-writer.writeExitReceipt(taskId, exitReceiptPayload)` with the paired `step_id`. Exit receipt write failure is warn-only and must not discard the step result.
+4. The exit payload must include `step_id`, `verdict`, `executor_namespace`, `prev_step_id`, `next_step_id`, and a `review` record with all 10 required fields:
+   - `review.skill` = `3rd-review`
+   - `review.executed`
+   - `review.source`
+   - `review.provider`
+   - `review.true_cross_engine`
+   - `review.verdict`
+   - `review.round`
+   - `review.report_path`
+   - `review.raw_result_path`
+   - `review.fix_status`

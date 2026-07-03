@@ -604,3 +604,49 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 | `s8_context_no_change` | S8 | — | CONTEXT 无变化 |
 | `s9_user_approved` | S9 | `s9_user_approved: true` | 用户明确批准 |
 | `s10_decision_log_complete` | S10 | — | decision-log 落盘完成 |
+
+## Before-Step Hook
+
+Run this hook before every make-decision step that performs work, review, or checks.
+
+1. Assign a step identifier with format `md.{step_type}.{seq}`:
+   - `step_type` must be one of `work`, `review`, or `check`.
+   - `seq` starts at `1` and increments within this make-decision run.
+   - Example: `md.work.1`, `md.review.1`, `md.check.2`.
+2. Read the previous step's `exit_receipt` from `journal.jsonl` when `prev_step_id` is not null.
+3. Set `check_status`:
+   - `ok` when the previous step passed and the current step may run.
+   - `blocked` when required upstream output, approval, or receipt state is missing or failed.
+   - `skipped` only when an explicit skip has been authorized; never default to `skipped`.
+4. Call `receipt-writer.writeEntryReceipt(taskId, entryReceiptPayload)` before the step body runs. The payload must include `step_id`, `stage_slug: "md"`, `step_type`, `step_seq`, `check_status`, `prev_step_id`, `next_step_id`, `writer_namespace`, and `workflow_run_id`. Include `skip_reason` when `check_status` is `skipped`.
+5. If entry receipt writing fails, fail closed: do not run the step.
+6. If `check_status` is `blocked`, emit a `judgement` object and stop this step:
+
+```json
+{
+  "status": "blocked",
+  "reason": "<why this step cannot run>",
+  "retry_eligible": true
+}
+```
+
+The runner handles rollback policy: rollback when `rollback_count < 2` and `retry_eligible=true`, escalate to human when rollback is exhausted, and escalate immediately when there is no previous step.
+
+## After-Step Hook
+
+Run this hook after every make-decision step that performs work, review, or checks.
+
+1. Call `3rd-review` against the concrete step output, artifact, or diff where applicable. A review failure or timeout is recorded as `review.executed=false` and `review.verdict=unknown`; it does not block step completion.
+2. Compare `writer_namespace` from the paired entry receipt with `executor_namespace`. If they match, append a warning to the journal and note `potential self-review risk` in `review.source`; still call `3rd-review`.
+3. Call `receipt-writer.writeExitReceipt(taskId, exitReceiptPayload)` with the paired `step_id`. Exit receipt write failure is warn-only and must not discard the step result.
+4. The exit payload must include `step_id`, `verdict`, `executor_namespace`, `prev_step_id`, `next_step_id`, and a `review` record with all 10 required fields:
+   - `review.skill` = `3rd-review`
+   - `review.executed`
+   - `review.source`
+   - `review.provider`
+   - `review.true_cross_engine`
+   - `review.verdict`
+   - `review.round`
+   - `review.report_path`
+   - `review.raw_result_path`
+   - `review.fix_status`
