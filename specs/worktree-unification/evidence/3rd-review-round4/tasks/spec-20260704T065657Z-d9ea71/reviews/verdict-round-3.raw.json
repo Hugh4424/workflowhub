@@ -1,0 +1,77 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "spec.md",
+      "line": 104,
+      "issue": "The partial-close recovery rule allows status=active with a missing worktree to skip active-only validation based only on the physical state. That weakens the fail-loud contract: a corrupt or accidentally removed active worktree can be treated as a resumable close instead of a hard failure.",
+      "recommendation": "Limit this exception to verify-code close re-entry only, and require a persisted close-progress marker proving the prior irreversible steps completed. If the marker is missing or inconsistent, status=active with a missing worktree must fail-loud."
+    },
+    {
+      "severity": "high",
+      "file": "spec.md",
+      "line": 130,
+      "issue": "make-decision creates the worktree at the end of the stage, but the spec does not require repo-scoped make-decision artifacts such as specs/{task-id}/ or decision-log outputs to be written into, moved into, and committed from worktree_root before build-code starts. This leaves the original ZHI-65 failure mode open: downstream stages may get a valid worktree.json while the actual preceding artifacts remain outside the task worktree or uncommitted.",
+      "recommendation": "Define that make-decision must create or reuse the task worktree before writing any repo-scoped artifacts, or explicitly migrate all generated repo artifacts into worktree_root before handoff. Add a required make-decision commit such as workflowhub(make-decision): initialize {task-id} before build-code reads the contract."
+    },
+    {
+      "severity": "medium",
+      "file": "spec.md",
+      "line": 220,
+      "issue": "FR-WORKTREE-CLOSE-006 restates the close operations with a different implied order from FR-WORKTREE-PUSH-005. The canonical sequence says push main, then delete remote branch, then delete local branch, but the close section summarizes it as merge, delete local branch, push main, delete remote branch. That creates an implementation ambiguity in the most sensitive irreversible path.",
+      "recommendation": "Make FR-WORKTREE-CLOSE-006 reference the canonical FR-WORKTREE-PUSH-005 8-step sequence without restating it, or restate the exact same order verbatim."
+    },
+    {
+      "severity": "medium",
+      "file": "spec.md",
+      "line": 171,
+      "issue": "The commit requirement says every stage or phase commit must use workflowhub(<stage>): prefixes, but the implementation scope is described as build-code while the required prefixes include make-decision, verify-code, and close. The spec does not say which SKILL owns enforcement for non-build-code stages or how acceptance tests should verify those commits.",
+      "recommendation": "Assign enforcement points explicitly: make-decision/SKILL.md owns make-decision commits, build-code/SKILL.md owns build-code phase commits, and verify-code/SKILL.md owns verify-code and close commits. Add acceptance checks that inspect git log for each required prefix after the full flow."
+    }
+  ],
+  "resolutionSummary": "revise_required: core contract is close, but active-state recovery, make-decision artifact handoff, close ordering, and cross-stage commit ownership still need tightening before implementation.",
+  "reviewSnapshot": [
+    {
+      "path": "spec.md",
+      "hash": null,
+      "lines": 408,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "spec.md",
+      "round": 3
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

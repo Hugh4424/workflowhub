@@ -1,0 +1,49 @@
+{
+  "verdict": "escalate_to_human",
+  "provider": "codex",
+  "error": "Provider produced non-JSON output; verdict cannot be determined automatically.",
+  "reviewSnapshot": [
+    {
+      "path": "spec.md",
+      "round": 2,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      }
+    }
+  ],
+  "findings": [],
+  "resolutionSummary": "Provider codex produced non-JSON output; escalating to human. Raw output head: {\n  \"verdict\": \"revise_required\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"spec.md\",\n      \"line\": 195,\n      \"issue\": \"close 线性序列把“切回主 checkout”写成 `git checkout main`。在 git work",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "host": "claude-code",
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "anti-forgery": "lightweight (no-manifest)",
+  "reportPath": "reviews/report-round-2.md"
+}

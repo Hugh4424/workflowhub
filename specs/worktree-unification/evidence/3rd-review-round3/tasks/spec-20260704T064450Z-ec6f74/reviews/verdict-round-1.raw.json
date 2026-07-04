@@ -1,0 +1,84 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "spec.md",
+      "line": 183,
+      "issue": "close 命令序列把 `git checkout main` 描述成在任务 worktree 内执行，但 `main` 通常已被主 checkout 占用，linked worktree 内执行会失败；即使未失败，也会把待删除的任务 worktree 切到 main，和“从主 checkout 执行 merge / remove”的语义冲突。",
+      "recommendation": "把步骤拆清：先完成任务 worktree 内的 archive commit；然后切换执行上下文到 `target_repo_root` 对应的主 checkout，并验证当前分支为 `main`；后续 `merge --no-ff`、`git worktree remove`、push、删分支都从主 checkout 执行。不要在任务 worktree 内 `git checkout main`。"
+    },
+    {
+      "severity": "medium",
+      "file": "spec.md",
+      "line": 64,
+      "issue": "`target_repo_root` 定义为“目标仓库根路径”，又假设“在任务分支 worktree 内执行 `git rev-parse --show-toplevel` 推导”。这会得到任务 worktree 根路径，和 `worktree_root` 字段重合，无法表示主 checkout 路径；但 close 流程又需要回到主 checkout 执行 merge/remove。",
+      "recommendation": "明确拆分字段语义：`main_checkout_root` 或 `primary_repo_root` 表示主 checkout；`worktree_root` 表示任务 worktree。若继续保留 `target_repo_root`，需规定它必须指向主 checkout，而不是在任务 worktree 内用 `rev-parse` 得到。"
+    },
+    {
+      "severity": "medium",
+      "file": "spec.md",
+      "line": 90,
+      "issue": "`worktree.json` 只有 `status` 可在 close 后更新为 `cleaned`，但 close 已把 spec 归档、worktree 删除、本地分支删除、远端分支删除。若 close 在 push、远端删分支、本地删分支或 status 更新中途失败，重跑规则未定义，且现有 `active-only` 校验会因为 worktree 已被删除而直接 fail-loud，阻断恢复。",
+      "recommendation": "为 close 增加可重入恢复规则，至少定义每一步已完成时的检测和跳过条件；或调整顺序，在所有不可逆远端操作完成前不要删除 worktree；并规定 partial-close 状态如何人工恢复。"
+    },
+    {
+      "severity": "medium",
+      "file": "spec.md",
+      "line": 165,
+      "issue": "commit message 规则说 stage-name 固定值域为 `make-decision`、`build-code`、`verify-code`、`close`，随后又允许 phase 名直接作为 stage-name 使用，例如 `build-code/phase-1`。这和固定值域冲突，验收实现无法同时满足。",
+      "recommendation": "把字段拆成 `stage` 与可选 `phase`，或把允许值域改成正则：`^(make-decision|build-code|verify-code|close)(/phase-[0-9]+)?$`。验收标准同步使用同一规则。"
+    },
+    {
+      "severity": "low",
+      "file": "spec.md",
+      "line": 296,
+      "issue": "FR 编号拼写为 `FR-WORKTREE-FAILOUD-007`，少了字母 `L`。这会影响后续引用、grep、自动校验和 checklist 对齐。",
+      "recommendation": "统一改为 `FR-WORKTREE-FAILLOUD-007`，并同步更新 §8、质量事实契约、Known Gaps 中所有引用。"
+    }
+  ],
+  "resolutionSummary": "需修订 close 执行上下文、主 checkout 与任务 worktree 字段语义、partial close 可重入规则、commit message 值域冲突，以及 FR 编号拼写。当前 spec 仍有会导致实现失败的流程矛盾。",
+  "reviewSnapshot": [
+    {
+      "path": "spec.md",
+      "hash": null,
+      "lines": 400,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "spec.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

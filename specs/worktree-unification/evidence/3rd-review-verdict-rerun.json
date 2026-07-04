@@ -1,0 +1,56 @@
+{
+  "verdict": "revise_required",
+  "overall_confidence_score": 0.88,
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "critical",
+      "location": "FR-WORKTREE-PUSH-005, FR-WORKTREE-CLOSE-006, §4 边界场景: verify-code 质量事实未达到关闭条件",
+      "issue": "Q2 修订仍不自洽。§4 说质量事实未达关闭条件时只记录 warn、needs_human=true、人工决定是否继续 close；但 FR-WORKTREE-PUSH-005 仍写 push 仅在 verify-code 收尾 gate 通过后执行，FR-WORKTREE-CLOSE-006 又要求确认所有验收标准均已验证通过。这里仍把 verify-code/验收事实写成 close/push 的前置阻断条件，和宪法 Q2 的记录型采集不阻断冲突。",
+      "suggestion": "把 verify-code close 拆成三类：入口校验只检查 worktree.json/路径/分支等必要事实；质量事实只写入 final-test-report、summary、needs_human；不可逆动作只由 user_decision=true 控制。删除“gate 通过”“所有验收标准均已验证通过”作为自动前置条件的表述，改为“质量事实已记录并展示”。"
+    },
+    {
+      "id": "F-02",
+      "severity": "major",
+      "location": "FR-WORKTREE-COMMIT-004",
+      "issue": "per-stage commit 规则不可实现。spec 说原子提交保持不变，per-stage commit 是每阶段完成时额外的阶段级提交，并且在所有原子提交之后执行。但如果阶段内变更已被原子提交提交完，阶段级提交没有 diff，普通 git commit 会失败。spec 未说明是否允许 --allow-empty，也未说明 stage commit 与原子 commit 的关系如何被测试。",
+      "suggestion": "二选一并写死：推荐改为“每个阶段至少有一条原子提交的 message 带 stage 名称”，不额外制造空提交；或明确“阶段级 marker commit 使用 git commit --allow-empty，message 格式固定为 workflowhub: stage <stage-name> complete”。"
+    },
+    {
+      "id": "F-03",
+      "severity": "major",
+      "location": "FR-WORKTREE-PUSH-005, FR-WORKTREE-CLOSE-006",
+      "issue": "push/merge/branch-delete 策略仍有歧义。FR-WORKTREE-PUSH-005 要求 verify-code 后恰好执行一次 git push；FR-WORKTREE-CLOSE-006 又要求 main 有 merge commit、本地和远端分支均删除。一次 push 是否推 main、是否删除远端任务分支、是否推任务分支、refspec 是什么都未定义。若中间阶段从不 push，远端任务分支可能从未存在，“远端分支已删除”也不可稳定验证。",
+      "suggestion": "明确 close 的 git 命令级策略，例如：本地 checkout main 后 --no-ff merge workflowhub/{task-id}，本地删分支，然后唯一远端操作为 git push origin main :workflowhub/{task-id}。同时定义远端分支原本不存在时的验收语义：视为已不存在，还是 fail-loud。"
+    },
+    {
+      "id": "F-04",
+      "severity": "major",
+      "location": "FR-WORKTREE-CONTRACT-001, §2 假设, §4 约束",
+      "issue": "status=cleaned 的校验语义不完整。spec 允许 verify-code close 更新 status 为 cleaned，并要求 cleaned 时提示 task 已归档；但字段校验规则仍无条件要求 branch 与 worktree HEAD 一致。close 后 worktree 已 remove、本地和远端分支已删除，此时不存在 worktree HEAD 可校验。实现者只能自行猜测 cleaned 文件应跳过哪些校验。",
+      "suggestion": "把 schema 校验拆为 common 校验与 active-only 校验：common 只校验字段存在、类型、push_policy、绝对路径、branch 格式、status 值域；active 时再校验 worktree list 和 HEAD branch；cleaned 时必须校验 worktree_root 不在 worktree list、路径不存在、分支不存在，然后返回 archived/task-closed 错误。"
+    },
+    {
+      "id": "F-05",
+      "severity": "major",
+      "location": "FR-WORKTREE-ENVVAR-003, §4 边界场景",
+      "issue": "env var 边界值未完整覆盖。已覆盖未设置、空字符串、相对路径，但未定义带空白的非空值是否 trim 后使用、~ 是否允许展开、目录不存在如何处理、路径存在但不是目录如何处理。这些会直接影响 parser 的可实现行为和测试断言。",
+      "suggestion": "补全规则：读取 env 后 trim；trim 为空视为缺失；必须以 / 开头；不展开 ~；路径存在但不是目录 fail-loud；路径不存在由 parser fail-loud 或由写入阶段创建，二选一写死。推荐 parser fail-loud，减少隐式创建。"
+    },
+    {
+      "id": "F-06",
+      "severity": "major",
+      "location": "FR-WORKTREE-MAKEDECISION-002 D2, §4 约束",
+      "issue": "分支命名规则还不够精确。spec 写 task-id 是“两三个英文单词，无空格，连字符分隔”，分支为 workflowhub/{task-id}，但没有 regex。大小写、数字、下划线、连续连字符、首尾连字符、保留 ref 字符等边界未定义，不能形成稳定校验器。",
+      "suggestion": "写成明确 regex：task-id 必须匹配 ^[a-z]+(-[a-z]+){1,2}$；branch 必须严格等于 workflowhub/{task-id} 且匹配 ^workflowhub/[a-z]+(-[a-z]+){1,2}$。再补充禁止 task-id 包含 /、..、@{、空白、连续连字符和首尾连字符。"
+    },
+    {
+      "id": "F-07",
+      "severity": "minor",
+      "location": "FR-WORKTREE-CONTRACT-001",
+      "issue": "worktree.json 契约缺少 created_by_stage 的值域。字段定义为 string，但语义上首次写入者固定为 make-decision。若出现 build-code、verify-code 或任意字符串，读取方应 fail-loud 还是只记录未知没有说明。",
+      "suggestion": "把 created_by_stage 值域固定为 make-decision，或定义允许值列表并说明非允许值 fail-loud。"
+    }
+  ],
+  "summary": "修订解决了初审中的大部分缺口：status 只读豁免、active/cleaned 重跑三态、build-code 缺失 worktree.json fail-loud、target_repo_root 默认 git rev-parse、worktree.json 基础字段校验、分支前缀和 env 优先级均已明显收敛。但仍不能 pass。阻断点集中在三处：verify-code close 仍残留质量 gate 阻断语义，违反宪法 Q2；per-stage commit 与原子提交共存方案会产生无 diff commit，不指定 --allow-empty 就不可实现；一次 push 同时满足 merge main 与远端删分支的策略没有命令级定义。建议先修 F-01 至 F-03，再补 F-04 至 F-06 的边界规则。"
+}
