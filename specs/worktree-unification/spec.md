@@ -100,8 +100,11 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{task_dir}/{ta
 - `branch` 必须与该 worktree 的 HEAD 对应分支一致
 
 **close 重入恢复规则**（partial close 中途失败时）：
+
+> **待决策**：以下 close-progress.json 状态机及 cross-check 规则在 decision-log D1-D6 中均无对应决策支持。D6 仅定义了收尾动作的原则（spec 归档、worktree 安全清理、分支安全清理），未定义 partial close 重入机制、close-progress.json schema 或 hash cross-check 规则。本节内容为实现层推演，须补充对应决策后方可作为规范约束。
+
 - 若 worktree 目录已不存在（worktree remove 已执行）但 status 仍为 `"active"`：active-only 校验会因 `worktree_root` 不在 `git worktree list` 中而失败，阻止正常重入；此时实现须检测此特殊状态（worktree 消失但 status=active），直接跳过 active-only 校验、跳过已完成的清理步骤，从下一个未完成步骤继续执行（幂等重入，不视为 fail-loud 条件）
-- 各不可逆步骤须记录已完成标记，写入 `{task_dir}/{task-id}/close-progress.json`，schema 如下（bool 字段默认 false，每步成功验证后立即写入 true；hash/path 字段在对应步骤完成时同步写入）：
+- 各不可逆步骤须记录已完成标记，写入 `{{task_tracking_root}}/tasks/{task-id}/close-progress.json`，schema 如下（bool 字段默认 false，每步成功验证后立即写入 true；hash/path 字段在对应步骤完成时同步写入）：
   ```json
   {
     "archive_commit": false,
@@ -140,9 +143,9 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 - D4：worktree.json 写入时机与字段要求
 - D5：僵尸 worktree / 占用分支的检测规则（fail-loud，不自动删除）
 
-**task 子目录创建职责（D6）**：make-decision 负责创建 `{task_dir}/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
+**task 子目录创建职责（D6）**：make-decision 负责创建 `{{task_tracking_root}}/tasks/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
 - 前置条件：`task_dir`（由 `WORKFLOWHUB_TASK_DIR` 或 workflowhub.yaml 提供）必须已存在；若父目录 task_dir 不存在，则 fail-loud 报错，不自动创建父目录。
-- 幂等：若 `{task_dir}/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
+- 幂等：若 `{{task_tracking_root}}/tasks/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
 - 成功后方可继续 D3 worktree 创建步骤。
 
 **验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，D1-D5 规则均有明确条文。
@@ -167,7 +170,6 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 
 build-code 流程中，每个 stage 或 phase 完成后，每个原子提交的 commit message 须包含 stage 名称前缀（格式：`workflowhub(<stage-name>): <描述>`），使提交记录可追溯到具体 stage。不额外制造阶段级空提交（即不使用 `git commit --allow-empty` 作为 stage marker）——原子提交本身承担 stage 标记职责。
 
-**make-decision 豁免**：make-decision stage 明确豁免于本条非空 commit 要求。make-decision 的唯一输出物（worktree.json、decision-log.md）写入 `task_dir/{task-id}/`（仓库外），而 FR-WORKTREE-SCOPE-009 规定 `specs/{task-id}/` 仅存放 spec.md/plan.md/tasks.md，make-decision 无合法的仓库内文件可提交。其跨 stage 产物可追溯性通过 task_dir 下的 worktree.json 保证，无需 repo commit。
 
 commit message 中括号内的标识符有两类：
 - **stage 级提交**：标识符为固定枚举之一：`make-decision`、`build-spec`、`build-plan`、`build-code`、`verify-code`、`close`；格式 `workflowhub(<stage>): <描述>`
@@ -223,7 +225,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 `specs/{task-id}/` 目录（仓库内）只允许存放交付物文件：spec.md、plan.md、tasks.md。禁止存放过程/追踪类文件。
 
-`task_dir/{task-id}/`（仓库外，WORKFLOWHUB_TASK_DIR 指向）存放过程/追踪类文件：decision-log.md、journal.jsonl、task-metrics.jsonl、3rd-review 审查证据（evidence/3rd-review-roundN/...）。
+`{{task_tracking_root}}/tasks/{task-id}/`（仓库外，WORKFLOWHUB_TASK_DIR 指向）存放过程/追踪类文件：decision-log.md、journal.jsonl、task-metrics.jsonl、3rd-review 审查证据（evidence/3rd-review-roundN/...）。
 
 **验收标准**：审查任一 stage 产出时，`git status`/`git show` 中 specs/{task-id}/ 下不得出现 evidence/ 或其他非 spec/plan/tasks 文件；3rd-review 证据文件必须能在 `{task_dir}/{task-id}/evidence/` 下找到。
 
@@ -233,7 +235,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 `git worktree list --porcelain` 校验逻辑在检测到以下情况时须 fail-loud，不自动删除：
 
-- 僵尸 worktree（目录已不存在但 git 仍记录）
+- 僵尸 worktree（路径存在但未被 git worktree list 注册，与 D4 定义一致）
 - 占用分支（目标分支已被其他 worktree 持有）
 
 **验收标准**：模拟僵尸 worktree 或占用分支场景，运行校验逻辑，收到明确错误消息且未发生自动删除。
@@ -297,6 +299,18 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - [RESOLVED] Q1：`workflowhub.yaml` 已在 line 41 声明 `task_dir` 字段，字段已存在。FR-WORKTREE-ENVVAR-003 的 fallback 直接读取该现有字段，无需新增配置项。
 - [RESOLVED] Q2：close 流程现有入口为 `workflows/verify-code/SKILL.md` 步骤 9（明文停顿/收尾确认）和步骤 10（收尾执行：merge + branch-delete）。无独立 close SKILL.md。FR-WORKTREE-CLOSE-006 要求的 spec 归档、验证清单检查、worktree 安全清理、分支安全清理四步，需在 verify-code Step 10 中补充，不另建文件。
 
+### 业务影响范围（Business Impact Scope）
+
+| 影响维度 | 具体内容 | 严重度 |
+|---|---|---|
+| 跨 stage 产物断链 | worktree.json 缺失或路径不一致导致后续 stage 无法读取，pipeline 中断 | 高 |
+| 任务目录丢失 | task_dir 不存在时未 fail-loud，导致产物写入意外位置，静默失败 | 高 |
+| 分支污染 | 僵尸分支未清理，下一次同名任务启动时产生冲突，须人工介入 | 中 |
+| push 时机失控 | 中间 stage 提前 push，main 分支收到未经验证代码 | 高 |
+| close 部分执行 | worktree 或分支未清理即报告 success，后续任务占用同名资源 | 中 |
+
+受影响的下游 stage：build-spec（读 target_repo_root）、build-plan（读 target_repo_root）、build-code（读全量 worktree.json）、verify-code（close 写 status=cleaned）。
+
 ---
 
 ## 7. 非目标（Out of Scope）
@@ -313,7 +327,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 **场景 A — 正常路径**
 - Given: make-decision stage 成功完成，task_dir 与 task-id 均已确定
-- When: make-decision 在 task_dir/{task-id}/ 写入 worktree.json
+- When: make-decision 在 {{task_tracking_root}}/tasks/{task-id}/ 写入 worktree.json
 - Then: 文件存在，包含 target_repo_root / worktree_root / branch / created_by_stage / push_policy / status 全部 6 个字段，build-code 可直接读取消费
 
 **场景 B — build-code 读取失败**
@@ -374,7 +388,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 ### FR-WORKTREE-FAILLOUD-007
 
 **场景 A — 僵尸 worktree**
-- Given: git 记录中存在一个目录已不存在的 worktree 条目
+- Given: 某路径存在于文件系统但未被 git worktree list 注册（D4 定义的僵尸目录场景）
 - When: 运行 worktree 校验逻辑
 - Then: 输出明确的僵尸 worktree 错误，不执行自动删除
 
