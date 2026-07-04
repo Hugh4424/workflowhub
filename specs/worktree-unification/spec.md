@@ -101,7 +101,19 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{task_dir}/{ta
 
 **close 重入恢复规则**（partial close 中途失败时）：
 - 若 worktree 目录已不存在（worktree remove 已执行）但 status 仍为 `"active"`：active-only 校验会因 `worktree_root` 不在 `git worktree list` 中而失败，阻止正常重入；此时实现须检测此特殊状态（worktree 消失但 status=active），直接跳过 active-only 校验、跳过已完成的清理步骤，从下一个未完成步骤继续执行（幂等重入，不视为 fail-loud 条件）
-- 各不可逆步骤须记录已完成标记（写入 close-progress.json 或等效持久化记录），重入时读取此标记跳过已完成步骤，避免重复执行不可逆操作
+- 各不可逆步骤须记录已完成标记，写入 `{task_dir}/{task-id}/close-progress.json`，schema 如下（所有字段为 bool，默认 false，每步成功验证后立即写入 true）：
+  ```json
+  {
+    "archive_commit": false,
+    "merged_main": false,
+    "worktree_removed": false,
+    "main_pushed": false,
+    "remote_branch_deleted": false,
+    "local_branch_deleted": false,
+    "cleaned_status_written": false
+  }
+  ```
+  重入时：先读取 close-progress.json，再 cross-check 各标记对应的 git 实际状态（如 `merged_main=true` 但 merge commit 不在 main 历史中，则视为标记错误，fail-loud）；仅当标记与实际状态一致时，跳过已完成步骤，从第一个 false 标记处继续执行。
 
 **cleaned-only 校验**（status=cleaned 时执行，替代 active-only）：
 - 仅执行 common schema 校验（6 字段存在、类型、值域）
@@ -120,6 +132,11 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 - D3：worktree 创建时机（make-decision 阶段末尾）
 - D4：worktree.json 写入时机与字段要求
 - D5：僵尸 worktree / 占用分支的检测规则（fail-loud，不自动删除）
+
+**task 子目录创建职责（D6）**：make-decision 负责创建 `{task_dir}/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
+- 前置条件：`task_dir`（由 `WORKFLOWHUB_TASK_DIR` 或 workflowhub.yaml 提供）必须已存在；若父目录 task_dir 不存在，则 fail-loud 报错，不自动创建父目录。
+- 幂等：若 `{task_dir}/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
+- 成功后方可继续 D3 worktree 创建步骤。
 
 **验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，D1-D5 规则均有明确条文。
 
@@ -162,7 +179,7 @@ close 阶段的完整线性操作序列（唯一允许发生远端交互的阶�
 3. `git merge --no-ff workflowhub/{task-id}`（从主 checkout 执行，保留合并节点，归档 commit 随之进入 main）
 4. `git worktree remove <worktree_root_path>`（从主 checkout 执行，清理 worktree 目录）；验证 worktree 目录不存在，`git worktree list` 无该条目
 5. `git push origin main`（推送合并后的 main）
-6. 检查并删除远端任务分支：`git ls-remote --exit-code origin workflowhub/{task-id}`
+6. 检查并删除远端任务分支：`git ls-remote --exit-code --heads origin workflowhub/{task-id}`
    - 若存在（exit 0）：执行 `git push origin :workflowhub/{task-id}` 删除远端分支
    - 若不存在（exit 非 0）：跳过，记录 info "远端分支不存在，无需删除"，不报错
 7. `git branch -d workflowhub/{task-id}`（删除本地任务分支；在远端处理完成后再删，便于失败重试）
@@ -185,6 +202,8 @@ close 流程须包含以下步骤，无遗漏：
 build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 worktree.json，只读取 worktree.json 中的 `target_repo_root` 字段作为仓库根路径定位依据。若字段缺失或 worktree.json 不存在，须 fail-loud，报错路径，不静默降级。
 
 **验收标准**：在 build-spec 和 build-plan 阶段，git worktree list 的条目数量与进入该阶段前一致（无新增 worktree）；worktree.json 缺失时 stage 输出明确错误且退出码非零。
+
+**补充说明**：build-spec 和 build-plan 虽然不创建 worktree，但它们的交付物（spec.md、plan.md、tasks.md）必须写入 worktree.json 中 `worktree_root` 字段所指向的 worktree 根目录下的 `specs/{task-id}/` 路径，并在任务分支上完成 commit。这些 stage 的"只读 worktree.json"约束仅指不新增 worktree 条目，不影响其在已有 worktree 内正常写文件和提交的职责。
 
 ---
 
@@ -400,10 +419,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - 第2轮（codex v2，2026-07-04）：revise_required，7 项残留
 - 第3轮（2026-07-04）：用户拍板修改方向，执行后重审，verdict: revise_required（5条finding）
 - 第4轮（2026-07-04）：修复5条finding后重审，verdict: revise_required（3条finding：commit scope、close顺序、Known Gaps过期状态）
-- 第5轮：本轮修改上述3条后待重审
-
-当前轮次状态由最新一次 reviewSnapshot（round:5）判定。
-evidence: specs/worktree-unification/evidence/3rd-review-round4/（第4轮）
+独立审查历史见 task_dir 下 evidence/3rd-review-round*/ 目录，以最新一轮 verdict.json 为准，不在本文固化轮次编号。
 
 ### 4. 未解风险
 
