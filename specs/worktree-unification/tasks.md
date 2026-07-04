@@ -30,11 +30,11 @@ Core implementation — 各 stage SKILL.md 改动，Stage 1 的 parser 改造完
 
 Verification & scope boundary — 核查只读约束和存放边界，最终校验全流程。
 
-- [ ] T005 核查 `workflows/build-spec/SKILL.md`：确认不执行 `git worktree add`（不新增 worktree 条目）；若缺失 target_repo_root / worktree_root 读取逻辑，补充最小必要说明（worktree.json 缺失时 fail-loud）。只读核查为主，最小补充为辅。FR: FR-WORKTREE-SCOPE-008 (stage:3, depends:T002,T003,T004) Knowledge: build-spec/SKILL.md 现有内容需先读取确认
+- [ ] T005 核查 `workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md`（FR-WORKTREE-SCOPE-008 要求覆盖二者）：确认两者均不执行 `git worktree add`（不新增 worktree 条目）；若缺失 target_repo_root / worktree_root 读取逻辑或 worktree.json 缺失时 fail-loud 的说明，补充最小必要条文（一行）。只读核查为主，最小补充为辅。不重构现有章节。FR: FR-WORKTREE-SCOPE-008 (stage:3, depends:T002,T003,T004) Knowledge: 先 Read build-spec/SKILL.md 和 build-plan/SKILL.md，确认现有内容后再判断是否需要补充
 
-- [ ] T006 全流程边界核查：（a）确认 `specs/{task-id}/` 目录下只允许 spec.md / plan.md / tasks.md，不含 evidence/ 或 stage-result.json；（b）confirm verify-code close step ⑤ stage-result 路径写到 `{{task_tracking_root}}/tasks/{task-id}/stage-result.json`（仓库外），不写 specs/；（c）confirm 3rd-review 证据路径 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`（仓库外）。FR: FR-WORKTREE-SCOPE-009 (stage:3, depends:T004) [P]
+- [ ] T006 全流程边界核查：（a）确认 `specs/{task-id}/` 目录下只允许 spec.md / plan.md / tasks.md，不含 evidence/ 或 stage-result 类文件；（b）确认 verify-code close step ⑤ stage-result 文件名为 `stage-result-verify-code.json`（与 verify-code/SKILL.md FR-PATH-001 一致），路径写到 `{{task_tracking_root}}/tasks/{task-id}/stage-result-verify-code.json`（仓库外，不写 specs/）；（c）确认 3rd-review 证据路径 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`（仓库外）。FR: FR-WORKTREE-SCOPE-009 (stage:3, depends:T004) [P]
 
-- [ ] T007 编写验收核查清单并写入 `specs/worktree-unification/checklists/acceptance.md`（如目录不存在则创建）：将 spec §7 验收标准 1-9 条逐条转为可勾选项，标注对应 Task ID（T001-T006）和 FR 编号；供 verify-code 阶段使用。FR: spec §7 验收标准 (stage:3, depends:T001,T002,T003,T004,T005,T006)
+- [ ] T007 编写验收核查清单，写入 `{{task_tracking_root}}/tasks/worktree-unification/checklists/acceptance.md`（路径通过 parseTaskDir 解析，仓库外，符合 FR-WORKTREE-SCOPE-009）：将 spec §7 验收标准 1-9 条逐条转为可勾选项，标注对应 Task ID（T001-T006）和 FR 编号；供 verify-code 阶段使用。禁止写入 `specs/worktree-unification/checklists/`（仓库内，违反 FR-WORKTREE-SCOPE-009）。FR: spec §7 验收标准, FR-WORKTREE-SCOPE-009 (stage:3, depends:T001,T002,T003,T004,T005,T006)
 
 ---
 

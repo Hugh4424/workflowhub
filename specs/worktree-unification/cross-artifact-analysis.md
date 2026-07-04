@@ -42,10 +42,10 @@
 | **fr_or_task_id** | FR-WORKTREE-SCOPE-008 |
 | **line_or_anchor** | plan.md 第 "3.1 全流程 worktree.json 读取路径核查" 节 vs tasks.md T005 |
 
-**描述**：plan.md Step 3.1 说"若现有实现缺失该读取逻辑，补充必要说明"，但未明确说明触发补充的阈值是什么（"缺失"的判断标准）。tasks.md T005 的 [Knowledge] 标记要求先读取 build-spec/SKILL.md 再判断，但缺少"读到什么结论算缺失"的判断标准。
+**描述**：plan.md Step 3.1 说"若现有实现缺失该读取逻辑，补充必要说明"，但未明确说明触发补充的阈值是什么（"缺失"的判断标准）。tasks.md T005 的 [Knowledge] 标记要求先读取 build-spec/SKILL.md 再判断，但缺少"读到什么结论算缺失"的判断标准。此外 FR-WORKTREE-SCOPE-008 覆盖范围包括 build-spec 和 build-plan 两者，T005 须同时核查两个文件。（已在 Round 2 修订版 tasks.md T005 中修复：明确要求同时核查 build-spec/SKILL.md 和 build-plan/SKILL.md，并给出判断标准）
 
-**Severity**: important
-**escalation_path**: next_iteration（执行 T005 前须先 Read build-spec/SKILL.md，若不存在关于 target_repo_root 读取的任何条文则视为缺失，需补充最小说明一行）
+**Severity**: minor（已修复）
+**escalation_path**: acceptable_ambiguity（T005 修订后已明确：先 Read 两文件，若不存在 target_repo_root 读取的任何条文则视为缺失，补充最小说明一行）
 
 ---
 

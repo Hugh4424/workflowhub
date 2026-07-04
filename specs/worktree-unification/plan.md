@@ -291,80 +291,76 @@ build-spec/SKILL.md 仅只读核查，若确实缺少 target_repo_root 读取逻
 
 ## Constitution Check
 
-*（21 条完整评估，含 status + rationale）*
+*（21 条完整评估，逐条对照 constitution-checklist.md 当前版本，含 status + rationale）*
 
 ### 框架原则（F）
 
-- [x] **F1 薄核心** — 判据：核心只做调度编排，重活下沉技能层。
-  **Rationale**: 本 task 改动均在各 stage 自身的 SKILL.md（make-decision/build-code/verify-code）和 core/task-dir-parser.mjs，未新增中间件或调度层。worktree.json 是点对点契约，不引入新的核心调度逻辑。符合 F1。
+- [x] **F1 薄核心** — 判据：核心是否只做调度编排、重活下沉技能层（改动牵连面小）。
+  **Rationale**: 本 task 改动均在各 stage 自身的 SKILL.md（make-decision/build-code/verify-code）和 core/task-dir-parser.mjs，未新增中间件或调度层。worktree.json 是点对点契约，不引入新的核心调度逻辑。改动牵连面限于 4 个文件。符合 F1。
 
-- [x] **F2 窄契约** — 判据：模块间走窄而明确的接口，不暴露内部实现。
+- [x] **F2 窄契约** — 判据：模块间是否走窄而明确的接口、不暴露内部实现。
   **Rationale**: worktree.json 6 字段是 make-decision（写）与消费 stage（读）之间的唯一接口，字段语义明确、版本固定。core/task-dir-parser.mjs 返回单一字符串（task_tracking_root），调用方不感知内部解析逻辑。符合 F2。
 
 - [x] **F3 物理事实靠机器校验但不阻断** — 判据：物理事实是否机器客观采集且不阻断推进。
-  **Rationale**: worktree 路径存在性（`git worktree list --porcelain`）和字段合法性均由机器校验。校验结果 fail-loud（因为缺失 worktree.json 是硬性阻断前提，非软性质量问题）；close 流程中质量事实（final-test-report warn）不阻断推进（Q2 语义）。符合 F3。
+  **Rationale**: worktree 路径存在性（`git worktree list --porcelain`）和字段合法性均由机器客观采集。worktree.json 缺失时 fail-loud 是入口校验（Q2 入口类）而非质量门阻断；close 流程中 final-test-report warn 不阻断推进（Q1 记录语义）。符合 F3。
 
-- [x] **F4 质量靠异源审查与人而非阻断式质量门** — 判据：质量靠独立审查+人，而非阻断门。
-  **Rationale**: close 流程的 3rd-review 独立审查在 merge 前执行，verdic=pass 才继续，是异源审查门控（非阻断式质量门）。质量事实记录（final-test-report）不阻断推进。符合 F4。
+- [x] **F4 质量靠异源审查与人而非阻断式质量门** — 判据：质量是否靠独立审查+人，而非阻断门。
+  **Rationale**: close 流程的 3rd-review 独立审查（独立上下文，非产出者自审）在 merge 前执行，verdict=pass 才继续。quality 事实（final-test-report）只记录不阻断，由人工决定。符合 F4。
 
-- [x] **F5 人负责最终批准** — 判据：所有不可逆动作必须经过人工确认。
-  **Rationale**: close 流程步骤④不可逆动作序列须 `user_decision=true` 且 3rd-review verdict=pass 后方可执行。build-plan Step 9 人审检查点是硬门控。符合 F5。
+- [x] **F5 gate 谨慎添加出事再补无用则移除** — 判据：关卡是否按需添加、无用即移除，未预先堆砌。
+  **Rationale**: 本 task 新增关卡仅：入口校验（worktree.json 读取时 common + active-only 校验）和 3rd-review 审查门控，均有真实故障场景支撑（ZHI-65 断链）。F10 gate 已过滤所有机制，无预堆基建。符合 F5。
 
-- [x] **F6 失败快而明确** — 判据：失败是否立即暴露、报错明确、不静默吞掉。
-  **Rationale**: worktree.json 缺失时 fail-loud；字段校验不通过时 fail-loud；路径不存在时 fail-loud；分支冲突时 fail-loud。核心契约路径全部采用 fail-loud 语义，无静默降级。符合 F6。
+- [x] **F6 统一外置执行记录** — 判据：进度/指标/回溯是否统一记录、可回溯。
+  **Rationale**: stage-result-verify-code.json 落盘于 task_tracking_root（外置，不在 repo 内）；journal.jsonl / task-metrics.jsonl 亦在 task_tracking_root；3rd-review 证据落盘于 evidence/3rd-review-roundN/。所有过程/追踪类产物统一外置，可回溯。符合 F6。
 
-- [x] **F7 产物落盘可查** — 判据：每个 stage 的产物是否落盘且可独立核查。
-  **Rationale**: worktree.json 落盘于 task_tracking_root；stage-result.json 落盘于 task_tracking_root；3rd-review 证据落盘于 evidence/3rd-review-roundN/；spec/plan/tasks 落盘于 specs/{task-id}/。各类产物路径明确、可独立核查。符合 F7。
+- [x] **F7 推进与不可逆操作不自动越过人** — 判据：推进/不可逆操作是否经人边界确认。
+  **Rationale**: close 流程步骤④不可逆动作序列须 `user_decision=true` 且 3rd-review verdict=pass 后方可执行。build-plan Step 9 人审检查点是硬门控（无超时旁路）。符合 F7。
 
-- [ ] **F8 新功能先有 research** — 判据：是否执行了 Phase 0 research。
-  **Rationale**: research.md 已由 Step 0 spec-research 产出（`specs/worktree-unification/research.md`）。此项为 [x] 应标记符合，但 F8 语义是"无 research 则不可推进"——本 task 已有 research，符合 F8 要求。
-  **修正**：[x] 符合。
+- [x] **F8 简单优先** — 判据：是否选更简单依赖更少的方案、不写掩盖问题的兜底。
+  **Rationale**: simplicity-guard 四阶梯评估：core/task-dir-parser.mjs 改造复用（P2），build-code §17 删除旧 fallback（负成本），其余为必要最小新增（P3）。build-code 旧 fallback 主动删除正是"不写掩盖问题的兜底"。符合 F8。
 
-- [x] **F8 新功能先有 research**（修正）
-  **Rationale**: research.md 已产出，覆盖历史先例（ZHI-65）、现有 codebase 状态、外部最佳实践、已知风险。符合 F8。
+- [x] **F9 可证伪不假绿** — 判据：检查是否在"实际为假"时真报失败、缺数据标未知。
+  **Rationale**: worktree.json common 校验、active-only 校验均在"实际为假"时 fail-loud 真报失败，不静默通过。baseline 5 指标均标注 unknown + 原因（非 0 或 `-` 占位），符合"缺数据标未知"。符合 F9。
 
-- [x] **F9 spec 先于实现** — 判据：功能需求是否先有 spec，再有实现计划。
-  **Rationale**: spec.md 由 build-spec 阶段产出，plan.md 在 spec.md 之后产出。实施步骤均基于 spec 中的 FR 编号。符合 F9。
-
-- [x] **F10 反过度工程** — 判据：是否通过四问门控，删除不必要机制。
-  **Rationale**: F10 gate 在 Implementation Steps 之前已执行（见上方"F10 Anti-Over-Engineering Gate"节）。4 个机制均通过四问，无需移除。符合 F10。
+- [x] **F10 自动化按真实收益添加，不为"机器可校验"本身堆基建** — 判据：自动化是否真实收益大于长期维护成本、不为"机器可校验"本身预堆基建、能实跑的优先实跑。
+  **Rationale**: F10 Anti-Over-Engineering Gate（见上方专节）对 4 个机制逐一回答四问，无需移除任何机制。predecessor 系统教训（~95000 行 gate 代码）已内化为门控标准。符合 F10。
 
 ### 质量门控（Q）
 
-- [x] **Q1 记事实而非阻断** — 判据：工具是否只记录客观事实，不以事实本身阻断流程。
-  **Rationale**: close 流程的质量事实记录（final-test-report warn）不阻断 close，由人工决定是否继续。constitution 检查结果记录但不阻断 stage-result。baseline 偏差记录但不阻断。符合 Q1。
+- [x] **Q1 记事实而非阻断** — 判据：质量事实是否只记录浮现、不阻断推进。
+  **Rationale**: close 流程 final-test-report warn 记录质量事实，不阻断 close，needs_human=true 仅上报；constitution check 结果记录不阻断 stage-result；baseline 偏差记录不阻断。符合 Q1。
 
-- [x] **Q2 质量门是记录型门控** — 判据：质量门是否设计为"记录 + 上报"而非"阻断执行"。
-  **Rationale**: close 流程 verify-code 质量事实未达关闭条件时，记录 warn 并 needs_human=true，不自动阻断（spec §4 边界场景表）。符合 Q2。
+- [x] **Q2 gate 三类划分** — 判据：关卡是否分入口校验/记录采集/人工确认三类、未把记录型做成阻断门。
+  **Rationale**: 入口校验（worktree.json schema 校验）= 入口类；final-test-report warn = 记录采集类（不阻断）；user_decision=true 确认不可逆动作 = 人工确认类。三类划分清晰，记录型未变阻断门。符合 Q2。
 
-- [x] **Q3 异源独立审查** — 判据：审查是否由独立来源（非产出者自身）执行。
-  **Rationale**: close 流程的 3rd-review 由独立上下文执行，产出者（build-code/verify-code）不自审。build-plan 的 plan-reviewer 同样通过 3rd-review 基础设施调用。符合 Q3。
+- [x] **Q3 异源审查加人工把关** — 判据：质量裁决是否由独立来源独立上下文产出、无自审自判。
+  **Rationale**: close 流程 3rd-review 由独立上下文执行（不是 verify-code 自身）；build-plan 的 plan-reviewer 同样通过 3rd-review 基础设施由独立引擎审查。无自审自判。符合 Q3。
 
-### 安全与边界（S）
+### 技能与可复用性（S）
 
-- [x] **S1 最小权限** — 判据：改动是否只请求必要权限，不超范围。
-  **Rationale**: worktree.json 写权限仅限 make-decision（全字段）和 verify-code close（仅 status 字段），其他 stage 只读。core/task-dir-parser.mjs 只读文件系统路径，无写权限。符合 S1。
+- [x] **S1 能用外部就不造轮子** — 判据：通用能力是否优先复用外部、文件直放项目内。
+  **Rationale**: core/task-dir-parser.mjs 改造复用（P2，非重写）；无新引入第三方依赖；git worktree 机制直接使用 git 原生能力（外部）。符合 S1。
 
-- [x] **S2 输入校验** — 判据：外部输入是否校验后再使用。
-  **Rationale**: task-id 归一化规则（转小写、替换非字母数字字符、校验 `^[a-z]+(-[a-z]+){1,2}$`）在 make-decision 阶段执行，不合规则 fail-loud 拒绝。env var 路径存在性校验在 parser 中执行。worktree.json 字段读取前执行 common + active-only 校验。符合 S2。
+- [x] **S2 外部技能可针对项目改造合宪** — 判据：采用的外部技能是否按需改造至合宪。
+  **Rationale**: spec-plan / spec-tasks / spec-analyze 均为从 speckit-* 改造至 workflowhub 宪法合规的内部技能（去 git 分支耦合、task-id 参数化、模板内置）。符合 S2。
 
-- [x] **S3 无隐含共享状态** — 判据：模块间是否通过显式接口通信，无隐含全局状态。
-  **Rationale**: 跨 stage 状态唯一通过 worktree.json（显式文件接口）传递。task_tracking_root 通过 env var 传递（显式环境变量接口）。无隐含内存共享状态。符合 S3。
+- [x] **S3 迭代时保持最新并就地检查** — 判据：迭代时是否查更新/更优、来源路径写进技能文件。
+  **Rationale**: decision-log D1-D5 是本次迭代的上游决策，已引用并在 spec/plan 中标注来源（R1 源自 D1、R7 源自 D5 等）；research.md 记录历史先例和外部最佳实践来源。符合 S3。
 
-- [x] **S4 幂等操作** — 判据：重复运行是否安全（不产生副作用）。
-  **Rationale**: make-decision 的 task 子目录创建设计为幂等（已存在时读取 worktree.json 按 status 处理）。worktree 存在性检测在 make-decision 中执行，复用已注册的 worktree。符合 S4。
+- [x] **S4 自定义技能必须有指标系统** — 判据：自研技能是否配套指标、纳入统一执行记录。
+  **Rationale**: build-plan 阶段通过 metrics/collector.mjs `recordSkeleton` + `updateOwnResult` 记录指标（M4 字段），task-metrics.jsonl 外置于 task_tracking_root。本 task 改动的各 stage SKILL.md 均纳入同一指标体系。符合 S4。
 
-- [x] **S5 错误消息不泄露敏感信息** — 判据：fail-loud 错误消息是否只含路径/状态信息，不含凭证。
-  **Rationale**: 所有 fail-loud 错误消息内容为路径（worktree.json 期望路径）、字段名称、状态值，无凭证、token 或私密数据。符合 S5。
+- [x] **S5 自定义技能方便子代理调用省主上下文** — 判据：自研技能是否便于子代理调用、减少主上下文占用。
+  **Rationale**: spec-plan / spec-tasks / spec-analyze / spec-research 均设计为独立 task-id 参数化调用，主 build-plan 流程调用后只收产物路径摘要，无需主上下文读全文。core/task-dir-parser.mjs 单一字符串返回值，调用方上下文负担最小。符合 S5。
 
-- [x] **S6 不修改他人产物** — 判据：是否只写自己负责的产物，不修改其他 stage 的产物。
-  **Rationale**: 写权限规则（FR-WORKTREE-CONTRACT-001-WRITE）明确限制各 stage 只写自己允许写的字段。build-code/verify-code（除 close）只读 worktree.json，不修改。符合 S6。
+- [x] **S6 自定义技能参考市面方案不闭门造车** — 判据：自研技能是否参考成熟方案优化。
+  **Rationale**: research.md §4 记录了外部生态最佳实践（"谁创建谁清理"、平级目录命名惯例、分支唯一性约束）；task-id slug 规则参考业界 CI/CD 惯例。符合 S6。
 
-- [x] **S7 最小变更** — 判据：是否只改了完成目标必须改的内容。
-  **Rationale**: 改动限于 3 个现有文件修改 + 1 个 close 流程补充，完全对应 spec 中的 FR 范围。无额外重构、无为未来需求预留的扩展点。符合 S7。
+- [x] **S7 一阶段一技能一工作流一文件夹** — 判据：阶段/工作流是否一一对应独立、按目录约定、核心零改可加。
+  **Rationale**: 改动的 4 个文件均在对应阶段目录下（workflows/make-decision/, workflows/build-code/, workflows/verify-code/, core/）；无跨阶段文件混放；新阶段按目录约定添加，核心零改。符合 S7。
 
-- [x] **S8 回滚路径存在** — 判据：是否有明确的回滚或恢复路径。
-  **Rationale**: close 流程的不可逆动作中途失败契约：立即停止，不自动回滚，escalate_to_human，由人工决定后续处理。这是显式的"停止+上报"策略，而非隐式静默。partial-close 恢复状态机不实现（Known Gaps 第 5 条），但该缺口已明确说明。符合 S8（"有明确路径"包括"明确说明不提供自动恢复"）。
+- [x] **S8 自定义技能可独立调用可搬运** — 判据：自研技能是否可独立调用、可跨宿主搬运、不绑死环境。
+  **Rationale**: core/task-dir-parser.mjs 无第三方依赖（FR-TASKDIR-001）；worktree.json 使用标准 JSON 格式；env var + yaml fallback 设计不绑死特定宿主环境（WORKFLOWHUB_TASK_DIR 可在任意环境注入）。符合 S8。
 
 ---
 
