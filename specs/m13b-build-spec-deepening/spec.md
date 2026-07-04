@@ -396,12 +396,12 @@ Spec-Purity grep：本 spec 含代码块（spec-acceptance-count.json 示例）�
 ### 3. 异源 3rd-review 独立审查摘要
 
 - **审查来源**：异源独立引擎（如 codex），独立上下文产出，非自审自判
-- **审查产物路径**：`artifacts/3rd-review-verdict.md`（实际执行时由 SKILL.md 填入）
+- **最新审查结果**：见 `evidence/3rd-review-round7/` 最新结果（历次审查记录见同级各 round 目录）
 
 | 项目 | 结论 | 备注 |
 |------|------|------|
-| verdict | pass | spec 主体为质量事实契约+最小实现，与 decision-log 一致（由异源引擎在独立上下文裁决） |
-| findings | 无执行门语义违规，符合宪法 | 无阻断门，所有检查为记录+浮现，符合 CONSTITUTION F4/F5/F7/F10；由异源 3rd-review 产出，见 `artifacts/3rd-review-verdict.md` |
+| verdict | 见最新 round | 由异源引擎在独立上下文裁决，结论以最新 evidence round 目录为准 |
+| findings | 见最新 round | 产物见 `evidence/3rd-review-round7/`；历次修复记录见对应 round 目录 |
 | 范围覆盖 | 清晰 | IN/OUT 明确，agenthub 阻断机制全部在 OUT 中列出 |
 
 ### 4. 未解风险
