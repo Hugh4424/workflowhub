@@ -14,7 +14,7 @@ source: constitution-checklist.md (21 items, F1-F10, Q1-Q3, S1-S8)
 
 - [x] **F3 物理事实靠机器校验但不阻断** — spec 中所有物理事实（worktree 存在性、分支占用检测、push 发生与否）均要求机器客观校验（git worktree list --porcelain、git log、push 日志）；僵尸检测 fail-loud 但不自动删除，不阻断后续人工判断。metrics 记录失败不阻断推进。符合判据。
 
-- [x] **F4 质量靠异源审查与人而非阻断式质量门** — spec 中质量检查（7条自检、Spec-Purity、scope-triage）均为记录+浮现语义，无任何阻断条件（附录质量事实契约 FR-CONTRACT-001 明确约束）。3rd-review 不可用时记录 not_executed 并降级继续，不自动阻断推进（见 FR-WORKTREE-CLOSE-006 降级路径）。符合判据。
+- [x] **F4 质量靠异源审查与人而非阻断式质量门** — spec 中质量检查（7条自检、Spec-Purity、scope-triage）均为记录+浮现语义，无任何阻断条件（附录质量事实契约 FR-CONTRACT-001 明确约束）。3rd-review 属于 close 前置审查门，不可用时不允许继续执行 merge/push/删分支等不可逆动作，须 needs_human=true + escalate_to_human 等人工确认；这符合 F4（质量裁决由人工做，非自动阻断，但也不绕过人强行推进不可逆操作）。符合判据。
 
 - [x] **F5 gate 谨慎添加出事再补无用则移除** — 本 spec 未新增任何质量门；现有 fail-loud 均为边界校验（入口校验类），不是新增阻断门。push 门控复用 verify-code 已有 gate，不另立新 gate。符合判据。
 
@@ -32,11 +32,11 @@ source: constitution-checklist.md (21 items, F1-F10, Q1-Q3, S1-S8)
 
 ## Quality Principles (Q1–Q3)
 
-- [x] **Q1 记事实而非阻断** — 质量事实契约（附录 FR-CONTRACT-001）明确约束全部 5 项为"记录+浮现"语义，禁止任何"若未通过则停止"语义。自检 warn、scope-triage 命中均只记录，不阻断推进。3rd-review 不可用（not_executed）时降级继续，记录 status=not_executed；只有在 3rd-review 执行并返回 revise_required 时才阻止 merge 不可逆动作（此为执行结果驱动，非质量门阻断）。符合判据。
+- [x] **Q1 记事实而非阻断** — 质量事实契约（附录 FR-CONTRACT-001）明确约束全部 5 项为"记录+浮现"语义，禁止任何"若未通过则停止"语义。自检 warn、scope-triage 命中均只记录，不阻断推进。3rd-review 不可用（not_executed）时，将 status=not_executed 记录为质量事实，然后 needs_human=true + escalate_to_human 等人工决定是否继续——记录事实是机器职责，继续 merge 还是人工重试 3rd-review 是人的决定，不由机器自动放行。符合判据。
 
 - [x] **Q2 gate 三类划分** — spec 中的关卡按三类组织：(1) 入口校验：worktree.json 存在性检查、WORKFLOWHUB_TASK_DIR 解析（fail-loud 但属入口边界，非推进门）；(2) 记录采集：per-stage commit 消息、metrics 记录、质量事实契约；(3) 人工确认：push/merge/branch-delete/worktree-remove 的 user_decision 门控。无把记录型做成阻断门的情况。符合判据。
 
-- [x] **Q3 异源审查加人工把关** — spec 要求 3rd-review 由异源引擎在独立上下文产出 verdict（FR-WORKTREE-CLOSE-006 §③）；3rd-review 不可用时降级为 status=not_executed 并继续推进（graceful downgrade，不阻断），因为无结果无法做质量裁决，由人工在 merge gate 把关；3rd-review 执行后 verdict=revise_required 则阻止不可逆 merge 动作并 escalate_to_human，不自审自判。两条路径均不自动越过人。符合判据。
+- [x] **Q3 异源审查加人工把关** — spec 要求 3rd-review 由异源引擎在独立上下文产出 verdict（FR-WORKTREE-CLOSE-006 §③）；3rd-review 不可用时记录 status=not_executed，不得自动放行继续 merge，须 needs_human=true + escalate_to_human 由人决定是否继续；3rd-review 执行后 verdict=pass 才允许进入不可逆动作，verdict=revise_required 则阻止并 escalate_to_human，不自审自判。两条路径均不自动越过人做不可逆操作。符合判据。
 
 ---
 

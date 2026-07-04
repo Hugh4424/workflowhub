@@ -155,12 +155,12 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 
 
 commit message 中括号内的标识符有两类：
-- **stage 级提交**：标识符为固定枚举之一：`make-decision`、`build-spec`、`build-plan`、`build-code`、`verify-code`、`close`；格式 `workflowhub(<stage>): <描述>`
+- **stage 级提交**：标识符为固定枚举之一：`make-decision`、`build-spec`、`build-plan`、`build-code`、`verify-code`；格式 `workflowhub(<stage>): <描述>`
 - **phase 级提交**：标识符格式为 `<stage>/<phase-name>`，其中 stage 取上述固定枚举，phase-name 在各 stage SKILL.md 中定义（如 build-code 的 phase 1 写为 `workflowhub(build-code/phase-1): <描述>`）
 
 两类互不混用：纯 stage 提交不含斜杠，phase 提交必须带 `<stage>/` 前缀。
 
-close 归档 commit 仅包含将 `specs/{task-id}/` 移入 `specs/archive/{task-id}/` 的变更（spec 目录移入归档），message 格式固定为 `workflowhub(close): archive {task-id}`。worktree 目录清理是仓库外操作，不属于此 commit 内容，在归档 commit 之后作为独立清理步骤执行（见 FR-WORKTREE-PUSH-005 步骤 4）。
+**close 归档 commit（verify-code 收尾子步骤，非独立 stage）**：close 不是 pipeline 的第六个 stage（decision-log D5/D6 未批准此定义），而是 verify-code 最后不可逆动作序列的第一步。归档 commit 仅包含将 `specs/{task-id}/` 移入 `specs/archive/{task-id}/` 的变更，message 格式固定为 `workflowhub(close): archive {task-id}`（使用 `close` 作为子步骤标识符，不列入 stage 枚举）。worktree 目录清理是仓库外操作，不属于此 commit 内容，在归档 commit 之后作为独立清理步骤执行（见 FR-WORKTREE-PUSH-005 步骤 4）。
 
 **验收标准**（per-stage/per-phase 级别，不限于 build-code）：每个产生文件变更的 stage 完成后，`git log --oneline` 中须存在至少一条 `workflowhub(<stage>):` 前缀的 commit；build-code 内每个 phase 完成后须存在对应 `workflowhub(build-code/<phase-name>):` 前缀的 commit；若某 stage/phase 无文件变更，须在 stage-result 或 journal 中明确记录"无变更"原因，不得静默跳过；close 归档 commit 独立存在且 message 格式符合 `workflowhub(close): archive {task-id}` 规定。
 
@@ -173,7 +173,7 @@ close 归档 commit 仅包含将 `specs/{task-id}/` 移入 `specs/archive/{task-
 | build-plan | build-plan.md 等计划产物 | stage-result.missing_items | 通常必有变更 |
 | build-code | 每个 phase（phase-name 由各 SKILL.md 定义）均独立计 | stage-result.facts 或 journal 的 no_change_reason | phase 数量由 build-code/SKILL.md 版本决定，审查时以当时 SKILL.md 为准 |
 | verify-code | 验证产物（test-report、evidence）如写入仓库则计入 | stage-result.missing_items | 若 evidence 写在 task_tracking_root 仓库外，本 stage 可无仓库 commit |
-| close | 归档 commit（git mv specs/{task-id}/ specs/archive/{task-id}/） | 不允许无变更跳过，归档 commit 是收尾必要步骤 | message 格式固定 |
+| verify-code（close 子步骤） | 归档 commit（git mv specs/{task-id}/ specs/archive/{task-id}/），属于 verify-code 不可逆动作序列第①步 | 不允许无变更跳过，归档 commit 是收尾必要步骤 | message 格式固定为 `workflowhub(close): archive {task-id}`；close 不是独立 stage，归属于 verify-code 范畴 |
 
 ### FR-WORKTREE-PUSH-005：push 仅在 verify-code 收尾执行
 
@@ -312,6 +312,8 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | close 部分执行 | worktree 或分支未清理即报告 success，后续任务占用同名资源 | 中 |
 | pre-merge 3rd-review gate（已消除 post-close 风险） | 原 close 流程曾在 merge 后执行 3rd-review，此时 main 已含问题代码不可回滚；本 spec 将 3rd-review 前移到 merge 之前（FR-WORKTREE-CLOSE-006 步骤③），revise_required 时阻止 merge，彻底消除该高风险场景 | 已消除 |
 
+| task-id 规范化拒绝 | make-decision 引入严格两步归一化（D3：转小写→连字符→校验 `^[a-z]+(-[a-z]+){1,2}$`）；不符合格式的输入（如含大写、特殊字符、单词数不足/过多）被 fail-loud 拒绝，用户看到明确错误提示，须修正 task-id 后重新运行 make-decision；已有任务若 task-id 不合规需人工重建 task-id（无自动迁移）。 | 中 |
+
 受影响的下游 stage：build-spec（读 target_repo_root）、build-plan（读 target_repo_root）、build-code（读全量 worktree.json）、verify-code（close 写 status=cleaned）。
 
 ---
@@ -344,6 +346,16 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - Given: 目标分支已被另一个 worktree 持有
 - When: make-decision 执行 worktree 创建前校验
 - Then: 输出明确错误说明分支冲突，不自动强制覆盖，停止执行
+
+**场景 B — D3 task-id 不合规拒绝**
+- Given: 用户输入 task-id 为 `My_Feature123`（含大写和数字）
+- When: make-decision 执行两步归一化（转小写→连字符替换→合并→去首尾）后得到 `my-feature-123`，校验 `^[a-z]+(-[a-z]+){1,2}$` 失败（含数字词段 `123`）
+- Then: fail-loud 拒绝，输出明确错误说明不合规原因，不继续执行 worktree 创建；用户须修正 task-id 后重新运行
+
+**场景 C — D3 task-id 兼容归一化**
+- Given: 用户输入 task-id 为 `Worktree Unification`（含大写和空格）
+- When: make-decision 执行归一化：转小写 → `worktree unification`，空格替换为连字符 → `worktree-unification`，校验 `^[a-z]+(-[a-z]+){1,2}$` 通过（2个纯小写词）
+- Then: 使用归一化结果 `worktree-unification` 作为 task-id，继续执行后续步骤
 
 ### FR-WORKTREE-ENVVAR-003
 

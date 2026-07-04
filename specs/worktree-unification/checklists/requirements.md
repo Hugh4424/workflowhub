@@ -7,34 +7,34 @@ source-spec: specs/worktree-unification/spec.md
 
 ## 产品可读性
 
-- [ ] 无实现细节泄露（无编程语言、框架、API 名称）
-- [ ] 聚焦用户价值与业务需求
-- [ ] 非技术干系人可读
-- [ ] 所有必填章节已完成
+- [x] 无实现细节泄露（无编程语言、框架、API 名称）— spec 以 git 命令为必要操作工具，非实现框架泄露；所有 FR 描述业务行为
+- [x] 聚焦用户价值与业务需求 — FR 聚焦 worktree 生命周期管理、commit 追溯、close 安全收尾
+- [x] 非技术干系人可读 — §1 速读卡、§7 非目标均为业务语言描述
+- [x] 所有必填章节已完成 — §1概述/速读卡、§3 FR、§5 成功标准、§6 影响范围、§7 非目标、§8 场景均已完成
 
 ## 需求完整性
 
 - [x] 所有 [NEEDS CLARIFICATION] 标记已解决（Q1/Q2 均已在 spec.md §6 标记 [RESOLVED] 并附消解依据）
-- [ ] 所有功能需求可测试、无歧义
-- [ ] 成功标准可度量
-- [ ] 成功标准不含实现细节
-- [ ] 所有验收场景已定义
-- [ ] 边界情况已标识
-- [ ] 范围已明确界定（Non-Goals 章节存在）
-- [ ] 依赖和假设已记录
+- [x] 所有功能需求可测试、无歧义 — 每个 FR 均有明确 Given/When/Then 场景，含 fail-loud 条件
+- [x] 成功标准可度量 — §5 成功标准列出 9 条可执行验收项，每条均有具体可观测结果
+- [x] 成功标准不含实现细节 — 验收标准以文件存在/git log/worktree list 输出为检查依据，不指定语言框架
+- [x] 所有验收场景已定义 — §8 Given/When/Then 覆盖全部 9 个 FR（CONTRACT-001 ~ SCOPE-009）
+- [x] 边界情况已标识 — 僵尸 worktree、双缺失 task_dir、occupied 分支、partial-close 失败均有场景
+- [x] 范围已明确界定（Non-Goals 章节存在）— §7 非目标明确排除经验提取、多仓库并发、自动修复僵尸
+- [x] 依赖和假设已记录 — §6 影响范围列出下游 stage 依赖，§2 背景列出假设（D1-D6 decision-log）
 
 ## 功能就绪
 
-- [ ] FR-WORKTREE-CONTRACT-001：worktree.json 契约字段完整定义，有验收标准
-- [ ] FR-WORKTREE-MAKEDECISION-002：make-decision D1-D5 规则章节，有验收标准
-- [ ] FR-WORKTREE-ENVVAR-003：环境变量优先级规则，有具体验收场景
-- [ ] FR-WORKTREE-COMMIT-004：per-stage commit 规则，有验收标准
-- [ ] FR-WORKTREE-PUSH-005：push 仅 verify-code 收尾执行，有验收标准
-- [ ] FR-WORKTREE-CLOSE-006：close 流程四步完整性，有验收标准
-- [ ] FR-WORKTREE-FAILLOUD-007：僵尸检测 fail-loud，有验收标准
-- [ ] 用户场景覆盖主要流程（全流程断链修复场景）
-- [ ] 功能满足成功标准中定义的可度量目标
-- [ ] 无实现细节泄漏进规格书
+- [x] FR-WORKTREE-CONTRACT-001：worktree.json 契约字段完整定义，有验收标准 — 6 字段（branch/worktree_path/task_id/target_repo_root/created_at/status）已定义，验收标准要求文件存在且全部字段可查
+- [x] FR-WORKTREE-MAKEDECISION-002：make-decision D1-D5 规则章节，有验收标准 — R1-R7 规则（含 D1 task_dir 读取、D2 target_repo_root 固化、D3 task-id 规范化、D4 冲突检测、D5 commit 责任）均已定义，验收标准要求 SKILL.md 中存在独立 worktree 章节
+- [x] FR-WORKTREE-ENVVAR-003：环境变量优先级规则，有具体验收场景 — 三场景（env 优先/yaml fallback/双缺失 fail-loud）均已定义
+- [x] FR-WORKTREE-COMMIT-004：per-stage commit 规则，有验收标准 — 5-stage 枚举、phase 级提交规则、commit 覆盖矩阵（6行分母）、no-change 记录要求均已定义
+- [x] FR-WORKTREE-PUSH-005：push 仅 verify-code 收尾执行，有验收标准 — 8 步线性序列已定义，push gate 要求 user_decision=true，验收标准含 push 未发生场景
+- [x] FR-WORKTREE-CLOSE-006：close 流程四步完整性，有验收标准 — 五步（入口校验/质量事实/3rd-review/不可逆动作/stage-result）已定义，含 pre-merge revise_required 契约和 partial-close 失败契约
+- [x] FR-WORKTREE-FAILLOUD-007：僵尸检测 fail-loud，有验收标准 — 定义僵尸目录场景（路径存在未注册）、fail-loud 不自动删除、场景 A/B 已补齐
+- [x] 用户场景覆盖主要流程（全流程断链修复场景）— §8 场景覆盖 contract/makedecision/envvar/commit/push/close/failloud/scope-008/scope-009
+- [x] 功能满足成功标准中定义的可度量目标 — 每个 FR 验收标准与 §5 成功标准逐条对应
+- [x] 无实现细节泄漏进规格书 — git 命令作为观测手段（`git worktree list --porcelain`），非实现语言；已核查无 Node.js/Python/框架名称
 
 ## 待澄清事项（NEEDS CLARIFICATION）
 
