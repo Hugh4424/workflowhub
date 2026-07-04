@@ -12,7 +12,7 @@ skill: spec-specify (adapted from speckit-specify)
 
 **档位：B 档（中等）**
 
-理由：本任务跨越 3 个模块（make-decision/SKILL.md、build-code/SKILL.md §17、core/task-dir-parser.mjs），引入一个新的跨阶段契约（worktree.json），变更环境变量优先级规则，以及调整 commit/push 策略和 close 流程。改动面跨模块但均在 workflowhub 系统边界内，无新引入外部依赖，非破坏性变更（向后兼容 fallback 保留）。
+理由：本任务跨越 3 个模块（make-decision/SKILL.md、build-code/SKILL.md §17、core/task-dir-parser.mjs），引入一个新的跨阶段契约（worktree.json），变更环境变量优先级规则，以及调整 commit/push 策略和 close 流程。改动面跨模块但均在 workflowhub 系统边界内，无新引入外部依赖。**向后兼容澄清**：task_dir 的 yaml fallback 保留（D1 决策）；但 build-code §17 旧"worktree.json 缺失时自动创建 worktree"fallback 路径被明确废除，改为 fail-loud+escalate_to_human（见 FR-WORKTREE-ENVVAR-003 和 scope 第 8 条）。这是有意为之的行为破坏，确保契约不被绕过。
 
 需完整三层 spec（功能描述 / 验收标准 / 边界场景）。
 
@@ -163,6 +163,17 @@ commit message 中括号内的标识符有两类：
 close 归档 commit 仅包含将 `specs/{task-id}/` 移入 `specs/archive/{task-id}/` 的变更（spec 目录移入归档），message 格式固定为 `workflowhub(close): archive {task-id}`。worktree 目录清理是仓库外操作，不属于此 commit 内容，在归档 commit 之后作为独立清理步骤执行（见 FR-WORKTREE-PUSH-005 步骤 4）。
 
 **验收标准**（per-stage/per-phase 级别，不限于 build-code）：每个产生文件变更的 stage 完成后，`git log --oneline` 中须存在至少一条 `workflowhub(<stage>):` 前缀的 commit；build-code 内每个 phase 完成后须存在对应 `workflowhub(build-code/<phase-name>):` 前缀的 commit；若某 stage/phase 无文件变更，须在 stage-result 或 journal 中明确记录"无变更"原因，不得静默跳过；close 归档 commit 独立存在且 message 格式符合 `workflowhub(close): archive {task-id}` 规定。
+
+**commit 覆盖矩阵**（分母定义，验收时按此表逐行核查）：
+
+| stage | commit 分母来源 | 无变更记录字段 | 备注 |
+|---|---|---|---|
+| make-decision | 目标仓库内产生的初始化文件变更 | stage-result.missing_items 或 journal | worktree.json 在仓库外，不计入 |
+| build-spec | spec.md + checklists/ 等 spec 产物 | stage-result.missing_items | 通常必有变更 |
+| build-plan | build-plan.md 等计划产物 | stage-result.missing_items | 通常必有变更 |
+| build-code | 每个 phase（phase-name 由各 SKILL.md 定义）均独立计 | stage-result.facts 或 journal 的 no_change_reason | phase 数量由 build-code/SKILL.md 版本决定，审查时以当时 SKILL.md 为准 |
+| verify-code | 验证产物（test-report、evidence）如写入仓库则计入 | stage-result.missing_items | 若 evidence 写在 task_tracking_root 仓库外，本 stage 可无仓库 commit |
+| close | 归档 commit（git mv specs/{task-id}/ specs/archive/{task-id}/） | 不允许无变更跳过，归档 commit 是收尾必要步骤 | message 格式固定 |
 
 ### FR-WORKTREE-PUSH-005：push 仅在 verify-code 收尾执行
 
@@ -354,9 +365,9 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 ### FR-WORKTREE-COMMIT-004
 
 **场景 A — per-stage commit 可追溯**
-- Given: build-code 完整跑完多个 stage
-- When: 检查提交历史
-- Then: 每个 stage 至少对应一条包含 stage 名称的提交记录，无跨 stage 合并提交
+- Given: build-code 完整跑完多个 stage，其中部分 stage/phase 产生文件变更，部分无变更
+- When: 检查提交历史和 stage-result/journal
+- Then: 产生文件变更的 stage 至少对应一条包含 stage 名称的提交记录，无跨 stage 合并提交；无文件变更的 stage/phase 在 stage-result 或 journal 中存在"无变更"原因记录，不得静默跳过，不得创建空 commit
 
 ### FR-WORKTREE-PUSH-005
 
