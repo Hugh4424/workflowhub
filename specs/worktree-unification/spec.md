@@ -188,6 +188,16 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ---
 
+### FR-WORKTREE-SCOPE-009：repo specs/ 与 task_dir 的存放边界
+
+`specs/{task-id}/` 目录（仓库内）只允许存放交付物文件：spec.md、plan.md、tasks.md。禁止存放过程/追踪类文件。
+
+`task_dir/{task-id}/`（仓库外，WORKFLOWHUB_TASK_DIR 指向）存放过程/追踪类文件：decision-log.md、journal.jsonl、task-metrics.jsonl、3rd-review 审查证据（evidence/3rd-review-roundN/...）。
+
+**验收标准**：审查任一 stage 产出时，`git status`/`git show` 中 specs/{task-id}/ 下不得出现 evidence/ 或其他非 spec/plan/tasks 文件；3rd-review 证据文件必须能在 `{task_dir}/{task-id}/evidence/` 下找到。
+
+---
+
 ### FR-WORKTREE-FAILOUD-007：僵尸检测 fail-loud
 
 `git worktree list --porcelain` 校验逻辑在检测到以下情况时须 fail-loud，不自动删除：

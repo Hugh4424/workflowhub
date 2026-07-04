@@ -11,12 +11,12 @@
     "constitution_check": "specs/worktree-unification/constitution-check.md",
     "baseline_report": "specs/worktree-unification/baseline-report.md",
     "human_brief": "specs/worktree-unification/human-brief.md",
-    "review_evidence": "tasks/worktree-unification/evidence/3rd-review-round5/tasks/spec-20260704T070533Z-2bf344"
+    "review_evidence": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/worktree-unification/evidence/3rd-review-round5/tasks/spec-20260704T070533Z-2bf344"
   },
   "review_summary": {
     "rounds": 5,
     "final_verdict": "pass",
-    "final_round_verdict_file": "specs/worktree-unification/evidence/3rd-review-round5/tasks/spec-20260704T070533Z-2bf344/reviews/verdict-round-2.json",
+    "final_round_verdict_file": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/worktree-unification/evidence/3rd-review-round5/tasks/spec-20260704T070533Z-2bf344/reviews/verdict-round-2.json",
     "provider": "codex",
     "trueCrossEngine": true
   },
