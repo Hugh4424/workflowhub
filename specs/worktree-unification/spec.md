@@ -52,7 +52,7 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 |------|------|
 | worktree.json | 跨 stage 共享的 worktree 状态契约文件，存储在 `{{task_tracking_root}}/tasks/{task-id}/` 下 |
 | task_dir | `{{task_tracking_root}}/tasks` 的缩写，仅供行文简称；规范路径表达统一使用 `{{task_tracking_root}}/tasks/{task-id}/...`，不使用 `{task_dir}/{task-id}/...` |
-| WORKFLOWHUB_TASK_DIR | 环境变量，其值等于 `{{task_tracking_root}}`（即 task tracking root 本身，不含 `/tasks` 子路径）；parser 读取该变量后将其作为 tracking root，再拼接 `/tasks/{task-id}/`，不做额外推断 |
+| WORKFLOWHUB_TASK_DIR | 环境变量，其值等于 `{{task_tracking_root}}`（即 task tracking root 本身，不含 `/tasks` 子路径）；parser 读取该变量后直接返回 task_tracking_root 本身，**不做 `/tasks/{task-id}` 拼接**；拼接动作由各 stage 调用方自行执行 |
 | target_repo_root | 目标仓库的根路径，由 make-decision 在当前会话 cwd 上下文首次探测并固化写入 worktree.json；后续 stage 从 worktree.json 读取，禁止重新探测或重新推导 |
 | worktree_root | 实际创建的 worktree 目录路径 |
 | push_policy | 推送策略：push 仅在 verify-code close 阶段人工确认后执行一次（close 命令级序列中） |
@@ -118,7 +118,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 - R2（源自 decision-log D2）：目标仓库路径（target_repo_root）探测与固化规则 —— make-decision 在当前会话 cwd 上下文首次探测并做存在性校验，写入 worktree.json 并标注不可覆盖；后续所有 stage 只读该字段，禁止重新探测；字段缺失时 escalate_to_human
 - R3（设计延伸，非 decision-log 直接定义）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（两到三个小写英文单词，连字符分隔，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
 - R4（设计延伸）：worktree 创建时机（make-decision 阶段末尾，task 子目录创建成功后）
-- R5（源自 decision-log D2 字段定义部分）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
+- R5（源自 decision-log 验收标准 1；其中 `target_repo_root` 固化规则源自 D2）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
 - R6（源自 decision-log D4）：worktree 存在性/冲突检测规则 —— 用 `git worktree list --porcelain` 作为唯一权威校验；已注册且路径存在则复用；路径存在未注册（僵尸目录）则 fail-loud，不自动删除；分支已被其他 worktree 占用则 fail-loud，报告占用详情，不强制 checkout
 - R7（源自 decision-log D5）：make-decision stage 完成时 commit 规则 —— 若本 stage 对目标仓库（target_repo_root 下）产生了文件变更（如初始化文件），须 commit，commit message 格式为 `workflowhub(make-decision): <描述>`；worktree.json 本身存储在 task_tracking_root（仓库外，见 FR-WORKTREE-SCOPE-009），不属于此 commit 范围，不受 git 管理；若 make-decision 阶段在目标仓库内无文件变更，须在 stage-result 或 journal 中明确记录"无 repo 内变更"原因，不得静默跳过
 
@@ -193,7 +193,7 @@ close 流程须包含以下步骤，**严格按以下顺序**执行，无遗漏�
 
 **pre-merge revise_required 契约**：3rd-review 在不可逆动作之前执行，若 verdict=revise_required：① **不执行 merge、不删分支、不 push**（不可逆动作全部跳过）；② 将 findings 写入 stage-result.json，记录 `review_status=revise_required` 及具体 finding 列表；③ 将 needs_human 置为 true 并列明所有 findings；④ escalate_to_human，等待人工确认修复后重新走 3rd-review（重新从步骤③开始）；⑤ 人工确认修复完成且 3rd-review verdict=pass 后，方可继续步骤④不可逆动作。此路径确保问题在不可逆动作前被阻止，不留歧义。
 
-**不可逆动作中途失败契约**：步骤④ 8 步序列中若某步失败，立即停止，不自动回滚已执行的步骤，不跳过后续步骤；在 stage-result.json 中记录失败步骤编号和错误信息；needs_human=true，escalate_to_human，等待人工决定后续处理（补全还是回退）；允许人工确认后从失败步骤重试（幂等步骤），非幂等步骤须人工确认已安全后再执行。
+**不可逆动作中途失败契约**：步骤④ 8 步序列中若某步失败，立即停止，不自动回滚已执行的步骤，不跳过后续步骤；在 stage-result.json 中记录失败步骤编号和错误信息；needs_human=true，escalate_to_human，等待人工决定后续处理（补全还是接受现状）。**不提供自动重试或部分恢复机制**（partial-close 恢复状态机在 decision-log D1-D6 中无对应决策，本任务不实现，见 Known Gaps 第 5 条）。
 
 **验收标准**：close 流程中，3rd-review 独立审查在 merge 之前完成；verdict=pass 才允许执行 merge + 分支清理；verdict=revise_required 时 merge 未发生、分支未删除、stage-result.json 中 review_status=revise_required 且 needs_human=true 可查，并已 escalate_to_human；close 成功完成后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；stage-result.json 在 `{{task_tracking_root}}/tasks/{task-id}/` 下可查且含 verdict 字段；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
@@ -299,7 +299,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | 分支污染 | 僵尸分支未清理，下一次同名任务启动时产生冲突，须人工介入 | 中 |
 | push 时机失控 | 中间 stage 提前 push，main 分支收到未经验证代码 | 高 |
 | close 部分执行 | worktree 或分支未清理即报告 success，后续任务占用同名资源 | 中 |
-| post-close 3rd-review revise_required | 3rd-review 在 merge/删分支/清 worktree 完成后执行，此时 main 已含问题代码且不可回滚；须人工决定补 commit 还是接受现状，恢复成本高 | 高 |
+| pre-merge 3rd-review gate（已消除 post-close 风险） | 原 close 流程曾在 merge 后执行 3rd-review，此时 main 已含问题代码不可回滚；本 spec 将 3rd-review 前移到 merge 之前（FR-WORKTREE-CLOSE-006 步骤③），revise_required 时阻止 merge，彻底消除该高风险场景 | 已消除 |
 
 受影响的下游 stage：build-spec（读 target_repo_root）、build-plan（读 target_repo_root）、build-code（读全量 worktree.json）、verify-code（close 写 status=cleaned）。
 
@@ -466,7 +466,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | 2 | 所有 FR 使用 FR-{DOMAIN}-NNN 格式 | pass | FR-WORKTREE-CONTRACT-001 ~ FR-WORKTREE-FAILLOUD-007，格式符合 |
 | 3 | 每个 FR 至少有一条 Given/When/Then 场景 | pass | §8 已补齐全部 9 个 FR 的场景（含 SCOPE-008、SCOPE-009） |
 | 4 | 五章硬门完整（速读卡/FR/不做/验收/影响范围） | pass | §1 概述充当速读卡，§3 FR，§7 非目标，§5 成功标准，§6 影响范围 |
-| 5 | spec↔decision-log 覆盖率（FR-ALIGN-001） | pass | decision-log D1-D6、验收标准 1-9 均在 FR 中有对应条目：D1→FR-WORKTREE-ENVVAR-003、D2→FR-WORKTREE-CONTRACT-001+MAKEDECISION-002(R1/R4)、D3→FR-WORKTREE-MAKEDECISION-002(R2)、D4→FR-WORKTREE-MAKEDECISION-002(R5)+FAILLOUD-007、D5→FR-WORKTREE-COMMIT-004+PUSH-005、D6→FR-WORKTREE-CLOSE-006+SCOPE-008 |
+| 5 | spec↔decision-log 覆盖率（FR-ALIGN-001） | pass | decision-log D1-D6、验收标准 1-9 均在 FR 中有对应条目：D1→FR-WORKTREE-ENVVAR-003（task_dir 机制/R1）、D2→FR-WORKTREE-CONTRACT-001+MAKEDECISION-002(R2，target_repo_root 探测固化)、D3→FR-WORKTREE-MAKEDECISION-002(R3，task-id 规范化)、D4→FR-WORKTREE-MAKEDECISION-002(R6，worktree 存在性冲突检测)+FAILLOUD-007、D5→FR-WORKTREE-COMMIT-004+PUSH-005、D6→FR-WORKTREE-CLOSE-006+SCOPE-008/009 |
 | 6 | 无 [NEEDS CLARIFICATION] 残留 | pass | Q1/Q2 均已标记 [RESOLVED] 并附消解依据 |
 | 7 | Known Gaps 段存在 | pass | §9 已添加 |
 | Purity | Spec-Purity grep | pass（口径修正） | FR 正文不含实现命令行（`&&`、`$VAR`、shell 管道）；正文中出现的命令级表达（如 `git worktree list`、`git log main --merges`）均作为"验收观察点"（用于描述可检测的外部状态），不属于 FR 内嵌 shell 脚本，符合 spec 可证伪原则；Markdown 表格 `\|` 为 false positive，不计 |
