@@ -118,7 +118,9 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{task_dir}/{ta
     "cleaned_status_written": false
   }
   ```
-  重入时：先读取 close-progress.json，再 cross-check 各标记对应的 git 实际状态（如 `merged_main=true` 但 merge commit 不在 main 历史中，则视为标记错误，fail-loud）；cross-check 还须比对 hash/path 字段与实际 git 状态（如 `archive_commit_hash` 须存在于 git log、`merge_commit_hash` 须在 main 历史中、`worktree_root`/`branch`/`target_repo_root` 须与当前 worktree.json 及 git 状态一致）；仅当标记与实际状态均一致时，跳过已完成步骤，从第一个 false 标记处继续执行。
+  重入时：先读取 close-progress.json，再 cross-check 各标记对应的 git 实际状态（如 `merged_main=true` 但 merge commit 不在 main 历史中，则视为标记错误，fail-loud）；cross-check 还须比对 hash/path 字段与实际 git 状态（如 `archive_commit_hash` 须通过 `git cat-file -e <hash>^{commit}` 验证对象可达，且须出现在 `git log --all` 中；`merge_commit_hash` 须在 `git log main` 历史中；`worktree_root`/`branch`/`target_repo_root` 须与当前 worktree.json 及 git 状态一致；任何 hash 字段不可达时视为标记无效，fail-loud，不跳过对应步骤）；仅当标记与实际状态均一致时，跳过已完成步骤，从第一个 false 标记处继续执行。
+
+**close-progress.json 写权限规则**：close-progress.json 仅允许由 verify-code 的 close 子流程在 `user_decision=true` 确认后创建或更新。每个步骤字段的写入必须在对应命令执行成功且验证通过后方可进行，禁止预先写入或批量写入。任何其他 stage（包括 make-decision、build-spec、build-plan、build-code）在任何时间点写入或修改 close-progress.json，必须 fail-loud 中止并报告写入者非法。user_decision=true 确认之前（即用户尚未批准 close 操作时），任何对 close-progress.json 的写入亦必须 fail-loud。
 
 **cleaned-only 校验**（status=cleaned 时执行，替代 active-only）：
 - 仅执行 common schema 校验（6 字段存在、类型、值域）
@@ -165,6 +167,8 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 
 build-code 流程中，每个 stage 或 phase 完成后，每个原子提交的 commit message 须包含 stage 名称前缀（格式：`workflowhub(<stage-name>): <描述>`），使提交记录可追溯到具体 stage。不额外制造阶段级空提交（即不使用 `git commit --allow-empty` 作为 stage marker）——原子提交本身承担 stage 标记职责。
 
+**make-decision 豁免**：make-decision stage 明确豁免于本条非空 commit 要求。make-decision 的唯一输出物（worktree.json、decision-log.md）写入 `task_dir/{task-id}/`（仓库外），而 FR-WORKTREE-SCOPE-009 规定 `specs/{task-id}/` 仅存放 spec.md/plan.md/tasks.md，make-decision 无合法的仓库内文件可提交。其跨 stage 产物可追溯性通过 task_dir 下的 worktree.json 保证，无需 repo commit。
+
 commit message 中括号内的标识符有两类：
 - **stage 级提交**：标识符为固定枚举之一：`make-decision`、`build-spec`、`build-plan`、`build-code`、`verify-code`、`close`；格式 `workflowhub(<stage>): <描述>`
 - **phase 级提交**：标识符格式为 `<stage>/<phase-name>`，其中 stage 取上述固定枚举，phase-name 在各 stage SKILL.md 中定义（如 build-code 的 phase 1 写为 `workflowhub(build-code/phase-1): <描述>`）
@@ -204,7 +208,12 @@ close 流程须包含以下步骤，无遗漏：
 
 ### FR-WORKTREE-SCOPE-008：build-spec / build-plan 不创建 worktree
 
-build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 worktree.json，只读取 worktree.json 中的 `target_repo_root` 字段作为仓库根路径定位依据。若字段缺失或 worktree.json 不存在，须 fail-loud，报错路径，不静默降级。
+build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 worktree.json，路径定位规则如下：
+
+- **使用 `target_repo_root`**：当 stage 需要定位主仓库根目录（执行 git 操作、读取仓库级配置）时，读取 worktree.json 中的 `target_repo_root` 字段；若字段缺失或 worktree.json 不存在，须 fail-loud，不静默降级。
+- **使用 `worktree_root`**：当 stage 需要写入交付物（spec.md、plan.md、tasks.md 等）时，路径为 `worktree_root` + `specs/{task-id}/`，即写入任务 worktree 目录而非主仓库根；`worktree_root` 同样从 worktree.json 读取，缺失时 fail-loud。
+
+二者不可混用：在主仓库执行 git 命令时用 `target_repo_root`，在任务 worktree 写文件时用 `worktree_root`。
 
 **验收标准**：在 build-spec 和 build-plan 阶段，git worktree list 的条目数量与进入该阶段前一致（无新增 worktree）；worktree.json 缺失时 stage 输出明确错误且退出码非零。
 
@@ -222,7 +231,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ---
 
-### FR-WORKTREE-FAILOUD-007：僵尸检测 fail-loud
+### FR-WORKTREE-FAILLOUD-007：僵尸检测 fail-loud
 
 `git worktree list --porcelain` 校验逻辑在检测到以下情况时须 fail-loud，不自动删除：
 
@@ -364,7 +373,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - When: 执行 close 流程
 - Then: spec 已归档至 specs/archive/{task-id}/，worktree 目录不复存在，分支已从本地和远端删除，merge commit 可在主线提交历史中查到
 
-### FR-WORKTREE-FAILOUD-007
+### FR-WORKTREE-FAILLOUD-007
 
 **场景 A — 僵尸 worktree**
 - Given: git 记录中存在一个目录已不存在的 worktree 条目
@@ -409,7 +418,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | # | 自检项 | 结果 | 说明 |
 |---|--------|------|------|
 | 1 | spec-ladder 档位已声明且有依据 | pass | 序言中明确标注 B 档，给出三模块跨越理由 |
-| 2 | 所有 FR 使用 FR-{DOMAIN}-NNN 格式 | pass | FR-WORKTREE-CONTRACT-001 ~ FR-WORKTREE-FAILOUD-007，格式符合 |
+| 2 | 所有 FR 使用 FR-{DOMAIN}-NNN 格式 | pass | FR-WORKTREE-CONTRACT-001 ~ FR-WORKTREE-FAILLOUD-007，格式符合 |
 | 3 | 每个 FR 至少有一条 Given/When/Then 场景 | pass | §8 已补齐全部 7 个 FR 的场景 |
 | 4 | 五章硬门完整（速读卡/FR/不做/验收/影响范围） | pass | §1 概述充当速读卡，§3 FR，§7 非目标，§5 成功标准，§6 影响范围 |
 | 5 | spec↔decision-log 覆盖率（FR-ALIGN-001） | pass | decision-log D1-D5、验收标准 1-9 均在 FR 中有对应条目 |
@@ -431,7 +440,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - [FRICTION] metrics Step 1: recordSkeleton 报 `Cannot read properties of undefined (reading 'taskMetricsPath')`，TASK_TRACKING_ROOT 未设置导致 collector 路径解析失败。非阻断，已跳过。建议: 在 metrics/collector.mjs 添加 TASK_TRACKING_ROOT 缺失时的 fallback 路径或明确错误提示。
 - [scope-triage] 高危词 grep：NO_HITS，无阻断语义词命中。
 - [spec-purity] 表格 `|` 字符命中 warn（行 51-59、145-151），人工确认为 Markdown 表格，非 shell 管道。
-- [align] decision-log 验收标准第 8/9 条（分支/worktree 安全清理）已映射到 FR-WORKTREE-CLOSE-006 和 FR-WORKTREE-FAILOUD-007。
+- [align] decision-log 验收标准第 8/9 条（分支/worktree 安全清理）已映射到 FR-WORKTREE-CLOSE-006 和 FR-WORKTREE-FAILLOUD-007。
 - [gap-resolved] 3rd-review revise_required（初次 2026-07-04）已修复：11 项 finding（F-01 status 字段只读豁免、F-02 build-code §17 废除旧 fallback、F-03 commit/push/merge 策略补全、F-04 重跑三状态表、F-08 verify-code gate 改为记录+needs_human、F-11 env var 边界值规则、F-12 target_repo_root 推导方式、F-13 分支命名精确格式、F-14 schema 校验规则、F-24 Purity false positive 结论）均已在 spec 中修订。详见 evidence/3rd-review-verdict.md。待重新执行异源审查确认 verdict。
 
 ### 5. Handoff required_reads
