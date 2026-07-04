@@ -50,8 +50,8 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 
 | 概念 | 定义 |
 |------|------|
-| worktree.json | 跨 stage 共享的 worktree 状态契约文件，存储在 task_dir 下 |
-| task_dir | 环境变量 `WORKFLOWHUB_TASK_DIR` 指定的任务跟踪根目录（非仓库内） |
+| worktree.json | 跨 stage 共享的 worktree 状态契约文件，存储在 `{{task_tracking_root}}/tasks/{task-id}/` 下 |
+| task_dir | `{{task_tracking_root}}/tasks` 的别名，即 `WORKFLOWHUB_TASK_DIR` 所指目录下的 tasks 子路径；单独使用 `task_dir` 时等价于 `{{task_tracking_root}}/tasks`，全篇路径表达统一使用 `{{task_tracking_root}}/tasks/{task-id}/...` 形式，不使用 `{task_dir}/{task-id}/...` |
 | target_repo_root | 目标仓库的根路径，默认通过 `git rev-parse --show-toplevel` 推导，不使用原始工作目录 |
 | worktree_root | 实际创建的 worktree 目录路径 |
 | push_policy | 推送策略：push 仅在 verify-code close 阶段人工确认后执行一次（close 命令级序列中） |
@@ -71,7 +71,7 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 
 ### FR-WORKTREE-CONTRACT-001：worktree.json 契约字段
 
-worktree.json 须包含以下字段，格式为 JSON，存储在 `{task_dir}/{task-id}/worktree.json`：
+worktree.json 须包含以下字段，格式为 JSON，存储在 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`：
 
 - `target_repo_root`（string）：目标仓库根路径
 - `worktree_root`（string）：实际 worktree 目录路径
@@ -98,32 +98,6 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{task_dir}/{ta
 **active-only 校验**（status=active 时额外执行）：
 - `worktree_root` 必须出现在 `git worktree list --porcelain` 输出中
 - `branch` 必须与该 worktree 的 HEAD 对应分支一致
-
-**close 重入恢复规则**（partial close 中途失败时）：
-
-> **待决策**：以下 close-progress.json 状态机及 cross-check 规则在 decision-log D1-D6 中均无对应决策支持。D6 仅定义了收尾动作的原则（spec 归档、worktree 安全清理、分支安全清理），未定义 partial close 重入机制、close-progress.json schema 或 hash cross-check 规则。本节内容为实现层推演，须补充对应决策后方可作为规范约束。
-
-- 若 worktree 目录已不存在（worktree remove 已执行）但 status 仍为 `"active"`：active-only 校验会因 `worktree_root` 不在 `git worktree list` 中而失败，阻止正常重入；此时实现须检测此特殊状态（worktree 消失但 status=active），直接跳过 active-only 校验、跳过已完成的清理步骤，从下一个未完成步骤继续执行（幂等重入，不视为 fail-loud 条件）
-- 各不可逆步骤须记录已完成标记，写入 `{{task_tracking_root}}/tasks/{task-id}/close-progress.json`，schema 如下（bool 字段默认 false，每步成功验证后立即写入 true；hash/path 字段在对应步骤完成时同步写入）：
-  ```json
-  {
-    "archive_commit": false,
-    "archive_commit_hash": "",
-    "merged_main": false,
-    "merge_commit_hash": "",
-    "worktree_removed": false,
-    "worktree_root": "",
-    "main_pushed": false,
-    "remote_branch_deleted": false,
-    "local_branch_deleted": false,
-    "branch": "",
-    "target_repo_root": "",
-    "cleaned_status_written": false
-  }
-  ```
-  重入时：先读取 close-progress.json，再 cross-check 各标记对应的 git 实际状态（如 `merged_main=true` 但 merge commit 不在 main 历史中，则视为标记错误，fail-loud）；cross-check 还须比对 hash/path 字段与实际 git 状态（如 `archive_commit_hash` 须通过 `git cat-file -e <hash>^{commit}` 验证对象可达，且须出现在 `git log --all` 中；`merge_commit_hash` 须在 `git log main` 历史中；`worktree_root`/`branch`/`target_repo_root` 须与当前 worktree.json 及 git 状态一致；任何 hash 字段不可达时视为标记无效，fail-loud，不跳过对应步骤）；仅当标记与实际状态均一致时，跳过已完成步骤，从第一个 false 标记处继续执行。
-
-**close-progress.json 写权限规则**：close-progress.json 仅允许由 verify-code 的 close 子流程在 `user_decision=true` 确认后创建或更新。每个步骤字段的写入必须在对应命令执行成功且验证通过后方可进行，禁止预先写入或批量写入。任何其他 stage（包括 make-decision、build-spec、build-plan、build-code）在任何时间点写入或修改 close-progress.json，必须 fail-loud 中止并报告写入者非法。user_decision=true 确认之前（即用户尚未批准 close 操作时），任何对 close-progress.json 的写入亦必须 fail-loud。
 
 **cleaned-only 校验**（status=cleaned 时执行，替代 active-only）：
 - 仅执行 common schema 校验（6 字段存在、类型、值域）
@@ -192,19 +166,21 @@ close 阶段的完整线性操作序列（唯一允许发生远端交互的阶�
 5. 将合并后的 main 推送到远端 origin
 6. 检查远端任务分支是否存在：若存在则删除远端任务分支；若不存在则跳过，记录 info "远端分支不存在，无需删除"，不报错
 7. 删除本地任务分支（在远端处理完成后再删，便于失败重试）
-8. 更新 `{task_dir}/{task-id}/worktree.json` 的 status 字段为 `"cleaned"`（这是 task_dir 下的外部契约文件，不属于目标 repo 的 git commit；仅更改 status 字段，其余字段保持不变）
+8. 更新 `{{task_tracking_root}}/tasks/{task-id}/worktree.json` 的 status 字段为 `"cleaned"`（这是 task_tracking_root 下的外部契约文件，不属于目标 repo 的 git commit；仅更改 status 字段，其余字段保持不变）
 
-**验收标准**：close 后 `git log main --merges` 可查到合并节点；`git log main --oneline` 包含 `workflowhub(close): archive {task-id}` commit；worktree 目录不存在；本地分支不存在；远端分支不存在或原本从未存在（均视为满足）；`{task_dir}/{task-id}/worktree.json` status 字段为 `"cleaned"`。
+**验收标准**：close 后 `git log main --merges` 可查到合并节点；`git log main --oneline` 包含 `workflowhub(close): archive {task-id}` commit；worktree 目录不存在；本地分支不存在；远端分支不存在或原本从未存在（均视为满足）；`{{task_tracking_root}}/tasks/{task-id}/worktree.json` status 字段为 `"cleaned"`。
 
 ### FR-WORKTREE-CLOSE-006：close 流程完整性
 
 close 流程须包含以下步骤，无遗漏：
 
-- 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。**例外**：若 close-progress.json 存在且 `worktree_removed=true`、且其 hash/path 字段与实际 git 状态一致（按重入 cross-check 规则验证），则跳过 active-only 校验，直接从第一个未完成步骤继续执行（partial-close 重入），不视为 fail-loud 条件。
+- 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。
 - 质量事实记录：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）
-- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
+- **3rd-review 独立审查**（在归档 commit 之前执行）：由独立上下文（3rd-review agent）对本 task 所有 stage 产出执行独立审查；审查结果写入 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`；审查结论须包含明确 verdict（pass / revise_required）；审查产物须落盘可查，不得以摘要或口头声明替代文件证据。验收标准：evidence 目录下存在当轮 3rd-review 产物且 verdict 明确；若 verdict=revise_required，需_human=true 并列明 findings，不得继续执行不可逆动作。
+- **stage-result 落盘**（在归档 commit 之前执行，3rd-review verdict=pass 后）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入持久化文件并纳入归档 commit；验收标准：归档 commit 中包含 stage-result 文件，且其 verdict 字段与 3rd-review 产物一致。
+- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit，含 stage-result）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
 
-**验收标准**：close 流程后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
+**验收标准**：close 流程后，spec 已归档（含 stage-result）、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
 ### FR-WORKTREE-SCOPE-008：build-spec / build-plan 不创建 worktree
 
@@ -227,7 +203,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 `{{task_tracking_root}}/tasks/{task-id}/`（仓库外，WORKFLOWHUB_TASK_DIR 指向）存放过程/追踪类文件：decision-log.md、journal.jsonl、task-metrics.jsonl、3rd-review 审查证据（evidence/3rd-review-roundN/...）。
 
-**验收标准**：审查任一 stage 产出时，`git status`/`git show` 中 specs/{task-id}/ 下不得出现 evidence/ 或其他非 spec/plan/tasks 文件；3rd-review 证据文件必须能在 `{task_dir}/{task-id}/evidence/` 下找到。
+**验收标准**：审查任一 stage 产出时，`git status`/`git show` 中 specs/{task-id}/ 下不得出现 evidence/ 或其他非 spec/plan/tasks 文件；3rd-review 证据文件必须能在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下找到。
 
 ---
 
@@ -332,7 +308,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 **场景 B — build-code 读取失败**
 - Given: make-decision 未写入 worktree.json
-- When: build-code 尝试读取 {task_dir}/{task-id}/worktree.json
+- When: build-code 尝试读取 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`
 - Then: 系统 fail-loud，输出明确错误路径，不静默降级继续执行
 
 ### FR-WORKTREE-MAKEDECISION-002
@@ -385,6 +361,35 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - When: 执行 close 流程
 - Then: spec 已归档至 specs/archive/{task-id}/，worktree 目录不复存在，分支已从本地和远端删除，merge commit 可在主线提交历史中查到
 
+### FR-WORKTREE-SCOPE-008
+
+**场景 A — worktree.json 存在时 build-spec 读取路径**
+- Given: make-decision 已在 `{{task_tracking_root}}/tasks/{task-id}/worktree.json` 写入完整字段（含 worktree_root、target_repo_root）
+- When: build-spec 执行并需要读取 worktree.json 中的路径信息
+- Then: build-spec 从 worktree.json 读取 `worktree_root` 和 `target_repo_root`，不调用任何 `git worktree add`，`git worktree list` 条目数与进入阶段前一致
+
+**场景 B — worktree.json 缺失时 build-spec fail-loud**
+- Given: `{{task_tracking_root}}/tasks/{task-id}/worktree.json` 不存在
+- When: build-spec 尝试读取 worktree.json
+- Then: 系统 fail-loud，输出明确错误路径，退出码非零，不静默降级或自行创建新 worktree
+
+**场景 C — build-spec 不得创建新 worktree**
+- Given: 任意时刻 build-spec 或 build-plan 阶段运行中
+- When: 阶段执行任意步骤
+- Then: 任何时间点不得出现 `git worktree add` 调用；`git worktree list` 条目数在阶段前后保持一致
+
+### FR-WORKTREE-SCOPE-009
+
+**场景 A — specs 目录内不得出现 evidence 文件**
+- Given: 3rd-review 执行后产出审查证据文件
+- When: 在任意 stage 审查产出（git status / git show 检查 specs/{task-id}/ 目录）
+- Then: specs/{task-id}/ 目录下不出现 evidence/ 子目录或任何非 spec/plan/tasks 类文件；3rd-review 证据文件只出现在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 路径下
+
+**场景 B — evidence 文件正确落点**
+- Given: 3rd-review 审查完成，产出证据文件
+- When: 查询 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/` 路径
+- Then: 证据文件存在且可查；对应 git 仓库的 specs/{task-id}/ 路径下无同名文件
+
 ### FR-WORKTREE-FAILLOUD-007
 
 **场景 A — 僵尸 worktree**
@@ -403,6 +408,10 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 3. **verify-code close 步骤未覆盖 spec 归档和 worktree 清理**：现有 verify-code Step 10 有 merge/branch-delete 确认，但无 spec 归档（将 specs/ 移入 specs/archive/）和 worktree 目录移除步骤。需补充。
 
 4. **metrics recordSkeleton 路径解析失败**：当前 metrics/collector.mjs 在 TASK_TRACKING_ROOT 未设置时报 `Cannot read properties of undefined (reading 'taskMetricsPath')`。本任务不修复此问题，记录为已知摩擦。
+
+5. **close 重入恢复机制（partial-close / close-progress.json）——待 decision-log 补充决策后转正**：close 流程中途失败后的重入状态机（close-progress.json schema、cross-check 规则、partial-close 重入路径）在 decision-log D1-D6 中均无对应决策支持。D6 仅定义了收尾动作的原则（spec 归档、worktree 安全清理、分支安全清理），未定义 partial close 重入机制。本条仅作已知缺口记录，不作为当前规范硬性约束，须补充对应 decision-log 决策后方可提升为 FR 正文。
+
+   参考信息（不作为约束）：候选实现方案包括将重入状态写入 `{{task_tracking_root}}/tasks/{task-id}/close-progress.json`（bool 字段记录各不可逆步骤完成状态，hash/path 字段供 cross-check），以及 `worktree_removed=true` 时跳过 active-only 校验等规则。这些均属实现层推演，在 make-decision 阶段补充决策之前，不纳入规范约束。
 
 ---
 
@@ -431,7 +440,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 |---|--------|------|------|
 | 1 | spec-ladder 档位已声明且有依据 | pass | 序言中明确标注 B 档，给出三模块跨越理由 |
 | 2 | 所有 FR 使用 FR-{DOMAIN}-NNN 格式 | pass | FR-WORKTREE-CONTRACT-001 ~ FR-WORKTREE-FAILLOUD-007，格式符合 |
-| 3 | 每个 FR 至少有一条 Given/When/Then 场景 | pass | §8 已补齐全部 7 个 FR 的场景 |
+| 3 | 每个 FR 至少有一条 Given/When/Then 场景 | pass | §8 已补齐全部 9 个 FR 的场景（含 SCOPE-008、SCOPE-009） |
 | 4 | 五章硬门完整（速读卡/FR/不做/验收/影响范围） | pass | §1 概述充当速读卡，§3 FR，§7 非目标，§5 成功标准，§6 影响范围 |
 | 5 | spec↔decision-log 覆盖率（FR-ALIGN-001） | pass | decision-log D1-D5、验收标准 1-9 均在 FR 中有对应条目 |
 | 6 | 无 [NEEDS CLARIFICATION] 残留 | pass | Q1/Q2 均已标记 [RESOLVED] 并附消解依据 |
