@@ -217,6 +217,15 @@ Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not
 
 After step 10 completes (user confirmed or rejected), and only when `user_decision=true`, invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run.
 
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=verify-code \
+  --input <(git diff HEAD~1) \
+  --engine codex \
+  --output {taskDir}/{task-id}/reviews/verify-code.md
+```
+
 **Dispatch rules:**
 - Run in a separate subagent context (independent from the coordinator).
 - Pass: changed file list, `worktree_root`, task context, and the path `{taskDir}/{task-id}/reviews/verify-code.md` as the output artifact path.

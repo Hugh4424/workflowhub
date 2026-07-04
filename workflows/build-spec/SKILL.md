@@ -163,6 +163,15 @@ spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-r
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
 - 可 grep 到 `3rd-review` 或 `异源独立审查`
 
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=build-spec \
+  --input specs/{task-id}/spec.md \
+  --engine codex \
+  --output specs/{task-id}/reviews/build-spec-review.md
+```
+
 ---
 
 ### 3.8. 质量事实契约产出（FR-CONTRACT-001/002）

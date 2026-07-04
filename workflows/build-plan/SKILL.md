@@ -172,6 +172,15 @@ Invoke the independent plan engineering reviewer via the `3rd-review` infrastruc
 - Before calling, verify that the cross-repository path `/Users/Hugh/Hugh/Project/3rd-review/verifiers/vibecoding/` is accessible (e.g., directory exists and is readable)
 - If the path is not accessible, **record `plan-eng-review.md` as unavailable and escalate to human** (non-blocking); do not block the stage
 - If accessible, call the plan-reviewer with: `specs/{task-id}/plan.md`, `specs/{task-id}/tasks.md`, and `specs/{task-id}/cross-artifact-analysis.md`
+
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=build-plan \
+  --input specs/{task-id}/plan.md \
+  --engine codex \
+  --output specs/{task-id}/reviews/build-plan-review.md
+```
 - The reviewer writes `specs/{task-id}/plan-eng-review.md` with an independent engineering verdict
 - If the reviewer call fails or times out, **record the failure and escalate to human** (non-blocking); stage-result still succeeds
 - Reference the plan-eng-review path (or `unavailable`) in stage-result `facts.plan_review_ref`

@@ -294,7 +294,15 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **入口检测（REVIEW_DISPATCH_CONFIG）**：读取 `REVIEW_DISPATCH_CONFIG` 环境变量（默认为空，走内置默认调度）。若设置了该变量，检查对应配置文件是否可达且可解析；文件不可达或解析失败时写 journal 事件 `event: "dispatch_config_invalid", config: "<值>"`，并回退使用内置默认调度，继续执行，不阻断流程。若未设置（空），直接使用内置默认调度。
 
-启动一条独立 3rd-review 链：
+启动一条独立 3rd-review 链（**调用命令模板**）：
+
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=make-decision \
+  --input specs/{task-id}/decision.md \
+  --engine codex \
+  --output specs/{task-id}/reviews/make-decision-review.md
+```
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性。
 

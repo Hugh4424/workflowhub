@@ -97,6 +97,15 @@ When dispatching implementation work, regardless of backend:
 
 After GREEN evidence is confirmed for a phase, call the **3rd-review standalone entry**. Feed the real `git diff` output (not a natural-language description of the change — using prose triggers the same-source downgrade path in 3rd-review's classifier).
 
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=build-code \
+  --input <(git diff HEAD~1) \
+  --engine codex \
+  --output {taskDir}/{task-id}/reviews/build-code-phase-N.md
+```
+
 Consume the 3-state verdict:
 
 - `pass` — proceed to the next phase.
