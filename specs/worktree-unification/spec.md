@@ -181,16 +181,21 @@ close 阶段的完整线性操作序列（唯一允许发生远端交互的阶�
 
 ### FR-WORKTREE-CLOSE-006：close 流程完整性
 
-close 流程须包含以下步骤，顺序严格按 decision-log D5 执行，无遗漏：
+> **修正说明**：本 FR 对 decision-log D5 原顺序做了主动修正。D5 原文顺序是先执行 merge + 分支清理等不可逆动作，再跑 3rd-review 独立审查；本 spec 改为先审后 merge，理由是避免不可逆动作在未过审前发生——3rd-review 若 revise_required，代码已合并进 main，只能 forward-fix，回滚代价极高。
 
-- 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。
-- 质量事实记录：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）
-- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
-- **3rd-review 独立审查**（在不可逆动作完成后执行，即 merge + 分支清理之后）：由独立上下文（3rd-review agent）对本 task 所有 stage 产出执行独立审查；审查结果写入 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`；审查结论须包含明确 verdict（pass / revise_required）；审查产物须落盘可查，不得以摘要或口头声明替代文件证据。验收标准：evidence 目录下存在当轮 3rd-review 产物且 verdict 明确。
-- **stage-result 落盘**（3rd-review 之后）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入 `{{task_tracking_root}}/tasks/{task-id}/stage-result.json`；不纳入 repo 归档 commit（stage-result 属于过程/追踪内容，须存放在 task_tracking_root 而非 repo specs/ 下）。验收标准：`{{task_tracking_root}}/tasks/{task-id}/stage-result.json` 存在且 verdict 字段与 3rd-review 产物一致。
-- **post-close 3rd-review revise_required 失败契约**：3rd-review 在不可逆动作完成后执行，此时 main 已合并推送、分支可能已删除、worktree 已清理。若 verdict=revise_required，**不执行回滚**（回滚代价高且可能引入新风险）。处理路径固定为：① 在 stage-result.json 中记录 `post_close_review_status=revise_required` 及具体 finding 列表；② 将 needs_human 置为 true 并列明所有 findings；③ escalate_to_human，由人工决定后续修复策略（新 commit 还是接受现状）。此路径是确定的不可逆后处理，不留歧义。
+close 流程须包含以下步骤，**严格按以下顺序**执行，无遗漏：
 
-**验收标准**：close 流程后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；stage-result.json 在 `{{task_tracking_root}}/tasks/{task-id}/` 下可查且含 verdict 字段；若 3rd-review verdict=revise_required，stage-result.json 中 post_close_review_status=revise_required 且 needs_human=true 可查，并已 escalate_to_human；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
+- **① 入口校验**：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。
+- **② 质量事实记录**：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）。
+- **③ 3rd-review 独立审查**（在不可逆动作之前执行，即 merge + 分支清理之前）：由独立上下文（3rd-review agent）对本 task 所有 stage 产出执行独立审查；审查结果写入 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`；审查结论须包含明确 verdict（pass / revise_required）；审查产物须落盘可查，不得以摘要或口头声明替代文件证据。verdict=pass 方可进入下一步不可逆动作；verdict=revise_required 时见"pre-merge revise_required 契约"。
+- **④ 不可逆动作**（须人工确认 user_decision=true 且 3rd-review verdict=pass 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。删远端/本地分支前须确认目标提交已被 main 包含；确认失败时停止 close，不删除任何分支。
+- **⑤ stage-result 落盘**（不可逆动作完成后，或 revise_required 阻止不可逆动作时均须落盘）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入 `{{task_tracking_root}}/tasks/{task-id}/stage-result.json`；不纳入 repo 归档 commit（stage-result 属于过程/追踪内容，须存放在 task_tracking_root 而非 repo specs/ 下）。验收标准：`{{task_tracking_root}}/tasks/{task-id}/stage-result.json` 存在且 verdict 字段与 3rd-review 产物一致。
+
+**pre-merge revise_required 契约**：3rd-review 在不可逆动作之前执行，若 verdict=revise_required：① **不执行 merge、不删分支、不 push**（不可逆动作全部跳过）；② 将 findings 写入 stage-result.json，记录 `review_status=revise_required` 及具体 finding 列表；③ 将 needs_human 置为 true 并列明所有 findings；④ escalate_to_human，等待人工确认修复后重新走 3rd-review（重新从步骤③开始）；⑤ 人工确认修复完成且 3rd-review verdict=pass 后，方可继续步骤④不可逆动作。此路径确保问题在不可逆动作前被阻止，不留歧义。
+
+**不可逆动作中途失败契约**：步骤④ 8 步序列中若某步失败，立即停止，不自动回滚已执行的步骤，不跳过后续步骤；在 stage-result.json 中记录失败步骤编号和错误信息；needs_human=true，escalate_to_human，等待人工决定后续处理（补全还是回退）；允许人工确认后从失败步骤重试（幂等步骤），非幂等步骤须人工确认已安全后再执行。
+
+**验收标准**：close 流程中，3rd-review 独立审查在 merge 之前完成；verdict=pass 才允许执行 merge + 分支清理；verdict=revise_required 时 merge 未发生、分支未删除、stage-result.json 中 review_status=revise_required 且 needs_human=true 可查，并已 escalate_to_human；close 成功完成后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；stage-result.json 在 `{{task_tracking_root}}/tasks/{task-id}/` 下可查且含 verdict 字段；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
 ### FR-WORKTREE-SCOPE-008：build-spec / build-plan 不创建 worktree
 
@@ -367,10 +372,20 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ### FR-WORKTREE-CLOSE-006
 
-**场景 A — 完整 close**
-- Given: worktree.json 字段校验通过，质量事实已记录，user_decision=true
-- When: 执行 close 流程
-- Then: spec 已归档至 specs/archive/{task-id}/，worktree 目录不复存在，分支已从本地和远端删除，merge commit 可在主线提交历史中查到
+**场景 A — 完整 close（3rd-review pass + 人工确认）**
+- Given: worktree.json 字段校验通过，质量事实已记录，3rd-review verdict=pass，user_decision=true
+- When: 执行 close 流程不可逆动作序列
+- Then: spec 已归档至 specs/archive/{task-id}/，worktree 目录不复存在，分支已从本地和远端删除（删除前已确认目标提交被 main 包含），merge commit 可在主线提交历史中查到；stage-result.json 存在且 verdict 字段=pass
+
+**场景 B — 3rd-review revise_required（阻止 merge）**
+- Given: worktree.json 字段校验通过，质量事实已记录，3rd-review verdict=revise_required
+- When: 执行 close 流程到达步骤③
+- Then: merge 未发生，分支未删除，push 未执行；stage-result.json 中 review_status=revise_required 且 needs_human=true；findings 列表可查；已 escalate_to_human
+
+**场景 C — 不可逆动作中途失败**
+- Given: 3rd-review verdict=pass，user_decision=true，8 步序列在第 k 步（k < 8）失败
+- When: 步骤 k 执行失败
+- Then: 立即停止，不自动回滚已执行步骤，不跳过后续步骤；stage-result.json 记录失败步骤编号和错误信息；needs_human=true，已 escalate_to_human
 
 ### FR-WORKTREE-SCOPE-008
 

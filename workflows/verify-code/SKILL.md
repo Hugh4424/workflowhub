@@ -186,36 +186,20 @@ present, classify the result as yellow.
 Before asking for confirmation, produce a plain-language decision brief following `docs/human-brief-template.md`'s seven elements, filled with this stage's facts:
 
 1. 这阶段做了什么 — 跑了测试、核对了验收标准。
-2. 审了几次、结论是什么 — 3rd-review 轮数 + 结论，以及本次 fresh 测试执行的通过/失败结论。
+2. 本次 fresh 测试执行的通过/失败结论。
 3. 这个 task 要解决什么 — 取自 spec.md / decision-log 的原始需求。
 4. 已经怎么做 — build-code 的实现概述。
 5. 原始需求覆盖情况 — 取自第 8.5 步产出的逐条覆盖清单，写清覆盖了哪些、有没有遗漏、有没有额外加的。
 6. 现在结果 — 测试通过/失败、verdict。
-7. 下一步 — 等待人确认合并。
+7. 下一步 — 即将进行 3rd-review 独立审查（step 10），审查通过后再询问是否确认合并（step 11）。
 
 全大白话中文，不出现内部产物名/字段名/编号（该模板的硬规则）。
 
-摘要结尾使用模板"A. 决策 gate 阶段"格式给出"请确认"块，具体问是否确认合并 + 删分支这两个不可逆动作，每个选项写清含义和后果，例如：
+摘要内容若有字段缺失（如覆盖情况算不出来），只记录 `missing_items` 并在摘要里显眼标注缺失，不阻断本步继续推进；本步骤只展示测试结果摘要，不要求人确认 merge（merge 确认在 step 11，发生在 3rd-review 通过之后）。
 
-```
-请确认：
-- **推荐：确认合并并删除分支** —— 后果：把 <feature-branch> 合并进 <target-branch>，然后删除 <feature-branch>，之后无法撤销。
-- 只合并、暂不删分支 —— 后果：完成合并，但保留 <feature-branch> 以备回退。
-- 暂停，不合并 —— 后果：本次改动留在原分支，不动 <target-branch>，你可以先看代码或提出修改。
-```
+### 10. 3rd-review 独立审查
 
-摘要内容若有字段缺失（如覆盖情况算不出来），只记录 `missing_items` 并在摘要里显眼标注缺失，不阻断本步继续向人发出确认请求；是否合并的裁决权仍完全在人，机器不做二次质量判断。
-
-Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not execute merge or delete without user consent.
-
-### 10. 收尾执行
-
-- **User confirms**: Execute the merge and branch deletion. Set `user_decision=true`.
-- **User rejects**: Set `user_decision=false`, skip all irreversible operations, continue to step 11 (which will skip 3rd-review) and then step 12 to write the stage-result with the rejection reason (FR-CLOSE-002). Do not exit early.
-
-### 11. 3rd-review 独立审查
-
-After step 10 completes (user confirmed or rejected), and only when `user_decision=true`, invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run.
+**在人工确认 merge 之前**，invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run. This ordering ensures revise_required findings block the irreversible merge, not just post-facto report them (FR-WORKTREE-CLOSE-006).
 
 **调用命令模板：**
 ```bash
@@ -231,17 +215,15 @@ bash /path/to/3rd-review/standalone.sh \
 - Pass: changed file list, `worktree_root`, task context, and the path `{taskDir}/{task-id}/reviews/verify-code.md` as the output artifact path.
 - Explicitly forbid `git commit` in the subagent instruction.
 
-**When `user_decision=false`** (user rejected in step 10): skip 3rd-review entirely. Record `buildReviewFact({ status: "not_executed" })` and proceed directly to step 12 to write the stage-result with `user_decision=false`. Do not exit without writing stage-result.
-
-**Verdict handling** (only reached when `user_decision=true`):
+**Verdict handling:**
 
 | Verdict | Action |
 |---|---|
-| `pass` | Proceed to step 12 (stage-result 落盘). |
-| `revise_required` | Surface findings to user. Record `missing_items` entry. Do not write stage-result yet. Agent or user fixes the flagged items, then rerun verify checks (steps 4–8) and rerun 3rd-review. After N=2 failed rerun rounds with no resolution, escalate to human and set `needs_human=true`. |
-| `escalate_to_human` | Surface findings immediately. Set `needs_human=true`. Do not write stage-result until human confirms resolution path. |
+| `pass` | Proceed to step 11 (人工确认 merge gate). |
+| `revise_required` | **Do not proceed to merge.** Surface all findings to user immediately. Write stage-result with `review_status=revise_required`, `needs_human=true`, and the full findings list. Set `user_decision=false`. Skip step 11 (no merge gate shown). Go directly to step 12 to write stage-result. After N=2 failed rerun rounds with no resolution, escalate to human. |
+| `escalate_to_human` | Surface findings immediately. Set `needs_human=true`. Write stage-result with findings. Skip step 11. Go to step 12. |
 
-If 3rd-review skill is unavailable or unreachable, downgrade gracefully: record `buildReviewFact({ status: "not_executed" })` with a visible warning in the stage-result. Do not block on unavailability.
+If 3rd-review skill is unavailable or unreachable, downgrade gracefully: record `buildReviewFact({ status: "not_executed" })` with a visible warning in the stage-result, and proceed to step 11 (do not block on unavailability).
 
 Record the review outcome in `facts.review` using `buildReviewFact` from `facts-schema.mjs`:
 
@@ -254,18 +236,28 @@ const reviewFact = buildReviewFact({
   verdict,         // "pass" | "revise_required" | "escalate_to_human"
   artifactPath: `{taskDir}/{task-id}/reviews/verify-code.md`
 });
-// review skipped (user_decision=false) or unavailable:
+// review unavailable:
 // const reviewFact = buildReviewFact({ status: "not_executed" });
 ```
 
 Write `reviewFact` into the stage-result under `facts.review` in step 12. Because `assembleStageResult` does not accept `review` as a parameter, explicitly merge it after assembly: `stageResult.facts.review = reviewFact` before calling `writeStageResult`.
 
+### 11. 人工确认 merge gate
+
+**Only reached when 3rd-review verdict=pass (or not_executed due to unavailability).** If verdict=revise_required or escalate_to_human, skip this step entirely and go to step 12.
+
+- **User confirms**: Execute the merge and branch deletion. Set `user_decision=true`. Before deleting remote/local branch, verify the task branch's target commit is included in main; if verification fails, stop close, do not delete any branch, set `needs_human=true`.
+- **User rejects**: Set `user_decision=false`, skip all irreversible operations, proceed to step 12 to write the stage-result with the rejection reason (FR-CLOSE-002). Do not exit early.
+
+Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not execute merge or delete without user consent.
+
 ### 12. stage-result 落盘
 
 Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the stage-result to `{taskDir}/{task-id}/stage-result-verify-code.json` (FR-PATH-001). The `final-test-report.md` goes to `{taskDir}/{task-id}/test/` (FR-PATH-002) and must include the step 8.5 逐条覆盖清单 as one of its sections. Both paths resolved via `parseTaskDir` — see step 2.
 
-The stage-result record has this structure:
+**必须处理两条落盘路径：**
 
+**路径 A — merge 完成（3rd-review pass + user_decision=true）：**
 ```json
 {
   "status": "success",
@@ -273,6 +265,7 @@ The stage-result record has this structure:
   "retryable": false,
   "facts": {
     "verdict": "pass",
+    "review_status": "pass",
     "evidence_ref": "<relative path to final-test-report.md>"
   },
   "missing_items": [],
@@ -280,6 +273,27 @@ The stage-result record has this structure:
   "reason": "All acceptance criteria verified and documented."
 }
 ```
+
+**路径 B — revise_required 阻止 merge（merge 未发生）：**
+```json
+{
+  "status": "failed",
+  "error_code": "review_revise_required",
+  "retryable": true,
+  "facts": {
+    "verdict": "revise_required",
+    "review_status": "revise_required",
+    "findings": ["<finding 1>", "<finding 2>", "..."],
+    "evidence_ref": "<relative path to 3rd-review artifact>"
+  },
+  "missing_items": ["<blocked items>"],
+  "user_decision": false,
+  "needs_human": true,
+  "reason": "3rd-review revise_required: merge blocked. Human must confirm fixes and re-run 3rd-review before merge."
+}
+```
+
+路径 B 须在 `stageResult.facts.review = reviewFact` 赋值后、`writeStageResult` 调用前确保 `needs_human=true` 字段写入。无论哪条路径，stage-result 文件必须存在，不得因未 merge 而跳过落盘。
 
 D7 color semantics must stay compatible with the current stage-result contract:
 use `success|failed|unknown`, not new status enum values. Never write `green`, `yellow`, or `red` to `stage-result.status`.
