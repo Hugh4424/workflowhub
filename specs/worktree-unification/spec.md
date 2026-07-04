@@ -114,20 +114,20 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{{task_trackin
 
 make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规则（R1-R7；注意：R 编号为本章节内部条目标识，与 decision-log 的 D 编号系统相互独立，不可混用）：
 
-- R1（源自 decision-log D1）：task_tracking_root 读取规则 —— make-decision 读取 `WORKFLOWHUB_TASK_DIR` 环境变量作为 task_tracking_root（即跟踪根目录本身，不含 `/tasks` 子路径）；task 专属目录为 `task_tracking_root/tasks/{task-id}/`；若环境变量未设置则按 FR-WORKTREE-ENVVAR-003 降级顺序处理；task_tracking_root 写入 worktree.json 的 `task_tracking_root` 字段，后续所有 stage 只读该字段，禁止重新探测
+- R1（源自 decision-log D1）：task_tracking_root 读取规则 —— make-decision 读取 `WORKFLOWHUB_TASK_DIR` 环境变量作为 task_tracking_root（即跟踪根目录本身，不含 `/tasks` 子路径）；task 专属目录为 `task_tracking_root/tasks/{task-id}/`；若环境变量未设置则按 FR-WORKTREE-ENVVAR-003 降级顺序处理；task_tracking_root **不写入** worktree.json（worktree.json 只含 FR-WORKTREE-CONTRACT-001 定义的 6 字段）；task_tracking_root 由各 stage 各自实时读取 `WORKFLOWHUB_TASK_DIR` 环境变量得到，无需跨 stage 固化传递（因为它是环境变量，每个 stage 运行时均可重新读取，值恒定不变）
 - R2（源自 decision-log D2）：目标仓库路径（target_repo_root）探测与固化规则 —— make-decision 在当前会话 cwd 上下文首次探测并做存在性校验，写入 worktree.json 并标注不可覆盖；后续所有 stage 只读该字段，禁止重新探测；字段缺失时 escalate_to_human
 - R3（设计延伸，非 decision-log 直接定义）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（两到三个小写英文单词，连字符分隔，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
 - R4（设计延伸）：worktree 创建时机（make-decision 阶段末尾，task 子目录创建成功后）
 - R5（源自 decision-log D2 字段定义部分）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
 - R6（源自 decision-log D4）：worktree 存在性/冲突检测规则 —— 用 `git worktree list --porcelain` 作为唯一权威校验；已注册且路径存在则复用；路径存在未注册（僵尸目录）则 fail-loud，不自动删除；分支已被其他 worktree 占用则 fail-loud，报告占用详情，不强制 checkout
-- R7（源自 decision-log D5）：make-decision stage 完成时 commit 规则 —— make-decision 成功完成时须在目标仓库提交 worktree.json（若已初始化 Git 跟踪）；commit message 格式为 `workflowhub(make-decision): <描述>`；若目标仓库尚未初始化或 make-decision 阶段无 repo 内文件变更，须在 stage-result 中明确记录"无 repo 内变更"原因，不得静默跳过
+- R7（源自 decision-log D5）：make-decision stage 完成时 commit 规则 —— 若本 stage 对目标仓库（target_repo_root 下）产生了文件变更（如初始化文件），须 commit，commit message 格式为 `workflowhub(make-decision): <描述>`；worktree.json 本身存储在 task_tracking_root（仓库外，见 FR-WORKTREE-SCOPE-009），不属于此 commit 范围，不受 git 管理；若 make-decision 阶段在目标仓库内无文件变更，须在 stage-result 或 journal 中明确记录"无 repo 内变更"原因，不得静默跳过
 
 **task 子目录创建职责（设计延伸：decision-log D1 决定 task_dir 读取机制，但未显式规定 make-decision 负责创建子目录；本条为基于 D1 语义和 fail-loud 设计原则的派生实现约束，非 D1 原文直接授权）**：make-decision 负责创建 `{{task_tracking_root}}/tasks/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
 - 前置条件：`{{task_tracking_root}}/tasks/`（由 `WORKFLOWHUB_TASK_DIR` 值拼接 `/tasks` 得到）必须已存在；若父目录不存在，则 fail-loud 报错，不自动创建父目录。
 - 幂等：若 `{{task_tracking_root}}/tasks/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
 - 成功后方可继续 R3 worktree 创建步骤。
 
-**验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，R1-R7 规则均有明确条文（含 D1 task_tracking_root 读取机制、D5 commit 责任）；R 编号与 decision-log D 编号不可混用。
+**验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，R1-R7 规则均有明确条文（含 D1 task_tracking_root 读取机制、D5 commit 责任：若目标仓库有文件变更则 commit，worktree.json 不纳入 commit，无变更则在 stage-result/journal 记录原因）；R 编号与 decision-log D 编号不可混用。
 
 ### FR-WORKTREE-ENVVAR-003：core/task-dir-parser.mjs 环境变量优先
 
@@ -136,6 +136,8 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 1. 环境变量 `WORKFLOWHUB_TASK_DIR`（最高优先）
 2. `workflowhub.yaml` 中配置的值（fallback）
 3. 若两者均缺失，fail-loud 报错，不使用硬编码路径
+
+**parser返回值语义**：parser 始终返回 task_tracking_root 本身（即 `WORKFLOWHUB_TASK_DIR` 的值，或 yaml fallback 值），**不做 `/tasks/{task-id}` 拼接**；该拼接动作由各调用方（各 stage）自行执行。
 
 **验收标准**：
 - Given `WORKFLOWHUB_TASK_DIR=<绝对路径>`（目录已存在），调用 parser，返回该路径
