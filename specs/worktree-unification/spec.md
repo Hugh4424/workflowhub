@@ -52,7 +52,7 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 |------|------|
 | worktree.json | 跨 stage 共享的 worktree 状态契约文件，存储在 `{{task_tracking_root}}/tasks/{task-id}/` 下 |
 | task_dir | `{{task_tracking_root}}/tasks` 的缩写，仅供行文简称；规范路径表达统一使用 `{{task_tracking_root}}/tasks/{task-id}/...`，不使用 `{task_dir}/{task-id}/...` |
-| WORKFLOWHUB_TASK_DIR | 环境变量，其值等于 `{{task_tracking_root}}`（即 task tracking root 本身，不含 `/tasks` 子路径）；parser 读取该变量后直接返回 task_tracking_root 本身，**不做 `/tasks/{task-id}` 拼接**；拼接动作由各 stage 调用方自行执行 |
+| WORKFLOWHUB_TASK_DIR | 环境变量，其值等于 `{{task_tracking_root}}`（即 task tracking root 本身，**不含** `/tasks` 子路径）；parser 读取该变量后直接返回 task_tracking_root 本身，**不做任何子路径拼接**；拼接动作由各 stage 调用方自行执行（如：`${task_tracking_root}/tasks/${task_id}/worktree.json`）。**迁移说明**：若 config/workflowhub.yaml 中 `task_dir` 字段当前值已包含 `/tasks` 子路径（如 `/path/to/project/tasks`），则该值为任务根（task_tracking_root/tasks），须将其父目录（`/path/to/project`）设为 WORKFLOWHUB_TASK_DIR 值或更新 yaml `task_dir` 字段值；否则会产生 `/tasks/tasks/{task-id}` 路径错位。兼容性：build-code 中已有使用 `task_dir` 变量拼接路径的调用方，须同步更新拼接逻辑为 `${WORKFLOWHUB_TASK_DIR}/tasks/${task_id}/`。 |
 | target_repo_root | 目标仓库的根路径，由 make-decision 在当前会话 cwd 上下文首次探测并固化写入 worktree.json；后续 stage 从 worktree.json 读取，禁止重新探测或重新推导 |
 | worktree_root | 实际创建的 worktree 目录路径 |
 | push_policy | 推送策略：push 仅在 verify-code close 阶段人工确认后执行一次（close 命令级序列中） |
@@ -61,7 +61,7 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 
 ### 假设
 
-- task_dir 由外部环境变量 `WORKFLOWHUB_TASK_DIR` 提供；若未设置，降级读取 workflowhub.yaml 中的配置值（fallback，非停止条件）
+- task_dir 由外部环境变量 `WORKFLOWHUB_TASK_DIR` 提供；若未设置，降级读取 config/workflowhub.yaml 中的配置值（fallback，非停止条件）
 - `target_repo_root` 表示主 checkout 根目录（即执行 `git worktree add` 的原始 checkout，非任务 worktree）；其值须由 make-decision 在当前会话 cwd 上下文首次探测并固化写入 worktree.json，后续 stage 只从 worktree.json 读取，禁止在任何其他上下文中重新探测或推导（尤其不得在任务 worktree 内重新推导，否则会得到 worktree_root，语义错误）；close 流程需切回此路径执行 merge/remove；`worktree_root` 表示任务 worktree 目录路径，二者不同
 - task-id 格式：两到三个小写英文单词，连字符分隔（如 `worktree-unification`），已在 make-decision 阶段确定；**make-decision 对用户/上游输入执行两步处理（decision-log D3）**：
   1. **归一化转换**：先将输入转为小写；再将所有非字母非数字字符统一替换为连字符；再将连续连字符合并为单个连字符；再去除首尾连字符。
@@ -134,16 +134,16 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 `core/task-dir-parser.mjs` 须按以下优先级读取 task_dir：
 
 1. 环境变量 `WORKFLOWHUB_TASK_DIR`（最高优先）
-2. `workflowhub.yaml` 中配置的值（fallback）
+2. `config/workflowhub.yaml` 中配置的值（fallback）
 3. 若两者均缺失，fail-loud 报错，不使用硬编码路径
 
 **parser返回值语义**：parser 始终返回 task_tracking_root 本身（即 `WORKFLOWHUB_TASK_DIR` 的值，或 yaml fallback 值），**不做 `/tasks/{task-id}` 拼接**；该拼接动作由各调用方（各 stage）自行执行。
 
 **验收标准**：
 - Given `WORKFLOWHUB_TASK_DIR=<绝对路径>`（目录已存在），调用 parser，返回该路径
-- Given `WORKFLOWHUB_TASK_DIR` 未设置，`workflowhub.yaml` 存在且含 `task_dir` 字段，返回 yaml 中的配置值
-- Given `WORKFLOWHUB_TASK_DIR` 未设置，`workflowhub.yaml` 文件不存在，parser fail-loud 抛出明确错误（不使用硬编码路径）
-- Given `WORKFLOWHUB_TASK_DIR` 未设置，`workflowhub.yaml` 存在但无 `task_dir` 字段，parser fail-loud 抛出明确错误（区别于文件不存在场景）
+- Given `WORKFLOWHUB_TASK_DIR` 未设置，`config/workflowhub.yaml` 存在且含 `task_dir` 字段，返回 yaml 中的配置值
+- Given `WORKFLOWHUB_TASK_DIR` 未设置，`config/workflowhub.yaml` 文件不存在，parser fail-loud 抛出明确错误（不使用硬编码路径）
+- Given `WORKFLOWHUB_TASK_DIR` 未设置，`config/workflowhub.yaml` 存在但无 `task_dir` 字段，parser fail-loud 抛出明确错误（区别于文件不存在场景）
 - Given 路径存在但不是目录，parser fail-loud
 - Given 路径不存在，parser fail-loud
 
@@ -288,7 +288,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - make-decision/SKILL.md（需新增章节）
 - build-code/SKILL.md §17 FR-WORKTREE-001（消费方）
 - core/task-dir-parser.mjs（需修改）
-- workflowhub.yaml（已有 task_dir 字段，line 41；无需新增）
+- config/workflowhub.yaml（已有 task_dir 字段，line 41；无需新增）
 
 ### 影响范围
 
@@ -298,8 +298,8 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ### 未解风险
 
-- [RESOLVED] Q1：`workflowhub.yaml` 已在 line 41 声明 `task_dir` 字段，字段已存在。FR-WORKTREE-ENVVAR-003 的 fallback 直接读取该现有字段，无需新增配置项。
-- [RESOLVED] Q2：close 流程现有入口为 `workflows/verify-code/SKILL.md` 步骤 9（明文停顿/收尾确认）和步骤 10（收尾执行：merge + branch-delete）。无独立 close SKILL.md。FR-WORKTREE-CLOSE-006 要求的 spec 归档、验证清单检查、worktree 安全清理、分支安全清理四步，需在 verify-code Step 10 中补充，不另建文件。
+- [RESOLVED] Q1：`config/workflowhub.yaml` 已在 line 41 声明 `task_dir` 字段，字段已存在。FR-WORKTREE-ENVVAR-003 的 fallback 直接读取该现有字段，无需新增配置项。
+- [RESOLVED] Q2：close 流程现有入口为 `workflows/verify-code/SKILL.md`，当前 Step 10=3rd-review 独立审查，Step 11=人工 merge gate（confirm + merge + branch-delete）。无独立 close SKILL.md。FR-WORKTREE-CLOSE-006 要求的 spec 归档、worktree 安全清理、分支安全清理、push 等步骤，需在 verify-code Step 11 不可逆动作序列中补充（对应 FR-WORKTREE-PUSH-005 的 8 步线性序列），不另建文件。
 
 ### 业务影响范围（Business Impact Scope）
 
@@ -313,6 +313,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | pre-merge 3rd-review gate（已消除 post-close 风险） | 原 close 流程曾在 merge 后执行 3rd-review，此时 main 已含问题代码不可回滚；本 spec 将 3rd-review 前移到 merge 之前（FR-WORKTREE-CLOSE-006 步骤③），revise_required 时阻止 merge，彻底消除该高风险场景 | 已消除 |
 
 | task-id 规范化拒绝 | make-decision 引入严格两步归一化（D3：转小写→连字符→校验 `^[a-z]+(-[a-z]+){1,2}$`）；不符合格式的输入（如含大写、特殊字符、单词数不足/过多）被 fail-loud 拒绝，用户看到明确错误提示，须修正 task-id 后重新运行 make-decision；已有任务若 task-id 不合规需人工重建 task-id（无自动迁移）。 | 中 |
+| commit 追溯断裂/阶段产物未提交 | per-stage/per-phase commit 规则若未执行（某 stage 无 commit 且未记录"无变更"原因），审查时无法确认该阶段是否已完成、产物是否已固化；跨 stage 读取 stage-result/evidence 时可能读到上一轮遗留数据；影响 build-spec、build-plan、build-code、verify-code 的可追溯性和交付连续性 | 高 |
 
 受影响的下游 stage：build-spec（读 target_repo_root）、build-plan（读 target_repo_root）、build-code（读全量 worktree.json）、verify-code（close 写 status=cleaned）。
 
@@ -360,17 +361,17 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 ### FR-WORKTREE-ENVVAR-003
 
 **场景 A — 环境变量优先**
-- Given: WORKFLOWHUB_TASK_DIR 设置为某绝对路径，workflowhub.yaml 中 task_dir 为另一路径
+- Given: WORKFLOWHUB_TASK_DIR 设置为某绝对路径，config/workflowhub.yaml 中 task_dir 为另一路径
 - When: 调用 task-dir-parser 解析 task_dir
 - Then: 返回环境变量所设路径，不使用 yaml 中的值
 
 **场景 B — 降级 fallback**
-- Given: WORKFLOWHUB_TASK_DIR 未设置，workflowhub.yaml 中存在 task_dir 字段
+- Given: WORKFLOWHUB_TASK_DIR 未设置，config/workflowhub.yaml 中存在 task_dir 字段
 - When: 调用 task-dir-parser 解析 task_dir
 - Then: 返回 yaml 中的配置值
 
 **场景 C — 双缺失**
-- Given: WORKFLOWHUB_TASK_DIR 未设置，workflowhub.yaml 也无 task_dir 字段
+- Given: WORKFLOWHUB_TASK_DIR 未设置，config/workflowhub.yaml 也无 task_dir 字段
 - When: 调用 task-dir-parser
 - Then: 抛出明确错误，不使用任何硬编码路径
 
