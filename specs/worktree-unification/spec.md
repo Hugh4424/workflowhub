@@ -180,6 +180,14 @@ close 流程须包含以下步骤，无遗漏：
 
 **验收标准**：close 流程后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
+### FR-WORKTREE-SCOPE-008：build-spec / build-plan 不创建 worktree
+
+build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 worktree.json，只读取 worktree.json 中的 `target_repo_root` 字段作为仓库根路径定位依据。若字段缺失或 worktree.json 不存在，须 fail-loud，报错路径，不静默降级。
+
+**验收标准**：在 build-spec 和 build-plan 阶段，git worktree list 的条目数量与进入该阶段前一致（无新增 worktree）；worktree.json 缺失时 stage 输出明确错误且退出码非零。
+
+---
+
 ### FR-WORKTREE-FAILOUD-007：僵尸检测 fail-loud
 
 `git worktree list --porcelain` 校验逻辑在检测到以下情况时须 fail-loud，不自动删除：
@@ -221,7 +229,7 @@ close 流程须包含以下步骤，无遗漏：
 
 ## 5. 成功标准（可度量）
 
-1. 在 Multica 多 agent 环境下跑完 make-decision → build-code → verify-code 全流程，各 stage 均可读取 worktree.json 且产物路径连续，无断链
+1. 在 Multica 多 agent 环境下跑完全流程，5 个 pipeline stage 均可读取 worktree.json 且产物路径连续，无断链：make-decision（唯一写入方）→ build-spec（只读）→ build-plan（只读）→ build-code（只读）→ verify-code（只读，close 阶段可更新 status 字段）；build-spec 和 build-plan 不创建 worktree，但须读取 worktree.json 的 target_repo_root 字段确定仓库根路径，缺失时 fail-loud
 2. 环境变量 `WORKFLOWHUB_TASK_DIR` 优先级覆盖生效，可通过测试用例验证
 3. git log 可追溯每个 stage 的提交；main 推送与远端任务分支删除只允许在 verify-code close 阶段人工确认后执行；main 推送必须执行一次，远端任务分支删除仅在远端分支存在时执行一次（不存在则跳过）
 4. close 流程执行后四项验收均通过，worktree 和分支均已清理，spec 已归档
