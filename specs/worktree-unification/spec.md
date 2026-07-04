@@ -51,8 +51,9 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 | 概念 | 定义 |
 |------|------|
 | worktree.json | 跨 stage 共享的 worktree 状态契约文件，存储在 `{{task_tracking_root}}/tasks/{task-id}/` 下 |
-| task_dir | `{{task_tracking_root}}/tasks` 的别名，即 `WORKFLOWHUB_TASK_DIR` 所指目录下的 tasks 子路径；单独使用 `task_dir` 时等价于 `{{task_tracking_root}}/tasks`，全篇路径表达统一使用 `{{task_tracking_root}}/tasks/{task-id}/...` 形式，不使用 `{task_dir}/{task-id}/...` |
-| target_repo_root | 目标仓库的根路径，默认通过 `git rev-parse --show-toplevel` 推导，不使用原始工作目录 |
+| task_dir | `{{task_tracking_root}}/tasks` 的缩写，仅供行文简称；规范路径表达统一使用 `{{task_tracking_root}}/tasks/{task-id}/...`，不使用 `{task_dir}/{task-id}/...` |
+| WORKFLOWHUB_TASK_DIR | 环境变量，其值等于 `{{task_tracking_root}}`（即 task tracking root 本身，不含 `/tasks` 子路径）；parser 读取该变量后将其作为 tracking root，再拼接 `/tasks/{task-id}/`，不做额外推断 |
+| target_repo_root | 目标仓库的根路径，由 make-decision 在当前会话 cwd 上下文首次探测并固化写入 worktree.json；后续 stage 从 worktree.json 读取，禁止重新探测或重新推导 |
 | worktree_root | 实际创建的 worktree 目录路径 |
 | push_policy | 推送策略：push 仅在 verify-code close 阶段人工确认后执行一次（close 命令级序列中） |
 | created_by_stage | 记录哪个 stage 创建了该 worktree |
@@ -61,7 +62,7 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 ### 假设
 
 - task_dir 由外部环境变量 `WORKFLOWHUB_TASK_DIR` 提供；若未设置，降级读取 workflowhub.yaml 中的配置值（fallback，非停止条件）
-- `target_repo_root` 表示主 checkout 根目录（即执行 `git worktree add` 的原始 checkout，非任务 worktree）；其值须在 make-decision 阶段从主 checkout 上下文中通过 `git rev-parse --show-toplevel` 推导后写入 worktree.json，不得在任务 worktree 内执行该命令（会得到 worktree_root，语义错误）；close 流程需切回此路径执行 merge/remove；`worktree_root` 表示任务 worktree 目录路径，二者不同
+- `target_repo_root` 表示主 checkout 根目录（即执行 `git worktree add` 的原始 checkout，非任务 worktree）；其值须由 make-decision 在当前会话 cwd 上下文首次探测并固化写入 worktree.json，后续 stage 只从 worktree.json 读取，禁止在任何其他上下文中重新探测或推导（尤其不得在任务 worktree 内重新推导，否则会得到 worktree_root，语义错误）；close 流程需切回此路径执行 merge/remove；`worktree_root` 表示任务 worktree 目录路径，二者不同
 - task-id 格式：两到三个小写英文单词，连字符分隔（如 `worktree-unification`），已在 make-decision 阶段确定，必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`
 - worktree.json 由 make-decision stage 负责首次写入，后续 stage 只读；唯一例外：verify-code close 阶段完成清理后可将 status 字段更新为 `"cleaned"`（仅此字段，其余字段保持只读）
 
@@ -117,8 +118,8 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 - D4：worktree.json 写入时机与字段要求
 - D5：僵尸 worktree / 占用分支的检测规则（fail-loud，不自动删除）
 
-**task 子目录创建职责（D6）**：make-decision 负责创建 `{{task_tracking_root}}/tasks/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
-- 前置条件：`task_dir`（由 `WORKFLOWHUB_TASK_DIR` 或 workflowhub.yaml 提供）必须已存在；若父目录 task_dir 不存在，则 fail-loud 报错，不自动创建父目录。
+**task 子目录创建职责（派生约束，来源：D1 + fail-loud 原则）**：make-decision 负责创建 `{{task_tracking_root}}/tasks/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
+- 前置条件：`{{task_tracking_root}}/tasks/`（由 `WORKFLOWHUB_TASK_DIR` 拼接 `/tasks` 得到）必须已存在；若父目录不存在，则 fail-loud 报错，不自动创建父目录。
 - 幂等：若 `{{task_tracking_root}}/tasks/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
 - 成功后方可继续 D3 worktree 创建步骤。
 
@@ -143,6 +144,8 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 ### FR-WORKTREE-COMMIT-004：每 stage/phase commit
 
 build-code 流程中，每个 stage 或 phase 完成后，每个原子提交的 commit message 须包含 stage 名称前缀（格式：`workflowhub(<stage-name>): <描述>`），使提交记录可追溯到具体 stage。不额外制造阶段级空提交（即不使用 `git commit --allow-empty` 作为 stage marker）——原子提交本身承担 stage 标记职责。
+
+**硬规则**：每个产生文件变更的 stage/phase 结束前，必须至少存在一条 `workflowhub(<stage-or-phase>)` 前缀的 commit；若某 stage/phase 无文件变更，须在 stage-result 或 journal 中明确记录"无变更"原因，不得静默跳过。
 
 
 commit message 中括号内的标识符有两类：
@@ -172,15 +175,15 @@ close 阶段的完整线性操作序列（唯一允许发生远端交互的阶�
 
 ### FR-WORKTREE-CLOSE-006：close 流程完整性
 
-close 流程须包含以下步骤，无遗漏：
+close 流程须包含以下步骤，顺序严格按 decision-log D5 执行，无遗漏：
 
 - 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。
 - 质量事实记录：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）
-- **3rd-review 独立审查**（在归档 commit 之前执行）：由独立上下文（3rd-review agent）对本 task 所有 stage 产出执行独立审查；审查结果写入 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`；审查结论须包含明确 verdict（pass / revise_required）；审查产物须落盘可查，不得以摘要或口头声明替代文件证据。验收标准：evidence 目录下存在当轮 3rd-review 产物且 verdict 明确；若 verdict=revise_required，需_human=true 并列明 findings，不得继续执行不可逆动作。
-- **stage-result 落盘**（在归档 commit 之前执行，3rd-review verdict=pass 后）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入持久化文件并纳入归档 commit；验收标准：归档 commit 中包含 stage-result 文件，且其 verdict 字段与 3rd-review 产物一致。
-- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit，含 stage-result）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
+- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
+- **3rd-review 独立审查**（在不可逆动作完成后执行，即 merge + 分支清理之后）：由独立上下文（3rd-review agent）对本 task 所有 stage 产出执行独立审查；审查结果写入 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`；审查结论须包含明确 verdict（pass / revise_required）；审查产物须落盘可查，不得以摘要或口头声明替代文件证据。验收标准：evidence 目录下存在当轮 3rd-review 产物且 verdict 明确。
+- **stage-result 落盘**（3rd-review 之后）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入 `{{task_tracking_root}}/tasks/{task-id}/stage-result.json`；不纳入 repo 归档 commit（stage-result 属于过程/追踪内容，须存放在 task_tracking_root 而非 repo specs/ 下）。验收标准：`{{task_tracking_root}}/tasks/{task-id}/stage-result.json` 存在且 verdict 字段与 3rd-review 产物一致。
 
-**验收标准**：close 流程后，spec 已归档（含 stage-result）、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
+**验收标准**：close 流程后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；stage-result.json 在 `{{task_tracking_root}}/tasks/{task-id}/` 下可查；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
 ### FR-WORKTREE-SCOPE-008：build-spec / build-plan 不创建 worktree
 
@@ -445,7 +448,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | 5 | spec↔decision-log 覆盖率（FR-ALIGN-001） | pass | decision-log D1-D5、验收标准 1-9 均在 FR 中有对应条目 |
 | 6 | 无 [NEEDS CLARIFICATION] 残留 | pass | Q1/Q2 均已标记 [RESOLVED] 并附消解依据 |
 | 7 | Known Gaps 段存在 | pass | §9 已添加 |
-| Purity | Spec-Purity grep | pass | 重跑 grep 检测：无 `&&`、无 `$VAR`、无独立 shell 管道符；Markdown 表格 `\|` 已确认为 false positive，无需处理 |
+| Purity | Spec-Purity grep | pass（口径修正） | FR 正文不含实现命令行（`&&`、`$VAR`、shell 管道）；正文中出现的命令级表达（如 `git worktree list`、`git log main --merges`）均作为"验收观察点"（用于描述可检测的外部状态），不属于 FR 内嵌 shell 脚本，符合 spec 可证伪原则；Markdown 表格 `\|` 为 false positive，不计 |
 
 ### 3. 独立审查摘要
 
