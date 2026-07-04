@@ -156,7 +156,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 3. 若两者均缺失，fail-loud 报错，不使用硬编码路径
 
 **验收标准**：
-- Given `WORKFLOWHUB_TASK_DIR=/tmp/test`（目录已存在），调用 parser，返回 `/tmp/test`
+- Given `WORKFLOWHUB_TASK_DIR=<绝对路径>`（目录已存在），调用 parser，返回该路径
 - Given `WORKFLOWHUB_TASK_DIR` 未设置，`workflowhub.yaml` 存在且含 `task_dir` 字段，返回 yaml 中的配置值
 - Given `WORKFLOWHUB_TASK_DIR` 未设置，`workflowhub.yaml` 文件不存在，parser fail-loud 抛出明确错误（不使用硬编码路径）
 - Given `WORKFLOWHUB_TASK_DIR` 未设置，`workflowhub.yaml` 存在但无 `task_dir` 字段，parser fail-loud 抛出明确错误（区别于文件不存在场景）
@@ -175,7 +175,7 @@ commit message 中括号内的标识符有两类：
 
 两类互不混用：纯 stage 提交不含斜杠，phase 提交必须带 `<stage>/` 前缀。
 
-close 归档 commit 仅包含 `git mv specs/{task-id}/ specs/archive/{task-id}/`（spec 目录移入归档），message 格式固定为 `workflowhub(close): archive {task-id}`。`git worktree remove` 是仓库外清理动作，不属于此 commit 内容，在归档 commit 之后作为独立清理步骤执行（见 FR-WORKTREE-PUSH-005 步骤 4）。
+close 归档 commit 仅包含将 `specs/{task-id}/` 移入 `specs/archive/{task-id}/` 的变更（spec 目录移入归档），message 格式固定为 `workflowhub(close): archive {task-id}`。worktree 目录清理是仓库外操作，不属于此 commit 内容，在归档 commit 之后作为独立清理步骤执行（见 FR-WORKTREE-PUSH-005 步骤 4）。
 
 **验收标准**：执行完整 build-code 流程后，`git log --oneline` 中每个 stage 的原子提交均带有对应 stage 名称前缀；close 归档 commit 独立存在且 message 格式符合规定。
 
@@ -183,15 +183,13 @@ close 归档 commit 仅包含 `git mv specs/{task-id}/ specs/archive/{task-id}/`
 
 close 阶段的完整线性操作序列（唯一允许发生远端交互的阶段；中间 stage 不得执行任何 push 或远端分支清理；须在人工确认 user_decision=true 后按此顺序执行，不可调换）：
 
-1. 在任务 worktree（任务分支 `workflowhub/{task-id}` 内）：执行 `git mv specs/{task-id}/ specs/archive/{task-id}/` 并 commit（message：`workflowhub(close): archive {task-id}`）——归档 commit 进入任务分支，确保后续 merge 时被 main 包含
-2. 切换执行上下文至主 checkout：将工作目录切换到 `target_repo_root`（主 checkout 根目录，非任务 worktree），并验证当前分支为 `main`（`git rev-parse --abbrev-ref HEAD` 输出为 `main`）；禁止在任务 worktree 内执行 `git checkout main`（linked worktree 不能 checkout 已被主 checkout 占用的分支，会失败）
-3. `git merge --no-ff workflowhub/{task-id}`（从主 checkout 执行，保留合并节点，归档 commit 随之进入 main）
-4. `git worktree remove <worktree_root_path>`（从主 checkout 执行，清理 worktree 目录）；验证 worktree 目录不存在，`git worktree list` 无该条目
-5. `git push origin main`（推送合并后的 main）
-6. 检查并删除远端任务分支：`git ls-remote --exit-code origin refs/heads/workflowhub/{task-id}`
-   - 若存在（exit 0）：执行 `git push origin :refs/heads/workflowhub/{task-id}` 删除远端分支
-   - 若不存在（exit 非 0）：跳过，记录 info "远端分支不存在，无需删除"，不报错
-7. `git branch -d workflowhub/{task-id}`（删除本地任务分支；在远端处理完成后再删，便于失败重试）
+1. 在任务 worktree（任务分支 `workflowhub/{task-id}` 内）：将 `specs/{task-id}/` 目录移入 `specs/archive/{task-id}/` 并提交归档 commit（message：`workflowhub(close): archive {task-id}`）——归档 commit 进入任务分支，确保后续 merge 时被 main 包含
+2. 切换执行上下文至主 checkout：将工作目录切换到 `target_repo_root`（主 checkout 根目录，非任务 worktree），并验证当前分支为 `main`；禁止在任务 worktree 内执行切换到 main 的操作（linked worktree 不能 checkout 已被主 checkout 占用的分支，会失败）
+3. 从主 checkout 执行非快进合并（no-ff），将任务分支 `workflowhub/{task-id}` 合并入 main，保留合并节点，归档 commit 随之进入 main
+4. 从主 checkout 移除任务 worktree 目录；验证 worktree 目录不存在且 worktree 列表中无该条目
+5. 将合并后的 main 推送到远端 origin
+6. 检查远端任务分支是否存在：若存在则删除远端任务分支；若不存在则跳过，记录 info "远端分支不存在，无需删除"，不报错
+7. 删除本地任务分支（在远端处理完成后再删，便于失败重试）
 8. 更新 `{task_dir}/{task-id}/worktree.json` 的 status 字段为 `"cleaned"`（这是 task_dir 下的外部契约文件，不属于目标 repo 的 git commit；仅更改 status 字段，其余字段保持不变）
 
 **验收标准**：close 后 `git log main --merges` 可查到合并节点；`git log main --oneline` 包含 `workflowhub(close): archive {task-id}` commit；worktree 目录不存在；本地分支不存在；远端分支不存在或原本从未存在（均视为满足）；`{task_dir}/{task-id}/worktree.json` status 字段为 `"cleaned"`。
@@ -202,7 +200,7 @@ close 流程须包含以下步骤，无遗漏：
 
 - 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。**例外**：若 close-progress.json 存在且 `worktree_removed=true`、且其 hash/path 字段与实际 git 状态一致（按重入 cross-check 规则验证），则跳过 active-only 校验，直接从第一个未完成步骤继续执行（partial-close 重入），不视为 fail-loud 条件。
 - 质量事实记录：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）
-- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（git mv + commit）→ ② 切主 checkout → ③ merge --no-ff → ④ git worktree remove → ⑤ push main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
+- 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
 
 **验收标准**：close 流程后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
@@ -296,7 +294,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ### 未解风险
 
-- [RESOLVED] Q1：`workflowhub.yaml` 已在 line 41 声明 `task_dir: /Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/`，字段已存在。FR-WORKTREE-ENVVAR-003 的 fallback 直接读取该现有字段，无需新增配置项。
+- [RESOLVED] Q1：`workflowhub.yaml` 已在 line 41 声明 `task_dir` 字段，字段已存在。FR-WORKTREE-ENVVAR-003 的 fallback 直接读取该现有字段，无需新增配置项。
 - [RESOLVED] Q2：close 流程现有入口为 `workflows/verify-code/SKILL.md` 步骤 9（明文停顿/收尾确认）和步骤 10（收尾执行：merge + branch-delete）。无独立 close SKILL.md。FR-WORKTREE-CLOSE-006 要求的 spec 归档、验证清单检查、worktree 安全清理、分支安全清理四步，需在 verify-code Step 10 中补充，不另建文件。
 
 ---
@@ -333,9 +331,9 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 ### FR-WORKTREE-ENVVAR-003
 
 **场景 A — 环境变量优先**
-- Given: WORKFLOWHUB_TASK_DIR 设置为 /tmp/test，workflowhub.yaml 中 task_dir 为另一路径
+- Given: WORKFLOWHUB_TASK_DIR 设置为某绝对路径，workflowhub.yaml 中 task_dir 为另一路径
 - When: 调用 task-dir-parser 解析 task_dir
-- Then: 返回 /tmp/test，不使用 yaml 中的值
+- Then: 返回环境变量所设路径，不使用 yaml 中的值
 
 **场景 B — 降级 fallback**
 - Given: WORKFLOWHUB_TASK_DIR 未设置，workflowhub.yaml 中存在 task_dir 字段
@@ -364,7 +362,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 **场景 B — 正常 push**
 - Given: close 流程收到 user_decision=true
 - When: 执行 close 线性命令序列（FR-WORKTREE-PUSH-005 定义的 8 步顺序）
-- Then: 归档 commit 已在任务分支提交；merge --no-ff 已执行，归档 commit 被 main 包含；worktree 目录不存在；`git push origin main` 已执行一次；远端任务分支存在时已执行 `git push origin :refs/heads/workflowhub/{task-id}`，不存在时跳过；本地任务分支已删除；worktree.json status 已更新为 cleaned
+- Then: 归档 commit 已在任务分支提交；非快进合并已执行，归档 commit 被 main 包含；worktree 目录不存在；main 已推送至远端一次；远端任务分支存在时已删除，不存在时跳过；本地任务分支已删除；worktree.json status 已更新为 cleaned
 
 ### FR-WORKTREE-CLOSE-006
 
@@ -388,7 +386,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 2. **make-decision/SKILL.md worktree 章节缺失**：build-code §17 FR-WORKTREE-001 已引用该章节，但其当前内容不存在。这是跨 SKILL.md 的规范缺口，需本任务补齐。
 
-3. **verify-code close 步骤未覆盖 spec 归档和 worktree 清理**：现有 verify-code Step 10 有 merge/branch-delete 确认，但无 spec 归档（git mv specs/ specs/archive/）和 git worktree remove 步骤。需补充。
+3. **verify-code close 步骤未覆盖 spec 归档和 worktree 清理**：现有 verify-code Step 10 有 merge/branch-delete 确认，但无 spec 归档（将 specs/ 移入 specs/archive/）和 worktree 目录移除步骤。需补充。
 
 4. **metrics recordSkeleton 路径解析失败**：当前 metrics/collector.mjs 在 TASK_TRACKING_ROOT 未设置时报 `Cannot read properties of undefined (reading 'taskMetricsPath')`。本任务不修复此问题，记录为已知摩擦。
 
