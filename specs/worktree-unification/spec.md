@@ -101,19 +101,24 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{task_dir}/{ta
 
 **close 重入恢复规则**（partial close 中途失败时）：
 - 若 worktree 目录已不存在（worktree remove 已执行）但 status 仍为 `"active"`：active-only 校验会因 `worktree_root` 不在 `git worktree list` 中而失败，阻止正常重入；此时实现须检测此特殊状态（worktree 消失但 status=active），直接跳过 active-only 校验、跳过已完成的清理步骤，从下一个未完成步骤继续执行（幂等重入，不视为 fail-loud 条件）
-- 各不可逆步骤须记录已完成标记，写入 `{task_dir}/{task-id}/close-progress.json`，schema 如下（所有字段为 bool，默认 false，每步成功验证后立即写入 true）：
+- 各不可逆步骤须记录已完成标记，写入 `{task_dir}/{task-id}/close-progress.json`，schema 如下（bool 字段默认 false，每步成功验证后立即写入 true；hash/path 字段在对应步骤完成时同步写入）：
   ```json
   {
     "archive_commit": false,
+    "archive_commit_hash": "",
     "merged_main": false,
+    "merge_commit_hash": "",
     "worktree_removed": false,
+    "worktree_root": "",
     "main_pushed": false,
     "remote_branch_deleted": false,
     "local_branch_deleted": false,
+    "branch": "",
+    "target_repo_root": "",
     "cleaned_status_written": false
   }
   ```
-  重入时：先读取 close-progress.json，再 cross-check 各标记对应的 git 实际状态（如 `merged_main=true` 但 merge commit 不在 main 历史中，则视为标记错误，fail-loud）；仅当标记与实际状态一致时，跳过已完成步骤，从第一个 false 标记处继续执行。
+  重入时：先读取 close-progress.json，再 cross-check 各标记对应的 git 实际状态（如 `merged_main=true` 但 merge commit 不在 main 历史中，则视为标记错误，fail-loud）；cross-check 还须比对 hash/path 字段与实际 git 状态（如 `archive_commit_hash` 须存在于 git log、`merge_commit_hash` 须在 main 历史中、`worktree_root`/`branch`/`target_repo_root` 须与当前 worktree.json 及 git 状态一致）；仅当标记与实际状态均一致时，跳过已完成步骤，从第一个 false 标记处继续执行。
 
 **cleaned-only 校验**（status=cleaned 时执行，替代 active-only）：
 - 仅执行 common schema 校验（6 字段存在、类型、值域）
@@ -161,7 +166,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下决�
 build-code 流程中，每个 stage 或 phase 完成后，每个原子提交的 commit message 须包含 stage 名称前缀（格式：`workflowhub(<stage-name>): <描述>`），使提交记录可追溯到具体 stage。不额外制造阶段级空提交（即不使用 `git commit --allow-empty` 作为 stage marker）——原子提交本身承担 stage 标记职责。
 
 commit message 中括号内的标识符有两类：
-- **stage 级提交**：标识符为固定枚举之一：`make-decision`、`build-code`、`verify-code`、`close`；格式 `workflowhub(<stage>): <描述>`
+- **stage 级提交**：标识符为固定枚举之一：`make-decision`、`build-spec`、`build-plan`、`build-code`、`verify-code`、`close`；格式 `workflowhub(<stage>): <描述>`
 - **phase 级提交**：标识符格式为 `<stage>/<phase-name>`，其中 stage 取上述固定枚举，phase-name 在各 stage SKILL.md 中定义（如 build-code 的 phase 1 写为 `workflowhub(build-code/phase-1): <描述>`）
 
 两类互不混用：纯 stage 提交不含斜杠，phase 提交必须带 `<stage>/` 前缀。
@@ -179,8 +184,8 @@ close 阶段的完整线性操作序列（唯一允许发生远端交互的阶�
 3. `git merge --no-ff workflowhub/{task-id}`（从主 checkout 执行，保留合并节点，归档 commit 随之进入 main）
 4. `git worktree remove <worktree_root_path>`（从主 checkout 执行，清理 worktree 目录）；验证 worktree 目录不存在，`git worktree list` 无该条目
 5. `git push origin main`（推送合并后的 main）
-6. 检查并删除远端任务分支：`git ls-remote --exit-code --heads origin workflowhub/{task-id}`
-   - 若存在（exit 0）：执行 `git push origin :workflowhub/{task-id}` 删除远端分支
+6. 检查并删除远端任务分支：`git ls-remote --exit-code origin refs/heads/workflowhub/{task-id}`
+   - 若存在（exit 0）：执行 `git push origin :refs/heads/workflowhub/{task-id}` 删除远端分支
    - 若不存在（exit 非 0）：跳过，记录 info "远端分支不存在，无需删除"，不报错
 7. `git branch -d workflowhub/{task-id}`（删除本地任务分支；在远端处理完成后再删，便于失败重试）
 8. 更新 `{task_dir}/{task-id}/worktree.json` 的 status 字段为 `"cleaned"`（这是 task_dir 下的外部契约文件，不属于目标 repo 的 git commit；仅更改 status 字段，其余字段保持不变）
@@ -191,7 +196,7 @@ close 阶段的完整线性操作序列（唯一允许发生远端交互的阶�
 
 close 流程须包含以下步骤，无遗漏：
 
-- 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close
+- 入口校验：读取 worktree.json，校验字段完整性（common 校验）和路径/分支存在性（active-only 校验）；校验失败 fail-loud，阻止 close。**例外**：若 close-progress.json 存在且 `worktree_removed=true`、且其 hash/path 字段与实际 git 状态一致（按重入 cross-check 规则验证），则跳过 active-only 校验，直接从第一个未完成步骤继续执行（partial-close 重入），不视为 fail-loud 条件。
 - 质量事实记录：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）
 - 不可逆动作（须人工确认 user_decision=true 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（git mv + commit）→ ② 切主 checkout → ③ merge --no-ff → ④ git worktree remove → ⑤ push main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。
 
@@ -350,7 +355,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 **场景 B — 正常 push**
 - Given: close 流程收到 user_decision=true
 - When: 执行 close 线性命令序列（FR-WORKTREE-PUSH-005 定义的 8 步顺序）
-- Then: 归档 commit 已在任务分支提交；merge --no-ff 已执行，归档 commit 被 main 包含；worktree 目录不存在；`git push origin main` 已执行一次；远端任务分支存在时已执行 `git push origin :workflowhub/{task-id}`，不存在时跳过；本地任务分支已删除；worktree.json status 已更新为 cleaned
+- Then: 归档 commit 已在任务分支提交；merge --no-ff 已执行，归档 commit 被 main 包含；worktree 目录不存在；`git push origin main` 已执行一次；远端任务分支存在时已执行 `git push origin :refs/heads/workflowhub/{task-id}`，不存在时跳过；本地任务分支已删除；worktree.json status 已更新为 cleaned
 
 ### FR-WORKTREE-CLOSE-006
 
