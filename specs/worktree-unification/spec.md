@@ -63,7 +63,9 @@ workflowhub 在 Multica 多 agent 环境下运行时，各 stage 通过独立 ch
 
 - task_dir 由外部环境变量 `WORKFLOWHUB_TASK_DIR` 提供；若未设置，降级读取 workflowhub.yaml 中的配置值（fallback，非停止条件）
 - `target_repo_root` 表示主 checkout 根目录（即执行 `git worktree add` 的原始 checkout，非任务 worktree）；其值须由 make-decision 在当前会话 cwd 上下文首次探测并固化写入 worktree.json，后续 stage 只从 worktree.json 读取，禁止在任何其他上下文中重新探测或推导（尤其不得在任务 worktree 内重新推导，否则会得到 worktree_root，语义错误）；close 流程需切回此路径执行 merge/remove；`worktree_root` 表示任务 worktree 目录路径，二者不同
-- task-id 格式：两到三个小写英文单词，连字符分隔（如 `worktree-unification`），已在 make-decision 阶段确定，必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`；**task-id 由用户/上游提供，make-decision 只做校验拒绝**：输入不匹配正则则 fail-loud 拒绝，不做自动归一化/转换（decision-log D3 仅定义合规格式，未授权自动 transform）
+- task-id 格式：两到三个小写英文单词，连字符分隔（如 `worktree-unification`），已在 make-decision 阶段确定；**make-decision 对用户/上游输入执行两步处理（decision-log D3）**：
+  1. **归一化转换**：先将输入转为小写；再将所有非字母非数字字符统一替换为连字符；再将连续连字符合并为单个连字符；再去除首尾连字符。
+  2. **校验**：归一化后的结果必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（即 2-3 个纯小写字母词，连字符分隔）；若归一化后仍不合规（如词数不对、含数字词段），则 fail-loud 拒绝，不做进一步猜测修正。
 - worktree.json 由 make-decision stage 负责首次写入，后续 stage 只读；唯一例外：verify-code close 阶段完成清理后可将 status 字段更新为 `"cleaned"`（仅此字段，其余字段保持只读）
 
 ---
@@ -110,20 +112,22 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{{task_trackin
 
 ### FR-WORKTREE-MAKEDECISION-002：make-decision 补齐 worktree 规则章节
 
-make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规则（R1-R5；注意：R 编号为本章节内部条目标识，与 decision-log 的 D 编号系统相互独立，不可混用）：
+make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规则（R1-R7；注意：R 编号为本章节内部条目标识，与 decision-log 的 D 编号系统相互独立，不可混用）：
 
-- R1（源自 decision-log D2）：目标仓库路径（target_repo_root）探测与固化规则 —— make-decision 在当前会话 cwd 上下文首次探测并做存在性校验，写入 worktree.json 并标注不可覆盖；后续所有 stage 只读该字段，禁止重新探测；字段缺失时 escalate_to_human
-- R2（设计延伸，非 decision-log 直接定义）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（两到三个小写英文单词，连字符分隔，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
-- R3（设计延伸）：worktree 创建时机（make-decision 阶段末尾，task 子目录创建成功后）
-- R4（源自 decision-log D2 字段定义部分）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
-- R5（源自 decision-log D4）：worktree 存在性/冲突检测规则 —— 用 `git worktree list --porcelain` 作为唯一权威校验；已注册且路径存在则复用；路径存在未注册（僵尸目录）则 fail-loud，不自动删除；分支已被其他 worktree 占用则 fail-loud，报告占用详情，不强制 checkout
+- R1（源自 decision-log D1）：task_tracking_root 读取规则 —— make-decision 读取 `WORKFLOWHUB_TASK_DIR` 环境变量作为 task_tracking_root（即跟踪根目录本身，不含 `/tasks` 子路径）；task 专属目录为 `task_tracking_root/tasks/{task-id}/`；若环境变量未设置则按 FR-WORKTREE-ENVVAR-003 降级顺序处理；task_tracking_root 写入 worktree.json 的 `task_tracking_root` 字段，后续所有 stage 只读该字段，禁止重新探测
+- R2（源自 decision-log D2）：目标仓库路径（target_repo_root）探测与固化规则 —— make-decision 在当前会话 cwd 上下文首次探测并做存在性校验，写入 worktree.json 并标注不可覆盖；后续所有 stage 只读该字段，禁止重新探测；字段缺失时 escalate_to_human
+- R3（设计延伸，非 decision-log 直接定义）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（两到三个小写英文单词，连字符分隔，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
+- R4（设计延伸）：worktree 创建时机（make-decision 阶段末尾，task 子目录创建成功后）
+- R5（源自 decision-log D2 字段定义部分）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
+- R6（源自 decision-log D4）：worktree 存在性/冲突检测规则 —— 用 `git worktree list --porcelain` 作为唯一权威校验；已注册且路径存在则复用；路径存在未注册（僵尸目录）则 fail-loud，不自动删除；分支已被其他 worktree 占用则 fail-loud，报告占用详情，不强制 checkout
+- R7（源自 decision-log D5）：make-decision stage 完成时 commit 规则 —— make-decision 成功完成时须在目标仓库提交 worktree.json（若已初始化 Git 跟踪）；commit message 格式为 `workflowhub(make-decision): <描述>`；若目标仓库尚未初始化或 make-decision 阶段无 repo 内文件变更，须在 stage-result 中明确记录"无 repo 内变更"原因，不得静默跳过
 
 **task 子目录创建职责（设计延伸：decision-log D1 决定 task_dir 读取机制，但未显式规定 make-decision 负责创建子目录；本条为基于 D1 语义和 fail-loud 设计原则的派生实现约束，非 D1 原文直接授权）**：make-decision 负责创建 `{{task_tracking_root}}/tasks/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
 - 前置条件：`{{task_tracking_root}}/tasks/`（由 `WORKFLOWHUB_TASK_DIR` 值拼接 `/tasks` 得到）必须已存在；若父目录不存在，则 fail-loud 报错，不自动创建父目录。
 - 幂等：若 `{{task_tracking_root}}/tasks/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
 - 成功后方可继续 R3 worktree 创建步骤。
 
-**验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，R1-R5 规则均有明确条文；R 编号与 decision-log D 编号不可混用。
+**验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，R1-R7 规则均有明确条文（含 D1 task_tracking_root 读取机制、D5 commit 责任）；R 编号与 decision-log D 编号不可混用。
 
 ### FR-WORKTREE-ENVVAR-003：core/task-dir-parser.mjs 环境变量优先
 
@@ -143,7 +147,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 
 ### FR-WORKTREE-COMMIT-004：每 stage/phase commit
 
-build-code 流程中，每个 stage 或 phase 完成后，每个原子提交的 commit message 须包含 stage 名称前缀（格式：`workflowhub(<stage-name>): <描述>`），使提交记录可追溯到具体 stage。不额外制造阶段级空提交（即不使用 `git commit --allow-empty` 作为 stage marker）——原子提交本身承担 stage 标记职责。
+本 commit 规则适用于 5-stage pipeline 中每个 stage 完成时、以及每个 stage 内每个 phase 完成时。每个原子提交的 commit message 须包含 stage 名称前缀（格式：`workflowhub(<stage-name>): <描述>`），使提交记录可追溯到具体 stage。不额外制造阶段级空提交（即不使用 `git commit --allow-empty` 作为 stage marker）——原子提交本身承担 stage 标记职责。
 
 **硬规则**：每个产生文件变更的 stage/phase 结束前，必须至少存在一条 `workflowhub(<stage-or-phase>)` 前缀的 commit；若某 stage/phase 无文件变更，须在 stage-result 或 journal 中明确记录"无变更"原因，不得静默跳过。
 
@@ -243,7 +247,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ### 约束
 
-- task-id 格式：两到三个小写英文单词，连字符分隔，匹配 `^[a-z]+(-[a-z]+){1,2}$`；make-decision 只做校验拒绝（不匹配则 fail-loud），不做自动归一化转换（D3 仅定义合规格式）
+- task-id 格式：两到三个小写英文单词，连字符分隔；make-decision 对输入执行两步处理（decision-log D3）：①归一化转换（转小写→非字母数字替换为连字符→合并连续连字符→去首尾连字符）；②校验归一化结果必须匹配 `^[a-z]+(-[a-z]+){1,2}$`，仍不合规则 fail-loud 拒绝
 - push_policy 字段值固定为 `"verify-code-only"`，不可扩展为其他值（防止后续滥用中间推送）
 - worktree.json 由 make-decision 首次写入后，后续 stage 只读，不得修改；verify-code close 阶段完成清理后例外，允许将 status 字段写为 `"cleaned"`
 - 不引入任何新的外部 npm 依赖
@@ -318,7 +322,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 ### FR-WORKTREE-MAKEDECISION-002
 
-**场景 A — D5 僵尸检测**
+**场景 A — D4 占用分支检测**
 - Given: 目标分支已被另一个 worktree 持有
 - When: make-decision 执行 worktree 创建前校验
 - Then: 输出明确错误说明分支冲突，不自动强制覆盖，停止执行
@@ -424,7 +428,7 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 
 **IN scope**:
 - worktree.json 契约字段定义（6 字段）
-- make-decision/SKILL.md 新增 worktree 章节（R1-R5，内部规则编号，不与 decision-log D 编号混用）
+- make-decision/SKILL.md 新增 worktree 章节（R1-R7，内部规则编号，不与 decision-log D 编号混用；含 D1 task_tracking_root 读取、D5 commit 责任）
 - core/task-dir-parser.mjs 改为 WORKFLOWHUB_TASK_DIR 优先
 - build-code §17 删除旧"File does not exist → create worktree"fallback 路径，改为 worktree.json 缺失时 fail-loud（stop/escalate_to_human）；此为废除旧 fallback 的明确要求
 - build-code per-stage commit 触发
