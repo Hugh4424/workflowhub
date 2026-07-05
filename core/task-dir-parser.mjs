@@ -23,13 +23,14 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
-
-/** Absolute path to the default config file (relative to this module). */
-const DEFAULT_CONFIG_PATH = resolve(here, "..", "config", "workflowhub.yaml");
+/**
+ * Yaml fallback resolves config/workflowhub.yaml relative to process.cwd().
+ * Callers relying on yaml fallback (not WORKFLOWHUB_TASK_DIR) must invoke from
+ * repo root. Production callers should prefer setting WORKFLOWHUB_TASK_DIR to
+ * avoid cwd sensitivity.
+ */
+const DEFAULT_CONFIG_PATH = resolve(process.cwd(), "config", "workflowhub.yaml");
 
 /**
  * Trim at most one trailing `/tasks` or `/tasks/` suffix from a path value.
