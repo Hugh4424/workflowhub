@@ -252,6 +252,7 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 2. `workflows/make-decision/SKILL.md`
 3. `workflows/build-code/SKILL.md`
 4. `workflows/verify-code/SKILL.md`
+5. `core/worktree-context.mjs`（新文件，Stage 2/build-code 阶段创建，由 T001 顺带交付，归属 core/ 共享工具脚本）
 
 **最小例外（Finding 1 决策）**：`workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md` 禁止修改，仅允许新增一段最小实现：读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段，字段缺失时 fail-loud 报错退出；其余逻辑一律不得改动。若该逻辑已存在，则跳过并记录"无需修改"。
 
