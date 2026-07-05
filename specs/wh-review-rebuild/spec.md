@@ -175,7 +175,8 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 - 第1轮：强制全量异源审查
 - 第2轮起：构造 Delta Package，以增量模式调用 3rd-review
 - 异源审查最多3轮；第4轮起强制转同源
-- 连续3轮出现大量 blocking 或指纹重复 blocking → 升级人工
+- **升级人工触发条件（精确定义）**：单轮 `blocking_count ≥ 3`，或 `fingerprint_repeated = true`（当轮 blocking 指纹集合与上轮完全相同），且上述条件在**连续3轮**均成立 → 触发 `escalate_to_human`
+- **优先级规则**：每轮末先判升级人工条件，满足则直接升级，不再进入下一轮同源切换；不满足升级条件时，再按轮次判断是否转同源。即：第3轮末如满足升级条件，直接升级人工，不进入第4轮；不满足时才进入第4轮同源模式。
 
 **Given/When/Then**：
 - Given 第1轮审查已完成，verdict=revise_required；
@@ -185,7 +186,8 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 **验收标准**：
 - AC3-1：轮次状态文件（或字段）可读，记录当前轮次号和模式。
 - AC3-2：第2轮+ Delta Package 存在且仅包含变更材料。
-- AC3-3：连续3轮 blocking 触发 `escalate_to_human` 裁决。
+- AC3-3：连续3轮每轮 `blocking_count ≥ 3` 或 `fingerprint_repeated=true` 时，触发 `escalate_to_human` 裁决（机器可验证：第3轮末升级条件满足时不进入第4轮）。
+- AC3-4：第3轮末升级条件满足时，裁决为 `escalate_to_human`，不进入同源模式（优先级规则可机器验证）。
 
 ---
 
@@ -200,10 +202,20 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 - When wh-review 综合轮次与 findings 做裁决；
 - Then 裁决值严格为枚举三值之一，报告以6章结构落盘当前任务目录。
 
+**报告最小章节结构（占位名清单，render-review-report.mjs 须输出以下6章）**：
+1. Summary（审查摘要：verdict、轮次、模式）
+2. Blocking Issues（blocking 级问题列表，含指纹字段）
+3. Minor Issues（minor 级问题列表）
+4. Pass Items（通过项列表）
+5. Delta（本轮相较上轮的变更说明，第1轮留空）
+6. Metadata（task-name、round_number、mode、contract、timestamp）
+
+实际章节名以 agenthub 原实现为准；build-plan 阶段核实后在 wh-review SKILL.md 中固化。
+
 **验收标准**：
 - AC4-1：裁决字段只含三值之一，其他值视为错误。
 - AC4-2：报告文件路径可预测（任务目录下固定子路径）。
-- AC4-3：报告包含6章结构（结构名称在 SKILL.md 中明确定义）。
+- AC4-3：报告含上述6章结构（章节名在 wh-review SKILL.md 中明确定义，可机器 grep 验证）。
 
 ---
 
@@ -211,19 +223,38 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 
 **描述**：精简 `skills/3rd-review/SKILL.md`，剥离所有 stage/轮次知识，只保留纯审查引擎接口。
 
-**接口约定**：
-- 输入：`{mode, contract, materials}`
-- 输出：`{verdict, findings, actual_mode}`
+**真实调用契约（基于 standalone.sh 实测参数，直接采信）**：
+
+wh-review 调用 3rd-review 的真实 CLI 形态为：
+
+```
+standalone.sh \
+  --input=<materials-path> \
+  --output-root=<output-dir> \
+  --task-name=<task-name> \
+  --review-runner=<runner-cmd> \
+  --checkpoint=<stage> \
+  [--max-revise-rounds=N]
+```
+
+- 无 `--engine` / `--output` 参数（这两个参数不存在于 standalone.sh）
+- `review-runner` 走 `<runner> --prompt-file=<path> --result-file=<out.json> --review-request-id=<id>` 契约
+- exit code 语义：`0` = pass，`1` = revise_required，`2` = escalate_to_human
+
+wh-review 的逻辑入参（高层抽象）仍为 `{mode, contract, materials}`，但实现时须将其映射到上述 CLI 参数：`mode` 影响 `--max-revise-rounds` 和 materials 构造，`contract` 映射到 `--checkpoint`（合同路径由 wh-review 预置），`materials` 写入 `--input` 路径。
+
+**⚠️ 已知 standalone.sh bug（wh-review 实现须规避）**：`--max-revise-rounds` 参数只在 CLI 解析和 manifest 记录中出现，standalone.sh revise 循环体（约 206-420 行）从未检查该上限，导致 revise_required 时无限循环（实测 round 33+ 仍未停止）。此 bug 不在本期 scope 内修复（属新发现 bug，非 decision-log 所指旧 checkpoint 路由 bug）。**wh-review 必须自己做轮次计数并强制停止，不能依赖 standalone.sh 的 `--max-revise-rounds` 上限（该上限在 standalone.sh 内不生效）。** 详见 Known Gaps GAP-6。
 
 **Given/When/Then**：
-- Given wh-review 传入 `{mode: "full", contract: <design合同>, materials: <build-spec产物>}`；
-- When 3rd-review 执行；
-- Then 3rd-review 完成环境探测、调度 reviewer agent、返回 `{verdict, findings, actual_mode}`，不感知 stage 名称或轮次号。
+- Given wh-review 构造好 materials 文件并写入 `--input` 路径；
+- When wh-review 调用 `standalone.sh --input=<path> --output-root=<dir> --task-name=<name> --review-runner=<cmd> --checkpoint=<stage>`；
+- Then standalone.sh 完成环境探测、调度 reviewer agent，以 exit code 0/1/2 返回结果，不感知 stage 名称或轮次号（由 wh-review 管理）。
 
 **验收标准**：
 - AC5-1：3rd-review SKILL.md 不含 stage 名称枚举（make-decision / build-spec 等）。
 - AC5-2：3rd-review SKILL.md 不含轮次管理逻辑（round/Delta Package 等）。
-- AC5-3：3rd-review 接受 `{mode, contract, materials}` 输入并返回 `{verdict, findings, actual_mode}`。
+- AC5-3：wh-review 实现调用 standalone.sh 时使用 `--input/--output-root/--task-name/--review-runner/--checkpoint` 参数，不使用不存在的 `--engine/--output` 参数（可机器 grep 验证）。
+- AC5-4：wh-review 实现含独立轮次计数器，不依赖 standalone.sh `--max-revise-rounds` 做强制停止（AC-D10 轮次状态文件验证）。
 
 ---
 
@@ -412,7 +443,7 @@ stage agent
 
 ### 未决问题
 
-- **OPEN-1**（不阻断当前范围）：3rd-review standalone.sh 实际调用参数与 SKILL.md 文档描述（`--engine`/`--output`/返回结构）存在不一致，build-plan 阶段需创建 tracking issue 并在实现时对齐（来源：decision-log §6）。
+- **OPEN-1**（已在本期 spec 解决）：3rd-review standalone.sh 实际调用参数与旧文档描述（`--engine`/`--output`）不一致，已在 FR-THIRDREVIEW-001 中基于实测事实明确真实 CLI 契约（`--input/--output-root/--task-name/--review-runner/--checkpoint`），不再需要 build-plan 阶段另建 tracking issue。
 
 ---
 
@@ -421,5 +452,6 @@ stage agent
 - 5 套 stage 专属合同从 agenthub verifiers/vibecoding 搬迁后可能需要适配 workflowhub 数据结构，具体适配点在 build-plan 阶段确认。
 - render-review-report.mjs 的6章结构名称未在 decision-log 中明确列出，build-plan 阶段需在 agenthub 原实现中核实并在 SKILL.md 中定义。
 - `docs/human-brief-template.md` 是否已存在未经确认，若不存在须作为前置依赖在 build-plan 中标出。
-- （spec-clarify 补充）**GAP-4**：降级触发条件"大量 blocking"中"大量"未定义数值阈值，build-plan 阶段需明确具体数值（如 blocking_count ≥ N）。不阻断本期范围。
-- （spec-clarify 补充）**GAP-5**：第4轮审查时"强制转同源"与"连续3轮 blocking→升级人工"两条规则可能同时触发，优先级未明确。Build-plan 阶段需在 wh-review SKILL.md 中定义执行优先级（升级人工优先于降同源，或反之）。不阻断本期范围。
+- （spec-clarify 补充）**GAP-4**（已在本期 spec 解决）：降级触发条件中"大量"已在 FR-WHREVIEW-003 中明确为"单轮 blocking_count ≥ 3 或 fingerprint_repeated=true，连续3轮成立"。
+- （spec-clarify 补充）**GAP-5**（已在本期 spec 解决）：同源切换与升级人工的优先级已在 FR-WHREVIEW-003 中明确：升级人工判定先于同源切换判定（第3轮末先判升级条件，满足则直接升级，不进入第4轮同源模式）。
+- （3rd-review 实测发现）**GAP-6**：standalone.sh `--max-revise-rounds` 参数在 revise 循环体（约 206-420 行）中从未生效，导致 revise_required 时无限循环（实测 round 33+ 未停止）。此 bug 不在本期修复 scope 内。wh-review 实现须自行做轮次计数并强制停止，不能依赖 standalone.sh 的 `--max-revise-rounds`（见 FR-THIRDREVIEW-001 AC5-4）。
