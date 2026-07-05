@@ -26,6 +26,20 @@ Call the `spec-research` skill located at `skills/spec-research/SKILL.md`:
 - If spec-research fails, **record the failure and escalate to human** (non-blocking) — do not hard-stop the pipeline. The build-plan stage continues, but the missing research.md must be acknowledged in stage-result `facts.research_ref` or `missing_items`
 - Reference the research output path in stage-result `facts.research_ref` when it exists
 
+### Step 0.6: Worktree context 读取 (FR-WORKTREE-SCOPE-008)
+
+build-plan **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-plan 只消费已创建的 worktree 上下文：
+
+```bash
+# worktree.json 路径构造规则（与 build-code §17 一致）：
+# taskDir 通过 parseTaskDir() 获取（WORKFLOWHUB_TASK_DIR env var 优先，yaml fallback，两者缺失 fail-loud）
+node core/worktree-context.mjs {taskDir}/{task-id}/worktree.json
+```
+
+调用上述命令读取 `worktree.json`：两字段（`target_repo_root`/`worktree_root`）任一缺失时该脚本以非零退出码 fail-loud，build-plan 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+
+**status=cleaned 拒绝逻辑**：读取 `worktree.json` 后，build-plan 须额外检查 `status` 字段——若 `status="cleaned"`，说明 worktree 已归档，须立即 `escalate_to_human` 并停止推进，不得复用已归档的 worktree 上下文（与 spec FR-WORKTREE-CONTRACT-001 cleaned-only 校验一致）。
+
 ### Step 1: Read upstream inputs
 
 Read the spec from upstream `build-spec`:
@@ -38,7 +52,7 @@ Read the spec from upstream `build-spec`:
 ```javascript
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
 ```
 
 The `task-id` must be explicitly provided. If missing, fail with "task-id required" and non-zero exit. No git branch inference fallback.
@@ -172,6 +186,15 @@ Invoke the independent plan engineering reviewer via the `3rd-review` infrastruc
 - Before calling, verify that the cross-repository path `/Users/Hugh/Hugh/Project/3rd-review/verifiers/vibecoding/` is accessible (e.g., directory exists and is readable)
 - If the path is not accessible, **record `plan-eng-review.md` as unavailable and escalate to human** (non-blocking); do not block the stage
 - If accessible, call the plan-reviewer with: `specs/{task-id}/plan.md`, `specs/{task-id}/tasks.md`, and `specs/{task-id}/cross-artifact-analysis.md`
+
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=build-plan \
+  --input specs/{task-id}/plan.md \
+  --engine codex \
+  --output specs/{task-id}/reviews/build-plan-review.md
+```
 - The reviewer writes `specs/{task-id}/plan-eng-review.md` with an independent engineering verdict
 - If the reviewer call fails or times out, **record the failure and escalate to human** (non-blocking); stage-result still succeeds
 - Reference the plan-eng-review path (or `unavailable`) in stage-result `facts.plan_review_ref`
@@ -241,6 +264,10 @@ There is no `pending` state. The checkpoint either has not yet resolved (in whic
 Identify all files and modules that will be touched by the plan. For deletions or renames, scan for every reference in code, config, tests, and docs.
 
 Every task in tasks.md must reference at least one FR from the spec. Check the plan against any list of forbidden files before finalising.
+
+### Step 10.5: Commit 触发点 (FR-WORKTREE-COMMIT-004)
+
+当本阶段对目标仓库产生文件变更时，须 `git add` + `git commit`，message 含 `workflowhub(build-plan)` 前缀（例如 `workflowhub(build-plan): <description>`）。所有 `git add`/`git commit` 必须在 `worktree_root`（本任务的 linked worktree，当前 task branch）中执行；严禁在 `target_repo_root` 的主工作树上执行提交。若本阶段无文件变更，禁止空提交，须在 stage-result 或 journal 记录 no-change reason；字段路径固定为 stage-result 的 `facts.no_change_reason`（string），仅在本阶段无文件变更时写入该字段（例如 `"facts": {"no_change_reason": "build-plan stage produced no file changes", ...}`），有文件变更时该字段不出现；no-change 记录为必填项，不得两者皆无地静默结束本阶段。
 
 ## Produce a stage-result
 

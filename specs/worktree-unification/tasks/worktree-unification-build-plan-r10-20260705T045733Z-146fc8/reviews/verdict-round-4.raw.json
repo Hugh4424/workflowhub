@@ -1,0 +1,91 @@
+{
+  "verdict": "escalate_to_human",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 65,
+      "issue": "上一轮 Finding 1 未闭合且已连续多轮重复：spec 要求 build-spec/build-plan 在已有 worktree 中读取 worktree.json 的 target_repo_root/worktree_root，并在缺失时 fail-loud；但任务仍把 build-spec/build-plan 定义为只读核查且禁止修改。执行者无法同时满足 spec 行为要求和 forbidden-file 边界。",
+      "recommendation": "二选一并同步 spec/plan/tasks：要么允许修改 build-spec/build-plan 并为 worktree.json 读取/fail-loud/commit 加任务和 gate；要么修改 spec 明确两者不消费 worktree.json，并删除对应验收场景。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 88,
+      "issue": "FR-WORKTREE-COMMIT-004 覆盖仍不足。T008 名义上是 COMMIT-004 gate，但实际只验证 build-code per-phase 规则和 build-code git log，未覆盖 build-spec、build-plan、verify-code、close 归档 commit 的矩阵行。",
+      "recommendation": "把 spec.md commit 覆盖矩阵逐行落到 T008 gate：make-decision、build-spec、build-plan、build-code 每 phase、verify-code、close；每行都要有 commit 或 no-change 记录的客观 gate。"
+    },
+    {
+      "severity": "blocking",
+      "file": "workflows/build-code/SKILL.md",
+      "line": 291,
+      "issue": "新增 per-phase commit rule 后，§15 仍保留“Commit only at the final semantic completion point”。这与行 286-288 的“每 phase GREEN 后、下一 phase 前 commit”直接冲突。执行者可能继续只做最终一次 commit，破坏 FR-WORKTREE-COMMIT-004 的阶段可追溯性。",
+      "recommendation": "删除或改写 final atomic commit 段，使其明确不再代表 build-code 的唯一提交点；证据字段说明也要改为每 phase commit 后记录对应 commit_sha/base_sha/head_sha。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 30,
+      "issue": "上一轮 Finding 4 未闭合：T002 仍只要求 R3 分支命名 `workflowhub/{task-id}` 和 task-id 正则，没有要求 make-decision 执行 spec/data-contracts 定义的归一化步骤。`Worktree Unification` 这类已批准输入仍可能被直接拒绝。",
+      "recommendation": "在 T002 明确加入归一化实现任务和 gate：转小写、非字母数字替换为连字符、合并连续连字符、去首尾连字符，再校验；加入 `Worktree Unification -> worktree-unification` 的验证。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "issue": "上一轮 Finding 3 仍未在任务层闭合：T001 改 core/task-dir-parser.mjs 的持久行为，但任务只列 shell gate，没有要求更新或运行持久单元测试文件。后续执行者可只改实现、不更新回归测试，旧 `~/Knowledge/workflowhub` fallback 语义可能回归。",
+      "recommendation": "在 T001 增加明确测试文件变更和 gate，例如更新 parser test，覆盖 env 优先、yaml fallback、双缺失 fail-loud、路径不存在/非目录、yaml `/tasks` 裁剪、env 不裁剪，并运行对应 Node 测试。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 73,
+      "issue": "依赖图与并行标记冲突：T006 标记 `[P]`，但 depends 包含 T005；同文件后续图又声明 T006 与 T005 可并行。执行者并行运行时，T006 可能在 T005 核查结论落盘前读取缺失证据。",
+      "recommendation": "移除 T006 的 `[P]` 或删除对 T005 的依赖；若 T006 需要 T005 结论，则必须串行执行并更新 Dependency Graph。"
+    }
+  ],
+  "resolutionSummary": "Round-9 的 fake grep gate 已通过独立非零退出 gate基本闭合；yaml `/tasks` 裁剪规则已同步。旧 blocking 1、2、3、4 仍未完整闭合，其中 Finding 1 已是多轮重复，按同类问题三轮未闭合规则升级为 escalate_to_human。",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r10-input.md",
+      "hash": null,
+      "lines": 668,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r10-input.md",
+      "round": 4
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

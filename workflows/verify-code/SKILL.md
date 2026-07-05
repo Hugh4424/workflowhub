@@ -37,7 +37,7 @@ skill. The exact first-line payload must include `"event":"stage_summary"` and
 ```javascript
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
 ```
 
 Read `{taskDir}/{task-id}/stage-result-build-code.json`, extract `facts.tests.command`. If the command field is missing, surface an explicit error and stop. Do not proceed silently without a test command.
@@ -181,58 +181,78 @@ present, classify the result as yellow.
 - 若某条验收标准算不出覆盖状态（如证据缺失），标 `not_covered` 并记入 `missing_items`，不阻断本阶段推进。
 - 这份覆盖清单同时是步骤 9 明文摘要"原始需求覆盖情况"那一条的事实来源。
 
+## Close 章节：5 步骤序列总览（严格顺序）
+
+verify-code 阶段的收尾（close）流程严格按以下 5 个步骤顺序执行，任一步骤失败均按其自身契约处理，不得跳步或乱序：
+
+① **入口校验**（对应 §8 common + active-only）：进入 close 流程前，先执行 common 校验（worktree.json 六字段全非空、路径为绝对路径、值域校验，其中 `branch` 须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`，与 build-code §17 common 校验口径一致）。**`status` 前置约束**：close 流程仅允许 `status="active"` 的任务继续；`status="cleaned"` 视为已归档任务重入，直接 fail-loud，不得进入步骤②-④。`status="active"` 时须额外执行 active-only 校验，与 §17 build-code 消费 6 字段前的 active-only 校验口径一致（不得弱化）：worktree 目录存在性、以 `target_repo_root` 为准执行的 `git worktree list --porcelain` 注册、分支名匹配、同仓校验（该 worktree 的 commondir 须与 `target_repo_root` 同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）。以上任一校验失败（含 common 校验失败、`status="cleaned"` 重入、active-only 校验失败）即 fail-loud，跳过步骤②-④（不执行质量记录、3rd-review、任何不可逆动作），仅进入步骤⑤ 落盘（stage-result 的 `verdict` 字段固定写 `escalate_to_human`，并记录 `needs_human=true` 与该失败事实），不得继续执行 merge 等后续动作。
+
+② **质量事实记录**（对应 §8.5 + §9）（final-test-report, warn 不阻断, needs_human=true）：记录 `final-test-report.md`（含步骤 8.5 逐条覆盖清单）；§9 产出七要素明文停顿摘要。质量事实记录本身若出现非致命异常，只 warn 不阻断流程；若发现需要人工介入的问题，设置 `needs_human=true` 并继续往下记录，不因此中止。
+
+③ **3rd-review 独立审查**（merge 前，evidence/ 落盘，verdict=pass 继续）：详见步骤 10——在人工确认 merge 之前，作为独立子代理执行 3rd-review。审查输入范围须明确为：命令须在 `worktree_root`（任务自身的 linked worktree 工作目录，而非 `target_repo_root` 的主工作树）中执行，以便正确读到该 worktree 自身的 staged/unstaged 未提交改动。先解析该仓库的默认主线分支（`git symbolic-ref refs/remotes/origin/HEAD` 或等价方式取得实际配置的默认分支，不得硬编码为 `main`），以任务分支相对该主线的待合并总增量为准，取 `git diff <merge-base(默认主线, task-branch)>`（不指定终点 ref，天然对比到当前工作树，因此自动包含尚未 commit 的 staged/unstaged 改动，覆盖步骤①归档 commit 之前的全部待合并内容）（覆盖 make-decision/build-spec/build-plan/build-code/verify-code 全部阶段在该任务分支上产生的、尚未合并进主线的改动，不只是本次 verify-code 运行内新增的增量）；不得包含 merge-base 之前主线自身的历史改动，也不得包含 worktree 外或与本任务无关的文件。产物落盘至 `evidence/`。仅当 `verdict=pass` 才继续进入步骤④；`revise_required`、`escalate_to_human`、或 3rd-review 不可用/不可达，均按下方"pre-merge revise_required 契约"处理（`needs_human=true`，跳过步骤④，直接进入步骤⑤）。
+
+④ **不可逆动作 8 步线性序列**（严格顺序，仅在步骤三 verdict=pass 且用户确认后执行）：
+  1. 归档 commit（commit message 精确为 `workflowhub(close): archive {task-id}`；close 不是独立 stage，不得使用 `workflowhub(verify-code)` 前缀；提交产生的 commit_sha 须记入本阶段 stage-result 的 `facts.close_commit_sha` 字段，字段路径与 close 流程共用同一命名，不得使用其他别名）
+  2. 切主 checkout（切换到主分支）
+  3. no-ff merge（`git merge --no-ff`，将任务分支合入主分支）
+  4. 移除 worktree 目录（`git worktree remove`）
+  5. push main（推送主分支到远端）
+  6. 删远端分支（存在则删；不存在则 skip 并记录 info，不视为失败）
+  7. 删本地分支
+  8. 更新 worktree.json 的 `status=cleaned`
+
+**pre-merge revise_required 契约**：若步骤三（3rd-review）判定为 `revise_required`（或 `escalate_to_human`），则步骤④的 8 步动作全部跳过，不执行任何一步，设置 `needs_human=true`，直接进入步骤⑤ 落盘。
+
+**不可逆动作中途失败契约**：步骤④ 8 步序列一旦开始执行，若任意一步中途失败，须立即停止，不回滚已完成的步骤，也不自动重试或自动续跑剩余步骤，触发 `escalate_to_human`，并在落盘产物中明确记录失败发生在第几步（失败步骤编号）。`status` 字段在整个 8 步期间维持 `active` 不变，直到步骤 8 成功完成才写 `cleaned`——`status` 仅用于 close 入口的 re-entry 拦截判断，不作为"已完成到第几步"的证据；后续如何处理（是否手动补齐剩余步骤、是否手动回滚）由人工依据落盘的失败步骤编号逐一核实当前 git/worktree 实际状态后裁决，本契约不承诺任何步骤的幂等重跑安全性。
+
+⑤ **stage-result 落盘**（task_tracking_root，含 verdict 字段）：调用 `assembleStageResult` + `writeStageResult`，将结果写入 `task_tracking_root` 下对应 task 的 stage-result 产物（即该阶段的 stage-result.json，具体路径详见 §12：`stage-result-verify-code.json`），必须包含 `verdict` 字段（`pass` / `revise_required` / `escalate_to_human`）。无论步骤④是否执行（merge 完成或 revise_required 阻止），stage-result 文件都必须存在，不得跳过落盘。
+
 ### 9. 明文停顿 (收尾确认)
 
 Before asking for confirmation, produce a plain-language decision brief following `docs/human-brief-template.md`'s seven elements, filled with this stage's facts:
 
 1. 这阶段做了什么 — 跑了测试、核对了验收标准。
-2. 审了几次、结论是什么 — 3rd-review 轮数 + 结论，以及本次 fresh 测试执行的通过/失败结论。
+2. 本次 fresh 测试执行的通过/失败结论。
 3. 这个 task 要解决什么 — 取自 spec.md / decision-log 的原始需求。
 4. 已经怎么做 — build-code 的实现概述。
 5. 原始需求覆盖情况 — 取自第 8.5 步产出的逐条覆盖清单，写清覆盖了哪些、有没有遗漏、有没有额外加的。
 6. 现在结果 — 测试通过/失败、verdict。
-7. 下一步 — 等待人确认合并。
+7. 下一步 — 即将进行 3rd-review 独立审查（step 10），审查通过后再询问是否确认合并（step 11）。
 
 全大白话中文，不出现内部产物名/字段名/编号（该模板的硬规则）。
 
-摘要结尾使用模板"A. 决策 gate 阶段"格式给出"请确认"块，具体问是否确认合并 + 删分支这两个不可逆动作，每个选项写清含义和后果，例如：
+摘要内容若有字段缺失（如覆盖情况算不出来），只记录 `missing_items` 并在摘要里显眼标注缺失，不阻断本步继续推进；本步骤只展示测试结果摘要，不要求人确认 merge（merge 确认在 step 11，发生在 3rd-review 通过之后）。
 
+### 10. 3rd-review 独立审查
+
+**在人工确认 merge 之前**，invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run. This ordering ensures revise_required findings block the irreversible merge, not just post-facto report them (FR-WORKTREE-CLOSE-006).
+
+**调用命令模板：**
+```bash
+# 须在 worktree_root 目录下执行：
+cd {worktree_root}
+MERGE_BASE=$(git merge-base HEAD $(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|origin/||'))
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=verify-code \
+  --input <(git diff ${MERGE_BASE}) \
+  --engine codex \
+  --output {taskDir}/{task-id}/reviews/verify-code.md
 ```
-请确认：
-- **推荐：确认合并并删除分支** —— 后果：把 <feature-branch> 合并进 <target-branch>，然后删除 <feature-branch>，之后无法撤销。
-- 只合并、暂不删分支 —— 后果：完成合并，但保留 <feature-branch> 以备回退。
-- 暂停，不合并 —— 后果：本次改动留在原分支，不动 <target-branch>，你可以先看代码或提出修改。
-```
-
-摘要内容若有字段缺失（如覆盖情况算不出来），只记录 `missing_items` 并在摘要里显眼标注缺失，不阻断本步继续向人发出确认请求；是否合并的裁决权仍完全在人，机器不做二次质量判断。
-
-Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not execute merge or delete without user consent.
-
-### 10. 收尾执行
-
-- **User confirms**: Execute the merge and branch deletion. Set `user_decision=true`.
-- **User rejects**: Set `user_decision=false`, skip all irreversible operations, continue to step 11 (which will skip 3rd-review) and then step 12 to write the stage-result with the rejection reason (FR-CLOSE-002). Do not exit early.
-
-### 11. 3rd-review 独立审查
-
-After step 10 completes (user confirmed or rejected), and only when `user_decision=true`, invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run.
 
 **Dispatch rules:**
 - Run in a separate subagent context (independent from the coordinator).
 - Pass: changed file list, `worktree_root`, task context, and the path `{taskDir}/{task-id}/reviews/verify-code.md` as the output artifact path.
 - Explicitly forbid `git commit` in the subagent instruction.
 
-**When `user_decision=false`** (user rejected in step 10): skip 3rd-review entirely. Record `buildReviewFact({ status: "not_executed" })` and proceed directly to step 12 to write the stage-result with `user_decision=false`. Do not exit without writing stage-result.
-
-**Verdict handling** (only reached when `user_decision=true`):
+**Verdict handling:**
 
 | Verdict | Action |
 |---|---|
-| `pass` | Proceed to step 12 (stage-result 落盘). |
-| `revise_required` | Surface findings to user. Record `missing_items` entry. Do not write stage-result yet. Agent or user fixes the flagged items, then rerun verify checks (steps 4–8) and rerun 3rd-review. After N=2 failed rerun rounds with no resolution, escalate to human and set `needs_human=true`. |
-| `escalate_to_human` | Surface findings immediately. Set `needs_human=true`. Do not write stage-result until human confirms resolution path. |
+| `pass` | Proceed to step 11 (人工确认 merge gate). |
+| `revise_required` | **Do not proceed to merge.** Surface all findings to user immediately. Write stage-result with `review_status=revise_required`, `needs_human=true`, and the full findings list. Set `user_decision=false`. Skip step 11 (no merge gate shown). Go directly to step 12 to write stage-result. After N=2 failed rerun rounds with no resolution, escalate to human. |
+| `escalate_to_human` | Surface findings immediately. Set `needs_human=true`. Write stage-result with findings. Skip step 11. Go to step 12. |
 
-If 3rd-review skill is unavailable or unreachable, downgrade gracefully: record `buildReviewFact({ status: "not_executed" })` with a visible warning in the stage-result. Do not block on unavailability.
+If 3rd-review skill is unavailable or unreachable **outside the worktree-unification close flow**, downgrade gracefully: record `buildReviewFact({ status: "not_executed" })` with a visible warning in the stage-result, and proceed to step 11 (do not block on unavailability). **This graceful-downgrade behavior is superseded by Close ③ when running the worktree-unification close sequence**: inside Close ③, 3rd-review 不可用/不可达按 blocking 处理（`needs_human=true`，跳过步骤④，直接进入步骤⑤），不适用本段"proceed to step 11"的降级路径。
 
 Record the review outcome in `facts.review` using `buildReviewFact` from `facts-schema.mjs`:
 
@@ -245,18 +265,28 @@ const reviewFact = buildReviewFact({
   verdict,         // "pass" | "revise_required" | "escalate_to_human"
   artifactPath: `{taskDir}/{task-id}/reviews/verify-code.md`
 });
-// review skipped (user_decision=false) or unavailable:
+// review unavailable:
 // const reviewFact = buildReviewFact({ status: "not_executed" });
 ```
 
 Write `reviewFact` into the stage-result under `facts.review` in step 12. Because `assembleStageResult` does not accept `review` as a parameter, explicitly merge it after assembly: `stageResult.facts.review = reviewFact` before calling `writeStageResult`.
 
+### 11. 人工确认 merge gate
+
+**Only reached when 3rd-review verdict=pass (or not_executed due to unavailability).** If verdict=revise_required or escalate_to_human, skip this step entirely and go to step 12.
+
+- **User confirms**: Execute the merge and branch deletion. Set `user_decision=true`. Before deleting remote/local branch, verify the task branch's target commit is included in main; if verification fails, stop close, do not delete any branch, set `needs_human=true`.
+- **User rejects**: Set `user_decision=false`, skip all irreversible operations, proceed to step 12 to write the stage-result with the rejection reason (FR-CLOSE-002). Do not exit early.
+
+Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not execute merge or delete without user consent.
+
 ### 12. stage-result 落盘
 
 Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the stage-result to `{taskDir}/{task-id}/stage-result-verify-code.json` (FR-PATH-001). The `final-test-report.md` goes to `{taskDir}/{task-id}/test/` (FR-PATH-002) and must include the step 8.5 逐条覆盖清单 as one of its sections. Both paths resolved via `parseTaskDir` — see step 2.
 
-The stage-result record has this structure:
+**必须处理两条落盘路径：**
 
+**路径 A — merge 完成（3rd-review pass + user_decision=true）：**
 ```json
 {
   "status": "success",
@@ -264,6 +294,7 @@ The stage-result record has this structure:
   "retryable": false,
   "facts": {
     "verdict": "pass",
+    "review_status": "pass",
     "evidence_ref": "<relative path to final-test-report.md>"
   },
   "missing_items": [],
@@ -271,6 +302,27 @@ The stage-result record has this structure:
   "reason": "All acceptance criteria verified and documented."
 }
 ```
+
+**路径 B — revise_required 阻止 merge（merge 未发生）：**
+```json
+{
+  "status": "failed",
+  "error_code": "review_revise_required",
+  "retryable": true,
+  "facts": {
+    "verdict": "revise_required",
+    "review_status": "revise_required",
+    "findings": ["<finding 1>", "<finding 2>", "..."],
+    "evidence_ref": "<relative path to 3rd-review artifact>"
+  },
+  "missing_items": ["<blocked items>"],
+  "user_decision": false,
+  "needs_human": true,
+  "reason": "3rd-review revise_required: merge blocked. Human must confirm fixes and re-run 3rd-review before merge."
+}
+```
+
+路径 B 须在 `stageResult.facts.review = reviewFact` 赋值后、`writeStageResult` 调用前确保 `needs_human=true` 字段写入。无论哪条路径，stage-result 文件必须存在，不得因未 merge 而跳过落盘。
 
 D7 color semantics must stay compatible with the current stage-result contract:
 use `success|failed|unknown`, not new status enum values. Never write `green`, `yellow`, or `red` to `stage-result.status`.
@@ -317,7 +369,8 @@ When verification is complete, write a `stage-result` record with:
   "retryable": false,
   "facts": {
     "verdict": "pass",
-    "evidence_ref": "<relative path to final-test-report.md>"
+    "evidence_ref": "<relative path to final-test-report.md>",
+    "close_commit_sha": "<commit_sha produced by close 步骤①归档 commit; present only when close ran>"
   },
   "missing_items": [],
   "user_decision": true,

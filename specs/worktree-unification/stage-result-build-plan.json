@@ -1,0 +1,25 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "plan_ref": "specs/worktree-unification/plan.md",
+    "tasks": "8 tasks across 3 stages — Stage 1: Foundation (T001); Stage 2: Core implementation (T002, T003, T004); Stage 3: Verification & boundary (T005, T006, T007, T008)",
+    "tasks_ref": "specs/worktree-unification/tasks.md",
+    "analysis_ref": "specs/worktree-unification/cross-artifact-analysis.md",
+    "research_ref": "specs/worktree-unification/research.md",
+    "data_contracts_ref": "specs/worktree-unification/data-contracts.md",
+    "plan_review_ref": "specs/worktree-unification/plan-eng-review.md",
+    "minimal_path": "simplicity-guard 四阶梯评估：core/task-dir-parser.mjs 改造复用（P2），build-code §17 删除旧 fallback（负成本），其余为必要最小新增（P3）。符合 F8。"
+  },
+  "missing_items": [],
+  "user_decision": true,
+  "reason": "Plan task list produced via spec-plan/spec-tasks, cross-artifact analyzed, constitution check completed, baseline comparison recorded, research/data-contracts/plan-reviewer recorded, human review checkpoint resolved by explicit human decision after 6 rounds of independent 3rd-review (round9-14), round-14 pass with zero findings.",
+  "review": {
+    "state": "approved",
+    "reviewer": "member:36d8091a-ab8e-4189-bc2f-67d1dfec84f4",
+    "timestamp": "2026-07-05T06:22:19Z",
+    "decision": "继续（进入 build-code）",
+    "notes": "Step9 人工检查点确认：build-plan 产物有独立 3rd-review pass 背书，非自审。"
+  }
+}

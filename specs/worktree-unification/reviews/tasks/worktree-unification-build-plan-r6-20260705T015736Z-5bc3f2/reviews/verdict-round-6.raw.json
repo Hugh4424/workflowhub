@@ -1,0 +1,112 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 16,
+      "issue": "Prior B3 remains open: Contract 1 still states worktree.json path as `{worktree_root}/worktree.json`, while the required path is `{{task_tracking_root}}/tasks/{task-id}/worktree.json`.",
+      "recommendation": "Change Contract 1 File path to `{{task_tracking_root}}/tasks/{task-id}/worktree.json` and align owner, consumer, validation, and write-permission text to that single path."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 71,
+      "issue": "Prior B4 remains open: Contract 2 still describes the old `{task_dir}/{task-id}` model, contradicting T001 where parser returns `task_tracking_root` and callers append `/tasks/{task-id}`.",
+      "recommendation": "Rewrite Contract 2 so `parseTaskDir()` returns only `task_tracking_root`, and every consumer composes `{{task_tracking_root}}/tasks/{task-id}` explicitly."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 78,
+      "issue": "Prior B5 remains open: Contract 2 still permits fallback to `~/Knowledge/workflowhub/`, while spec/tasks require fail-loud when env var and yaml are both missing.",
+      "recommendation": "Delete the hardcoded fallback and define priority as `WORKFLOWHUB_TASK_DIR` -> yaml `task_dir` -> explicit non-zero fail-loud."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 55,
+      "issue": "Prior B2 closure is not verifiable from the review package: the delta only shows SCOPE-009 edits and does not show the corrected WORKFLOWHUB_TASK_DIR/yaml fallback text that prevents `/tasks/tasks/{task-id}` drift.",
+      "recommendation": "Include or update the spec.md line-55 area so it explicitly says parser returns `task_tracking_root` and consumers append `/tasks/{task-id}` exactly once."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 66,
+      "issue": "The plan still conflicts on `workflows/build-spec/SKILL.md`: the Forbidden files section says it is not to be touched, but later Scope Boundary and T005 allow a minimal one-line modification if missing target_repo_root/worktree_root fail-loud behavior.",
+      "recommendation": "Choose one contract: either make build-spec strictly read-only and remove modification language, or remove it from forbidden files and list the exact allowed one-line change plus gate."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "issue": "T001 gate_cmd is not reliably executable: it uses `require('./core/task-dir-parser.mjs')` against an `.mjs` module and assumes `/tmp/testdir` exists even though nonexistent paths must fail-loud.",
+      "recommendation": "Replace with executable ESM-safe commands using `node --input-type=module`, create temp directories/files inside the command, and isolate env/yaml cases with temporary config state."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 61,
+      "issue": "T005 `git worktree list | wc -l` only prints a count; it does not compare before/after and cannot produce a machine pass/fail result for '条目数不变'.",
+      "recommendation": "Define a real gate that records a before count, runs the checked stage action or documented no-op, records after count, and exits non-zero if counts differ."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 68,
+      "issue": "T006 no-output check is a fake gate: `git show HEAD -- specs/{task-id}/ | grep ...` uses a literal `{task-id}` placeholder and success is described as no output, which makes grep exit 1 unless wrapped with `!` or equivalent.",
+      "recommendation": "Replace with an executable command using the concrete task id and inverted grep, for example `! git show --name-only HEAD -- specs/worktree-unification | grep -E '(^|/)(evidence/|stage-result\\.json|journal\\.jsonl|task-metrics\\.jsonl)$'`."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 68,
+      "issue": "T006 requires `stage-result.json` to exist under `${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/` during the build-plan verification phase, but that runtime close artifact only exists after verify-code close executes.",
+      "recommendation": "Split static plan verification from runtime close verification. In T006, verify the intended SKILL.md path/rule; leave actual `stage-result.json` existence to verify-code close evidence."
+    }
+  ],
+  "resolutionSummary": "Round 6 cannot pass. B1, B7, and B8 are partially addressed. B3, B4, and B5 remain open because data-contracts.md is unchanged. B2 lacks visible closure evidence. B6 remains open because several new gate_cmd entries are not direct reliable machine gates. Additional blocking conflict remains around build-spec mutability.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r6-input.md",
+      "hash": null,
+      "lines": 945,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r6-input.md",
+      "round": 6
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

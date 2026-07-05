@@ -1,0 +1,11 @@
+{
+  "taskName": "worktree-unification-build-plan-r6-20260705T015717Z-036a51",
+  "status": "failed",
+  "startedAt": "2026-07-05T01:57:17Z",
+  "versionAnchor": "742788bd5e4fb3dfbce82358260864f352f903a4",
+  "input": "/tmp/wu-r6-input.md",
+  "maxReviseRounds": 3,
+  "reviseRounds": 0,
+  "endedAt": "2026-07-05T01:57:17Z",
+  "failureReason": "review runner failed (rc=1) at round 1"
+}

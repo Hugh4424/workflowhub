@@ -1,0 +1,109 @@
+{
+  "verdict": "revise_required",
+  "skillResults": [
+    {
+      "name": "speckit-analyze",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback executed in this session from /Users/Hugh/.claude/skills/speckit-analyze/SKILL.md; (2) checked specs/worktree-unification/spec.md, plan.md, tasks.md, data-contracts.md, cross-artifact-analysis.md, plus constitution coverage dimensions: consistency, ambiguity, underspecification, coverage gaps, and conflicts; (3) found prior path/fallback blockers closed, but current artifacts still have blocking cross-artifact drift in parser normalization, unexecutable parser gates, missing durable parser tests, and incomplete FR-WORKTREE-COMMIT-004 coverage."
+    },
+    {
+      "name": "plan-eng-review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback executed in this session from /Users/Hugh/.claude/skills/gstack/plan-eng-review/SKILL.md and /Users/Hugh/.claude/skills/gstack/plan-eng-review/sections/review-sections.md; (2) checked architecture boundaries, dependency order, data flow, failure modes, test strategy, commit traceability, and verification executability across specs/worktree-unification/plan.md and tasks.md; (3) found the parser implementation task lacks test-first durable coverage, T008 only audits a hard commit requirement, and several gate commands cannot reliably prove the intended behavior."
+    },
+    {
+      "name": "review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback executed in this session from /Users/Hugh/.claude/skills/gstack/review/SKILL.md and /Users/Hugh/.claude/skills/gstack/review/checklist.md; (2) checked scope drift, stale runtime artifacts, fake-command patterns, diff/scope traceability, and impacted files including .gitignore, core/task-dir-parser.mjs, core/__tests__/task-dir-parser.test.mjs, workflows/*/SKILL.md references, and config/workflowhub.yaml; (3) confirmed stage-result.json is no longer tracked and ignore rules exist, but found remaining blocking execution and traceability gaps."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 15,
+      "issue": "T001 gate_cmd is still not executable as written. It uses `require('./core/task-dir-parser.mjs').then(...)`, but `require('./core/task-dir-parser.mjs')` returns a module object with `parseTaskDir`, not a Promise. The gate fails on command shape before it verifies env-var priority, fail-loud behavior, or path semantics.",
+      "recommendation": "Rewrite all parser gates to use real ESM invocation, for example `node --input-type=module -e \"import { parseTaskDir } from './core/task-dir-parser.mjs'; const r=parseTaskDir(); ...\"`. Assert exact return values, exact nonzero exit for fail-loud cases, and expected stderr text."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 36,
+      "issue": "T002 introduces automatic `/tasks` trimming and a `normalizeTaskTrackingRoot()` API, but spec.md says yaml values ending in `/tasks` require migration or env override, data-contracts.md does not define trimming, and plan.md only specifies `parseTaskDir()`. This is concept drift plus an unregistered public helper API.",
+      "recommendation": "Pick one canonical rule and state it in spec.md, plan.md, data-contracts.md, and tasks.md. Recommended: if yaml fallback may contain one trailing `/tasks` or `/tasks/`, define that normalization explicitly in Contract 2 and implement/test it inside T001 through `parseTaskDir`; do not expose `normalizeTaskTrackingRoot()` unless the API is explicitly part of the contract."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 84,
+      "issue": "FR-WORKTREE-COMMIT-004 is a hard in-scope requirement for every stage/phase, but T008 is read-only and advisory: missing build-code per-phase commit/no-change coverage becomes a follow-up instead of a failed gate. Executing this plan can still pass while the commit traceability requirement remains unimplemented.",
+      "recommendation": "Add an implementation task or extend T003 to modify `workflows/build-code/SKILL.md` so each file-changing phase commits with `workflowhub(build-code/<phase-name>): ...`, and each no-change phase records a no-change reason. Make T008 a blocking verification gate, not advisory, and add T008 to plan.md Verification Mapping."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 128,
+      "issue": "Contract 4 says every stage/phase must run `git add + git commit`, while spec.md requires commits only when files changed, forbids empty stage markers, and requires stage-result/journal no-change records otherwise. An executor following the contract can create unwanted empty commits or treat valid no-change stages as failures.",
+      "recommendation": "Align Contract 4 with spec.md: file-changing stage/phase must commit; no-change stage/phase must write a no-change reason to stage-result or journal; empty stage marker commits are forbidden."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "issue": "T001 changes durable behavior in `core/task-dir-parser.mjs`, but tasks.md does not require updating the persistent parser test file. Existing `core/__tests__/task-dir-parser.test.mjs` still covers the old `~/Knowledge/workflowhub/` fallback behavior, directly conflicting with the new fail-loud requirement.",
+      "recommendation": "Add a test-first subtask before parser implementation: update `core/__tests__/task-dir-parser.test.mjs`, then run `npx vitest run core/__tests__/task-dir-parser.test.mjs`. Cover env priority, empty env, yaml fallback, missing yaml, missing `task_dir`, relative path, `~` path, nonexistent path, non-directory, hardcoded fallback removal, and the chosen `/tasks` normalization rule."
+    }
+  ],
+  "resolutionSummary": "Prior package blockers mostly closed: data-contracts now uses `{{task_tracking_root}}/tasks/{task-id}/worktree.json`, hardcoded fallback is removed from Contract 2, build-spec is now read-only, B10/B11/B12 gate exit-code fixes are present, and stage-result.json is no longer tracked with ignore rules added. Verdict remains revise_required because current artifacts still contain blocking execution and traceability gaps: parser gates are not runnable, normalization semantics conflict across artifacts, FR-WORKTREE-COMMIT-004 is only advisory/read-only, Contract 4 contradicts spec no-change behavior, and durable parser tests are missing.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r9-input.md",
+      "hash": null,
+      "lines": 790,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r9-input.md",
+      "round": 3
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      },
+      {
+        "severity": "important",
+        "category": "schema-drift",
+        "description": "Spec describes timing-trigger metadata duplicated or flattened across multiple authoritative sources (cluster: trigger-timing terms + conflict/flatten/multiple-source terms). Divergent timing records cause gate behavior drift — schema-drift important."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

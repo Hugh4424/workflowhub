@@ -1,0 +1,180 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 215,
+      "issue": "Round-6 forbidden-file contradiction is still open. The plan still says build-spec/SKILL.md may receive a minimal one-line edit if target_repo_root/worktree_root read logic is missing, while plan.md:75 and tasks.md:58 say build-spec/SKILL.md is strictly read-only and must not be modified.",
+      "recommendation": "Make Phase 3.1 pure read-only. Delete the \"补充最小必要条文（一行）\" allowance at plan.md:215, plan.md:217, and plan.md:256. Missing build-spec behavior should be recorded in stage-result/journal only, not edited in this task."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 217,
+      "issue": "The Files line repeats the same contradiction: build-spec/SKILL.md is described as read-only but also says it may receive a minimal one-line addition when logic is missing.",
+      "recommendation": "Change the Files entry to state that workflows/build-spec/SKILL.md and workflows/build-plan/SKILL.md are read-only verification targets only. No modification path should remain in plan.md."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 256,
+      "issue": "Scope Boundary Verification still allows a minimal build-spec/SKILL.md edit. This directly conflicts with the forbidden-file boundary and leaves executors unable to know whether editing build-spec is allowed.",
+      "recommendation": "Remove the write permission. If build-spec lacks the required behavior, record that as a finding for a separate approved task."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 17,
+      "issue": "T001 fail-loud gate can pass for the wrong reason. It runs git rev-parse --show-toplevel after cd into a temporary non-repo directory, so the module path can be wrong. It also pipes stderr to grep and only checks that some output exists, not that parseTaskDir reached the intended \"env missing + yaml missing\" branch and exited nonzero with the expected parser error.",
+      "recommendation": "Capture repo root before cd, run the parser from that absolute path, assert node exits nonzero, and assert stderr contains the parser's expected missing-task-dir error. Do not accept arbitrary stderr as proof."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 15,
+      "issue": "T001 node gate commands use require('./core/task-dir-parser.mjs').then(...), but core/task-dir-parser.mjs is an ESM module with synchronous parseTaskDir export. As written, the gates can fail with TypeError instead of testing parser behavior.",
+      "recommendation": "Rewrite T001 node checks using node --input-type=module with an explicit ESM import, for example import { parseTaskDir } from './core/task-dir-parser.mjs'; then call parseTaskDir() synchronously."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 15,
+      "issue": "Contract 1 says all consumers locate files through worktree_root. That is circular for worktree.json itself because worktree_root is only known after reading worktree.json. The authoritative file path at line 16 is under task_tracking_root.",
+      "recommendation": "Clarify the flow: consumers first resolve task_tracking_root, read {{task_tracking_root}}/tasks/{task-id}/worktree.json, then use target_repo_root/worktree_root from the contract for repo/worktree operations."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 63,
+      "issue": "T005 worktree count verification is not an executable gate. `git worktree list | wc -l` only displays a count and has no before/after comparison, so it cannot prove build-spec/build-plan did not create a worktree.",
+      "recommendation": "Make the gate capture before and after counts around the relevant stage execution, then run `test \"$before\" -eq \"$after\"` or record it explicitly as a display-only check, not a gate."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 66,
+      "issue": "T006 forbidden-file check is still not a valid passing gate. The command says output should be empty, but raw grep returns exit 1 when no forbidden file is found. If used as a gate, the success case fails unless inverted.",
+      "recommendation": "Use an explicit zero-exit negative assertion, e.g. `! git show HEAD -- specs/worktree-unification/ | grep -E \"^\\+\\+\\+ b/specs/.*(evidence/|stage-result\\.json|journal\\.jsonl|task-metrics\\.jsonl)\"`, or save output and assert it is empty."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 21,
+      "issue": "Commit gates at T001/T002/T003/T004 only inspect the latest HEAD commit via `git log --oneline | head -1 | grep ...`. That does not prove the relevant stage produced a commit when needed, and it provides no executable alternate check for the allowed no-change path recorded in stage-result/journal.",
+      "recommendation": "For each commit-required task, define two explicit branches: if files changed, verify a matching workflowhub(<stage-or-phase>): commit in the relevant range; if no files changed, verify the stage-result/journal no-change reason exists."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 68,
+      "issue": "The acceptance checklist is ordered after the final boundary/close verification but is described as input for verify-code. T007 depends on T006, while T006 verifies verify-code close artifacts. This makes the checklist arrive after the stage that needs it.",
+      "recommendation": "Move T007 before verify-code-dependent final checks. A workable order is T001 -> T002/T003/T004 -> T005/T007 -> verify-code uses checklist -> T006 final boundary verification."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 150,
+      "issue": "FR-WORKTREE-COMMIT-004 requires per-stage/per-phase commit behavior, including build-code phase commits, but plan.md/tasks.md do not include an implementation task that modifies build-code to trigger per-phase commits. The current plan only checks commit messages around individual tasks.",
+      "recommendation": "Add an explicit plan step and task for build-code per-phase commit trigger behavior, with concrete verification. If this is no longer in scope, narrow FR-WORKTREE-COMMIT-004 in the spec instead of leaving it uncovered."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 478,
+      "issue": "Spec scope explicitly includes build-code per-stage commit trigger work, but the plan implementation steps do not land that behavior. This is a traceability gap from authoritative spec to executable plan.",
+      "recommendation": "Align plan.md and tasks.md with the spec by adding the missing build-code commit trigger work and a verification gate that proves the trigger exists."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/stage-result.json",
+      "line": 1,
+      "issue": "A forbidden top-level stage-result.json exists under specs/worktree-unification/. The spec forbids top-level stage-result.json under specs/{task-id}/ and requires it under {{task_tracking_root}}/tasks/{task-id}/ instead.",
+      "recommendation": "Remove specs/worktree-unification/stage-result.json from the review package/repo path and keep stage-result.json only under {{task_tracking_root}}/tasks/worktree-unification/stage-result.json."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/cross-artifact-analysis.md",
+      "line": 6,
+      "issue": "cross-artifact-analysis.md says all 6 blocking findings are fixed, but current artifacts still contain open blocking issues: build-spec write permission remains in plan.md and T001/T006 gates remain unreliable.",
+      "recommendation": "Regenerate or edit the analysis after fixing the artifacts. Do not claim blocking=0 or all prior findings closed until the current line-level evidence matches."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 172,
+      "issue": "plan.md still references \"spec §7 验收标准 1-9\", but tasks.md correctly states spec §7 is Out of Scope and success criteria are in §5 with scenarios in §8.",
+      "recommendation": "Replace the stale §7 reference with spec §5 success criteria and §8 Given/When/Then scenarios."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 39,
+      "issue": "T003 old-fallback deletion check uses a broad grep for worktree add and expects exit 1. This can fail on legitimate text that forbids worktree add, creating false red results.",
+      "recommendation": "Use a more precise check for the old fallback behavior, or check that the exact old fallback paragraph is absent."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 46,
+      "issue": "T004 5-step check counts symbols ①-⑤ anywhere in the file. It can pass even if the close section is incomplete.",
+      "recommendation": "Check the close section for the required semantic items: 入口校验, 质量事实记录, 3rd-review, 不可逆动作, and stage-result."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 89,
+      "issue": "Dependency Graph note says `先读 build-spec/SKILL.md 再动笔`, which implies writing may happen and conflicts with the read-only rule.",
+      "recommendation": "Change the wording to `先读 build-spec/SKILL.md 再记录核查结论` or equivalent."
+    }
+  ],
+  "resolutionSummary": "Round 1 verdict: revise_required. Required skill lenses were executed in read-only fallback mode by reading the required SKILL.md files and applying speckit-analyze, plan-eng-review, and review lenses through independent subagents. Prior B4, B5, and the literal {task-id} part of B7 are closed. Prior B6 and B8 remain open. Additional blocking gaps were found in Contract 1 consumer wording, fake/display-only gates, commit-trigger traceability, acceptance-checklist ordering, forbidden stage-result placement, and stale cross-artifact closure claims.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r7-input.md",
+      "hash": null,
+      "lines": 755,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r7-input.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      },
+      {
+        "severity": "important",
+        "category": "schema-drift",
+        "description": "Spec describes timing-trigger metadata duplicated or flattened across multiple authoritative sources (cluster: trigger-timing terms + conflict/flatten/multiple-source terms). Divergent timing records cause gate behavior drift — schema-drift important."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

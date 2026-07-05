@@ -1,0 +1,114 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 16,
+      "issue": "worktree.json 契约路径与权威 spec 冲突。data-contracts 写成 `{worktree_root}/worktree.json`，但 spec 要求 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`。按当前契约实现会把跨 stage 状态写到错误位置，断链问题仍存在。",
+      "recommendation": "把 Contract 1 的 File path 改为 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`，并明确 `worktree_root` 只是字段值，不是契约文件存放根。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 71,
+      "issue": "task_dir 返回值语义仍是旧模型：写成供调用方拼接 `{task_dir}/{task-id}/`，且 line 78 仍保留 `~/Knowledge/workflowhub/` fallback。此处与 spec/plan/tasks 的 `task_tracking_root -> /tasks/{task-id}` 和双缺失 fail-loud 冲突。",
+      "recommendation": "统一为 parser 返回 task_tracking_root；调用方只拼接 `${task_tracking_root}/tasks/${task_id}/...`；删除硬编码 fallback，优先级只保留 `WORKFLOWHUB_TASK_DIR -> config/workflowhub.yaml task_dir -> fail-loud`。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 74,
+      "issue": "scope 边界自相矛盾。plan 将 `workflows/build-spec/SKILL.md` 标为 forbidden，line 76 又禁止修改 build-plan，但 spec 要求 build-spec/build-plan 都读取 worktree.json、写入 `worktree_root/specs/{task-id}/`、缺失时 fail-loud。按 plan 执行会无法落地 FR-WORKTREE-SCOPE-008。",
+      "recommendation": "把 `workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md` 纳入明确可修改范围，或把二者改为只读审计并声明缺口作为后续任务；若当前逻辑缺少 worktree.json 读取，就必须允许最小修改。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 33,
+      "issue": "FR-WORKTREE-SCOPE-008 覆盖不完整且顺序不稳。T005 只核查 build-spec，未覆盖 build-plan；同时该任务放在 T004 verify-code close 之后，晚于实际 pipeline 消费路径。",
+      "recommendation": "新增或扩展任务，明确核查/最小修改 `workflows/build-plan/SKILL.md` 的 `target_repo_root`/`worktree_root` 读取、缺失 fail-loud、不得 `git worktree add`；并把 build-spec/build-plan 消费方改造提前到核心实现阶段。"
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "issue": "parser 行为变更没有测试任务。现有 `core/__tests__/task-dir-parser.test.mjs` 仍断言 config 缺失时 fallback 到 `~/Knowledge/workflowhub/`，会与新 FR 直接冲突。",
+      "recommendation": "在 T001 或新增任务中显式更新 `core/__tests__/task-dir-parser.test.mjs`，覆盖 env 优先、空 env 走 yaml、yaml fallback、yaml 缺失 fail-loud、yaml 无 `task_dir` fail-loud、相对路径/`~`/不存在/非目录 fail-loud，并写明运行命令。"
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 37,
+      "issue": "T007 要新增 `specs/worktree-unification/checklists/acceptance.md`，但 spec 规定 `specs/{task-id}/` 只允许 spec.md/plan.md/tasks.md，禁止过程/追踪类文件。执行 T007 会制造自身边界违规。",
+      "recommendation": "推荐把 acceptance checklist 改到 `{{task_tracking_root}}/tasks/{task-id}/checklists/acceptance.md`；或修改 FR-WORKTREE-SCOPE-009，明确 checklists 是允许的 repo 交付物。"
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 319,
+      "issue": "Constitution Check 使用旧宪法语义。plan 把 F8 写成“新功能先有 research”，但当前 CONSTITUTION.md F8 是“简单优先”；F10、S8 等也错位。治理检查是假绿。",
+      "recommendation": "按当前 `CONSTITUTION.md` 和 `constitution-checklist.md` 的 21 条重新生成 Constitution Check，删除旧条目映射和先 `[ ]` 后 `[x]` 的自我修正。"
+    },
+    {
+      "severity": "important",
+      "file": "workflows/verify-code/SKILL.md",
+      "line": 206,
+      "issue": "当前 verify-code 仍包含 `bash /path/to/3rd-review/standalone.sh` 占位命令；plan/tasks 未明确要求替换这个不可执行入口。pre-merge 3rd-review gate 可能只停留在文档承诺。",
+      "recommendation": "在 T004 明确增加“替换 fake standalone path”为真实可调用入口；若仓库没有真实 3rd-review entry，则要求 fail-loud 并记录 `needs_human`，不允许 placeholder 留在执行说明中。"
+    },
+    {
+      "severity": "minor",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 12,
+      "issue": "范围口径偏小。plan 写“改动跨 3 个模块”，但实际至少涉及 make-decision、build-code、verify-code、core/parser，且 FR-SCOPE-008 可能触及 build-spec/build-plan。",
+      "recommendation": "统一影响范围口径：分别列出核心修改文件、条件修改文件、只读核查文件和配置依赖；不要用“3 个模块”概括全部变更面。"
+    }
+  ],
+  "resolutionSummary": "round 1 full review completed. Required lenses were executed in read-only verifier mode via skill-file fallback and independent subagents: speckit-analyze, plan-eng-review, and review. Verdict is revise_required because core contract artifacts conflict on worktree.json path and fallback behavior, build-plan/build-spec scope is not executable, and verification/governance tasks are incomplete.",
+  "reviewSnapshot": [
+    {
+      "path": "plan.md",
+      "hash": null,
+      "lines": 383,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "plan.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-1.md"
+}

@@ -46,3 +46,12 @@ reply.md
 .claude/
 .multica/
 .specify/
+
+# worktree-unification runtime artifacts (live in task_tracking_root, not repo)
+specs/**/stage-result.json
+specs/**/journal.jsonl
+specs/**/task-metrics.jsonl
+
+stage-result.json
+journal.jsonl
+task-metrics.jsonl

@@ -1,0 +1,53 @@
+{
+  "verdict": "escalate_to_human",
+  "provider": "codex",
+  "error": "Provider produced non-JSON output; verdict cannot be determined automatically.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r7-input.md",
+      "round": 4,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      }
+    }
+  ],
+  "findings": [],
+  "resolutionSummary": "Provider codex produced non-JSON output; escalating to human. Raw output head: {\n  \"verdict\": \"escalate_to_human\",\n  \"findings\": [\n    {\n      \"severity\": \"blocking\",\n      \"file\": \"specs/worktree-unification/plan.md\",\n      \"line\": 215,\n      \"issue\": \"Prior B8 remains open aft",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "host": "claude-code",
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      },
+      {
+        "severity": "important",
+        "category": "schema-drift",
+        "description": "Spec describes timing-trigger metadata duplicated or flattened across multiple authoritative sources (cluster: trigger-timing terms + conflict/flatten/multiple-source terms). Divergent timing records cause gate behavior drift — schema-drift important."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-4.md"
+}

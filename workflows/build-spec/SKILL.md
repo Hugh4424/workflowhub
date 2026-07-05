@@ -14,14 +14,14 @@ Translate the decision log from `make-decision` into a full spec via an orchestr
 
 ### 环境变量与参数约定（FR-TRACKING-001/002，FR-TASKDIR-001）
 
-#### TASK_TRACKING_ROOT
+#### WORKFLOWHUB_TASK_DIR
 
-全局环境变量 `TASK_TRACKING_ROOT` 约定所有阶段跟踪文件的存储根目录：
+全局环境变量 `WORKFLOWHUB_TASK_DIR` 约定所有阶段跟踪文件的存储根目录（即 task_tracking_root）。实际路径解析通过 `core/task-dir-parser.mjs` 完成（优先级：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` 的 `task_dir` 字段 → 两者均缺失则 fail-loud 非零退出）：
 
-- **默认值**：`~/Knowledge/workflowhub/`（若变量未设置则使用此默认路径）
-- **降级行为**：若 `TASK_TRACKING_ROOT` 未设置，记录 warn（不停止），继续使用默认路径
-- **目录创建**：若路径不存在，尝试自动 `mkdir -p` 创建；失败时 warn 不停止
-- **禁止绕过（FR-TRACKING-002）**：所有 stage（包括 spec-specify、spec-clarify 等）必须通过 `TASK_TRACKING_ROOT` 获取跟踪文件路径，禁止硬编码绝对跟踪路径
+- **优先级 1**：`WORKFLOWHUB_TASK_DIR` 环境变量（已设置且非空时直接使用）
+- **优先级 2**：`config/workflowhub.yaml` 的 `task_dir` 字段（yaml fallback）
+- **两者均缺失**：fail-loud，非零退出，明确报错；无默认路径，不静默降级
+- **禁止绕过（FR-TRACKING-002）**：所有 stage（包括 spec-specify、spec-clarify 等）必须通过 `core/task-dir-parser.mjs` 获取跟踪文件路径，禁止硬编码绝对跟踪路径
 
 #### --task-dir 参数约定（FR-TASKDIR-001）
 
@@ -36,7 +36,7 @@ Translate the decision log from `make-decision` into a full spec via an orchestr
 ```javascript
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
 ```
 
 本 skill 中所有 `specs/{task-id}/` 路径均为速记写法，运行时必须使用 `path.join(taskDir, taskId, ...)` 构造实际路径。
@@ -88,6 +88,20 @@ build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，
 ### 0. Pre-read: decision-log
 
 Read `{--task-dir}/decision-log.md` — the upstream `make-decision` output (default path when `--task-dir` absent: `tasks/{task-id}/decision-log.md`, per FR-TASKDIR-001). Extract the functional description, recorded decisions, and constraints. If the file is missing or the description is empty, stop and report "decision-log missing or empty for {task-id}" before any further work.
+
+### 0.5. Worktree context 读取 (FR-WORKTREE-SCOPE-008)
+
+build-spec **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-spec 只消费已创建的 worktree 上下文：
+
+```bash
+# worktree.json 路径构造规则（与 build-code §17 一致）：
+# taskDir 通过 parseTaskDir() 获取（WORKFLOWHUB_TASK_DIR env var 优先，yaml fallback，两者缺失 fail-loud）
+node core/worktree-context.mjs {taskDir}/{task-id}/worktree.json
+```
+
+调用上述命令读取 `worktree.json`：两字段（`target_repo_root`/`worktree_root`）任一缺失时该脚本以非零退出码 fail-loud，build-spec 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+
+**status=cleaned 拒绝逻辑**：读取 `worktree.json` 后，build-spec 须额外检查 `status` 字段——若 `status="cleaned"`，说明 worktree 已归档，须立即 `escalate_to_human` 并停止推进，不得复用已归档的 worktree 上下文（与 spec FR-WORKTREE-CONTRACT-001 cleaned-only 校验一致）。
 
 ### 1. Metrics: stage start
 
@@ -162,6 +176,15 @@ spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-r
 - 审查失败/不可用时降级记录 unknown + 原因——**这里的"不阻断"仅指记录该事实本身不阻断**（F3/Q1：物理事实机器采集浮现到边界，记录动作不卡死推进）。stage 是否继续推进是另一个独立决策，由第 7 节 auto-advance 判断点裁定：`unknown` 在那里必须停下，不产出 stage-result，转人工确认（needs_human=true）。见第 7 节。
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
 - 可 grep 到 `3rd-review` 或 `异源独立审查`
+
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=build-spec \
+  --input specs/{task-id}/spec.md \
+  --engine codex \
+  --output specs/{task-id}/reviews/build-spec-review.md
+```
 
 ---
 
@@ -305,6 +328,10 @@ Only a clean `pass` verdict may auto-advance. `revise_required` loops back inter
   4. Once the human responds, act on their explicit choice (continue now / wait and retry 3.7) and only then produce the stage-result reflecting the outcome actually reached.
 
 The spec is not silently altered by this step — what spec-specify/spec-clarify produced (plus recorded F10/constitution/baseline findings) is exactly what gets carried into the brief and the stage-result.
+
+### 7.5. Commit 触发点 (FR-WORKTREE-COMMIT-004)
+
+当本阶段对目标仓库产生文件变更时，须 `git add` + `git commit`，message 含 `workflowhub(build-spec)` 前缀（例如 `workflowhub(build-spec): <description>`）。所有 `git add`/`git commit` 必须在 `worktree_root`（本任务的 linked worktree，当前 task branch）中执行；严禁在 `target_repo_root` 的主工作树上执行提交。若本阶段无文件变更，禁止空提交，须在 stage-result 或 journal 记录 no-change reason；字段路径固定为 stage-result 的 `facts.no_change_reason`（string），仅在本阶段无文件变更时写入该字段（例如 `"facts": {"no_change_reason": "build-spec stage produced no file changes", ...}`），有文件变更时该字段不出现；no-change 记录为必填项，不得两者皆无地静默结束本阶段。
 
 ## Produce a stage-result
 

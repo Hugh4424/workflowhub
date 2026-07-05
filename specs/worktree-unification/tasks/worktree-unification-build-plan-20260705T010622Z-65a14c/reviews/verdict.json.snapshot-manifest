@@ -1,0 +1,27 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "tmp/build-plan-review-1783213533/review-input.md",
+      "hash": "b79953fa2b7e6441e7fd5dcf046caeb2e7416bbf191a6980fff2b08e01ba526f"
+    },
+    {
+      "path": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/cross-artifact-analysis.md",
+      "hash": "cee248e3911bb26ede9d9d9e976254f56f3c6ce621bba327575f7a45bf1afc18"
+    },
+    {
+      "path": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/plan.md",
+      "hash": "8e2bff633f6fdfa7cf0cbe9eacf5445a5f25c5a059e2568e92db888b9c069fc8"
+    },
+    {
+      "path": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/tasks.md",
+      "hash": "d57710c200badac3e272c089a4cb2ae781ecb2734668b13e967185143a7d71d3"
+    }
+  ],
+  "verdict_binding": {
+    "verdict_id": "ed96e583-8c3e-4f6a-afc2-8241944343d4",
+    "verdict_file": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/tasks/worktree-unification-build-plan-20260705T010622Z-65a14c/reviews/verdict.json",
+    "hash": "a8da11baa5783568048159d966151c3c3426d0a2e76ee0a7d4d4b92559d7d3a9"
+  }
+}

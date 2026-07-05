@@ -1,0 +1,98 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 215,
+      "issue": "Prior B8 remains open. plan.md still says build-spec/SKILL.md may be edited if target_repo_root/worktree_root read logic is missing, while line 75 marks the same file as read-only and forbidden. line 217 and line 256 repeat the same write permission. Executing this plan can still modify a forbidden file.",
+      "recommendation": "Make build-spec/SKILL.md strictly read-only everywhere. Remove the '补充最小必要条文（一行）' permission from plan.md lines 215, 217, and 256, matching tasks.md T005."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 17,
+      "issue": "Prior B6 remains open. T001 '两者缺失 fail-loud' gate pipes node stderr/stdout into grep, so the node process exit code is swallowed. The command proves only that some output existed, not that parseTaskDir failed non-zero as required.",
+      "recommendation": "Rewrite the gate to capture node exit code and stderr separately, then assert both: node exit code is non-zero and stderr is non-empty. Example shape: run node with `2>$_ERR`, save `_node_rc=$?`, then `test $_node_rc -ne 0 && test -s \"$_ERR\"`."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 39,
+      "issue": "T003 gate_cmd still uses raw grep with expected exit 1 as the passing condition. That is not a reliable machine gate under the contract because pass should return exit 0 and negative checks must be explicitly inverted.",
+      "recommendation": "Change the fallback-deletion gate to `! grep -Eq \"自动创建 worktree|auto.*create.*worktree|worktree add\" workflows/build-code/SKILL.md` and document exit 0 as the pass result."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 66,
+      "issue": "Prior B6/T006 remains open. T006 has no dedicated `gate_cmd` block, and its first check still uses `git show ... | grep -E ...` with '应无输出'. No match makes grep return 1, so the passing condition is still a non-zero command unless inverted.",
+      "recommendation": "Add a real `gate_cmd` block for T006. Invert the forbidden-file diff check with `! git show HEAD -- specs/worktree-unification/ | grep -Eq ...`, and keep stage-result/evidence checks as separate exit-0 gates."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 29,
+      "issue": "FR-WORKTREE-MAKEDECISION-002 requires task-id two-step normalization before validation, but T002 only says branch naming uses `workflowhub/{task-id}` and task-id matches the regex. The conversion rule from spec.md is not landed in any task, so inputs like `Worktree Unification` may fail instead of being normalized.",
+      "recommendation": "Extend T002 to implement the full normalization contract: lowercase, replace non-alphanumeric with hyphen, collapse repeated hyphens, trim edge hyphens, then validate `^[a-z]+(-[a-z]+){1,2}$` and fail-loud if still invalid."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 37,
+      "issue": "FR-WORKTREE-COMMIT-004 and Business Impact Scope require per-stage/per-phase commit traceability, especially for build-code phases, but no task implements or verifies build-code per-phase commit trigger behavior. Existing commit gates only check the latest git log message after individual task edits.",
+      "recommendation": "Add an explicit task or extend T003 to update/verify build-code per-phase commit behavior: each file-changing phase must produce `workflowhub(build-code/<phase-name>): ...`, and no-change phases must record a no-change reason in stage-result or journal."
+    }
+  ],
+  "resolutionSummary": "speckit-analyze, plan-eng-review, and review were applied in read-only skill-file fallback mode against spec.md, plan.md, tasks.md, data-contracts.md, constitution, and prior round findings. B3, B4, and B5 are closed in data-contracts.md. B6 and B8 remain open. Additional blocking gaps remain in fake gate commands and FR traceability for task-id normalization / commit traceability.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r7-input.md",
+      "hash": null,
+      "lines": 755,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r7-input.md",
+      "round": 3
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      },
+      {
+        "severity": "important",
+        "category": "schema-drift",
+        "description": "Spec describes timing-trigger metadata duplicated or flattened across multiple authoritative sources (cluster: trigger-timing terms + conflict/flatten/multiple-source terms). Divergent timing records cause gate behavior drift — schema-drift important."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-3.md"
+}

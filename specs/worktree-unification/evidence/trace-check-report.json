@@ -1,0 +1,39 @@
+{
+  "checked_at": "2026-07-05T12:45:00Z",
+  "missing_ac_coverage": [],
+  "checked_phases": [
+    {
+      "phase": "phase-1",
+      "commit": "3816932",
+      "tasks": ["T001"],
+      "status": "done",
+      "review_verdict": "pass"
+    },
+    {
+      "phase": "phase-2",
+      "commit": "0e93a55",
+      "tasks": ["T002", "T003", "T004"],
+      "status": "done",
+      "review_verdict": "pass"
+    },
+    {
+      "phase": "phase-3",
+      "commit": "d1e135a",
+      "tasks": ["T005", "T006", "T007", "T008"],
+      "status": "done",
+      "review_verdict": "pass",
+      "changed_files": [
+        "workflows/build-spec/SKILL.md",
+        "workflows/build-plan/SKILL.md",
+        "workflows/verify-code/SKILL.md",
+        "checklists/acceptance.md (task_tracking_root, outside repo)"
+      ]
+    }
+  ],
+  "violations": [],
+  "notes": [
+    "no UI surface in changed_files, L3 not applicable, treated as intentional skip",
+    "changed_files in phase-3 are all .md (doc-only); no UI surface present; L3 e2e report not required and absence is not a violation",
+    "fresh-capture skipped per human approval (comment cb3945ac-6815-4209-a5b1-d304b0501c1f): doc-only change, no executable test command"
+  ]
+}

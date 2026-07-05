@@ -1,0 +1,15 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "tmp/wu-r14-input.md",
+      "hash": "6cbf8bbfb499d78ef30174dbb5b66bca279116c8c009ed73e798d168a920d531"
+    }
+  ],
+  "verdict_binding": {
+    "verdict_id": "decf23d7-a267-47e9-ba52-44d39dac8d13",
+    "verdict_file": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/tasks/worktree-unification-build-plan-r14-20260705T061117Z-45074d/reviews/verdict.json",
+    "hash": "1bb023fdf15892d2940d03151f69a7cf2fa883b5a6a22880ce67872faf5a1d93"
+  }
+}

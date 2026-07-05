@@ -1,0 +1,49 @@
+# 审查报告 — worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2 (round 2)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+Round 2 不能通过。B6/B7/B8 有局部修复，但 B2-B5 仍在 data-contracts.md 原样保留；B1 只修掉 build-plan/SKILL.md，build-spec/SKILL.md 仍有 forbidden/conditional modify 冲突；新增 gate_cmd 虽覆盖 T001-T007，但 T001/T005/T006 存在不可执行、非自包含、占位符、负向 grep、无 before/after 比较、pipefail 缺失等机器门控问题。最小修复顺序：先同步 data-contracts.md，再统一 build-spec scope 口径，最后重写 T001/T005/T006 gate_cmd 为可直接执行且 exit code 正确的命令。
+
+## Findings
+
+- [blocking] 位置: specs/worktree-unification/data-contracts.md:16 | 问题: B3 未修复。Contract 1 仍把 worktree.json 路径写成 `{worktree_root}/worktree.json`，但上轮要求统一为 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`。如果按当前契约执行，make-decision、build-code、verify-code 会在不同位置读写同一跨 stage 契约，继续造成断链。 | 建议: 把 Contract 1 的 File path 改为 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`，并同步 Owner/Consumer/Write Permission Rules。
+- [blocking] 位置: specs/worktree-unification/data-contracts.md:71 | 问题: B4 未修复。Contract 2 仍定义 parser 返回值供调用方拼接 `{task_dir}/{task-id}/`，与 plan/tasks 中“parser 返回 task_tracking_root 本身，调用方拼 `/tasks/{task-id}/`”冲突。该冲突会保留 `/tasks/tasks/{task-id}` 或漏拼 `/tasks/` 的路径错位风险。 | 建议: 重写 Contract 2：`parseTaskDir()` 返回 `task_tracking_root`；任务目录统一为 `{{task_tracking_root}}/tasks/{task-id}/`；删除 `{task_dir}/{task-id}` 旧模型。
+- [blocking] 位置: specs/worktree-unification/data-contracts.md:78 | 问题: B5 未修复。Contract 2 仍允许 fallback 到 `~/Knowledge/workflowhub/`，直接违反 FR-WORKTREE-ENVVAR-003 和 T001 的“两者缺失 fail-loud，不使用硬编码路径”。执行者按该契约实施会继续静默写入旧目录。 | 建议: 删除硬编码 fallback；优先级只保留 `WORKFLOWHUB_TASK_DIR` → `config/workflowhub.yaml task_dir` → 两者缺失 fail-loud，并写明路径不存在/非目录也 fail-loud。
+- [blocking] 位置: specs/worktree-unification/plan.md:68 | 问题: scope 边界仍冲突。Forbidden files 把 `workflows/build-spec/SKILL.md` 标为不可触碰，但 Phase 3.1 / T005 又允许 build-spec 缺失时最小补充一行。执行者无法判断该文件到底能不能改，可能违反 scope 锁定或遗漏必要条文。 | 建议: 二选一写死：若允许补充，从 Forbidden files 删除 `workflows/build-spec/SKILL.md` 并列为 conditional modify；若禁止修改，则 T005 只能只读核查，缺失时记录 revise_required/needs_human。
+- [blocking] 位置: specs/worktree-unification/tasks.md:15 | 问题: T001 gate_cmd 不可执行。命令使用 `require('./core/task-dir-parser.mjs').then(...)`，但 `.mjs` 是 ESM，且当前模块导出同步 `parseTaskDir()`；该命令会报 `TypeError: require(...).then is not a function`，无法作为机器门控。 | 建议: 改为真实 ESM 调用，例如 `node --input-type=module -e "import { parseTaskDir } from './core/task-dir-parser.mjs'; const r=parseTaskDir(); if(!r.startsWith(process.env.EXPECTED)) process.exit(1)"`。
+- [blocking] 位置: specs/worktree-unification/tasks.md:15 | 问题: T001 env var 成功路径 gate 不自包含。命令设置 `WORKFLOWHUB_TASK_DIR=/tmp/testdir`，但计划要求路径不存在 fail-loud，命令没有创建 `/tmp/testdir`。在干净机器上会假失败。 | 建议: 用 `d=$(mktemp -d)` 创建测试目录，再传入 `WORKFLOWHUB_TASK_DIR="$d"`，并断言返回值等于该目录。
+- [blocking] 位置: specs/worktree-unification/tasks.md:17 | 问题: T001 “两者缺失 fail-loud” gate 不能证明两者缺失。当前命令只是不设置 env var；如果 `config/workflowhub.yaml` 存在 task_dir，按计划应成功而不是非零。该 gate 会把合法 yaml fallback 误判为失败。 | 建议: 在隔离 cwd 或临时配置环境中运行，明确屏蔽 yaml fallback；或提供 parser 测试入口，显式传入不存在的 config 路径并断言非零和 stderr。
+- [blocking] 位置: specs/worktree-unification/tasks.md:32 | 问题: 多处 gate_cmd 存在 fake-green 风险：`grep -cE ... | grep -q`、`git log --oneline | head -1 | grep -q`、`grep ... | awk` 被当作机器门控，但未设置 `pipefail`，也没有 gate/display 分离。管道前段失败可能被后段吞掉 exit code。 | 建议: 机器门控统一改为 `bash -euo pipefail -c '...'` 或单个 `node --input-type=module` 脚本；`grep`/`tail`/`awk` 摘要只放 display_cmd，不作为 gate_cmd pass/fail 主体。
+- [blocking] 位置: specs/worktree-unification/tasks.md:62 | 问题: T005 worktree 条目数 gate 不是机器门控。`git worktree list | wc -l` 只输出数值，没有 before/after 记录、比较命令和退出码标准，不能证明 build-spec/build-plan 没有新增 worktree。 | 建议: 写成完整比较 gate：`before=$(git worktree list --porcelain | grep -c '^worktree '); ...; after=$(git worktree list --porcelain | grep -c '^worktree '); test "$before" -eq "$after"`，并加 `set -euo pipefail`。
+- [blocking] 位置: specs/worktree-unification/tasks.md:66 | 问题: T006 缺少正式 gate_cmd，且负向 grep 写法会把“无禁止文件”表现为 exit 1。若直接作为机器门控会假失败；若只看输出则不能 gate。 | 建议: 给 T006 增加 `gate_cmd` 小节，并使用 `if git show HEAD -- "specs/$TASK_ID/" | grep -qE '...'; then exit 1; else exit 0; fi` 这类反向断言。
+- [blocking] 位置: specs/worktree-unification/tasks.md:66 | 问题: T006 gate 保留字面占位符 `{task-id}`，包括 `specs/{task-id}/` 和 `${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/stage-result.json`。命令不可直接执行，会检查错误路径。 | 建议: 在当前计划中写死 `worktree-unification`，或先定义 `TASK_ID=worktree-unification` 并统一使用 `${TASK_ID}`。
+- [important] 位置: specs/worktree-unification/tasks.md:34 | 问题: T002 R1-R7 覆盖 gate 文案写“至少 7 条”，但命令 `grep -q "^7$"` 实际要求正好 7 条。若章节中有说明性重复 R 编号，会假失败。 | 建议: 改为 `awk '{if($1>=7) exit 0; else exit 1}'`，或限定只扫描 worktree 规则章节内的规范行。
+- [important] 位置: specs/worktree-unification/plan.md:242 | 问题: Verification Mapping 仍引用 `spec §7 验收标准 1-9`，但 round-6 已把 T007 修正为 §5 成功标准 AC-01..AC-04，且 T007 明确 §7 是 Out of Scope。该 stale 引用会误导验收追踪。 | 建议: 把 Verification Mapping 中 make-decision 验收来源改为 spec §5 AC-01..AC-04 和相关 FR/场景，保持与 T007 一致。
+- [important] 位置: specs/worktree-unification/tasks.md:73 | 问题: T007 说写入 `specs/worktree-unification/checklists/acceptance.md` 会违反 FR-WORKTREE-SCOPE-009，但更新后的 spec.md SCOPE-009 已把 `checklists/` 纳入 repo 内白名单。该表述与 spec 冲突。 | 建议: 改成：T007 的 runtime acceptance.md 必须写到 task_tracking_root；repo 内 build-plan `checklists/` 是白名单允许项，不要笼统称 specs/.../checklists 违反 SCOPE-009。
+- [important] 位置: specs/worktree-unification/cross-artifact-analysis.md:11 | 问题: cross-artifact-analysis.md 声称 `blocking=0，minor=0，达标`，但本轮包内仍有 stale data-contracts、scope 边界冲突和不可执行 gate_cmd。该报告不能作为通过证据。 | 建议: 重新生成或修订 cross-artifact-analysis.md，必须把 data-contracts.md 纳入扫描输入，并逐项关闭 B1-B8。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：B3 未修复。Contract 1 仍把 worktree.json 路径写成 `{worktree_root}/worktree.json`，但上轮要求统一为 `{{task_tracking_root}}/tasks/{task-id}/worktree.json`。如果按当前契约执行，make-decision、build-code、verify-code 会在不同位置读写同一跨 stage 契约，继续造成断链。
+- 必须修复：B4 未修复。Contract 2 仍定义 parser 返回值供调用方拼接 `{task_dir}/{task-id}/`，与 plan/tasks 中“parser 返回 task_tracking_root 本身，调用方拼 `/tasks/{task-id}/`”冲突。该冲突会保留 `/tasks/tasks/{task-id}` 或漏拼 `/tasks/` 的路径错位风险。
+- 必须修复：B5 未修复。Contract 2 仍允许 fallback 到 `~/Knowledge/workflowhub/`，直接违反 FR-WORKTREE-ENVVAR-003 和 T001 的“两者缺失 fail-loud，不使用硬编码路径”。执行者按该契约实施会继续静默写入旧目录。
+- 必须修复：scope 边界仍冲突。Forbidden files 把 `workflows/build-spec/SKILL.md` 标为不可触碰，但 Phase 3.1 / T005 又允许 build-spec 缺失时最小补充一行。执行者无法判断该文件到底能不能改，可能违反 scope 锁定或遗漏必要条文。
+- 必须修复：T001 gate_cmd 不可执行。命令使用 `require('./core/task-dir-parser.mjs').then(...)`，但 `.mjs` 是 ESM，且当前模块导出同步 `parseTaskDir()`；该命令会报 `TypeError: require(...).then is not a function`，无法作为机器门控。
+- 必须修复：T001 env var 成功路径 gate 不自包含。命令设置 `WORKFLOWHUB_TASK_DIR=/tmp/testdir`，但计划要求路径不存在 fail-loud，命令没有创建 `/tmp/testdir`。在干净机器上会假失败。
+- 必须修复：T001 “两者缺失 fail-loud” gate 不能证明两者缺失。当前命令只是不设置 env var；如果 `config/workflowhub.yaml` 存在 task_dir，按计划应成功而不是非零。该 gate 会把合法 yaml fallback 误判为失败。
+- 必须修复：多处 gate_cmd 存在 fake-green 风险：`grep -cE ... | grep -q`、`git log --oneline | head -1 | grep -q`、`grep ... | awk` 被当作机器门控，但未设置 `pipefail`，也没有 gate/display 分离。管道前段失败可能被后段吞掉 exit code。
+- 必须修复：T005 worktree 条目数 gate 不是机器门控。`git worktree list | wc -l` 只输出数值，没有 before/after 记录、比较命令和退出码标准，不能证明 build-spec/build-plan 没有新增 worktree。
+- 必须修复：T006 缺少正式 gate_cmd，且负向 grep 写法会把“无禁止文件”表现为 exit 1。若直接作为机器门控会假失败；若只看输出则不能 gate。
+- 必须修复：T006 gate 保留字面占位符 `{task-id}`，包括 `specs/{task-id}/` 和 `${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/stage-result.json`。命令不可直接执行，会检查错误路径。
+

@@ -1,0 +1,6 @@
+{
+  "skipped": true,
+  "reason": "human approved: doc-only change (workflows/*/SKILL.md + checklists/acceptance.md), no executable test command applicable",
+  "approved_by": "member 36d8091a-ab8e-4189-bc2f-67d1dfec84f4 via comment cb3945ac-6815-4209-a5b1-d304b0501c1f",
+  "git_sha": "d1e135a"
+}

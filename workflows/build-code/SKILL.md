@@ -97,6 +97,15 @@ When dispatching implementation work, regardless of backend:
 
 After GREEN evidence is confirmed for a phase, call the **3rd-review standalone entry**. Feed the real `git diff` output (not a natural-language description of the change — using prose triggers the same-source downgrade path in 3rd-review's classifier).
 
+**调用命令模板：**
+```bash
+bash /path/to/3rd-review/standalone.sh \
+  --checkpoint=build-code \
+  --input <(git diff HEAD~1) \
+  --engine codex \
+  --output {taskDir}/{task-id}/reviews/build-code-phase-N.md
+```
+
 Consume the 3-state verdict:
 
 - `pass` — proceed to the next phase.
@@ -272,10 +281,17 @@ Explicit instruction to pass to every implementation subagent:
 
 > DO NOT commit. Leave changes in the working tree.
 
-**Commit timing:**
+**Per-phase commit rule (FR-WORKTREE-COMMIT-004):**
 
-- Commit only at a semantic completion point: all phases are GREEN, two-stage review passes (no `revise_required` or `escalate_to_human`), and L2 smoke has been recorded.
-- The coordinator computes `base_sha` and `head_sha` before and after the commit, and captures the resulting `commit_sha`.
+Each phase that produces file changes **must** be followed by `git add` + `git commit` with message pattern `workflowhub(build-code/<phase-name>): <description>` before the next phase begins. This ensures each phase's changes are independently traceable.
+
+- **File-changing phase**: run `git add -A && git commit -m "workflowhub(build-code/<phase-name>): <description>"` after the phase reaches GREEN and before advancing to the next phase.
+- **No-change phase**: if a phase produces no file changes, do **not** create a commit (empty/marker-only commits are forbidden). Instead, write a no-change reason into the phase's stage-result or journal entry (e.g. `"no_change_reason": "phase skipped — no files modified"`). This no-change record is **mandatory**; a phase may not complete silently with neither a commit nor a no-change record.
+
+**Commit timing (per-phase, not a single final atomic commit):**
+
+- Each file-changing phase commits immediately after reaching GREEN and before the next phase begins (see per-phase commit rule above). There is no single final atomic commit that bundles all phases.
+- The coordinator computes `base_sha` and `head_sha` at commit time for each phase and captures the resulting `commit_sha`.
 
 **Evidence fields:**
 
@@ -292,7 +308,7 @@ These fields are required by the evidence contract (see §11). When the coordina
 
 ### 16. 自动进度摘要（人向，问题 1+2）
 
-This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** the atomic commit in §15 has completed.
+This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** all per-phase commits in §15 have completed.
 
 When that condition holds:
 
@@ -308,14 +324,26 @@ When that condition holds:
 
 Before starting implementation, locate the worktree descriptor at `{taskDir}/{task-id}/worktree.json`.
 
-**Normal paths:**
+**Normal path:**
 
 1. **File exists and is valid JSON** with a valid `worktree_root` pointing to an existing directory → reuse it. Do not re-clone or re-checkout.
-2. **File does not exist** → create the worktree following the make-decision stage rules, then write a valid `worktree.json`.
+
+**Missing file — fail-loud (FR-WORKTREE-FAILLOUD-007):**
+
+2. **File does not exist** → do **not** create a worktree. Output a clear error to stderr:
+   ```
+   ERROR [FR-WORKTREE-001]: worktree.json not found at expected path: {taskDir}/{task-id}/worktree.json
+   make-decision stage must complete successfully before build-code can proceed.
+   ```
+   Trigger `escalate_to_human`, stop build-code progression immediately, and record the missing path in `missing_items`. Do **not** silently fall back to creating a new worktree.
 
 **Exception paths:**
 
 3. **Corrupted file:** If `worktree.json` cannot be parsed as JSON, or if `worktree_root` is missing / not a string / empty string / points to a non-existent path / is not a git worktree directory, do **not** read the corrupted content and do **not** guess a path. Trigger `escalate_to_human`, stop build-code progression, and record the corruption details in `missing_items`.
-4. **Checkout failure:** If creating the worktree fails, do **not** write a half-baked `worktree.json` file. Leave the file absent or keep the previous valid version, surface the error, and stop.
 
 The `worktree_root` config key passed to this skill (see §5) must always match the path recorded in `worktree.json`. Never resolve upward to the host agenthub repo directory.
+
+**消费 6 字段前的 common 校验（全字段非空、绝对路径、值域）：** 读取 `worktree.json` 后，在消费 `target_repo_root`、`worktree_root`、`branch`、`created_by_stage`、`push_policy`、`status` 六字段之前，须先执行 common 校验：①全字段非空（六个字段均不得为空字符串或 `null`）；②路径字段（`target_repo_root`、`worktree_root`）须为绝对路径（以 `/` 开头）；③各字段值域校验（`status` ∈ `{active, cleaned}`；`push_policy` ∈ 预定义枚举；`created_by_stage` ∈ `{make-decision}`——本字段记录首次创建 worktree.json 的阶段，当前唯一合法值为 `make-decision`（R4/R5 规定 worktree 仅在 make-decision 阶段创建）；`branch` 须匹配 make-decision R3 定义的规范化分支正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`）。任一项校验失败即触发 `escalate_to_human`，停止 build-code 推进，并在 `missing_items` 记录具体失败字段。**`status` 前置约束**：common 校验通过后，build-code 仅允许 `status="active"` 的任务继续推进；`status="cleaned"` 视为已归档任务重入，直接 `escalate_to_human`/fail-loud，停止 build-code 推进，不得复用陈旧 worktree.json 继续后续步骤（与 verify-code close 的 re-entry 约束保持一致）。
+
+**`status=active` 时的 active-only 校验：** common 校验通过且 `status="active"` 时，须额外执行 active-only 校验：①`worktree_root` 目录存在性（目录须实际存在于文件系统）；②该 worktree 已在 `target_repo_root` 对应仓库的 `git worktree list --porcelain` 输出中注册（`worktree_root` 出现在某条目的 `worktree` 行——须以 `target_repo_root` 为准跑该命令，不得用任意其他仓库的注册记录替代）；③分支名匹配（该 worktree 条目对应的 `branch` 与 `worktree.json` 中记录的 `branch` 一致）；④同仓校验（该 worktree 的 commondir 须与 `target_repo_root` 同源，防止 `worktree.json` 被错误固化到另一仓库后仍被当作有效记录放行；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）。四项任一失败同样触发 `escalate_to_human`，停止推进，记录失败详情于 `missing_items`。
+

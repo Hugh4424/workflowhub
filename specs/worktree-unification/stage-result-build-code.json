@@ -1,0 +1,56 @@
+{
+  "stage": "build-code",
+  "task_id": "worktree-unification",
+  "status": "success",
+  "needs_human": false,
+  "needs_human_reason": "resolved: 人工裁决已下——「之前的没法达标也不该硬凑，不算问题」。T008 历史性 commit-format 缺口（规则定义前的老提交，含 T003 自身 commit 30d79df 不合规）属于规则生效前的既存状态，非阻塞项，人工已确认放行，无需补救措施。",
+  "human_decision": "approved, no remediation needed",
+  "phases": [
+    {
+      "phase_id": "phase-1",
+      "tasks": ["T001"],
+      "commit": "3816932",
+      "review": {
+        "verdict": "pass",
+        "rounds": 2
+      },
+      "status": "done"
+    },
+    {
+      "phase_id": "phase-2",
+      "tasks": ["T002", "T003", "T004"],
+      "commit": "0e93a55",
+      "review": {
+        "verdict": "pass",
+        "rounds": 13
+      },
+      "status": "done"
+    },
+    {
+      "phase_id": "phase-3",
+      "tasks": ["T005", "T006", "T007", "T008"],
+      "commit": "d1e135a",
+      "review": {
+        "verdict": "pass",
+        "rounds": 3
+      },
+      "status": "done",
+      "partial_tasks": {
+        "T008": {
+          "status": "done_with_finding",
+          "note": "12/13 doc-level gate 通过；1 项历史性 post-hoc 检查无法通过（git history 从未出现 workflowhub(build-code/<phase-name>): 格式提交，含定义该规则的 T003 commit 30d79df 自身），判定为 needs_human 既存缺口，不阻断本阶段其余交付"
+        }
+      }
+    }
+  ],
+  "next_stage": "verify-code",
+  "advance_blocked_pending_human": false,
+  "facts": {
+    "plan_ref": "specs/worktree-unification/plan.md",
+    "tasks_ref": "specs/worktree-unification/tasks.md",
+    "phase_result_ref": "tasks/worktree-unification/phase-result.json"
+  },
+  "missing_items": [
+    "T008 commit-format historical gap: git history never had a `workflowhub(build-code/<phase-name>):` format commit prior to the rule's own defining commit T003 30d79df; cannot retroactively fix history; does not block other deliverables"
+  ]
+}
