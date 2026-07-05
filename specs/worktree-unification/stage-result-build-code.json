@@ -2,8 +2,9 @@
   "stage": "build-code",
   "task_id": "worktree-unification",
   "status": "success",
-  "needs_human": true,
-  "needs_human_reason": "T008 单项遗留：git 历史中从未出现过 `workflowhub(build-code/<phase-name>):` 格式的提交（含定义该规则的 T003 commit 本身），属于规则先于自身历史存在的既存缺口，无法通过编辑文档修复，也不应改写历史提交。其余 T005-T008 全部任务及 3rd-review（3 轮迭代后 verdict=pass，0 blocking findings）均已完成，不阻断本阶段交付，留给人工判断是否需要就该命名规则的历史合规性做出裁定。",
+  "needs_human": false,
+  "needs_human_reason": "resolved: 人工裁决已下——「之前的没法达标也不该硬凑，不算问题」。T008 历史性 commit-format 缺口（规则定义前的老提交，含 T003 自身 commit 30d79df 不合规）属于规则生效前的既存状态，非阻塞项，人工已确认放行，无需补救措施。",
+  "human_decision": "approved, no remediation needed",
   "phases": [
     {
       "phase_id": "phase-1",
@@ -43,7 +44,7 @@
     }
   ],
   "next_stage": "verify-code",
-  "advance_blocked_pending_human": true,
+  "advance_blocked_pending_human": false,
   "facts": {
     "plan_ref": "specs/worktree-unification/plan.md",
     "tasks_ref": "specs/worktree-unification/tasks.md",
