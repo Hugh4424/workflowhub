@@ -71,7 +71,8 @@ Core implementation — 各 stage SKILL.md 改动，Stage 1 的 parser 改造完
 
 Verification & scope boundary — 核查只读约束和存放边界，最终校验全流程。
 
-- [ ] T005 核查并按需最小修改 `workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md`（FR-WORKTREE-SCOPE-008 要求覆盖二者）：（1）确认两者均不执行 `git worktree add`（不新增 worktree 条目）；（2）确认各自已包含读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段的逻辑，以及字段缺失时 fail-loud 报错退出的说明；若尚未存在，**仅允许新增该段最小实现**（读取字段 + 缺失 fail-loud），其余逻辑一律禁止修改；若已存在则记录"无需修改"并跳过；核查/修改结论写入 stage-result / journal。FR: FR-WORKTREE-SCOPE-008 (stage:3, depends:T002,T003,T004) Knowledge: 先 Read build-spec/SKILL.md 和 build-plan/SKILL.md，确认现有内容后决定是否需要最小补充
+- [ ] T005 核查并按需最小修改 `workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md`（FR-WORKTREE-SCOPE-008 要求覆盖二者）：（1）确认两者均不执行 `git worktree add`（不新增 worktree 条目）；（2）确认各自已包含读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段的逻辑，以及字段缺失时 fail-loud 报错退出的说明；若尚未存在，**仅允许新增该段最小实现**（读取字段 + 缺失 fail-loud），其余逻辑一律禁止修改；若已存在则记录"无需修改"并跳过；核查/修改结论写入 stage-result / journal。**新增交付物**：`core/worktree-context.mjs` — 共享脚本，build-spec/SKILL.md 和 build-plan/SKILL.md 都必须通过它读取 worktree.json 的 `target_repo_root`/`worktree_root` 字段（不允许各自重复实现读取逻辑）。该脚本接口：`node core/worktree-context.mjs <worktree.json路径>`，字段完整则打印 JSON 到 stdout 并 exit 0；字段缺失则 stderr 报错并 exit 1。build-spec/SKILL.md 和 build-plan/SKILL.md 须新增/确认调用 `core/worktree-context.mjs` 读取字段（而非各自 inline 重复实现），其余逻辑禁止修改。FR: FR-WORKTREE-SCOPE-008 (stage:3, depends:T002,T003,T004) Knowledge: 先 Read build-spec/SKILL.md 和 build-plan/SKILL.md，确认现有内容后决定是否需要最小补充
+  - **交付物**：`core/worktree-context.mjs`（新文件，build-code 阶段创建）
   - **gate_cmd**:
     - build-spec 无 worktree add：`! grep -q "git worktree add" workflows/build-spec/SKILL.md` — exit 0（无匹配即通过）
     - build-plan 无 worktree add：`! grep -q "git worktree add" workflows/build-plan/SKILL.md` — exit 0（无匹配即通过）
@@ -80,8 +81,9 @@ Verification & scope boundary — 核查只读约束和存放边界，最终校�
     - build-plan 含 target_repo_root/worktree_root 读取逻辑：`grep -q "target_repo_root\|worktree_root" workflows/build-plan/SKILL.md` — exit 0（**blocking**：须包含字段读取说明；缺失则 gate 失败）
     - build-plan 含缺失时 fail-loud 说明：`grep -q "fail-loud\|缺失.*fail\|fail.*缺失" workflows/build-plan/SKILL.md` — exit 0（**blocking**：须明确说明字段缺失时 fail-loud；缺失则 gate 失败）
     - worktree 条目数不变（跨 stage 验证）：`_before=$(git worktree list | wc -l); git worktree list > /dev/null; _after=$(git worktree list | wc -l); test "$_before" -eq "$_after" && echo PASS || (echo "FAIL: before=$_before after=$_after"; exit 1)` — exit 0（T005 不新增 worktree；before 与 after 相等即通过）
-    - 构造缺失字段场景验证 fail-loud（build-spec）：写入不含 target_repo_root/worktree_root 的 worktree.json，调用读取脚本，断言退出码非零：`node -e "const fs=require('fs'); const wt=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); if(!wt.target_repo_root||!wt.worktree_root){process.stderr.write('ERROR: target_repo_root or worktree_root missing in worktree.json\n');process.exit(1);}" <<< '{"branch":"workflowhub/test","status":"active"}'; [ $? -ne 0 ] && echo "PASS: fail-loud confirmed" || (echo "FAIL: expected non-zero exit"; exit 1)` — exit 0（**blocking**：必须真实断言缺字段时退出码非零）
-    - 构造缺失字段场景验证 fail-loud（build-plan）：同上逻辑对 build-plan SKILL.md 描述的读取方式：`node -e "const fs=require('fs'); const wt=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); if(!wt.target_repo_root||!wt.worktree_root){process.stderr.write('ERROR: target_repo_root or worktree_root missing in worktree.json\n');process.exit(1);}" <<< '{"branch":"workflowhub/test","status":"active"}'; [ $? -ne 0 ] && echo "PASS: fail-loud confirmed" || (echo "FAIL: expected non-zero exit"; exit 1)` — exit 0（**blocking**：必须真实断言缺字段时退出码非零）
+    - core/worktree-context.mjs 存在：`_ROOT=$(git rev-parse --show-toplevel) && test -f "$_ROOT/core/worktree-context.mjs"` — exit 0（**blocking**：真实交付物必须存在；缺失则 exit 1，阻断）
+    - 构造缺失字段场景验证 fail-loud（真实脚本）：`_ROOT=$(git rev-parse --show-toplevel) && _F=$(mktemp --suffix=.json) && printf '{"branch":"workflowhub/test","status":"active"}' > "$_F" && node "$_ROOT/core/worktree-context.mjs" "$_F" ; _rc=$? ; rm -f "$_F" ; test $_rc -ne 0` — exit 0（**blocking**：缺 target_repo_root/worktree_root 时须退出码非零）
+    - 构造字段齐全场景验证 exit 0（真实脚本）：`_ROOT=$(git rev-parse --show-toplevel) && _F=$(mktemp --suffix=.json) && printf '{"target_repo_root":"/tmp/repo","worktree_root":"/tmp/wt","branch":"workflowhub/test","status":"active","created_by_stage":"make-decision","push_policy":"verify-code-only"}' > "$_F" && node "$_ROOT/core/worktree-context.mjs" "$_F" ; _rc=$? ; rm -f "$_F" ; test $_rc -eq 0` — exit 0（**blocking**：字段齐全时须退出码 0 且打印 JSON）
   - **commit gate**：若 build-spec/SKILL.md 或 build-plan/SKILL.md 有最小例外修改，须 commit（message 含 `workflowhub(build-spec)` 或 `workflowhub(build-plan)`）；若无需修改则无 commit，须在 stage-result / journal 记录"无需修改（字段读取逻辑已存在）"
 
 - [ ] T006 全流程边界核查：（a）确认 `specs/worktree-unification/` 顶层不含禁止文件：evidence/ 目录、stage-result.json、journal.jsonl、task-metrics.jsonl（build-plan 过程产物 research.md / baseline-report.md 等在 SCOPE-009 白名单内，不视为违规）；（b）确认 verify-code close step ⑤ stage-result 文件路径为 `${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/stage-result.json`（仓库外，不写 specs/）；（c）确认 3rd-review 证据路径 `${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/evidence/` 在仓库外。FR: FR-WORKTREE-SCOPE-009 (stage:3, depends:T004) [P]
@@ -99,14 +101,17 @@ Verification & scope boundary — 核查只读约束和存放边界，最终校�
     - 含可勾选项（至少 4 条 AC）：`grep -c "^\- \[" "${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/checklists/acceptance.md" | awk '{if($1>=4)exit 0; else exit 1}'` — exit 0
     - 含 FR 编号引用：`grep -q "FR-WORKTREE" "${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/checklists/acceptance.md"` — exit 0
 
-- [ ] T008 验证 FR-WORKTREE-COMMIT-004 per-phase commit 规则在各阶段 SKILL.md 中落地，覆盖 build-code、build-spec、build-plan、verify-code 和 close 归档 commit 共 5 个触发点：
+- [ ] T008 验证 FR-WORKTREE-COMMIT-004 per-phase commit 规则在各阶段 SKILL.md 中落地，覆盖 make-decision、build-code、build-spec、build-plan、verify-code 和 close 归档 commit 共 6 个触发点：
+  - **T008-F（make-decision commit 触发点）**：make-decision/SKILL.md 须包含当阶段目标仓库有文件变更时须 commit 的说明（commit message 含 `workflowhub(make-decision)` 前缀）及无变更时须写 stage-result.missing_items 或 journal 记录的说明；缺失则阻断。
   - **T008-A（build-code per-phase commit）**：build-code/SKILL.md §15 须包含明确的 per-phase commit 规则（file-changing phase → commit；no-change phase → 禁止空提交，必须写 no-change reason 到 stage-result/journal）；commit message 须符合 `workflowhub(build-code/<phase-name>): <描述>` 模式；缺失任一项则 gate 失败并阻断。
   - **T008-B（build-spec commit 触发点）**：build-spec/SKILL.md 须包含当阶段有文件变更时须 commit 的说明（commit message 含 `workflowhub(build-spec)` 前缀）及无变更时须写 no-change reason 的说明；缺失则阻断。
   - **T008-C（build-plan commit 触发点）**：build-plan/SKILL.md 须包含当阶段有文件变更时须 commit 的说明（commit message 含 `workflowhub(build-plan)` 前缀）及无变更时须写 no-change reason 的说明；缺失则阻断。
-  - **T008-D（verify-code commit 触发点）**：verify-code/SKILL.md 须包含 close 阶段归档 commit 说明（commit message 含 `workflowhub(verify-code)` 前缀）；缺失则阻断。
+  - **T008-D（verify-code close 归档 commit 触发点）**：verify-code/SKILL.md 须包含 close 阶段归档 commit 说明，commit message 精确为 `workflowhub(close): archive {task-id}`（不得使用 `workflowhub(verify-code)` 前缀，close 不是独立 stage）；缺失则阻断。
   - **T008-E（close 归档 commit 矩阵行）**：verify-code/SKILL.md close 流程第④步不可逆动作序列中须有"归档 commit"步骤，且须在 stage-result 中记录 commit_sha；缺失则阻断。
   FR: FR-WORKTREE-COMMIT-004 (stage:3, depends:T002,T003,T004,T005) **[blocking gate]**
   - **gate_cmd**:
+    - T008-F make-decision commit 规则存在：`grep -q "workflowhub(make-decision)\|commit.*make-decision\|make-decision.*commit" workflows/make-decision/SKILL.md` — exit 0（缺失则 exit 1，阻断）
+    - T008-F make-decision no-change 记录规则存在：`grep -q "missing_items\|journal" workflows/make-decision/SKILL.md` — exit 0（缺失则 exit 1，阻断）
     - T008-A per-phase commit 规则存在：`grep -q "workflowhub(build-code/" workflows/build-code/SKILL.md` — exit 0（缺失则 exit 1，阻断）
     - T008-A no-change 禁止空提交规则存在：`grep -q "no.change\|no_change\|无.*变更\|无文件.*变更\|empty.*commit.*forbid\|禁止.*空.*commit\|forbidden\|marker.only" workflows/build-code/SKILL.md` — exit 0（缺失则 exit 1，阻断）
     - T008-A no-change 须写 journal/stage-result 记录：`grep -q "no.change.reason\|no_change_reason\|journal\|stage.result" workflows/build-code/SKILL.md` — exit 0（缺失则 exit 1，阻断）
@@ -114,7 +119,7 @@ Verification & scope boundary — 核查只读约束和存放边界，最终校�
     - T008-B build-spec no-change reason 规则存在：`grep -q "no.change\|no_change\|无.*变更\|无文件" workflows/build-spec/SKILL.md` — exit 0（缺失则 exit 1，阻断）
     - T008-C build-plan commit 规则存在：`grep -q "workflowhub(build-plan)\|commit.*build-plan\|build-plan.*commit" workflows/build-plan/SKILL.md` — exit 0（build-plan/SKILL.md 须含 commit 触发点说明；缺失则 exit 1，阻断）
     - T008-C build-plan no-change reason 规则存在：`grep -q "no.change\|no_change\|无.*变更\|无文件" workflows/build-plan/SKILL.md` — exit 0（缺失则 exit 1，阻断）
-    - T008-D verify-code commit 规则存在：`grep -q "workflowhub(verify-code)\|commit.*verify.code\|verify.code.*commit" workflows/verify-code/SKILL.md` — exit 0（缺失则 exit 1，阻断）
+    - T008-D verify-code close 归档 commit 前缀正确：`grep -q "workflowhub(close): archive" workflows/verify-code/SKILL.md` — exit 0（缺失则 exit 1，阻断）
     - T008-E close 归档 commit 步骤存在：`grep -q "归档.*commit\|archive.*commit\|commit.*归档" workflows/verify-code/SKILL.md` — exit 0（close 第④步须含归档 commit；缺失则 exit 1，阻断）
     - T008-E stage-result 记录 commit_sha：`grep -q "commit_sha" workflows/verify-code/SKILL.md` — exit 0（stage-result 须记录 commit_sha；缺失则 exit 1，阻断）
     - git log 验证 per-phase commit 已实际执行（post-hoc，在目标仓库 worktree 中执行）：`git -C "${WORKTREE_ROOT:-$(git rev-parse --show-toplevel)}" log --oneline | grep -q "workflowhub(build-code/"` — exit 0（验证 git history 中存在至少一条 workflowhub(build-code/) 前缀 commit；若目标 worktree 路径由 WORKTREE_ROOT 提供则用之，否则用当前仓库；缺失则 exit 1，阻断）
