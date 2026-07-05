@@ -169,7 +169,7 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 - 读取 make-decision/SKILL.md，存在独立 worktree 章节
 - R1-R7 规则均有明确条文
 - R 编号不与 decision-log D 编号混用
-- 验收清单（spec §7 验收标准 1-9）逐条可核查
+- 验收清单（spec §5 AC-01..AC-04 + §8 scenarios）逐条可核查
 
 #### 2.2: build-code/SKILL.md §17 — 删除旧 fallback，改为 fail-loud
 
@@ -212,9 +212,9 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 
 #### 3.1: 全流程 worktree.json 读取路径核查
 
-**描述**：检查 build-spec/SKILL.md 和 build-plan/SKILL.md，确认两者不执行 `git worktree add`，且在需要定位仓库根路径时读取 worktree.json 的 `target_repo_root` / `worktree_root` 字段（缺失时 fail-loud），而非重新探测。若 build-spec/SKILL.md 缺失该读取逻辑，补充最小必要条文（一行）。
+**描述**：检查 build-spec/SKILL.md 和 build-plan/SKILL.md，确认两者不执行 `git worktree add`，记录是否含 target_repo_root / worktree_root 读取逻辑或 worktree.json 缺失时 fail-loud 的说明，核查结论写入 stage-result / journal。**build-spec/SKILL.md 和 build-plan/SKILL.md 均仅只读核查，禁止任何修改**（无论是否缺失相关说明，一律不得写入）。
 
-**Files**: `workflows/build-spec/SKILL.md`（只读核查；缺失时最小补充一行）, `workflows/build-plan/SKILL.md`（**仅只读核查，禁止任何修改**——本 stage 自身 SKILL.md，属 scope 锁定文件）
+**Files**: `workflows/build-spec/SKILL.md`（**仅只读核查，禁止任何修改**）, `workflows/build-plan/SKILL.md`（**仅只读核查，禁止任何修改**——本 stage 自身 SKILL.md，属 scope 锁定文件）
 
 **Maps to**: FR-WORKTREE-SCOPE-008
 
@@ -253,7 +253,7 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 3. `workflows/build-code/SKILL.md`
 4. `workflows/verify-code/SKILL.md`
 
-build-spec/SKILL.md 仅只读核查，若确实缺少 target_repo_root 读取逻辑则最小补充（单行说明），不重构现有章节。
+build-spec/SKILL.md 仅只读核查，禁止任何修改（无论是否缺少相关说明）。
 
 ---
 
@@ -262,7 +262,7 @@ build-spec/SKILL.md 仅只读核查，若确实缺少 target_repo_root 读取逻
 | Implementation Step | FR 编号 | AC / 验收标准 |
 |---|---|---|
 | 1.1 core/task-dir-parser.mjs | FR-WORKTREE-ENVVAR-003 | WORKFLOWHUB_TASK_DIR 优先；yaml fallback；两者缺失 fail-loud；路径不存在 fail-loud |
-| 2.1 make-decision worktree 章节 | FR-WORKTREE-MAKEDECISION-002, FR-WORKTREE-CONTRACT-001, FR-WORKTREE-FAILLOUD-007, FR-WORKTREE-COMMIT-004 | R1-R7 均有明确条文；spec §7 验收标准 1-9 可核查 |
+| 2.1 make-decision worktree 章节 | FR-WORKTREE-MAKEDECISION-002, FR-WORKTREE-CONTRACT-001, FR-WORKTREE-FAILLOUD-007, FR-WORKTREE-COMMIT-004 | R1-R7 均有明确条文；spec §5 AC-01..AC-04 + §8 scenarios 可核查 |
 | 2.2 build-code §17 删除旧 fallback | FR-WORKTREE-CONTRACT-001, scope §8 | 旧 fallback 逻辑不存在；缺失时 fail-loud |
 | 2.3 verify-code close 5 步骤 | FR-WORKTREE-CLOSE-006, FR-WORKTREE-PUSH-005, FR-WORKTREE-CONTRACT-001-WRITE, FR-WORKTREE-SCOPE-009 | 5 步骤完整顺序；3rd-review 在 merge 前；stage-result 在 task_tracking_root |
 | 3.1 全流程核查 | FR-WORKTREE-SCOPE-008 | git worktree list 条目无新增 |
