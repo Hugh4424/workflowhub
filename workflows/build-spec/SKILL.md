@@ -319,6 +319,10 @@ Only a clean `pass` verdict may auto-advance. `revise_required` loops back inter
 
 The spec is not silently altered by this step — what spec-specify/spec-clarify produced (plus recorded F10/constitution/baseline findings) is exactly what gets carried into the brief and the stage-result.
 
+### 7.5. Commit 触发点 (FR-WORKTREE-COMMIT-004)
+
+当本阶段对目标仓库产生文件变更时，须 `git add` + `git commit`，message 含 `workflowhub(build-spec)` 前缀（例如 `workflowhub(build-spec): <description>`）。若本阶段无文件变更，禁止空提交，须在 stage-result 或 journal 记录 no-change reason（例如 `"no_change_reason": "build-spec stage produced no file changes"`）；no-change 记录为必填项，不得两者皆无地静默结束本阶段。
+
 ## Produce a stage-result
 
 When the stage is complete (all steps above done and 3rd-review verdict is `pass`, plain-language brief produced per step 7), write a `stage-result` record with:
