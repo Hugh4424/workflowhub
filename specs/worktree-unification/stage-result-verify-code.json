@@ -1,0 +1,29 @@
+{
+  "status": "success",
+  "retryable": false,
+  "facts": {
+    "evidence_ref": "reviews/verify-code.md",
+    "anomaly_flags": [
+      "missing_test_command_waived_by_human"
+    ],
+    "review": {
+      "status": "executed",
+      "source": "third_party",
+      "verdict": "pass",
+      "artifact_path": "specs/worktree-unification/reviews/verify-code.md"
+    }
+  },
+  "missing_items": [],
+  "user_decision": true,
+  "reason": "3rd-review verdict=pass；人工已豁免 test-command（文档变更，无可运行测试）。",
+  "error_code": "",
+  "needs_human": false,
+  "needs_human_reason": "",
+  "audit_summary": {
+    "total_step_count": 0,
+    "passed_step_count": 0,
+    "blocked_step_count": 0,
+    "skipped_step_count": 0,
+    "rollback_count": 0
+  }
+}

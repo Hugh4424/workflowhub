@@ -14,14 +14,14 @@ Translate the decision log from `make-decision` into a full spec via an orchestr
 
 ### 环境变量与参数约定（FR-TRACKING-001/002，FR-TASKDIR-001）
 
-#### TASK_TRACKING_ROOT
+#### WORKFLOWHUB_TASK_DIR
 
-全局环境变量 `TASK_TRACKING_ROOT` 约定所有阶段跟踪文件的存储根目录：
+全局环境变量 `WORKFLOWHUB_TASK_DIR` 约定所有阶段跟踪文件的存储根目录（即 task_tracking_root）。实际路径解析通过 `core/task-dir-parser.mjs` 完成（优先级：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` 的 `task_dir` 字段 → 两者均缺失则 fail-loud 非零退出）：
 
-- **默认值**：`~/Knowledge/workflowhub/`（若变量未设置则使用此默认路径）
-- **降级行为**：若 `TASK_TRACKING_ROOT` 未设置，记录 warn（不停止），继续使用默认路径
-- **目录创建**：若路径不存在，尝试自动 `mkdir -p` 创建；失败时 warn 不停止
-- **禁止绕过（FR-TRACKING-002）**：所有 stage（包括 spec-specify、spec-clarify 等）必须通过 `TASK_TRACKING_ROOT` 获取跟踪文件路径，禁止硬编码绝对跟踪路径
+- **优先级 1**：`WORKFLOWHUB_TASK_DIR` 环境变量（已设置且非空时直接使用）
+- **优先级 2**：`config/workflowhub.yaml` 的 `task_dir` 字段（yaml fallback）
+- **两者均缺失**：fail-loud，非零退出，明确报错；无默认路径，不静默降级
+- **禁止绕过（FR-TRACKING-002）**：所有 stage（包括 spec-specify、spec-clarify 等）必须通过 `core/task-dir-parser.mjs` 获取跟踪文件路径，禁止硬编码绝对跟踪路径
 
 #### --task-dir 参数约定（FR-TASKDIR-001）
 
@@ -36,7 +36,7 @@ Translate the decision log from `make-decision` into a full spec via an orchestr
 ```javascript
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
 ```
 
 本 skill 中所有 `specs/{task-id}/` 路径均为速记写法，运行时必须使用 `path.join(taskDir, taskId, ...)` 构造实际路径。
@@ -91,7 +91,17 @@ Read `{--task-dir}/decision-log.md` — the upstream `make-decision` output (def
 
 ### 0.5. Worktree context 读取 (FR-WORKTREE-SCOPE-008)
 
-build-spec **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-spec 只消费已创建的 worktree 上下文：调用 `core/worktree-context.mjs` 读取 `worktree.json` 的 `target_repo_root`/`worktree_root` 字段；两字段任一缺失时该脚本以非零退出码 fail-loud，build-spec 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+build-spec **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-spec 只消费已创建的 worktree 上下文：
+
+```bash
+# worktree.json 路径构造规则（与 build-code §17 一致）：
+# taskDir 通过 parseTaskDir() 获取（WORKFLOWHUB_TASK_DIR env var 优先，yaml fallback，两者缺失 fail-loud）
+node core/worktree-context.mjs {taskDir}/{task-id}/worktree.json
+```
+
+调用上述命令读取 `worktree.json`：两字段（`target_repo_root`/`worktree_root`）任一缺失时该脚本以非零退出码 fail-loud，build-spec 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+
+**status=cleaned 拒绝逻辑**：读取 `worktree.json` 后，build-spec 须额外检查 `status` 字段——若 `status="cleaned"`，说明 worktree 已归档，须立即 `escalate_to_human` 并停止推进，不得复用已归档的 worktree 上下文（与 spec FR-WORKTREE-CONTRACT-001 cleaned-only 校验一致）。
 
 ### 1. Metrics: stage start
 

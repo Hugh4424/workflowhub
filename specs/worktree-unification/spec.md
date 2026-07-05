@@ -96,7 +96,7 @@ worktree.json 须包含以下字段，格式为 JSON，存储在 `{{task_trackin
 - `push_policy` 仅允许值 `"verify-code-only"`，其他值视为无效文件
 - `status` 值域为 `["active", "cleaned"]`，其他值 fail-loud
 - `created_by_stage` 值域固定为 `["make-decision"]`，其他值 fail-loud
-- `branch` 必须匹配正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`
+- `branch` 必须匹配正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，不允许数字，源自 decision-log D3）
 
 **active-only 校验**（status=active 时额外执行）：
 - `worktree_root` 必须出现在 `git worktree list --porcelain` 输出中
@@ -116,7 +116,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 
 - R1（源自 decision-log D1）：task_tracking_root 读取规则 —— make-decision 读取 `WORKFLOWHUB_TASK_DIR` 环境变量作为 task_tracking_root（即跟踪根目录本身，不含 `/tasks` 子路径）；task 专属目录为 `task_tracking_root/tasks/{task-id}/`；若环境变量未设置则按 FR-WORKTREE-ENVVAR-003 降级顺序处理；task_tracking_root **不写入** worktree.json（worktree.json 只含 FR-WORKTREE-CONTRACT-001 定义的 6 字段）；task_tracking_root 由各 stage 各自实时读取 `WORKFLOWHUB_TASK_DIR` 环境变量得到，无需跨 stage 固化传递（因为它是环境变量，每个 stage 运行时均可重新读取，值恒定不变）
 - R2（源自 decision-log D2）：目标仓库路径（target_repo_root）探测与固化规则 —— make-decision 在当前会话 cwd 上下文首次探测并做存在性校验，写入 worktree.json 并标注不可覆盖；后续所有 stage 只读该字段，禁止重新探测；字段缺失时 escalate_to_human
-- R3（设计延伸，非 decision-log 直接定义）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（两到三个小写英文单词，连字符分隔，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
+- R3（源自 decision-log D3）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
 - R4（设计延伸）：worktree 创建时机（make-decision 阶段末尾，task 子目录创建成功后）
 - R5（源自 decision-log 验收标准 1；其中 `target_repo_root` 固化规则源自 D2）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
 - R6（源自 decision-log D4）：worktree 存在性/冲突检测规则 —— 用 `git worktree list --porcelain` 作为唯一权威校验；已注册且路径存在则复用；路径存在未注册（僵尸目录）则 fail-loud，不自动删除；分支已被其他 worktree 占用则 fail-loud，报告占用详情，不强制 checkout
@@ -202,13 +202,13 @@ close 流程须包含以下步骤，**严格按以下顺序**执行，无遗漏�
 - **② 质量事实记录**：将当前验收清单状态写入 final-test-report，如有未验证条目记录 warn 并上报 needs_human=true；不自动阻断 close（宪法 Q2：质量事实只记录，不阻断推进，由人工决定）。
 - **③ 3rd-review 独立审查**（在不可逆动作之前执行，即 merge + 分支清理之前）：由独立上下文（3rd-review agent）对本 task 所有 stage 产出执行独立审查；审查结果写入 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`；审查结论须包含明确 verdict（pass / revise_required）；审查产物须落盘可查，不得以摘要或口头声明替代文件证据。verdict=pass 方可进入下一步不可逆动作；verdict=revise_required 时见"pre-merge revise_required 契约"。
 - **④ 不可逆动作**（须人工确认 user_decision=true 且 3rd-review verdict=pass 后方可执行）：按 FR-WORKTREE-PUSH-005 定义的 8 步线性序列严格顺序执行，不得调换。序列为：① 归档 commit（移目录 + commit）→ ② 切主 checkout → ③ 非快进合并 → ④ 移除 worktree 目录 → ⑤ 推送 main → ⑥ 删远端分支（或跳过） → ⑦ 删本地分支 → ⑧ 更新 worktree.json status=cleaned。FR-WORKTREE-CLOSE-006 不另行规定顺序，以 FR-WORKTREE-PUSH-005 为唯一权威。删远端/本地分支前须确认目标提交已被 main 包含；确认失败时停止 close，不删除任何分支。
-- **⑤ stage-result 落盘**（不可逆动作完成后，或 revise_required 阻止不可逆动作时均须落盘）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入 `{{task_tracking_root}}/tasks/{task-id}/stage-result.json`；不纳入 repo 归档 commit（stage-result 属于过程/追踪内容，须存放在 task_tracking_root 而非 repo specs/ 下）。验收标准：`{{task_tracking_root}}/tasks/{task-id}/stage-result.json` 存在且 verdict 字段与 3rd-review 产物一致。
+- **⑤ stage-result 落盘**（不可逆动作完成后，或 revise_required 阻止不可逆动作时均须落盘）：将本 task 的 stage-result（包括各阶段产出摘要、质量事实、3rd-review verdict）写入 `{{task_tracking_root}}/tasks/{task-id}/stage-result-verify-code.json`；不纳入 repo 归档 commit（stage-result 属于过程/追踪内容，须存放在 task_tracking_root 而非 repo specs/ 下）。验收标准：`{{task_tracking_root}}/tasks/{task-id}/stage-result-verify-code.json` 存在且 verdict 字段与 3rd-review 产物一致。
 
 **pre-merge revise_required 契约**：3rd-review 在不可逆动作之前执行，若 verdict=revise_required：① **不执行 merge、不删分支、不 push**（不可逆动作全部跳过）；② 将 findings 写入 stage-result.json，记录 `review_status=revise_required` 及具体 finding 列表；③ 将 needs_human 置为 true 并列明所有 findings；④ escalate_to_human，等待人工确认修复后重新走 3rd-review（重新从步骤③开始）；⑤ 人工确认修复完成且 3rd-review verdict=pass 后，方可继续步骤④不可逆动作。此路径确保问题在不可逆动作前被阻止，不留歧义。
 
 **不可逆动作中途失败契约**：步骤④ 8 步序列中若某步失败，立即停止，不自动回滚已执行的步骤，不跳过后续步骤；在 stage-result.json 中记录失败步骤编号和错误信息；needs_human=true，escalate_to_human，等待人工决定后续处理（补全还是接受现状）。**不提供自动重试或部分恢复机制**（partial-close 恢复状态机在 decision-log D1-D6 中无对应决策，本任务不实现，见 Known Gaps 第 5 条）。
 
-**验收标准**：close 流程中，3rd-review 独立审查在 merge 之前完成；verdict=pass 才允许执行 merge + 分支清理；verdict=revise_required 时 merge 未发生、分支未删除、stage-result.json 中 review_status=revise_required 且 needs_human=true 可查，并已 escalate_to_human；close 成功完成后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；stage-result.json 在 `{{task_tracking_root}}/tasks/{task-id}/` 下可查且含 verdict 字段；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
+**验收标准**：close 流程中，3rd-review 独立审查在 merge 之前完成；verdict=pass 才允许执行 merge + 分支清理；verdict=revise_required 时 merge 未发生、分支未删除、stage-result-verify-code.json 中 review_status=revise_required 且 needs_human=true 可查，并已 escalate_to_human；close 成功完成后，spec 已归档、worktree 已清理、分支已删除、merge commit 可查；3rd-review 证据文件在 `{{task_tracking_root}}/tasks/{task-id}/evidence/` 下可查；stage-result-verify-code.json 在 `{{task_tracking_root}}/tasks/{task-id}/` 下可查且含 verdict 字段；若质量事实有 warn，needs_human=true 记录可查，但不阻止后续人工推进。
 
 ### FR-WORKTREE-SCOPE-008：build-spec / build-plan 不创建 worktree
 

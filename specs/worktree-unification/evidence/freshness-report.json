@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-07-05T12:45:00Z",
+  "phase3_commit": "d1e135a",
+  "phase3_commit_full": "d1e135ae3378c1d372ed987c96c997fb99481ccf",
+  "current_head": "4b49b15145d3a8af777d224a172cfafd9c81ccd6",
+  "sha_match": false,
+  "intentional_skip": true,
+  "skip_reason": "tests skipped per human approval (doc-only change); freshness check adapted accordingly",
+  "post_phase3_commits": [
+    {
+      "sha": "6d15f17",
+      "message": "workflowhub(build-code): write stage-result-build-code.json, needs_human=true (T008 historical commit-format gap)",
+      "changed_files": ["specs/worktree-unification/stage-result-build-code.json"]
+    },
+    {
+      "sha": "4b49b15",
+      "message": "workflowhub(build-code): resolve needs_human per human decision on T008 historical commit-format gap",
+      "changed_files": ["specs/worktree-unification/stage-result-build-code.json"]
+    }
+  ],
+  "implementation_files_changed_since_phase3": [],
+  "anomaly_flags": [
+    {
+      "flag": "head_sha_differs_from_phase3",
+      "severity": "informational",
+      "detail": "HEAD (4b49b15) is 2 commits ahead of phase-3 SHA (d1e135a); delta contains only stage-result-build-code.json (process tracking), no implementation or SKILL.md files changed"
+    }
+  ],
+  "verdict": "clean_for_doc_change"
+}

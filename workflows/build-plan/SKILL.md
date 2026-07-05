@@ -28,7 +28,17 @@ Call the `spec-research` skill located at `skills/spec-research/SKILL.md`:
 
 ### Step 0.6: Worktree context 读取 (FR-WORKTREE-SCOPE-008)
 
-build-plan **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-plan 只消费已创建的 worktree 上下文：调用 `core/worktree-context.mjs` 读取 `worktree.json` 的 `target_repo_root`/`worktree_root` 字段；两字段任一缺失时该脚本以非零退出码 fail-loud，build-plan 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+build-plan **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-plan 只消费已创建的 worktree 上下文：
+
+```bash
+# worktree.json 路径构造规则（与 build-code §17 一致）：
+# taskDir 通过 parseTaskDir() 获取（WORKFLOWHUB_TASK_DIR env var 优先，yaml fallback，两者缺失 fail-loud）
+node core/worktree-context.mjs {taskDir}/{task-id}/worktree.json
+```
+
+调用上述命令读取 `worktree.json`：两字段（`target_repo_root`/`worktree_root`）任一缺失时该脚本以非零退出码 fail-loud，build-plan 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+
+**status=cleaned 拒绝逻辑**：读取 `worktree.json` 后，build-plan 须额外检查 `status` 字段——若 `status="cleaned"`，说明 worktree 已归档，须立即 `escalate_to_human` 并停止推进，不得复用已归档的 worktree 上下文（与 spec FR-WORKTREE-CONTRACT-001 cleaned-only 校验一致）。
 
 ### Step 1: Read upstream inputs
 
@@ -42,7 +52,7 @@ Read the spec from upstream `build-spec`:
 ```javascript
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
 ```
 
 The `task-id` must be explicitly provided. If missing, fail with "task-id required" and non-zero exit. No git branch inference fallback.
