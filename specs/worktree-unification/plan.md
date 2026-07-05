@@ -212,9 +212,9 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 
 #### 3.1: 全流程 worktree.json 读取路径核查
 
-**描述**：检查 build-spec/SKILL.md 和 build-plan/SKILL.md，确认两者不执行 `git worktree add`，且在需要定位仓库根路径时读取 worktree.json 的 `target_repo_root` / `worktree_root` 字段（缺失时 fail-loud），而非重新探测。若现有实现缺失该读取逻辑，补充必要说明。
+**描述**：检查 build-spec/SKILL.md 和 build-plan/SKILL.md，确认两者不执行 `git worktree add`，且在需要定位仓库根路径时读取 worktree.json 的 `target_repo_root` / `worktree_root` 字段（缺失时 fail-loud），而非重新探测。若 build-spec/SKILL.md 缺失该读取逻辑，补充最小必要条文（一行）。
 
-**Files**: `workflows/build-spec/SKILL.md`（只读核查；如缺失则最小补充）, `workflows/build-plan/SKILL.md`（只读核查）
+**Files**: `workflows/build-spec/SKILL.md`（只读核查；缺失时最小补充一行）, `workflows/build-plan/SKILL.md`（**仅只读核查，禁止任何修改**——本 stage 自身 SKILL.md，属 scope 锁定文件）
 
 **Maps to**: FR-WORKTREE-SCOPE-008
 
@@ -224,7 +224,7 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 
 #### 3.2: 存放边界核查
 
-**描述**：核查 verify-code close 流程确认 stage-result.json 写入 `{{task_tracking_root}}/tasks/{task-id}/`（仓库外），不写入 `specs/{task-id}/`（仓库内）。核查 `specs/{task-id}/` 下只存放 spec.md、plan.md、tasks.md。
+**描述**：核查 verify-code close 流程确认 stage-result.json 写入 `{{task_tracking_root}}/tasks/{task-id}/`（仓库外），不写入 `specs/{task-id}/`（仓库内）。核查 `specs/{task-id}/` 顶层不含禁止文件（evidence/、stage-result.json、journal.jsonl、task-metrics.jsonl）；build-plan 过程产物（research.md、baseline-report.md 等）在白名单内，不视为违规。
 
 **Files**: `workflows/verify-code/SKILL.md`（已在 2.3 覆盖）
 
@@ -311,7 +311,7 @@ build-spec/SKILL.md 仅只读核查，若确实缺少 target_repo_root 读取逻
   **Rationale**: 本 task 新增关卡仅：入口校验（worktree.json 读取时 common + active-only 校验）和 3rd-review 审查门控，均有真实故障场景支撑（ZHI-65 断链）。F10 gate 已过滤所有机制，无预堆基建。符合 F5。
 
 - [x] **F6 统一外置执行记录** — 判据：进度/指标/回溯是否统一记录、可回溯。
-  **Rationale**: stage-result-verify-code.json 落盘于 task_tracking_root（外置，不在 repo 内）；journal.jsonl / task-metrics.jsonl 亦在 task_tracking_root；3rd-review 证据落盘于 evidence/3rd-review-roundN/。所有过程/追踪类产物统一外置，可回溯。符合 F6。
+  **Rationale**: stage-result.json 落盘于 task_tracking_root（外置，不在 repo 内）；journal.jsonl / task-metrics.jsonl 亦在 task_tracking_root；3rd-review 证据落盘于 evidence/3rd-review-roundN/。所有过程/追踪类产物统一外置，可回溯。符合 F6。
 
 - [x] **F7 推进与不可逆操作不自动越过人** — 判据：推进/不可逆操作是否经人边界确认。
   **Rationale**: close 流程步骤④不可逆动作序列须 `user_decision=true` 且 3rd-review verdict=pass 后方可执行。build-plan Step 9 人审检查点是硬门控（无超时旁路）。符合 F7。

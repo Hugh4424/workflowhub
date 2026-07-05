@@ -11,6 +11,14 @@
 Foundation — 基础设施改造，后续所有 stage 的读取路径依赖此完成。
 
 - [ ] T001 改造 `core/task-dir-parser.mjs`：新增 `WORKFLOWHUB_TASK_DIR` env var 优先级（① env var → ② yaml fallback → ③ 两者缺失 fail-loud），parser 返回 task_tracking_root 本身（不拼接 `/tasks/{task-id}`）；路径不存在或非目录时 fail-loud；保留 yaml fallback（D1 不破坏）；删除旧硬编码路径 `~/Knowledge/workflowhub/`（FR-WORKTREE-ENVVAR-003 第 3 条：两者均缺失时 fail-loud，不使用硬编码）。FR: FR-WORKTREE-ENVVAR-003, AC-16 (stage:1, depends:无) (upstream_delta: research.md §3 — core/task-dir-parser.mjs 硬编码路径，scripts/ 为空无辅助脚本)
+  - **gate_cmd**:
+    - env var 路径：`WORKFLOWHUB_TASK_DIR=/tmp/testdir node -e "require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir()).then(r=>{if(!r.startsWith('/tmp/testdir'))process.exit(1)})"` — exit 0
+    - yaml fallback：`WORKFLOWHUB_TASK_DIR= node -e "require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())"` — exit 0（yaml 有配置时）
+    - 两者缺失 fail-loud：`node -e "require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())"` — exit 非零，stderr 含明确错误
+    - 路径不存在 fail-loud：`WORKFLOWHUB_TASK_DIR=/nonexistent node -e "require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())"` — exit 非零
+    - 非目录 fail-loud：`WORKFLOWHUB_TASK_DIR=/tmp/somefile node -e "require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())"` — exit 非零
+    - 硬编码已删除：`grep -R "Knowledge/workflowhub" core/task-dir-parser.mjs` — 无输出（exit 1 即通过）
+  - **commit gate**：`git log --oneline | head -1 | grep -q "workflowhub(task-dir-parser)"` — exit 0；若无文件变更，须在 stage-result 或 journal 记录"无变更"原因
 
 ---
 
@@ -19,10 +27,27 @@ Foundation — 基础设施改造，后续所有 stage 的读取路径依赖此�
 Core implementation — 各 stage SKILL.md 改动，Stage 1 的 parser 改造完成后并行展开。
 
 - [ ] T002 在 `workflows/make-decision/SKILL.md` 新增独立 **worktree 规则章节**，覆盖 R1-R7（R1: task_tracking_root 读取；R2: target_repo_root 探测与固化；R3: 分支命名 `workflowhub/{task-id}`；R4: worktree 创建时机；R5: worktree.json 首次写入 6 字段含 status="active"；R6: 存在性/冲突检测用 `git worktree list --porcelain`，僵尸 fail-loud，占用 fail-loud；R7: make-decision stage commit 规则）；补充 task 子目录创建职责（幂等，父目录不存在 fail-loud，status=cleaned fail-loud "task 已归档"）。FR: FR-WORKTREE-MAKEDECISION-002, FR-WORKTREE-CONTRACT-001, FR-WORKTREE-FAILLOUD-007, FR-WORKTREE-COMMIT-004 (stage:2, depends:T001) [P]
+  - **gate_cmd**:
+    - 章节存在：`grep -q "worktree 规则" workflows/make-decision/SKILL.md` — exit 0
+    - R1-R7 全覆盖：`grep -cE "^[- ]*R[1-7]" workflows/make-decision/SKILL.md | grep -q "^7$"` — exit 0（至少 7 条 R 规则）
+    - status=active 字段：`grep -q 'status.*active' workflows/make-decision/SKILL.md` — exit 0
+    - fail-loud 僵尸检测：`grep -q "fail-loud" workflows/make-decision/SKILL.md` — exit 0
+  - **commit gate**：`git log --oneline | head -1 | grep -q "workflowhub(make-decision)"` — exit 0；若无文件变更须在 stage-result/journal 记录原因
 
 - [ ] T003 在 `workflows/build-code/SKILL.md §17`：删除旧"worktree.json 缺失时自动创建 worktree"fallback 路径，替换为 fail-loud（输出明确错误含期望路径，exit 非零，escalate_to_human）；确认 §17 读取 worktree.json 后消费 6 字段时执行 common 校验（全字段非空、绝对路径、值域）+ status=active 时 active-only 校验（worktree 目录存在性 + git worktree list 注册 + 分支名匹配）。FR: FR-WORKTREE-CONTRACT-001, scope §8 (stage:2, depends:T001) [P]
+  - **gate_cmd**:
+    - 旧 fallback 已删除：`grep -q "自动创建 worktree\|auto.*create.*worktree\|worktree add" workflows/build-code/SKILL.md` — exit 1（无匹配即通过）
+    - fail-loud 条文存在：`grep -q "fail-loud\|escalate_to_human" workflows/build-code/SKILL.md` — exit 0
+    - common 校验条文存在：`grep -q "common 校验\|全字段非空" workflows/build-code/SKILL.md` — exit 0
+  - **commit gate**：`git log --oneline | head -1 | grep -q "workflowhub(build-code)"` — exit 0；若无文件变更须在 stage-result/journal 记录原因
 
 - [ ] T004 在 `workflows/verify-code/SKILL.md` close 章节补充完整 **5 步骤序列**（严格顺序）：①入口校验（common + active-only）；②质量事实记录（final-test-report, warn 不阻断, needs_human=true）；③3rd-review 独立审查（merge 前，evidence/ 落盘，verdict=pass 继续）；④不可逆动作 8 步线性序列（归档 commit → 切主 checkout → no-ff merge → 移除 worktree 目录 → push main → 删远端分支（存在则删, 不存在 skip+info）→ 删本地分支 → 更新 status=cleaned）；⑤stage-result 落盘（task_tracking_root, 含 verdict 字段）。补充：pre-merge revise_required 契约（步骤④全部跳过, needs_human=true）；不可逆动作中途失败契约（立即停止, 不回滚, escalate_to_human, 记录失败步骤编号）。FR: FR-WORKTREE-CLOSE-006, FR-WORKTREE-PUSH-005, FR-WORKTREE-CONTRACT-001-WRITE, FR-WORKTREE-SCOPE-009 (stage:2, depends:T001) [P]
+  - **gate_cmd**:
+    - 5 步骤存在：`grep -cE "①|②|③|④|⑤" workflows/verify-code/SKILL.md | awk '{if($1>=5)exit 0; else exit 1}'` — exit 0
+    - 3rd-review 在 merge 前：`awk '/③/{r=NR} /no-ff merge/{m=NR} END{if(r>0&&m>0&&r<m)exit 0; else exit 1}' workflows/verify-code/SKILL.md` — exit 0
+    - revise_required 契约存在：`grep -q "revise_required" workflows/verify-code/SKILL.md` — exit 0
+    - stage-result.json 路径正确：`grep -q "stage-result\.json" workflows/verify-code/SKILL.md` — exit 0
+  - **commit gate**：`git log --oneline | head -1 | grep -q "workflowhub(verify-code)"` — exit 0；若无文件变更须在 stage-result/journal 记录原因
 
 ---
 
@@ -30,11 +55,22 @@ Core implementation — 各 stage SKILL.md 改动，Stage 1 的 parser 改造完
 
 Verification & scope boundary — 核查只读约束和存放边界，最终校验全流程。
 
-- [ ] T005 核查 `workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md`（FR-WORKTREE-SCOPE-008 要求覆盖二者）：确认两者均不执行 `git worktree add`（不新增 worktree 条目）；若缺失 target_repo_root / worktree_root 读取逻辑或 worktree.json 缺失时 fail-loud 的说明，补充最小必要条文（一行）。只读核查为主，最小补充为辅。不重构现有章节。FR: FR-WORKTREE-SCOPE-008 (stage:3, depends:T002,T003,T004) Knowledge: 先 Read build-spec/SKILL.md 和 build-plan/SKILL.md，确认现有内容后再判断是否需要补充
+- [ ] T005 核查 `workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md`（FR-WORKTREE-SCOPE-008 要求覆盖二者）：确认两者均不执行 `git worktree add`（不新增 worktree 条目）；若 build-spec/SKILL.md 缺失 target_repo_root / worktree_root 读取逻辑或 worktree.json 缺失时 fail-loud 的说明，补充最小必要条文（一行）。**build-plan/SKILL.md 仅只读核查，禁止任何修改**（本 stage 自身 SKILL.md，scope 锁定，不适用"最小补充"规则）。不重构现有章节。FR: FR-WORKTREE-SCOPE-008 (stage:3, depends:T002,T003,T004) Knowledge: 先 Read build-spec/SKILL.md 和 build-plan/SKILL.md，确认现有内容后再判断是否需要补充
+  - **gate_cmd**:
+    - build-spec 无 worktree add：`grep -q "git worktree add" workflows/build-spec/SKILL.md` — exit 1（无匹配即通过）
+    - build-plan 无 worktree add：`grep -q "git worktree add" workflows/build-plan/SKILL.md` — exit 1（无匹配即通过）
+    - build-spec 含 fail-loud 说明：`grep -q "fail-loud\|缺失.*fail" workflows/build-spec/SKILL.md` — exit 0
+    - worktree 条目数不变（跨 stage 验证）：`git worktree list | wc -l` — 运行前后数值相同
+  - **commit gate（build-spec 有修改时）**：`git log --oneline | head -1 | grep -q "workflowhub(build-spec)"` — exit 0；若 build-spec/SKILL.md 无需修改须在 stage-result/journal 记录"build-spec 无需变更"原因
 
-- [ ] T006 全流程边界核查：（a）确认 `specs/{task-id}/` 目录下只允许 spec.md / plan.md / tasks.md，不含 evidence/ 或 stage-result 类文件；（b）确认 verify-code close step ⑤ stage-result 文件名为 `stage-result-verify-code.json`（与 verify-code/SKILL.md FR-PATH-001 一致），路径写到 `{{task_tracking_root}}/tasks/{task-id}/stage-result-verify-code.json`（仓库外，不写 specs/）；（c）确认 3rd-review 证据路径 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`（仓库外）。FR: FR-WORKTREE-SCOPE-009 (stage:3, depends:T004) [P]
+- [ ] T006 全流程边界核查：（a）确认 `specs/{task-id}/` 顶层不含禁止文件：evidence/ 目录、stage-result.json、journal.jsonl、task-metrics.jsonl（build-plan 过程产物 research.md / baseline-report.md 等在 SCOPE-009 白名单内，不视为违规）；检查命令：`git show HEAD -- specs/{task-id}/ | grep -E "^\\+\\+\\+ b/specs/.*(evidence/|stage-result\\.json|journal\\.jsonl|task-metrics\\.jsonl)"`，应无输出；（b）确认 verify-code close step ⑤ stage-result 文件名为 `stage-result.json`（唯一权威文件名，与 spec.md FR-WORKTREE-CLOSE-006 验收标准一致），路径写到 `{{task_tracking_root}}/tasks/{task-id}/stage-result.json`（仓库外，不写 specs/）；检查命令：`test -f "${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/stage-result.json" && jq -e '.verdict' "${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/stage-result.json"`，exit 0 为通过；（c）确认 3rd-review 证据路径 `{{task_tracking_root}}/tasks/{task-id}/evidence/3rd-review-roundN/`（仓库外）；检查命令：`ls "${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/evidence/"` 可列出目录，exit 0 为通过。FR: FR-WORKTREE-SCOPE-009 (stage:3, depends:T004) [P]
 
-- [ ] T007 编写验收核查清单，写入 `{{task_tracking_root}}/tasks/worktree-unification/checklists/acceptance.md`（路径通过 parseTaskDir 解析，仓库外，符合 FR-WORKTREE-SCOPE-009）：将 spec §7 验收标准 1-9 条逐条转为可勾选项，标注对应 Task ID（T001-T006）和 FR 编号；供 verify-code 阶段使用。禁止写入 `specs/worktree-unification/checklists/`（仓库内，违反 FR-WORKTREE-SCOPE-009）。FR: spec §7 验收标准, FR-WORKTREE-SCOPE-009 (stage:3, depends:T001,T002,T003,T004,T005,T006)
+- [ ] T007 编写验收核查清单，写入 `{{task_tracking_root}}/tasks/worktree-unification/checklists/acceptance.md`（路径通过 parseTaskDir 解析，仓库外，符合 FR-WORKTREE-SCOPE-009）：将 spec §5 成功标准（AC-01 至 AC-04）及 spec §8 场景逐条转为可勾选项，标注对应 Task ID（T001-T006）和 FR 编号；供 verify-code 阶段使用。**注意**：spec §7 为 Out of Scope，成功标准在 §5 中定义（AC-01..AC-04），T007 须引用 §5 而非 §7。禁止写入 `specs/worktree-unification/checklists/`（仓库内，违反 FR-WORKTREE-SCOPE-009）。FR: spec §5 成功标准 AC-01..AC-04, FR-WORKTREE-SCOPE-009 (stage:3, depends:T001,T002,T003,T004,T005,T006)
+  - **gate_cmd**:
+    - 文件已写入仓库外路径：`test -f "${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/checklists/acceptance.md"` — exit 0
+    - 文件不存在于仓库内：`test ! -f "specs/worktree-unification/checklists/acceptance.md"` — exit 0
+    - 含可勾选项（至少 4 条 AC）：`grep -c "^\- \[" "${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/checklists/acceptance.md" | awk '{if($1>=4)exit 0; else exit 1}'` — exit 0
+    - 含 FR 编号引用：`grep -q "FR-WORKTREE" "${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/checklists/acceptance.md"` — exit 0
 
 ---
 
