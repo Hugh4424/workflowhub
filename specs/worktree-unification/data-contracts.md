@@ -12,7 +12,7 @@
 |------|------|
 | **Contract name** | `worktree.json` — 跨 stage worktree 状态契约 |
 | **Owner side** | `make-decision` stage（首次写入全部 6 字段） |
-| **Consumer side** | `build-code` §17 FR-WORKTREE-001、`verify-code` close 阶段（仅可更新 status）；consumer 通过已知的 `task_tracking_root`（从环境变量或 yaml 配置解析，与 worktree.json 本身无关）拼接 `{{task_tracking_root}}/tasks/{task-id}/worktree.json` 得到文件路径并读取；文件内的 `worktree_root` 等字段供读取后内部使用，不用于定位文件自身 |
+| **Consumer side** | `build-code` §17 FR-WORKTREE-001、`verify-code` close 阶段（仅可更新 status）、`build-spec` 阶段（读取 `target_repo_root`/`worktree_root`，缺失时 fail-loud）、`build-plan` 阶段（读取 `target_repo_root`/`worktree_root`，缺失时 fail-loud）；consumer 通过已知的 `task_tracking_root`（从环境变量或 yaml 配置解析，与 worktree.json 本身无关）拼接 `{{task_tracking_root}}/tasks/{task-id}/worktree.json` 得到文件路径并读取；文件内的 `worktree_root` 等字段供读取后内部使用，不用于定位文件自身 |
 | **File path** | `{{task_tracking_root}}/tasks/{task-id}/worktree.json`（任务跟踪目录下，由 make-decision 写入） |
 
 ### Required Fields / Types

@@ -288,10 +288,10 @@ Each phase that produces file changes **must** be followed by `git add` + `git c
 - **File-changing phase**: run `git add -A && git commit -m "workflowhub(build-code/<phase-name>): <description>"` after the phase reaches GREEN and before advancing to the next phase.
 - **No-change phase**: if a phase produces no file changes, do **not** create a commit (empty/marker-only commits are forbidden). Instead, write a no-change reason into the phase's stage-result or journal entry (e.g. `"no_change_reason": "phase skipped — no files modified"`). This no-change record is **mandatory**; a phase may not complete silently with neither a commit nor a no-change record.
 
-**Commit timing (final atomic commit):**
+**Commit timing (per-phase, not a single final atomic commit):**
 
-- Commit only at the final semantic completion point: all phases are GREEN, two-stage review passes (no `revise_required` or `escalate_to_human`), and L2 smoke has been recorded.
-- The coordinator computes `base_sha` and `head_sha` before and after the commit, and captures the resulting `commit_sha`.
+- Each file-changing phase commits immediately after reaching GREEN and before the next phase begins (see per-phase commit rule above). There is no single final atomic commit that bundles all phases.
+- The coordinator computes `base_sha` and `head_sha` at commit time for each phase and captures the resulting `commit_sha`.
 
 **Evidence fields:**
 
@@ -308,7 +308,7 @@ These fields are required by the evidence contract (see §11). When the coordina
 
 ### 16. 自动进度摘要（人向，问题 1+2）
 
-This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** the atomic commit in §15 has completed.
+This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** all per-phase commits in §15 have completed.
 
 When that condition holds:
 

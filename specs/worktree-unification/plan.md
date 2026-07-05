@@ -72,8 +72,8 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 ```
 
 **Forbidden files（不可触碰）**：
-- `workflows/build-spec/SKILL.md`（**仅只读核查，禁止任何修改**；T005 Knowledge 门控要求先读再判断，若核查结果无需变更则记录"无需修改"原因并跳过；FR-WORKTREE-SCOPE-008 明确此文件不在改动范围内）
-- `workflows/build-plan/SKILL.md`（本 stage 自身，不修改）
+- `workflows/build-spec/SKILL.md`（**禁止修改，除以下单一最小例外**：允许新增读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段的逻辑，以及该字段缺失时的 fail-loud 报错退出；其余逻辑一律不得改动；T005 Knowledge 门控要求先读再判断，若该字段读取逻辑已存在则记录"无需修改"原因并跳过；FR-WORKTREE-SCOPE-008）
+- `workflows/build-plan/SKILL.md`（**禁止修改，除以下单一最小例外**：允许新增读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段的逻辑，以及该字段缺失时的 fail-loud 报错退出；其余逻辑一律不得改动）
 - `specs/` 下其他 task 目录
 
 **Structure Decision**: 改动集中于 3 个现有文件 + 1 个 close 流程补充，完全遵循 S7（最小必要变更），无新增模块或层次。
@@ -212,9 +212,9 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 
 #### 3.1: 全流程 worktree.json 读取路径核查
 
-**描述**：检查 build-spec/SKILL.md 和 build-plan/SKILL.md，确认两者不执行 `git worktree add`，记录是否含 target_repo_root / worktree_root 读取逻辑或 worktree.json 缺失时 fail-loud 的说明，核查结论写入 stage-result / journal。**build-spec/SKILL.md 和 build-plan/SKILL.md 均仅只读核查，禁止任何修改**（无论是否缺失相关说明，一律不得写入）。
+**描述**：检查 build-spec/SKILL.md 和 build-plan/SKILL.md，确认两者不执行 `git worktree add`，并确认各自已包含读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段的逻辑及字段缺失时 fail-loud 的说明；核查结论写入 stage-result / journal。**build-spec/SKILL.md 和 build-plan/SKILL.md 禁止修改，除以下单一最小例外**：若该字段读取与 fail-loud 逻辑尚未存在，允许仅新增该段最小实现（读取 `target_repo_root`/`worktree_root`，缺失时 fail-loud 退出）；其余逻辑一律不得改动。
 
-**Files**: `workflows/build-spec/SKILL.md`（**仅只读核查，禁止任何修改**）, `workflows/build-plan/SKILL.md`（**仅只读核查，禁止任何修改**——本 stage 自身 SKILL.md，属 scope 锁定文件）
+**Files**: `workflows/build-spec/SKILL.md`（禁止修改，允许最小例外：新增 `target_repo_root`/`worktree_root` 读取 + 缺失 fail-loud）, `workflows/build-plan/SKILL.md`（禁止修改，允许最小例外：新增 `target_repo_root`/`worktree_root` 读取 + 缺失 fail-loud——本 stage 自身 SKILL.md，属 scope 锁定文件，其余改动一律禁止）
 
 **Maps to**: FR-WORKTREE-SCOPE-008
 
@@ -241,19 +241,19 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 
 | 路径 | 原因 |
 |------|------|
-| `workflows/build-plan/SKILL.md` | 本 stage 自身，禁止修改 |
+| `workflows/build-plan/SKILL.md` | 本 stage 自身，禁止修改（最小例外见下） |
 | `specs/` 下其他 task 目录 | 边界外 |
 | `metrics/` 相关文件 | 非本 task scope |
 
 ### 本 task scope 明确边界
 
-本 task 只允许修改以下 4 个文件：
+本 task 只允许修改以下 4 个文件（核心改动），以及下方最小例外：
 1. `core/task-dir-parser.mjs`
 2. `workflows/make-decision/SKILL.md`
 3. `workflows/build-code/SKILL.md`
 4. `workflows/verify-code/SKILL.md`
 
-build-spec/SKILL.md 仅只读核查，禁止任何修改（无论是否缺少相关说明）。
+**最小例外（Finding 1 决策）**：`workflows/build-spec/SKILL.md` 和 `workflows/build-plan/SKILL.md` 禁止修改，仅允许新增一段最小实现：读取 `worktree.json` 中 `target_repo_root`/`worktree_root` 字段，字段缺失时 fail-loud 报错退出；其余逻辑一律不得改动。若该逻辑已存在，则跳过并记录"无需修改"。
 
 ---
 
