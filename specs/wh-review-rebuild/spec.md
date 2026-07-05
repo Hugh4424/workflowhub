@@ -161,8 +161,8 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 - Then 加载 `plan` 合同，日志中合同路径可验证。
 
 **验收标准**：
-- AC2-1：5 套合同文件均存在于 `skills/wh-review/contracts/`（或同等路径）。
-- AC2-2：传入任意已知 stage 时，合同路由日志显示对应专属合同路径（非通用合同）。
+- AC2-1：5 套合同文件均存在于 `skills/wh-review/contracts/`。
+- AC2-2：传入任意已知 stage 时，route-decision 记录文件中含所选合同源路径 + hash（或版本锚点），可机器 grep 验证（非通用合同）。
 - AC2-3：传入未知 stage 时，fail-loud 而非静默回退。
 
 ---
@@ -177,6 +177,7 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 - 异源审查最多3轮；第4轮起强制转同源
 - **升级人工触发条件（精确定义）**：单轮 `blocking_count ≥ 3`，或 `fingerprint_repeated = true`（当轮 blocking 指纹集合与上轮完全相同），且上述条件在**连续3轮**均成立 → 触发 `escalate_to_human`
 - **优先级规则**：每轮末先判升级人工条件，满足则直接升级，不再进入下一轮同源切换；不满足升级条件时，再按轮次判断是否转同源。即：第3轮末如满足升级条件，直接升级人工，不进入第4轮；不满足时才进入第4轮同源模式。
+- **同源模式终止规则**：同源审查最多3轮（独立计数，不与异源轮次合并）；第4轮起（同源第3轮末）若仍非 pass，强制裁决 `escalate_to_human`，不允许无限循环。同源模式下升级条件与异源相同（单轮 `blocking_count ≥ 3` 或 `fingerprint_repeated=true` 连续3轮成立），但因总轮次上限为3，实际触发时机为：同源第3轮末仍非 pass → 直接升级人工，无需等待3轮连续条件。**此计数由 wh-review 独立维护，不依赖 standalone.sh 的 `--max-revise-rounds`（该参数在 standalone.sh 内不生效，见 GAP-6）。**
 
 **Given/When/Then**：
 - Given 第1轮审查已完成，verdict=revise_required；
@@ -202,15 +203,15 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 - When wh-review 综合轮次与 findings 做裁决；
 - Then 裁决值严格为枚举三值之一，报告以6章结构落盘当前任务目录。
 
-**报告最小章节结构（占位名清单，render-review-report.mjs 须输出以下6章）**：
+**报告章节结构（6章，已定死——章数、顺序、每章语义不可更改）**：
 1. Summary（审查摘要：verdict、轮次、模式）
 2. Blocking Issues（blocking 级问题列表，含指纹字段）
 3. Minor Issues（minor 级问题列表）
 4. Pass Items（通过项列表）
 5. Delta（本轮相较上轮的变更说明，第1轮留空）
-6. Metadata（task-name、round_number、mode、contract、timestamp）
+6. Metadata（task-name、round_number、mode、contract_path、contract_hash、timestamp）
 
-实际章节名以 agenthub 原实现为准；build-plan 阶段核实后在 wh-review SKILL.md 中固化。
+build-plan 阶段核实 agenthub 原实现后，可在不违反本清单结构的前提下调整具体章节措辞（如副标题文案），但章数、顺序、每章语义不可更改。
 
 **验收标准**：
 - AC4-1：裁决字段只含三值之一，其他值视为错误。
@@ -246,14 +247,16 @@ standalone.sh \
 - **不传 `--checkpoint` 参数**——stage 路由与合同选择完全由 wh-review 在调用前完成
 - 无 `--engine` / `--output` 参数（这两个参数不存在于 standalone.sh）
 - `review-runner` 走 `<runner> --prompt-file=<path> --result-file=<out.json> --review-request-id=<id>` 契约
-- exit code 语义：`0` = pass，`1` = revise_required，`2` = escalate_to_human
+- exit code 语义：`0` = pass，`1` = revise_required，`2` = escalate_to_human（仅作进程级快速判断，以 result-file 结构化 verdict 字段为准——见下方判定优先级）
+
+**判定优先级（verdict 主次）**：wh-review 读取 standalone.sh 输出时，以 `--result-file` 中的结构化 `verdict` 字段为准（更细粒度）；exit code 仅作进程级快速判断。二者不一致时 fail-loud 报错，不静默择一。`result-file` 缺失或不可解析时视为 `unknown`，触发 `escalate_to_human`。
 
 **⚠️ 已知 standalone.sh bug（wh-review 实现须规避）**：`--max-revise-rounds` 参数只在 CLI 解析和 manifest 记录中出现，standalone.sh revise 循环体（约 206-420 行）从未检查该上限，导致 revise_required 时无限循环（实测 round 33+ 仍未停止）。此 bug 不在本期 scope 内修复。**wh-review 必须自己做轮次计数并强制停止，不能依赖 standalone.sh 的 `--max-revise-rounds`。** 详见 Known Gaps GAP-6。
 
 **Given/When/Then**：
 - Given wh-review 接收到 stage 标识和待审材料；
-- When wh-review 读取对应合同文件、拼装审查包、调用 `standalone.sh --input=<审查包路径> --output-root=<dir> --task-name=<name> --review-runner=<cmd>`（无 --checkpoint）；
-- Then standalone.sh 完成审查并以 exit code 0/1/2 返回，全程不感知 stage 名称、轮次号或合同路由（这些信息已由 wh-review 在调用前封装进审查包）。
+- When wh-review 读取对应合同文件、将合同源路径 + hash（或版本锚点）写入 route-decision 记录文件，再拼装审查包、调用 `standalone.sh --input=<审查包路径> --output-root=<dir> --task-name=<name> --review-runner=<cmd>`（无 --checkpoint）；
+- Then standalone.sh 完成审查并以 exit code 0/1/2 + result-file 返回，wh-review 以 result-file 中 verdict 字段为准裁决，全程不感知 stage 名称、轮次号或合同路由。
 
 **验收标准**：
 - AC5-1：3rd-review SKILL.md 不含 stage 名称枚举（make-decision / build-spec 等）。
@@ -438,7 +441,7 @@ stage agent
 - AC-D1：3rd-review SKILL.md 不含 stage 名称枚举、不含轮次管理逻辑 → 可机器 grep 验证
 - AC-D2：§7 不含 numbered step / if/else 逻辑 → 可机器 grep 验证
 - AC-D3：wh-review/SKILL.md 存在 stage→合同映射表（5 条全覆盖）
-- AC-D4：5 个 stage 传入对应标识后，审查报告中合同路径为对应专属合同（非通用）
+- AC-D4：5 个 stage 传入对应标识后，route-decision 记录文件含对应专属合同源路径 + hash（非通用合同），可机器 grep 验证
 - AC-D5：make-decision / build-plan / verify-code pass 路径不自动推进（代码/文档可查）
 - AC-D6：5 个 stage SKILL.md 收尾段均含 human-brief-template.md 引用
 - AC-D7：端到端冒烟用例可本地跑通，覆盖 wh-review + 精简 3rd-review 组合
