@@ -72,7 +72,7 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 ```
 
 **Forbidden files（不可触碰）**：
-- `workflows/build-spec/SKILL.md`（FR-WORKTREE-SCOPE-008 要求只读 worktree.json，不创建 worktree，只需用到的行为已由 make-decision 提供，无需修改 build-spec 内部实现）
+- `workflows/build-spec/SKILL.md`（**仅只读核查，禁止任何修改**；T005 Knowledge 门控要求先读再判断，若核查结果无需变更则记录"无需修改"原因并跳过；FR-WORKTREE-SCOPE-008 明确此文件不在改动范围内）
 - `workflows/build-plan/SKILL.md`（本 stage 自身，不修改）
 - `specs/` 下其他 task 目录
 

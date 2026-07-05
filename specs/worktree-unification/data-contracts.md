@@ -12,8 +12,8 @@
 |------|------|
 | **Contract name** | `worktree.json` — 跨 stage worktree 状态契约 |
 | **Owner side** | `make-decision` stage（首次写入全部 6 字段） |
-| **Consumer side** | `build-code` §17 FR-WORKTREE-001、`verify-code` close 阶段（仅可更新 status） |
-| **File path** | `{worktree_root}/worktree.json`（worktree 根路径下） |
+| **Consumer side** | `build-code` §17 FR-WORKTREE-001、`verify-code` close 阶段（仅可更新 status）；所有 consumer 通过 `worktree_root` 字段定位文件 |
+| **File path** | `{{task_tracking_root}}/tasks/{task-id}/worktree.json`（任务跟踪目录下，由 make-decision 写入） |
 
 ### Required Fields / Types
 
@@ -68,14 +68,16 @@
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
-| 返回值 | string | task_dir 绝对路径，供调用方拼接 `{task_dir}/{task-id}/` |
+| 返回值 | string | `task_tracking_root` 绝对路径（不含 `/tasks/{task-id}` 段）；所有 consumer 拼接完整路径时统一写 `{{task_tracking_root}}/tasks/{task-id}/...` |
 
 ### Validation Rules
 
 优先级顺序（高 → 低）：
 1. `WORKFLOWHUB_TASK_DIR` 环境变量（若已设置且非空）
 2. `config/workflowhub.yaml` 的 `task_dir` 字段
-3. fallback：`~/Knowledge/workflowhub/`
+3. 两者均缺失 → **fail-loud**（明确错误信息，exit 非零，无 fallback）
+
+**删除旧硬编码 fallback**：`~/Knowledge/workflowhub/` 不再作为 fallback（与 FR-WORKTREE-ENVVAR-003、tasks.md T001 一致）。
 
 解析失败时 fail-loud，不静默 swallow。
 
