@@ -257,7 +257,7 @@ Every task in tasks.md must reference at least one FR from the spec. Check the p
 
 ### Step 10.5: Commit 触发点 (FR-WORKTREE-COMMIT-004)
 
-当本阶段对目标仓库产生文件变更时，须 `git add` + `git commit`，message 含 `workflowhub(build-plan)` 前缀（例如 `workflowhub(build-plan): <description>`）。所有 `git add`/`git commit` 必须在 `worktree_root`（本任务的 linked worktree，当前 task branch）中执行；严禁在 `target_repo_root` 的主工作树上执行提交。若本阶段无文件变更，禁止空提交，须在 stage-result 或 journal 记录 no-change reason（例如 `"no_change_reason": "build-plan stage produced no file changes"`）；no-change 记录为必填项，不得两者皆无地静默结束本阶段。
+当本阶段对目标仓库产生文件变更时，须 `git add` + `git commit`，message 含 `workflowhub(build-plan)` 前缀（例如 `workflowhub(build-plan): <description>`）。所有 `git add`/`git commit` 必须在 `worktree_root`（本任务的 linked worktree，当前 task branch）中执行；严禁在 `target_repo_root` 的主工作树上执行提交。若本阶段无文件变更，禁止空提交，须在 stage-result 或 journal 记录 no-change reason；字段路径固定为 stage-result 的 `facts.no_change_reason`（string），仅在本阶段无文件变更时写入该字段（例如 `"facts": {"no_change_reason": "build-plan stage produced no file changes", ...}`），有文件变更时该字段不出现；no-change 记录为必填项，不得两者皆无地静默结束本阶段。
 
 ## Produce a stage-result
 
