@@ -1,78 +1,74 @@
-# Cross-Artifact Analysis — worktree-unification
-<!-- round-9 / 2026-07-05 -->
+# Cross-Artifact Analysis worktree-unification
+<!-- round-14 / 2026-07-05 — final pass -->
 
-## 本轮（round-9）审查结论
+## 本轮（round-14）审查结论
 
-本轮发现 9 条问题（5 blocking + 4 important），全部已修复。
-
----
-
-## Blocking Findings（5 条）
-
-### B9 — plan.md build-spec editable 边界矛盾（残留）
-- **原文**：plan.md Step 3.1 和 Scope Boundary 含"若 build-spec/SKILL.md 缺失则最小补充（单行）"
-- **问题**：与 Forbidden files 章节直接矛盾，执行者无法判断能否改 build-spec
-- **修复**：Step 3.1 改为"仅只读核查，禁止任何修改"；Scope Boundary 中"最小补充"改为"禁止任何修改"
-- **证据**：`specs/worktree-unification/plan.md`（已修复）
-
-### B10 — tasks.md T001 gate_cmd pipe 吞 exit-code
-- **原文**：两者缺失 fail-loud gate 用 `... | grep -q "."` 判断，pipe 丢弃 node 真实 exit code
-- **问题**：node exit 非零但 grep 找到输出则整体 exit 0，gate 永远通过
-- **修复**：保存子进程 exit code 后 `test $_rc -ne 0`，不走管道
-- **证据**：`specs/worktree-unification/tasks.md:17`（已修复）
-
-### B11 — tasks.md T003 gate_cmd exit-code 约定反向
-- **原文**：`grep -q ... — exit 1（无匹配即通过）`
-- **问题**：gate_cmd 约定 exit 0 = pass，exit 1 会被 runner 判为失败
-- **修复**：改为 `! grep -q ... && echo PASS || (echo FAIL; exit 1)` — exit 0
-- **证据**：`specs/worktree-unification/tasks.md:39`（已修复）
-
-### B12 — tasks.md T005 gate_cmd worktree-count 仅展示不比较
-- **原文**：`git worktree list | wc -l` 注释说前后相同，无比较逻辑
-- **问题**：gate 永远 exit 0，无法检测 worktree 泄漏
-- **修复**：`_before`/`_after` 变量比较，不等则 exit 1
-- **证据**：`specs/worktree-unification/tasks.md:63`（已修复）
-
-### B13 — stage-result.json 已被 git 跟踪（运行时产物不应入库）
-- **原文**：`specs/worktree-unification/stage-result.json` 已在 git index
-- **问题**：违反 FR-WORKTREE-SCOPE-009；运行时产物应存于仓库外 task_tracking_root
-- **修复**：`git rm --cached`；.gitignore 新增 `stage-result.json`、`journal.jsonl`、`task-metrics.jsonl`
-- **证据**：`.gitignore`（已修复）
+独立 3rd-review 已通过（verdict=pass，findings=[]）。
 
 ---
 
-## Important（4 条）
+## 审查历程摘要
 
-### I2 — plan.md 两处 stale cross-reference（spec §7 → spec §5）
-- plan.md:172 和 plan.md:265 引用"spec §7 验收标准 1-9"，但 spec §7 为 Out of Scope，验收标准在 §5 AC-01..AC-04
-- 修复：改为"spec §5 AC-01..AC-04 + §8 scenarios"
+共进行 6 轮独立第三方审查（round-9 至 round-14），每轮均由独立审查者（非自审）执行，产物路径 `specs/worktree-unification/tasks/worktree-unification-build-plan-r{N}-*/reviews/verdict.json`。
 
-### I3 — data-contracts.md Consumer side 循环依赖表述
-- "consumer 通过 worktree_root 字段定位文件"——worktree_root 在文件内部，循环逻辑
-- 修复：改为"通过已知 task_tracking_root 拼接路径"，worktree_root 是读取后内部使用字段
+| 轮次 | verdict | blocking findings |
+|------|---------|-------------------|
+| round-9  | revise_required | 5 blocking（B9-B13）|
+| round-10 | revise_required | 6 blocking |
+| round-11 | revise_required | 5 blocking |
+| round-12 | revise_required | 若干 blocking |
+| round-13 | revise_required | 3 blocking |
+| round-14 | **pass** | **0** |
 
-### I4 — tasks.md 缺少 FR-WORKTREE-COMMIT-004 per-phase commit 覆盖（T008 缺失）
-- tasks.md 仅 T002 R7 提及 commit 规则；build-code per-phase 及其他 stage 无覆盖
-- 修复：新增 T008（只读核查 + gate_cmd + 结论写 stage-result）；更新依赖图
-
-### I5 — tasks.md T002 缺少 yaml 路径归一化 gate（双拼接风险）
-- 现有 yaml config 值可能以 `/tasks/` 结尾，不归一化则产生 `/tasks/tasks/{id}`
-- 修复：T002 新增 normalization gate 两条（归一化函数验证 + 结果不以 /tasks 结尾）
+round-9 至 round-13 期间发现并修复的所有 blocking 问题已全部关闭，详见各轮 verdict.json。
 
 ---
 
-## 修复汇总
+## Round-14 最终通过摘要
 
-| 编号 | 文件 | 状态 |
+round-14 审查结论（`verdict.json` 摘录）：
+
+> Round-13 三个 blocking 均已关闭：data-contracts.md Contract 4 已覆盖 build-spec/build-plan/verify-code；T005 已新增 build-spec/build-plan 对 core/worktree-context.mjs 的真实引用 gate；plan.md/tasks.md 已把 core/worktree-context.mjs 纳入允许范围并由 T001 先交付、T005 后验证。已按 speckit-analyze、plan-eng-review、review 三个只读 lens 做交叉检查，未发现仍阻断执行的 traceability、executability 或 verification 问题。
+
+**findings**: []（零发现，无 blocking，无 important）
+
+---
+
+## 已修复问题总览
+
+以下为 round-9 至 round-13 期间累计修复的 blocking/important 问题：
+
+| ID  | 描述 | 修复轮次 |
+|-----|------|---------|
+| B9  | plan.md build-spec editable 边界矛盾（Forbidden files 与 Step 3.1 描述冲突） | round-9 |
+| B10 | tasks.md T001 gate_cmd pipe 吞 exit-code | round-9 |
+| B11 | tasks.md T003 gate_cmd exit-code 约定反向 | round-9 |
+| B12 | tasks.md T005 gate_cmd 缺失真实调用校验 | round-9/13 |
+| B13 | stage-result.json + .gitignore 路径约定冲突 | round-9 |
+| I2  | plan.md cross-reference 缺失 | round-9 |
+| I3  | data-contracts.md consumer-side 覆盖不完整 | round-9 |
+| I4  | tasks.md T008 缺失触发点 | round-9 |
+| I5  | tasks.md T002 normalization gate 缺失 | round-9 |
+| —   | round-10 多条 blocking（T001 ESM gate、T002 归一化统一、T008 commit gate、Contract 4 no-change 对齐等） | round-10 |
+| —   | round-11 5 条 blocking（build-spec/build-plan 范围收窄+口径统一） | round-11 |
+| —   | round-12 若干 blocking | round-12 |
+| —   | round-13 3 条 blocking（Contract4 6 阶段矩阵、T005 真实 gate、core/worktree-context.mjs 归属） | round-13 |
+
+---
+
+## 当前产物状态（round-14 通过后）
+
+| 产物 | 路径 | 状态 |
 |------|------|------|
-| B9  | plan.md | 已修复 |
-| B10 | tasks.md T001 gate_cmd | 已修复 |
-| B11 | tasks.md T003 gate_cmd | 已修复 |
-| B12 | tasks.md T005 gate_cmd | 已修复 |
-| B13 | stage-result.json + .gitignore | 已修复 |
-| I2  | plan.md cross-reference | 已修复 |
-| I3  | data-contracts.md consumer-side | 已修复 |
-| I4  | tasks.md T008 新增 | 已修复 |
-| I5  | tasks.md T002 normalization gate | 已修复 |
+| plan.md | specs/worktree-unification/plan.md | 通过 |
+| tasks.md | specs/worktree-unification/tasks.md | 通过 |
+| data-contracts.md | specs/worktree-unification/data-contracts.md | 通过 |
+| research.md | specs/worktree-unification/research.md | 通过 |
+| plan-eng-review.md | specs/worktree-unification/plan-eng-review.md | 通过（最终版由 round-14 审查覆盖） |
+| cross-artifact-analysis.md（本文件） | specs/worktree-unification/cross-artifact-analysis.md | 已更新至 round-14 pass 状态 |
 
-blocking 5 条全部已修复；important 4 条全部已修复。
+---
+
+## 结论
+
+build-plan 阶段产物已通过 6 轮独立 3rd-review，当前无任何 blocking 或 important finding。可进入 build-code 阶段。

@@ -1,0 +1,86 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 79,
+      "issue": "T005 声称验证 build-spec 缺失 target_repo_root/worktree_root 时 fail-loud，但 gate_cmd 只 grep 文档中是否出现 target_repo_root。它没有调用 build-spec 的读取路径，也没有断言缺失字段时非零退出。执行后可能文档文字存在但真实 stage 仍静默走错路径。",
+      "recommendation": "把 T005 的 build-spec/build-plan fail-loud gate 改成可执行验证：构造缺字段 worktree.json，按对应 SKILL.md 的实际入口或最小读取命令运行，断言 exit code 非零且错误包含缺失字段/路径。不能用 grep 文档替代行为验证。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 98,
+      "issue": "T008 仍未完整覆盖 FR-WORKTREE-COMMIT-004 的 commit 矩阵。spec.md 矩阵包含 make-decision 行和 close 子步骤固定 message `workflowhub(close): archive {task-id}`，但 T008 覆盖列表缺 make-decision，且 close gate 只查“归档 commit/commit_sha”，没有验证固定 close message。",
+      "recommendation": "T008 按 spec.md commit 覆盖矩阵逐行列 gate：make-decision、build-spec、build-plan、build-code phase、verify-code、verify-code close。close 必须验证 `workflowhub(close): archive {task-id}`，不是 `workflowhub(verify-code)` 或泛 grep。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 104,
+      "issue": "T008 标注 depends:T005，但依赖图又写 T008 `[P with T005, T006]`。T008 读取 build-spec/build-plan 的 commit/fail-loud 规则，T005 又可能最小修改这两个文件；并行会导致 T008 在 T005 修改前读取旧内容，产生假失败或假通过。",
+      "recommendation": "移除 T008 与 T005 的并行关系，并在依赖图中明确 T008 串行依赖 T005；或拆分 T008 中不依赖 T005 的部分，依赖 build-spec/build-plan 规则的部分必须在 T005 后执行。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 39,
+      "issue": "T002 的 task-id 归一化 gate 只 grep 是否出现“归一化/normalize/小写”等词和顺序，没有验证 spec 要求的实际转换链。`Worktree Unification -> worktree-unification` 场景仍可能只写文案、不实现转换，gate 仍通过。",
+      "recommendation": "增加可执行或至少精确文本 gate：必须覆盖小写、非字母数字替换连字符、合并连续连字符、去首尾连字符，并加入 `Worktree Unification` 归一化为 `worktree-unification` 后再校验正则的验证。"
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 134,
+      "issue": "Dependency Graph 末尾仍写“T005 只读 build-spec，禁止任何修改”，与 line 70 的“核查并按需最小修改 build-spec/build-plan”冲突。",
+      "recommendation": "同步更新该 Knowledge 说明：T005 必须先读 build-spec 和 build-plan，若缺字段读取/fail-loud 逻辑则仅允许最小补充；不要再写“禁止任何修改”。"
+    }
+  ],
+  "resolutionSummary": "Round-10 的 F3、T001 单元测试、T006 依赖冲突基本闭合；但 T005 行为验证、T008 commit 矩阵、T008/T005 依赖、T002 归一化可验证性仍不够可执行，需修订。",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r11-input.md",
+      "hash": null,
+      "lines": 1333,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r11-input.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-1.md"
+}

@@ -1,0 +1,72 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 123,
+      "issue": "Contract 4 仍未闭合 Round-12 的 commit 覆盖问题。Owner side 和 Per-stage commit coverage 仍只列 make-decision、build-code per phase、verify-code close，漏掉 tasks.md T008 已要求验收的 build-spec、build-plan、verify-code stage commit。",
+      "recommendation": "同步 Contract 4：Owner side、Per-stage commit coverage、Version Compatibility Notes 必须逐行覆盖 make-decision、build-spec、build-plan、build-code per phase、verify-code、verify-code close，并写清 commit message、no-change 记录和不可跳过条件。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 74,
+      "issue": "T005 新增 `core/worktree-context.mjs` 作为真实交付物，但 plan.md 的 Source Code / Scope Boundary 仍声明只改 4 个核心文件且无新增模块；data-contracts.md 也没有登记这个共享脚本接口。任务说它由 build-code 阶段创建，但 Stage 2 没有任何任务创建它，T005 执行时会遇到未生产的依赖。",
+      "recommendation": "二选一：删除 `core/worktree-context.mjs` 新增概念，改为验收真实 stage 入口；或把它正式登记到 plan.md Source Code、Scope Boundary、data-contracts，并新增明确创建任务，且让 T005 依赖该任务。推荐后者，因当前 T005 需要真实共享读取对象。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 86,
+      "issue": "字段齐全场景 gate 只断言 `core/worktree-context.mjs` exit 0，没有验证 stdout 真的打印 JSON，也没有验证 JSON 含 `target_repo_root` 和 `worktree_root`。脚本即使空输出也会通过，build-spec/build-plan 消费时仍会断链。",
+      "recommendation": "把 gate 改为捕获 stdout 并用 `jq -e '.target_repo_root and .worktree_root'` 或等价 Node 断言校验输出 JSON；同时保留 exit 0 检查。"
+    }
+  ],
+  "resolutionSummary": "已用 speckit-analyze、plan-eng-review、review 的 SKILL.md fallback 只读核查。Round-12 T008 覆盖缺 make-decision 与 close 前缀错误已闭合；T005 内联假脚本问题已改成真实脚本方向，但引入未登记/未生产的新交付物且 stdout 行为未验；Round-12 data-contracts Contract 4 覆盖缺口仍未闭合。",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r13-input.md",
+      "hash": null,
+      "lines": 1220,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r13-input.md",
+      "round": 2
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-2.md"
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 74,
+      "issue": "Scope boundary contradicts required implementation. plan marks `workflows/build-spec/SKILL.md` and `workflows/build-plan/SKILL.md` as forbidden/no-touch, but spec FR-WORKTREE-SCOPE-008 requires both stages to read `worktree.json`, use `worktree_root`/`target_repo_root`, fail loud when missing, and avoid creating new worktrees. tasks.md T005 also allows minimal edits to those files.",
+      "recommendation": "Resolve the scope contract before implementation. Recommended: add `workflows/build-spec/SKILL.md` and `workflows/build-plan/SKILL.md` to editable scope, split T005 into implementation tasks for both workflow files plus a separate verification task. If not in scope, remove/defer FR-WORKTREE-SCOPE-008."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 55,
+      "issue": "`WORKFLOWHUB_TASK_DIR` semantics are not executable with current yaml fallback. Spec/plan say parser returns `task_tracking_root` and callers append `/tasks/{task-id}`, but existing `config/workflowhub.yaml` value already ends with `/tasks/`, so fallback can produce `/tasks/tasks/{task-id}`.",
+      "recommendation": "Add an explicit migration/normalization requirement and tests. Recommended: update `config/workflowhub.yaml` to store the parent `task_tracking_root`, or define parser normalization for legacy yaml values ending in `/tasks`; add T001 tests covering env priority, yaml fallback, empty env, missing yaml, missing key, non-directory, nonexistent, relative path, and `~` path."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 16,
+      "issue": "Data contract contradicts spec storage path. It says `worktree.json` path is `{worktree_root}/worktree.json`, while spec requires `{{task_tracking_root}}/tasks/{task-id}/worktree.json`. Following data-contracts would put the cross-stage contract inside the target worktree and reintroduce the断链 risk.",
+      "recommendation": "Update Contract 1 to `{{task_tracking_root}}/tasks/{task-id}/worktree.json`; state that `worktree_root` is only a JSON field value and not the contract storage root."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 71,
+      "issue": "Data contract still uses old `task_dir/{task-id}` model. It says parser returns `task_dir` for callers to append `{task_dir}/{task-id}/`, but spec says parser returns `task_tracking_root` and callers append `/tasks/{task-id}`.",
+      "recommendation": "Rewrite Contract 2 so return value is `task_tracking_root`; canonical task path must be `${task_tracking_root}/tasks/${task_id}/...`. Remove old `task_dir/{task-id}` wording."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 78,
+      "issue": "Data contract still permits hardcoded fallback `~/Knowledge/workflowhub/`, but FR-WORKTREE-ENVVAR-003 requires env var → yaml → fail-loud, with no hardcoded fallback.",
+      "recommendation": "Delete the hardcoded fallback from data-contracts. Add explicit fail-loud cases for missing config, missing `task_dir`, nonexistent path, non-directory path, relative path, and `~` path."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 203,
+      "issue": "Stage-result filename is inconsistent. spec uses `stage-result.json`; tasks and existing verify-code contract use `stage-result-verify-code.json`; plan Constitution Check also names `stage-result-verify-code.json`. This breaks close/revise_required/failure evidence verification because writers/readers can target different files.",
+      "recommendation": "Choose one canonical filename. Recommended: align spec to existing verify-code FR-PATH-001 and use `{{task_tracking_root}}/tasks/{task-id}/stage-result-verify-code.json` in spec lines 203, 205, 207, 209, 402, 407, and 412."
+    },
+    {
+      "severity": "blocking",
+      "file": "workflows/verify-code/SKILL.md",
+      "line": 206,
+      "issue": "Current critical pre-merge 3rd-review command is a fake placeholder: `bash /path/to/3rd-review/standalone.sh`. The plan does not require replacing it with a real callable entry before close depends on it.",
+      "recommendation": "Add a T004 requirement naming the real 3rd-review runner/discovery path, inputs, output schema, timeout/failure behavior, and evidence directory. Placeholder paths must be removed or explicitly marked non-runnable examples with a real command nearby."
+    },
+    {
+      "severity": "blocking",
+      "file": "workflows/verify-code/SKILL.md",
+      "line": 226,
+      "issue": "Current verify-code allows graceful downgrade and continuing to merge when 3rd-review is unavailable, but the spec requires a `verdict=pass` before irreversible actions. This leaves a path to merge/push/delete without independent review when the review tool is broken.",
+      "recommendation": "Make close fail/stall before irreversible actions when 3rd-review is unavailable. Record `needs_human=true` and stop, or define an explicit human override path with recorded approval and risk acknowledgement."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 228,
+      "issue": "Artifact boundary is internally inconsistent. Spec says repo `specs/{task-id}/` only allows `spec.md`, `plan.md`, `tasks.md`, but the plan itself lists `research.md` and `data-contracts.md`, and the current directory contains additional planning/process files.",
+      "recommendation": "Pick one boundary. Recommended: allow planning artifacts in repo specs during build-plan, but forbid process/runtime/evidence files such as `evidence/`, `stage-result*`, journals, and metrics. Then update T006 to verify the full chosen allow/deny set."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "issue": "Parser behavior change lacks explicit test task and runnable verification command. Existing `core/__tests__/task-dir-parser.test.mjs` still encodes legacy fallback expectations, so the plan can be implemented while tests remain stale.",
+      "recommendation": "Add a test task updating `core/__tests__/task-dir-parser.test.mjs` and include the exact command, e.g. `npm test -- core/__tests__/task-dir-parser.test.mjs` or the repo’s actual Vitest invocation."
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 25,
+      "issue": "T004 omits the spec-required safety check before deleting remote/local branches: confirm the task commit is reachable from main. The spec states deletion must stop if containment cannot be confirmed.",
+      "recommendation": "Add this directly to T004 before remote/local branch deletion: verify task branch tip or merge commit is contained in main; on failure, stop close, preserve both branches, record failure, and escalate."
+    },
+    {
+      "severity": "important",
+      "file": "workflows/build-code/SKILL.md",
+      "line": 286,
+      "issue": "Current build-code commit model conflicts with the plan’s per-stage/per-phase commit rule. Source says commit only at semantic completion when all phases are green, while spec requires per-producing-phase commits with `workflowhub(build-code/<phase-name>):`.",
+      "recommendation": "Add an explicit task to revise build-code commit timing and evidence. Clarify that subagents do not commit; the coordinator commits after each accepted phase with the required message and records commit SHA per phase. Or revise the spec to match the current single semantic commit model."
+    }
+  ],
+  "resolutionSummary": "Required skills were executed via read-only skill-file fallback because direct Skill tool invocation was unavailable in this environment. speckit-analyze, plan-eng-review, and review lenses all found executable blockers. Main blockers: contradictory editable scope for build-spec/build-plan, stale data-contracts, invalid yaml fallback semantics, inconsistent stage-result filename, fake 3rd-review command, and close allowing merge when 3rd-review is unavailable. Round 1 verdict: revise_required.",
+  "reviewSnapshot": [
+    {
+      "path": "plan.md",
+      "hash": null,
+      "lines": 379,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "plan.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-1.md"
+}

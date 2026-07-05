@@ -1,0 +1,9 @@
+{
+  "taskName": "worktree-unification-build-plan-r2-20260704T161149Z-721561",
+  "status": "in_progress",
+  "startedAt": "2026-07-04T16:11:49Z",
+  "versionAnchor": "0edc2ee6f76514dfceff277144f456302c4a6dcf",
+  "input": "/Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/plan.md",
+  "maxReviseRounds": 3,
+  "reviseRounds": 0
+}

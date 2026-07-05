@@ -1,0 +1,23 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/data-contracts.md",
+      "hash": "a5fde8623579a1ac37e2864006e25bc9d2bd3fc7d7dbb20744bacd5f4b1bb512"
+    },
+    {
+      "path": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/tasks.md",
+      "hash": "65ed73be7e9d4a9fa701878e1ea3c8f9d36b5f182181f3bc2be86bfad13850d8"
+    },
+    {
+      "path": "tmp/wu-r13-input.md",
+      "hash": "2c4071b456db963ee5a8b7ad13facc74b8485a155f19a13e7b4a2999d7aca5aa"
+    }
+  ],
+  "verdict_binding": {
+    "verdict_id": "6becac6c-e633-4368-8ca1-313c8384d5f0",
+    "verdict_file": "Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/a5605cda/workdir/workflowhub/specs/worktree-unification/tasks/worktree-unification-build-plan-r13-20260705T055950Z-6639ec/reviews/verdict.json",
+    "hash": "89d8123c1f1320c5402f07bcbbba82ab50ee97e3ad6e2f19a95df29957cd1e2a"
+  }
+}

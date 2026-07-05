@@ -1,0 +1,39 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "specs/worktree-unification/plan.md",
+      "hash": "8e2bff633f6fdfa7cf0cbe9eacf5445a5f25c5a059e2568e92db888b9c069fc8"
+    },
+    {
+      "path": "specs/worktree-unification/data-contracts.md",
+      "hash": "ccd3f8c6c27e9ecd288f4905215b13e17ea9f6dda1662cec8ab4711f41482691"
+    },
+    {
+      "path": "specs/worktree-unification/plan.md",
+      "hash": "8e2bff633f6fdfa7cf0cbe9eacf5445a5f25c5a059e2568e92db888b9c069fc8"
+    },
+    {
+      "path": "specs/worktree-unification/spec.md",
+      "hash": "c980441740f41b76e1c327a413d7ebb577473719f8a78a4536843aac446686d6"
+    },
+    {
+      "path": "specs/worktree-unification/tasks.md",
+      "hash": "d57710c200badac3e272c089a4cb2ae781ecb2734668b13e967185143a7d71d3"
+    },
+    {
+      "path": "workflows/build-code/SKILL.md",
+      "hash": "a23997e6369c521af232f0c6dd894da91ffa3832a16d0403df496312c40b76be"
+    },
+    {
+      "path": "workflows/verify-code/SKILL.md",
+      "hash": "be96156c12451b003e9b4c3016a27d2cf8ca9eea04206a464944cea0f5d4b40f"
+    }
+  ],
+  "verdict_binding": {
+    "verdict_id": "8e025407-cbaf-4998-85f4-e2bd97d8703a",
+    "verdict_file": "specs/worktree-unification/reviews/tasks/worktree-unification-build-plan-r2-20260704T161149Z-721561/reviews/verdict.json",
+    "hash": "120e162836d648d27ba04e8e80501d9fdc65caac161dfbd3f1a7a8473cf1e3f7"
+  }
+}

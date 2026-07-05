@@ -1,0 +1,96 @@
+{
+  "verdict": "escalate_to_human",
+  "skillResults": [
+    {
+      "name": "speckit-analyze",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback: /Users/Hugh/.claude/skills/speckit-analyze/SKILL.md; (2) checked specs/worktree-unification/spec.md, plan.md, tasks.md, data-contracts.md for cross-artifact consistency, FR coverage, concept drift, and prior finding closure; (3) T008 scope is now reflected in tasks.md, but data-contracts.md Contract 4 still contradicts spec.md FR-WORKTREE-COMMIT-004, and T005 adds core/worktree-context.mjs without plan/scope alignment."
+    },
+    {
+      "name": "plan-eng-review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback: /Users/Hugh/.claude/skills/gstack/plan-eng-review/SKILL.md; (2) checked dependency ordering, delivery ownership, file impact, gate executability, and failure-mode verification in tasks.md T005/T008; (3) T005's shared script gate is not integrated into build-spec/build-plan verification, and the new core file has no stable creation phase in the plan."
+    },
+    {
+      "name": "review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback: /Users/Hugh/.claude/skills/gstack/review/SKILL.md; (2) checked delta against round-12 findings, scope drift, stale contract text, and fake-green command risks; (3) T008 and the standalone T005 script test moved in the right direction, but one prior blocking contract finding remains open and T005 still permits false pass on actual consumer integration."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 123,
+      "issue": "Round-12 Contract 4 finding remains open. Owner side and coverage still list only make-decision, build-code per phase, and verify-code close, while spec.md FR-WORKTREE-COMMIT-004 defines the commit coverage denominator as make-decision, build-spec, build-plan, build-code, verify-code, and verify-code close. Version notes also still say only make-decision/build-code/verify-code close are covered.",
+      "recommendation": "Update Contract 4 Owner side, Per-stage commit coverage, and Version Compatibility Notes to include build-spec, build-plan, and verify-code stage commit/no-change obligations, matching spec.md FR-WORKTREE-COMMIT-004 and tasks.md T008.",
+      "repeat": true,
+      "cross_phase_recurrence": true
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 74,
+      "issue": "T005 requires build-spec/SKILL.md and build-plan/SKILL.md to use core/worktree-context.mjs, but its gates only check that those files mention target_repo_root/worktree_root and fail-loud. They do not verify either SKILL.md actually calls core/worktree-context.mjs, so the real consumer path can still bypass the tested script.",
+      "recommendation": "Add blocking gates that verify both workflows/build-spec/SKILL.md and workflows/build-plan/SKILL.md explicitly reference/call core/worktree-context.mjs, and keep the missing/full-field script tests as the shared implementation verification.",
+      "repeat": true,
+      "cross_phase_recurrence": true
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 75,
+      "issue": "T005 introduces a new delivery file core/worktree-context.mjs and says it is created in build-code stage, but plan.md source scope still allows only core/task-dir-parser.mjs plus the stage SKILL.md files and narrow build-spec/build-plan exceptions. No Stage 2 task creates core/worktree-context.mjs, so execution ownership and scope are contradictory.",
+      "recommendation": "Either remove the new core script and verify an existing real entry path, or update plan.md scope/source list plus tasks.md dependency ownership so a specific task creates core/worktree-context.mjs before T005 verifies it.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    }
+  ],
+  "resolutionSummary": "Round-12 T008 make-decision coverage and close commit prefix are fixed in tasks.md. Round-12 T005 fake standalone gate is only partially fixed because the real build-spec/build-plan integration is still not gated. Round-12 data-contracts.md Contract 4 finding is unchanged, so round 3 escalates to human.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r13-input.md",
+      "hash": null,
+      "lines": 1220,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r13-input.md",
+      "round": 3
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

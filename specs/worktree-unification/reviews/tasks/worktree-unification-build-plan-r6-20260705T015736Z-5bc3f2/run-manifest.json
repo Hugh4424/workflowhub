@@ -1,0 +1,9 @@
+{
+  "taskName": "worktree-unification-build-plan-r6-20260705T015736Z-5bc3f2",
+  "status": "in_progress",
+  "startedAt": "2026-07-05T01:57:36Z",
+  "versionAnchor": "742788bd5e4fb3dfbce82358260864f352f903a4",
+  "input": "/tmp/wu-r6-input.md",
+  "maxReviseRounds": 3,
+  "reviseRounds": 0
+}

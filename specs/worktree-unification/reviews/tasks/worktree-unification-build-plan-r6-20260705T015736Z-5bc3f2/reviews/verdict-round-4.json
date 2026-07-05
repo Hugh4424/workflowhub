@@ -1,0 +1,238 @@
+{
+  "verdict": "revise_required",
+  "skillResults": [
+    {
+      "name": "speckit-analyze",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) executed by subagent 019f300c-a301-79f1-8663-388d39f7b931 after reading /Users/Hugh/.claude/skills/speckit-analyze/SKILL.md; (2) checked provided review package artifacts and delta for spec.md / plan.md / tasks.md / unchanged data-contracts.md, including FR coverage, cross-artifact consistency, prior B1-B8 closure, task-dir and worktree.json path contracts; (3) found unresolved prior blocking issues in data-contracts.md, plus remaining plan/task drift around build-spec mutability and acceptance-source references."
+    },
+    {
+      "name": "plan-eng-review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) executed by subagent 019f300c-cd09-7c23-868a-b021dadc8325 after reading /Users/Hugh/.claude/skills/gstack/plan-eng-review/SKILL.md and /Users/Hugh/.claude/skills/gstack/plan-eng-review/sections/review-sections.md; (2) checked architecture/data flow, dependency ordering, parallelism, fail-loud paths, close-flow failure handling, gate_cmd executability, placeholder substitution, and performance risk; (3) found broad phase ordering feasible but blocking issues remain in stale data contracts and non-executable/future-artifact gates."
+    },
+    {
+      "name": "review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) executed by subagent 019f300c-eb96-7513-a055-bd0164bfb064 after reading /Users/Hugh/.claude/skills/gstack/review/SKILL.md; (2) checked diff/scope drift, prior blocking closure, traceability, stale contracts, fake commands, forbidden-file boundaries, and cross-artifact-analysis consistency; (3) found data-contracts.md unchanged, B2 closure not evidenced in the package, gate_cmd still not machine-passable, and build-spec boundary still contradictory."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 16,
+      "code": "File path | `{worktree_root}/worktree.json`（worktree 根路径下）",
+      "issue": "Prior blocking B3 remains open: Contract 1 still locates worktree.json at `{worktree_root}/worktree.json`, while the prior review required `{{task_tracking_root}}/tasks/{task-id}/worktree.json`.",
+      "impact": "If implemented as written, make-decision, build-code, and verify-code can write/read different worktree.json files, leaving the cross-stage source of truth split and causing downstream stages to fail or silently consume stale state.",
+      "recommendation": "Update Contract 1 File path to `{{task_tracking_root}}/tasks/{task-id}/worktree.json`, then align owner/consumer and validation text to that single authoritative path.",
+      "evidence": "The review package says data-contracts.md is unchanged, and prior B3 explicitly required this line to change.",
+      "requiredFix": "Replace `{worktree_root}/worktree.json` with `{{task_tracking_root}}/tasks/{task-id}/worktree.json` and update all Contract 1 read/write text to match.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 71,
+      "code": "返回值 | string | task_dir 绝对路径，供调用方拼接 `{task_dir}/{task-id}/`",
+      "issue": "Prior blocking B4 remains open: Contract 2 still describes the old `{task_dir}/{task-id}` model, contradicting T001's requirement that parser returns `task_tracking_root` and callers append `/tasks/{task-id}`.",
+      "impact": "Executing from this contract can produce `/tasks/tasks/{task-id}` or omit the `/tasks/` segment, causing stage outputs and evidence paths to diverge between agents.",
+      "recommendation": "Rewrite Contract 2 so `parseTaskDir` returns `task_tracking_root`, and every consumer explicitly composes `{{task_tracking_root}}/tasks/{task-id}/...`.",
+      "evidence": "tasks.md T001 says `parser 返回 task_tracking_root 本身（不拼接 /tasks/{task-id}）`; data-contracts.md still says callers append `{task_dir}/{task-id}`.",
+      "requiredFix": "Remove the old `{task_dir}/{task-id}` model from Contract 2 and replace it with the task_tracking_root + `/tasks/{task-id}` composition rule.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 78,
+      "code": "3. fallback：`~/Knowledge/workflowhub/`",
+      "issue": "Prior blocking B5 remains open: Contract 2 still permits hardcoded fallback `~/Knowledge/workflowhub/`, while spec/tasks require fail-loud when both env var and yaml are missing.",
+      "impact": "The old fallback can silently route a stage into the wrong Knowledge directory, recreating the original cross-agent path divergence instead of exposing configuration failure.",
+      "recommendation": "Delete the hardcoded fallback. Define priority exactly as `WORKFLOWHUB_TASK_DIR` -> yaml `task_dir` -> fail-loud with explicit error.",
+      "evidence": "tasks.md T001 says `两者均缺失 fail-loud，不使用硬编码`; data-contracts.md still lists `~/Knowledge/workflowhub/` fallback.",
+      "requiredFix": "Remove `~/Knowledge/workflowhub/` from Contract 2 and state that missing env var plus missing yaml is a non-zero fail-loud error.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/spec.md",
+      "line": 55,
+      "code": "Delta Patch 的 spec.md 仅显示 SCOPE-009 hunk；未显示 WORKFLOWHUB_TASK_DIR / yaml fallback / /tasks/tasks 修复内容",
+      "issue": "Prior blocking B2 lacks verifiable closure evidence in the review package: the delta does not show the required fix for yaml fallback producing `/tasks/tasks/{task-id}` path drift.",
+      "impact": "A reviewer cannot confirm the path derivation invariant was corrected. Passing the plan would allow the original task-dir misrouting bug to remain in the authoritative spec.",
+      "recommendation": "Include the corrected current spec.md text around line 55 in the review package or add the missing delta hunk showing the yaml fallback path rule no longer produces `/tasks/tasks/{task-id}`.",
+      "evidence": "The provided spec.md delta only changes the SCOPE-009 storage boundary hunk near line 225; B2 targets line 55 and is not evidenced in the package.",
+      "requiredFix": "Expose or modify spec.md line 55 area so the reviewer can verify the yaml fallback rule returns task_tracking_root and consumers append `/tasks/{task-id}` exactly once.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 14,
+      "code": "WORKFLOWHUB_TASK_DIR=/tmp/testdir node -e \"require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())...\"",
+      "issue": "T001 gate_cmd is not reliably executable: it uses `require('./core/task-dir-parser.mjs').then(...)` against an `.mjs` module and assumes `/tmp/testdir` exists even though nonexistent paths must fail-loud.",
+      "impact": "The gate can fail because the test harness is wrong, or pass/fail depending on local filesystem state, so it does not objectively prove the parser behavior required by FR-WORKTREE-ENVVAR-003.",
+      "recommendation": "Use ESM import with `node --input-type=module`, create temp directories/files inside each gate, and isolate each filesystem case.",
+      "evidence": "plan-eng-review fallback identified `.mjs` + CJS require mismatch and missing temp setup for `/tmp/testdir` and `/tmp/somefile`.",
+      "requiredFix": "Replace parser gates with commands that create their own fixtures, use `await import('./core/task-dir-parser.mjs')`, and assert exit code plus stderr deterministically.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 18,
+      "code": "两者缺失 fail-loud：`node -e \"require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())\"` — exit 非零",
+      "issue": "T001's missing-env-and-yaml fail-loud gate does not isolate yaml fallback, so it may succeed when local `config/workflowhub.yaml` exists.",
+      "impact": "The fail-loud branch can remain untested while the gate passes in one environment and fails in another, leaving the core path-resolution bug uncontrolled.",
+      "recommendation": "Run this gate in a temp cwd/repo fixture with no `config/workflowhub.yaml`, or add a parser test fixture that explicitly disables config lookup.",
+      "evidence": "The gate unsets neither cwd nor config path and does not prove both input sources are absent.",
+      "requiredFix": "Provide a machine command that guarantees env var is empty and yaml config is absent before asserting non-zero exit and expected stderr.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 20,
+      "code": "硬编码已删除：`grep -R \"Knowledge/workflowhub\" core/task-dir-parser.mjs` — 无输出（exit 1 即通过）",
+      "issue": "Several negative grep gates treat exit 1 as pass, so they are not direct machine pass/fail gates under normal exit-code semantics.",
+      "impact": "Automation will mark a correct no-match condition as failure unless a human interprets the prose, meaning prior B6 is not closed.",
+      "recommendation": "Invert negative grep commands with `! grep ...` or wrap them in a shell assertion that exits 0 when no match exists.",
+      "evidence": "T001 uses `grep -R ... — exit 1 即通过`; T003 and T005 use the same pattern for `worktree add` absence.",
+      "requiredFix": "Convert every absence check to an exit-0-on-pass gate and keep raw grep only as display_cmd if needed.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 65,
+      "code": "`git show HEAD -- specs/{task-id}/ | grep -E \"^\\\\+\\\\+\\\\+ b/specs/.*(evidence/|stage-result\\\\.json|journal\\\\.jsonl|task-metrics\\\\.jsonl)\"`，应无输出",
+      "issue": "T006 boundary gate is not executable as a pass/fail command: it contains literal `{task-id}` and uses grep no-output as success without inverting exit code.",
+      "impact": "The command can inspect the wrong path or return non-zero on the desired no-match state, so it cannot prove repository-boundary compliance.",
+      "recommendation": "Use the concrete task id `worktree-unification` or define an explicit substitution variable, and invert the grep check with `!` or an equivalent assertion.",
+      "evidence": "Both speckit-analyze and review fallback flagged T006 placeholder and no-output grep as non-machine-executable.",
+      "requiredFix": "Replace the gate with an exit-0 pass command such as `! git show --name-only HEAD -- \"specs/worktree-unification\" | grep -E '(^|/)(evidence/|stage-result\\.json|journal\\.jsonl|task-metrics\\.jsonl)$'`.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Executability",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 65,
+      "code": "`test -f \"${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}/stage-result.json\" && jq -e '.verdict' ...`",
+      "issue": "T006 requires the verify-code close runtime artifact `stage-result.json` before the close flow has actually executed.",
+      "impact": "Stage 3 verification can fail even when the plan implementation is correct, because it checks for a future artifact that is only produced after verify-code close step ⑤.",
+      "recommendation": "During plan-stage verification, inspect `workflows/verify-code/SKILL.md` for the required path rule; move actual file-existence verification to a post-close smoke/integration check.",
+      "evidence": "T006 depends on T004 editing verify-code rules, not on executing close; the file being tested is created by the future close flow.",
+      "requiredFix": "Split static plan verification from runtime close verification and do not require `stage-result.json` existence inside T006.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Governance",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 58,
+      "code": "`workflows/build-spec/SKILL.md`（FR-WORKTREE-SCOPE-008 要求只读 worktree.json...无需修改 build-spec 内部实现）",
+      "issue": "Scope boundary remains contradictory: plan.md lists `workflows/build-spec/SKILL.md` as forbidden/no-modify, but Phase 3.1 and T005 allow a one-line edit if fail-loud/read logic is missing.",
+      "impact": "An executor cannot know whether editing build-spec is forbidden or required, causing either forbidden-file violation or incomplete FR-WORKTREE-SCOPE-008 implementation.",
+      "recommendation": "Classify build-spec as conditional allowed with exact one-line-only constraints, or make it strictly read-only and remove the T005/Phase 3.1 edit allowance.",
+      "evidence": "plan.md Forbidden files conflicts with Phase 3.1 `缺失时最小补充一行` and tasks.md T005's same allowance.",
+      "requiredFix": "Make build-spec mutability unambiguous in Project Structure, Scope Boundary Verification, Phase 3.1, and T005.",
+      "repeat": true,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "important",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 148,
+      "code": "验收清单（spec §7 验收标准 1-9）逐条可核查",
+      "issue": "Acceptance-source drift remains: tasks.md T007 correctly says success criteria are in spec §5 AC-01..AC-04 and §8 scenarios, but plan.md still references spec §7 acceptance criteria.",
+      "impact": "Implementation may build the acceptance checklist from an Out of Scope section instead of the approved success criteria, reducing verification quality.",
+      "recommendation": "Replace remaining plan.md references to `spec §7 验收标准 1-9` with `spec §5 成功标准 AC-01..AC-04 and spec §8 scenarios`.",
+      "evidence": "tasks.md T007 explicitly says `spec §7 为 Out of Scope，成功标准在 §5 中定义`.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "important",
+      "axis": "Governance",
+      "file": "specs/worktree-unification/cross-artifact-analysis.md",
+      "line": 12,
+      "code": "本轮针对 round-4 verdict 中 5 条 blocking + 2 条 minor 逐一修复后重新扫描。blocking=0，minor=0，达标。",
+      "issue": "Closure record is stale/inaccurate: the review metadata says this round is based on round-5 with 8 blocking and 4 important, but cross-artifact-analysis claims round-4 with 5 blocking and 2 minor and declares blocking=0.",
+      "impact": "The artifact cannot be trusted as evidence that prior findings were closed, and it masks still-open blockers in unchanged data-contracts.md and gate_cmds.",
+      "recommendation": "Rewrite the closure matrix against the actual round-5 findings, listing fixed file/line/evidence for each prior blocking and leaving open items non-zero.",
+      "evidence": "Review package metadata says `prior-verdict: revise_required (8 blocking, 4 important from round-5)`; cross-artifact-analysis says `round-4 ... 5 blocking + 2 minor`.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    }
+  ],
+  "resolutionSummary": "Round 4 / wu-r6 delta cannot pass. B1/B7/B8 appear partially addressed, but B3/B4/B5 remain open because data-contracts.md is unchanged; B2 lacks visible closure evidence in the provided package; B6 remains open because several gate_cmd entries still are not direct exit-0 machine gates. Additional unresolved issues: build-spec mutability is contradictory, T006 checks a future close artifact too early, and cross-artifact-analysis records the wrong prior round/findings count.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r6-input.md",
+      "hash": null,
+      "lines": 945,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r6-input.md",
+      "round": 4
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "anti-forgery": "lightweight (no-manifest)",
+  "reportPath": "reviews/report-round-4.md"
+}

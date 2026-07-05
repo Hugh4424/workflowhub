@@ -1,0 +1,105 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 15,
+      "issue": "T001 gate_cmd 不可执行。命令使用 `require('./core/task-dir-parser.mjs').then(...)`，但当前模块导出的是同步 `parseTaskDir` 函数，实跑会先报 `TypeError: require(...).then is not a function`，无法验证 env 优先级、fail-loud、路径语义。",
+      "recommendation": "把所有 parser gate 改成真实 ESM 调用，例如 `node --input-type=module -e \"import { parseTaskDir } from './core/task-dir-parser.mjs'; const r=parseTaskDir(); ...\"`；env 成功用例断言精确相等，fail-loud 用例断言非零退出和明确 stderr。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 36,
+      "issue": "T002 引入 `/tasks` 自动裁剪和 `normalizeTaskTrackingRoot()` API，但 spec.md:55 说 yaml 值若含 `/tasks` 应迁移或设置父目录，data-contracts.md:71-80 也没有定义该归一化规则或 public helper。该任务引入未获 spec/contract 支撑的新概念。",
+      "recommendation": "二选一并全量同步。推荐把一个尾随 `/tasks` 或 `/tasks/` 的归一化规则正式写入 spec.md、plan.md、data-contracts.md，并通过 `parseTaskDir` 测试；不要新增未登记的 `normalizeTaskTrackingRoot()` public API。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 84,
+      "issue": "FR-WORKTREE-COMMIT-004 是硬性范围内要求，但 T008 是只读/advisory，写明缺失项列为 follow-up。执行该计划时 per-phase commit/no-change 覆盖仍可缺失而不阻断。",
+      "recommendation": "把 T008 改成 blocking verification；在 T003 或新增实现任务中要求 `workflows/build-code/SKILL.md` 落地每个变更 phase 的 `workflowhub(build-code/<phase-name>): ...` commit 规则，以及 no-change 记录规则；把 T008 加入 plan.md Verification Mapping。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 128,
+      "issue": "Contract 4 写“每个 stage/phase 完成时至少执行一次 `git add + git commit`”，但 spec.md:154-165 要求仅有文件变更时 commit，无变更时写 stage-result/journal 原因且不使用空提交。合同与 spec 冲突。",
+      "recommendation": "Contract 4 改为：有文件变更才 commit；无变更必须写 no-change reason 到 stage-result 或 journal；明确禁止 empty stage marker commit。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "issue": "T001 修改 `core/task-dir-parser.mjs` 的持久行为，但 tasks.md 未要求更新持久测试。现有 `core/__tests__/task-dir-parser.test.mjs:24-26` 仍断言缺失 config 时 fallback 到 `~/Knowledge/workflowhub/`，与新 fail-loud 要求冲突。",
+      "recommendation": "新增 test-first 子任务：先更新 `core/__tests__/task-dir-parser.test.mjs`，再实现 parser；gate 用 `npx vitest run core/__tests__/task-dir-parser.test.mjs`，覆盖 env priority、yaml fallback、missing yaml、missing task_dir、nonexistent、non-directory、硬编码 fallback 删除和最终选定的 `/tasks` 归一化规则。"
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 69,
+      "issue": "T006 要求 `${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/stage-result.json` 和 evidence 目录存在，但这些是 verify-code close 后运行时产物，不应作为 Stage 3 文档计划阶段的前置 gate。",
+      "recommendation": "拆分静态与运行时验证：Stage 3 只验证 verify-code/SKILL.md 的路径规则和 repo 内 forbidden 文件不存在；外部 stage-result/evidence 存在性移到 verify-code close acceptance。"
+    },
+    {
+      "severity": "important",
+      "file": "specs/worktree-unification/cross-artifact-analysis.md",
+      "line": 6,
+      "issue": "文件声称 round-9 的 5 blocking + 4 important 全部已修复，但当前主文档仍有 blocking，且已有最新 r9b review 报告仍为 revise_required。该 closure summary 是假绿。",
+      "recommendation": "重生成 closure matrix，标注 superseded review 路径；不要在 cross-artifact-analysis.md 宣称全部已修复，直到 blocking 清零。"
+    }
+  ],
+  "resolutionSummary": "已执行三类 required skill 的只读 fallback 审查：speckit-analyze、plan-eng-review、review。旧 round-7/8 的路径合同、硬编码 fallback、build-spec 禁改、部分 pipe exit-code、stage-result 入库问题基本关闭；但 round-9 仍有可执行性和可验证性阻断，不能 pass。",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r9-input.md",
+      "hash": null,
+      "lines": 790,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r9-input.md",
+      "round": 4
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      },
+      {
+        "severity": "important",
+        "category": "schema-drift",
+        "description": "Spec describes timing-trigger metadata duplicated or flattened across multiple authoritative sources (cluster: trigger-timing terms + conflict/flatten/multiple-source terms). Divergent timing records cause gate behavior drift — schema-drift important."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-4.md"
+}

@@ -1,0 +1,86 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "plan.md",
+      "line": 217,
+      "issue": "Scope boundary is internally inconsistent: plan.md marks workflows/build-spec/SKILL.md and workflows/build-plan/SKILL.md as forbidden/read-only at lines 74-77 and limits scope to four files at lines 250-256, but Phase 3.1 allows minimally modifying build-spec and build-plan. tasks.md T005 repeats that write permission. If executed as written, an implementer may edit a forbidden stage, including the current build-plan stage, expanding scope and changing workflow behavior outside the approved surface.",
+      "recommendation": "Choose one contract and make it explicit: either make T005 strictly read-only and fail the plan if build-spec/build-plan lack required behavior, or remove those files from forbidden scope and add precise tasks, file impact, verification, and governance justification for modifying them."
+    },
+    {
+      "severity": "blocking",
+      "file": "tasks.md",
+      "line": 21,
+      "issue": "FR-WORKTREE-COMMIT-004 is only mapped to make-decision R7, but spec.md lines 150-176 require commit/no-change traceability for every stage and build-code phase, including build-spec, build-plan, build-code, verify-code, and close. T002 only covers make-decision, T004 only covers close archive, and no task implements or verifies the rest. Executing this plan can still leave stage artifacts uncommitted or untraceable, preserving the cross-stage discontinuity the feature is meant to fix.",
+      "recommendation": "Add explicit tasks for every affected stage/phase commit responsibility, or register existing SIG anchors proving current SKILL.md behavior already satisfies FR-WORKTREE-COMMIT-004. Each task must include a concrete verification for git log prefixes and no-change records."
+    },
+    {
+      "severity": "blocking",
+      "file": "plan.md",
+      "line": 67,
+      "issue": "File/code impact coverage is incomplete against spec.md Business Impact Scope lines 304-318. The plan lists only core/task-dir-parser.mjs, make-decision, build-code, and verify-code as source changes, while the spec impact covers build-spec/build-plan path use, task-id normalization rejection, per-stage/per-phase commit traceability, push timing, close partial execution, and downstream stage behavior. The plan does not account one by one for each impacted feature as changed, deleted, already-covered, or tested.",
+      "recommendation": "Add a Business Impact coverage matrix that maps every impacted item in spec.md lines 304-318 to changed files, existing anchors, or verification-only checks. Include reverse-reference scan results for parseTaskDir, task_dir path semantics, worktree.json consumers, git worktree add, push, branch deletion, and commit message rules."
+    },
+    {
+      "severity": "blocking",
+      "file": "plan.md",
+      "line": 139,
+      "issue": "Verification is not expressed as executable gates. The plan gives bullet assertions such as reading files, checking text exists, and git status/git show observations, but it lacks dual-column gate_cmd/display_cmd checks, concrete Node test files, and runnable commands for the parser behavior. This lets implementation pass on subjective inspection while env-var/yaml/fail-loud behavior remains untested.",
+      "recommendation": "For each phase, add objective gate_cmd/display_cmd pairs. For T001, add a concrete Node test file and command covering env var priority, yaml fallback, missing config, missing task_dir, non-directory, nonexistent path, relative path, ~ path, and empty/trimmed env var behavior. For docs/SKILL changes, use grep or structured checks only as display_cmd unless the gate exit code is intact."
+    },
+    {
+      "severity": "blocking",
+      "file": "tasks.md",
+      "line": 37,
+      "issue": "T007 creates an acceptance checklist from `spec §7 验收标准 1-9`, but spec.md §7 is Out of Scope, not an acceptance-standard section. The task is therefore not traceable to a valid requirement line and can cause verify-code to check invented or wrong acceptance criteria.",
+      "recommendation": "Replace the `spec §7` reference with exact source lines from spec.md, such as measurable success criteria and Given/When/Then scenarios, or remove T007 if the checklist is not required by a real FR/governance rule. The task must list the exact criteria it will copy and the FR each item proves."
+    }
+  ],
+  "resolutionSummary": "Round 1 review executed required lenses via SKILL.md fallback in this session: speckit-analyze fallback checked spec/plan/tasks consistency and confirmed prior cross-artifact findings were insufficiently blocking; plan-eng-review fallback checked architecture, dependency ordering, failure modes, test strategy, and phase executability; review fallback checked scope drift, traceability gaps, documentation/stale boundary risk, and adversarial scope mismatch. Verdict is revise_required because traceability, scope control, impact coverage, and verification gates are not yet executable enough.",
+  "reviewSnapshot": [
+    {
+      "path": "review-input.md",
+      "hash": null,
+      "lines": 585,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "review-input.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-1.md"
+}

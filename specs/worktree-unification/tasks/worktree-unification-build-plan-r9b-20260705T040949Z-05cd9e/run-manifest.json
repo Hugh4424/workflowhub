@@ -1,0 +1,12 @@
+{
+  "taskName": "worktree-unification-build-plan-r9b-20260705T040949Z-05cd9e",
+  "status": "completed",
+  "startedAt": "2026-07-05T04:09:49Z",
+  "versionAnchor": "8e55c2f2e6afb7f57dc86955411fd01da7823639",
+  "input": "/tmp/wu-r9-input.md",
+  "maxReviseRounds": 5,
+  "reviseRounds": 6,
+  "endedAt": "2026-07-05T04:49:29Z",
+  "verdict": "escalate_to_human",
+  "exitCode": 2
+}

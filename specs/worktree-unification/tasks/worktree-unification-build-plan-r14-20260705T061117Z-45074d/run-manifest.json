@@ -1,0 +1,12 @@
+{
+  "taskName": "worktree-unification-build-plan-r14-20260705T061117Z-45074d",
+  "status": "completed",
+  "startedAt": "2026-07-05T06:11:17Z",
+  "versionAnchor": "5eb9917d4b6c4c6b54881f8595a21257c4344cf5",
+  "input": "/tmp/wu-r14-input.md",
+  "maxReviseRounds": 5,
+  "reviseRounds": 0,
+  "endedAt": "2026-07-05T06:12:54Z",
+  "verdict": "pass",
+  "exitCode": 0
+}

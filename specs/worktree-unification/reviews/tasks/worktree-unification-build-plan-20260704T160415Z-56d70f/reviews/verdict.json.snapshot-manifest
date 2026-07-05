@@ -1,0 +1,27 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "plan.md",
+      "hash": "8e2bff633f6fdfa7cf0cbe9eacf5445a5f25c5a059e2568e92db888b9c069fc8"
+    },
+    {
+      "path": "data-contracts.md",
+      "hash": "ccd3f8c6c27e9ecd288f4905215b13e17ea9f6dda1662cec8ab4711f41482691"
+    },
+    {
+      "path": "plan.md",
+      "hash": "8e2bff633f6fdfa7cf0cbe9eacf5445a5f25c5a059e2568e92db888b9c069fc8"
+    },
+    {
+      "path": "tasks.md",
+      "hash": "d57710c200badac3e272c089a4cb2ae781ecb2734668b13e967185143a7d71d3"
+    }
+  ],
+  "verdict_binding": {
+    "verdict_id": "8e2a0d04-9c32-4b70-b2a9-78db3bffd6af",
+    "verdict_file": "reviews/tasks/worktree-unification-build-plan-20260704T160415Z-56d70f/reviews/verdict.json",
+    "hash": "b470175f9491aa7d5e5a1185e5d23b2a32eae31ec4b7be6bbc62763dd6a681dd"
+  }
+}

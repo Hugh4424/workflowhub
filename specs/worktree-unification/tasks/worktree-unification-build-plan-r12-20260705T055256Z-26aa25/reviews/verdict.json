@@ -1,0 +1,72 @@
+{
+  "verdict": "escalate_to_human",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 102,
+      "issue": "T008 仍未按 spec/data-contracts 完整覆盖 FR-WORKTREE-COMMIT-004。它列出 build-code、build-spec、build-plan、verify-code、close 5 个触发点，仍漏掉 make-decision；同时 T008-D 仍要求 close 归档 commit 含 workflowhub(verify-code)，但 spec 和 data-contracts 固定要求 workflowhub(close): archive {task-id}。这是 Round-11 Finding 3 的同类未闭合问题。",
+      "recommendation": "把 T008 改成按 spec commit 覆盖矩阵逐行验收：make-decision、build-spec、build-plan、build-code per phase、verify-code、verify-code close 子步骤全部有 gate；close 归档 commit 只允许 workflowhub(close): archive {task-id}，不得用 workflowhub(verify-code) 替代。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 83,
+      "issue": "T005 的缺失字段 fail-loud gate 仍是假行为验证。命令只运行内联 node 片段解析 stdin，没有调用 build-spec/SKILL.md 或 build-plan/SKILL.md 的实际读取逻辑；真实 SKILL 即使没有 fail-loud 实现，该 gate 也会通过。这是 Round-11 Finding 2 的同类未闭合问题。",
+      "recommendation": "改为调用 build-spec/build-plan 实际入口或抽出的共享读取命令，在临时 task_tracking_root 写入缺少 target_repo_root/worktree_root 的 worktree.json，并断言真实 stage 读取流程非零退出且错误信息明确。不能用独立内联脚本替代被验收对象。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 123,
+      "issue": "Contract 4 的 Owner side 与覆盖说明仍把 per-stage commit 契约收缩为 make-decision、build-code per phase、verify-code close，漏掉 spec.md 明确要求的 build-spec、build-plan、verify-code stage commit 分母。下游按 data-contracts 执行会低估提交覆盖面。",
+      "recommendation": "把 Contract 4 的 Owner side、Per-stage commit coverage 和 Version Compatibility Notes 改为覆盖 make-decision、build-spec、build-plan、build-code per phase、verify-code、verify-code close；每行写清 commit message、无变更记录字段和不可跳过条件。"
+    }
+  ],
+  "resolutionSummary": "Round-11 的 T005 边界互斥、build-code §17 fallback、T002 四步归一化基本闭合；但 T005 假行为 gate 与 T008 COMMIT-004 覆盖/close 前缀仍未闭合，且同类问题已跨轮重复，按同一 blocking 多轮未闭合规则升级为 escalate_to_human。已按 speckit-analyze、plan-eng-review、review 三个只读 lens 做 skill-file fallback 核查：重点检查 spec/plan/tasks/data-contracts 一致性、依赖/可执行性、fake gate 与 scope drift。",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r12-input.md",
+      "hash": null,
+      "lines": 1269,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r12-input.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-1.md"
+}

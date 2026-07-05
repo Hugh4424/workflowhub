@@ -1,0 +1,111 @@
+{
+  "verdict": "revise_required",
+  "skillResults": [
+    {
+      "name": "speckit-analyze",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback read at /Users/Hugh/.claude/skills/speckit-analyze/SKILL.md in this session; (2) checked current review package artifacts: spec.md delta, plan.md, tasks.md, data-contracts.md reference, cross-artifact-analysis.md, prior B1-B8 closure; dimensions: inconsistency, ambiguity, underspecification, coverage gaps; (3) found unresolved cross-artifact conflicts in data-contracts.md and false closure claims in cross-artifact-analysis.md."
+    },
+    {
+      "name": "plan-eng-review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback read at /Users/Hugh/.claude/skills/gstack/plan-eng-review/SKILL.md in this session; (2) checked execution ordering, forbidden-file boundary, gate executability, dependency graph, failure modes, and stage granularity in plan.md/tasks.md; (3) plan remains non-executable because gates use non-runnable placeholders and at least one forbidden-file boundary contradicts task behavior."
+    },
+    {
+      "name": "review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback read at /Users/Hugh/.claude/skills/gstack/review/SKILL.md in this session; (2) checked delta scope against prior blocking list, stale reference artifacts, traceability from diff to claimed fixes, and fake-green command risk; (3) found prior blockers B3-B5 still open because data-contracts.md is unchanged while cross-artifact-analysis.md claims all blockers are fixed."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 16,
+      "issue": "Prior B3 remains open: Contract 1 still says worktree.json lives at `{worktree_root}/worktree.json`, while the review contract/prior finding requires the authoritative path under `{{task_tracking_root}}/tasks/{task-id}/worktree.json`. The delta did not modify data-contracts.md, yet cross-artifact-analysis.md claims blocking=0.",
+      "recommendation": "Update Contract 1 File path to the task_tracking_root task directory path and align owner/consumer wording with spec.md/plan.md before claiming B3 closed."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 71,
+      "issue": "Prior B4 remains open: Contract 2 still describes consumers拼接 `{task_dir}/{task-id}/`, which omits the required `/tasks/{task-id}` segment and conflicts with plan.md/tasks.md paths using `${WORKFLOWHUB_TASK_DIR}/tasks/{task-id}`. Executing from this contract can write/read the wrong directory.",
+      "recommendation": "Change Contract 2 so parser returns `task_tracking_root`, and every consumer path is `{{task_tracking_root}}/tasks/{task-id}/...`; remove the old `{task_dir}/{task-id}` model."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 78,
+      "issue": "Prior B5 remains open: Contract 2 still allows fallback `~/Knowledge/workflowhub/`, directly contradicting FR-WORKTREE-ENVVAR-003 and tasks.md T001, which require fail-loud when env var and yaml are both missing. This reintroduces the hardcoded path the plan is meant to delete.",
+      "recommendation": "Remove the hardcoded fallback from data-contracts.md and state the only valid priority is `WORKFLOWHUB_TASK_DIR` → yaml `task_dir` → fail-loud."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 15,
+      "issue": "T001 gate_cmd is not executable as written: `WORKFLOWHUB_TASK_DIR=/tmp/testdir ...` expects success while T001 also requires nonexistent paths to fail-loud, but the gate never creates `/tmp/testdir`. The “两者缺失 fail-loud” command also does not isolate/remove yaml config, so it can pass or fail depending on local config state instead of the requirement.",
+      "recommendation": "Make gate_cmd self-contained: create a temp directory for the env-var success case, create a temp file for non-directory failure, run in an isolated temp config/cwd for yaml-missing behavior, and assert exact exit codes/stderr."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 70,
+      "issue": "T006 still lacks a reliable machine gate. The first check uses `git show ... | grep -E ...` and says “应无输出”; no match means grep exits 1, so the passing condition is a non-zero exit unless explicitly inverted. The same task also contains literal `{task-id}` placeholders inside shell commands, so the commands are not runnable as written.",
+      "recommendation": "Add an explicit `gate_cmd` block for T006 with runnable variables, e.g. `TASK_ID=worktree-unification`, and invert negative grep checks with `! ...` or a Node script so pass returns exit 0. Avoid literal `{task-id}` in executable commands."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 52,
+      "issue": "Forbidden-file governance is inconsistent: plan.md lists `workflows/build-spec/SKILL.md` under “Forbidden files（不可触碰）”, but plan.md §3.1 and tasks.md T005 allow a minimal write to build-spec/SKILL.md if the read-path/fail-loud rule is missing. An executor cannot know whether editing build-spec is allowed.",
+      "recommendation": "Move `workflows/build-spec/SKILL.md` out of forbidden files, or make it strictly read-only everywhere. If minimal edit is allowed, list it in the allowed change surface with the exact condition and verification gate."
+    }
+  ],
+  "resolutionSummary": "Round 8 delta review: B1 appears fixed for build-plan/SKILL.md read-only scope. B3, B4, and B5 remain open because data-contracts.md is unchanged and still carries the old worktree path, old task_dir model, and hardcoded fallback. B6 is only partially addressed: tasks now contain gate_cmd text, but T001/T006 are not reliable runnable gates. B8 is partially addressed for T001/T005 commit/no-change gates. Because repeated prior blocking issues remain, verdict is revise_required.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r6-input.md",
+      "hash": null,
+      "lines": 945,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r6-input.md",
+      "round": 8
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

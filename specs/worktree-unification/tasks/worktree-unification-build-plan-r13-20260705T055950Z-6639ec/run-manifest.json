@@ -1,0 +1,12 @@
+{
+  "taskName": "worktree-unification-build-plan-r13-20260705T055950Z-6639ec",
+  "status": "completed",
+  "startedAt": "2026-07-05T05:59:50Z",
+  "versionAnchor": "c4bfcf68051ca44964243c99e1a4519a1dad3068",
+  "input": "/tmp/wu-r13-input.md",
+  "maxReviseRounds": 5,
+  "reviseRounds": 2,
+  "endedAt": "2026-07-05T06:04:27Z",
+  "verdict": "escalate_to_human",
+  "exitCode": 2
+}

@@ -1,0 +1,255 @@
+{
+  "reviewRequestId": "wu-r9-input.md",
+  "verdict": "revise_required",
+  "skillResults": [
+    {
+      "name": "speckit-analyze",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) Executed via SKILL.md fallback from /Users/Hugh/.claude/skills/speckit-analyze/SKILL.md plus independent subagent 019f3079-3c69-7c42-9c16-5badd5099e65; (2) checked specs/worktree-unification/spec.md, plan.md, tasks.md, data-contracts.md, cross-artifact-analysis.md, CONSTITUTION.md, constitution-checklist.md for consistency, coverage, ambiguity, conflict, and constitution alignment; (3) found blocking cross-artifact conflicts around build-spec/build-plan scope, parser normalization semantics, omitted consumers, external artifacts, and commit contract."
+    },
+    {
+      "name": "plan-eng-review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) Executed via SKILL.md fallback from /Users/Hugh/.claude/skills/gstack/plan-eng-review/SKILL.md and sections/review-sections.md plus independent subagent 019f3079-5f1f-7382-932a-f155be568471; (2) checked architecture, dependency ordering, current core/task-dir-parser.mjs API shape, worktree data flow, close failure modes, test strategy, fake command risks, and parallel commit gates; (3) found blocking engineering risks in parser gates, missing Vitest coverage, advisory commit verification for a hard FR, unavailable-review close path, stale filename contract, broad grep gates, and no-op worktree-count gate."
+    },
+    {
+      "name": "review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) Executed via SKILL.md fallback from /Users/Hugh/.claude/skills/gstack/review/SKILL.md plus independent subagent 019f3079-8267-79d1-b575-053baf7cf241; (2) checked scope drift, boundary conflicts, stale docs, structural risks, git status, forbidden runtime artifacts, and tracked/untracked package state; (3) found blocking scope and verification issues in sync parser commands, task-id normalization coverage, commit FR coverage, forbidden-file gate shape, and T007 dependency order; no tracked forbidden runtime artifact was found."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 15,
+      "code": "require('./core/task-dir-parser.mjs').then(m=>m.parseTaskDir())",
+      "issue": "T001/T002 gate_cmd commands call .then(...) on require('./core/task-dir-parser.mjs'), but the current module returns a synchronous namespace object and parseTaskDir is synchronous. T002 also references normalizeTaskTrackingRoot without a corresponding implementation task or explicit export contract.",
+      "impact": "The gates fail or pass for command-shape reasons unrelated to FR-WORKTREE-ENVVAR-003. Executing as written can block a correct implementation or force an unplanned async/API change.",
+      "recommendation": "Rewrite parser gates to use the real API shape, for example node --input-type=module import { parseTaskDir } ... or require(...).parseTaskDir(...). If normalizeTaskTrackingRoot is required, add it explicitly to T001/spec/data-contracts as an exported helper; otherwise move normalization assertions into parser tests.",
+      "requiredFix": "Make all parser gate_cmd entries executable against the planned API and remove undefined helper assumptions.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 35,
+      "code": "yaml 值以 `/tasks` 或 `/tasks/` 结尾时，parser 自动裁掉该后缀",
+      "issue": "Parser normalization semantics are inconsistent across artifacts. spec.md says yaml values ending in /tasks require migration or env override; tasks.md requires automatic trimming; data-contracts.md only says parser returns task_tracking_root and does not define trimming behavior.",
+      "impact": "Implementers can either produce /tasks/tasks/{task-id} or add an undocumented normalizer. The current repo config already uses a task_dir ending in /tasks, so the ambiguity affects the main fallback path.",
+      "recommendation": "Choose one canonical rule and state it in spec.md, plan.md, data-contracts.md, and T001/T002. Recommended: yaml fallback trims exactly one trailing /tasks or /tasks/ to task_tracking_root; WORKFLOWHUB_TASK_DIR must already be task_tracking_root; both paths are tested.",
+      "requiredFix": "Align normalization rule and gates across all artifacts.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 13,
+      "code": "改造 `core/task-dir-parser.mjs`：新增 `WORKFLOWHUB_TASK_DIR` env var 优先级",
+      "issue": "The parser behavior change lacks a real test task. Existing core tests still cover the old hardcoded ~/Knowledge/workflowhub fallback, while tasks.md relies on ad hoc node commands.",
+      "impact": "A core data-flow change can pass planning review without updating regression tests, or the implementation can break existing tests while gates only exercise shell snippets.",
+      "recommendation": "Add a T001 test-first subtask to update core/__tests__/task-dir-parser.test.mjs and run npx vitest run core/__tests__/task-dir-parser.test.mjs. Cover env priority, empty env, yaml fallback, missing yaml, missing task_dir, relative path, ~ path, nonexistent path, non-directory, and trailing /tasks normalization.",
+      "requiredFix": "Add runnable Vitest coverage before parser implementation gates.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 84,
+      "code": "缺失项列为 follow-up（本任务不修改上述 SKILL.md）",
+      "issue": "FR-WORKTREE-COMMIT-004 is a hard requirement for every stage/phase, but T008 only performs a read-only advisory audit and allows missing commit/no-change coverage to become follow-up. plan.md Verification Mapping also omits T008.",
+      "impact": "The package can pass while per-phase build-code commits and cross-stage no-change records remain unimplemented, leaving the cross-stage traceability problem unresolved.",
+      "recommendation": "Either narrow FR-WORKTREE-COMMIT-004 out of this task with explicit spec/design approval, or add implementation tasks and blocking gates for every affected row in the commit coverage matrix. Missing coverage must not be follow-up when the FR remains in scope.",
+      "requiredFix": "Make FR-WORKTREE-COMMIT-004 fully implemented and verified, or explicitly remove it from current scope.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Executability",
+      "file": "specs/worktree-unification/plan.md",
+      "line": 215,
+      "code": "build-spec/SKILL.md 和 build-plan/SKILL.md 均仅只读核查，禁止任何修改",
+      "issue": "spec.md requires build-spec/build-plan to read worktree.json, use target_repo_root/worktree_root, and fail-loud when missing, but plan/tasks forbid modifying build-spec/build-plan and make missing fail-loud wording only a recorded conclusion.",
+      "impact": "FR-WORKTREE-SCOPE-008 cannot be satisfied if those skills lack the required behavior. Executors cannot both obey the forbidden-file boundary and implement the spec requirement.",
+      "recommendation": "Choose one: allow tightly scoped edits to workflows/build-spec/SKILL.md and workflows/build-plan/SKILL.md with exact gates, or downgrade FR-WORKTREE-SCOPE-008 to read-only audit only and remove MUST/fail-loud consumer obligations from spec/data-contracts.",
+      "requiredFix": "Resolve the forbidden-file vs required-behavior conflict before implementation.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Traceability",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 15,
+      "code": "Consumer side | `build-code` §17 FR-WORKTREE-001、`verify-code` close 阶段",
+      "issue": "Contract 1 omits build-spec and build-plan as worktree.json consumers, while spec.md requires them to consume target_repo_root/worktree_root for path routing.",
+      "impact": "Implementation can miss two required consumers and still appear contract-compliant, breaking FR-WORKTREE-SCOPE-008 coverage.",
+      "recommendation": "Add build-spec and build-plan as read-only consumers in data-contracts.md, or revise spec.md to remove their consumer obligation.",
+      "requiredFix": "Align Contract 1 consumer list with spec.md SCOPE-008.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Executability",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 47,
+      "code": "3rd-review 独立审查（merge 前，evidence/ 落盘，verdict=pass 继续）",
+      "issue": "The plan requires 3rd-review verdict=pass before irreversible actions, but current verify-code has an unavailable/not_executed review path that can proceed to merge. T004 does not explicitly remove or block that path.",
+      "impact": "If 3rd-review is missing or not executed, close can still merge/push/delete, defeating the main pre-merge safety goal.",
+      "recommendation": "T004 must explicitly require review unavailable/not_executed to block close and escalate_to_human, or provide an approved exception. Add a gate that rejects not_executed/proceed-to-merge semantics in verify-code/SKILL.md.",
+      "requiredFix": "Close path must require executed 3rd-review pass before irreversible actions, or the spec must be changed.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 72,
+      "code": "test -f \"${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/stage-result.json\" && jq -e '.verdict'",
+      "issue": "T006 requires stage-result.json and evidence/ to already exist under task_tracking_root, but these are verify-code close outputs. T004 only edits verify-code/SKILL.md; it does not run close.",
+      "impact": "Stage 3 can fail before the producer runs, or push agents to fabricate runtime artifacts just to satisfy the plan gate.",
+      "recommendation": "Change T006 to verify verify-code/SKILL.md path rules and repo absence only. Defer actual external artifact existence checks to verify-code close acceptance after close executes.",
+      "requiredFix": "Do not require runtime close artifacts before the close stage has produced them.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 71,
+      "code": "! git show HEAD -- specs/worktree-unification/ 2>/dev/null | grep -E \"^\\+\\+\\+ b/specs/.*(evidence/|stage-result\\.json|journal\\.jsonl|task-metrics\\.jsonl)\" | grep -q .",
+      "issue": "The forbidden-file gate checks git show diff headers instead of current repo state, and only stage-result.json has a direct test ! -f check. Top-level evidence/, journal.jsonl, or task-metrics.jsonl can exist untracked or pre-existing and still false-green.",
+      "impact": "FR-WORKTREE-SCOPE-009 can pass while forbidden runtime artifacts are present in specs/worktree-unification.",
+      "recommendation": "Replace with current-state checks: test ! -e specs/worktree-unification/evidence, test ! -f specs/worktree-unification/journal.jsonl, test ! -f specs/worktree-unification/task-metrics.jsonl, plus git ls-files and git ls-files --others --exclude-standard scans for forbidden paths.",
+      "requiredFix": "Make boundary gates inspect current tracked and untracked state, not only HEAD diff headers.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Executability",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 77,
+      "code": "供 verify-code 阶段使用",
+      "issue": "T007 says the acceptance checklist is for verify-code, but the dependency graph schedules it after T006, which validates verify-code close outputs. This places the checklist after the stage that needs to consume it.",
+      "impact": "verify-code cannot rely on the checklist during verification; acceptance evidence becomes post-hoc instead of executable input.",
+      "recommendation": "Move T007 before final verify-code/close boundary checks, or clarify it is post-run documentation and remove the claim that verify-code consumes it.",
+      "requiredFix": "Fix T007 dependency order and intended consumer.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Governance",
+      "file": "specs/worktree-unification/data-contracts.md",
+      "line": 128,
+      "code": "每个 stage/phase 完成时至少执行一次 `git add + git commit`（不 push）",
+      "issue": "Contract 4 says every stage/phase must run git add + git commit, while spec.md says commits occur only when files changed, forbids empty stage markers, and requires no-change records otherwise.",
+      "impact": "Following the contract can create empty or unwanted commits and violate FR-WORKTREE-COMMIT-004.",
+      "recommendation": "Align Contract 4 with spec.md: commit only when a stage/phase produces file changes; otherwise record no-change reason in stage-result/journal; do not use --allow-empty as a stage marker.",
+      "requiredFix": "Remove unconditional commit wording from data-contracts.md.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "blocking",
+      "axis": "Verification",
+      "file": "specs/worktree-unification/tasks.md",
+      "line": 42,
+      "code": "! grep -q \"自动创建 worktree\\|auto.*create.*worktree\\|worktree add\" workflows/build-code/SKILL.md",
+      "issue": "Several gates are broad text greps/counts that can pass or fail on unrelated prose. Example: whole-file worktree add grep can false-fail on prohibition text; circled-number counts can pass outside close section; grep for stage-result.json proves only the string exists, not the write path.",
+      "impact": "F9 false-green/false-red risk remains. The plan can claim behavior is verified while only checking prose anchors.",
+      "recommendation": "Scope text checks to exact sections and ordered anchors, and add executable checks where behavior is required. At minimum, replace broad whole-file greps with section-bounded assertions and classify purely advisory text scans as non-gates.",
+      "requiredFix": "Replace fake-green-prone gates with objective section-bounded or executable checks.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "important",
+      "axis": "Governance",
+      "file": "specs/worktree-unification/cross-artifact-analysis.md",
+      "line": 6,
+      "code": "本轮发现 9 条问题（5 blocking + 4 important），全部已修复。",
+      "issue": "Closure documents claim all round-9 issues are fixed, but this review found current blocking issues. Related stale files include constitution-check.md and plan-eng-review.md with outdated checklist/review state.",
+      "impact": "Review package gives contradictory pass/fail signals and makes it hard to identify authoritative evidence.",
+      "recommendation": "Regenerate the closure matrix and constitution check from the current checklist, or mark stale review outputs superseded and keep only dated historical reports outside the current review package.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    },
+    {
+      "severity": "important",
+      "axis": "Governance",
+      "file": ".gitignore",
+      "line": 50,
+      "code": "specs/**/stage-result.json",
+      "issue": "Runtime run-manifest.json files are not ignored or clearly classified, while untracked run manifests under specs/worktree-unification/tasks contain in_progress state. specs tasks/reviews paths are otherwise allowed package paths.",
+      "impact": "Transient runtime state can be accidentally committed and confuse future review packages.",
+      "recommendation": "Either move run-manifest.json to task_tracking_root, add a specific ignore rule, or define which review manifests are commit-worthy and exclude transient in_progress manifests.",
+      "repeat": false,
+      "cross_phase_recurrence": false
+    }
+  ],
+  "resolutionSummary": "Round 1 full review of wu-r9-input.md: prior B3/B4/B5/B9/B10/B11/B12/B13 fixes are partly closed, but current plan/tasks remain non-executable because parser gates use the wrong API shape, normalization semantics are split, parser tests are missing, commit coverage is advisory despite a hard FR, build-spec/build-plan scope conflicts with SCOPE-008, close review gating is not fail-closed, runtime artifact gates are ordered incorrectly, and several gates can fake green. Verdict: revise_required.",
+  "reviewSnapshot": [
+    {
+      "path": "wu-r9-input.md",
+      "hash": null,
+      "lines": 790,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wu-r9-input.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      },
+      {
+        "severity": "important",
+        "category": "schema-drift",
+        "description": "Spec describes timing-trigger metadata duplicated or flattened across multiple authoritative sources (cluster: trigger-timing terms + conflict/flatten/multiple-source terms). Divergent timing records cause gate behavior drift — schema-drift important."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}
