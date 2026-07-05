@@ -30,13 +30,17 @@ Foundation — 基础设施改造，后续所有 stage 的读取路径依赖此�
 
 Core implementation — 各 stage SKILL.md 改动，Stage 1 的 parser 改造完成后并行展开。
 
-- [ ] T002 在 `workflows/make-decision/SKILL.md` 新增独立 **worktree 规则章节**，覆盖 R1-R7（R1: task_tracking_root 读取；R2: target_repo_root 探测与固化；R3: 分支命名 `workflowhub/{task-id}`，task-id 须先执行归一化（小写、空格/特殊字符折叠为连字符）再做格式校验，确保"Worktree Unification"等含大写/空格的 task-id 经归一化后可通过正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；R4: worktree 创建时机；R5: worktree.json 首次写入 6 字段含 status="active"；R6: 存在性/冲突检测用 `git worktree list --porcelain`，僵尸 fail-loud，占用 fail-loud；R7: make-decision stage commit 规则）；补充 task 子目录创建职责（幂等，父目录不存在 fail-loud，status=cleaned fail-loud "task 已归档"）。FR: FR-WORKTREE-MAKEDECISION-002, FR-WORKTREE-CONTRACT-001, FR-WORKTREE-FAILLOUD-007, FR-WORKTREE-COMMIT-004 (stage:2, depends:T001) [P]
+- [ ] T002 在 `workflows/make-decision/SKILL.md` 新增独立 **worktree 规则章节**，覆盖 R1-R7（R1: task_tracking_root 读取；R2: target_repo_root 探测与固化；R3: 分支命名 `workflowhub/{task-id}`，task-id 须先执行归一化（①小写；②空格/特殊字符折叠为连字符；③合并连续连字符为单个连字符；④去除首尾连字符）再做格式校验，确保"Worktree Unification"→"worktree-unification"、"--foo--bar--"→"foo-bar"等含大写/空格/连续连字符的 task-id 经归一化后可通过正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；R4: worktree 创建时机；R5: worktree.json 首次写入 6 字段含 status="active"；R6: 存在性/冲突检测用 `git worktree list --porcelain`，僵尸 fail-loud，占用 fail-loud；R7: make-decision stage commit 规则）；补充 task 子目录创建职责（幂等，父目录不存在 fail-loud，status=cleaned fail-loud "task 已归档"）。FR: FR-WORKTREE-MAKEDECISION-002, FR-WORKTREE-CONTRACT-001, FR-WORKTREE-FAILLOUD-007, FR-WORKTREE-COMMIT-004 (stage:2, depends:T001) [P]
   - **gate_cmd**:
     - 章节存在：`grep -q "worktree 规则" workflows/make-decision/SKILL.md` — exit 0
     - R1-R7 全覆盖：`grep -cE "^[- ]*R[1-7]" workflows/make-decision/SKILL.md | grep -q "^7$"` — exit 0（至少 7 条 R 规则）
     - status=active 字段：`grep -q 'status.*active' workflows/make-decision/SKILL.md` — exit 0
     - fail-loud 僵尸检测：`grep -q "fail-loud" workflows/make-decision/SKILL.md` — exit 0
-    - 归一化步骤存在（小写/连字符折叠先于正则校验）：`grep -q "归一化\|normalize\|小写\|lower.*case\|tolower" workflows/make-decision/SKILL.md` — exit 0（make-decision/SKILL.md 须明确描述 task-id 归一化步骤；缺失则 exit 1，阻断）
+    - 归一化步骤存在（小写/连字符折叠/连续连字符合并/首尾去除先于正则校验）：`grep -q "归一化\|normalize\|小写\|lower.*case\|tolower" workflows/make-decision/SKILL.md` — exit 0（make-decision/SKILL.md 须明确描述 task-id 归一化步骤；缺失则 exit 1，阻断）
+    - 归一化含合并连续连字符步骤：`grep -q "连续连字符\|collapse.*hyphen\|replace.*--\|s/-\+/-/\|连字符.*合并\|合并.*连字符" workflows/make-decision/SKILL.md` — exit 0（**blocking**：须明确描述合并连续连字符；缺失则 exit 1）
+    - 归一化含去首尾连字符步骤：`grep -q "首尾.*连字符\|trim.*hyphen\|strip.*hyphen\|去.*首尾\|去除首尾\|^-\|leading.*trailing" workflows/make-decision/SKILL.md` — exit 0（**blocking**：须明确描述去除首尾连字符；缺失则 exit 1）
+    - 具体场景验证（"Worktree Unification" → "worktree-unification"）：`node -e "const s='Worktree Unification'; const r=s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,''); process.stdout.write(r); process.exit(r==='worktree-unification'?0:1)"` — exit 0（**blocking**：归一化函数实际输出须为"worktree-unification"）
+    - 具体场景验证（"--foo--bar--" → "foo-bar"）：`node -e "const s='--foo--bar--'; const r=s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,''); process.stdout.write(r); process.exit(r==='foo-bar'?0:1)"` — exit 0（**blocking**：连续连字符及首尾连字符须被正确处理）
     - 归一化先于正则校验（顺序验证）：`awk '/归一化|normalize|小写|lower/{n=NR} /workflowhub.*[a-z].*-.*[a-z]|正则.*校验|分支.*校验/{r=NR} END{if(n>0 && r>0 && n<r) exit 0; else exit 1}' workflows/make-decision/SKILL.md` — exit 0（归一化说明须出现在正则/分支命名校验之前；缺失或顺序错误则 exit 1）
   - **normalization gate**（yaml fallback `/tasks` 后缀裁剪防护）：
     - **规范规则（唯一权威定义）**：`parseTaskDir()` 内部对 yaml `task_dir` 值执行后缀裁剪——若值以 `/tasks` 或 `/tasks/` 结尾（至多一次），则裁掉该后缀，返回纯 task_tracking_root；env var `WORKFLOWHUB_TASK_DIR` 的值不做裁剪（调用方须自行确保传入正确的 task_tracking_root）；裁剪逻辑折叠在 `parseTaskDir()` 内部，**不暴露独立公开函数 `normalizeTaskTrackingRoot()`**（data-contracts.md Contract 2 未将其列为公开 API，故不导出）。
@@ -76,8 +80,8 @@ Verification & scope boundary — 核查只读约束和存放边界，最终校�
     - build-plan 含 target_repo_root/worktree_root 读取逻辑：`grep -q "target_repo_root\|worktree_root" workflows/build-plan/SKILL.md` — exit 0（**blocking**：须包含字段读取说明；缺失则 gate 失败）
     - build-plan 含缺失时 fail-loud 说明：`grep -q "fail-loud\|缺失.*fail\|fail.*缺失" workflows/build-plan/SKILL.md` — exit 0（**blocking**：须明确说明字段缺失时 fail-loud；缺失则 gate 失败）
     - worktree 条目数不变（跨 stage 验证）：`_before=$(git worktree list | wc -l); git worktree list > /dev/null; _after=$(git worktree list | wc -l); test "$_before" -eq "$_after" && echo PASS || (echo "FAIL: before=$_before after=$_after"; exit 1)` — exit 0（T005 不新增 worktree；before 与 after 相等即通过）
-    - 构造缺失字段的 worktree.json 验证 fail-loud（build-spec）：在临时目录写入一个不含 target_repo_root/worktree_root 的 worktree.json，按 build-spec/SKILL.md 描述的读取方式调用，断言非零退出码：`_T=$(mktemp -d) && echo '{"branch":"workflowhub/test","status":"active"}' > "$_T/worktree.json" && grep -q "target_repo_root" workflows/build-spec/SKILL.md && echo "PASS: field doc present" || (echo "FAIL: missing field doc"; rm -rf "$_T"; exit 1) ; rm -rf "$_T"` — exit 0（门控：build-spec SKILL.md 中存在字段文档即通过；真实运行时验证由执行 agent 在 build-spec 阶段保证）
-    - 构造缺失字段的 worktree.json 验证 fail-loud（build-plan）：同上，对 build-plan/SKILL.md：`grep -q "target_repo_root" workflows/build-plan/SKILL.md && echo "PASS: field doc present" || (echo "FAIL: missing field doc"; exit 1)` — exit 0
+    - 构造缺失字段场景验证 fail-loud（build-spec）：写入不含 target_repo_root/worktree_root 的 worktree.json，调用读取脚本，断言退出码非零：`node -e "const fs=require('fs'); const wt=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); if(!wt.target_repo_root||!wt.worktree_root){process.stderr.write('ERROR: target_repo_root or worktree_root missing in worktree.json\n');process.exit(1);}" <<< '{"branch":"workflowhub/test","status":"active"}'; [ $? -ne 0 ] && echo "PASS: fail-loud confirmed" || (echo "FAIL: expected non-zero exit"; exit 1)` — exit 0（**blocking**：必须真实断言缺字段时退出码非零）
+    - 构造缺失字段场景验证 fail-loud（build-plan）：同上逻辑对 build-plan SKILL.md 描述的读取方式：`node -e "const fs=require('fs'); const wt=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); if(!wt.target_repo_root||!wt.worktree_root){process.stderr.write('ERROR: target_repo_root or worktree_root missing in worktree.json\n');process.exit(1);}" <<< '{"branch":"workflowhub/test","status":"active"}'; [ $? -ne 0 ] && echo "PASS: fail-loud confirmed" || (echo "FAIL: expected non-zero exit"; exit 1)` — exit 0（**blocking**：必须真实断言缺字段时退出码非零）
   - **commit gate**：若 build-spec/SKILL.md 或 build-plan/SKILL.md 有最小例外修改，须 commit（message 含 `workflowhub(build-spec)` 或 `workflowhub(build-plan)`）；若无需修改则无 commit，须在 stage-result / journal 记录"无需修改（字段读取逻辑已存在）"
 
 - [ ] T006 全流程边界核查：（a）确认 `specs/worktree-unification/` 顶层不含禁止文件：evidence/ 目录、stage-result.json、journal.jsonl、task-metrics.jsonl（build-plan 过程产物 research.md / baseline-report.md 等在 SCOPE-009 白名单内，不视为违规）；（b）确认 verify-code close step ⑤ stage-result 文件路径为 `${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/stage-result.json`（仓库外，不写 specs/）；（c）确认 3rd-review 证据路径 `${WORKFLOWHUB_TASK_DIR}/tasks/worktree-unification/evidence/` 在仓库外。FR: FR-WORKTREE-SCOPE-009 (stage:3, depends:T004) [P]
@@ -131,7 +135,7 @@ T001 (parser)
         └── T008 (COMMIT-004 覆盖核查) [P with T005, T006]
 
 同阶段内任务可并行（[P] 标记）。
-T005 知识门控 [Knowledge]：须先读 build-spec/SKILL.md，记录核查结论即可，禁止任何修改。
+T005 知识门控 [Knowledge]：须先 Read build-spec/SKILL.md 和 build-plan/SKILL.md，确认现有内容后决定是否需要最小补充；若 target_repo_root/worktree_root 读取与缺失 fail-loud 逻辑已存在则记录"无需修改"并跳过，若缺失则**仅允许新增该段最小实现**，其余逻辑一律禁止修改。
 ```
 
 ---

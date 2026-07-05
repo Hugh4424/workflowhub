@@ -120,7 +120,7 @@
 | 字段 | 说明 |
 |------|------|
 | **Contract name** | 每 stage/phase commit 契约（文件变更必提交，无变更必记录） |
-| **Owner side** | 每个执行写入的 stage（build-code per phase 为主要实施者） |
+| **Owner side** | 每个执行写入的 stage（make-decision、build-code per phase、verify-code close 均为实施者） |
 | **Consumer side** | 后续 stage，通过 git log / git show 读取前序产物 |
 
 ### Required Fields / Types
@@ -133,8 +133,17 @@
 | push 策略 | 仅 verify-code close 阶段人工确认后一次性推送（`--no-ff` merge） |
 | 禁止项 | 其他 stage 不得执行 `git push` |
 
+### Per-stage commit coverage
+
+| stage | commit 职责 | commit message 格式 | 不允许跳过条件 |
+|-------|------------|---------------------|----------------|
+| `make-decision` | 写入 worktree.json + decision-log 等产物后必须 commit | `workflowhub(make-decision): <描述>` | 有文件变更时不允许跳过；无变更须记录原因 |
+| `build-code` per phase | 每个有文件变更的 phase 完成后 commit | `workflowhub(build-code/<phase-name>): <描述>` | 每个产生变更的 phase 均不允许跳过；无变更记录原因 |
+| `verify-code` close 归档 | 归档 commit（git mv specs/{task-id}/ specs/archive/{task-id}/）是收尾必要步骤，不允许无变更跳过 | `workflowhub(close): archive {task-id}` | 必须执行，无条件不允许跳过 |
+
 ### Version Compatibility Notes
 
-- build-code §15 已新增 per-phase commit 触发逻辑（FR-WORKTREE-COMMIT-004）
+- make-decision、build-code §15、verify-code close 均已覆盖 FR-WORKTREE-COMMIT-004
 - push 策略从"各 stage 自行决定"收拢为"verify-code close 统一执行"
+- verify-code close 归档 commit 前缀固定为 `workflowhub(close): archive {task-id}`，不得使用其他前缀
 - 本 Contract 4 与 spec.md FR-WORKTREE-COMMIT-004 保持一致：文件变更必提交，无变更必记录，空提交禁止

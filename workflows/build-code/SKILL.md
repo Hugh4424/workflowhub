@@ -324,14 +324,21 @@ When that condition holds:
 
 Before starting implementation, locate the worktree descriptor at `{taskDir}/{task-id}/worktree.json`.
 
-**Normal paths:**
+**Normal path:**
 
 1. **File exists and is valid JSON** with a valid `worktree_root` pointing to an existing directory → reuse it. Do not re-clone or re-checkout.
-2. **File does not exist** → create the worktree following the make-decision stage rules, then write a valid `worktree.json`.
+
+**Missing file — fail-loud (FR-WORKTREE-FAILLOUD-007):**
+
+2. **File does not exist** → do **not** create a worktree. Output a clear error to stderr:
+   ```
+   ERROR [FR-WORKTREE-001]: worktree.json not found at expected path: {taskDir}/{task-id}/worktree.json
+   make-decision stage must complete successfully before build-code can proceed.
+   ```
+   Trigger `escalate_to_human`, stop build-code progression immediately, and record the missing path in `missing_items`. Do **not** silently fall back to creating a new worktree.
 
 **Exception paths:**
 
 3. **Corrupted file:** If `worktree.json` cannot be parsed as JSON, or if `worktree_root` is missing / not a string / empty string / points to a non-existent path / is not a git worktree directory, do **not** read the corrupted content and do **not** guess a path. Trigger `escalate_to_human`, stop build-code progression, and record the corruption details in `missing_items`.
-4. **Checkout failure:** If creating the worktree fails, do **not** write a half-baked `worktree.json` file. Leave the file absent or keep the previous valid version, surface the error, and stop.
 
 The `worktree_root` config key passed to this skill (see §5) must always match the path recorded in `worktree.json`. Never resolve upward to the host agenthub repo directory.
