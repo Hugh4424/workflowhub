@@ -592,6 +592,25 @@ user_decision: true
 
 ---
 
+## Worktree 规则（make-decision 阶段职责）
+
+本节即 worktree 规则章节，定义 make-decision 阶段涉及 worktree 生命周期的完整规则（R1-R7）。
+
+**task-id 归一化步骤（先归一化，再校验分支命名）**：branch 命名校验前必须先对 task-id 做归一化（normalize），步骤依次为：①小写（lower case，全部转小写）；②非字母数字字符折叠为连字符；③合并连续连字符为单个连字符（连续连字符须合并，例如 `--` → `-`）；④去除首尾连字符（去除首尾连字符，例如结尾的 `-` 须去掉）。归一化完成后才允许进入分支命名校验步骤。例如 "Worktree Unification" 归一化后得到 "worktree-unification"；"--foo--bar--" 归一化后得到 "foo-bar"。
+
+- R1 task_tracking_root 读取：make-decision 阶段须通过 `parseTaskDir()`（`core/task-dir-parser.mjs`）读取 task_tracking_root，遵循 env var 优先、yaml fallback 次之、两者缺失 fail-loud 的顺序。**target_repo_root 的入口前提**：make-decision 阶段被调用时，已预设在目标仓库自身的工作目录/上下文中执行（该前提由阶段调用方式本身保证，不在本节范围内重新定义"如何找到目标仓库"这一更上层的调用契约）；R2 的 `git rev-parse --show-toplevel` 只负责在该既有上下文中把相对/隐含路径转换成绝对路径并做一致性校验，不承担从零发现目标仓库的职责。
+- R2 target_repo_root 探测与固化：执行时序须为「① 先探测 target_repo_root（`git rev-parse --show-toplevel` 或等价方式，须在目标仓库自身的执行上下文中进行，禁止在 task tracking repo 或 host repo 中执行）→ ② 按 R4 创建 worktree → ③ 基于该 target_repo_root 执行 `git worktree list --porcelain`，校验刚创建的 worktree 的 `worktree_root`/`branch`/同仓关系（commondir 须同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）→ ④ 校验通过后按 R5 首次写入 worktree.json」。任一环节不一致须 fail-loud，不得固化、不得跳步。**步骤③/④失败时的清理契约**：步骤③校验失败，或步骤④首次写入 `worktree.json` 失败，均须按顺序执行两步清理（`git worktree remove` 只移除 worktree 目录，不会删除本地分支，须显式补第二步）：(a) `git worktree remove` 清理步骤②刚创建的 worktree；(b) 若步骤③校验涉及的分支为本次新建（非复用已有分支），额外执行 `git branch -D` 删除该本地分支。两步任一失败均单独记录失败详情（区分是 worktree 清理失败还是分支删除失败），并 escalate_to_human 附带残留路径/分支名，不得静默吞掉分支残留。固化后的 `target_repo_root` 后续阶段不再重新探测，直接读取该固化值。
+- R3 分支命名 `workflowhub/{task-id}`：task-id 先执行归一化（见上文步骤①-④）完成后才继续。
+  分支命名正则校验分两层：① 归一化产物本身（task-id slug，不含 `workflowhub/` 前缀）须满足正则 `^[a-z0-9]+(-[a-z0-9]+)*$`（与归一化步骤②"非字母数字字符折叠为连字符"保持一致，允许数字与任意段数的完整 slug，不限制在 2-3 段）；② 拼接 `workflowhub/` 前缀后得到的最终分支名须满足正则 `^workflowhub/[a-z0-9]+(-[a-z0-9]+)*$`。下游（build-code §17 / verify-code）对 `branch` 字段的校验统一引用②的最终分支名正则，不引用①的裸 slug 正则。校验顺序须在归一化之后，不得颠倒。
+- R4 worktree 创建时机：仅在 make-decision 阶段首次决定进入实现流程时创建 worktree（`git worktree add`），不得在其余阶段重复创建。
+- R5 worktree.json 首次写入：worktree.json 首次写入须包含 6 个字段，且一次性满足下游（build-code §17 / verify-code close①）common 校验，不得写出下游必然拒收的值：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（取预定义枚举中的一个具体值，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
+- R6 存在性/冲突检测：使用 `git worktree list --porcelain` 检测 worktree 是否已存在或冲突；发现僵尸 worktree（目录不存在但仍在 git 记录中）须 fail-loud 报错退出；发现路径/分支被其他 worktree 占用同样须 fail-loud，不得静默覆盖。
+- R7 make-decision stage commit 规则：本规则仅约束 `target_repo_root`（代码仓库）——本阶段在 target_repo_root 内涉及文件变更（如 decision-log 等产物写入代码仓库路径）时须在 target_repo_root 执行 commit（message 含 `workflowhub(make-decision)` 前缀）；无变更时须在 stage-result 的 `missing_items` 或 journal 中记录无变更原因。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）不受本规则约束，不要求 commit。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"，不因此触发本规则的 commit 要求。
+
+**task 子目录创建职责**：make-decision 阶段负责幂等地创建 task_tracking_root 下的 task 子目录（`{task_tracking_root}/{task-id}/`）；若父目录（task_tracking_root）不存在，须 fail-loud 报错退出，不得自动创建父目录；若该 task 已处于 `status=cleaned`（已归档）状态，须 fail-loud 报错 "task 已归档"，不得继续复用。
+
+---
+
 ## Journal 事件流规范（S0–S10 全覆盖）
 
 每个步骤 S0–S10 在 SKILL.md 中均有明确 journal 写入指令。事件统一写入 `tasks/{task-id}/journal.jsonl`，格式为：`{"event": "<稳定事件 key>", "<字段>": "<值>", ...}`。稳定 key 遵循 `s{N}_{event}` 命名；字段为结构化 kv。
