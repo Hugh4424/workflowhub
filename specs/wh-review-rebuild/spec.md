@@ -223,37 +223,42 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 
 **描述**：精简 `skills/3rd-review/SKILL.md`，剥离所有 stage/轮次知识，只保留纯审查引擎接口。
 
-**真实调用契约（基于 standalone.sh 实测参数，直接采信）**：
+**方案A 定案架构（装配职责100%在 wh-review 侧）**：
 
-wh-review 调用 3rd-review 的真实 CLI 形态为：
+wh-review 负责：
+1. 接收 stage 标识，从 `skills/wh-review/contracts/` 读取对应合同内容
+2. 将合同内容 + 待审材料（materials）拼装为一份完整审查包（单一文件，纯文本，无任何 stage 语义）
+3. 将装配好的审查包路径传给 standalone.sh 的 `--input`
+
+3rd-review 收到的只是一份已装配好的纯文本输入，不含任何 stage 标识或合同路由信息，实现真正的零 stage 知识纯引擎。
+
+**真实 CLI 调用形态（方案A，不传 --checkpoint）**：
 
 ```
 standalone.sh \
-  --input=<materials-path> \
+  --input=<wh-review装配好的审查包路径> \
   --output-root=<output-dir> \
   --task-name=<task-name> \
   --review-runner=<runner-cmd> \
-  --checkpoint=<stage> \
   [--max-revise-rounds=N]
 ```
 
+- **不传 `--checkpoint` 参数**——stage 路由与合同选择完全由 wh-review 在调用前完成
 - 无 `--engine` / `--output` 参数（这两个参数不存在于 standalone.sh）
 - `review-runner` 走 `<runner> --prompt-file=<path> --result-file=<out.json> --review-request-id=<id>` 契约
 - exit code 语义：`0` = pass，`1` = revise_required，`2` = escalate_to_human
 
-wh-review 的逻辑入参（高层抽象）仍为 `{mode, contract, materials}`，但实现时须将其映射到上述 CLI 参数：`mode` 影响 `--max-revise-rounds` 和 materials 构造，`contract` 映射到 `--checkpoint`（合同路径由 wh-review 预置），`materials` 写入 `--input` 路径。
-
-**⚠️ 已知 standalone.sh bug（wh-review 实现须规避）**：`--max-revise-rounds` 参数只在 CLI 解析和 manifest 记录中出现，standalone.sh revise 循环体（约 206-420 行）从未检查该上限，导致 revise_required 时无限循环（实测 round 33+ 仍未停止）。此 bug 不在本期 scope 内修复（属新发现 bug，非 decision-log 所指旧 checkpoint 路由 bug）。**wh-review 必须自己做轮次计数并强制停止，不能依赖 standalone.sh 的 `--max-revise-rounds` 上限（该上限在 standalone.sh 内不生效）。** 详见 Known Gaps GAP-6。
+**⚠️ 已知 standalone.sh bug（wh-review 实现须规避）**：`--max-revise-rounds` 参数只在 CLI 解析和 manifest 记录中出现，standalone.sh revise 循环体（约 206-420 行）从未检查该上限，导致 revise_required 时无限循环（实测 round 33+ 仍未停止）。此 bug 不在本期 scope 内修复。**wh-review 必须自己做轮次计数并强制停止，不能依赖 standalone.sh 的 `--max-revise-rounds`。** 详见 Known Gaps GAP-6。
 
 **Given/When/Then**：
-- Given wh-review 构造好 materials 文件并写入 `--input` 路径；
-- When wh-review 调用 `standalone.sh --input=<path> --output-root=<dir> --task-name=<name> --review-runner=<cmd> --checkpoint=<stage>`；
-- Then standalone.sh 完成环境探测、调度 reviewer agent，以 exit code 0/1/2 返回结果，不感知 stage 名称或轮次号（由 wh-review 管理）。
+- Given wh-review 接收到 stage 标识和待审材料；
+- When wh-review 读取对应合同文件、拼装审查包、调用 `standalone.sh --input=<审查包路径> --output-root=<dir> --task-name=<name> --review-runner=<cmd>`（无 --checkpoint）；
+- Then standalone.sh 完成审查并以 exit code 0/1/2 返回，全程不感知 stage 名称、轮次号或合同路由（这些信息已由 wh-review 在调用前封装进审查包）。
 
 **验收标准**：
 - AC5-1：3rd-review SKILL.md 不含 stage 名称枚举（make-decision / build-spec 等）。
 - AC5-2：3rd-review SKILL.md 不含轮次管理逻辑（round/Delta Package 等）。
-- AC5-3：wh-review 实现调用 standalone.sh 时使用 `--input/--output-root/--task-name/--review-runner/--checkpoint` 参数，不使用不存在的 `--engine/--output` 参数（可机器 grep 验证）。
+- AC5-3：wh-review 实现调用 standalone.sh 时命令行不含 `--checkpoint` 参数，且审查包（--input 文件）中含正确合同内容（可机器 grep 验证调用命令 + 审查包内容）。
 - AC5-4：wh-review 实现含独立轮次计数器，不依赖 standalone.sh `--max-revise-rounds` 做强制停止（AC-D10 轮次状态文件验证）。
 
 ---
@@ -443,7 +448,7 @@ stage agent
 
 ### 未决问题
 
-- **OPEN-1**（已在本期 spec 解决）：3rd-review standalone.sh 实际调用参数与旧文档描述（`--engine`/`--output`）不一致，已在 FR-THIRDREVIEW-001 中基于实测事实明确真实 CLI 契约（`--input/--output-root/--task-name/--review-runner/--checkpoint`），不再需要 build-plan 阶段另建 tracking issue。
+- **OPEN-1**（已按方案A彻底解决）：原问题为"3rd-review 靠 --checkpoint 做 stage 路由/合同匹配，参数文档不一致"。方案A从根本上消除该问题：wh-review 自行读取合同并装配审查包，调用 standalone.sh 时不传 --checkpoint，3rd-review 完全不感知 stage 和合同路由，路由不一致问题不复存在。无需 build-plan 阶段另建 tracking issue。
 
 ---
 
