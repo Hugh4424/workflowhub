@@ -21,7 +21,7 @@
  */
 
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 
 /**
@@ -147,7 +147,12 @@ export function parseTaskDir(configPath = DEFAULT_CONFIG_PATH) {
   const rawYaml = readTaskDirFromYaml(configPath);
   if (rawYaml !== null) {
     const trimmed = trimTasksSuffix(rawYaml);
-    const resolved = resolve(expandHome(trimmed));
+    const expanded = expandHome(trimmed);
+    // Relative paths are resolved against the repo root (dirname of the config file),
+    // so ./tasks/ works on any machine regardless of cwd.
+    const resolved = isAbsolute(expanded)
+      ? expanded
+      : resolve(dirname(configPath), expanded);
     validateDir(resolved, `yaml task_dir (${configPath})`);
     return resolved;
   }
