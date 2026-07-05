@@ -89,6 +89,10 @@ build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，
 
 Read `{--task-dir}/decision-log.md` — the upstream `make-decision` output (default path when `--task-dir` absent: `tasks/{task-id}/decision-log.md`, per FR-TASKDIR-001). Extract the functional description, recorded decisions, and constraints. If the file is missing or the description is empty, stop and report "decision-log missing or empty for {task-id}" before any further work.
 
+### 0.5. Worktree context 读取 (FR-WORKTREE-SCOPE-008)
+
+build-spec **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-spec 只消费已创建的 worktree 上下文：调用 `core/worktree-context.mjs` 读取 `worktree.json` 的 `target_repo_root`/`worktree_root` 字段；两字段任一缺失时该脚本以非零退出码 fail-loud，build-spec 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+
 ### 1. Metrics: stage start
 
 At stage start, call `metrics/collector.mjs` `recordSkeleton` with stage `build-spec`. Pass the M4 10 core fields as seed: `execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`. If metrics write fails, warn but do not block.
