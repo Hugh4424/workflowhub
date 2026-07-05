@@ -178,13 +178,20 @@ spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-r
 - 可 grep 到 `3rd-review` 或 `异源独立审查`
 
 **调用命令模板：**
+
+调用前必须先 `cd` 到 workflowhub worktree 根目录（或显式传 `--output-root=<workflowhub worktree 绝对路径>`），确保 standalone.sh 按文件名搜索 decision-log.md 等文件时命中的是本任务目录，不是 3rd-review 仓库自己的残留任务。
+
 ```bash
+cd /path/to/workflowhub-worktree  # 或用 --output-root= 显式指定，见下
 bash /path/to/3rd-review/standalone.sh \
   --checkpoint=build-spec \
-  --input specs/{task-id}/spec.md \
-  --engine codex \
-  --output specs/{task-id}/reviews/build-spec-review.md
+  --input=specs/{task-id}/spec.md \
+  --output-root=/path/to/workflowhub-worktree \
+  --task-name=build-spec-{task-id} \
+  --review-runner=<review-runner-cmd>
 ```
+
+参数均为 `--flag=value` 形式（standalone.sh 不接受空格分隔的参数）。standalone.sh 不产出固定路径的输出文件，裁决与报告写在 `<output-root>/tasks/<task-name>-<timestamp>-<rand>/reviews/verdict.json` 与 `report.md`，由 stdout 的"任务目录"提示获取实际路径。可用参数全集（见 standalone.sh 脚本头注释与参数解析）：`--input=`、`--output-root=`、`--task-name=`、`--review-runner=`、`--max-revise-rounds=`、`--checkpoint=`、`--foreground-only`、`--skip-manifest`；未列出的参数（如 `--engine`、`--output`）不受支持，传入会直接触发 `unknown argument` 报错（exit 3）。
 
 ---
 
