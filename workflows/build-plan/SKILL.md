@@ -26,6 +26,10 @@ Call the `spec-research` skill located at `skills/spec-research/SKILL.md`:
 - If spec-research fails, **record the failure and escalate to human** (non-blocking) — do not hard-stop the pipeline. The build-plan stage continues, but the missing research.md must be acknowledged in stage-result `facts.research_ref` or `missing_items`
 - Reference the research output path in stage-result `facts.research_ref` when it exists
 
+### Step 0.6: Worktree context 读取 (FR-WORKTREE-SCOPE-008)
+
+build-plan **不新增 worktree 条目**（不调用 git 的 worktree-创建子命令）——worktree 仅在 `make-decision` 阶段创建（R4/R5）。build-plan 只消费已创建的 worktree 上下文：调用 `core/worktree-context.mjs` 读取 `worktree.json` 的 `target_repo_root`/`worktree_root` 字段；两字段任一缺失时该脚本以非零退出码 fail-loud，build-plan 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
+
 ### Step 1: Read upstream inputs
 
 Read the spec from upstream `build-spec`:
