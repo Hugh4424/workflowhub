@@ -181,6 +181,32 @@ present, classify the result as yellow.
 - 若某条验收标准算不出覆盖状态（如证据缺失），标 `not_covered` 并记入 `missing_items`，不阻断本阶段推进。
 - 这份覆盖清单同时是步骤 9 明文摘要"原始需求覆盖情况"那一条的事实来源。
 
+## Close 章节：5 步骤序列总览（严格顺序）
+
+verify-code 阶段的收尾（close）流程严格按以下 5 个步骤顺序执行，任一步骤失败均按其自身契约处理，不得跳步或乱序：
+
+① **入口校验**（common + active-only）：进入 close 流程前，先执行 common 校验（worktree.json 六字段全非空、路径为绝对路径、值域校验）。**`status` 前置约束**：close 流程仅允许 `status="active"` 的任务继续；`status="cleaned"` 视为已归档任务重入，直接 fail-loud，不得进入步骤②-④。`status="active"` 时须额外执行 active-only 校验，与 §17 build-code 消费 6 字段前的 active-only 校验口径一致（不得弱化）：worktree 目录存在性、以 `target_repo_root` 为准执行的 `git worktree list --porcelain` 注册、分支名匹配、同仓校验（该 worktree 的 commondir 须与 `target_repo_root` 同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）。以上任一校验失败（含 common 校验失败、`status="cleaned"` 重入、active-only 校验失败）即 fail-loud，跳过步骤②-④（不执行质量记录、3rd-review、任何不可逆动作），仅进入步骤⑤ 落盘（stage-result 的 `verdict` 字段固定写 `escalate_to_human`，并记录 `needs_human=true` 与该失败事实），不得继续执行 merge 等后续动作。
+
+② **质量事实记录**（final-test-report, warn 不阻断, needs_human=true）：记录 `final-test-report.md`（含步骤 8.5 逐条覆盖清单）。质量事实记录本身若出现非致命异常，只 warn 不阻断流程；若发现需要人工介入的问题，设置 `needs_human=true` 并继续往下记录，不因此中止。
+
+③ **3rd-review 独立审查**（merge 前，evidence/ 落盘，verdict=pass 继续）：详见步骤 10——在人工确认 merge 之前，作为独立子代理执行 3rd-review。审查输入范围须明确为：命令须在 `worktree_root`（任务自身的 linked worktree 工作目录，而非 `target_repo_root` 的主工作树）中执行，以便正确读到该 worktree 自身的 staged/unstaged 未提交改动。先解析该仓库的默认主线分支（`git symbolic-ref refs/remotes/origin/HEAD` 或等价方式取得实际配置的默认分支，不得硬编码为 `main`），以任务分支相对该主线的待合并总增量为准，取 `git diff <merge-base(默认主线, task-branch)>`（不指定终点 ref，天然对比到当前工作树，因此自动包含尚未 commit 的 staged/unstaged 改动，覆盖步骤①归档 commit 之前的全部待合并内容）（覆盖 make-decision/build-code/verify-code 全部阶段在该任务分支上产生的、尚未合并进主线的改动，不只是本次 verify-code 运行内新增的增量）；不得包含 merge-base 之前主线自身的历史改动，也不得包含 worktree 外或与本任务无关的文件。产物落盘至 `evidence/`。仅当 `verdict=pass` 才继续进入步骤④；`revise_required`、`escalate_to_human`、或 3rd-review 不可用/不可达，均按下方"pre-merge revise_required 契约"处理（`needs_human=true`，跳过步骤④，直接进入步骤⑤）。
+
+④ **不可逆动作 8 步线性序列**（严格顺序，仅在步骤三 verdict=pass 且用户确认后执行）：
+  1. 归档 commit
+  2. 切主 checkout（切换到主分支）
+  3. no-ff merge（`git merge --no-ff`，将任务分支合入主分支）
+  4. 移除 worktree 目录（`git worktree remove`）
+  5. push main（推送主分支到远端）
+  6. 删远端分支（存在则删；不存在则 skip 并记录 info，不视为失败）
+  7. 删本地分支
+  8. 更新 worktree.json 的 `status=cleaned`
+
+**pre-merge revise_required 契约**：若步骤三（3rd-review）判定为 `revise_required`（或 `escalate_to_human`），则步骤④的 8 步动作全部跳过，不执行任何一步，设置 `needs_human=true`，直接进入步骤⑤ 落盘。
+
+**不可逆动作中途失败契约**：步骤④ 8 步序列一旦开始执行，若任意一步中途失败，须立即停止，不回滚已完成的步骤，也不自动重试或自动续跑剩余步骤，触发 `escalate_to_human`，并在落盘产物中明确记录失败发生在第几步（失败步骤编号）。`status` 字段在整个 8 步期间维持 `active` 不变，直到步骤 8 成功完成才写 `cleaned`——`status` 仅用于 close 入口的 re-entry 拦截判断，不作为"已完成到第几步"的证据；后续如何处理（是否手动补齐剩余步骤、是否手动回滚）由人工依据落盘的失败步骤编号逐一核实当前 git/worktree 实际状态后裁决，本契约不承诺任何步骤的幂等重跑安全性。
+
+⑤ **stage-result 落盘**（task_tracking_root，含 verdict 字段）：调用 `assembleStageResult` + `writeStageResult`，将结果写入 `task_tracking_root` 下对应 task 的 stage-result 产物（即该阶段的 stage-result.json，具体路径详见 §12：`stage-result-verify-code.json`），必须包含 `verdict` 字段（`pass` / `revise_required` / `escalate_to_human`）。无论步骤④是否执行（merge 完成或 revise_required 阻止），stage-result 文件都必须存在，不得跳过落盘。
+
 ### 9. 明文停顿 (收尾确认)
 
 Before asking for confirmation, produce a plain-language decision brief following `docs/human-brief-template.md`'s seven elements, filled with this stage's facts:
