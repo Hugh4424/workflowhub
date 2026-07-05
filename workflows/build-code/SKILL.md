@@ -281,9 +281,16 @@ Explicit instruction to pass to every implementation subagent:
 
 > DO NOT commit. Leave changes in the working tree.
 
-**Commit timing:**
+**Per-phase commit rule (FR-WORKTREE-COMMIT-004):**
 
-- Commit only at a semantic completion point: all phases are GREEN, two-stage review passes (no `revise_required` or `escalate_to_human`), and L2 smoke has been recorded.
+Each phase that produces file changes **must** be followed by `git add` + `git commit` with message pattern `workflowhub(build-code/<phase-name>): <description>` before the next phase begins. This ensures each phase's changes are independently traceable.
+
+- **File-changing phase**: run `git add -A && git commit -m "workflowhub(build-code/<phase-name>): <description>"` after the phase reaches GREEN and before advancing to the next phase.
+- **No-change phase**: if a phase produces no file changes, do **not** create a commit (empty/marker-only commits are forbidden). Instead, write a no-change reason into the phase's stage-result or journal entry (e.g. `"no_change_reason": "phase skipped — no files modified"`). This no-change record is **mandatory**; a phase may not complete silently with neither a commit nor a no-change record.
+
+**Commit timing (final atomic commit):**
+
+- Commit only at the final semantic completion point: all phases are GREEN, two-stage review passes (no `revise_required` or `escalate_to_human`), and L2 smoke has been recorded.
 - The coordinator computes `base_sha` and `head_sha` before and after the commit, and captures the resulting `commit_sha`.
 
 **Evidence fields:**

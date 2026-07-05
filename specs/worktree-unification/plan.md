@@ -130,7 +130,7 @@ core/task-dir-parser.mjs           MODIFY — 新增 WORKFLOWHUB_TASK_DIR env va
 
 #### 1.1: 改造 core/task-dir-parser.mjs — env var 优先级
 
-**描述**：修改 `core/task-dir-parser.mjs`，读取优先级改为：① `WORKFLOWHUB_TASK_DIR` env var → ② `config/workflowhub.yaml` 的 `task_dir` 字段 → ③ 两者均缺失时 fail-loud（不使用硬编码路径）。parser 返回 task_tracking_root 本身，**不拼接** `/tasks/{task-id}`。路径存在性校验：路径不存在或非目录时 fail-loud。
+**描述**：修改 `core/task-dir-parser.mjs`，读取优先级改为：① `WORKFLOWHUB_TASK_DIR` env var → ② `config/workflowhub.yaml` 的 `task_dir` 字段 → ③ 两者均缺失时 fail-loud（不使用硬编码路径）。parser 返回 task_tracking_root 本身，**不拼接** `/tasks/{task-id}`。路径存在性校验：路径不存在或非目录时 fail-loud。**yaml `/tasks` 后缀裁剪规则**：读取 yaml `task_dir` 值后，若值以 `/tasks` 或 `/tasks/` 结尾（至多裁剪一次），自动裁掉该后缀，返回纯 task_tracking_root；env var 值不做裁剪；裁剪逻辑折叠在 `parseTaskDir()` 内部，不暴露独立公开函数 `normalizeTaskTrackingRoot()`。
 
 **Files**: `core/task-dir-parser.mjs`
 
@@ -267,6 +267,7 @@ build-spec/SKILL.md 仅只读核查，禁止任何修改（无论是否缺少相
 | 2.3 verify-code close 5 步骤 | FR-WORKTREE-CLOSE-006, FR-WORKTREE-PUSH-005, FR-WORKTREE-CONTRACT-001-WRITE, FR-WORKTREE-SCOPE-009 | 5 步骤完整顺序；3rd-review 在 merge 前；stage-result 在 task_tracking_root |
 | 3.1 全流程核查 | FR-WORKTREE-SCOPE-008 | git worktree list 条目无新增 |
 | 3.2 存放边界核查 | FR-WORKTREE-SCOPE-009 | specs/ 下无 evidence/ 或 stage-result.json |
+| 3.3 T008 per-phase commit 规则落地（**blocking gate**） | FR-WORKTREE-COMMIT-004 | build-code/SKILL.md §15 含 per-phase commit 规则（commit message 模式 `workflowhub(build-code/<phase-name>):`）；no-change phase 禁止空提交且须写 no-change reason 到 stage-result/journal；git log 中存在至少一条 `workflowhub(build-code/` 前缀 commit；任一缺失则 gate 失败阻断 |
 
 ---
 

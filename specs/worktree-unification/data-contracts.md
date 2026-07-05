@@ -79,6 +79,8 @@
 
 **删除旧硬编码 fallback**：`~/Knowledge/workflowhub/` 不再作为 fallback（与 FR-WORKTREE-ENVVAR-003、tasks.md T001 一致）。
 
+**yaml `task_dir` 后缀裁剪规则（唯一权威定义）**：`parseTaskDir()` 在读取 yaml `task_dir` 字段值后，若该值以 `/tasks` 或 `/tasks/` 结尾（至多裁剪一次），则自动裁掉该后缀，返回纯 `task_tracking_root`。`WORKFLOWHUB_TASK_DIR` 环境变量值不做裁剪（调用方须自行确保传入正确的 `task_tracking_root`）。裁剪逻辑折叠在 `parseTaskDir()` 内部，**不暴露独立公开函数 `normalizeTaskTrackingRoot()`**。此规则防止 yaml 遗留 `/tasks` 后缀导致 `/tasks/tasks/{task-id}` 路径双重拼接。
+
 解析失败时 fail-loud，不静默 swallow。
 
 ### Version Compatibility Notes
@@ -117,19 +119,22 @@
 
 | 字段 | 说明 |
 |------|------|
-| **Contract name** | 每 stage/phase 至少一次 commit 契约 |
-| **Owner side** | 每个执行写入的 stage（build-code per phase） |
+| **Contract name** | 每 stage/phase commit 契约（文件变更必提交，无变更必记录） |
+| **Owner side** | 每个执行写入的 stage（build-code per phase 为主要实施者） |
 | **Consumer side** | 后续 stage，通过 git log / git show 读取前序产物 |
 
 ### Required Fields / Types
 
 | 规则 | 说明 |
 |------|------|
-| commit 触发时机 | 每个 stage/phase 完成时至少执行一次 `git add + git commit`（不 push） |
+| **文件变更 stage/phase → 必须 commit** | 每个产生文件变更的 stage 或 phase，完成后必须执行 `git add + git commit`（不 push）；commit message 须符合 `workflowhub(<stage-or-phase-name>): <描述>` 模式，使提交可追溯到具体 stage/phase |
+| **无变更 stage/phase → 禁止空提交，必须记录原因** | 若某 stage 或 phase 无文件变更，**不得**创建空提交（empty commit）或仅含标记信息的无实质变更提交（marker-only commit）。必须将"无变更"原因明确写入该 stage/phase 的 stage-result 或 journal（如 `"no_change_reason": "phase skipped — no files modified"`）；不得静默跳过 |
+| **空提交明确禁止** | 任何形式的 `git commit --allow-empty` 或无文件变更的 commit 均被禁止，包括用于标记阶段推进的占位 commit |
 | push 策略 | 仅 verify-code close 阶段人工确认后一次性推送（`--no-ff` merge） |
 | 禁止项 | 其他 stage 不得执行 `git push` |
 
 ### Version Compatibility Notes
 
-- build-code §17 需新增 per-phase commit 触发逻辑
+- build-code §15 已新增 per-phase commit 触发逻辑（FR-WORKTREE-COMMIT-004）
 - push 策略从"各 stage 自行决定"收拢为"verify-code close 统一执行"
+- 本 Contract 4 与 spec.md FR-WORKTREE-COMMIT-004 保持一致：文件变更必提交，无变更必记录，空提交禁止

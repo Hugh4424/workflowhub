@@ -139,6 +139,8 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 
 **parser返回值语义**：parser 始终返回 task_tracking_root 本身（即 `WORKFLOWHUB_TASK_DIR` 的值，或 yaml fallback 值），**不做 `/tasks/{task-id}` 拼接**；该拼接动作由各调用方（各 stage）自行执行。
 
+**yaml `task_dir` 后缀裁剪规则**：`parseTaskDir()` 在读取 yaml `task_dir` 字段值后，若该值以 `/tasks` 或 `/tasks/` 结尾（至多裁剪一次），则自动裁掉该后缀，返回纯 `task_tracking_root`。`WORKFLOWHUB_TASK_DIR` 环境变量值不做裁剪。裁剪逻辑折叠在 `parseTaskDir()` 内部，**不暴露独立公开函数 `normalizeTaskTrackingRoot()`**。此规则防止 yaml 遗留 `/tasks` 后缀导致 `/tasks/tasks/{task-id}` 路径双重拼接。
+
 **验收标准**：
 - Given `WORKFLOWHUB_TASK_DIR=<绝对路径>`（目录已存在），调用 parser，返回该路径
 - Given `WORKFLOWHUB_TASK_DIR` 未设置，`config/workflowhub.yaml` 存在且含 `task_dir` 字段，返回 yaml 中的配置值
