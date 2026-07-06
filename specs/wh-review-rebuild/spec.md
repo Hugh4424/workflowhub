@@ -15,7 +15,7 @@
   2. 精简 `skills/3rd-review/`：剥离所有 stage/轮次知识，只保留"收入参→调度审查 agent→返回结果"核心引擎
   3. 5 个 stage 的 SKILL.md 收尾步骤统一调用 `docs/human-brief-template.md`（D6）
   4. 现有 `§7`（3rd-review SKILL.md 中的流程步骤段）改写为仅对 `§13` 的概念性导读，删除所有 numbered step 和 if/else 逻辑
-  5. 搬迁 agenthub `verifiers/vibecoding/` 的 5 套 stage 专属合同到 wh-review，逐步扩充
+  5. 搬迁 agenthub `verifiers/vibecoding/` 的 5 套 stage 专属合同到 wh-review，本期一次性完整搬迁落地（架构支持未来新增合同，但不稀释本期 5 套全部完成的验收口径）
 - **最大影响面**：`skills/3rd-review/SKILL.md`（破坏性重构）+ `skills/wh-review/`（全新）+ 5 个 stage SKILL.md 收尾段
 - **验收信号**：各 stage 触发 wh-review 时传入正确 stage 标识，stage 专属合同被加载（日志可验证）；§7 不含任何 numbered step / if/else 逻辑（机器可检验）；审查轮次状态与报告均落盘任务目录
 
@@ -130,15 +130,18 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 
 **描述**：新建 `skills/wh-review/` 模块作为 workflowhub 专属审查调度层。
 
+**落盘路径解析（复用 FR-TASKDIR-001 契约）**：wh-review 的报告文件与轮次状态文件的根路径解析统一复用 `core/task-dir-parser.mjs`（`parseTaskDir()`），优先级与 FR-TASKDIR-001 一致：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` `task_dir` 字段 → 两者均缺失则 fail-loud、非零退出。wh-review 不得自行硬编码任务目录路径，也不得另造一套解析逻辑。
+
 **Given/When/Then**：
 - Given 任意 stage agent 发起审查请求（stage 标识已传入）；
 - When wh-review 被调用；
-- Then wh-review 完成 stage→合同查找、调用 3rd-review、轮次状态管理、报告渲染，返回裁决结果。
+- Then wh-review 通过 `core/task-dir-parser.mjs` 解析出 task_tracking_root，完成 stage→合同查找、调用 3rd-review、轮次状态管理、报告渲染，返回裁决结果。
 
 **验收标准**：
 - AC1-1：`skills/wh-review/SKILL.md` 存在且包含 stage→合同映射表（5 条）。
 - AC1-2（行为验证）：给定不传 stage 标识的调用，wh-review 以非零退出码终止并输出明确错误信息；给定传入已知 stage 标识的调用，wh-review 正常完成，不报错。两种情况的实际行为可通过集成测试或手动测试复现；断言：前者 exit code ≠ 0，后者 exit code = 0。
-- AC1-3（行为验证）：给定一次完整审查调用完成后，在预期路径（任务目录下固定子路径）存在对应报告文件；断言：`ls <task-dir>/<task-id>/reviews/` 命令返回至少一个报告文件，且文件内容含 `verdict` 字段。
+- AC1-3（行为验证）：给定一次完整审查调用完成后，报告文件落盘路径由 `core/task-dir-parser.mjs`（`parseTaskDir()`）解析得到的 task_tracking_root 推导，而非硬编码；在预期路径（任务目录下固定子路径）存在对应报告文件；断言：`ls <task-dir>/<task-id>/reviews/` 命令返回至少一个报告文件，且文件内容含 `verdict` 字段。
+- AC1-4（静态验证）：wh-review 实现代码 import `core/task-dir-parser.mjs` 的 `parseTaskDir`，代码中不存在任务目录路径硬编码字符串或另造的路径解析逻辑；可 grep 验证。
 
 ---
 
@@ -224,31 +227,31 @@ build-plan 阶段核实 agenthub 原实现后，可在不违反本清单结构�
 
 **描述**：精简 `skills/3rd-review/SKILL.md`，剥离所有 stage/轮次知识，只保留纯审查引擎接口。
 
-**方案A 定案架构（装配职责100%在 wh-review 侧）**：
+**结构化三元组架构（decision-log D1 口径，非"方案A/纯文本审查包"）**：
 
-wh-review 负责：在调用 3rd-review 引擎前，读取对应合同内容，将其与待审材料拼装为一份完整的纯文本审查包（无任何 stage 语义），然后将该审查包传给 3rd-review 引擎。
+wh-review 调用 3rd-review 引擎时，须显式传入结构化三元组 `{mode, contract, materials}`：`mode`（full/incremental/same-source）与 `contract`（本次审查依据的合同内容或路径+hash）必须是独立的显式字段，`materials` 字段可以是 wh-review 组装好的完整审查材料包（文本内容），但不得把 `mode`/`contract` 也坍缩进这份纯文本材料、让 3rd-review 失去对本次审查依据合同与模式的路由感知。
 
-3rd-review 收到的只是一份已装配好的纯文本输入，不含任何 stage 标识或合同路由信息，实现真正的零 stage 知识纯引擎。
+3rd-review 引擎不感知 stage 名称、轮次号等 workflowhub 专属知识（零 stage/轮次知识），但通过显式 `contract`/`mode` 字段获知本次依据哪份合同、以何种模式审查，返回 `{verdict, findings, actual_mode}`。
 
-**调用语义契约（方案A，wh-review 侧完成所有装配）**：
+**调用语义契约（decision-log D1 结构化三元组口径）**：
 
 wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下约束：
 
-- **输入**：wh-review 自行将合同内容与待审材料拼装为一份完整的、纯文本的审查包，不含任何 stage 标识或合同路由元数据。
-- **禁止传入**：stage 路由参数（如 `--checkpoint`）——stage 路由与合同选择须在调用前由 wh-review 完全完成，3rd-review 引擎不感知。
-- **输出**：3rd-review 引擎须返回结构化裁决（含 `verdict` 字段）和审查 findings；以结构化 verdict 字段为主权威判定，进程级快速判断为辅；二者不一致时 fail-loud，不静默择一。
+- **输入**：结构化三元组 `{mode, contract, materials}`——`mode`、`contract` 必须作为独立显式字段传入，不得坍缩进纯文本；`materials` 字段可以是 wh-review 组装好的完整审查材料包（文本内容）。
+- **禁止传入**：stage 名称或轮次号（如 `--checkpoint=<stage>`）——stage 身份判断与 stage→合同映射须在调用前由 wh-review 完全完成；3rd-review 引擎不做 stage 路由，但仍通过显式 `contract` 字段获知本次审查依据的合同。
+- **输出**：3rd-review 引擎须返回结构化裁决 `{verdict, findings, actual_mode}`；以结构化 `verdict` 字段为主权威判定，进程级快速判断为辅；二者不一致时 fail-loud，不静默择一。
 - **结果文件缺失处理**：result-file 缺失或不可解析时，视为 `unknown`，触发 `escalate_to_human`。
 - **轮次控制**：wh-review 须自行维护轮次计数并强制停止，不依赖 3rd-review 引擎侧的轮次上限参数（已知该参数在引擎内部无效，见 Known Gaps GAP-6）。
 
 **Given/When/Then**：
 - Given wh-review 接收到 stage 标识和待审材料；
-- When wh-review 读取对应合同文件、将合同源路径 + hash（或版本锚点）写入 route-decision 记录文件，再拼装审查包、调用 3rd-review 引擎（不传 stage 路由参数）；
-- Then 3rd-review 引擎完成审查并返回结构化 verdict + findings，wh-review 以结构化 verdict 字段为准裁决，全程不感知 stage 名称、轮次号或合同路由。
+- When wh-review 读取对应合同文件、将合同源路径 + hash（或版本锚点）写入 route-decision 记录文件，再组装显式的 `mode`、`contract` 字段与 `materials` 材料包，调用 3rd-review 引擎；
+- Then 3rd-review 引擎依据显式 `mode`/`contract` 字段与 `materials` 内容完成审查并返回结构化 `{verdict, findings, actual_mode}`，wh-review 以结构化 verdict 字段为准裁决，全程不感知 stage 名称或轮次号。
 
 **验收标准**：
 - AC5-1：3rd-review SKILL.md 不含 stage 名称枚举（make-decision / build-spec 等）。
 - AC5-2：3rd-review SKILL.md 不含轮次管理逻辑（round/Delta Package 等）。
-- AC5-3（行为验证）：给定任意 stage 标识调用 wh-review，wh-review 传给 3rd-review 引擎的输入中不含 stage 路由参数，且审查包内含正确合同内容——可通过集成测试或日志追踪验证（辅证：调用日志 grep 不含 stage 路由参数）。
+- AC5-3（行为验证）：给定任意 stage 标识调用 wh-review，wh-review 传给 3rd-review 引擎的调用中显式包含非空 `mode` 与 `contract` 字段（未坍缩进 materials 纯文本），且不含 stage 名称或轮次号——可通过集成测试或日志追踪验证（辅证：调用日志 grep 可见独立的 mode/contract 字段，且不含 stage 名称枚举）。
 - AC5-4（行为验证）：给定触发强制停止条件（如达到轮次上限），wh-review 实际停止调用 3rd-review 引擎，不进入下一轮——可通过轮次状态文件验证（AC-D10）；辅证：wh-review 实现含独立轮次计数器，不依赖引擎内部轮次上限参数。
 
 ---
@@ -257,17 +260,18 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 **描述**：改写 3rd-review SKILL.md 中的 §7，删除所有流程步骤和 if/else 逻辑，仅保留对 §13 的概念性导读。
 
-**机器可检验规则**：§7 不含任何 numbered step（`1.`/`2.`/`- [ ]` 等枚举格式）或 if/else 逻辑关键字。
+**机器可检验规则**：§7 不含任何 numbered step（`1.`/`2.`/`- [ ]` 等枚举格式）、if/else 逻辑关键字，也不含用于绕过上述检测的等价顺序步骤表述——包括中文步骤词（如"第一步/首先/其次/然后/接着/随后/最后/再"等）与英文等价词（如 `step 1`/`first ... then`/`next`/`finally`）。
 
 **Given/When/Then**：
 - Given §7 改写完成；
 - When 对 §7 内容运行模式匹配；
-- Then 不命中 `^\s*\d+\.` 或 `/\bif\b.*\belse\b/` 等 step/条件分支模式。
+- Then 不命中 `^\s*\d+\.` 或 `/\bif\b.*\belse\b/` 等 step/条件分支模式，也不命中中文步骤词模式（如 `第[一二三四五六七八九十]+步|首先|其次|然后|接着|随后|最后`）或英文步骤词模式（如 `\bstep\s*\d+\b|\bfirst\b.*\bthen\b|\bfinally\b|\bnext\b`）。
 
 **验收标准**：
 - AC6-1：§7 文本不含 numbered list（`1. 2. 3.`）。
 - AC6-2：§7 文本不含 if/else/条件分支逻辑描述。
 - AC6-3：§7 文本包含明确的"单次调用语义参见 §13"或等价表述。
+- AC6-4（新增）：§7 文本不含等价顺序步骤词绕过表达（中文"第一步/首先/其次/然后/接着/最后"或英文 `step 1`/`first...then`/`finally`/`next` 等）；可机器 grep 上述扩展规则验证。
 
 ---
 
@@ -380,6 +384,19 @@ stage agent
 
 ---
 
+## 6.5 指标与统一执行记录（CONSTITUTION.md S4/F6）
+
+wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`（`recordSkeleton` / `updateOwnResult`，M4 十核心字段：`execution_id`、`skill_or_stage`、`stage`、`skill_version`、`executed`、`tokens`、`duration_ms`、`rework_rounds`、`human_intervention`、`friction_ref`），不新增独立指标底座。
+
+- 调用时机：wh-review 每次被 stage 调用触发审查前，调用 `recordSkeleton` 落一条骨架记录；本轮审查裁决完成后，调用 `updateOwnResult` 写入实测值。写入失败须 warn 但不阻断审查流程本身（与各 SKILL.md 现有约定一致）。
+- wh-review 需落入 M4 字段的关键信息：轮次状态中的 `round_number` 落入 `rework_rounds`；本轮审查耗时落入 `duration_ms`；是否触发 `escalate_to_human` 落入 `human_intervention`；`verdict`/`mode` 等 M4 字段之外的信息保留在 wh-review 自身的轮次状态文件中，作为 metrics 记录之外的可回溯锚点。
+
+**验收标准**：
+- AC-METRICS-1（静态验证）：wh-review 实现中存在对 `metrics/collector.mjs` 的 `recordSkeleton`/`updateOwnResult` 调用，不手写独立的指标文件或另建指标底座；可 grep 验证。
+- AC-METRICS-2（行为验证）：给定一次完整审查调用完成后，对应 metrics 记录含 M4 十核心字段全集，且 `rework_rounds` 与本次轮次状态文件中的 `round_number` 一致。
+
+---
+
 ## 7. 影响范围
 
 本章描述本需求会改变或破坏的既有业务行为与用户场景（文件路径见§9"不做"小节）。
@@ -472,10 +489,12 @@ stage agent
 - AC-D8：intake 合同覆盖 C1-C6 全部判据字段
 - AC-D9：test-acceptance 合同覆盖 F1-F6 全部判据字段
 - AC-D10：轮次状态文件存在，记录 round_number / mode / verdict / report_path
+- AC-D11（静态验证）：wh-review 复用 `core/task-dir-parser.mjs` 解析任务目录路径，不硬编码、不另造解析逻辑（见 FR-WHREVIEW-001 AC1-4）。
+- AC-D12（静态验证）：wh-review 复用 `metrics/collector.mjs` 统一执行记录机制记录审查指标，不新增独立指标底座（见 §6.5 AC-METRICS-1/2）。
 
 ### 未决问题
 
-- **OPEN-1**（已按方案A彻底解决）：原问题为"3rd-review 靠 --checkpoint 做 stage 路由/合同匹配，参数文档不一致"。方案A从根本上消除该问题：wh-review 自行读取合同并装配审查包，调用 3rd-review 引擎时不传 stage 路由参数，3rd-review 完全不感知 stage 和合同路由，路由不一致问题不复存在。无需 build-plan 阶段另建 tracking issue。
+- **OPEN-1**（已按 decision-log D1 结构化三元组口径解决）：原问题为"3rd-review 靠 --checkpoint 做 stage 路由/合同匹配，参数文档不一致"。本期方案从根本上消除该问题：wh-review 完成 stage→合同映射后，调用 3rd-review 引擎时显式传入 `{mode, contract, materials}` 三元组；3rd-review 不做 stage 路由、不感知 stage 名称或轮次号，但通过显式 `contract` 字段获知本次审查依据的合同，路由不一致问题不复存在。无需 build-plan 阶段另建 tracking issue。
 
 ---
 
