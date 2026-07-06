@@ -128,7 +128,7 @@ F10 反过度工程四问（FR-LADDER-002）在档位判断时一并执行，结
 Invoke `skills/spec-specify/SKILL.md` (spec-specify):
 
 - **Input**: task-id (from the current stage context) and the functional description text extracted from the decision-log.
-- **Expected output**: `specs/{task-id}/spec.md` (first draft) and `specs/{task-id}/checklists/requirements.md` (quality checklist).
+- **Expected output**: `specs/{task-id}/spec.md` (first draft) and `tasks/{task-id}/artifacts/build-spec-requirements.md` (quality checklist).
 - If spec-specify reports failure or the output files are missing, stop and surface the error — do not proceed to spec-clarify.
 
 ### 3. spec-clarify: ambiguity scan and interactive refinement
@@ -279,7 +279,7 @@ The 21 items are:
 
 **Rule**: non-compliance does NOT block build-spec progression. Any `[ ]` marks are recorded transparently and surfaced in the stage-result facts, but the pipeline continues. The constitution check is a factual recording step, not a gate — per constitution principle Q1 (记录事实而非阻断).
 
-Write the completed checklist as an appendix to the spec or as a standalone file `specs/{task-id}/constitution-check.md`.
+Write the completed checklist as an appendix to the spec or as a standalone file `tasks/{task-id}/artifacts/build-spec-constitution-check.md`.
 
 ### 5. Baseline comparison
 
@@ -300,7 +300,7 @@ Compare the current M11 task execution against the M10 baseline using 5 metrics 
 - **Thresholds are set by humans, not by this stage.** The M10 baseline values are reference points only — non-compliance with any of them does NOT block progression (F3, Q1).
 - The fifth metric must be named `rework_proxy_count` — do NOT use any previous naming for this metric.
 
-Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as a standalone file `specs/{task-id}/baseline-report.md`.
+Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as a standalone file `tasks/{task-id}/artifacts/build-spec-baseline-report.md`.
 
 ### 6. F10 anti-over-engineering gate (apply while the spec can still be revised, before the 3rd-review pass in step 7)
 

@@ -301,7 +301,7 @@ bash /path/to/3rd-review/standalone.sh \
   --checkpoint=make-decision \
   --input specs/{task-id}/decision.md \
   --engine codex \
-  --output specs/{task-id}/reviews/make-decision-review.md
+  --output tasks/{task-id}/artifacts/make-decision-review.md
 ```
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性。
