@@ -130,18 +130,25 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 
 **描述**：新建 `skills/wh-review/` 模块作为 workflowhub 专属审查调度层。
 
-**落盘路径解析（复用 FR-TASKDIR-001 契约）**：wh-review 的报告文件与轮次状态文件的根路径解析统一复用 `core/task-dir-parser.mjs`（`parseTaskDir()`），优先级与 FR-TASKDIR-001 一致：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` `task_dir` 字段 → 两者均缺失则 fail-loud、非零退出。wh-review 不得自行硬编码任务目录路径，也不得另造一套解析逻辑。
+**落盘路径解析（复用 FR-TASKDIR-001 契约 + 对齐 agenthub 归档规范）**：wh-review 的报告文件与轮次状态文件的根路径解析统一复用 `core/task-dir-parser.mjs`（`parseTaskDir()`），优先级与 FR-TASKDIR-001 一致：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` `task_dir` 字段 → 两者均缺失则 fail-loud、非零退出。wh-review 不得自行硬编码任务目录路径，也不得另造一套解析逻辑。
+
+**落盘契约（定死，不再是待定选项）**：
+1. **中间产物（非最终交付物）**：3rd-review/standalone.sh 原始产出的 `tasks/{task-name}-{timestamp}-{rand}/reviews/verdict*.json`、`report*.md` 等文件是临时工作区产物，wh-review 读取消费后即完成使命；这些文件不落入 `parseTaskDir()` 解析出的 `task_tracking_root`，不算最终审查记录，wh-review 执行完毕后可清理，不要求提交入库。
+2. **最终交付物（唯一权威路径）**：wh-review 必须把从 3rd-review 拿到的 verdict/findings 渲染成 agenthub 风格的扁平命名报告文件，落在 `parseTaskDir()` 解析出的 `task_tracking_root` 下的 `tasks/{task-id}/reports/` 目录（与 agenthub `tasks/{task}/reports/` 结构对齐），禁止嵌套时间戳目录。
+3. **命名规则**：报告文件名格式为 `<stage>-review-<round>[-pass|-failed].md`，例如 `build-spec-review-1.md`（未终审）、`build-spec-review-3-pass.md`（通过）、`build-spec-review-2-failed.md`（拒绝）。`<stage>` 取 make-decision/build-spec/build-plan/build-code/verify-code 之一；`<round>` 为当前审查轮次的整数序号，从 1 开始，不跨 stage 复位。
+4. **索引文件**：wh-review 必须在 `tasks/{task-id}/reports/report-index.md` 维护一份汇总索引（结构参照 agenthub `verifier-report-index.md`：seq/timestamp/stage/report_kind/verdict/report_path/summary 等列），每次渲染新报告后追加一行，不得覆盖历史记录。
 
 **Given/When/Then**：
 - Given 任意 stage agent 发起审查请求（stage 标识已传入）；
 - When wh-review 被调用；
-- Then wh-review 通过 `core/task-dir-parser.mjs` 解析出 task_tracking_root，完成 stage→合同查找、调用 3rd-review、轮次状态管理、报告渲染，返回裁决结果。
+- Then wh-review 通过 `core/task-dir-parser.mjs` 解析出 task_tracking_root，完成 stage→合同查找、调用 3rd-review（中间产物落临时工作区）、轮次状态管理、报告渲染（最终产物落 `tasks/{task-id}/reports/`），返回裁决结果。
 
 **验收标准**：
 - AC1-1：`skills/wh-review/SKILL.md` 存在且包含 stage→合同映射表（5 条）。
 - AC1-2（行为验证）：给定不传 stage 标识的调用，wh-review 以非零退出码终止并输出明确错误信息；给定传入已知 stage 标识的调用，wh-review 正常完成，不报错。两种情况的实际行为可通过集成测试或手动测试复现；断言：前者 exit code ≠ 0，后者 exit code = 0。
-- AC1-3（行为验证）：给定一次完整审查调用完成后，报告文件落盘路径由 `core/task-dir-parser.mjs`（`parseTaskDir()`）解析得到的 task_tracking_root 推导，而非硬编码；在预期路径（任务目录下固定子路径）存在对应报告文件；断言：`ls <task-dir>/<task-id>/reviews/` 命令返回至少一个报告文件，且文件内容含 `verdict` 字段。
+- AC1-3（行为验证）：给定一次完整审查调用完成后，最终报告文件落盘路径为 `parseTaskDir()` 解析得到的 `task_tracking_root` 下的 `tasks/{task-id}/reports/`，而非硬编码，也不落在 3rd-review/standalone.sh 的原始时间戳目录；断言：`ls tasks/{task-id}/reports/` 命令返回至少一个报告文件，且文件内容含 `verdict` 字段。
 - AC1-4（静态验证）：wh-review 实现代码 import `core/task-dir-parser.mjs` 的 `parseTaskDir`，代码中不存在任务目录路径硬编码字符串或另造的路径解析逻辑；可 grep 验证。
+- AC1-5（行为验证，可判定的渲染约束）：给定 wh-review 完成一次渲染后，生成的报告文件名必须匹配正则 `^[a-z-]+-review-\d+(-pass|-failed)?\.md$`；断言：对 `tasks/{task-id}/reports/` 下所有报告文件名运行该正则，全部匹配；同时 `report-index.md` 中存在对应该文件的索引行。
 
 ---
 
