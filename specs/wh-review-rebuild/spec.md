@@ -226,7 +226,10 @@ Then wh-review 进入第4轮并强制转为同源模式（`mode=same-source`）�
 - When wh-review 综合轮次与 findings 做裁决；
 - Then 裁决值严格为枚举三值之一，报告以6章结构落盘当前任务目录。
 
-**报告章节结构（6章，已定死——章数、顺序、每章语义不可更改；来源：decision-log D1 目标节"报告脚本渲染（移植render-review-report.mjs），6章结构，落盘任务目录"）**：
+**报告章节结构（章数=6 已由 decision-log D1 确认；具体章节名称/顺序/每章语义为草案，待 build-plan 阶段在 agenthub 原实现中核实后定案）**：
+
+decision-log D1 目标节原文仅确认"报告脚本渲染（移植render-review-report.mjs），6章结构，落盘任务目录"——即章节总数为6，未列出具体章节名称、顺序或每章语义。以下清单是本 spec 阶段基于合理推断给出的草案参考，不构成已批准的最终结构：
+
 1. Summary（审查摘要：verdict、轮次、模式）
 2. Blocking Issues（blocking 级问题列表，含指纹字段）
 3. Minor Issues（minor 级问题列表）
@@ -234,12 +237,12 @@ Then wh-review 进入第4轮并强制转为同源模式（`mode=same-source`）�
 5. Delta（本轮相较上轮的变更说明，第1轮留空）
 6. Metadata（task-name、round_number、mode、actual_mode、contract_path、contract_hash、timestamp）
 
-build-plan 阶段核实 agenthub 原实现后，可在不违反本清单结构的前提下调整具体章节措辞（如副标题文案），但章数、顺序、每章语义不可更改。
+build-plan 阶段须在 agenthub 原实现（render-review-report.mjs）中核实上述章节名称、顺序、语义是否准确，并将核实结果写入 `wh-review/SKILL.md` 作为最终定案；核实后若与本草案不同，以核实结果为准。本条唯一硬约束是**章数=6**（decision-log 已确认），具体命名/顺序/语义在核实前均为开放项，不视为已定死。
 
 **验收标准**：
 - AC4-1：裁决字段只含三值之一，其他值视为错误。
-- AC4-2：报告文件路径可预测（任务目录下固定子路径）。
-- AC4-3：报告含上述6章结构（章节名在 wh-review SKILL.md 中明确定义，可机器 grep 验证）。
+- AC4-2（行为验证）：给定任意一次完整审查裁决，报告文件路径固定为 `parseTaskDir()` 解析出的 `task_tracking_root` 下 `tasks/{task-id}/reports/` 子路径（拼接规则本身不因 stage、轮次不同而改变）；断言：连续对两个不同 stage/轮次发起审查，两次报告路径均可由同一条固定拼接规则推导得出，且不落在 3rd-review 临时工作区或硬编码测试路径下；若报告文件缺失、或路径不符合该固定拼接规则，则判不通过。
+- AC4-3（行为验证）：报告章节标题数量=6，与 `wh-review/SKILL.md` 最终定义的章节名称/顺序完全一致；可机器 grep 报告文件与 SKILL.md 交叉比对验证；章节数≠6，或章节名称/顺序与 SKILL.md 定义不一致，均判不通过。
 
 ---
 
@@ -268,6 +271,19 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 - **输出**：3rd-review 引擎须返回结构化裁决 `{verdict, findings, actual_mode}`；以结构化 `verdict` 字段为主权威判定，进程级快速判断为辅；二者不一致时 fail-loud，不静默择一。
 - **结果文件缺失处理**：result-file 缺失或不可解析时，最终裁决统一直接判定为 `escalate_to_human`（不引入 `unknown` 这一裁决态，裁决枚举仍严格为 `pass | revise_required | escalate_to_human`，见 FR-WHREVIEW-004），触发原因须写入报告/日志。
 - **轮次控制**：wh-review 须自行维护轮次计数并强制停止，不依赖 3rd-review 引擎侧的轮次上限参数（已知该参数在引擎内部无效，见 Known Gaps GAP-6）。
+
+**Runner 发现与可执行调用规则（本轮新增，落实抽象三元组的真实入口）**：
+
+- **Runner 发现规则**：3rd-review 与 workflowhub 为独立仓库，wh-review 不得硬编码调用方本机的 runner 绝对路径。发现规则复用既有的 `THIRD_REVIEW_RUNNER` 环境变量：设置时取该值作为可执行入口（文件名或路径）；未设置时使用约定默认值 `run-heterologous-review.mjs`，按仓库约定路径（3rd-review 仓库的 `scripts/` 目录）解析。
+- **调用格式**：`node <runner> --diff=<file> --round=<n> --output=<file> [--checkpoint=<stage>]`，全部参数为 `--flag=value` 形式，不使用空格分隔多个 token。
+  - `--diff`：必填。wh-review 将装配好的结构化三元组 `{mode, contract, materials}` 整体序列化（如 JSON）后写入该文件，作为审查引擎的完整输入——`mode`/`contract` 不是通过独立 CLI flag 传递，而是随 `--diff` 文件内容一并传入。
+  - `--output`：必填。3rd-review 引擎本轮审查结果 JSON 的唯一落盘路径，由 wh-review 指定。
+  - `--round`：可选，省略时引擎默认按 1 处理；wh-review 须显式传入当前 `round_number`，与自身轮次状态文件保持一致。
+  - `--checkpoint`：可选。按本条款"集成入口冻结"约束，wh-review 的正常调用路径**不传**该参数（stage 身份已在 contract 中体现，不通过 checkpoint 传递）；该参数仅保留给脱离 wh-review 的独立调试场景。
+- **超时策略**：wh-review 对每次 runner 调用设置超时上限（可配置，默认值由 build-plan 阶段结合 3rd-review 实际耗时核实），超时未返回则终止子进程。
+- **不可达/失败语义**：runner 文件不存在、不可执行、进程以非零码退出、调用超时、或 `--output` 结果文件缺失/不可解析——均归入既有"结果文件缺失处理"规则，统一判定为 `escalate_to_human`，触发原因写入报告/日志，不静默降级为其他裁决。
+- **结果 schema**：`--output` 文件为单轮 JSON，至少含 `verdict`、`findings`（数组，元素含 `severity`/`file`/`line`/`issue`/`recommendation` 等字段）字段；引擎版本可能另含 `threatAuditor` 等辅助字段，wh-review 至少解析 `verdict` 与 `findings` 作为裁决依据，其余字段原样保留供追溯（示例参照 `tasks/build-spec-wh-review-rebuild-r10-manual/reviews/verdict-round-1.raw.json`）。
+- **evidence/report 落盘路径规则**：`--output` 指向的单轮原始 JSON 落在任务目录下的证据路径 `tasks/{task-id}/reviews/verdict-round-{round_number}.raw.json`；render-review-report.mjs 渲染后的最终报告落在 `tasks/{task-id}/reports/`（与 AC1-3、AC4-2 落盘规则一致）。
 
 **Given/When/Then**：
 - Given wh-review 接收到 stage 标识和待审材料；
@@ -328,8 +344,8 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 - Then 仍然调用 `docs/human-brief-template.md` 生成标准收尾摘要，不因本期改动引入自定义收尾逻辑或退化为不一致实现。
 
 **验收标准**：
-- AC7-1（回归验证）：逐一核实 5 个 stage 的 SKILL.md 收尾段在本期改动后仍均含对 `docs/human-brief-template.md` 的调用引用，未回退。
-- AC7-2（回归验证）：逐一核实本期改动后无 stage 使用自定义收尾模板（与 human-brief-template 不一致），现状未被破坏。
+- AC7-1（回归验证）：逐一核实 make-decision/build-spec/build-plan/build-code/verify-code 共 5 个 stage 的 SKILL.md 收尾段；断言：5 个中必须全部 5 个仍含对 `docs/human-brief-template.md` 的调用引用，0 个允许回退——发现任意 1 个 stage 收尾段缺失该引用即判不通过。
+- AC7-2（回归验证）：逐一核实上述 5 个 stage 的收尾实现；断言：5 个中必须全部 5 个使用统一的 `human-brief-template.md` 调用，不存在任何与其不一致的自定义收尾模板——发现任意 1 个 stage 使用不一致的自定义收尾逻辑即判不通过。
 
 ---
 
@@ -396,7 +412,7 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 **验收标准**：
 - AC11-1：测试方案文档（test-strategy.md 或等价）存在且含端到端冒烟用例描述。
-- AC11-2：至少一个端到端冒烟用例可在 workflowhub 本地跑通。
+- AC11-2（行为验证）：make-decision/build-spec/build-plan/build-code/verify-code 共 5 个 stage 中，至少 1 个（1 out of 5）完整端到端冒烟用例可在 workflowhub 本地实际跑通（进程正常退出、生成报告文件、裁决字段非空）；断言：其余未纳入本轮冒烟覆盖的 stage 不得因 wh-review/3rd-review 本期接口变更而在主流程中报错或阻塞——冒烟覆盖数 <1，或任意 1 个未覆盖 stage 因接口变更报错，均判不通过。
 
 ---
 
@@ -431,7 +447,7 @@ stage agent
 
 wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`（`recordSkeleton` / `updateOwnResult`，M4 十核心字段：`execution_id`、`skill_or_stage`、`stage`、`skill_version`、`executed`、`tokens`、`duration_ms`、`rework_rounds`、`human_intervention`、`friction_ref`），不新增独立指标底座。
 
-- 调用时机：wh-review 每次被 stage 调用触发审查前，调用 `recordSkeleton` 落一条骨架记录；本轮审查裁决完成后，调用 `updateOwnResult` 写入实测值。写入失败须 warn 但不阻断审查流程本身（与各 SKILL.md 现有约定一致）。**设计意图说明**：这是有意为之的非阻断记录型门，不是校验疏漏或旁路开关——依据 `CONSTITUTION.md` F3（物理事实靠机器校验但不阻断）与 Q1（记事实而非阻断），质量相关的物理事实（此处为指标写入）应自动采集并浮现，但采集本身不应反过来卡死审查主流程；记录失败只代表"事后可见的遗漏"，供人事后判断，不代表审查裁决本身可以旁路或降级。
+- 调用时机：wh-review 每次被 stage 调用触发审查前，调用 `recordSkeleton` 落一条骨架记录；本轮审查裁决完成后，调用 `updateOwnResult` 写入实测值。写入失败须记录警告但不阻断审查流程本身（与各 SKILL.md 现有约定一致）。**设计意图说明**：这是有意为之的非阻断式事实记录门（fact-recording gate，仅记录事实、不阻塞审查主流程推进），不是校验疏漏——依据 `CONSTITUTION.md` F3（物理事实靠机器校验但不阻断）与 Q1（记事实而非阻断），质量相关的物理事实（此处为指标写入）应自动采集并浮现，但采集本身不应反过来卡死审查主流程；记录失败只代表"事后可见的遗漏"，结果记入质量事实契约，推进判断由人工基于记录决定，不代表审查裁决本身可以被降级或跳过。
 - wh-review 需落入 M4 字段的关键信息：轮次状态中的 `round_number` 落入 `rework_rounds`；本轮审查耗时落入 `duration_ms`；是否触发 `escalate_to_human` 落入 `human_intervention`；`verdict`/`mode` 等 M4 字段之外的信息保留在 wh-review 自身的轮次状态文件中，作为 metrics 记录之外的可回溯锚点。
 
 **验收标准**：
