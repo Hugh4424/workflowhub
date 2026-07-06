@@ -122,6 +122,19 @@ Given wh-review 从 3rd-review 收到 findings；
 When wh-review 调用 render-review-report.mjs；
 Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 
+**UC-8 失败场景：关键输入缺失或结果不可解析（关联 FR-WHREVIEW-001/002/003/THIRDREVIEW-001、NFR-2）**
+Given stage 标识缺失或为未知值，或 stage 对应的合同文件缺失，或 3rd-review 返回的 result-file 缺失/不可解析；
+When wh-review 执行到对应校验点；
+Then wh-review 以非零退出码终止并输出明确错误信息（分别对应：stage 缺失/未知 → fail-loud；合同缺失 → fail-loud；result-file 缺失或不可解析 → 裁决 `unknown`，触发 `escalate_to_human`），不静默降级、不回退通用合同、不跳过校验继续推进。
+
+**UC-9 边界场景：第3轮末升级人工判定的边界行为（关联 FR-WHREVIEW-003、NFR-2）**
+Given 异源审查进行到第3轮末；
+When 升级人工条件（单轮 `blocking_count ≥ 3` 或 `fingerprint_repeated=true`，且连续3轮成立）被判定为满足；
+Then wh-review 直接裁决 `escalate_to_human`，不进入第4轮；
+Given 同一场景下升级人工条件在第3轮末被判定为不满足；
+When wh-review 继续按轮次规则推进；
+Then wh-review 进入第4轮并强制转为同源模式（`mode=same-source`），不再发起异源审查。
+
 ---
 
 ## 4. 功能需求（FR）
@@ -148,7 +161,7 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 - AC1-2（行为验证）：给定不传 stage 标识的调用，wh-review 以非零退出码终止并输出明确错误信息；给定传入已知 stage 标识的调用，wh-review 正常完成，不报错。两种情况的实际行为可通过集成测试或手动测试复现；断言：前者 exit code ≠ 0，后者 exit code = 0。
 - AC1-3（行为验证）：给定一次完整审查调用完成后，最终报告文件落盘路径为 `parseTaskDir()` 解析得到的 `task_tracking_root` 下的 `tasks/{task-id}/reports/`，而非硬编码，也不落在 3rd-review 产出的原始临时工作区目录；断言：`ls tasks/{task-id}/reports/` 命令返回至少一个报告文件，且文件内容含 `verdict` 字段。
 - AC1-4（静态验证）：wh-review 实现代码 import `core/task-dir-parser.mjs` 的 `parseTaskDir`，代码中不存在任务目录路径硬编码字符串或另造的路径解析逻辑；可 grep 验证。
-- AC1-5（行为验证，可判定的渲染约束）：给定 wh-review 完成一次渲染后，生成的报告文件名必须匹配正则 `^[a-z-]+--\d+(-pass|-failed)?\.md$`；断言：对 `tasks/{task-id}/reports/` 下所有报告文件名运行该正则，全部匹配；同时 `report-index.md` 中存在对应该文件的索引行。
+- AC1-5（行为验证，可判定的渲染约束）：给定 wh-review 完成一次渲染后，生成的 stage report 文件名必须匹配正则 `^[a-z-]+--\d+(-pass|-failed)?\.md$`；断言：对 `tasks/{task-id}/reports/` 目录下除 `report-index.md` 外的所有报告文件名运行该正则，全部匹配（`report-index.md` 为独立命名的索引文件，不参与该正则校验）；同时 `report-index.md` 中存在对应每份 stage report 的索引行。
 
 ---
 
@@ -219,7 +232,7 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 3. Minor Issues（minor 级问题列表）
 4. Pass Items（通过项列表）
 5. Delta（本轮相较上轮的变更说明，第1轮留空）
-6. Metadata（task-name、round_number、mode、contract_path、contract_hash、timestamp）
+6. Metadata（task-name、round_number、mode、actual_mode、contract_path、contract_hash、timestamp）
 
 build-plan 阶段核实 agenthub 原实现后，可在不违反本清单结构的前提下调整具体章节措辞（如副标题文案），但章数、顺序、每章语义不可更改。
 
@@ -239,6 +252,12 @@ build-plan 阶段核实 agenthub 原实现后，可在不违反本清单结构�
 wh-review 调用 3rd-review 引擎时，须显式传入结构化三元组 `{mode, contract, materials}`：`mode`（full/incremental/same-source）与 `contract`（本次审查依据的合同内容或路径+hash）必须是独立的显式字段，`materials` 字段可以是 wh-review 组装好的完整审查材料包（文本内容），但不得把 `mode`/`contract` 也坍缩进这份纯文本材料、让 3rd-review 失去对本次审查依据合同与模式的路由感知。
 
 3rd-review 引擎不感知 stage 名称、轮次号等 workflowhub 专属知识（零 stage/轮次知识），但通过显式 `contract`/`mode` 字段获知本次依据哪份合同、以何种模式审查，返回 `{verdict, findings, actual_mode}`。
+
+**集成入口冻结（本条款为本期硬性约束，不再推给 build-plan 阶段决定）**：
+
+wh-review 与 3rd-review 的集成边界，是 3rd-review 仓库中 `scripts/run-heterologous-review.mjs` 提供的**单次调用接口**——即 `node run-heterologous-review.mjs --diff=<materials文件> --round=<N> --output=<结果文件> --checkpoint=<用于查找合同的标识，逐步替换为显式 contract 路径>` 这一形态：一次调用、一次返回，内部无循环、无跨调用状态记忆。**不是** `standalone.sh` 的内部多轮 revise 循环。wh-review 每一轮自己调用一次这个单次接口，自行维护轮次状态与升级判定；wh-review 绝不调用 `standalone.sh` 让它自己的循环去跑多轮，避免双重循环失控（`standalone.sh` 的 revise 循环历史上存在轮次上限比较缺失的 bug，见 FR-THIRDREVIEW-003）。
+
+当前 `run-heterologous-review.mjs` 的 `--checkpoint` 参数命名仍是沿用 workflowhub stage 名、内部硬编码 5 个 stage 到合同的对照表这一实现细节，属于本期"瘦身"清理目标之一（与本条款已有的"零 stage/轮次知识"要求配合，逐步替换为显式 contract 路径/内容传参，不再靠 `--checkpoint` 字符串前缀匹配路由）。
 
 **调用语义契约（decision-log D1 结构化三元组口径）**：
 
@@ -282,18 +301,35 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 ---
 
-### FR-STAGE-001 5 个 stage 收尾统一
+### FR-THIRDREVIEW-003 standalone.sh revise 循环 round-cap 缺陷修复
 
-**描述**：5 个 stage 的 SKILL.md 收尾步骤统一调用 `docs/human-brief-template.md`，禁止各自实现不一致的收尾逻辑。
+**描述**：3rd-review 仓库的 `standalone.sh`（第206-413行 revise 循环）存在历史遗留 bug：循环内的 `ROUND` 计数从未与 `MAX_REVISE_ROUNDS` 做比较，`revise_required` 时无条件 `ROUND++; continue`，导致单独调用 `standalone.sh` 时可能无限循环（已实测复现：一次跑到44轮才因意外崩溃停止，另一次连续跑6轮未停被人工中断）。本期须在 `standalone.sh` 自身的 revise 循环中修复该缺陷，加回轮次上限比较：超过 `--max-revise-rounds` 上限即转 `escalate_to_human` 并退出，不得无限循环。
+
+本条修复是**防御性修复**，独立于"wh-review 不依赖 3rd-review 内部循环、只走单次调用接口"这条集成边界（见 FR-THIRDREVIEW-001 的"集成入口冻结"小节）——即使有人脱离 wh-review 单独调用 `standalone.sh`，也不能无限循环。
 
 **Given/When/Then**：
-- Given 任意 stage（如 build-plan）完成主体工作；
-- When 执行收尾步骤；
-- Then 调用 `docs/human-brief-template.md` 生成标准收尾摘要，不走自定义收尾逻辑。
+- Given 以 `--max-revise-rounds=N` 调用 `standalone.sh`，且持续收到 `revise_required`；
+- When 循环推进到第 N 轮末仍为 `revise_required`；
+- Then `standalone.sh` 转 `escalate_to_human` 并退出，不进入第 N+1 轮。
 
 **验收标准**：
-- AC7-1：5 个 stage 的 SKILL.md 收尾段均含对 `docs/human-brief-template.md` 的调用引用。
-- AC7-2：逐一核实后无 stage 使用自定义收尾模板（与 human-brief-template 不一致）。
+- AC-THIRDREVIEW3-1（行为验证）：给定 `--max-revise-rounds=N` 调用 `standalone.sh` 且持续收到 `revise_required`，第 N 轮后必须转 `escalate_to_human` 并退出；断言：进程退出前的最终裁决为 `escalate_to_human`，且循环实际执行轮次数 ≤ N，不出现第 N+1 轮调用记录。
+- AC-THIRDREVIEW3-2（静态验证）：`standalone.sh` 第206-413行 revise 循环代码中存在 `ROUND` 与 `MAX_REVISE_ROUNDS`（或等价上限参数）的显式比较逻辑；可 grep/代码审查验证。
+
+---
+
+### FR-STAGE-001 5 个 stage 收尾统一（回归保护项，非待改造项）
+
+**描述**：decision-log D6 已确认 5 个 stage 的 SKILL.md 收尾步骤统一调用 `docs/human-brief-template.md` 的现状已满足要求，不是本期待改造的缺陷。本条 FR 的定位是回归保护：本期其他改动（尤其 §7 改写、wh-review 接入）不得破坏这一现状统一调用。
+
+**Given/When/Then**：
+- Given 任意 stage（如 build-plan）完成主体工作，且本期改动已落地；
+- When 执行收尾步骤；
+- Then 仍然调用 `docs/human-brief-template.md` 生成标准收尾摘要，不因本期改动引入自定义收尾逻辑或退化为不一致实现。
+
+**验收标准**：
+- AC7-1（回归验证）：逐一核实 5 个 stage 的 SKILL.md 收尾段在本期改动后仍均含对 `docs/human-brief-template.md` 的调用引用，未回退。
+- AC7-2（回归验证）：逐一核实本期改动后无 stage 使用自定义收尾模板（与 human-brief-template 不一致），现状未被破坏。
 
 ---
 
@@ -327,7 +363,7 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 **验收标准**：
 - AC9-1（静态验证）：intake 合同文件中 C1、C2、C3、C4、C5、C6 六个判据各有对应字段或检查项，缺任意一项即不通过；可 grep 合同文件验证。
-- AC9-2（静态验证）：合同文件中 `decision`、`scope.in`、`scope.out`、`open_questions` 四个标准字段均存在且值非空字符串（`""` 或缺失均视为不通过）；可机器 parse 验证。
+- AC9-2（行为验证，实例级）：intake 合同文件本身只需定义对 `decision`、`scope.in`、`scope.out`、`open_questions` 四个字段的检查规则（合同文件本身不要求填有具体实例值）；给定一个被审的 make-decision 产物实例，校验该实例中这四个字段均存在、值非空字符串（`""` 或缺失均视为不通过）、且可机器 parse；断言：对实例文件运行合同定义的检查规则，四个字段全部通过。
 
 ---
 
@@ -387,7 +423,7 @@ stage agent
                └── 返回裁决: pass | revise_required | escalate_to_human
 ```
 
-**轮次状态字段**（最小集）：`round_number`、`mode`（full/incremental/same-source）、`verdict`、`report_path`、`blocking_count`、`fingerprint_repeated`
+**轮次状态字段**（最小集）：`round_number`、`mode`（full/incremental/same-source）、`actual_mode`（3rd-review 引擎实际执行的模式，用于与请求的 `mode` 比对，降级为 same-source 时须显式体现为 `actual_mode=same-source`）、`verdict`、`report_path`、`blocking_count`、`fingerprint_repeated`
 
 ---
 
@@ -448,6 +484,10 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 | make-decision/build-plan/verify-code pass 路径 | 行为不确定 | 审查通过后停在人工确认门，不自动推进 | 行为明确化 |
 | 3rd-review 调用合同路由 | 靠 checkpoint 参数前缀匹配；参数缺失时回退通用合同 | 路由逻辑移入 wh-review；3rd-review 不再感知 stage | 破坏性（接口变更） |
 | 审查轮次状态 | 无状态记录 | wh-review 维护轮次状态文件，可追踪 | 新增能力 |
+| make-decision intake 合同判据 | 无结构化判据，intake 合同未强制覆盖具体检查项 | 收紧为 C1-C6 强制卡口，六项判据缺任意一项即不通过（见 FR-INTAKE-001） | 破坏性（校验收紧） |
+| verify-code 合同判据 | 无结构化新鲜性判据 | 收紧为 F1-F6 强制卡口，六项判据缺任意一项即不通过（见 FR-TESTACCEPTANCE-001） | 破坏性（校验收紧） |
+| build-code §7/§13 调用语义 | §7 含 stage/轮次路由 numbered step 和 if/else 分支逻辑，调用方需了解内部路由机制 | §7 精简为对 §13 的概念性导读，不含任何流程步骤/条件分支，单次调用语义详见 §13（见 FR-THIRDREVIEW-002、7.4节） | 破坏性（接口/文档语义变更） |
+| 3rd-review 返回 unknown 时的处理路径 | 无此路径，result-file 缺失/不可解析时行为未定义 | result-file 缺失或不可解析时裁决为 `unknown`，触发 `escalate_to_human`；轮次状态文件与报告记录须体现该次裁决为升级人工，日志/报告中标注触发原因，等待人工介入 | 新增能力（fail-loud 路径） |
 
 ### 不受影响的范围
 
@@ -486,7 +526,7 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 
 ### 验收检查（success_criteria）
 
-- AC-D1（行为验证）：给定含 stage 名称的测试调用，3rd-review 引擎返回的结果中不含任何 stage 枚举字段；且对同一审查包，去掉/加上 stage 参数的两次调用返回结果一致。辅证：3rd-review SKILL.md grep 不含 stage 名称枚举、不含轮次管理逻辑。
+- AC-D1（行为验证）：给定 wh-review 调用 3rd-review 引擎的实际调用记录，校验调用参数中不含 `stage` 或 `round` 字段（须遵守 FR-THIRDREVIEW-001"禁止传入 stage 名称或轮次号"的约定）；且 3rd-review 引擎返回的结果结构中不含任何 stage 枚举字段。辅证：3rd-review SKILL.md grep 不含 stage 名称枚举、不含轮次管理逻辑。
 - AC-D2（行为验证）：对精简后的 build-code/SKILL.md §7，执行端到端调用，调用方无需感知 §7 中的任何 step 序号或 if/else 分支即可完成调用。辅证：§7 文本 grep 不含 numbered step / if/else 逻辑。
 - AC-D3：wh-review/SKILL.md 存在 stage→合同映射表（5 条全覆盖）
 - AC-D4（行为验证）：5 个 stage 传入对应标识后，实际调用流程中 route-decision 记录文件含对应专属合同源路径 + hash（非通用合同），且该记录与实际审查包内容一致——可通过集成测试或日志追踪验证（辅证：可机器 grep route-decision 文件内容）。
@@ -495,9 +535,11 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 - AC-D7：端到端冒烟用例可本地跑通，覆盖 wh-review + 精简 3rd-review 组合
 - AC-D8：intake 合同覆盖 C1-C6 全部判据字段
 - AC-D9：test-acceptance 合同覆盖 F1-F6 全部判据字段
-- AC-D10：轮次状态文件存在，记录 round_number / mode / verdict / report_path
+- AC-D10：轮次状态文件存在，记录 round_number / mode / actual_mode / verdict / report_path
+- AC-D10.1（行为验证）：给定一次因升级人工条件不满足而降级为同源模式的审查轮次，该轮的轮次状态文件与报告 Metadata 章节均须显式展示 `actual_mode=same-source`；断言：两处文件均可 grep 到该字段且取值一致。
 - AC-D11（静态验证）：wh-review 复用 `core/task-dir-parser.mjs` 解析任务目录路径，不硬编码、不另造解析逻辑（见 FR-WHREVIEW-001 AC1-4）。
 - AC-D12（静态验证）：wh-review 复用 `metrics/collector.mjs` 统一执行记录机制记录审查指标，不新增独立指标底座（见 §6.5 AC-METRICS-1/2）。
+- AC-D13（行为验证）：给定 `--max-revise-rounds=N` 调用 `standalone.sh` 且持续收到 `revise_required`，第 N 轮后转 `escalate_to_human` 并退出，不进入第 N+1 轮（见 FR-THIRDREVIEW-003 AC-THIRDREVIEW3-1/2）。
 
 ### 未决问题
 
@@ -512,4 +554,4 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 - `docs/human-brief-template.md` 是否已存在未经确认，若不存在须作为前置依赖在 build-plan 中标出。
 - （spec-clarify 补充）**GAP-4**（已在本期 spec 解决）：降级触发条件中"大量"已在 FR-WHREVIEW-003 中明确为"单轮 blocking_count ≥ 3 或 fingerprint_repeated=true，连续3轮成立"。
 - （spec-clarify 补充）**GAP-5**（已在本期 spec 解决）：同源切换与升级人工的优先级已在 FR-WHREVIEW-003 中明确：升级人工判定先于同源切换判定（第3轮末先判升级条件，满足则直接升级，不进入第4轮同源模式）。
-- （3rd-review 实测发现）**GAP-6**：3rd-review 引擎内部的轮次上限参数实测不生效，revise_required 时可能无限循环。此 bug 不在本期修复 scope 内。wh-review 实现须自行做轮次计数并强制停止，不能依赖 3rd-review 引擎的内部轮次上限参数（见 FR-THIRDREVIEW-001 AC5-4）。
+- （3rd-review 实测发现）**GAP-6**（已在本期 spec 解决，不再是 gap）：3rd-review 引擎内部的轮次上限参数实测不生效（`standalone.sh` revise 循环从不比较 `ROUND` 与 `MAX_REVISE_ROUNDS`），revise_required 时可能无限循环。本期已通过两条 FR 解决：集成边界层面，wh-review 只走 `run-heterologous-review.mjs` 单次调用接口、自行维护轮次计数并强制停止，不依赖 3rd-review 内部循环（见 FR-THIRDREVIEW-001"集成入口冻结"小节、AC5-4）；防御性修复层面，`standalone.sh` 自身的 revise 循环须加回轮次上限比较，独立堵住无限循环风险（见 FR-THIRDREVIEW-003）。
