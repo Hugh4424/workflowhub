@@ -14,7 +14,7 @@
   1. 新建 `skills/wh-review/` 模块：拥有 stage→合同映射（5 套）、轮次状态、降级/升级逻辑、Delta Package 构造、报告渲染
   2. 精简 `skills/3rd-review/`：剥离所有 stage/轮次知识，只保留"收入参→调度审查 agent→返回结果"核心引擎
   3. 5 个 stage 的 SKILL.md 收尾步骤统一调用 `docs/human-brief-template.md`（D6）
-  4. 现有 `§7`（3rd-review SKILL.md 中的流程步骤段）改写为仅对 `§13` 的概念性导读，删除所有 numbered step 和 if/else 逻辑
+  4. 现有 `§7`（build-code/SKILL.md 中的流程步骤段）改写为仅对 `§13` 的概念性导读，删除所有 numbered step 和 if/else 逻辑
   5. 搬迁 agenthub `verifiers/vibecoding/` 的 5 套 stage 专属合同到 wh-review，本期一次性完整搬迁落地（架构支持未来新增合同，但不稀释本期 5 套全部完成的验收口径）
 - **最大影响面**：`skills/3rd-review/SKILL.md`（破坏性重构）+ `skills/wh-review/`（全新）+ 5 个 stage SKILL.md 收尾段
 - **验收信号**：各 stage 触发 wh-review 时传入正确 stage 标识，stage 专属合同被加载（日志可验证）；§7 不含任何 numbered step / if/else 逻辑（机器可检验）；审查轮次状态与报告均落盘任务目录
@@ -55,7 +55,7 @@ workflowhub 是一套多阶段 AI 工作流编排系统，包含 5 个核心 sta
 **In-scope**：
 - 新建 `skills/wh-review/` 技能模块（SKILL.md + 5 套专属合同 + 报告模板 + 渲染脚本）
 - 精简 `skills/3rd-review/SKILL.md`（删除 stage/轮次知识，保留纯引擎）
-- 改写 3rd-review §7：删除 numbered step / if/else，仅保留对 §13 的概念性导读
+- 改写 build-code/SKILL.md §7：删除 numbered step / if/else，仅保留对 §13 的概念性导读
 - 5 个 stage SKILL.md 收尾步骤统一调用 `docs/human-brief-template.md`
 - stage→合同映射实现：make-decision←intake / build-spec←design / build-plan←plan / build-code←code / verify-code←test-acceptance
 - 搬迁 agenthub verifiers/vibecoding 5 套 stage 专属合同（5 套均在本期交付，搬迁后初版质量可能偏弱需适配，适配点在 build-plan 阶段确认——见 Known Gaps；来源：decision-log D1）
@@ -265,7 +265,7 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 ### FR-THIRDREVIEW-002 §7 改写
 
-**描述**：改写 3rd-review SKILL.md 中的 §7，删除所有流程步骤和 if/else 逻辑，仅保留对 §13 的概念性导读。
+**描述**：改写 build-code/SKILL.md 中的 §7，删除所有流程步骤和 if/else 逻辑，仅保留对 §13 的概念性导读。原 §7 中的降级规则不得删除，需迁移保留为 §13 的补充说明。
 
 **机器可检验规则**：§7 不含任何 numbered step（`1.`/`2.`/`- [ ]` 等枚举格式）、if/else 逻辑关键字，也不含用于绕过上述检测的等价顺序步骤表述——包括中文步骤词（如"第一步/首先/其次/然后/接着/随后/最后/再"等）与英文等价词（如 `step 1`/`first ... then`/`next`/`finally`）。
 
@@ -319,7 +319,7 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 **C1-C6 判据**（来源 decision-log D4）：
 - C1：原始需求原文引用（至少一处，不可仅概括）
-- C2：决策有证据支撑（每条 KEEP 结论须附具体理由）
+- C2：决策有证据支撑（每条"选X非Y"结论需附至少一条具体理由，如技术约束/风险评估/用户表态；裸断言视为不通过）
 - C3：范围边界明确划分 in/out（各至少一条且互不重叠）
 - C4：无悬挂开放问题（0 个未解决或已标注不阻断+跟进）
 - C5：方向与上游输入一致（方向结论需覆盖用户明确要求全部条目，无未授权范围扩张）
@@ -425,7 +425,7 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 
 ### 7.4 3rd-review 单次调用语义变化
 
-- **当前行为**：3rd-review SKILL.md §7 含 stage/轮次路由逻辑，调用方需了解其内部合同路由机制。
+- **当前行为**：build-code/SKILL.md §7 含 stage/轮次路由逻辑，调用方需了解其内部合同路由机制。
 - **变更后行为**：3rd-review 精简为纯引擎，接收完整审查包、返回结构化 verdict，不感知 stage 或轮次。单次调用语义详见"调用语义契约"小节（见 FR-THIRDREVIEW-001）。调用方迁移到 wh-review 后不再直接依赖 3rd-review 内部路由。
 
 ### 7.5 既有调用方迁移影响
@@ -487,7 +487,7 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 ### 验收检查（success_criteria）
 
 - AC-D1（行为验证）：给定含 stage 名称的测试调用，3rd-review 引擎返回的结果中不含任何 stage 枚举字段；且对同一审查包，去掉/加上 stage 参数的两次调用返回结果一致。辅证：3rd-review SKILL.md grep 不含 stage 名称枚举、不含轮次管理逻辑。
-- AC-D2（行为验证）：对精简后的 3rd-review §7，执行端到端调用，调用方无需感知 §7 中的任何 step 序号或 if/else 分支即可完成调用。辅证：§7 文本 grep 不含 numbered step / if/else 逻辑。
+- AC-D2（行为验证）：对精简后的 build-code/SKILL.md §7，执行端到端调用，调用方无需感知 §7 中的任何 step 序号或 if/else 分支即可完成调用。辅证：§7 文本 grep 不含 numbered step / if/else 逻辑。
 - AC-D3：wh-review/SKILL.md 存在 stage→合同映射表（5 条全覆盖）
 - AC-D4（行为验证）：5 个 stage 传入对应标识后，实际调用流程中 route-decision 记录文件含对应专属合同源路径 + hash（非通用合同），且该记录与实际审查包内容一致——可通过集成测试或日志追踪验证（辅证：可机器 grep route-decision 文件内容）。
 - AC-D5（行为验证）：同 AC8-1——给定 verdict=pass，make-decision / build-plan / verify-code 执行流程实际停在人工确认门。辅证：代码/文档可查 pass 路径不含自动推进逻辑。
@@ -501,7 +501,7 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 
 ### 未决问题
 
-- **OPEN-1**（已按 decision-log D1 结构化三元组口径解决）：原问题为"3rd-review 靠 --checkpoint 做 stage 路由/合同匹配，参数文档不一致"。本期方案从根本上消除该问题：wh-review 完成 stage→合同映射后，调用 3rd-review 引擎时显式传入 `{mode, contract, materials}` 三元组；3rd-review 不做 stage 路由、不感知 stage 名称或轮次号，但通过显式 `contract` 字段获知本次审查依据的合同，路由不一致问题不复存在。无需 build-plan 阶段另建 tracking issue。
+- **OPEN-1**（已按 decision-log D1 结构化三元组口径解决）：原问题为"3rd-review 靠 --checkpoint 做 stage 路由/合同匹配，参数文档不一致"。本期方案从根本上消除该问题：wh-review 完成 stage→合同映射后，调用 3rd-review 引擎时显式传入 `{mode, contract, materials}` 三元组；3rd-review 不做 stage 路由、不感知 stage 名称或轮次号，但通过显式 `contract` 字段获知本次审查依据的合同，路由不一致问题不复存在。**待跟进事项**：`standalone.sh` 实际调用参数/返回结构与 3rd-review SKILL.md 文档描述存在不一致，当前范围不阻断，build-plan 阶段需为此建 tracking issue 跟踪。
 
 ---
 
