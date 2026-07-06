@@ -125,7 +125,7 @@ Then 生成 6 章结构报告，落盘当前任务目录（路径可查）。
 **UC-8 失败场景：关键输入缺失或结果不可解析（关联 FR-WHREVIEW-001/002/003/THIRDREVIEW-001、NFR-2）**
 Given stage 标识缺失或为未知值，或 stage 对应的合同文件缺失，或 3rd-review 返回的 result-file 缺失/不可解析；
 When wh-review 执行到对应校验点；
-Then wh-review 以非零退出码终止并输出明确错误信息（分别对应：stage 缺失/未知 → fail-loud；合同缺失 → fail-loud；result-file 缺失或不可解析 → 裁决 `unknown`，触发 `escalate_to_human`），不静默降级、不回退通用合同、不跳过校验继续推进。
+Then wh-review 以非零退出码终止并输出明确错误信息（分别对应：stage 缺失/未知 → fail-loud；合同缺失 → fail-loud；result-file 缺失或不可解析 → 最终裁决直接判定为 `escalate_to_human`，触发原因写入报告/日志），不静默降级、不回退通用合同、不跳过校验继续推进。
 
 **UC-9 边界场景：第3轮末升级人工判定的边界行为（关联 FR-WHREVIEW-003、NFR-2）**
 Given 异源审查进行到第3轮末；
@@ -159,7 +159,7 @@ Then wh-review 进入第4轮并强制转为同源模式（`mode=same-source`）�
 **验收标准**：
 - AC1-1：`skills/wh-review/SKILL.md` 存在且包含 stage→合同映射表（5 条）。
 - AC1-2（行为验证）：给定不传 stage 标识的调用，wh-review 以非零退出码终止并输出明确错误信息；给定传入已知 stage 标识的调用，wh-review 正常完成，不报错。两种情况的实际行为可通过集成测试或手动测试复现；断言：前者 exit code ≠ 0，后者 exit code = 0。
-- AC1-3（行为验证）：给定一次完整审查调用完成后，最终报告文件落盘路径为 `parseTaskDir()` 解析得到的 `task_tracking_root` 下的 `tasks/{task-id}/reports/`，而非硬编码，也不落在 3rd-review 产出的原始临时工作区目录；断言：`ls tasks/{task-id}/reports/` 命令返回至少一个报告文件，且文件内容含 `verdict` 字段。
+- AC1-3（行为验证）：给定一次完整审查调用完成后，最终报告文件落盘路径为 `parseTaskDir()` 解析得到的 `task_tracking_root` 下的 `tasks/{task-id}/reports/`，而非硬编码，也不落在 3rd-review 产出的原始临时工作区目录；断言：该目录下存在至少一个报告文件，且文件内容包含 `verdict` 字段，可通过机器验证（脚本检查目录非空且解析出 `verdict` 字段）或人工检查确认；具体验证脚本/命令示例不在本 spec 正文列出，留待后续 test-strategy 文档给出。
 - AC1-4（静态验证）：wh-review 实现代码 import `core/task-dir-parser.mjs` 的 `parseTaskDir`，代码中不存在任务目录路径硬编码字符串或另造的路径解析逻辑；可 grep 验证。
 - AC1-5（行为验证，可判定的渲染约束）：给定 wh-review 完成一次渲染后，生成的 stage report 文件名必须匹配正则 `^[a-z-]+--\d+(-pass|-failed)?\.md$`；断言：对 `tasks/{task-id}/reports/` 目录下除 `report-index.md` 外的所有报告文件名运行该正则，全部匹配（`report-index.md` 为独立命名的索引文件，不参与该正则校验）；同时 `report-index.md` 中存在对应每份 stage report 的索引行。
 
@@ -255,9 +255,9 @@ wh-review 调用 3rd-review 引擎时，须显式传入结构化三元组 `{mode
 
 **集成入口冻结（本条款为本期硬性约束，不再推给 build-plan 阶段决定）**：
 
-wh-review 与 3rd-review 的集成边界，是 3rd-review 仓库中 `scripts/run-heterologous-review.mjs` 提供的**单次调用接口**——即 `node run-heterologous-review.mjs --diff=<materials文件> --round=<N> --output=<结果文件> --checkpoint=<用于查找合同的标识，逐步替换为显式 contract 路径>` 这一形态：一次调用、一次返回，内部无循环、无跨调用状态记忆。**不是** `standalone.sh` 的内部多轮 revise 循环。wh-review 每一轮自己调用一次这个单次接口，自行维护轮次状态与升级判定；wh-review 绝不调用 `standalone.sh` 让它自己的循环去跑多轮，避免双重循环失控（`standalone.sh` 的 revise 循环历史上存在轮次上限比较缺失的 bug，见 FR-THIRDREVIEW-003）。
+wh-review 与 3rd-review 的集成边界，统一收敛为**单次调用接口**：wh-review 显式传入结构化三元组 `{mode, contract, materials}`，3rd-review 引擎完成一次审查后返回 `{verdict, findings, actual_mode}`；一次调用、一次返回，引擎内部无循环、无跨调用状态记忆，**不接收、不解析** stage 名称、轮次号，或任何形态的 `--checkpoint` 字符串前缀参数——contract 由 wh-review 在调用前完全解析装配好，以显式字段传入，3rd-review 引擎不做 stage→合同的路由匹配。这一入口**不是** `standalone.sh` 的内部多轮 revise 循环：wh-review 每一轮自己发起一次这个单次调用，自行维护轮次状态与升级判定；wh-review 绝不调用 `standalone.sh` 让它自己的循环去跑多轮，避免双重循环失控（`standalone.sh` 的 revise 循环历史上存在轮次上限比较缺失的 bug，见 FR-THIRDREVIEW-003）。
 
-当前 `run-heterologous-review.mjs` 的 `--checkpoint` 参数命名仍是沿用 workflowhub stage 名、内部硬编码 5 个 stage 到合同的对照表这一实现细节，属于本期"瘦身"清理目标之一（与本条款已有的"零 stage/轮次知识"要求配合，逐步替换为显式 contract 路径/内容传参，不再靠 `--checkpoint` 字符串前缀匹配路由）。
+3rd-review 引擎当前实现中若仍存在以 `--checkpoint` 字符串前缀匹配路由到 stage 专属合同、或内部硬编码 stage→合同对照表的遗留逻辑，均属本期"瘦身"清理目标，须移除或替换为仅接收显式 `contract` 字段，不再以任何形式解析 stage 名称（与本条款"零 stage/轮次知识"要求一致）。
 
 **调用语义契约（decision-log D1 结构化三元组口径）**：
 
@@ -266,7 +266,7 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 - **输入**：结构化三元组 `{mode, contract, materials}`——`mode`、`contract` 必须作为独立显式字段传入，不得坍缩进纯文本；`materials` 字段可以是 wh-review 组装好的完整审查材料包（文本内容）。
 - **禁止传入**：stage 名称或轮次号（如 `--checkpoint=<stage>`）——stage 身份判断与 stage→合同映射须在调用前由 wh-review 完全完成；3rd-review 引擎不做 stage 路由，但仍通过显式 `contract` 字段获知本次审查依据的合同。
 - **输出**：3rd-review 引擎须返回结构化裁决 `{verdict, findings, actual_mode}`；以结构化 `verdict` 字段为主权威判定，进程级快速判断为辅；二者不一致时 fail-loud，不静默择一。
-- **结果文件缺失处理**：result-file 缺失或不可解析时，视为 `unknown`，触发 `escalate_to_human`。
+- **结果文件缺失处理**：result-file 缺失或不可解析时，最终裁决统一直接判定为 `escalate_to_human`（不引入 `unknown` 这一裁决态，裁决枚举仍严格为 `pass | revise_required | escalate_to_human`，见 FR-WHREVIEW-004），触发原因须写入报告/日志。
 - **轮次控制**：wh-review 须自行维护轮次计数并强制停止，不依赖 3rd-review 引擎侧的轮次上限参数（已知该参数在引擎内部无效，见 Known Gaps GAP-6）。
 
 **Given/When/Then**：
@@ -381,7 +381,7 @@ wh-review 在调用 3rd-review 引擎前，须完成以下装配并满足以下�
 
 **验收标准**：
 - AC10-1（静态验证）：test-acceptance 合同文件中 F1、F2、F3、F4、F5、F6 六个判据各有对应字段或检查项，缺任意一项即不通过；可 grep 合同文件验证。
-- AC10-2（行为验证）：给定一次 verify-code 执行后，fresh-capture 记录的 `git_sha` 与当前 HEAD 一致，且 `evidence` 字段中引用的 build-code 产物路径均存在于实际文件系统；断言：`git_sha == $(git rev-parse HEAD)` 且 evidence 路径 `ls` 均返回非空。
+- AC10-2（行为验证）：给定一次 verify-code 执行后，fresh-capture 记录的 `git_sha` 与当前 HEAD 一致，且 `evidence` 字段中引用的 build-code 产物路径均存在于实际文件系统；断言：记录的 `git_sha` 与执行时刻代码库的当前提交一致，且 evidence 字段引用的每个产物路径在文件系统中均存在，可通过机器验证或人工检查确认；具体验证脚本/命令示例不在本 spec 正文列出，留待后续 test-strategy 文档给出。
 
 ---
 
@@ -431,7 +431,7 @@ stage agent
 
 wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`（`recordSkeleton` / `updateOwnResult`，M4 十核心字段：`execution_id`、`skill_or_stage`、`stage`、`skill_version`、`executed`、`tokens`、`duration_ms`、`rework_rounds`、`human_intervention`、`friction_ref`），不新增独立指标底座。
 
-- 调用时机：wh-review 每次被 stage 调用触发审查前，调用 `recordSkeleton` 落一条骨架记录；本轮审查裁决完成后，调用 `updateOwnResult` 写入实测值。写入失败须 warn 但不阻断审查流程本身（与各 SKILL.md 现有约定一致）。
+- 调用时机：wh-review 每次被 stage 调用触发审查前，调用 `recordSkeleton` 落一条骨架记录；本轮审查裁决完成后，调用 `updateOwnResult` 写入实测值。写入失败须 warn 但不阻断审查流程本身（与各 SKILL.md 现有约定一致）。**设计意图说明**：这是有意为之的非阻断记录型门，不是校验疏漏或旁路开关——依据 `CONSTITUTION.md` F3（物理事实靠机器校验但不阻断）与 Q1（记事实而非阻断），质量相关的物理事实（此处为指标写入）应自动采集并浮现，但采集本身不应反过来卡死审查主流程；记录失败只代表"事后可见的遗漏"，供人事后判断，不代表审查裁决本身可以旁路或降级。
 - wh-review 需落入 M4 字段的关键信息：轮次状态中的 `round_number` 落入 `rework_rounds`；本轮审查耗时落入 `duration_ms`；是否触发 `escalate_to_human` 落入 `human_intervention`；`verdict`/`mode` 等 M4 字段之外的信息保留在 wh-review 自身的轮次状态文件中，作为 metrics 记录之外的可回溯锚点。
 
 **验收标准**：
@@ -487,7 +487,7 @@ wh-review 复用仓库已有的统一执行记录机制 `metrics/collector.mjs`�
 | make-decision intake 合同判据 | 无结构化判据，intake 合同未强制覆盖具体检查项 | 收紧为 C1-C6 强制卡口，六项判据缺任意一项即不通过（见 FR-INTAKE-001） | 破坏性（校验收紧） |
 | verify-code 合同判据 | 无结构化新鲜性判据 | 收紧为 F1-F6 强制卡口，六项判据缺任意一项即不通过（见 FR-TESTACCEPTANCE-001） | 破坏性（校验收紧） |
 | build-code §7/§13 调用语义 | §7 含 stage/轮次路由 numbered step 和 if/else 分支逻辑，调用方需了解内部路由机制 | §7 精简为对 §13 的概念性导读，不含任何流程步骤/条件分支，单次调用语义详见 §13（见 FR-THIRDREVIEW-002、7.4节） | 破坏性（接口/文档语义变更） |
-| 3rd-review 返回 unknown 时的处理路径 | 无此路径，result-file 缺失/不可解析时行为未定义 | result-file 缺失或不可解析时裁决为 `unknown`，触发 `escalate_to_human`；轮次状态文件与报告记录须体现该次裁决为升级人工，日志/报告中标注触发原因，等待人工介入 | 新增能力（fail-loud 路径） |
+| 3rd-review 返回结果文件缺失/不可解析时的处理路径 | 无此路径，result-file 缺失/不可解析时行为未定义 | result-file 缺失或不可解析时最终裁决直接判定为 `escalate_to_human`（不新增 `unknown` 裁决态）；轮次状态文件与报告记录须体现该次裁决为升级人工，日志/报告中标注触发原因，等待人工介入 | 新增能力（fail-loud 路径） |
 
 ### 不受影响的范围
 
