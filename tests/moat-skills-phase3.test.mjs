@@ -48,9 +48,9 @@ describe("Stage 2 make-decision moat references", () => {
 describe("Stage 2 make-decision tracking root", () => {
   const skill = readRequiredFile("workflows", "make-decision", "SKILL.md");
 
-  test("declares TASK_TRACKING_ROOT and records fallback when unset", () => {
-    assert.match(skill, /TASK_TRACKING_ROOT/, "SKILL.md must declare TASK_TRACKING_ROOT");
-    assert.match(skill, /tracking_root_fallback/, "SKILL.md must mention tracking_root_fallback");
+  test("declares WORKFLOWHUB_TASK_DIR and documents fail-loud behaviour when unset", () => {
+    assert.match(skill, /WORKFLOWHUB_TASK_DIR/, "SKILL.md must declare WORKFLOWHUB_TASK_DIR");
+    assert.match(skill, /fail-loud/, "SKILL.md must document fail-loud behaviour when unset");
   });
 });
 

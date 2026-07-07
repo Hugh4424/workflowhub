@@ -1,6 +1,6 @@
 ---
 name: intake-decision-review
-description: 单一入口的 intake 决策审查技能。把 direction、framing、scope 三个内部审查角度拼成一次 3rd-review 请求，并用大白话与用户确认关键选择。
+description: 单一入口的 intake 决策审查技能。把 direction、framing、scope、feasibility 四个内部审查角度拼成一次 3rd-review 请求，并用大白话与用户确认关键选择。
 ---
 
 # intake-decision-review
@@ -12,6 +12,7 @@ description: 单一入口的 intake 决策审查技能。把 direction、framing
 - `direction`：方向是否真的值得做，是否解决了真实问题。
 - `framing`：问题表述是否偏了，是否把手段当目标。
 - `scope`：范围是否过大、过小或边界不清。
+- `feasibility`：技术可行性——方案里的外部工具/接口/边界条件假设是否与现实相符。
 
 这些英文标签只用于内部记录和输出结构。面向用户时必须翻译成大白话，不能把这些词作为独立术语直接扔给用户。
 
@@ -42,14 +43,15 @@ description: 单一入口的 intake 决策审查技能。把 direction、framing
 
 一次只问一个最关键问题。若上下文足够，不打断用户，直接进入 S3。
 
-### S3 拼装三角度审查请求
+### S3 拼装四角度审查请求
 
-把三个内部角度拼进同一个 3rd-review 请求中，要求 reviewer 返回 findings。请求必须明确：
+把四个内部角度拼进同一个 3rd-review 请求中，要求 reviewer 返回 findings。请求必须明确：
 
-- findings **恰好 3 条**。
-- 每条 finding 标注且只标注 `direction`、`framing`、`scope` 之一。
-- 三类必须全覆盖，各一条，顺序不限。
+- findings **不设条数上限**，每个角度 0-N 条：某角度确实无发现可以是 0 条，但不得因为"凑数"而编造，也不得因为"怕超限"而截断真实问题。
+- 每条 finding 标注且只标注 `direction`、`framing`、`scope`、`feasibility` 之一。
+- 四类角度均须被覆盖考察（允许某角度产出为空，但不得未审），顺序不限。
 - 每条 finding 必须包含证据、风险、建议动作。
+- 请求必须携带强制字段 `verified_interface: {tool, checked_at, method}`：审查涉及调用外部脚本/工具时，必须先实测跑一次 `--help` 或读源码确认接口，再把核实结果写进这个字段。请求缺这个字段直接判不可执行，不得静默假设旧接口。
 
 ### S4 遇到问题时给中文选项
 
@@ -71,14 +73,15 @@ description: 单一入口的 intake 决策审查技能。把 direction、framing
 
 校验 findings：
 
-- 数量必须恰好 3 条。
-- `direction`、`framing`、`scope` 三类必须各一条。
-- 若 findings 数量不足、超过 3 条、缺角度或标签重复，要求重跑或重新调用审查。
+- 数量不设上限，每个角度 0-N 条，不得因固定条数上限截断真实问题。
+- `direction`、`framing`、`scope`、`feasibility` 四类必须均已被考察（angle 标签只允许取这四个值之一），允许某角度为 0 条，但不得整体缺失某个角度未被审查。
+- 若标签值非法（不属于四类之一）或明显缺整角度未审查，要求重跑或重新调用审查。
+- **契约漂移检测**：审查请求实际返回的结构与本合同声明的结构（字段名、angle 枚举值、必填字段）不一致时，审查器必须把这个不一致本身列为一条 blocking finding，不得吞掉重试、不得静默忽略差异继续解析。
 - 不得编造、不自行编造、不补齐缺失角度；缺什么就明确说缺什么。
 
 ### S8 产出审查结论
 
-输出恰好 3 条 findings，并附一个汇总判断：
+输出 findings（每个角度 0-N 条，不设总数上限），并附一个汇总判断：
 
 ```text
 findings:
@@ -86,14 +89,26 @@ findings:
     evidence: ...
     risk: ...
     recommendation: ...
+  # 0..N items
   - angle: framing
     evidence: ...
     risk: ...
     recommendation: ...
+  # 0..N items
   - angle: scope
     evidence: ...
     risk: ...
     recommendation: ...
+  # 0..N items
+  - angle: feasibility
+    evidence: ...
+    risk: ...
+    recommendation: ...
+  # 0..N items
+verified_interface:
+  tool: ...
+  checked_at: ...
+  method: ...
 summary:
   verdict: pass | revise_required | blocked
   reason: ...
@@ -103,17 +118,27 @@ summary:
 
 把结论翻译成大白话交给用户确认，明确说明：**不确认就不继续**。如果用户没有确认，等待确认，不推进到后续实现或计划步骤。
 
+### S9.5 跳过机制（允许跳过，但不许静默消失）
+
+允许跳过本轮盲审（例如已有更早轮次的等效审查覆盖）。但跳过前必须检查：本轮盲审在被跳过之前，是否已经产出过任何 finding（哪怕只是中途生成、尚未走完流程）。
+
+- 若已产出过 finding：不允许直接跳过消失，必须把这些 finding 转成调用方 decision-log 的"开放问题"节，并为其生成一个对应的可追踪 issue（issue 编号写入开放问题条目）。
+- 若确实没有产出过任何 finding：可以正常跳过，写明跳过原因。
+
 ## 输出
 
-- 3 条 findings，内部标签恰好覆盖 `direction`、`framing`、`scope`。
+- findings：每个角度 0-N 条，标签覆盖 `direction`、`framing`、`scope`、`feasibility`。
+- `verified_interface` 字段（工具、核实时间、核实方式）。
 - `fallback_used` 检查结果。
-- 完整性校验结果。
+- 完整性校验结果（含契约漂移检测结果）。
 - 面向用户的大白话确认文本。
 - 若 blocked，输出阻塞原因和需要用户补充的最小信息。
+- 若跳过，输出跳过原因；若跳过前已有 finding，输出对应的开放问题条目与 issue 编号。
 
 ## 约束
 
 - 单一 intake-decision-review skill，不拆分为多个 intake-* 技能。
-- 三角度内容必须拼装后对 3rd-review 单次调用。
-- findings 必须恰好 3 条，缺角度就重跑，不得编造。
+- 四角度内容必须拼装后对 3rd-review 单次调用。
+- findings 不设总数上限，缺整角度未审查就重跑，不得编造，也不得为了凑数虚报 finding。
+- 跳过必须满足 S9.5 的留痕约束，跳过前已有 finding 不许直接消失。
 - 用户可见文本用中文大白话表达，不直接暴露内部英文术语。

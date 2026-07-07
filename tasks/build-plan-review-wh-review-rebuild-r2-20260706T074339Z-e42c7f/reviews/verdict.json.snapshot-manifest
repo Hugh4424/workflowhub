@@ -1,0 +1,23 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "Users/Hugh/Hugh/Knowledge/Projects/workflowhub/wh-review-rebuild/worktree/workflowhub/specs/wh-review-rebuild/plan.md",
+      "hash": "8e92981220112467b2b423d59ac0eb1492a600ed354664396a01c0357d00c325"
+    },
+    {
+      "path": "Users/Hugh/Hugh/Knowledge/Projects/workflowhub/wh-review-rebuild/worktree/workflowhub/specs/wh-review-rebuild/tasks.md",
+      "hash": "34b76e7a67e4bd9bae3cbadf2551c072b6173d4f019d95e4071a4981b3e55708"
+    },
+    {
+      "path": "tmp/wh-review-rebuild-build-plan-review-package-r2.md",
+      "hash": "0b13ef949744f2b64d32d75973810006bf2d2bfdc25a7e80343559c3c9d90a1b"
+    }
+  ],
+  "verdict_binding": {
+    "verdict_id": "245960a0-4541-442a-b541-4e9fcffdb97a",
+    "verdict_file": "Users/Hugh/Hugh/Knowledge/Projects/workflowhub/wh-review-rebuild/worktree/workflowhub/tasks/build-plan-review-wh-review-rebuild-r2-20260706T074339Z-e42c7f/reviews/verdict.json",
+    "hash": "872ed56b1a11d0cc2c9ab31c66148c129e319ce00721bee47973f3e7f066c010"
+  }
+}

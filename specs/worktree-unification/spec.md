@@ -116,7 +116,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 
 - R1（源自 decision-log D1）：task_tracking_root 读取规则 —— make-decision 读取 `WORKFLOWHUB_TASK_DIR` 环境变量作为 task_tracking_root（即跟踪根目录本身，不含 `/tasks` 子路径）；task 专属目录为 `task_tracking_root/tasks/{task-id}/`；若环境变量未设置则按 FR-WORKTREE-ENVVAR-003 降级顺序处理；task_tracking_root **不写入** worktree.json（worktree.json 只含 FR-WORKTREE-CONTRACT-001 定义的 6 字段）；task_tracking_root 由各 stage 各自实时读取 `WORKFLOWHUB_TASK_DIR` 环境变量得到，无需跨 stage 固化传递（因为它是环境变量，每个 stage 运行时均可重新读取，值恒定不变）
 - R2（源自 decision-log D2）：目标仓库路径（target_repo_root）探测与固化规则 —— make-decision 在当前会话 cwd 上下文首次探测并做存在性校验，写入 worktree.json 并标注不可覆盖；后续所有 stage 只读该字段，禁止重新探测；字段缺失时 escalate_to_human
-- R3（源自 decision-log D3）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配则复用，否则 fail-loud
+- R3（源自 decision-log D3）：分支命名规则，精确格式为 `workflowhub/{task-id}`；task-id 必须匹配正则 `^[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，禁止数字、下划线、大写、连续连字符、首尾连字符、`/`、`..`、`@{`、空白字符）；完整分支名必须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`；重跑时若 worktree.json status=active 且分支名匹配，**并且** worktree.json 记录的 `target_repo_root` 与本次调用探测得到的 `target_repo_root` 完全一致，则复用；分支名匹配但 `target_repo_root` 不一致（同一 task-id 被用于不同项目）须 fail-loud，不得静默复用——分支名由 task-id 确定性推导，仅比对分支名不足以检测跨项目 task-id 冲突，必须叠加 `target_repo_root` 比对（校验逻辑由 `core/worktree-reuse-guard.mjs` 承载，见下方"幂等复用前置校验"）
 - R4（设计延伸）：worktree 创建时机（make-decision 阶段末尾，task 子目录创建成功后）
 - R5（源自 decision-log 验收标准 1；其中 `target_repo_root` 固化规则源自 D2）：worktree.json 写入时机与字段要求（首次写入全部 6 字段，写入后标注不可覆盖）
 - R6（源自 decision-log D4）：worktree 存在性/冲突检测规则 —— 用 `git worktree list --porcelain` 作为唯一权威校验；已注册且路径存在则复用；路径存在未注册（僵尸目录）则 fail-loud，不自动删除；分支已被其他 worktree 占用则 fail-loud，报告占用详情，不强制 checkout
@@ -124,7 +124,7 @@ make-decision/SKILL.md 须新增 worktree 创建规则章节，覆盖以下规�
 
 **task 子目录创建职责（设计延伸：decision-log D1 决定 task_dir 读取机制，但未显式规定 make-decision 负责创建子目录；本条为基于 D1 语义和 fail-loud 设计原则的派生实现约束，非 D1 原文直接授权）**：make-decision 负责创建 `{{task_tracking_root}}/tasks/{task-id}/` 子目录（一次性，仅在首次运行时）。执行条件：
 - 前置条件：`{{task_tracking_root}}/tasks/`（由 `WORKFLOWHUB_TASK_DIR` 值拼接 `/tasks` 得到）必须已存在；若父目录不存在，则 fail-loud 报错，不自动创建父目录。
-- 幂等：若 `{{task_tracking_root}}/tasks/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理（status=active 则复用，status=cleaned 则 fail-loud 报"task 已归档"）。
+- 幂等：若 `{{task_tracking_root}}/tasks/{task-id}/` 已存在，读取其中 worktree.json 并按 status 字段规则处理：status=cleaned 则 fail-loud 报"task 已归档"；status=active 时须先比对 worktree.json 记录的 `target_repo_root` 与本次调用探测得到的 `target_repo_root` 是否一致——一致才复用，不一致（同一 task-id 撞到不同项目）须 fail-loud，报错须含 task-id 及双方 target_repo_root，不得静默把本次调用接到旧项目的 worktree 上（见 R3 及 `core/worktree-reuse-guard.mjs`）。
 - 成功后方可继续 R3 worktree 创建步骤。
 
 **验收标准**：读取 make-decision/SKILL.md，存在独立 worktree 章节，R1-R7 规则均有明确条文（含 D1 task_tracking_root 读取机制、D5 commit 责任：若目标仓库有文件变更则 commit，worktree.json 不纳入 commit，无变更则在 stage-result/journal 记录原因）；R 编号与 decision-log D 编号不可混用。
@@ -262,7 +262,8 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 | `WORKFLOWHUB_TASK_DIR` 设置为相对路径或 `~` 开头 | fail-loud，必须绝对路径（以 `/` 开头），不展开 `~` |
 | `WORKFLOWHUB_TASK_DIR` 路径存在但不是目录 | fail-loud，路径必须指向目录 |
 | `WORKFLOWHUB_TASK_DIR` 路径不存在 | fail-loud，parser 不自动创建目录（由调用方在创建阶段负责 mkdir -p）|
-| worktree.json 已存在且 status=active，分支匹配 | 复用现有 worktree 记录，校验字段完整性后继续 |
+| worktree.json 已存在且 status=active，分支匹配，target_repo_root 一致 | 复用现有 worktree 记录，校验字段完整性后继续 |
+| worktree.json 已存在且 status=active，分支匹配，target_repo_root 不一致（同一 task-id 撞到不同项目） | fail-loud，报 task-id 及双方 target_repo_root，不得静默复用 |
 | worktree.json 已存在且 status=active，分支不匹配 | fail-loud，报字段冲突，不自动覆盖 |
 | worktree.json 已存在且 status=cleaned | 报错提示该 task 已归档，须新建 task-id |
 | worktree.json 不存在但目标分支已存在 | fail-loud，检测到孤立分支，不自动强制切换，需人工确认 |
@@ -363,6 +364,11 @@ build-spec 和 build-plan 不执行任何 `git worktree add` 操作，不写入 
 - Given: 用户输入 task-id 为 `Worktree Unification`（含大写和空格）
 - When: make-decision 执行归一化：转小写 → `worktree unification`，空格替换为连字符 → `worktree-unification`，校验 `^[a-z]+(-[a-z]+){1,2}$` 通过（2个纯小写词）
 - Then: 使用归一化结果 `worktree-unification` 作为 task-id，继续执行后续步骤
+
+**场景 D — 幂等复用前置 target_repo_root 一致性校验（跨项目 task-id 冲突拒绝复用）**
+- Given: task-id `my-feature` 已存在 `worktree.json`，其中 `status=active`、`target_repo_root=/repo/project-a`；本次调用探测得到的 `target_repo_root=/repo/project-b`（同一 task-id 被用于不同项目）
+- When: make-decision 幂等复用前调用 `core/worktree-reuse-guard.mjs` 的 `checkWorktreeReuse()` 比对两侧 `target_repo_root`
+- Then: 检测到不一致，fail-loud 拒绝复用，错误信息须包含 task-id、worktree.json 中记录的 `target_repo_root`（`/repo/project-a`）、本次调用的 `target_repo_root`（`/repo/project-b`）三项，提示用户更换 task-id 或核实目标仓库；不得静默复用旧项目的 worktree 记录。同一 task-id 且 `target_repo_root` 一致（同项目重复调用）时不受影响，正常复用。
 
 ### FR-WORKTREE-ENVVAR-003
 

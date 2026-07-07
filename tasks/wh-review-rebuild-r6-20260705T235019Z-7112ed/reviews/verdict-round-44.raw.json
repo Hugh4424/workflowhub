@@ -1,0 +1,27 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "3rd-review 调用契约前后冲突，无法唯一实现",
+      "detail": "同一份 spec 对 3rd-review 输入面定义了两套不兼容接口。§2 Goal 2 和 §6 数据流把 3rd-review 定义成接收 `{mode, contract, materials}` 的纯引擎；但 FR-THIRDREVIEW-001 的“方案A 定案架构”又要求 wh-review 先把合同与材料拼成“一份完整的纯文本审查包”，并强调 3rd-review 只收到这份纯文本输入、不再感知 contract 路由信息。实现者无法判断引擎边界到底是结构化三元组还是单一文本包，AC5-3、独立调用能力、日志验证口径都会随之分叉，属于阻断级歧义。"
+    },
+    {
+      "severity": "blocking",
+      "title": "wh-review 作为自研技能缺少 S4/F6 指标与统一执行记录设计",
+      "detail": "本 spec 大量要求 `skills/wh-review/` 持久化轮次状态、route-decision、报告、Delta Package，但这些都只是散落文件，没有定义如何接入仓库要求的统一执行记录/指标底座。仓库 `CONSTITUTION.md` 明确要求 F6“统一外置执行记录”和 S4“自定义技能必须有指标系统”；现有验收项也没有任何关于 execution record、metric 字段、写入时机、关联 executionId/roundId 的要求。按当前文本落地会直接产出一个不合宪的新技能。"
+    },
+    {
+      "severity": "blocking",
+      "title": "核心落盘路径依赖“任务目录”，但 spec 没有定义任务目录解析契约",
+      "detail": "AC1-3、AC3-1、AC4-2、AC-D4、AC-D10 都把可验收性建立在“当前任务目录下固定子路径”之上，但全文没有定义任务目录从哪里来、由谁解析、调用方必须传什么、与现有 `task_tracking_root`/`parseTaskDir()` 契约如何对齐。当前仓库多个 stage 已依赖明确的任务目录解析规则；这份 spec 若不把 wh-review 的路径解析契约写死，不同 stage/runner 可能把状态与报告写到不同位置，直接导致验收不可重复。"
+    },
+    {
+      "severity": "minor",
+      "title": "§7 的机器校验规则过窄，容易被等价写法绕过",
+      "detail": "FR-THIRDREVIEW-002 只要求不命中 `^\\s*\\d+\\.` 和 `/\\bif\\b.*\\belse\\b/`。这不能覆盖 `-` 列表、`Step 1`、中文条件句、分段式条件描述等等价流程逻辑，导致“机器可检验”与真实约束不一致，容易假绿。"
+    }
+  ],
+  "resolutionSummary": "先统一 3rd-review 的唯一 API，再补 wh-review 的 metrics/执行记录契约和任务目录解析契约，最后收紧 §7 的可检验规则。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r44"
+}

@@ -1,0 +1,6 @@
+{
+  "routing_tier": "simple",
+  "routing_rationale": "Phase-3 verification is limited to the existing npm test suite with no browser, network, or integration surface; the simple tier is sufficient.",
+  "result": "pass",
+  "ts": "2026-07-02T00:25:00.000Z"
+}

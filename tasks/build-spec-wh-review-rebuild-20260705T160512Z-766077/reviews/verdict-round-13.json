@@ -1,0 +1,29 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "审查轮次规则冲突，无法确定第4轮行为",
+      "detail": "FR-WHREVIEW-003同时写了“异源审查最多3轮；第4轮起强制转同源”和“连续3轮大量 blocking 或指纹重复 blocking → 升级人工”。Known Gaps 也承认两条规则可能同时触发但未定优先级。这个冲突直接决定 wh-review 的裁决与停止条件，当前无法实现确定性逻辑，也无法写稳定测试。"
+    },
+    {
+      "severity": "blocking",
+      "title": "“大量 blocking”未定义，升级人工条件不可执行",
+      "detail": "FR-WHREVIEW-003把升级条件写成“连续3轮出现大量 blocking”，但 GAP-4 明确承认“大量”没有数值阈值。没有 blocking_count 的阈值，`escalate_to_human` 何时触发无法实现，也无法验收 AC3-3、AC-D10。"
+    },
+    {
+      "severity": "blocking",
+      "title": "3rd-review 纯引擎接口与现有调用契约未对齐",
+      "detail": "规格要求 3rd-review 精简为输入 `{mode, contract, materials}`、输出 `{verdict, findings, actual_mode}`，同时又把 `standalone.sh` 参数/输出不一致列为 OPEN-1 且标记“不阻断”。这不是边角问题，而是核心集成契约。若不先统一 3rd-review 的真实 CLI/API 形态，wh-review 无法稳定调用，FR-THIRDREVIEW-001、NFR-3、AC-D7 都缺少可落地接口。"
+    },
+    {
+      "severity": "minor",
+      "title": "6章报告结构未在规格中定稿",
+      "detail": "FR-WHREVIEW-004要求报告“包含6章结构”，Known Gaps 又说明 6 章名称尚未核实、需 build-plan 阶段补定义。建议在规格里直接列出章名或明确占位字段，否则验收只能做存在性检查，不能做内容一致性检查。"
+    }
+  ],
+  "resolutionSummary": "先补齐轮次优先级、blocking 阈值、3rd-review 实际接口契约，再进入实现；否则 wh-review 的核心流程不可验证。",
+  "reviewRequestId": "standalone-build-spec-wh-review-rebuild-20260705T160512Z-766077-r13",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-13.md"
+}

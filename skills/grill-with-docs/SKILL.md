@@ -11,6 +11,15 @@ Ask the questions one at a time, waiting for feedback on each question before co
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
+**退出条件（客观 checklist，不是主观判断）**：不再用"用户能否复述四件事"这类主观标准判断是否可以退出。退出前必须逐项过下面这份客观 checklist，四项全过才能退：
+
+1. 外部依赖接口是否已核实真实定义（非文档假设）
+2. 涉及字段/路径命名是否已有唯一权威定义
+3. 失败路径/异常语义是否明确
+4. 范围边界"做什么/不做什么"是否写死、无隐性口头扩大
+
+四项缺一项，不得静默放过、不得直接退出：把缺失项转入调用方的 decision-log"开放问题"节，标注具体缺哪一项、缺失原因，再继续追问或转交后续阶段处理。
+
 **Plain language mandatory**：面向非工程背景的人提问和汇报时用大白话，不堆专业术语；给选项时逐条说明每个选项的含义和选它会导致什么后果，不能只列名词让人自己猜。
 
 </what-to-do>

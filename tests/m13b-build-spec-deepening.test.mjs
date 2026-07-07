@@ -18,19 +18,19 @@ function skill() {
 
 // ─── Phase 1: Foundation ────────────────────────────────────────────────────
 
-describe("Phase 1 / AC-06: TASK_TRACKING_ROOT env var declared", () => {
-  test("SKILL.md contains TASK_TRACKING_ROOT", () => {
-    assert.ok(skill().includes("TASK_TRACKING_ROOT"),
-      "TASK_TRACKING_ROOT must appear in build-spec SKILL.md (FR-TRACKING-001)");
+describe("Phase 1 / AC-06: WORKFLOWHUB_TASK_DIR env var declared", () => {
+  test("SKILL.md contains WORKFLOWHUB_TASK_DIR", () => {
+    assert.ok(skill().includes("WORKFLOWHUB_TASK_DIR"),
+      "WORKFLOWHUB_TASK_DIR must appear in build-spec SKILL.md (FR-TRACKING-001)");
   });
-  test("SKILL.md declares default path ~/Knowledge/workflowhub/", () => {
-    assert.ok(skill().includes("Knowledge/workflowhub"),
-      "Default TASK_TRACKING_ROOT path must be declared (FR-TRACKING-001)");
+  test("SKILL.md declares config/workflowhub.yaml task_dir as fallback", () => {
+    assert.ok(skill().includes("config/workflowhub.yaml") && skill().includes("task_dir"),
+      "config/workflowhub.yaml task_dir fallback must be declared (FR-TRACKING-001)");
   });
-  test("SKILL.md states warn-not-stop behaviour for missing TASK_TRACKING_ROOT", () => {
+  test("SKILL.md states fail-loud behaviour for missing WORKFLOWHUB_TASK_DIR", () => {
     const c = skill();
-    assert.ok(c.includes("TASK_TRACKING_ROOT") && (c.includes("warn") || c.includes("警告")),
-      "SKILL.md must declare warn (not stop) on missing TASK_TRACKING_ROOT (FR-TRACKING-001)");
+    assert.ok(c.includes("WORKFLOWHUB_TASK_DIR") && c.includes("fail-loud"),
+      "SKILL.md must declare fail-loud (not warn/default) on missing WORKFLOWHUB_TASK_DIR (FR-TRACKING-001)");
   });
 });
 
@@ -420,10 +420,10 @@ describe("Phase 3 / AC-18: all FR numbers use FR-[A-Z]+-[0-9]{3} format", () => 
   });
 });
 
-describe("Phase 3 / AC-22: TASK_TRACKING_ROOT used, no hardcoded tracking absolute paths", () => {
-  test("SKILL.md references TASK_TRACKING_ROOT for tracking file paths", () => {
-    assert.ok(skill().includes("TASK_TRACKING_ROOT"),
-      "SKILL.md must reference TASK_TRACKING_ROOT for tracking paths (FR-TRACKING-001/002 AC-22)");
+describe("Phase 3 / AC-22: WORKFLOWHUB_TASK_DIR used, no hardcoded tracking absolute paths", () => {
+  test("SKILL.md references WORKFLOWHUB_TASK_DIR for tracking file paths", () => {
+    assert.ok(skill().includes("WORKFLOWHUB_TASK_DIR"),
+      "SKILL.md must reference WORKFLOWHUB_TASK_DIR for tracking paths (FR-TRACKING-001/002 AC-22)");
   });
   test("SKILL.md does not use ~/Knowledge/ as a hardcoded write path (only allowed as default-value declaration)", () => {
     const c = skill();
