@@ -1,0 +1,31 @@
+# 审查报告 — build-spec-wh-review-rebuild-20260705T160512Z-766077 (round 11)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+先补齐状态机优先级、blocking 阈值、6章报告结构定义，再收紧合同搬迁范围与 3rd-review 接口对齐口径。
+
+## Findings
+
+- [blocking] 问题: 降级/升级规则冲突未定序 | 建议: 规格同时要求“连续3轮 blocking 或指纹重复 blocking → escalate_to_human”和“第4轮起强制转同源”，但未定义二者同时命中时的优先级。Known Gaps 已承认 GAP-5。这个冲突直接影响 wh-review 的裁决状态机、round 4 行为、以及 AC3-3/AC-D10 的可验证性，当前无法无歧义实现。
+- [blocking] 问题: “大量 blocking”缺少数值阈值 | 建议: FR-WHREVIEW-003 把升级人工条件写成“连续3轮出现大量 blocking”，但没有定义 blocking_count 的阈值或计算口径。Known Gaps 已承认 GAP-4。没有阈值，轮次状态字段中的 blocking_count 无法形成确定裁决，AC3-3 无法做机器验收。
+- [blocking] 问题: 6章报告结构缺少明确章节定义 | 建议: FR-WHREVIEW-004 和 UC-7 要求 render-review-report.mjs 生成“6章结构”报告，AC4-3 还要求“结构名称在 SKILL.md 中明确定义”，但 Known Gaps 明确写了这6章名称尚未核实。当前验收对象不存在，报告渲染无法做客观对照，也无法判断迁移是否完整。
+- [minor] 问题: 合同搬迁范围表述前后不稳 | 建议: 范围部分写“搬迁 agenthub verifiers/vibecoding 5 套 stage 专属合同（逐步扩充到位）”，但问题陈述又说已有 11 份 stage 专属合同在 workflowhub 中从未使用。这里没有说清本期到底迁哪 5 套、剩余 6 份如何处理，容易让实现方误判范围。
+- [minor] 问题: 3rd-review 实际接口与文档接口存在已知不一致 | 建议: OPEN-1 说明 standalone.sh 的实际调用参数与 SKILL.md 描述不一致，而本规格又把 3rd-review 纯引擎接口收敛为 {mode, contract, materials} -> {verdict, findings, actual_mode}。虽然文中标注“不阻断当前范围”，但若不在计划阶段明确对齐策略，后续实现和验收会产生口径漂移。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：降级/升级规则冲突未定序
+- 必须修复：“大量 blocking”缺少数值阈值
+- 必须修复：6章报告结构缺少明确章节定义
+

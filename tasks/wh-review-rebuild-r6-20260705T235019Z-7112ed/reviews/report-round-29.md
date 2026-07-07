@@ -1,0 +1,30 @@
+# 审查报告 — wh-review-rebuild-r6-20260705T235019Z-7112ed (round 29)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+先补齐 3rd-review 唯一输入契约、审查产物固定路径合同、D2 gate 的唯一责任层，再进入实现。
+
+## Findings
+
+- [blocking] 问题: 3rd-review 输入契约前后冲突，无法定实现边界 | 建议: 第 2 节 Goal 2 和数据流图把 3rd-review 定义成接收 `{mode, contract, materials}` 的纯引擎；FR-THIRDREVIEW-001 的方案A又要求 wh-review 先把合同与材料装配成一份纯文本审查包，并明确 3rd-review 不再接收合同路由语义。这两套接口不等价，会直接影响 wh-review/3rd-review 的调用实现、日志设计和验收方式，当前规格无法唯一落地。
+- [blocking] 问题: 报告与轮次状态的落盘路径未定死，验收无法执行 | 建议: 多处要求“任务目录下固定子路径”“路径可预测”“`ls <task-dir>/<task-id>/reviews/` 可验证”，但规格没有定义 task-dir/task-id 的来源规则，也没有给出 report/state/route-decision/delta 的精确目录结构和命名约定。AC1-3、AC3-1、AC4-2、AC-D4、AC-D10 都依赖这个路径合同，缺失后实现和测试都无法一致。
+- [blocking] 问题: D2 人工确认门的责任归属不清，流程验收不可判 | 建议: 规格一方面把 wh-review 定义为返回 `pass | revise_required | escalate_to_human` 的审查层；另一方面又要求 make-decision/build-plan/verify-code 的 `pass` 路径必须“停在人工确认门”，而 build-spec/build-code 自动推进。当前没有定死是 wh-review 负责返回额外 gate 信号，还是 5 个 stage 各自根据 stage 名和 verdict 决定暂停/推进。没有明确输出契约，AC8-1/AC8-2/AC-D5 无法稳定实现和验收。
+- [minor] 问题: `docs/human-brief-template.md` 是否存在仍被列为 Gap，但正文未定是否创建 | 建议: FR-STAGE-001 把 5 个 stage 统一调用该模板作为硬要求，但 Known Gaps 仍写“若不存在须作为前置依赖在 build-plan 中标出”。如果本期不同时创建该文件，阶段收尾统一目标可能被外部依赖卡住；建议把“文件已存在”或“本期负责创建”写死。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：3rd-review 输入契约前后冲突，无法定实现边界
+- 必须修复：报告与轮次状态的落盘路径未定死，验收无法执行
+- 必须修复：D2 人工确认门的责任归属不清，流程验收不可判
+

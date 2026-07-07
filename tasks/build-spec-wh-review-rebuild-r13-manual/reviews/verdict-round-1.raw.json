@@ -1,0 +1,77 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "wh-review-rebuild-r13-materials.md",
+      "line": "spec.md FR-WHREVIEW-001 / FR-WHREVIEW-004 / FR-D2-001",
+      "issue": "多处落盘路径写成 `tasks/{task-id}/...`，但规格从未定义 `task-id` 的来源、解析规则、与当前 stage/task 的绑定方式。`parseTaskDir()` 只解析 `task_tracking_root`，不能推出 `task-id`。结果是 report、report-index、reviews、human-confirmation 等核心产物都无法稳定落盘或验收。",
+      "recommendation": "补一条权威契约：明确 `task-id` 从哪里来（例如输入参数、现有 stage artifact、当前工作目录约定或专用解析器），并要求所有 `tasks/{task-id}/...` 路径统一复用该解析结果。"
+    },
+    {
+      "severity": "high",
+      "file": "wh-review-rebuild-r13-materials.md",
+      "line": "spec.md UC-8 / NFR-2 / FR-THIRDREVIEW-001 Runner 发现与可执行调用规则",
+      "issue": "错误语义自相矛盾。NFR-2 规定“3rd-review 调用失败等错误场景，均须非零退出+明确错误信息”，但 FR-THIRDREVIEW-001 又把 runner 不存在、非零退出、超时、`--output` 缺失/不可解析统一映射为 `escalate_to_human` 裁决。这两套语义一个是 fail-loud 终止，一个是正常产出裁决，实施方无法判断 wh-review 此时应退出还是继续。",
+      "recommendation": "二选一并写死：要么把 runner 级失败定义为 wh-review 自身 fail-loud 非零退出；要么明确 wh-review 仍返回 0 且产出 `escalate_to_human`，同时下调或改写 NFR-2，避免同一错误同时要求“退出”和“给裁决”。"
+    },
+    {
+      "severity": "medium",
+      "file": "wh-review-rebuild-r13-materials.md",
+      "line": "spec.md FR-WHREVIEW-002 / FR-THIRDREVIEW-001 / AC-D4",
+      "issue": "`route-decision` 被当成核心验收证据使用，但规格没有定死它的落盘路径、文件名、最小 schema、写入时机。AC2-2 和 AC-D4 要求机器 grep 验证合同源路径+hash 与实际审查包一致，当前无法形成可重复验收。",
+      "recommendation": "补充 `route-decision` 契约：固定路径、命名规则、字段最小集（stage、contract_path、contract_hash、timestamp、input_mode、review_input_hash 等）、以及“在调用 3rd-review 前写入”的时序要求。"
+    },
+    {
+      "severity": "medium",
+      "file": "wh-review-rebuild-r13-materials.md",
+      "line": "decision-log.md §6 开放问题",
+      "issue": "decision-log 先写“无遗留待定项”，随后又保留“issue 编号待后续 build-plan 阶段创建：[占位符]”。这既与本段表述冲突，也不满足 D4 C4 对“开放问题需有实际跟进 issue 编号”的要求。",
+      "recommendation": "要么删除该待跟进项并确认确实无开放问题，要么立即补上真实 issue 编号，并把该项明确标记为“不阻断当前范围”的已登记跟进事项。"
+    }
+  ],
+  "resolutionSummary": "规格已补强人工确认门与轮次模型，但仍有 4 个会阻塞实现或验收的合同缺口：`task-id` 来源未定义、3rd-review 失败语义冲突、`route-decision` 证据文件契约缺失、decision-log 仍保留未落号占位问题。",
+  "reviewSnapshot": [
+    {
+      "path": "wh-review-rebuild-r13-materials.md",
+      "hash": null,
+      "lines": 805,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wh-review-rebuild-r13-materials.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

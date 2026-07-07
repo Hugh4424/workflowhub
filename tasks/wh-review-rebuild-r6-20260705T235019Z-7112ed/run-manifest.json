@@ -1,0 +1,11 @@
+{
+  "taskName": "wh-review-rebuild-r6-20260705T235019Z-7112ed",
+  "status": "failed",
+  "startedAt": "2026-07-05T23:50:19Z",
+  "versionAnchor": "60f9d26b83f903eb58d0090f8cc745d89423c3ba",
+  "input": "specs/wh-review-rebuild/spec.md",
+  "maxReviseRounds": 3,
+  "reviseRounds": 44,
+  "endedAt": "2026-07-06T00:38:56Z",
+  "failureReason": "review runner failed (rc=1) at round 45"
+}

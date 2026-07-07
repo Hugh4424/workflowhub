@@ -1,0 +1,29 @@
+# 审查报告 — wh-review-rebuild-r6-20260705T235019Z-7112ed (round 13)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+先修 3 件事：统一目标路径到现有 `workflows/*` 结构、消除 3rd-review 接口与验收冲突、明确处理 F7 后再继续实现。
+
+## Findings
+
+- [blocking] 问题: 目标文件路径与仓库真实结构不一致 | 建议: spec 把主要改动面写成 `skills/3rd-review/`、`skills/wh-review/` 和“5 个 stage SKILL.md”，但当前仓库实际 stage 入口在 `workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`，且仓库内不存在 `skills/3rd-review/` 或 `skills/wh-review/` 目录。这样会让实现者无法判断应修改现有 `workflows/*` 还是另起一套 `skills/*`，AC1-1、AC5-1、AC7-1 这类路径级验收也会直接失真。
+- [blocking] 问题: 3rd-review 纯引擎契约与验收条件前后冲突 | 建议: FR-THIRDREVIEW-001 明确要求 wh-review 在调用前完成合同装配，且“禁止传入” stage 路由参数（如 `--checkpoint`），3rd-review 必须零 stage 知识；但 AC-D1 又要求对同一审查包“去掉/加上 stage 参数”的两次调用结果一致，等于默认 3rd-review 仍接受 stage 参数。仓库现有 `workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md` 也都还写着 `--checkpoint=build-*` 的直接调用模板。当前 spec 没把旧调用面如何迁移、哪些验收针对 wh-review、哪些针对 3rd-review 引擎本体说清，导致接口不可实现也不可验收。
+- [blocking] 问题: 自动推进规则与项目宪法 F7 冲突 | 建议: FR-D2-001 规定 `build-spec`、`build-code` 在 pass 后可自动推进，且 `docs/human-brief-template.md` 现有文案也写了“自动进入下一阶段”；但项目宪法 `CONSTITUTION.md` 的 F7 明确要求“进入下一阶段前停下来等人确认”，且治理条款说明宪法优先级高于其它临时约定。除非本需求先显式修宪，或把自动推进改成仅建议推进/待人确认，否则该 spec 本身不合宪，不能作为可落地基线。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：目标文件路径与仓库真实结构不一致
+- 必须修复：3rd-review 纯引擎契约与验收条件前后冲突
+- 必须修复：自动推进规则与项目宪法 F7 冲突
+

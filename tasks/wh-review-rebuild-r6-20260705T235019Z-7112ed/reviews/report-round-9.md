@@ -1,0 +1,30 @@
+# 审查报告 — wh-review-rebuild-r6-20260705T235019Z-7112ed (round 9)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+先补齐落盘路径合同、人工确认门接口、stage 收尾顺序这三项执行级定义，再进入实现。
+
+## Findings
+
+- [blocking] 问题: 任务目录与落盘路径合同未定义 | 建议: 多处验收依赖固定落盘位置，但规格只写了“任务目录下固定子路径”或“当前任务目录”，没有定义 task-dir、task-id 的来源、目录结构、报告文件名规则、轮次状态文件名规则、route-decision 文件名规则。AC1-3、AC2-2、AC3-1、AC4-2、AC-D4、AC-D10 都因此无法稳定实现或测试。
+- [blocking] 问题: 人工确认门缺少可执行接口 | 建议: FR-D2-001 只要求 make-decision/build-plan/verify-code 在 pass 后“停在人工确认门”，但没有定义暂停/恢复的具体机制：由哪个文件、命令、状态字段或返回值承载等待态，human orchestrator 如何批准，批准后如何恢复到下一 stage。AC8-1/AC8-2 要求行为验证，但当前规格没有可实现的集成合同。
+- [blocking] 问题: stage 收尾流程顺序未定，wh-review 与 human-brief-template 关系不清 | 建议: 规格同时要求 5 个 stage 收尾统一调用 `docs/human-brief-template.md`，又要求 stage 收尾触发 wh-review、处理 D2 人工门、自动推进或挂起，但没有定义顺序与数据依赖：human brief 是在审查前还是审查后生成，是否必须包含 verdict/report_path/findings，遇到 `revise_required` 或 `escalate_to_human` 时是否仍生成。这会直接导致 5 个 stage 的收尾实现分叉。
+- [minor] 问题: Known Gaps 与正文已有定案重复且部分过时 | 建议: Known Gaps 仍写“render-review-report.mjs 的6章结构名称未明确列出，build-plan 阶段需核实”，但正文 FR-WHREVIEW-004 已经把 6 章名称、顺序、语义定死。该处会让执行者误判哪些内容已决、哪些仍待确认。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：任务目录与落盘路径合同未定义
+- 必须修复：人工确认门缺少可执行接口
+- 必须修复：stage 收尾流程顺序未定，wh-review 与 human-brief-template 关系不清
+

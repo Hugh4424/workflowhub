@@ -1,0 +1,24 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "自动推进规则违反宪法 F7",
+      "detail": "规格 §2 与 FR-D2-001 明确要求 `build-spec` / `build-code` 的 `pass` 路径可自动推进，但 `CONSTITUTION.md` 的 F7 写明“阶段推进与不可逆操作必须经人在边界确认，不由系统自动越界执行”。该冲突未被豁免，也未同步修改宪法，因此当前规格不可按仓库最高优先级规则落地。"
+    },
+    {
+      "severity": "blocking",
+      "title": "“第4轮起强制转同源”破坏异源裁决硬约束",
+      "detail": "规格 FR-WHREVIEW-003 规定“异源审查最多3轮；第4轮起强制转同源”。这与 `CONSTITUTION.md` 的 Q3“质量裁决必须由独立来源（异源审查者）在独立上下文中产出，禁止自审自判”直接冲突，也与规格 §3 对 reviewer agent 的“异源保证客观性”自相矛盾。若第4轮仍可能产出质量裁决，则该裁决不再合宪。"
+    },
+    {
+      "severity": "minor",
+      "title": "影响范围中的阶段文件路径与仓库实际结构不一致",
+      "detail": "规格 §7 将 5 个阶段文件写成 `skills/make-decision/SKILL.md`、`skills/build-spec/SKILL.md` 等，但仓库实际路径在 `config/workflowhub.yaml` 中登记为 `workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`。该处若不修正，会误导实现和验收范围。"
+    }
+  ],
+  "resolutionSummary": "先修正两处合宪性冲突：取消自动推进或修改宪法，取消“转同源后继续裁决”或明确第4轮只能升级人工；同时把影响范围中的阶段文件路径改成 `workflows/.../SKILL.md`。",
+  "reviewRequestId": "standalone-build-spec-wh-review-rebuild-20260705T160512Z-766077-r22",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-22.md"
+}

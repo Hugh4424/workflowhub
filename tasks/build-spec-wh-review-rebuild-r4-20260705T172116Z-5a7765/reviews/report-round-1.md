@@ -1,0 +1,32 @@
+# 审查报告 — build-spec-wh-review-rebuild-r4-20260705T172116Z-5a7765 (round 1)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+spec 还不能进 planning。主要问题不是文案，而是 4 个硬门没过：缺业务影响范围、6章报告结构来源未闭环、spec 混入实现级命令细节、验收标准不可判定；另有 1 个范围口径冲突需要收敛。
+
+## Findings
+
+- [blocking] 位置: spec.md:396 | 问题: 缺少业务层面的 Business Impact Scope。现有“影响范围”只列文件/模块变更，没有枚举会被这次重构改变的既有业务行为：哪些 stage 的审查推进语义会变、哪些直接调用 3rd-review 的现有路径会受影响、哪些人工确认/自动推进路径会改变、哪些报告消费者/任务目录约定会被重写。按 reviewer contract，这类新模板 spec 缺失业务影响范围不能进 planning。 | 建议: 新增独立的业务影响范围章节，只写业务行为和用户场景，不写文件路径；逐项覆盖 5 个 stage、直接 3rd-review 调用方、人工确认门、报告落盘/读取方、同源/异源切换语义。
+- [blocking] 位置: spec.md:207 | 问题: 把“6章报告结构”写成不可更改的硬合同，但 spec 自己在 Known Gaps 里承认这套章节名并未在 decision-log 中明确，需要到 build-plan 再核实 agenthub 原实现。未确认来源就冻结为硬要求，属于未完成源头追溯的核心概念。 | 建议: 二选一：要么补上 decision-log 或 agenthub 原实现的可追溯来源并在 spec 中标注理由；要么先把这部分降为待核实约束/开放决策，禁止在 spec 阶段写成“已定死不可更改”。
+- [blocking] 位置: spec.md:237 | 问题: spec 混入了被 contract 明确禁止的实现级命令细节：CLI 调用块、参数名、exit code 语义、grep/regex 模式、standalone.sh 行号级 bug 描述。这些属于 Spec-Purity blacklist 的 shell command lines / 代码级实现细节，不应出现在可进入 planning 的需求规格中。 | 建议: 删掉命令块、regex、行号、进程级参数细节，改写成行为合同：输入是什么、输出是什么、失败时必须发生什么。具体 CLI 形态和脚本参数留到 plan/implementation。
+- [blocking] 位置: spec.md:138 | 问题: 验收标准整体不满足 reviewer contract 的可判定性软门。多处 AC 只有“存在/可 grep/可查/可预测”这类结构性检查，没有给出分母、正反断言或运行时行为验证。典型位置包括 AC1-1~1-3、AC4-1~4-3、AC7-1~7-2、AC8-1~8-2、AC11-1~11-2，以及总验收 AC-D1~D10。这样进入 planning 后，很多完成判定仍会退化成‘看起来像做了’。 | 建议: 逐条重写 AC：补上分母范围（例如 5/5 stage、3/3 D2 gate）、正反断言（必须发生/必须不发生）、运行时验证方式（命令、日志、落盘结果、人工步骤），并为涉及阈值或基线的项注明来源。
+- [important] 位置: spec.md:61 | 问题: 范围定义前后不一致。前文写“搬迁 5 套合同，逐步扩充到位”，但 AC2-1 又要求 5 套合同本期全部存在；Known Gaps 又说搬迁后适配点要到 build-plan 再确认。实现范围到底是‘本期完整落地 5 套’还是‘先搭框架再逐步补齐’，现在是冲突的。 | 建议: 把 MVP 范围改成单一口径：如果本期必须 5 套全落地，就删除“逐步扩充”表述；如果允许分批，就把未落地合同明确写进 out-of-scope/后续轮次，并同步修改 AC2-1。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：缺少业务层面的 Business Impact Scope。现有“影响范围”只列文件/模块变更，没有枚举会被这次重构改变的既有业务行为：哪些 stage 的审查推进语义会变、哪些直接调用 3rd-review 的现有路径会受影响、哪些人工确认/自动推进路径会改变、哪些报告消费者/任务目录约定会被重写。按 reviewer contract，这类新模板 spec 缺失业务影响范围不能进 planning。
+- 必须修复：把“6章报告结构”写成不可更改的硬合同，但 spec 自己在 Known Gaps 里承认这套章节名并未在 decision-log 中明确，需要到 build-plan 再核实 agenthub 原实现。未确认来源就冻结为硬要求，属于未完成源头追溯的核心概念。
+- 必须修复：spec 混入了被 contract 明确禁止的实现级命令细节：CLI 调用块、参数名、exit code 语义、grep/regex 模式、standalone.sh 行号级 bug 描述。这些属于 Spec-Purity blacklist 的 shell command lines / 代码级实现细节，不应出现在可进入 planning 的需求规格中。
+- 必须修复：验收标准整体不满足 reviewer contract 的可判定性软门。多处 AC 只有“存在/可 grep/可查/可预测”这类结构性检查，没有给出分母、正反断言或运行时行为验证。典型位置包括 AC1-1~1-3、AC4-1~4-3、AC7-1~7-2、AC8-1~8-2、AC11-1~11-2，以及总验收 AC-D1~D10。这样进入 planning 后，很多完成判定仍会退化成‘看起来像做了’。
+
