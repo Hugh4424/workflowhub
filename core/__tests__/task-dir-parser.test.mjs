@@ -21,7 +21,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const parserPath = resolve(here, "../task-dir-parser.mjs");
@@ -177,17 +177,27 @@ describe("FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003 task_dir parser", () => {
   // --- ~ path expansion ---
 
   it("~ in yaml task_dir is expanded to home directory", () => {
-    const homeSubDir = join(homedir(), ".task-dir-parser-test-" + Date.now());
+    // Use a fake HOME (temp dir) instead of the real os.homedir() so this
+    // test never touches the real home directory (avoids EPERM in sandboxed
+    // environments where writing to $HOME is restricted). The parser runs
+    // in a child process (runParser -> execSync), so overriding HOME in
+    // that child's env is sufficient for node:os's homedir() to resolve to
+    // the fake dir there.
+    const fakeHome = mkdtempSync(join(tmpdir(), "task-dir-parser-fakehome-"));
+    const homeSubDir = join(fakeHome, ".task-dir-parser-test-" + Date.now());
     try {
       mkdirSync(homeSubDir, { recursive: true });
       const configPath = join(tmpDir, "workflowhub.yaml");
-      const relToHome = homeSubDir.replace(homedir(), "~");
+      const relToHome = homeSubDir.replace(fakeHome, "~");
       writeFileSync(configPath, `task_dir: ${relToHome}\n`);
-      const result = runParser({ WORKFLOWHUB_TASK_DIR: undefined }, configPath);
+      const result = runParser(
+        { WORKFLOWHUB_TASK_DIR: undefined, HOME: fakeHome },
+        configPath
+      );
       assert.equal(result.exitCode, 0);
       assert.equal(result.stdout, homeSubDir);
     } finally {
-      if (existsSync(homeSubDir)) rmSync(homeSubDir, { recursive: true, force: true });
+      rmSync(fakeHome, { recursive: true, force: true });
     }
   });
 
