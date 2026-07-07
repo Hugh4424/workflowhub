@@ -1,5 +1,5 @@
 /**
- * worktree-reuse-guard.mjs FR-WORKTREE-MAKEDECISION-002 test suite (node:test runner).
+ * worktree-reuse-guard.mjs FR-WORKTREE-MAKEDECISION-002 test suite (vitest runner).
  *
  * Covers:
  * - worktree.json missing → action "create"
@@ -10,7 +10,7 @@
  * - status neither active nor cleaned → fail-loud
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "vitest";
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

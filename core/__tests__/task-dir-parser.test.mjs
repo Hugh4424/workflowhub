@@ -1,5 +1,5 @@
 /**
- * FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003 test suite (node:test runner)
+ * FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003 test suite (vitest runner)
  *
  * Covers:
  * - env var priority (WORKFLOWHUB_TASK_DIR > yaml task_dir > fail-loud)
@@ -15,7 +15,7 @@
  * - /tasks trailing-suffix trim rule
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "vitest";
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
