@@ -614,6 +614,8 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 
 **task 子目录创建职责**：make-decision 阶段负责幂等地创建 task_tracking_root 下的 task 子目录（`{task_tracking_root}/{task-id}/`）；若父目录（task_tracking_root）不存在，须 fail-loud 报错退出，不得自动创建父目录；若该 task 已处于 `status=cleaned`（已归档）状态，须 fail-loud 报错 "task 已归档"，不得继续复用。
 
+**幂等复用前的 target_repo_root 一致性校验（FR-WORKTREE-MAKEDECISION-002 延伸）**：`{task_tracking_root}/{task-id}/worktree.json` 已存在且 `status=active` 时，不得仅凭 task-id 相同就静默复用——须先比对该 worktree.json 中记录的 `target_repo_root` 与本次调用（R2 探测得到）的 `target_repo_root` 是否完全一致；调用 `core/worktree-reuse-guard.mjs` 的 `checkWorktreeReuse(worktreeJsonPath, currentTargetRepoRoot, taskId)` 执行该判定：一致则返回 `{action: "reuse"}`，按现有 worktree.json 继续；不一致（同一 task-id 撞到不同项目）则 fail-loud 退出，报错须包含 task-id、worktree.json 中记录的 target_repo_root、本次调用的 target_repo_root 三项，提示用户更换 task-id 或核实目标仓库，不得把新一轮请求静默接到旧项目的仓库/worktree 上；worktree.json 不存在时返回 `{action: "create"}`，走 R4/R5 首次创建路径。
+
 ---
 
 ## Journal 事件流规范（S0–S10 全覆盖）
