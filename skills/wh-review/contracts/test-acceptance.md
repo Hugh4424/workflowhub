@@ -11,7 +11,7 @@
 | 轴 | 含义 | 对照源 |
 |----|------|--------|
 | **Acceptance Coverage** | spec 验收章节 / plan-tasks 测试设计 / 用户问题是否全部验收 | `tasks/{task-id}/spec.md`（第 10 章 + 第 3 章）、`tasks/{task-id}/plan.md`、`tasks/{task-id}/tasks.md`、`tasks/{task-id}/test/final-test-report.md` |
-| **Evidence Authenticity** | 证据是否 fresh、原始、可复现 | `tasks/{task-id}/test/final-test-report.md`、`tasks/{task-id}/apply/evidence/`、qa-only |
+| **Evidence Authenticity** | 证据是否 fresh、原始、可复现 | `tasks/{task-id}/test/final-test-report.md`、`tasks/{task-id}/phase-{N}-{RED,GREEN}.json`、`tasks/{task-id}/evidence/`、qa-only |
 | **Workflow Closure** | verifier、Knowledge、workflow-issues、交付边界是否闭环 | `tasks/{task-id}/reports/report-index.md`、`tasks/{task-id}/reviews/reviews.jsonl`、verify-change --light |
 
 ## Required Skill Execution
@@ -167,7 +167,7 @@ UI/browser/user-flow change 必查：
 
 ## 证据真实性维度（FR-REV-002）
 
-- 证据文件位于 `tasks/{task-id}/apply/evidence/phase-{N}-{MODE}.json` + `.stdout` + `.stderr`，gate 已验证 provenance
+- 证据文件位于 `tasks/{task-id}/phase-{N}-{MODE}.json` + `.stdout` + `.stderr`（根级）、辅助报告位于 `tasks/{task-id}/evidence/`，gate 已验证 provenance
 - 审查时 Read evidence JSON 确认 command、exit_code、timestamp 合理性
 - 禁止 `...` / `（省略）` / `（同上）`。
 - **Host-Verified Facts 优先**：当审查包包含 Host-Verified Facts 段时，reviewer 不重跑 evidence command。reviewer 继续读取 evidence JSON 确认 command/exit_code/timestamp 合理性，读取 stdout/stderr 检查占位符
