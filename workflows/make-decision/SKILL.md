@@ -281,7 +281,9 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 ### 0. MAKE_DECISION_SKIP_BLIND_REVIEW 快速跳过分支
 
-若 `MAKE_DECISION_SKIP_BLIND_REVIEW=1`：
+**判定方式**：本分支是否生效，必须通过实际读取 `MAKE_DECISION_SKIP_BLIND_REVIEW` 环境变量的真实值来判断（例如 `echo $MAKE_DECISION_SKIP_BLIND_REVIEW` 或等价的真实环境探测），不得由 agent 凭记忆/推测手动模拟"当作已设置=1"来走跳过分支。agent 手动模拟环境变量值视为违规，必须以本次执行环境的真实检测结果为准。
+
+若 `MAKE_DECISION_SKIP_BLIND_REVIEW=1`（真实检测结果）：
 - 跳过以下单次盲审（### 1）和结果整理（### 2）全部步骤。
 - 写 journal 事件：`event: "s5_blind_review_skipped", reason: "MAKE_DECISION_SKIP_BLIND_REVIEW=1"`。
 - S5 产出以空审查集合视为"无 blocking 发现"：`direction_divergence: false`，`findings: []`。
@@ -294,19 +296,9 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **入口检测（REVIEW_DISPATCH_CONFIG）**：读取 `REVIEW_DISPATCH_CONFIG` 环境变量（默认为空，走内置默认调度）。若设置了该变量，检查对应配置文件是否可达且可解析；文件不可达或解析失败时写 journal 事件 `event: "dispatch_config_invalid", config: "<值>"`，并回退使用内置默认调度，继续执行，不阻断流程。若未设置（空），直接使用内置默认调度。
 
-启动一条独立 3rd-review 链（**调用命令模板**）：
+通过 `wh-review` 两段式协议（非 `standalone.sh`）：①`prepareRoundState({taskId, stage:"make-decision", taskTrackingRoot})`→`ready{review_flow_id,total_round,contract_path}`或 `blocked_by_human_confirmation`（D2 门未过，不得绕过/伪造批准）；②派发前 `assertSafeTaskId` 校验 task_id，子代理只拿 `review_flow_id`/`total_round`，写 `prompt-{review_flow_id}-r{total_round}.md`，不下发 `contract_path`；③主 agent 调 `invoke-review-engine.mjs` 驱动引擎，写回 `round-state-make-decision-{review_flow_id}.json`，渲染 review 产物。
 
-```bash
-bash /path/to/3rd-review/standalone.sh \
-  --checkpoint=make-decision \
-  --input specs/{task-id}/decision.md \
-  --engine codex \
-  --output tasks/{task-id}/artifacts/make-decision-review.md
-```
-
-- `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性。
-
-审查输入必须与主上下文隔离：只给 S4 已落盘产物和必要任务背景，不给本轮 agent 的推理过程或未落盘草稿。
+- `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性、技术可行性（D8 新增第四维 `feasibility`）。
 
 审查结果必须包含以下字段：
 
@@ -315,7 +307,8 @@ reviewer_runtime_id: <唯一标识该 agent 运行实例>
 reviewer_source: <来源标识>
 fallback_used: <true|false>
 input_hash: <审查输入内容的哈希，用于隔离验证>
-findings: <恰好 3 条审查建议>
+findings: <四个角度 direction/framing/scope/feasibility，每角度 0-N 条，不设总数上限>
+verified_interface: <{tool, checked_at, method}，涉及外部工具调用时必填>
 ```
 
 每条 `findings` 建议必须包含：
@@ -331,10 +324,11 @@ evidence: <对应 S4 内容或调研依据>
 ### 2. 结果整理与失败语义
 
 - 若 `fallback_used: true` → 视为本次审查失败，结果不采用，立即停下报告用户，**禁止静默降级**。
-- 若 `findings` 不是恰好 3 条 → 视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议。
+- 若 `findings` 中出现四类角度（direction/framing/scope/feasibility）之外的标签，或某角度整体未被审查（而非"该角度确实无发现"），视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议，也不因怕超限而截断真实问题。
+- 若涉及外部工具调用但缺 `verified_interface` 字段，直接判该次审查不可执行，要求 reviewer 补齐后重跑。
 - 审查通过后写入 `tasks/{task-id}/artifacts/make-decision-review.md`：
   - `direction_divergence`: `true`/`false`（方向分歧标记）
-  - `findings`: 恰好 3 条审查建议
+  - `findings`: 四个角度、每角度 0-N 条审查建议（不设总数上限）
 
 写 journal 事件：`event: "s5_blind_review_done"`。
 
@@ -400,9 +394,9 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能�
 
 ### 2. grill（纯委托 grill-with-docs）
 
-退出条件：用户能复述四件事——做了什么 / 为何 / 不做什么 / 怎么验证。
+退出条件：用户须对四件事——做了什么 / 为何 / 不做什么 / 怎么验证——逐条确认（或对全部四条整体回复"以上都对"），单一是非题式回复（例如只回一句"对"而未指明针对哪几条）不算确认，须追问澄清到位。
 
-纯委托（pure delegation）给 `skills/grill-with-docs/SKILL.md` 执行，退出逻辑由其内部控制，不在本 agent 内联展开。
+纯委托（pure delegation）给 `skills/grill-with-docs/SKILL.md` 执行，退出逻辑（含其内部客观 checklist）由其内部控制，不在本 agent 内联展开。
 
 **成功分支**：
 - 产出：`tasks/{task-id}/artifacts/make-decision-grill-with-docs.md`（grill 会话记录）
@@ -433,6 +427,8 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能�
 写 journal 事件：`event: "s7_draft_complete"`
 
 ### 4. orchestrator 审查 + 第二次 debate
+
+**orchestrator 实现**：本步骤的 orchestrator 审查由 `skills/intake-review-orchestrator/SKILL.md` 承担（ZHI-93 遗漏加固机制），不是抽象占位描述。调用时按其"审查合同"组装 `materials`：`draft`（S7.3 产出的 decision-log 草稿）、`s4_baseline`（S4 原始需求台账）、`authoritative_definitions`（decision-log 权威定义表）、`s5_findings`（S5 单次盲审结果）。`intake-review-orchestrator` 不设跳过分支，S7 draft 产出后必须执行一次。
 
 **入口检测（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）**：调用 debate 技能前，记录 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 的当前状态——已设置（`=1`）还是未设置/`=0`——写 journal 事件 `event: "debate_env_checked", agent_teams: "<当前值>"`，并透传给 debate 技能，由 debate 技能决定启用五方法庭模式（`=1`）或自动降级单人三档（`=0`）。make-decision 本身不读此变量控制 debate 是否触发。
 
@@ -473,7 +469,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 - 若 S7 产出导致项目方向、术语、决策有实质变更：
   - 更新 `CONTEXT.md` 中受影响的术语或背景描述。
   - 若有架构决策，补写 ADR 条目（追加，不覆盖历史）。
-  - 更新 `project-memory.json` 中受影响的字段。
+  - `project-memory.json` 二选一，不可默认跳过：要么同步更新其中受影响的字段，要么显式写入"本次无需变更"及理由（例如该变更不涉及 project-memory.json 记录的字段范围）。CONTEXT.md/ADR 有更新但 project-memory.json 既未同步、也未显式写理由，视为遗漏，须补齐后才能继续。
   - 写 journal 事件：`event: "s8_context_synced"`
 - 若无任何内容变更（决策与现有文档完全一致）：
   - 以上三个文件**不强制写入**。
@@ -568,7 +564,15 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 user_decision: true
 ```
 
-### 4. 调用 metrics/collector.mjs updateOwnResult
+### 4. S10 落盘后机器级自检（非 LLM 审查，脚本级 fail-loud）
+
+decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"就判定完成，必须真跑以下机器级自检：
+
+1. **落盘存在性校验**：真跑一次 `parseTaskDir()` 解析出的路径，对 `tasks/{task-id}/decision-log.md` 做真实文件存在性校验（例如 `test -f` / `fs.existsSync` 或等价真实检测），不是 agent 凭记忆或凭"应该已经写了"主观判断。校验失败（文件不存在或路径不对）视为 S10 未完成，fail-loud 报错，不得静默继续。
+2. **占位符扫描**：对落盘后的 decision-log.md 全文做占位符词表 grep 扫描（词表至少包含 `[占位符]`、`TBD`、`待后续` 等），若命中出现在决策性字段（第 3 节决策记录、第 7 节验收标准、权威定义表、外部依赖接口核实记录）中，直接 fail-loud，不得放行落盘。
+3. **校验留痕**：本步骤实际执行的校验命令与校验结果，必须写进收尾评论/journal，不得只写"已校验"这类无证据结论。
+
+### 5. 调用 metrics/collector.mjs updateOwnResult
 
 调用 `metrics/collector.mjs` 的 `updateOwnResult`，写入 M4 十核心字段：
 

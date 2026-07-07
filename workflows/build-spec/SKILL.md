@@ -177,21 +177,13 @@ spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-r
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
 - 可 grep 到 `3rd-review` 或 `异源独立审查`
 
-**调用命令模板：**
+**调用方式（wh-review 两段式协议，取代直接 shell 出 `standalone.sh`）：**
 
-调用前必须先 `cd` 到 workflowhub worktree 根目录（或显式传 `--output-root=<workflowhub worktree 绝对路径>`），确保 standalone.sh 按文件名搜索 decision-log.md 等文件时命中的是本任务目录，不是 3rd-review 仓库自己的残留任务。
+不再需要手动 `cd` 到 workflowhub worktree 根目录或猜测 `standalone.sh` 的动态任务目录——`taskTrackingRoot` 由 `parseTaskDir()` 统一解析，路径确定、非猜测。
 
-```bash
-cd /path/to/workflowhub-worktree  # 或用 --output-root= 显式指定，见下
-bash /path/to/3rd-review/standalone.sh \
-  --checkpoint=build-spec \
-  --input=specs/{task-id}/spec.md \
-  --output-root=/path/to/workflowhub-worktree \
-  --task-name=build-spec-{task-id} \
-  --review-runner=<review-runner-cmd>
-```
-
-参数均为 `--flag=value` 形式（standalone.sh 不接受空格分隔的参数）。standalone.sh 不产出固定路径的输出文件，裁决与报告写在 `<output-root>/tasks/<task-name>-<timestamp>-<rand>/reviews/verdict.json` 与 `report.md`，由 stdout 的"任务目录"提示获取实际路径。可用参数全集（见 standalone.sh 脚本头注释与参数解析）：`--input=`、`--output-root=`、`--task-name=`、`--review-runner=`、`--max-revise-rounds=`、`--checkpoint=`、`--foreground-only`、`--skip-manifest`；未列出的参数（如 `--engine`、`--output`）不受支持，传入会直接触发 `unknown argument` 报错（exit 3）。
+1. **准备阶段**：调用 `prepareRoundState({ taskId, stage: "build-spec", taskTrackingRoot })`。`{status:"ready", review_flow_id, total_round, contract_path}` 时，`contract_path` 必须命中 build-spec 专属合同；命中其它 stage 合同视为配置错误，停止并报告。build-spec 是 auto-advance stage（无人工确认门），正常路径不应返回 `blocked_by_human_confirmation`；若意外返回，视为异常，不得静默忽略或伪造确认继续，需按第 7 节 auto-advance 判断点的 `unknown` 语义处理（转人工确认）。
+2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派生审查子代理前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许派发。子代理只拿 `review_flow_id`/`total_round`，据此写出 `prompt-{review_flow_id}-r{total_round}.md`（仅补充说明，不含 materials 本体），**不下发 `contract_path`**。
+3. **执行阶段**：主 agent 调用 `invoke-review-engine.mjs`（携带 `review_flow_id`/`contract_path`/子代理补充说明文件路径，`specs/{task-id}/spec.md` 作为审查材料），驱动实际审查引擎；结果写回 `round-state-build-spec-{review_flow_id}.json`，并渲染确定路径的报告产物（不再依赖 stdout 提示的动态任务目录）。
 
 ---
 
