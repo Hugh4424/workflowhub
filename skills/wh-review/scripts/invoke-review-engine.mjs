@@ -312,6 +312,23 @@ export function invokeReviewEngine({
   assertSafeReviewFlowId(reviewFlowId);
   assertValidTotalRound(totalRound);
 
+  // round-review finding: spawnSync() below has no `env` option, so the runner
+  // subprocess (which runs `npm test` on the target repo as review evidence)
+  // always inherits the REAL process.env — never the caller-supplied `env` param,
+  // which is only consulted for THIRD_REVIEW_RUNNER/THIRD_REVIEW_REPO_ROOT
+  // discovery and can be (and in tests, is) bypassed entirely by passing
+  // `taskTrackingRoot` explicitly, skipping parseTaskDir()'s own check of this
+  // same env var. If the caller's shell forgot to export WORKFLOWHUB_TASK_DIR,
+  // the runner would silently gather review evidence against a broken path,
+  // producing false test-failure findings treated as real blocking review
+  // findings. This must fail loud before any spawn/write side effect, never
+  // fall through to a synthesized escalate_to_human result.
+  if (!process.env.WORKFLOWHUB_TASK_DIR || process.env.WORKFLOWHUB_TASK_DIR.trim() === "") {
+    throw new FailLoudError(
+      "WORKFLOWHUB_TASK_DIR not set — review evidence would be gathered against a broken path, refusing to proceed silently."
+    );
+  }
+
   const root = taskTrackingRoot ?? parseTaskDir();
   const artifactPath = rawArtifactPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId, totalRound });
   mkdirSync(dirname(artifactPath), { recursive: true });
