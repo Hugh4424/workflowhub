@@ -142,6 +142,53 @@ user_decision: true
 
 ---
 
+### D8 make-decision 优化方案
+
+- **talk-with-zhipeng**（`skills/talk-with-zhipeng/SKILL.md`）：范围四维判定（真实痛点/ROI/风险/时机）前加两条前置检查——(1) 外部工具/接口是否已核实真实调用方式，未核实转 S3 外部调研；(2) 本轮讨论的、会被多处复用的命名/路径/字段本轮必须钉死唯一定义。落地位置：`skills/talk-with-zhipeng/SKILL.md` 新增"4.5 前置检查"节。
+- **grill-with-docs**（`skills/grill-with-docs/SKILL.md`）：退出条件从主观"用户能否复述四件事"改为客观 checklist（外部依赖接口是否已核实真实定义 / 字段路径命名是否有唯一权威定义 / 失败路径与异常语义是否明确 / 范围边界做什么不做什么是否写死），四项全过才能退，缺一项转 decision-log"开放问题"节，不许静默放过。
+- **decision-log**（`skills/decision-log/SKILL.md`）：7 节结构不变，第 3 节"决策记录"下新增两个子节：
+  - **权威定义表**：详见本文件新增的"权威定义表"节（字段/路径/命名 → 值 → 唯一来源文件）。
+  - **外部依赖接口核实记录**：详见本文件新增的"外部依赖接口核实记录"节。
+  - 并在"What to do"新增第 6 步：落盘后做存在性自检（真实校验文件确实生成在预期路径），不能"执行了写命令"就算完成。
+- **盲审 skill**（`skills/intake-decision-review/SKILL.md`）：加第四维 `feasibility`（技术可行性，审外部工具/接口/边界条件假设是否与现实相符）；findings 数量上限从"恰好 3 条"改为每维 0-N 条不设上限，避免真实问题被截断；跳过机制加约束——允许跳过，但跳过前若本轮已产出任意 finding，必须转成 decision-log"开放问题"+生成对应可追踪 issue，不许直接消失。
+- **盲审审查合同**（同一文件内 S3/S7）：合同加强制字段 `verified_interface: {tool, checked_at, method}`，调用前须实测跑一次 `--help` 或读源码确认接口，缺该字段直接判不可执行；加"契约漂移检测"——实际返回结构与合同声明不一致时，审查器必须把该不一致本身列为 blocking finding，不能吞掉重试或忽略。
+
+来源证据：用户批准的 `/tmp/d8d9-scope.md`"D8：make-decision 优化方案"全文，2026-07-07 落地执行。
+
+#### 权威定义表（D8 新增，本任务实例）
+
+| 字段/路径/命名 | 值 | 唯一来源文件 |
+|---|---|---|
+| grill-with-docs 退出 checklist 四项 | 外部依赖接口核实/字段路径命名唯一定义/失败路径与异常语义/范围边界写死 | `skills/grill-with-docs/SKILL.md` |
+| `verified_interface` 字段结构 | `{tool, checked_at, method}` | `skills/intake-decision-review/SKILL.md`（S3 审查请求定义） |
+| 盲审审查角度 | `direction`/`framing`/`scope`/`feasibility` 四类 | `skills/intake-decision-review/SKILL.md` |
+| intake-review-orchestrator 审查维度 | 漂移/盲点/细节自洽/权威定义唯一/外部接口真实性 五维 | `skills/intake-review-orchestrator/SKILL.md` |
+| intake-review-orchestrator 挂载点 | make-decision S7 draft 产出后、第二次 debate 门控前 | `workflows/make-decision/SKILL.md` S7 第 4 步 |
+
+#### 外部依赖接口核实记录（D8 新增，本任务实例）
+
+- 已读取 `skills/grill-with-docs/SKILL.md` 真实源文件内容，确认其现有退出条件描述位置（"If a question can be answered by exploring the codebase..."之后），在该处插入客观 checklist，未依赖对该文件内容的假设。
+- 已读取 `skills/decision-log/SKILL.md` 真实源文件内容，确认其 7 节结构定义与"What to do"步骤列表的准确位置后插入新子节与新步骤。
+- 已读取 `skills/intake-decision-review/SKILL.md` 真实源文件全文（含 S3/S6/S7/S8/S9、输出、约束各节），确认"findings 恰好 3 条"的所有出现位置后统一改写，未遗留旧表述。
+- 已读取 `workflows/make-decision/SKILL.md` 真实源文件对应 S5/S7/S7.2/S8.2/S10 各步骤原文（含 journal 事件表），核实后逐处加固，非计划性描述。
+
+---
+
+### D9 细节审查机制设计（ZHI-93 遗漏加固）
+
+- **ZHI-93 遗漏审计结论**（已核实，直接作为加固依据）：高危 3 条——S10.2 taskDir 解析故障需机器级校验、S10.4 收尾自证脱节（收尾评论宣称"产物齐全"但未核实真实路径）、S7.4 blocking finding 假装闭环（格式走完但决策日志写占位符文本）；中危 3 条——S5 盲审跳过未走真实环境变量（agent 手动模拟跳过）、S7.2 grill 退出条件非用户主动逐条复述、S8.2 project-memory.json 该同步未同步且未写"无需变更"理由；低危 3 条不影响本次加固设计，无需处理。
+- **新建细节审查 skill**：`skills/intake-review-orchestrator/SKILL.md`，挂载点 make-decision S7 draft 产出后、第二次 debate 门控前；审查对象为 decision-log 草稿全文 + S4 原始需求台账 + 权威定义表 + S5 盲审结果；五维不设条数上限（漂移/盲点/细节自洽/权威定义唯一/外部接口真实性）；不重跑 framing-challenge；不留跳过口子（宪法 F5：gate 谨慎添加、出事再补，新加的不预留后门）；findings 存在 blocking 时走 debate_2，debate 裁决维持 blocking 的必须真改草稿内容或给出真实可跟进 issue 编号，不许用"决定不处理"当挡箭牌。
+- **五处加固**（对应上述中低危及高危遗漏，落地于 `workflows/make-decision/SKILL.md`）：
+  1. S5 跳过分支：改成必须基于真实环境变量检测判断，agent 手动模拟视为违规。
+  2. S7 第 4 步：显式接入 `skills/intake-review-orchestrator/SKILL.md` 作为 orchestrator 实现，不再是抽象占位描述。
+  3. S7.2 grill 退出：用户须对四件事逐条确认（或整体"以上都对"），单一是非题回复不算确认。
+  4. S8.2：CONTEXT.md/ADR 有更新时，project-memory.json 必须同步或显式写"本次无需变更"+理由，二选一不可默认跳过。
+  5. S10 新增机器级自检（非 LLM 审查、脚本级 fail-loud）：落盘后真跑 `parseTaskDir()` 文件存在性校验；grep 全文扫占位符词表（"[占位符]"/"TBD"/"待后续"等）命中决策性字段直接 fail-loud；校验命令与结果写进收尾评论。
+
+来源证据：用户批准的 `/tmp/d8d9-scope.md`"D9：细节审查机制设计 ZHI-93 遗漏加固"全文，2026-07-07 落地执行。
+
+---
+
 ## 4. 假设
 
 - **(a)** checkpoint 路由 bug 已在 commit e96c257 修复，本次重设计不涉及修复该旧 bug；用户 2026-07-05 明确确认"不影响，继续重设计"。
@@ -161,11 +208,11 @@ user_decision: true
 
 ## 6. 开放问题
 
-无遗留待定项（D1-D7 均已用户明确定案，无遗留待定项）。
+D1-D9 均已用户明确定案，无阻断性开放问题遗留。
 
-**待跟进事项**：
+**已登记的跟进事项（不阻断当前范围）**：
 
-- **3rd-review 调用契约与 SKILL.md 描述不一致**：standalone.sh 实际调用参数/返回结构与 SKILL.md 文档描述（`--engine`/`--output`，返回 findings 三条+direction_divergence）存在不一致。当前范围不阻断，issue 编号待后续 build-plan 阶段创建：[占位符，build-plan 阶段需替换为实际 issue 编号]
+- **3rd-review 调用契约与 SKILL.md 描述不一致**：standalone.sh 实际调用参数/返回结构与 SKILL.md 文档描述（`--engine`/`--output`，返回 findings 三条+direction_divergence）存在不一致。已登记为跟进事项，不阻断当前范围，具体 issue 编号将在 build-plan 阶段创建时补上。
 
 ---
 
