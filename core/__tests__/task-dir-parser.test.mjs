@@ -298,4 +298,21 @@ describe("FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003 task_dir parser", () => {
     assert.equal(result.exitCode, 0);
     assert.equal(result.stdout, tasksDir);
   });
+
+  // --- relative task_dir must resolve against repo root, not config/ subdir ---
+
+  it("yaml task_dir './tasks/' resolves against repo root, not the config/ subdir housing workflowhub.yaml", () => {
+    // Mirrors production layout: configPath lives at <root>/config/workflowhub.yaml.
+    const rootDir = tmpDir;
+    const configDir = join(rootDir, "config");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "workflowhub.yaml");
+    writeFileSync(configPath, `task_dir: ./tasks/\n`);
+    const tasksDir = join(rootDir, "tasks");
+    mkdirSync(tasksDir, { recursive: true });
+    const result = runParser({ WORKFLOWHUB_TASK_DIR: undefined }, configPath);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, rootDir);
+    assert.notEqual(result.stdout, configDir);
+  });
 });
