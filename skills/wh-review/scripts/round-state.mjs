@@ -45,6 +45,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { randomUUID, createHash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { parseTaskDir } from "../../../core/task-dir-parser.mjs";
+import { loadConfig } from "../../../core/load-config.mjs";
 import {
   FailLoudError,
   assertSafeTaskId,
@@ -55,6 +56,33 @@ import {
 } from "./lib/safe-id.mjs";
 import { writeRoutePreparePhase } from "./route-decision-writer.mjs";
 import { computeDocSnapshotDiff, readMaterialsBaseline } from "./snapshot-writer.mjs";
+import { recordSkeleton, updateOwnResult, configForCollector } from "../../../metrics/collector.mjs";
+
+// ---- T024: metrics/collector.mjs integration (rounds/duration/escalation feed the metrics pipeline) ----
+// FR-GUARD-001 mirror: a metrics call must never interrupt round-state's own read/write flow, so
+// every call site below is wrapped in try/catch with a warn-only fallback.
+
+function metricsExecutionId({ taskId, stage, reviewFlowId, totalRound }) {
+  return `${taskId}:${stage}:${reviewFlowId}:round${totalRound}`;
+}
+
+// round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece, blocking):
+// this previously (a) hardcoded the global metrics_path literal instead of reading
+// config.metrics_path via loadConfig() (spec.md §6.5 AC-METRICS-2 / collector.mjs's own
+// contract), and (b) passed taskTrackingRoot straight through as configForCollector's
+// taskDir instead of the per-task directory — task-level metrics landed at
+// <taskTrackingRoot>/task-metrics.jsonl instead of tasks/{task-id}/task-metrics.jsonl.
+function metricsConfigFor({ taskId, taskTrackingRoot }) {
+  return configForCollector(loadConfig(), {
+    taskDir: taskRoot(taskTrackingRoot, taskId),
+    taskId,
+    project: "workflowhub",
+  });
+}
+
+function warnMetricsFailure(err) {
+  console.warn(`[round-state] metrics call failed: ${err && err.message ? err.message : err}`);
+}
 
 // ---- path builders ----
 
@@ -263,7 +291,7 @@ function generateReviewFlowId() {
  * crash happens before that final write, no pointer exists yet and the next prepare() call
  * allocates cleanly, leaving at most an orphaned (never-referenced) round-state file behind.
  */
-function allocateNewFlow({ taskId, stage, taskTrackingRoot }) {
+function allocateNewFlow({ taskId, stage, taskTrackingRoot, metricsCfg }) {
   const newFlowId = generateReviewFlowId();
   initializeRoundState({ taskId, stage, reviewFlowId: newFlowId, taskTrackingRoot });
   // T011 (FR-WHREVIEW-003 mode-transition rule): round 1 of a brand new flow is always "full".
@@ -277,6 +305,25 @@ function allocateNewFlow({ taskId, stage, taskTrackingRoot }) {
   });
   // Commit point: only once every other new-flow artifact is guaranteed written.
   writeActiveFlow({ taskId, stage, reviewFlowId: newFlowId, taskTrackingRoot });
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-4, blocking):
+  // metricsConfigFor() (and its loadConfig() call) no longer runs here at all — a static config
+  // parse/validation error is fail-loud (F8) and must fire BEFORE any of this function's writes
+  // above, not after. prepareRoundState() now computes metricsCfg once, up front (before
+  // readActiveFlow), and passes it in via this parameter; only the recordSkeleton() call itself
+  // (the actual metrics write) stays warn-only.
+  try {
+    recordSkeleton(
+      {
+        execution_id: metricsExecutionId({ taskId, stage, reviewFlowId: newFlowId, totalRound: 1 }),
+        skill_or_stage: "wh-review",
+        stage,
+        rework_rounds: 1,
+      },
+      metricsCfg
+    );
+  } catch (err) {
+    warnMetricsFailure(err);
+  }
   return { status: "ready", review_flow_id: newFlowId, total_round: 1, contract_path: record.contract_path };
 }
 
@@ -291,11 +338,18 @@ export function prepareRoundState({ taskId, stage, taskTrackingRoot } = {}) {
   assertSafeTaskId(taskId);
   assertKnownStage(stage);
   const root = taskTrackingRoot ?? parseTaskDir();
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-4,
+  // blocking): metricsConfigFor()'s loadConfig() call must run BEFORE any read/write below
+  // (readActiveFlow onward) — a static config parse/validation error is fail-loud (F8) and must
+  // never let this function partially write state (round-state file / active-flow pointer)
+  // before it surfaces. Computed once here and threaded through to allocateNewFlow() and the
+  // reused-flow metrics call below so neither of them calls metricsConfigFor() a second time.
+  const metricsCfg = metricsConfigFor({ taskId, taskTrackingRoot: root });
 
   const activeFlow = readActiveFlow({ taskId, stage, taskTrackingRoot: root });
 
   if (!activeFlow) {
-    return allocateNewFlow({ taskId, stage, taskTrackingRoot: root });
+    return allocateNewFlow({ taskId, stage, taskTrackingRoot: root, metricsCfg });
   }
 
   const existingState = readRoundState({
@@ -313,7 +367,7 @@ export function prepareRoundState({ taskId, stage, taskTrackingRoot } = {}) {
     // exactly like "no active flow" (see the !activeFlow branch above): allocateNewFlow()
     // atomically overwrites the stale pointer with a freshly allocated flow, so no explicit
     // cleanup of the old pointer file is needed here.
-    return allocateNewFlow({ taskId, stage, taskTrackingRoot: root });
+    return allocateNewFlow({ taskId, stage, taskTrackingRoot: root, metricsCfg });
   }
 
   // T023a (AC8-4, restart-recovery hardening): the round-state file's own internal
@@ -334,7 +388,7 @@ export function prepareRoundState({ taskId, stage, taskTrackingRoot } = {}) {
   }
 
   if (isFlowConcluded({ taskId, stage, roundState: existingState, taskTrackingRoot: root })) {
-    return allocateNewFlow({ taskId, stage, taskTrackingRoot: root });
+    return allocateNewFlow({ taskId, stage, taskTrackingRoot: root, metricsCfg });
   }
 
   if (isBlockedOnHumanConfirmation({ taskId, stage, roundState: existingState, taskTrackingRoot: root })) {
@@ -366,6 +420,28 @@ export function prepareRoundState({ taskId, stage, taskTrackingRoot } = {}) {
     inputMode: nextMode,
     taskTrackingRoot: root,
   });
+  // round-4 fix: metricsCfg was already computed at the top of prepareRoundState() (before
+  // readActiveFlow), so this reused-flow branch reuses it instead of calling
+  // metricsConfigFor() a second time. Only the recordSkeleton() call itself (the actual
+  // metrics write) is warn-only.
+  try {
+    recordSkeleton(
+      {
+        execution_id: metricsExecutionId({
+          taskId,
+          stage,
+          reviewFlowId: activeFlow.review_flow_id,
+          totalRound: nextTotalRound,
+        }),
+        skill_or_stage: "wh-review",
+        stage,
+        rework_rounds: nextTotalRound,
+      },
+      metricsCfg
+    );
+  } catch (err) {
+    warnMetricsFailure(err);
+  }
   return {
     status: "ready",
     review_flow_id: activeFlow.review_flow_id,
@@ -391,6 +467,8 @@ function writeRoundStateMode({ taskId, stage, reviewFlowId, mode, taskTrackingRo
   const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId });
   const state = JSON.parse(readFileSync(path, "utf8"));
   state.mode = mode;
+  // T024: stamp the start time of the round about to run so recordRoundOutcome can compute duration_ms.
+  state.round_started_at = Date.now();
   atomicWriteFileSync(path, JSON.stringify(state, null, 2));
 }
 
@@ -568,6 +646,14 @@ export function recordRoundOutcome({
   assertValidTotalRound(totalRound);
 
   const root = taskTrackingRoot ?? parseTaskDir();
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-4,
+  // blocking): metricsConfigFor()'s loadConfig() call must run before this function's own
+  // state read/write below — a static config parse/validation error is fail-loud (F8) and
+  // must fire before the round-state file is ever rewritten, not after (previously this ran
+  // right before the warn-only metrics write at the very end, well after
+  // writeFileSync(path, ...) had already landed the new round's outcome on disk).
+  const metricsCfg = metricsConfigFor({ taskId, taskTrackingRoot: root });
+
   const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId });
   const state = readRoundState({ taskId, stage, reviewFlowId, taskTrackingRoot: root });
   if (!state) {
@@ -758,5 +844,22 @@ export function recordRoundOutcome({
   assertTotalRoundConsistent(nextState);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(nextState, null, 2));
+  // round-4 fix: metricsCfg was already computed at the top of this function (before the
+  // round-state file was read/rewritten), so it is reused here instead of calling
+  // metricsConfigFor() a second time. Only the metrics write itself is warn-only.
+  try {
+    const durationMs = Date.now() - (state.round_started_at ?? Date.now());
+    updateOwnResult(
+      metricsExecutionId({ taskId, stage, reviewFlowId, totalRound }),
+      {
+        duration_ms: durationMs,
+        rework_rounds: totalRound,
+        human_intervention: finalVerdict === "escalate_to_human",
+      },
+      metricsCfg
+    );
+  } catch (err) {
+    warnMetricsFailure(err);
+  }
   return nextState;
 }

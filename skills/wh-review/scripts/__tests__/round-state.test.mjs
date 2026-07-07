@@ -11,6 +11,7 @@ import {
   assertTotalRoundConsistent,
   isFlowConcluded,
   recordPathFor,
+  activeFlowPathFor,
   humanConfirmationPathFor,
   computePostReviewAction,
   computeFindingFingerprint,
@@ -713,5 +714,409 @@ describe("recordRoundOutcome (T011, FR-WHREVIEW-003/005 end-to-end)", () => {
     const next = prepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
     const state = readRoundState({ taskId: TASK_ID, stage: STAGE, reviewFlowId: next.review_flow_id, taskTrackingRoot: root });
     expect(state.mode).toBe("same-source");
+  });
+});
+
+describe("metrics integration (T024)", () => {
+  const COLLECTOR_MODULE = "../../../../metrics/collector.mjs";
+
+  it("prepareRoundState (new flow) calls recordSkeleton with execution_id/skill_or_stage/stage/rework_rounds", async () => {
+    const recordSkeletonSpy = vi.fn();
+
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: recordSkeletonSpy,
+      updateOwnResult: vi.fn(),
+      configForCollector: () => ({ mocked: true }),
+    }));
+
+    let result;
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      result = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.resetModules();
+    }
+
+    expect(recordSkeletonSpy).toHaveBeenCalledTimes(1);
+    const [seed] = recordSkeletonSpy.mock.calls[0];
+    expect(seed.execution_id).toBe(`${TASK_ID}:${STAGE}:${result.review_flow_id}:round1`);
+    expect(seed.skill_or_stage).toBe("wh-review");
+    expect(seed.stage).toBe(STAGE);
+    expect(seed.rework_rounds).toBe(1);
+  });
+
+  it("prepareRoundState (reuse in-progress flow) calls recordSkeleton with the next total_round", async () => {
+    const recordSkeletonSpy = vi.fn();
+
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: recordSkeletonSpy,
+      updateOwnResult: vi.fn(),
+      configForCollector: () => ({ mocked: true }),
+    }));
+
+    let first;
+    let second;
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      first = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+      writeRoundStateFixture(first.review_flow_id, {
+        verdict: "revise_required",
+        total_round: 1,
+        heterologous_round: 1,
+      });
+      recordSkeletonSpy.mockClear();
+      second = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.resetModules();
+    }
+
+    expect(second.total_round).toBe(2);
+    expect(recordSkeletonSpy).toHaveBeenCalledTimes(1);
+    const [seed] = recordSkeletonSpy.mock.calls[0];
+    expect(seed.execution_id).toBe(`${TASK_ID}:${STAGE}:${first.review_flow_id}:round2`);
+    expect(seed.rework_rounds).toBe(2);
+  });
+
+  it("recordRoundOutcome calls updateOwnResult with duration_ms/rework_rounds/human_intervention=false for a non-escalating verdict", async () => {
+    const updateOwnResultSpy = vi.fn();
+
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: vi.fn(),
+      updateOwnResult: updateOwnResultSpy,
+      configForCollector: () => ({ mocked: true }),
+    }));
+
+    let prep;
+    let result;
+    try {
+      const { prepareRoundState: freshPrepareRoundState, recordRoundOutcome: freshRecordRoundOutcome } =
+        await import("../round-state.mjs");
+      prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+      result = freshRecordRoundOutcome({
+        taskId: TASK_ID, stage: STAGE, reviewFlowId: prep.review_flow_id, totalRound: 1, taskTrackingRoot: root,
+        actualMode: "full", verdict: "pass", reportPath: "r1.md", rawFindings: [], docType: "non-doc",
+      });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.resetModules();
+    }
+
+    expect(result.verdict).not.toBe("escalate_to_human");
+    expect(updateOwnResultSpy).toHaveBeenCalledTimes(1);
+    const [executionId, patch] = updateOwnResultSpy.mock.calls[0];
+    expect(executionId).toBe(`${TASK_ID}:${STAGE}:${prep.review_flow_id}:round1`);
+    expect(typeof patch.duration_ms).toBe("number");
+    expect(patch.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(patch.rework_rounds).toBe(1);
+    expect(patch.human_intervention).toBe(false);
+  });
+
+  it("recordRoundOutcome calls updateOwnResult with human_intervention=true when the round escalates to human", async () => {
+    const updateOwnResultSpy = vi.fn();
+
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: vi.fn(),
+      updateOwnResult: updateOwnResultSpy,
+      configForCollector: () => ({ mocked: true }),
+    }));
+
+    let result;
+    try {
+      const { prepareRoundState: freshPrepareRoundState, recordRoundOutcome: freshRecordRoundOutcome } =
+        await import("../round-state.mjs");
+      const prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+      result = freshRecordRoundOutcome({
+        taskId: TASK_ID, stage: STAGE, reviewFlowId: prep.review_flow_id, totalRound: 1, taskTrackingRoot: root,
+        actualMode: "full", verdict: "escalate_to_human", reportPath: "r1.md", rawFindings: [], docType: "non-doc",
+      });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.resetModules();
+    }
+
+    expect(result.verdict).toBe("escalate_to_human");
+    expect(updateOwnResultSpy).toHaveBeenCalledTimes(1);
+    const [, patch] = updateOwnResultSpy.mock.calls[0];
+    expect(patch.human_intervention).toBe(true);
+  });
+
+  it("does not crash prepareRoundState/recordRoundOutcome when metrics calls throw (try/catch fallback), and logs a warn for each swallowed failure", async () => {
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: () => {
+        throw new Error("recordSkeleton boom");
+      },
+      updateOwnResult: () => {
+        throw new Error("updateOwnResult boom");
+      },
+      configForCollector: () => ({ mocked: true }),
+    }));
+
+    // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-2, minor)：
+    // 此前只断言函数调用不崩溃，未断言 warnMetricsFailure() 真的记录了 warn——这里 spy 住
+    // console.warn，验证两处 boom 各自触发了一条包含对应错误信息的 warn。
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    let prep;
+    let result;
+    try {
+      const { prepareRoundState: freshPrepareRoundState, recordRoundOutcome: freshRecordRoundOutcome } =
+        await import("../round-state.mjs");
+      prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+      result = freshRecordRoundOutcome({
+        taskId: TASK_ID, stage: STAGE, reviewFlowId: prep.review_flow_id, totalRound: 1, taskTrackingRoot: root,
+        actualMode: "full", verdict: "pass", reportPath: "r1.md", rawFindings: [], docType: "non-doc",
+      });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.resetModules();
+    }
+
+    expect(prep.status).toBe("ready");
+    expect(result.verdict).toBe("pass");
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("recordSkeleton boom"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("updateOwnResult boom"));
+    warnSpy.mockRestore();
+  });
+
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece, blocking):
+  // metricsConfigFor() previously passed taskTrackingRoot directly as configForCollector's
+  // taskDir, instead of the per-task directory (tasks/{task-id}/). Effect: task-level metrics
+  // would land at <taskTrackingRoot>/task-metrics.jsonl instead of
+  // <taskTrackingRoot>/tasks/{task-id}/task-metrics.jsonl (data-contracts.md/collector.mjs
+  // contract violation).
+  it("metricsConfigFor derives taskDir from taskRoot(taskTrackingRoot, taskId), not the raw taskTrackingRoot", async () => {
+    const configForCollectorSpy = vi.fn(() => ({ mocked: true }));
+
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: vi.fn(),
+      updateOwnResult: vi.fn(),
+      configForCollector: configForCollectorSpy,
+    }));
+
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.resetModules();
+    }
+
+    expect(configForCollectorSpy).toHaveBeenCalledTimes(1);
+    const [, opts] = configForCollectorSpy.mock.calls[0];
+    expect(opts.taskDir).toBe(join(root, "tasks", TASK_ID));
+  });
+
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-2, minor)：
+  // 此前所有 metrics 相关测试都 mock 了 collector.mjs 本身，从未用真实 collector 落盘验证过
+  // Contract 9（M4 十核心字段全集）。这里不 mock collector.mjs，只 mock loadConfig() 把
+  // metrics_path 指向一个临时目录（避免真实写用户级 global-metrics.jsonl），让 prepareRoundState
+  // 走真实 recordSkeleton -> upsert -> writeAll 落盘，再读回 task-metrics.jsonl 校验十个核心字段
+  // 全部存在。
+  it("performs a real (unmocked) metrics/collector.mjs round-trip and writes all ten M4 core fields to task-metrics.jsonl (Contract 9)", async () => {
+    const globalMetricsDir = mkdtempSync(join(tmpdir(), "round-state-test-global-metrics-"));
+    const globalMetricsPath = join(globalMetricsDir, "global-metrics.jsonl");
+
+    vi.resetModules();
+    vi.doMock("../../../../core/load-config.mjs", () => ({
+      loadConfig: () => ({ registry: {}, metrics_path: globalMetricsPath }),
+    }));
+
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      const prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+      expect(prep.status).toBe("ready");
+
+      const taskMetricsPath = join(root, "tasks", TASK_ID, "task-metrics.jsonl");
+      expect(existsSync(taskMetricsPath)).toBe(true);
+      const record = JSON.parse(readFileSync(taskMetricsPath, "utf8").trim().split("\n")[0]);
+
+      for (const field of [
+        "execution_id",
+        "skill_or_stage",
+        "stage",
+        "skill_version",
+        "executed",
+        "tokens",
+        "duration_ms",
+        "rework_rounds",
+        "human_intervention",
+        "friction_ref",
+      ]) {
+        expect(record).toHaveProperty(field);
+      }
+      expect(record.stage).toBe(STAGE);
+    } finally {
+      vi.doUnmock("../../../../core/load-config.mjs");
+      vi.resetModules();
+      rmSync(globalMetricsDir, { recursive: true, force: true });
+    }
+  });
+
+  // round-review finding (同上, blocking): metricsConfigFor() previously hardcoded the global
+  // metrics_path literal inline instead of sourcing it from core/load-config.mjs's loadConfig()
+  // (spec.md §6.5 AC-METRICS-2 / collector.mjs's own "metrics_path comes from loaded config,
+  // not hardcoded" contract). Mocking loadConfig() here proves the value actually flows through.
+  it("metricsConfigFor sources metrics_path from loadConfig(), not a hardcoded literal", async () => {
+    const configForCollectorSpy = vi.fn(() => ({ mocked: true }));
+    const MARKER_METRICS_PATH = "/tmp/round-state-test-marker-metrics.jsonl";
+
+    vi.resetModules();
+    vi.doMock(COLLECTOR_MODULE, () => ({
+      recordSkeleton: vi.fn(),
+      updateOwnResult: vi.fn(),
+      configForCollector: configForCollectorSpy,
+    }));
+    vi.doMock("../../../../core/load-config.mjs", () => ({
+      loadConfig: () => ({ metrics_path: MARKER_METRICS_PATH }),
+    }));
+
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+    } finally {
+      vi.doUnmock(COLLECTOR_MODULE);
+      vi.doUnmock("../../../../core/load-config.mjs");
+      vi.resetModules();
+    }
+
+    expect(configForCollectorSpy).toHaveBeenCalledTimes(1);
+    const [loadedConfig] = configForCollectorSpy.mock.calls[0];
+    expect(loadedConfig.metrics_path).toBe(MARKER_METRICS_PATH);
+  });
+
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-2, blocking):
+  // 此前 prepareRoundState/recordRoundOutcome 把 metricsConfigFor()（内部调用 loadConfig()）也包在
+  // 同一个 warn-only try/catch 里——metrics 写入失败可以 warn-only，但静态配置本身解析/校验出错
+  // 属于 fail-loud 范畴，被吞掉会把坏配置伪装成正常审查流程。这里断言：当 loadConfig() 本身抛错时，
+  // prepareRoundState/recordRoundOutcome 必须让错误真实抛出，而不是打一条 metrics warn 就继续。
+  it("prepareRoundState (new flow) propagates a loadConfig() error instead of swallowing it as a metrics-call warn", async () => {
+    vi.resetModules();
+    vi.doMock("../../../../core/load-config.mjs", () => ({
+      loadConfig: () => {
+        throw new Error("Invalid config: registry (组件清单) is required");
+      },
+    }));
+
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      expect(() =>
+        freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root })
+      ).toThrow(/Invalid config/);
+    } finally {
+      vi.doUnmock("../../../../core/load-config.mjs");
+      vi.resetModules();
+    }
+  });
+
+  it("recordRoundOutcome propagates a loadConfig() error instead of swallowing it as a metrics-call warn", async () => {
+    let prep;
+    {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+    }
+
+    vi.resetModules();
+    vi.doMock("../../../../core/load-config.mjs", () => ({
+      loadConfig: () => {
+        throw new Error("Invalid config: registry (组件清单) is required");
+      },
+    }));
+
+    try {
+      const { recordRoundOutcome: freshRecordRoundOutcome } = await import("../round-state.mjs");
+      expect(() =>
+        freshRecordRoundOutcome({
+          taskId: TASK_ID, stage: STAGE, reviewFlowId: prep.review_flow_id, totalRound: 1, taskTrackingRoot: root,
+          actualMode: "full", verdict: "pass", reportPath: "r1.md", rawFindings: [], docType: "non-doc",
+        })
+      ).toThrow(/Invalid config/);
+    } finally {
+      vi.doUnmock("../../../../core/load-config.mjs");
+      vi.resetModules();
+    }
+  });
+
+  // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-2/round-3,
+  // blocking, R4 fix): round-2/round-3 only proved the loadConfig() error *propagates* (the two
+  // tests above) — they never proved WHEN it fires relative to this function's own writes.
+  // metricsConfigFor() was still called AFTER allocateNewFlow()'s commit point (writeActiveFlow),
+  // so a config failure left a fully-written active-flow pointer + round-state file on disk even
+  // though prepareRoundState() itself threw — a half-write masquerading as "no flow was
+  // allocated". R4 fix: metricsConfigFor() now runs at the very top of prepareRoundState(), before
+  // readActiveFlow() / allocateNewFlow() are even reached, so a config failure leaves nothing on
+  // disk at all.
+  it("prepareRoundState (new flow) writes no active-flow pointer or round-state file when loadConfig() fails (R4 half-write fix)", async () => {
+    vi.resetModules();
+    vi.doMock("../../../../core/load-config.mjs", () => ({
+      loadConfig: () => {
+        throw new Error("Invalid config: registry (组件清单) is required");
+      },
+    }));
+
+    try {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      expect(() =>
+        freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root })
+      ).toThrow(/Invalid config/);
+
+      const activeFlowPath = activeFlowPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: STAGE });
+      expect(existsSync(activeFlowPath)).toBe(false);
+    } finally {
+      vi.doUnmock("../../../../core/load-config.mjs");
+      vi.resetModules();
+    }
+  });
+
+  // Same half-write concern as above, but for recordRoundOutcome(): metricsConfigFor() ran right
+  // before the warn-only recordSkeleton/updateOwnResult calls at the very end of the function —
+  // well after writeFileSync(path, ...) had already landed the new round's outcome on disk. R4
+  // fix: metricsConfigFor() now runs at the top of recordRoundOutcome(), before the round-state
+  // file is read or rewritten, so a config failure leaves the on-disk round-state file byte-for-
+  // byte unchanged.
+  it("recordRoundOutcome leaves the round-state file untouched when loadConfig() fails (R4 half-write fix)", async () => {
+    let prep;
+    {
+      const { prepareRoundState: freshPrepareRoundState } = await import("../round-state.mjs");
+      prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
+    }
+
+    const path = recordPathFor({
+      taskTrackingRoot: root,
+      taskId: TASK_ID,
+      stage: STAGE,
+      reviewFlowId: prep.review_flow_id,
+    });
+    const before = readFileSync(path, "utf8");
+
+    vi.resetModules();
+    vi.doMock("../../../../core/load-config.mjs", () => ({
+      loadConfig: () => {
+        throw new Error("Invalid config: registry (组件清单) is required");
+      },
+    }));
+
+    try {
+      const { recordRoundOutcome: freshRecordRoundOutcome } = await import("../round-state.mjs");
+      expect(() =>
+        freshRecordRoundOutcome({
+          taskId: TASK_ID, stage: STAGE, reviewFlowId: prep.review_flow_id, totalRound: 1, taskTrackingRoot: root,
+          actualMode: "full", verdict: "pass", reportPath: "r1.md", rawFindings: [], docType: "non-doc",
+        })
+      ).toThrow(/Invalid config/);
+
+      const after = readFileSync(path, "utf8");
+      expect(after).toBe(before);
+    } finally {
+      vi.doUnmock("../../../../core/load-config.mjs");
+      vi.resetModules();
+    }
   });
 });
