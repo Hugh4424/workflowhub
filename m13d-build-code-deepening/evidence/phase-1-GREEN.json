@@ -1,0 +1,17 @@
+{
+  "command": "npx vitest run tests/reuse-registry.test.mjs tests/m12-reuse-registry.test.mjs tests/five-skills-present.test.mjs tests/moat-skills.test.mjs tests/m13-make-decision.test.mjs tests/build-code-capture.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub/workflowhub",
+  "git_sha": "41f2a1135138eb255a7e4bd99383895def80aae5",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 0,
+  "timestamp": "2026-07-01T14:56:37.330Z",
+  "test_files_line": " Test Files  6 passed (6)",
+  "content_hash": "96b1ce98db31a5d10103efad4bb8cd3350de1d13003f0604ddb216801b8fd719",
+  "stdout_path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m13d-build-code-deepening/evidence/phase-1-GREEN.json.stdout",
+  "stderr_path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m13d-build-code-deepening/evidence/phase-1-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

@@ -312,21 +312,28 @@ export function invokeReviewEngine({
   assertSafeReviewFlowId(reviewFlowId);
   assertValidTotalRound(totalRound);
 
-  // round-review finding: spawnSync() below has no `env` option, so the runner
-  // subprocess (which runs `npm test` on the target repo as review evidence)
-  // always inherits the REAL process.env — never the caller-supplied `env` param,
-  // which is only consulted for THIRD_REVIEW_RUNNER/THIRD_REVIEW_REPO_ROOT
-  // discovery and can be (and in tests, is) bypassed entirely by passing
-  // `taskTrackingRoot` explicitly, skipping parseTaskDir()'s own check of this
-  // same env var. If the caller's shell forgot to export WORKFLOWHUB_TASK_DIR,
-  // the runner would silently gather review evidence against a broken path,
-  // producing false test-failure findings treated as real blocking review
-  // findings. This must fail loud before any spawn/write side effect, never
-  // fall through to a synthesized escalate_to_human result.
-  if (!process.env.WORKFLOWHUB_TASK_DIR || process.env.WORKFLOWHUB_TASK_DIR.trim() === "") {
-    throw new FailLoudError(
-      "WORKFLOWHUB_TASK_DIR not set — review evidence would be gathered against a broken path, refusing to proceed silently."
-    );
+  // round-review finding (round-1, this fix): spawnSync() below has no `env`
+  // option, so the runner subprocess (which runs `npm test` on the target repo
+  // as review evidence) always inherits the REAL process.env — never the
+  // caller-supplied `env` param, which is only consulted for
+  // THIRD_REVIEW_RUNNER/THIRD_REVIEW_REPO_ROOT discovery and can be (and in
+  // tests, is) bypassed entirely by passing `taskTrackingRoot` explicitly.
+  // A previous fix here hard-required `process.env.WORKFLOWHUB_TASK_DIR` to be
+  // literally set, but WORKFLOWHUB_TASK_DIR is meant to be an optional
+  // override of parseTaskDir()'s priority chain, not a hard requirement —
+  // config/workflowhub.yaml's `task_dir` field is a legitimate fallback that
+  // must keep working from a clean shell within the repo. Call parseTaskDir()
+  // itself (env var, else yaml fallback) purely to validate that SOME
+  // task_tracking_root is genuinely resolvable before any spawn/write side
+  // effect; parseTaskDir() already fails loud (non-zero exit) when both the
+  // env var and the yaml fallback are absent. The resolved value here is
+  // discarded — the actual `root` used below still prefers an explicit
+  // `taskTrackingRoot` override (see line below); this call only guards
+  // against a machine that has neither the env var nor a usable yaml config.
+  // Skipped when `taskTrackingRoot` is absent — the fallback call below
+  // already performs the exact same resolution and fail-loud check.
+  if (taskTrackingRoot !== undefined && taskTrackingRoot !== null) {
+    parseTaskDir();
   }
 
   const root = taskTrackingRoot ?? parseTaskDir();

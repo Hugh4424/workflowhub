@@ -186,14 +186,17 @@ describe("invokeReviewEngine — success path", () => {
   });
 });
 
-describe("invokeReviewEngine — WORKFLOWHUB_TASK_DIR guard (round-2 review finding)", () => {
+describe("invokeReviewEngine — task_tracking_root resolvability guard (round-1 review finding)", () => {
   // spawnSync() in invokeReviewEngine has no `env` option, so the runner subprocess
   // (which runs `npm test` as review evidence) always inherits the REAL process.env —
   // not the caller-supplied `env` param, which is only consulted for THIRD_REVIEW_RUNNER
   // / THIRD_REVIEW_REPO_ROOT discovery and is bypassed here via `taskTrackingRoot`.
-  // If the shell forgot to export WORKFLOWHUB_TASK_DIR, the runner would silently
-  // gather review evidence against a broken path. This must fail loud before spawning,
-  // never fall through to a synthesized escalate_to_human result.
+  // A previous round hard-required `process.env.WORKFLOWHUB_TASK_DIR` to be literally
+  // set, which broke every clean-shell / CI invocation: WORKFLOWHUB_TASK_DIR is an
+  // optional override of parseTaskDir()'s priority chain, not a hard requirement —
+  // config/workflowhub.yaml's `task_dir` yaml fallback must keep resolving a valid
+  // task_tracking_root on its own when invoked from within the repo. The guard now
+  // only fails loud when NEITHER the env var NOR the yaml fallback can resolve one.
   let savedTaskDir;
 
   beforeEach(() => {
@@ -208,31 +211,30 @@ describe("invokeReviewEngine — WORKFLOWHUB_TASK_DIR guard (round-2 review find
     }
   });
 
-  it("throws FailLoudError and never spawns the runner when WORKFLOWHUB_TASK_DIR is unset", () => {
+  it("does not throw and dispatches normally when WORKFLOWHUB_TASK_DIR is unset (yaml task_dir fallback resolves)", () => {
     delete process.env.WORKFLOWHUB_TASK_DIR;
     const runnerPath = writeStubRunner(SUCCESS_STUB);
 
-    expect(() =>
-      invokeReviewEngine({
-        taskId: TASK_ID,
-        stage: STAGE,
-        reviewFlowId: REVIEW_FLOW_ID,
-        totalRound: 1,
-        mode: "full",
-        contract: "c",
-        materials: "m",
-        taskTrackingRoot: root,
-        env: { THIRD_REVIEW_RUNNER: runnerPath },
-      })
-    ).toThrow(/WORKFLOWHUB_TASK_DIR not set/);
+    const result = invokeReviewEngine({
+      taskId: TASK_ID,
+      stage: STAGE,
+      reviewFlowId: REVIEW_FLOW_ID,
+      totalRound: 1,
+      mode: "full",
+      contract: "c",
+      materials: "m",
+      taskTrackingRoot: root,
+      env: { THIRD_REVIEW_RUNNER: runnerPath },
+    });
 
-    // No raw artifact should have been written — the guard must fire before any
-    // spawnSync / write side effect, not silently degrade into a synthesized result.
+    expect(result.verdict).toBe("pass");
+    // The explicit taskTrackingRoot override is still honored — the artifact lands
+    // in the test's own temp dir, never the real repo tasks/ directory.
     const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
-    expect(existsSync(artifactPath)).toBe(false);
+    expect(existsSync(artifactPath)).toBe(true);
   });
 
-  it("throws FailLoudError when WORKFLOWHUB_TASK_DIR is set but blank", () => {
+  it("does not throw when WORKFLOWHUB_TASK_DIR is set but blank (yaml task_dir fallback resolves)", () => {
     process.env.WORKFLOWHUB_TASK_DIR = "   ";
     const runnerPath = writeStubRunner(SUCCESS_STUB);
 
@@ -248,7 +250,7 @@ describe("invokeReviewEngine — WORKFLOWHUB_TASK_DIR guard (round-2 review find
         taskTrackingRoot: root,
         env: { THIRD_REVIEW_RUNNER: runnerPath },
       })
-    ).toThrow(/WORKFLOWHUB_TASK_DIR not set/);
+    ).not.toThrow();
   });
 });
 

@@ -1,0 +1,17 @@
+{
+  "command": "npm test -- tests/m13d-build-code-deepening.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub/workflowhub",
+  "git_sha": "5c5f872f4bae1232986f97f616dd19edd84e6730",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 1,
+  "timestamp": "2026-07-02T00:24:09.294Z",
+  "test_files_line": " Test Files  1 failed (1)",
+  "content_hash": "753f874d446a4a48ad88445ff375367caca45dafd2ad4da83cfdd3c31bcd41c6",
+  "stdout_path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m13d-build-code-deepening/evidence/phase-3-RED.json.stdout",
+  "stderr_path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m13d-build-code-deepening/evidence/phase-3-RED.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}
