@@ -1,0 +1,18 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence
+
+ ❯ tests/receipt-wiring.test.mjs (4 tests | 4 failed) 4ms
+   × receipt wiring in workflow skills > build-spec calls verifyReceipts after stage-result write 2ms
+     → workflows/build-spec/SKILL.md verifyReceipts call: expected -1 to be greater than 19931
+   × receipt wiring in workflow skills > build-plan calls verifyReceipts after stage-result write 1ms
+     → workflows/build-plan/SKILL.md verifyReceipts call: expected -1 to be greater than 19717
+   × receipt wiring in workflow skills > build-code calls verifyReceipts after stage-result write 1ms
+     → workflows/build-code/SKILL.md verifyReceipts call: expected -1 to be greater than 21525
+   × receipt wiring in workflow skills > verify-code calls verifyReceipts after stage-result write 0ms
+     → workflows/verify-code/SKILL.md verifyReceipts call: expected -1 to be greater than 17969
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  01:19:05
+   Duration  161ms (transform 11ms, setup 0ms, collect 6ms, tests 4ms, environment 0ms, prepare 38ms)
+

@@ -1,34 +1,34 @@
 {
   "task_id": "wh-quality-convergence",
-  "phase_id": "phase-2-foundational",
+  "phase_id": "phase-3-skill-wiring",
   "status": "done",
   "needs_human": false,
   "verdict": "pass",
   "changed_files": [
-    "scripts/validate-stage-result.mjs",
-    "core/task-index.mjs",
-    "core/task-dir-parser.mjs",
-    "core/__tests__/task-index.test.mjs",
-    "core/__tests__/task-dir-parser.test.mjs",
-    "core/__tests__/task-dir-parser-config.test.mjs",
-    "tests/receipt-verification.test.mjs"
+    "workflows/build-spec/SKILL.md",
+    "workflows/build-plan/SKILL.md",
+    "workflows/build-code/SKILL.md",
+    "workflows/verify-code/SKILL.md",
+    "tests/receipt-wiring.test.mjs"
   ],
   "tests": {
     "red": {
-      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-RED.json",
+      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-3-RED.json",
       "exit_code": 1
     },
     "green": {
-      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-GREEN.json",
+      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-3-GREEN.json",
       "exit_code": 0
     },
-    "command": "npx vitest run tests/receipt-verification.test.mjs core/__tests__/task-index.test.mjs core/__tests__/task-dir-parser.test.mjs core/__tests__/task-dir-parser-config.test.mjs"
+    "command": "npx vitest run -t receipt"
   },
   "review": {
-    "source": "third_party",
+    "source": "heterogeneous",
     "verdict": "pass",
     "artifact_paths": [
-      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-2-foundational-redo-fix-r3-round-1.raw.json"
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/phase-3-revise-heterogeneous-review-input.json",
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-3-skill-wiring-round-2.raw.json",
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/phase-3-revise-result.json"
     ]
   },
   "diff_scan": {
@@ -38,10 +38,8 @@
   "no_change_reason": "",
   "notes": [
     "DO NOT commit honored; changes are left in the working tree.",
-    "Dirty-state gate passed on redo: no forbidden workflow/spec paths are currently dirty.",
-    "Targeted Phase 2 GREEN was refreshed with capture.mjs at HEAD 2d2e51867420a947ead6514424a085258c7f7611.",
-    "C2 diff scan is clean: /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-diff-scan.json.",
-    "Third-party wh-review redo fix round 3 has verdict=pass with trueCrossEngine=true.",
-    "Full npm test dirty-worktree capture is recorded separately at /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-full-regression-dirty-worktree-fail.json; it fails only repo-cleanliness self-checks because this phase intentionally leaves uncommitted core changes."
+    "Receipt verification is wired after stage-result write in build-spec, build-plan, build-code, and verify-code.",
+    "Round 1 heterogeneous review returned revise_required; build-code transition order and receipt-wiring test coverage were fixed, then GREEN and review were rerun.",
+    "Independent grep verified verifyReceipts calls at workflows/build-spec/SKILL.md:380, workflows/build-plan/SKILL.md:342, workflows/build-code/SKILL.md:314, workflows/verify-code/SKILL.md:409."
   ]
 }

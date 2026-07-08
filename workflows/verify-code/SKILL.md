@@ -400,3 +400,16 @@ Also record a metrics entry via the collector. Call `recordSkeleton` at stage st
 ```
 
 These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`). Use `metrics/collector.mjs` — do not hand-write a raw jsonl line with only `skill/stage/event/ts`.
+
+### Receipt verification
+
+After writing stage-result, call:
+
+```js
+const { verifyReceipts } = await import("../../scripts/validate-stage-result.mjs");
+const receiptResult = verifyReceipts("verify-code", "<stageResultPath>", "<worktreeRoot>");
+if (!receiptResult.ok) {
+  process.stderr.write(`[receipt] FAIL: ${receiptResult.errors.join("; ")}\n`);
+  process.exit(1);
+}
+```

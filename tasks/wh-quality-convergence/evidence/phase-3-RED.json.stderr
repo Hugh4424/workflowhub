@@ -1,0 +1,50 @@
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/receipt-wiring.test.mjs > receipt wiring in workflow skills > build-spec calls verifyReceipts after stage-result write
+AssertionError: workflows/build-spec/SKILL.md verifyReceipts call: expected -1 to be greater than 19931
+ ❯ tests/receipt-wiring.test.mjs:36:68
+     34| 
+     35|       expect(markerIndex, `${workflow.path} stage-result marker`).toBe…
+     36|       expect(receiptIndex, `${workflow.path} verifyReceipts call`).toB…
+       |                                                                    ^
+     37|       expect(content).toContain("../../scripts/validate-stage-result.m…
+     38|       expect(content).toContain(`verifyReceipts("${workflow.stage}"`);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/receipt-wiring.test.mjs > receipt wiring in workflow skills > build-plan calls verifyReceipts after stage-result write
+AssertionError: workflows/build-plan/SKILL.md verifyReceipts call: expected -1 to be greater than 19717
+ ❯ tests/receipt-wiring.test.mjs:36:68
+     34| 
+     35|       expect(markerIndex, `${workflow.path} stage-result marker`).toBe…
+     36|       expect(receiptIndex, `${workflow.path} verifyReceipts call`).toB…
+       |                                                                    ^
+     37|       expect(content).toContain("../../scripts/validate-stage-result.m…
+     38|       expect(content).toContain(`verifyReceipts("${workflow.stage}"`);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/receipt-wiring.test.mjs > receipt wiring in workflow skills > build-code calls verifyReceipts after stage-result write
+AssertionError: workflows/build-code/SKILL.md verifyReceipts call: expected -1 to be greater than 21525
+ ❯ tests/receipt-wiring.test.mjs:36:68
+     34| 
+     35|       expect(markerIndex, `${workflow.path} stage-result marker`).toBe…
+     36|       expect(receiptIndex, `${workflow.path} verifyReceipts call`).toB…
+       |                                                                    ^
+     37|       expect(content).toContain("../../scripts/validate-stage-result.m…
+     38|       expect(content).toContain(`verifyReceipts("${workflow.stage}"`);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/receipt-wiring.test.mjs > receipt wiring in workflow skills > verify-code calls verifyReceipts after stage-result write
+AssertionError: workflows/verify-code/SKILL.md verifyReceipts call: expected -1 to be greater than 17969
+ ❯ tests/receipt-wiring.test.mjs:36:68
+     34| 
+     35|       expect(markerIndex, `${workflow.path} stage-result marker`).toBe…
+     36|       expect(receiptIndex, `${workflow.path} verifyReceipts call`).toB…
+       |                                                                    ^
+     37|       expect(content).toContain("../../scripts/validate-stage-result.m…
+     38|       expect(content).toContain(`verifyReceipts("${workflow.stage}"`);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+

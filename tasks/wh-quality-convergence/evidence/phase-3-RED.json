@@ -1,0 +1,17 @@
+{
+  "command": "npx vitest run tests/receipt-wiring.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "git_sha": "1ce3e6f84eba107724a3cf279ee4bbb840aae641",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 1,
+  "timestamp": "2026-07-08T17:19:06.026Z",
+  "test_files_line": " Test Files  1 failed (1)",
+  "content_hash": "b2a01d75e951910b52fe29853e025fdbe2787e471e229bdb5764f54c66524910",
+  "stdout_path": "tasks/wh-quality-convergence/evidence/phase-3-RED.json.stdout",
+  "stderr_path": "tasks/wh-quality-convergence/evidence/phase-3-RED.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

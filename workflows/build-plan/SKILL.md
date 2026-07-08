@@ -334,6 +334,19 @@ Also record a metrics entry via the collector. Call `recordSkeleton` at stage st
 
 These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`). Use `metrics/collector.mjs` — do not hand-write a raw jsonl line with only `skill/stage/event/ts`.
 
+### Receipt verification
+
+After writing stage-result, call:
+
+```js
+const { verifyReceipts } = await import("../../scripts/validate-stage-result.mjs");
+const receiptResult = verifyReceipts("build-plan", "<stageResultPath>", "<worktreeRoot>");
+if (!receiptResult.ok) {
+  process.stderr.write(`[receipt] FAIL: ${receiptResult.errors.join("; ")}\n`);
+  process.exit(1);
+}
+```
+
 ## 人工放行摘要（Plain-language summary for human approval）
 
 七要素摘要 + 请确认块的完整定义已并入 Step 9（人审检查点）——那是人工拍板前看到的唯一界面，本节不重复内容，避免两份摘要打架。摘要落盘位置：写入 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md`（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）。
