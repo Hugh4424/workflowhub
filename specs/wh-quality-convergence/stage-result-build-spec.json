@@ -1,0 +1,12 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "facts": {
+    "spec_ref": "specs/wh-quality-convergence/spec.md",
+    "requirements": "FR-RECEIPT-001/002, FR-FLOWPROFILE-001, FR-PROJECTINDEX-001/002, FR-TASKDIR-001/002/003, FR-SRC-TRACE-001"
+  },
+  "missing_items": [],
+  "user_decision": false,
+  "reason": "Spec written via spec-specify → spec-clarify → constitution check → baseline comparison, auto-advanced after 3rd-review pass (build-spec is an auto-advance stage). 6 review-fix cycles, final verdict=pass with 0 blocking findings."
+}

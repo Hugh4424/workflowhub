@@ -1,0 +1,10 @@
+{
+  "manifest_version": "1",
+  "hash_algorithm": "sha256",
+  "files": [],
+  "verdict_binding": {
+    "verdict_id": "e88aa448-3e19-4f90-9eb3-08400aa4bf69",
+    "verdict_file": "reviews/verdict.json",
+    "hash": "7fb30496b3b808c4c70d4c1de91bf628285f2132d22a7998fe7382ebda5fa131"
+  }
+}
