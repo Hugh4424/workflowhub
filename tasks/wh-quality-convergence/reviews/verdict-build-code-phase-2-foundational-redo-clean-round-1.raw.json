@@ -1,0 +1,59 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "scripts/validate-stage-result.mjs",
+      "line": 96,
+      "issue": "getRealChangedFiles() only runs git diff --name-only, so untracked newly-created files are invisible. That creates a false-green path: a stage can create an untracked file, declare no_code_change:true, and verifyReceipts() will pass because realChanged is empty. This violates FR-RECEIPT-001/002 and F9 because receipt verification can miss real worktree changes.",
+      "recommendation": "Collect untracked files too, e.g. combine git diff --name-only with git ls-files --others --exclude-standard, or fail-loud when untracked files exist. Update diff_sha semantics/tests so newly-created untracked files cannot be hidden by no_code_change:true."
+    },
+    {
+      "severity": "blocking",
+      "file": "core/task-index.mjs",
+      "line": 44,
+      "issue": "appendTaskIndex() performs a read-modify-write directly against ~/.workflowhub/task-index.json with writeFileSync(). This is non-atomic: concurrent appends can lose one record, and a partial write can corrupt the existing index. Structural Quality Gate marks non-atomic multi-step state updates with possible half-write as blocking.",
+      "recommendation": "Write through an atomic temp-file + rename path, and add a concurrency/changed-underfoot guard or lock/retry strategy. Add regression coverage for concurrent append or stale-read overwrite, plus partial/corrupt write handling."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-quality-convergence/tasks.md",
+      "line": 32,
+      "issue": "Phase 2 scope T004-T009 remains unchecked in the authoritative tasks.md even though the review package claims Phase 2 foundational is ready. The review contract requires current phase tasks to be checked for delivery completeness.",
+      "recommendation": "After fixing the code findings, mark T004-T009 complete in tasks.md or provide an explicit, reviewable reason why this phase intentionally leaves them unchecked."
+    }
+  ],
+  "resolutionSummary": "Targeted Phase 2 tests and full regression both pass locally, and evidence files have sane exit codes/timestamps with no placeholder markers. Blocking remains on receipt false-green for untracked files, non-atomic task-index writes, and Phase 2 task completion state not recorded.",
+  "reviewSnapshot": [
+    {
+      "path": "diff.json",
+      "hash": null,
+      "lines": 1489,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "diff.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

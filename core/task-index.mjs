@@ -8,7 +8,7 @@
 
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 
 /** @type {string|null} — overridden by tests via __setIndexPathForTest. */
 let _indexPath = null;
@@ -17,6 +17,37 @@ function getIndexPath() {
   if (_indexPath !== null) return _indexPath;
   _indexPath = join(homedir(), ".workflowhub", "task-index.json");
   return _indexPath;
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withIndexLock(indexPath, fn) {
+  const lockPath = `${indexPath}.lock`;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      mkdirSync(lockPath);
+      try {
+        return fn();
+      } finally {
+        rmSync(lockPath, { recursive: true, force: true });
+      }
+    } catch (err) {
+      if (err && err.code === "EEXIST") {
+        sleepSync(10);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Could not acquire task index lock at ${lockPath}`);
+}
+
+function writeIndexAtomically(indexPath, index) {
+  const tmpPath = `${indexPath}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(tmpPath, JSON.stringify(index, null, 2) + "\n");
+  renameSync(tmpPath, indexPath);
 }
 
 /** @private Testing hook — override the index file path. */
@@ -41,22 +72,24 @@ export function appendTaskIndex(taskId, projectKey, repoUrl) {
     mkdirSync(dir, { recursive: true });
   }
 
-  let index = {};
-  if (existsSync(indexPath)) {
-    const raw = readFileSync(indexPath, "utf-8");
-    try {
-      index = JSON.parse(raw);
-    } catch (e) {
-      throw new Error(`Corrupted task index file at ${indexPath}: ${e.message}`);
+  return withIndexLock(indexPath, () => {
+    let index = {};
+    if (existsSync(indexPath)) {
+      const raw = readFileSync(indexPath, "utf-8");
+      try {
+        index = JSON.parse(raw);
+      } catch (e) {
+        throw new Error(`Corrupted task index file at ${indexPath}: ${e.message}`);
+      }
     }
-  }
 
-  if (taskId in index) {
-    throw new Error(`Task "${taskId}" already exists in index`);
-  }
+    if (taskId in index) {
+      throw new Error(`Task "${taskId}" already exists in index`);
+    }
 
-  index[taskId] = { projectKey, repo: repoUrl };
-  writeFileSync(indexPath, JSON.stringify(index, null, 2) + "\n");
+    index[taskId] = { projectKey, repo: repoUrl };
+    writeIndexAtomically(indexPath, index);
+  });
 }
 
 /**

@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendTaskIndex, lookupProjectKey, __setIndexPathForTest } from "../task-index.mjs";
@@ -46,6 +47,42 @@ describe("appendTaskIndex — duplicate detection", () => {
     expect(() =>
       appendTaskIndex("task-dup", "proj2", "https://github.com/org/repo2"),
     ).toThrow(/already exists/i);
+  });
+});
+
+describe("appendTaskIndex — atomic concurrent writes", () => {
+  it("preserves all records from concurrent appenders", async () => {
+    const moduleUrl = new URL("../task-index.mjs", import.meta.url).href;
+    const children = Array.from({ length: 5 }, (_, i) => {
+      const code = [
+        `import { appendTaskIndex, __setIndexPathForTest } from ${JSON.stringify(moduleUrl)};`,
+        `__setIndexPathForTest(${JSON.stringify(indexPath)});`,
+        `appendTaskIndex("task-${i}", "project-${i}", "https://example.com/repo-${i}");`,
+      ].join("\n");
+      return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stderr = "";
+        child.stderr.on("data", (chunk) => {
+          stderr += chunk.toString();
+        });
+        child.on("error", reject);
+        child.on("exit", (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(stderr || `child exited ${code}`));
+        });
+      });
+    });
+
+    await Promise.all(children);
+
+    for (let i = 0; i < 5; i += 1) {
+      expect(lookupProjectKey(`task-${i}`)).toEqual({
+        projectKey: `project-${i}`,
+        repo: `https://example.com/repo-${i}`,
+      });
+    }
   });
 });
 

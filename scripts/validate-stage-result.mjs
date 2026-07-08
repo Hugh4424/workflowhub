@@ -94,31 +94,69 @@ export function validateStageResult(stage, artifact) {
  * of the target ref and HEAD.
  */
 export function getRealChangedFiles(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD") {
-  const args =
+  const baseOutput =
     baseRef === "HEAD"
-      ? ["diff", "--name-only", "HEAD"]
-      : ["diff", "--name-only", `${baseRef}...HEAD`];
-  const output = execFileSync("git", args, {
+      ? ""
+      : execFileSync("git", ["diff", "--name-only", `${baseRef}...HEAD`], {
+          cwd: worktreeRoot,
+          encoding: "utf8",
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+  const worktreeOutput = execFileSync("git", ["diff", "--name-only", "HEAD"], {
     cwd: worktreeRoot,
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const lines = output.trim();
-  if (lines.length === 0) return [];
-  return lines.split("\n");
+  const untrackedOutput = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], {
+    cwd: worktreeRoot,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const files = new Set();
+  for (const line of `${baseOutput}\n${worktreeOutput}\n${untrackedOutput}`.split("\n")) {
+    const file = line.trim();
+    if (file) files.add(file);
+  }
+  return [...files].sort();
 }
 
 function getDiffSha(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD") {
-  const args =
+  const baseDiff =
     baseRef === "HEAD"
-      ? ["diff", "HEAD"]
-      : ["diff", `${baseRef}...HEAD`];
-  const output = execFileSync("git", args, {
+      ? ""
+      : execFileSync("git", ["diff", `${baseRef}...HEAD`], {
+          cwd: worktreeRoot,
+          encoding: "utf8",
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+  const worktreeDiff = execFileSync("git", ["diff", "HEAD"], {
     cwd: worktreeRoot,
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  return createHash("sha256").update(output).digest("hex");
+  const untrackedFiles = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], {
+    cwd: worktreeRoot,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  })
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort();
+  const untrackedPayload = untrackedFiles
+    .map((file) => {
+      const content = readFileSync(resolve(worktreeRoot, file));
+      const hash = createHash("sha256").update(content).digest("hex");
+      return `${file}\0${hash}`;
+    })
+    .join("\n");
+  return createHash("sha256")
+    .update(baseDiff)
+    .update("\n--worktree--\n")
+    .update(worktreeDiff)
+    .update("\n--untracked--\n")
+    .update(untrackedPayload)
+    .digest("hex");
 }
 
 function verifyTestResultLog(stage, facts) {

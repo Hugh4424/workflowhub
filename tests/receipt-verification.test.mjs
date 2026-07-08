@@ -38,13 +38,35 @@ function sh(cmd, cwd) {
 }
 
 function diffSha(repo) {
-  const diff = sh("git diff HEAD", repo);
-  return createHash("sha256").update(diff).digest("hex");
+  return diffShaFor(repo, "HEAD");
 }
 
 function diffShaFromBase(repo, baseRef) {
-  const diff = sh(`git diff ${JSON.stringify(baseRef)}...HEAD`, repo);
-  return createHash("sha256").update(diff).digest("hex");
+  return diffShaFor(repo, baseRef);
+}
+
+function diffShaFor(repo, baseRef) {
+  const baseDiff =
+    baseRef === "HEAD" ? "" : sh(`git diff ${JSON.stringify(baseRef)}...HEAD`, repo);
+  const worktreeDiff = sh("git diff HEAD", repo);
+  const untracked = sh("git ls-files --others --exclude-standard", repo)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort()
+    .map((file) => {
+      const content = execSync(`cat ${JSON.stringify(join(repo, file))}`);
+      const hash = createHash("sha256").update(content).digest("hex");
+      return `${file}\0${hash}`;
+    })
+    .join("\n");
+  return createHash("sha256")
+    .update(baseDiff)
+    .update("\n--worktree--\n")
+    .update(worktreeDiff)
+    .update("\n--untracked--\n")
+    .update(untracked)
+    .digest("hex");
 }
 
 function writeTestResult(dir, stage = "build-code", exitCode = 0, extra = {}) {
@@ -124,6 +146,13 @@ describe("T004 — getRealChangedFiles", () => {
     expect(changed).toEqual([]);
   });
 
+  it("includes untracked files in real changed files", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "new-file.txt"), "new work\n");
+    const changed = getRealChangedFiles(repo);
+    expect(changed).toEqual(["new-file.txt"]);
+  });
+
   it("can diff committed stage work against a base ref", () => {
     const repo = initCleanRepo();
     sh("git branch base-before-stage", repo);
@@ -200,6 +229,38 @@ describe("T005 — verifyReceipts", () => {
     const result = verifyReceipts("build-code", path, nonGitDir);
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/git diff evidence/i);
+  });
+
+  it("fails no_code_change:true when untracked files exist", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "new-file.txt"), "new work\n");
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: { no_code_change: true },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/new-file\.txt/);
+  });
+
+  it("passes when an untracked file is declared and bound by diff_sha", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "new-file.txt"), "new work\n");
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["new-file.txt"],
+        diff_sha: diffSha(repo),
+        test_result_log: writeTestResult(workDir, "build-code"),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 
   it("fails when no facts.changed and no no_code_change", () => {
@@ -321,6 +382,56 @@ describe("T005 — verifyReceipts", () => {
       status: "success",
       facts: {
         changed: ["README.md"],
+        diff_sha: diffShaFromBase(repo, "base-before-stage"),
+        test_result_log: writeTestResult(workDir, "build-code"),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo, { baseRef: "base-before-stage" });
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("fails under base ref when a tracked dirty file is not declared", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "tracked.txt"), "base\n");
+    sh("git add tracked.txt", repo);
+    sh('git commit -m "add tracked"', repo);
+    sh("git branch base-before-stage", repo);
+    writeFileSync(join(repo, "README.md"), "# Hello\ncommitted stage work\n");
+    sh("git add README.md", repo);
+    sh('git commit -m "stage work"', repo);
+    writeFileSync(join(repo, "tracked.txt"), "dirty\n");
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffShaFromBase(repo, "base-before-stage"),
+        test_result_log: writeTestResult(workDir, "build-code"),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo, { baseRef: "base-before-stage" });
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/tracked\.txt/);
+  });
+
+  it("passes under base ref when committed and dirty tracked changes are declared", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "tracked.txt"), "base\n");
+    sh("git add tracked.txt", repo);
+    sh('git commit -m "add tracked"', repo);
+    sh("git branch base-before-stage", repo);
+    writeFileSync(join(repo, "README.md"), "# Hello\ncommitted stage work\n");
+    sh("git add README.md", repo);
+    sh('git commit -m "stage work"', repo);
+    writeFileSync(join(repo, "tracked.txt"), "dirty\n");
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md", "tracked.txt"],
         diff_sha: diffShaFromBase(repo, "base-before-stage"),
         test_result_log: writeTestResult(workDir, "build-code"),
       },

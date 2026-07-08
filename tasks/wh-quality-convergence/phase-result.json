@@ -1,33 +1,18 @@
 {
   "task_id": "wh-quality-convergence",
   "phase_id": "phase-2-foundational",
-  "status": "blocked",
-  "needs_human": true,
-  "verdict": "escalate_to_human",
-  "worktree_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
-  "base_before": "b35eb36dc795947f2bd74a692c48511811786202",
-  "head_after": "working-tree",
-  "diff_ref": "working-tree",
+  "status": "done",
+  "needs_human": false,
+  "verdict": "pass",
   "changed_files": [
-    "core/__tests__/task-dir-parser.test.mjs",
     "scripts/validate-stage-result.mjs",
-    "tests/receipt-verification.test.mjs",
-    "workflows/build-code/SKILL.md",
-    "workflows/build-plan/SKILL.md",
-    "workflows/build-spec/SKILL.md",
-    "workflows/verify-code/SKILL.md"
+    "core/task-index.mjs",
+    "core/task-dir-parser.mjs",
+    "core/__tests__/task-index.test.mjs",
+    "core/__tests__/task-dir-parser.test.mjs",
+    "core/__tests__/task-dir-parser-config.test.mjs",
+    "tests/receipt-verification.test.mjs"
   ],
-  "artifact_paths": {
-    "red": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-RED.json",
-    "green": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-GREEN.json",
-    "diff": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-diff-scan.json",
-    "full_regression_green": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-full-regression-GREEN.json",
-    "full_regression_fail_superseded": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-full-regression-fail.json",
-    "review_round_1": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-2-foundational-round-1.raw.json",
-    "review_round_2": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-2-foundational-r2-round-1.raw.json",
-    "review_round_3": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-2-foundational-r3-round-1.raw.json",
-    "phase_result": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/phase-result.json"
-  },
   "tests": {
     "red": {
       "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-RED.json",
@@ -39,51 +24,24 @@
     },
     "command": "npx vitest run tests/receipt-verification.test.mjs core/__tests__/task-index.test.mjs core/__tests__/task-dir-parser.test.mjs core/__tests__/task-dir-parser-config.test.mjs"
   },
-  "tests_run": [
-    "node workflows/build-code/capture.mjs \"npx vitest run tests/receipt-verification.test.mjs core/__tests__/task-index.test.mjs core/__tests__/task-dir-parser.test.mjs core/__tests__/task-dir-parser-config.test.mjs\" tasks/wh-quality-convergence/evidence/phase-2-RED.json --cwd=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence --git-sha=b35eb36dc795947f2bd74a692c48511811786202",
-    "node workflows/build-code/capture.mjs \"npx vitest run tests/receipt-verification.test.mjs core/__tests__/task-index.test.mjs core/__tests__/task-dir-parser.test.mjs core/__tests__/task-dir-parser-config.test.mjs\" tasks/wh-quality-convergence/evidence/phase-2-GREEN.json --cwd=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence --git-sha=b35eb36dc795947f2bd74a692c48511811786202",
-    "env WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence npm test",
-    "node workflows/build-code/capture.mjs \"env WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence npm test\" tasks/wh-quality-convergence/evidence/phase-2-full-regression-GREEN.json --cwd=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence --git-sha=b35eb36dc795947f2bd74a692c48511811786202"
-  ],
   "review": {
     "source": "third_party",
     "verdict": "pass",
     "artifact_paths": [
-      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-2-foundational-r3-round-1.raw.json"
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-2-foundational-redo-fix-r3-round-1.raw.json"
     ]
   },
   "diff_scan": {
-    "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-diff-scan.json",
-    "violations": [
-      {
-        "type": "allowed_path",
-        "path": "workflows/build-code/SKILL.md",
-        "reason": "forbidden for phase-2-foundational; present before this run"
-      },
-      {
-        "type": "allowed_path",
-        "path": "workflows/build-plan/SKILL.md",
-        "reason": "forbidden for phase-2-foundational; present before this run"
-      },
-      {
-        "type": "allowed_path",
-        "path": "workflows/build-spec/SKILL.md",
-        "reason": "forbidden for phase-2-foundational; present before this run"
-      },
-      {
-        "type": "allowed_path",
-        "path": "workflows/verify-code/SKILL.md",
-        "reason": "forbidden for phase-2-foundational; present before this run"
-      }
-    ],
-    "c2_violations": []
+    "violations": []
   },
   "commit_intent": "file_changes",
   "no_change_reason": "",
-  "reason": "Phase 2 implementation, tests, full regression, and third-party wh-review pass for allowed files; issue remains blocked because the working tree still contains pre-existing forbidden workflow SKILL.md diffs that must be resolved by the coordinator/human before this phase can be marked done.",
   "notes": [
-    "DO NOT commit honored; changes left in working tree.",
-    "Entry git status already showed workflows/build-code/SKILL.md, workflows/build-plan/SKILL.md, workflows/build-spec/SKILL.md, and workflows/verify-code/SKILL.md dirty before phase-2 edits.",
-    "Plain npm test without WORKFLOWHUB_TASK_DIR depends on user config; verified full regression with WORKFLOWHUB_TASK_DIR set to this worktree root."
+    "DO NOT commit honored; changes are left in the working tree.",
+    "Dirty-state gate passed on redo: no forbidden workflow/spec paths are currently dirty.",
+    "Targeted Phase 2 GREEN was refreshed with capture.mjs at HEAD 2d2e51867420a947ead6514424a085258c7f7611.",
+    "C2 diff scan is clean: /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-diff-scan.json.",
+    "Third-party wh-review redo fix round 3 has verdict=pass with trueCrossEngine=true.",
+    "Full npm test dirty-worktree capture is recorded separately at /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-2-full-regression-dirty-worktree-fail.json; it fails only repo-cleanliness self-checks because this phase intentionally leaves uncommitted core changes."
   ]
 }
