@@ -1,0 +1,138 @@
+{
+  "status": "success",
+  "error_code": "",
+  "retryable": false,
+  "stage": "build-code",
+  "facts": {
+    "changed": [
+      "workflows/make-decision/SKILL.md",
+      "tests/flow-profile-decision-log.test.mjs",
+      "scripts/validate-stage-result.mjs",
+      "core/task-index.mjs",
+      "core/task-dir-parser.mjs",
+      "core/__tests__/task-index.test.mjs",
+      "core/__tests__/task-dir-parser.test.mjs",
+      "core/__tests__/task-dir-parser-config.test.mjs",
+      "tests/receipt-verification.test.mjs",
+      "workflows/build-spec/SKILL.md",
+      "workflows/build-plan/SKILL.md",
+      "workflows/build-code/SKILL.md",
+      "workflows/verify-code/SKILL.md",
+      "tests/receipt-wiring.test.mjs",
+      "specs/wh-quality-convergence/tasks.md",
+      "tasks/wh-quality-convergence/evidence/phase-1-RED.json",
+      "tasks/wh-quality-convergence/evidence/phase-1-GREEN.json",
+      "tasks/wh-quality-convergence/evidence/phase-2-RED.json",
+      "tasks/wh-quality-convergence/evidence/phase-2-GREEN.json",
+      "tasks/wh-quality-convergence/evidence/phase-3-RED.json",
+      "tasks/wh-quality-convergence/evidence/phase-3-GREEN.json",
+      "tasks/wh-quality-convergence/evidence/phase-4-RED.json",
+      "tasks/wh-quality-convergence/evidence/phase-4-GREEN.json",
+      "tasks/wh-quality-convergence/evidence/phase-5-RED.json",
+      "tasks/wh-quality-convergence/evidence/phase-5-GREEN.json",
+      "tasks/wh-quality-convergence/phase-result.json"
+    ],
+    "tests": {
+      "passed": 68,
+      "total": 68,
+      "files": [
+        "tests/flow-profile-decision-log.test.mjs",
+        "tests/receipt-verification.test.mjs",
+        "tests/receipt-wiring.test.mjs",
+        "core/__tests__/task-index.test.mjs",
+        "core/__tests__/task-dir-parser.test.mjs",
+        "core/__tests__/task-dir-parser-config.test.mjs"
+      ],
+      "command": "HOME=/tmp/workflowhub-phase5-home WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence npm test -- --reporter=dot",
+      "risk_level": "P2",
+      "phases": [
+        {
+          "phase_id": "phase-1-setup",
+          "risk_level": "P2"
+        },
+        {
+          "phase_id": "phase-2-foundational",
+          "risk_level": "P2"
+        },
+        {
+          "phase_id": "phase-3-skill-wiring",
+          "risk_level": "P2"
+        },
+        {
+          "phase_id": "phase-4-test-coverage",
+          "risk_level": "P2"
+        },
+        {
+          "phase_id": "phase-5-polish",
+          "risk_level": "P2"
+        }
+      ],
+      "evidence": [
+        "tasks/wh-quality-convergence/evidence/phase-1-RED.json",
+        "tasks/wh-quality-convergence/evidence/phase-1-GREEN.json",
+        "tasks/wh-quality-convergence/evidence/phase-2-RED.json",
+        "tasks/wh-quality-convergence/evidence/phase-2-GREEN.json",
+        "tasks/wh-quality-convergence/evidence/phase-3-RED.json",
+        "tasks/wh-quality-convergence/evidence/phase-3-GREEN.json",
+        "tasks/wh-quality-convergence/evidence/phase-4-RED.json",
+        "tasks/wh-quality-convergence/evidence/phase-4-GREEN.json",
+        "tasks/wh-quality-convergence/evidence/phase-5-RED.json",
+        "tasks/wh-quality-convergence/evidence/phase-5-GREEN.json"
+      ]
+    },
+    "review": {
+      "status": "executed",
+      "source": "third_party",
+      "verdict": "pass",
+      "artifact_path": "tasks/wh-quality-convergence/reviews/verdict-build-code-phase-5-polish-round-1.raw.json"
+    },
+    "no_code_change": true,
+    "commit_records": [
+      {
+        "phase_id": "phase-1-setup",
+        "commit_sha": "b35eb36",
+        "message": "workflowhub(build-code/phase-1-setup): add flow profile decision log contract"
+      },
+      {
+        "phase_id": "phase-1-revise",
+        "commit_sha": "df030c7",
+        "message": "workflowhub(build-code/phase-1-revise): finalize flow profile setup review fixes"
+      },
+      {
+        "phase_id": "phase-2-foundational",
+        "commit_sha": "1ce3e6f",
+        "message": "workflowhub(build-code/phase-2-foundational): finalize receipt verification gate"
+      },
+      {
+        "phase_id": "phase-3-skill-wiring",
+        "commit_sha": "a54240c",
+        "message": "workflowhub(build-code/phase-3-skill-wiring): finalize receipt wiring"
+      },
+      {
+        "phase_id": "phase-4-test-coverage",
+        "commit_sha": "fb9a5bc",
+        "message": "workflowhub(build-code/phase-4-test-coverage): finalize receipt coverage gate"
+      },
+      {
+        "phase_id": "phase-5-polish",
+        "commit_sha": "0f2da34",
+        "message": "workflowhub(build-code/phase-5-polish): finalize scope and regression gate"
+      }
+    ],
+    "artifact_refs": [
+      "tasks/wh-quality-convergence/build-code-summary.md",
+      "tasks/wh-quality-convergence/stage-result-build-code.json",
+      "tasks/wh-quality-convergence/phase-result.json"
+    ],
+    "gate_summary": {
+      "red_green": "pass",
+      "diff": "pass",
+      "review": "pass",
+      "commit_record": "pass",
+      "worktree": "clean_before_closeout_artifacts"
+    }
+  },
+  "missing_items": [],
+  "user_decision": false,
+  "reason": "All build-code phases completed with RED/GREEN evidence, diff scan pass, third-party review pass, and commit records. Closeout artifacts are informational and ready for final commit."
+}
