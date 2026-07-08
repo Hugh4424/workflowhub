@@ -13,7 +13,8 @@
  * No AJV — hand-written validator consistent with core/validate-contract.mjs (FR-NC-004).
  */
 
-import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateContract } from "../core/validate-contract.mjs";
@@ -81,6 +82,99 @@ export function validateStageResult(stage, artifact) {
   }
 
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * getRealChangedFiles(worktreeRoot) -> string[]
+ *
+ * Runs `git diff --name-only` in the given worktree directory against HEAD.
+ * Returns an array of changed file paths. If git diff fails or the worktree
+ * is not a git repo, returns an empty array (no crash).
+ */
+export function getRealChangedFiles(worktreeRoot) {
+  try {
+    const output = execSync("git diff --name-only HEAD", {
+      cwd: worktreeRoot,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const lines = output.trim();
+    if (lines.length === 0) return [];
+    return lines.split("\n");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * verifyReceipts(stage, stageResultPath, worktreeRoot)
+ *   -> { ok: boolean, errors: string[], changed: string[] }
+ *
+ * Reads the stage-result JSON from stageResultPath, compares facts.changed
+ * against the real git diff from the worktree, and returns a receipt check.
+ *
+ * Fails (ok=false) if:
+ *   - stage-result has no facts.changed AND no no_code_change:true
+ *   - Actual diff files don't match declared changed files
+ */
+export function verifyReceipts(stage, stageResultPath, worktreeRoot) {
+  const errors = [];
+
+  // Read and parse stage-result
+  let stageResult;
+  try {
+    const raw = readFileSync(stageResultPath, "utf8");
+    stageResult = JSON.parse(raw);
+  } catch (err) {
+    return { ok: false, errors: [`Failed to read stage-result: ${err.message}`], changed: [] };
+  }
+
+  // Get real changed files from git
+  const realChanged = getRealChangedFiles(worktreeRoot);
+
+  const facts = stageResult.facts ?? {};
+
+  // No changes declared at all
+  if (!("changed" in facts) && !facts.no_code_change) {
+    errors.push(
+      `stage "${stage}" has no facts.changed and no no_code_change:true — cannot verify receipt`
+    );
+    return { ok: false, errors, changed: realChanged };
+  }
+
+  // no_code_change: true — no changes expected
+  if (facts.no_code_change) {
+    if (realChanged.length > 0) {
+      errors.push(
+        `stage "${stage}" declares no_code_change:true but git diff has changes: ${realChanged.join(", ")}`
+      );
+      return { ok: false, errors, changed: realChanged };
+    }
+    return { ok: true, errors: [], changed: realChanged };
+  }
+
+  // facts.changed declared
+  const declared = facts.changed ?? [];
+
+  // Check: declared must be a non-empty array
+  if (!Array.isArray(declared) || declared.length === 0) {
+    errors.push(
+      `stage "${stage}" facts.changed must be a non-empty array (got ${JSON.stringify(declared)})`
+    );
+    return { ok: false, errors, changed: realChanged };
+  }
+
+  // Check: declared must match real diff
+  const declaredSorted = [...declared].sort();
+  const realSorted = [...realChanged].sort();
+  if (JSON.stringify(declaredSorted) !== JSON.stringify(realSorted)) {
+    errors.push(
+      `stage "${stage}" declared changed files do not match git diff — declared: [${declaredSorted.join(", ")}], actual: [${realSorted.join(", ")}]`
+    );
+    return { ok: false, errors, changed: realChanged };
+  }
+
+  return { ok: true, errors: [], changed: realChanged };
 }
 
 // ── CLI entry ─────────────────────────────────────────────────────────────────
