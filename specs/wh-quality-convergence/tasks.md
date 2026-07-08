@@ -102,9 +102,9 @@
 
 **Purpose**: Final verification, cleanup, and scope boundary checks
 
-- [ ] T018 [P] Verify scope boundary: no changes to make-decision/write-code/verify-code SKILL.md beyond receipt wiring and flow_profile field addition Governance: scope-boundary
-- [ ] T019 [P] Scan for no-placeholder compliance: TODO, TBD, placeholder, 待定, 暂缺 patterns in all new files Governance: no-placeholder
-- [ ] T020 [P] Final regression: `npm test` full suite, all 152+ tests pass FR: All FRs
+- [x] T018 [P] Verify scope boundary: no changes to make-decision/write-code/verify-code SKILL.md beyond receipt wiring and flow_profile field addition Governance: scope-boundary
+- [x] T019 [P] Scan for no-placeholder compliance: TODO, TBD, placeholder, 待定, 暂缺 patterns in all new files Governance: no-placeholder
+- [x] T020 [P] Final regression: `npm test` full suite, all 152+ tests pass FR: All FRs
 
 ---
 
