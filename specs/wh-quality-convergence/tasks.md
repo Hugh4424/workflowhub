@@ -19,9 +19,9 @@
 
 **Purpose**: Schema definition and foundational changes that all downstream tasks depend on
 
-- [ ] T001 Define flow_profile field — make-decision writes flow_profile to decision-log facts (string, values: full_vibecoding/fast_make_decision_to_code) FR: FR-FLOWPROFILE-001
-- [ ] T002 Update make-decision SKILL.md to write flow_profile in decision-log facts FR: FR-FLOWPROFILE-001
-- [ ] T003 Add flow_profile acceptance tests — decision-log write + downstream read-only: missing field, non-string values, downstream misuse check FR: FR-FLOWPROFILE-001
+- [x] T001 Define flow_profile field — make-decision writes flow_profile to decision-log facts (string, values: full_vibecoding/fast_make_decision_to_code) FR: FR-FLOWPROFILE-001
+- [x] T002 Update make-decision SKILL.md to write flow_profile in decision-log facts FR: FR-FLOWPROFILE-001
+- [x] T003 Add flow_profile acceptance tests — decision-log write + downstream read-only: missing field, non-string values, downstream misuse check FR: FR-FLOWPROFILE-001
 
 ---
 
