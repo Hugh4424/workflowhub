@@ -35,6 +35,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         decision: "ship now",
         scope: "backend only",
         decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+        flow_profile: "full_vibecoding",
       },
     };
     const result = validateStageResult("make-decision", artifact);
@@ -50,28 +51,28 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
 
   it("negative: missing 'decision' key → fails", () => {
     // Only scope present — decision is missing (literal, so removing decision key makes this red)
-    const artifact = { ...base(), facts: { scope: "full rewrite" } };
+    const artifact = { ...base(), facts: { scope: "full rewrite", flow_profile: "full_vibecoding" } };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/decision/);
   });
 
   it("negative: missing 'scope' key → fails", () => {
-    const artifact = { ...base(), facts: { decision: "proceed" } };
+    const artifact = { ...base(), facts: { decision: "proceed", flow_profile: "full_vibecoding" } };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/scope/);
   });
 
   it("negative: 'decision' present but empty string → fails", () => {
-    const artifact = { ...base(), facts: { decision: "", scope: "something" } };
+    const artifact = { ...base(), facts: { decision: "", scope: "something", flow_profile: "full_vibecoding" } };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/decision/);
   });
 
   it("negative: 'scope' present but empty string → fails", () => {
-    const artifact = { ...base(), facts: { decision: "go", scope: "" } };
+    const artifact = { ...base(), facts: { decision: "go", scope: "", flow_profile: "full_vibecoding" } };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/scope/);
@@ -84,6 +85,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         decision: "go",
         scope: "minimal",
         decision_log_path: "tasks/t1/decision-log.md",
+        flow_profile: "full_vibecoding",
         extra_note: "fyi",
       },
     };
@@ -98,6 +100,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         decision: "ship now",
         scope: "backend only",
         decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+        flow_profile: "fast_make_decision_to_code",
       },
     };
     const result = validateStageResult("make-decision", artifact);
@@ -108,7 +111,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
     // Literal: only decision + scope, decision_log_path key absent
     const artifact = {
       ...base(),
-      facts: { decision: "ship now", scope: "backend only" },
+      facts: { decision: "ship now", scope: "backend only", flow_profile: "full_vibecoding" },
     };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok).toBe(false);
@@ -122,11 +125,57 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         decision: "ship now",
         scope: "backend only",
         decision_log_path: "",
+        flow_profile: "full_vibecoding",
       },
     };
     const result = validateStageResult("make-decision", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/decision_log_path/);
+  });
+
+  // ── flow_profile (FR-FLOWPROFILE-001) ──
+
+  it("positive: flow_profile in facts → ok", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        decision: "ship now",
+        scope: "backend only",
+        decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+        flow_profile: "full_vibecoding",
+      },
+    };
+    const result = validateStageResult("make-decision", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
+  });
+
+  it("negative: missing 'flow_profile' key → fails", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        decision: "ship now",
+        scope: "backend only",
+        decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+      },
+    };
+    const result = validateStageResult("make-decision", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/flow_profile/);
+  });
+
+  it("negative: 'flow_profile' present but empty string → fails", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        decision: "ship now",
+        scope: "backend only",
+        decision_log_path: "tasks/m7-intake-v1/decision-log.md",
+        flow_profile: "",
+      },
+    };
+    const result = validateStageResult("make-decision", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/flow_profile/);
   });
 });
 
