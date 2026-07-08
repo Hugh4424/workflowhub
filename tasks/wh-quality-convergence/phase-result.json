@@ -1,0 +1,64 @@
+{
+  "task_id": "wh-quality-convergence",
+  "phase_id": "phase-1-setup",
+  "status": "done",
+  "needs_human": false,
+  "verdict": "pass",
+  "worktree_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "base_before": "0c08b63bed4aabd4f0cb2740e2234c1d96b27bdd",
+  "head_after": "working-tree",
+  "diff_ref": "working-tree",
+  "changed_files": [
+    "workflows/make-decision/SKILL.md",
+    "tests/flow-profile-decision-log.test.mjs"
+  ],
+  "artifact_paths": {
+    "red": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-RED.json",
+    "green": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-GREEN.json",
+    "diff": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-diff-scan.json",
+    "review_summary": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-review-summary.md",
+    "spec_compliance": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-spec-compliance-verdict.md",
+    "code_quality": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-code-quality-verdict.md",
+    "phase_result": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/phase-result.json"
+  },
+  "tests": {
+    "red": {
+      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-RED.json",
+      "exit_code": 1,
+      "content_hash": "e8ff7fc311e9e31738b2ff55110d96e851a51d9a2c60c41c2798698a508ccaef"
+    },
+    "green": {
+      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-GREEN.json",
+      "exit_code": 0,
+      "content_hash": "e41610da4df2cd853be900695ed266c5a5a5c8322f0f6f6a8dc97a16b48e1658"
+    },
+    "command": "npx vitest run tests/flow-profile-decision-log.test.mjs",
+    "hashes_differ": true
+  },
+  "tests_run": [
+    "node workflows/build-code/capture.mjs \"npx vitest run tests/flow-profile-decision-log.test.mjs\" /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-RED.json",
+    "node workflows/build-code/capture.mjs \"npx vitest run tests/flow-profile-decision-log.test.mjs\" /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-GREEN.json"
+  ],
+  "review": {
+    "source": "same_source",
+    "verdict": "pass",
+    "third_party_status": "not_executed",
+    "reason": "../3rd-review/scripts/run-heterologous-review.mjs exists but is not executable",
+    "artifact_paths": [
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-spec-compliance-verdict.md",
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-code-quality-verdict.md",
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-review-summary.md"
+    ]
+  },
+  "diff_scan": {
+    "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-diff-scan.json",
+    "violations": []
+  },
+  "commit_intent": "file_changes",
+  "no_change_reason": "",
+  "reason": "",
+  "notes": [
+    "DO NOT commit honored; changes left in working tree.",
+    "Full working tree already contained pre-existing out-of-scope dirty files on entry; this phase only modified workflows/make-decision/SKILL.md and added tests/flow-profile-decision-log.test.mjs plus evidence artifacts."
+  ]
+}

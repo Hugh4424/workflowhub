@@ -231,6 +231,7 @@ Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.m
    6. **开放问题** — items still ambiguous or awaiting approval.
    7. **验收标准** — acceptance criteria verifiable after implementation.
 3. Record the path of this file as facts key `decision_log_path`.
+4. Record `flow_profile` in `decision-log.md` as a 字符串 field on the task's decision record, using `full_vibecoding` or `fast_make_decision_to_code` as the suggested values. This is an informational placeholder only.
 
 ## Produce stage-result
 
@@ -244,13 +245,21 @@ When the stage is complete, write a `stage-result` record with:
   "facts": {
     "decision": "<one-sentence summary of the agreed direction>",
     "scope": "<brief description of what is in scope and what is explicitly excluded>",
-    "decision_log_path": "tasks/<task>/decision-log.md"
+    "decision_log_path": "tasks/<task>/decision-log.md",
+    "flow_profile": "<full_vibecoding | fast_make_decision_to_code>"
   },
   "missing_items": [],
   "user_decision": true,
   "reason": "User confirmed direction and scope."
 }
 ```
+
+`facts.flow_profile` contract:
+
+- `flow_profile` is required and must be a 字符串. If the field is 缺失 or 非字符串, fail-loud before handing off to downstream stages.
+- Suggested values are `full_vibecoding` and `fast_make_decision_to_code`, but this round does 不做枚举约束; 枚举校验逻辑接入推迟.
+- Downstream build-spec/build-plan/build-code/verify-code may read `flow_profile` as 只读 context only: 不得写入, 不得校验, 不得据此分支, 不得阻断.
+- `flow_profile` 本轮不驱动任何行为差异.
 
 Also record a metrics entry via the collector. Call `recordSkeleton` at stage start and `updateOwnResult` at stage end, passing at minimum:
 
@@ -599,7 +608,7 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 
 ## Worktree 规则（make-decision 阶段职责）
 
-本节即 worktree 规则章节，定义 make-decision 阶段涉及 worktree 生命周期的完整规则（R1-R7）。
+本节即 worktree 规则章节，定义 make-decision 阶段涉及 worktree 生命周期的完整规则（R1-R8）。
 
 **task-id 归一化步骤（先归一化，再校验分支命名）**：branch 命名校验前必须先对 task-id 做归一化（normalize），步骤依次为：①小写（lower case，全部转小写）；②非字母数字字符折叠为连字符；③合并连续连字符为单个连字符（连续连字符须合并，例如 `--` → `-`）；④去除首尾连字符（去除首尾连字符，例如结尾的 `-` 须去掉）。归一化完成后才允许进入分支命名校验步骤。例如 "Worktree Unification" 归一化后得到 "worktree-unification"；"--foo--bar--" 归一化后得到 "foo-bar"。
 
@@ -612,6 +621,7 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 - R5 worktree.json 首次写入：worktree.json 首次写入须包含 6 个字段，且一次性满足下游（build-code §17 / verify-code close①）common 校验，不得写出下游必然拒收的值：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径，须满足上方 worktree_root 路径公式）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（固定值 `"verify-code-only"`，其他值 fail-loud，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
 - R6 存在性/冲突检测：使用 `git worktree list --porcelain` 检测 worktree 是否已存在或冲突；发现僵尸 worktree（目录不存在但仍在 git 记录中）须 fail-loud 报错退出；发现路径/分支被其他 worktree 占用同样须 fail-loud，不得静默覆盖。
 - R7 make-decision stage commit 规则：本规则仅约束 `target_repo_root`（代码仓库）——本阶段在 target_repo_root 内涉及文件变更（如 decision-log 等产物写入代码仓库路径）时须在 target_repo_root 执行 commit（message 含 `workflowhub(make-decision)` 前缀）；无变更时须在 stage-result 的 `missing_items` 或 journal 中记录无变更原因。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）不受本规则约束，不要求 commit。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"，不因此触发本规则的 commit 要求。
+- R8 分支切分点须基于最新 origin 远程：R4 执行 `git worktree add` 创建分支前，必须先在 target_repo_root 执行 `git fetch origin`，确认切分点（branch point）是从 target_repo_root 当前默认分支（如 `main`）的最新 `origin/main` tip 切出，不得只认某个历史 commit sha 就直接切分支，也不得省略 fetch 直接基于本地已有的（可能过期的）默认分支引用切分支。若 fetch 后发现 target_repo_root 本地默认分支落后于 `origin`（存在本地缺失的上游提交），须先同步：对本地默认分支执行 fast-forward（`git merge --ff-only origin/main` 或等价），确认本地默认分支与 `origin/main` 一致后才允许基于其切出新分支；无法 fast-forward（存在分叉、或本地有未提交改动导致冲突）须 fail-loud 报错退出并 escalate_to_human，不得静默基于旧 commit 继续切分支。**违反后果与真实案例**：本任务（wh-quality-convergence）实际发生过——worktree 分支被切在 `wh-review-rebuild` 合并进 `origin/main` 之前的旧 commit 上，导致后续几个 stage 的工作一度对着过期的 3rd-review 基础设施执行，产出与 main 上已合并的基础设施/技能更新脱节，最终靠事后 merge `origin/main` 才修复。本规则即为杜绝该场景重演。
 
 **task 子目录创建职责**：make-decision 阶段负责幂等地创建 task_tracking_root 下的 task 子目录（`{task_tracking_root}/{task-id}/`）；若父目录（task_tracking_root）不存在，须 fail-loud 报错退出，不得自动创建父目录；若该 task 已处于 `status=cleaned`（已归档）状态，须 fail-loud 报错 "task 已归档"，不得继续复用。
 

@@ -1,0 +1,5 @@
+{
+  "violations": [],
+  "safe": true,
+  "note": "scanDiff ran on tracked git diff; untracked evidence/test paths listed separately in phase-result"
+}
