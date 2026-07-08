@@ -1,14 +1,10 @@
 /**
- * task-dir-parser.mjs — FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003
+ * task-dir-parser.mjs — FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003 / FR-TASKDIR-002
  *
  * Reads task_tracking_root via priority order:
  *   1. WORKFLOWHUB_TASK_DIR env var (if set and non-empty)
- *   2. config/workflowhub.yaml `task_dir` field (yaml fallback)
+ *   2. ~/.workflowhub/config.json `task_dir` field (config fallback)
  *   3. Both absent → fail-loud (non-zero exit, explicit error message)
- *
- * yaml `task_dir` trailing `/tasks` or `/tasks/` suffix is trimmed (at most once)
- * to return the pure task_tracking_root, preventing `/tasks/tasks/{id}` double-join.
- * WORKFLOWHUB_TASK_DIR value is NOT trimmed (caller must supply correct root).
  *
  * Path validation: returned path must exist and be a directory; otherwise fail-loud.
  * No third-party dependencies (FR-TASKDIR-001).
@@ -117,6 +113,43 @@ function validateDir(resolvedPath, source) {
 }
 
 /**
+ * Read task_dir from ~/.workflowhub/config.json.
+ * - File doesn't exist → return null (not configured)
+ * - Malformed JSON → fail-loud
+ * - task_dir field missing or empty → fail-loud
+ * - Path doesn't exist on disk → fail-loud (via validateDir)
+ *
+ * @returns {string|null} The resolved, validated task_dir path, or null if file doesn't exist.
+ */
+function readTaskDirFromConfig() {
+  const configPath = expandHome("~/.workflowhub/config.json");
+  if (!existsSync(configPath)) return null;
+
+  let config;
+  try {
+    config = JSON.parse(readFileSync(configPath, "utf8"));
+  } catch {
+    failLoud("配置有问题 (config.json malformed)");
+  }
+
+  if (
+    !config ||
+    typeof config.task_dir !== "string" ||
+    config.task_dir.trim() === ""
+  ) {
+    failLoud(
+      `WORKFLOWHUB_TASK_DIR is not set and no task_dir found in ${configPath}. ` +
+        `Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, ` +
+        `or add a task_dir entry to ~/.workflowhub/config.json.`
+    );
+  }
+
+  const resolved = resolve(expandHome(config.task_dir.trim()));
+  validateDir(resolved, `config.json (${configPath})`);
+  return resolved;
+}
+
+/**
  * Parse a single top-level `task_dir:` key from a YAML config file.
  * Uses a line-level scan — no third-party YAML parser required.
  *
@@ -145,15 +178,15 @@ function readTaskDirFromYaml(configPath) {
 /**
  * Resolve task_tracking_root via priority:
  *   1. WORKFLOWHUB_TASK_DIR env var
- *   2. yaml task_dir field (with trailing /tasks[/] trim)
+ *   2. ~/.workflowhub/config.json task_dir field
  *   3. fail-loud
  *
  * Returned path is validated to exist and be a directory.
  *
- * @param {string} [configPath] - Path to workflowhub.yaml. Defaults to repo-relative config/workflowhub.yaml.
+ * @param {string} [_configPath] - Deprecated, kept for backward compat. No longer used in priority chain.
  * @returns {string} Absolute task_tracking_root path.
  */
-export function parseTaskDir(configPath = DEFAULT_CONFIG_PATH) {
+export function parseTaskDir(_configPath) {
   // Priority 1: WORKFLOWHUB_TASK_DIR env var (set and non-empty)
   const envVar = process.env.WORKFLOWHUB_TASK_DIR;
   if (envVar && envVar.trim() !== "") {
@@ -162,25 +195,17 @@ export function parseTaskDir(configPath = DEFAULT_CONFIG_PATH) {
     return resolved;
   }
 
-  // Priority 2: yaml task_dir field
-  const rawYaml = readTaskDirFromYaml(configPath);
-  if (rawYaml !== null) {
-    const trimmed = trimTasksSuffix(rawYaml);
-    const expanded = expandHome(trimmed);
-    // Relative paths are resolved against the repo root that owns this config
-    // file (see resolveConfigRepoRoot), not against the config file's own
-    // directory, so ./tasks/ works on any machine regardless of cwd.
-    const resolved = isAbsolute(expanded)
-      ? expanded
-      : resolve(resolveConfigRepoRoot(configPath), expanded);
-    validateDir(resolved, `yaml task_dir (${configPath})`);
-    return resolved;
+  // Priority 2: config.json task_dir field
+  const configResult = readTaskDirFromConfig();
+  if (configResult !== null) {
+    return configResult;
   }
 
   // Priority 3: both absent — fail-loud
+  const configPath = expandHome("~/.workflowhub/config.json");
   failLoud(
     `WORKFLOWHUB_TASK_DIR is not set and no task_dir found in ${configPath}. ` +
       `Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, ` +
-      `or add a task_dir entry to config/workflowhub.yaml.`
+      `or add a task_dir entry to ~/.workflowhub/config.json.`
   );
 }
