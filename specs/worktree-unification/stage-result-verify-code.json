@@ -2,7 +2,10 @@
   "status": "success",
   "retryable": false,
   "facts": {
-    "evidence_ref": "reviews/verify-code.md",
+    "verdict": "pass",
+    "review_status": "pass",
+    "close_commit_sha": "96e5ecb",
+    "evidence_ref": "test/final-test-report.md",
     "anomaly_flags": [
       "missing_test_command_waived_by_human"
     ],
