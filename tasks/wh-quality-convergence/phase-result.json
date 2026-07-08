@@ -1,34 +1,32 @@
 {
   "task_id": "wh-quality-convergence",
-  "phase_id": "phase-3-skill-wiring",
+  "phase_id": "phase-4-test-coverage",
   "status": "done",
   "needs_human": false,
   "verdict": "pass",
   "changed_files": [
-    "workflows/build-spec/SKILL.md",
-    "workflows/build-plan/SKILL.md",
-    "workflows/build-code/SKILL.md",
-    "workflows/verify-code/SKILL.md",
-    "tests/receipt-wiring.test.mjs"
+    "tests/receipt-verification.test.mjs",
+    "core/__tests__/task-index.test.mjs",
+    "core/__tests__/task-dir-parser-config.test.mjs",
+    "scripts/validate-stage-result.mjs"
   ],
   "tests": {
     "red": {
-      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-3-RED.json",
+      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-4-RED.json",
       "exit_code": 1
     },
     "green": {
-      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-3-GREEN.json",
+      "path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-4-GREEN.json",
       "exit_code": 0
     },
-    "command": "npx vitest run -t receipt"
+    "command": "npx vitest run tests/receipt-verification.test.mjs core/__tests__/task-index.test.mjs core/__tests__/task-dir-parser-config.test.mjs"
   },
   "review": {
-    "source": "heterogeneous",
+    "source": "third_party",
     "verdict": "pass",
     "artifact_paths": [
-      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/phase-3-revise-heterogeneous-review-input.json",
-      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase-3-skill-wiring-round-2.raw.json",
-      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/phase-3-revise-result.json"
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/verdict-build-code-phase4testcoverage-round-1.raw.json",
+      "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/reviews/phase-4-heterogeneous-review-result.json"
     ]
   },
   "diff_scan": {
@@ -37,9 +35,7 @@
   "commit_intent": "file_changes",
   "no_change_reason": "",
   "notes": [
-    "DO NOT commit honored; changes are left in the working tree.",
-    "Receipt verification is wired after stage-result write in build-spec, build-plan, build-code, and verify-code.",
-    "Round 1 heterogeneous review returned revise_required; build-code transition order and receipt-wiring test coverage were fixed, then GREEN and review were rerun.",
-    "Independent grep verified verifyReceipts calls at workflows/build-spec/SKILL.md:380, workflows/build-plan/SKILL.md:342, workflows/build-code/SKILL.md:314, workflows/verify-code/SKILL.md:409."
+    "Full npm test was run via capture.mjs and failed in unrelated existing tests/m13d-build-code-deepening.test.mjs because it expects missing artifacts under /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence; artifact: /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-4-full-regression-fail.json; risk: no changed phase-4 files failed, targeted phase suite passed 3/3 files.",
+    "No commit performed per phase contract."
   ]
 }

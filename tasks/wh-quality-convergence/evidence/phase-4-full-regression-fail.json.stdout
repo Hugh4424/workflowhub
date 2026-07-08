@@ -1,0 +1,108 @@
+
+> workflowhub@0.0.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence
+
+ ✓ tests/five-skills-present.test.mjs (59 tests) 12ms
+ ✓ tests/m12-spec-analyze.test.mjs (33 tests) 9ms
+ ✓ tests/m12-build-plan-v1.test.mjs (35 tests) 7ms
+ ✓ tests/m12-spec-plan.test.mjs (17 tests) 2ms
+ ✓ tests/m13b-build-spec-deepening.test.mjs (61 tests) 13ms
+ ✓ tests/build-code-diff-only.test.mjs (23 tests) 3ms
+ ✓ tests/facts-subschema.test.mjs (40 tests) 4ms
+ ✓ tests/m13-make-decision.test.mjs (163 tests) 29ms
+ ✓ tests/metric-scan.test.mjs (24 tests) 99ms
+ ✓ tests/stage-result-contract.test.mjs (17 tests) 4ms
+ ✓ tests/m12-spec-tasks.test.mjs (20 tests) 4ms
+ ❯ tests/m13d-build-code-deepening.test.mjs (13 tests | 9 failed) 6ms
+   × T010(a): phase-N-RED.json risk_level exists and is legal when present > discovers at least one phase-N-RED.json evidence file 3ms
+     → no phase-N-RED.json files found in /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence
+   × T010(a): phase-N-RED.json risk_level exists and is legal when present > current phase-3-RED.json contains the risk_level field 0ms
+     → missing /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/phase-3-RED.json
+   × T010(b): phase-N-GREEN.json carries risk_level + commit/base/head sha > discovers at least one phase-N-GREEN.json evidence file 0ms
+     → no phase-N-GREEN.json files found in /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence
+   × T010(c): l2-integration-test-report.json fields and enums > file exists 0ms
+     → missing /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/l2-integration-test-report.json
+   × T010(c): l2-integration-test-report.json fields and enums > has legal routing_tier, non-empty routing_rationale, and legal result 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/l2-integration-test-report.json'
+   × T010(d): spec-compliance-verdict.md verdict and findings > file exists 0ms
+     → missing /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/spec-compliance-verdict.md
+   × T010(d): spec-compliance-verdict.md verdict and findings > contains a legal verdict and a findings field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/spec-compliance-verdict.md'
+   × T010(e): code-quality-verdict.md verdict and findings > file exists 0ms
+     → missing /Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/code-quality-verdict.md
+   × T010(e): code-quality-verdict.md verdict and findings > contains a legal verdict and a findings field 0ms
+     → ENOENT: no such file or directory, open '/Users/Hugh/Hugh/Knowledge/m13d-build-code-deepening/evidence/code-quality-verdict.md'
+ ✓ tests/baseline.test.mjs (19 tests) 7ms
+ ✓ tests/boundary-confirm.test.mjs (10 tests) 27ms
+ ✓ specs/wh-review-rebuild/__tests__/test-plan-smoke.test.mjs (3 tests) 135ms
+ ✓ tests/metrics-collector.test.mjs (25 tests) 278ms
+ ✓ core/__tests__/receipt-writer.test.mjs (49 tests) 354ms
+ ✓ tests/spike-intake-design.test.mjs (7 tests) 6ms
+ ✓ skills/wh-review/scripts/__tests__/snapshot-writer.test.mjs (12 tests) 14ms
+ ✓ tests/knowledge-card.test.mjs (19 tests) 3ms
+ ✓ tests/moat-skills-phase1.test.mjs (10 tests) 4ms
+ ✓ tests/m12-templates.test.mjs (19 tests) 3ms
+ ✓ skills/wh-review/scripts/__tests__/render-review-report.test.mjs (11 tests) 7ms
+ ✓ tests/moat-skills.test.mjs (14 tests) 7ms
+ ✓ tests/stage-quality.test.mjs (7 tests) 104ms
+ ✓ core/__tests__/parse-framework-config.test.mjs (8 tests) 4ms
+ ✓ skills/wh-review/scripts/__tests__/invoke-review-engine.test.mjs (27 tests) 601ms
+ ✓ skills/wh-review/__tests__/human-brief-behavioral.test.mjs (20 tests) 3ms
+ ✓ skills/wh-review/scripts/__tests__/route-decision-writer.test.mjs (12 tests) 463ms
+ ✓ core/__tests__/check-contract.test.mjs (13 tests) 398ms
+ ✓ core/__tests__/check-anti-host.test.mjs (17 tests) 405ms
+ ✓ core/__tests__/resolve-path.test.mjs (12 tests) 3ms
+ ✓ tests/execution-record.test.mjs (14 tests) 4ms
+ ✓ tests/verify-code-facts.test.mjs (19 tests) 5ms
+ ✓ tests/m12-reuse-registry.test.mjs (15 tests) 2ms
+ ✓ core/__tests__/task-dir-parser-config.test.mjs (8 tests) 289ms
+ ✓ skills/wh-review/scripts/__tests__/stage-invocation-chain.test.mjs (4 tests) 581ms
+ ✓ skills/wh-review/scripts/__tests__/human-confirmation.test.mjs (9 tests) 11ms
+ ✓ skills/wh-review/scripts/__tests__/report-index.test.mjs (6 tests) 9ms
+ ✓ core/__tests__/worktree-reuse-guard.test.mjs (5 tests) 181ms
+ ✓ tests/fact-collector.test.mjs (3 tests) 162ms
+ ✓ tests/moat-skills-phase2.test.mjs (5 tests) 3ms
+ ✓ tests/build-code-review.test.mjs (12 tests) 2ms
+ ✓ core/__tests__/kernel.test.mjs (9 tests) 266ms
+ ✓ core/__tests__/task-dir-parser.test.mjs (8 tests) 257ms
+ ✓ tests/verify-code-capture.test.mjs (15 tests) 425ms
+ ✓ core/__tests__/validate-contract.test.mjs (7 tests) 2ms
+ ✓ tests/m12-subskill-exclusion.test.mjs (2 tests) 5ms
+ ✓ core/__tests__/load-config.test.mjs (8 tests) 6ms
+ ✓ tests/moat-skills-phase3.test.mjs (8 tests) 2ms
+ ✓ core/__tests__/task-index.test.mjs (6 tests) 54ms
+ ✓ tests/build-code-facts.test.mjs (10 tests) 3ms
+ ✓ tests/verify-code-freshness.test.mjs (9 tests) 3ms
+ ✓ tests/contract-freeze.test.mjs (5 tests) 4ms
+ ✓ tests/reuse-registry.test.mjs (3 tests) 1ms
+ ✓ tests/flow-profile-decision-log.test.mjs (4 tests) 4ms
+ ✓ workflows/build-code/__tests__/section7-machine-checkable.test.mjs (4 tests) 1ms
+ ✓ skills/wh-review/scripts/__tests__/round-state.test.mjs (57 tests) 1325ms
+ ✓ tests/metrics-smoke.test.mjs (4 tests) 63ms
+ ✓ core/__tests__/protected-paths.test.mjs (7 tests) 1ms
+ ✓ tests/receipt-wiring.test.mjs (4 tests) 3ms
+ ✓ tests/smoke.test.mjs (1 test) 1ms
+ ✓ tests/build-code-target.test.mjs (4 tests) 2ms
+ ✓ tests/agenthub-baseline.test.mjs (9 tests) 360ms
+ ✓ tests/build-code-capture.test.mjs (23 tests) 1493ms
+ ✓ tests/receipt-verification.test.mjs (25 tests) 3456ms
+ ✓ core/__tests__/check-extensibility.test.mjs (13 tests) 3681ms
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > resolves successfully with { passed: true } 512ms
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports component_id matching the stub, not any original component 528ms
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports coreDiffEmpty = true (no core files were modified) 404ms
+ ✓ core/__tests__/run-checks.test.mjs (11 tests) 3924ms
+   ✓ FR-CI-001: aggregate mode (no args) > exits 0 on a clean repo 982ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-anti-host (checker was invoked) 645ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-extensibility (checker was invoked) 452ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-contract (checker was invoked) 648ms
+   ✓ FR-CI-001: non-zero propagation > exits non-zero when a checker signals failure 533ms
+   ✓ FR-CI-001: non-zero propagation > reports which checker failed 479ms
+
+ Test Files  1 failed | 67 passed (68)
+      Tests  9 failed | 1166 passed (1175)
+   Start at  01:44:55
+   Duration  5.03s (transform 816ms, setup 0ms, collect 2.15s, tests 19.61s, environment 7ms, prepare 2.22s)
+

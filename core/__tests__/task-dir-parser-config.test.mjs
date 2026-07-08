@@ -102,6 +102,17 @@ describe("FR-TASKDIR-002 config.json task_dir parser", () => {
     }
   });
 
+  it("env var takes priority even when config.json is malformed", () => {
+    const fakeHome = join(tmpDir, "fake-home");
+    const configDir = join(fakeHome, ".workflowhub");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.json"), "not json {{{");
+
+    const result = runParser({ WORKFLOWHUB_TASK_DIR: tmpDir, HOME: fakeHome });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, tmpDir);
+  });
+
   // --- config.json missing file → fail-loud ---
 
   it("fail-loud when config.json file does not exist", () => {

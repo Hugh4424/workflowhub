@@ -309,6 +309,23 @@ describe("T005 — verifyReceipts", () => {
     expect(result.errors.join("\n")).toMatch(/wrong stage|build-plan/i);
   });
 
+  it("fails when stage-result belongs to a different stage", () => {
+    const repo = initRepoWithChange();
+    const path = writeStageResult(workDir, {
+      stage: "build-plan",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+        test_result_log: writeTestResult(workDir, "build-code"),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/stage-result.*build-plan/i);
+  });
+
   it("fails when test_result_log omits exit_code", () => {
     const repo = initRepoWithChange();
     const path = writeStageResult(workDir, {

@@ -47,6 +47,10 @@ describe("appendTaskIndex — duplicate detection", () => {
     expect(() =>
       appendTaskIndex("task-dup", "proj2", "https://github.com/org/repo2"),
     ).toThrow(/already exists/i);
+    expect(lookupProjectKey("task-dup")).toEqual({
+      projectKey: "proj",
+      repo: "https://github.com/org/repo",
+    });
   });
 });
 

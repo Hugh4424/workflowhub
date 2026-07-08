@@ -246,6 +246,17 @@ export function verifyReceipts(stage, stageResultPath, worktreeRoot, options = {
 
   const facts = stageResult.facts ?? {};
 
+  if (
+    typeof stageResult.stage === "string" &&
+    stageResult.stage.trim() !== "" &&
+    stageResult.stage !== stage
+  ) {
+    errors.push(
+      `stage "${stage}" stage-result is for wrong stage "${stageResult.stage}"`
+    );
+    return { ok: false, errors, changed: realChanged };
+  }
+
   // No changes declared at all
   if (!("changed" in facts) && !facts.no_code_change) {
     errors.push(
