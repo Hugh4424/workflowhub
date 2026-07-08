@@ -1,0 +1,17 @@
+{
+  "command": "env WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence npm test",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "git_sha": "b35eb36dc795947f2bd74a692c48511811786202",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 1,
+  "timestamp": "2026-07-08T15:01:22.655Z",
+  "test_files_line": " Test Files  2 failed | 65 passed (67)",
+  "content_hash": "b0d7d9a66685058d3ce782fa373821fdd075505755d368bdf7b37dbf5304628c",
+  "stdout_path": "tasks/wh-quality-convergence/evidence/phase-2-GREEN.json.stdout",
+  "stderr_path": "tasks/wh-quality-convergence/evidence/phase-2-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

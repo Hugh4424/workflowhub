@@ -13,7 +13,8 @@
  * No AJV — hand-written validator consistent with core/validate-contract.mjs (FR-NC-004).
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,25 +86,88 @@ export function validateStageResult(stage, artifact) {
 }
 
 /**
- * getRealChangedFiles(worktreeRoot) -> string[]
+ * getRealChangedFiles(worktreeRoot, baseRef) -> string[]
  *
- * Runs `git diff --name-only` in the given worktree directory against HEAD.
- * Returns an array of changed file paths. If git diff fails or the worktree
- * is not a git repo, returns an empty array (no crash).
+ * Runs `git diff --name-only` in the given worktree directory. By default,
+ * compares the working tree against HEAD. When baseRef is supplied, uses
+ * triple-dot diff so committed stage work is compared against the merge-base
+ * of the target ref and HEAD.
  */
-export function getRealChangedFiles(worktreeRoot) {
-  try {
-    const output = execSync("git diff --name-only HEAD", {
-      cwd: worktreeRoot,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const lines = output.trim();
-    if (lines.length === 0) return [];
-    return lines.split("\n");
-  } catch {
-    return [];
+export function getRealChangedFiles(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD") {
+  const args =
+    baseRef === "HEAD"
+      ? ["diff", "--name-only", "HEAD"]
+      : ["diff", "--name-only", `${baseRef}...HEAD`];
+  const output = execFileSync("git", args, {
+    cwd: worktreeRoot,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const lines = output.trim();
+  if (lines.length === 0) return [];
+  return lines.split("\n");
+}
+
+function getDiffSha(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD") {
+  const args =
+    baseRef === "HEAD"
+      ? ["diff", "HEAD"]
+      : ["diff", `${baseRef}...HEAD`];
+  const output = execFileSync("git", args, {
+    cwd: worktreeRoot,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  return createHash("sha256").update(output).digest("hex");
+}
+
+function verifyTestResultLog(stage, facts) {
+  const errors = [];
+  if (facts.test_not_applicable === true) return errors;
+  if (typeof facts.test_result_log !== "string" || facts.test_result_log.trim() === "") {
+    errors.push(`stage "${stage}" missing facts.test_result_log`);
+    return errors;
   }
+
+  let raw;
+  try {
+    raw = readFileSync(resolve(facts.test_result_log.trim()), "utf8");
+  } catch (err) {
+    errors.push(`stage "${stage}" cannot read test_result_log: ${err.message}`);
+    return errors;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.stage && parsed.stage !== stage) {
+      errors.push(
+        `stage "${stage}" test_result_log is for wrong stage "${parsed.stage}"`
+      );
+    }
+    if (!("exit_code" in parsed)) {
+      errors.push(`stage "${stage}" test_result_log missing exit_code`);
+    } else if (parsed.exit_code !== 0) {
+      errors.push(
+        `stage "${stage}" test_result_log exit_code must be 0 (got ${parsed.exit_code})`
+      );
+    }
+    const hasStdout =
+      typeof parsed.stdout === "string" ||
+      (typeof parsed.stdout_path === "string" && existsSync(resolve(parsed.stdout_path)));
+    const hasStderr =
+      typeof parsed.stderr === "string" ||
+      (typeof parsed.stderr_path === "string" && existsSync(resolve(parsed.stderr_path)));
+    if (!hasStdout) {
+      errors.push(`stage "${stage}" test_result_log missing stdout evidence`);
+    }
+    if (!hasStderr) {
+      errors.push(`stage "${stage}" test_result_log missing stderr evidence`);
+    }
+  } catch {
+    errors.push(`stage "${stage}" test_result_log must be structured JSON evidence`);
+  }
+
+  return errors;
 }
 
 /**
@@ -117,8 +181,9 @@ export function getRealChangedFiles(worktreeRoot) {
  *   - stage-result has no facts.changed AND no no_code_change:true
  *   - Actual diff files don't match declared changed files
  */
-export function verifyReceipts(stage, stageResultPath, worktreeRoot) {
+export function verifyReceipts(stage, stageResultPath, worktreeRoot, options = {}) {
   const errors = [];
+  const baseRef = options.baseRef ?? process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD";
 
   // Read and parse stage-result
   let stageResult;
@@ -130,7 +195,16 @@ export function verifyReceipts(stage, stageResultPath, worktreeRoot) {
   }
 
   // Get real changed files from git
-  const realChanged = getRealChangedFiles(worktreeRoot);
+  let realChanged;
+  try {
+    realChanged = getRealChangedFiles(worktreeRoot, baseRef);
+  } catch (err) {
+    return {
+      ok: false,
+      errors: [`stage "${stage}" cannot collect git diff evidence: ${err.message}`],
+      changed: [],
+    };
+  }
 
   const facts = stageResult.facts ?? {};
 
@@ -174,6 +248,29 @@ export function verifyReceipts(stage, stageResultPath, worktreeRoot) {
     return { ok: false, errors, changed: realChanged };
   }
 
+  if (typeof facts.diff_sha !== "string" || facts.diff_sha.trim() === "") {
+    errors.push(`stage "${stage}" missing facts.diff_sha`);
+    return { ok: false, errors, changed: realChanged };
+  }
+  let actualDiffSha;
+  try {
+    actualDiffSha = getDiffSha(worktreeRoot, baseRef);
+  } catch (err) {
+    errors.push(`stage "${stage}" cannot compute git diff sha: ${err.message}`);
+    return { ok: false, errors, changed: realChanged };
+  }
+  if (facts.diff_sha !== actualDiffSha) {
+    errors.push(
+      `stage "${stage}" facts.diff_sha does not match git diff sha — declared: ${facts.diff_sha}, actual: ${actualDiffSha}`
+    );
+    return { ok: false, errors, changed: realChanged };
+  }
+
+  errors.push(...verifyTestResultLog(stage, facts));
+  if (errors.length > 0) {
+    return { ok: false, errors, changed: realChanged };
+  }
+
   return { ok: true, errors: [], changed: realChanged };
 }
 
@@ -183,10 +280,12 @@ const isMain =
   process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 
 if (isMain) {
-  const [stage, artifactPath] = process.argv.slice(2);
+  const [stage, artifactPath, worktreeRootArg, baseRefArg] = process.argv.slice(2);
 
   if (!stage || !artifactPath) {
-    console.error("Usage: node scripts/validate-stage-result.mjs <stage> <artifact-json-path>");
+    console.error(
+      "Usage: node scripts/validate-stage-result.mjs <stage> <artifact-json-path> [worktree-root] [base-ref]"
+    );
     console.error("Stages: make-decision, build-spec, build-plan, build-code, verify-code");
     process.exit(2);
   }
@@ -200,6 +299,18 @@ if (isMain) {
   }
 
   const result = validateStageResult(stage, artifact);
+  if (result.ok && worktreeRootArg) {
+    const receiptResult = verifyReceipts(
+      stage,
+      resolve(artifactPath),
+      resolve(worktreeRootArg),
+      baseRefArg ? { baseRef: baseRefArg } : {}
+    );
+    if (!receiptResult.ok) {
+      result.ok = false;
+      result.errors = receiptResult.errors;
+    }
+  }
   if (result.ok) {
     console.log(`[validate-stage-result] PASS — stage "${stage}" artifact valid`);
     process.exit(0);

@@ -12,8 +12,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execSync } from "child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { createHash } from "crypto";
 
 import { getRealChangedFiles, verifyReceipts } from "../scripts/validate-stage-result.mjs";
 
@@ -33,6 +35,31 @@ afterEach(() => {
 /** Helper: run a shell command in a given cwd. */
 function sh(cmd, cwd) {
   return execSync(cmd, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+}
+
+function diffSha(repo) {
+  const diff = sh("git diff HEAD", repo);
+  return createHash("sha256").update(diff).digest("hex");
+}
+
+function diffShaFromBase(repo, baseRef) {
+  const diff = sh(`git diff ${JSON.stringify(baseRef)}...HEAD`, repo);
+  return createHash("sha256").update(diff).digest("hex");
+}
+
+function writeTestResult(dir, stage = "build-code", exitCode = 0, extra = {}) {
+  const path = join(dir, `${stage}-test-result.json`);
+  writeFileSync(
+    path,
+    JSON.stringify({
+      stage,
+      exit_code: exitCode,
+      stdout: "ok",
+      stderr: "",
+      ...extra,
+    })
+  );
+  return path;
 }
 
 /**
@@ -84,12 +111,10 @@ describe("T004 — getRealChangedFiles", () => {
     expect(changed).toEqual(["README.md"]);
   });
 
-  it("handles non-git dir gracefully (returns empty array)", () => {
+  it("fails loud in a non-git dir", () => {
     const nonGitDir = join(workDir, "not-a-repo");
     execSync(`mkdir -p "${nonGitDir}"`);
-    const changed = getRealChangedFiles(nonGitDir);
-    expect(Array.isArray(changed)).toBe(true);
-    expect(changed).toEqual([]);
+    expect(() => getRealChangedFiles(nonGitDir)).toThrow();
   });
 
   it("returns empty array in a clean git repo (no uncommitted changes)", () => {
@@ -98,6 +123,16 @@ describe("T004 — getRealChangedFiles", () => {
     expect(Array.isArray(changed)).toBe(true);
     expect(changed).toEqual([]);
   });
+
+  it("can diff committed stage work against a base ref", () => {
+    const repo = initCleanRepo();
+    sh("git branch base-before-stage", repo);
+    writeFileSync(join(repo, "README.md"), "# Hello\ncommitted stage work\n");
+    sh("git add README.md", repo);
+    sh('git commit -m "stage work"', repo);
+    const changed = getRealChangedFiles(repo, "base-before-stage");
+    expect(changed).toEqual(["README.md"]);
+  });
 });
 
 // ── T005: verifyReceipts ─────────────────────────────────────────────────────
@@ -105,10 +140,15 @@ describe("T004 — getRealChangedFiles", () => {
 describe("T005 — verifyReceipts", () => {
   it("passes when declared changes match actual diff", () => {
     const repo = initRepoWithChange();
+    const testResultLog = writeTestResult(workDir, "build-code");
     const path = writeStageResult(workDir, {
       stage: "build-code",
       status: "success",
-      facts: { changed: ["README.md"] },
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+        test_result_log: testResultLog,
+      },
     });
 
     const result = verifyReceipts("build-code", path, repo);
@@ -119,10 +159,15 @@ describe("T005 — verifyReceipts", () => {
 
   it("fails when diff is empty but facts.changed declares changes", () => {
     const repo = initCleanRepo();
+    const testResultLog = writeTestResult(workDir, "build-code");
     const path = writeStageResult(workDir, {
       stage: "build-code",
       status: "success",
-      facts: { changed: ["src/app.ts"] },
+      facts: {
+        changed: ["src/app.ts"],
+        diff_sha: diffSha(repo),
+        test_result_log: testResultLog,
+      },
     });
 
     const result = verifyReceipts("build-code", path, repo);
@@ -143,6 +188,20 @@ describe("T005 — verifyReceipts", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("fails no_code_change:true when git diff evidence cannot be collected", () => {
+    const nonGitDir = join(workDir, "not-a-repo");
+    execSync(`mkdir -p "${nonGitDir}"`);
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: { no_code_change: true },
+    });
+
+    const result = verifyReceipts("build-code", path, nonGitDir);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/git diff evidence/i);
+  });
+
   it("fails when no facts.changed and no no_code_change", () => {
     const repo = initCleanRepo();
     const path = writeStageResult(workDir, {
@@ -156,12 +215,133 @@ describe("T005 — verifyReceipts", () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it("fails when declared changed files do not match actual diff files", () => {
-    const repo = initRepoWithChange(); // actual diff = README.md
+  it("fails when a code-change receipt omits test_result_log", () => {
+    const repo = initRepoWithChange();
     const path = writeStageResult(workDir, {
       stage: "build-code",
       status: "success",
-      facts: { changed: ["other.ts", "extra.ts"] },
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/test_result_log/i);
+  });
+
+  it("fails when test_result_log belongs to the wrong stage", () => {
+    const repo = initRepoWithChange();
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+        test_result_log: writeTestResult(workDir, "build-plan"),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/wrong stage|build-plan/i);
+  });
+
+  it("fails when test_result_log omits exit_code", () => {
+    const repo = initRepoWithChange();
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+        test_result_log: writeTestResult(workDir, "build-code", 0, { exit_code: undefined }),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/exit_code/i);
+  });
+
+  it("fails when test_result_log omits stdout evidence", () => {
+    const repo = initRepoWithChange();
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+        test_result_log: writeTestResult(workDir, "build-code", 0, { stdout: undefined }),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/stdout/i);
+  });
+
+  it("fails when test_result_log is plain text even if it mentions the stage", () => {
+    const repo = initRepoWithChange();
+    const logPath = join(workDir, "plain-test-log.txt");
+    writeFileSync(logPath, "build-code tests passed");
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffSha(repo),
+        test_result_log: logPath,
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/structured JSON/i);
+  });
+
+  it("does not execute shell metacharacters from baseRef", () => {
+    const repo = initCleanRepo();
+    const marker = join(workDir, "base-ref-injection-marker");
+    const maliciousBaseRef = `HEAD"; touch ${marker}; echo "`;
+
+    expect(() => getRealChangedFiles(repo, maliciousBaseRef)).toThrow();
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("passes when committed changes are verified against a base ref", () => {
+    const repo = initCleanRepo();
+    sh("git branch base-before-stage", repo);
+    writeFileSync(join(repo, "README.md"), "# Hello\ncommitted stage work\n");
+    sh("git add README.md", repo);
+    sh('git commit -m "stage work"', repo);
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["README.md"],
+        diff_sha: diffShaFromBase(repo, "base-before-stage"),
+        test_result_log: writeTestResult(workDir, "build-code"),
+      },
+    });
+
+    const result = verifyReceipts("build-code", path, repo, { baseRef: "base-before-stage" });
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("fails when declared changed files do not match actual diff files", () => {
+    const repo = initRepoWithChange(); // actual diff = README.md
+    const testResultLog = writeTestResult(workDir, "build-code");
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      facts: {
+        changed: ["other.ts", "extra.ts"],
+        diff_sha: diffSha(repo),
+        test_result_log: testResultLog,
+      },
     });
 
     const result = verifyReceipts("build-code", path, repo);
@@ -177,5 +357,23 @@ describe("T005 — verifyReceipts", () => {
     const result = verifyReceipts("build-code", bogusPath, repo);
     expect(result.ok).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it("CLI receipt mode exits nonzero when receipt evidence is missing", () => {
+    const repo = initRepoWithChange();
+    const path = writeStageResult(workDir, {
+      stage: "build-code",
+      status: "success",
+      git_sha: "sha",
+      receipt_path: "receipt.json",
+      facts: {
+        changed: ["README.md"],
+        test_result_log: writeTestResult(workDir, "build-code"),
+      },
+    });
+
+    expect(() =>
+      sh(`node ${JSON.stringify(join(process.cwd(), "scripts/validate-stage-result.mjs"))} build-code ${JSON.stringify(path)} ${JSON.stringify(repo)}`, process.cwd())
+    ).toThrow();
   });
 });

@@ -1,0 +1,13 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence
+
+ ✓ core/__tests__/task-index.test.mjs (5 tests) 2ms
+ ✓ core/__tests__/task-dir-parser-config.test.mjs (7 tests) 174ms
+ ✓ core/__tests__/task-dir-parser.test.mjs (8 tests) 177ms
+ ✓ tests/receipt-verification.test.mjs (19 tests) 1235ms
+
+ Test Files  4 passed (4)
+      Tests  39 passed (39)
+   Start at  23:04:54
+   Duration  1.40s (transform 40ms, setup 0ms, collect 79ms, tests 1.59s, environment 0ms, prepare 134ms)
+
