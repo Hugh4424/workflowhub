@@ -1,0 +1,29 @@
+# 审查报告 — build-spec-wh-review-rebuild-r8-20260706T022154Z-8f7cda (round 1)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+规格主方向对齐 decision-log，但还没到可进 plan 的程度：失败场景缺口、Business Impact Scope 漏项、多个验收口径不可判定。
+
+## Findings
+
+- [blocking] 位置: spec.md:90 | 问题: 场景集缺显式失败场景。当前 UC-1~UC-7 只覆盖正常流、升级流、路由流，没有把 `stage` 缺失/未知、合同缺失、result-file 缺失或不可解析等 fail-loud 路径写成 Given/When/Then 场景。 | 建议: 在第 3 章补至少 1 个失败场景，并把它直接对应到 FR-WHREVIEW-001/002/THIRDREVIEW-001 与 NFR-2，明确触发条件、可观察报错、非零退出和不得静默回退。
+- [blocking] 位置: spec.md:440 | 问题: `Business Impact Scope` 不完整。第 8 章只列了路由、pass 门、报告、轮次等影响，遗漏了 decision-log D4/D5 带来的既有行为变化：make-decision 审查现在要按 C1-C6 卡口，verify-code 审查现在要按 F1-F6 新鲜性卡口；这些都会改变现有 stop/go 判定。 | 建议: 扩充第 8 章，单列 make-decision 的 intake 判据收紧、verify-code 的 freshness 判据收紧，以及所有现存直接调用 3rd-review 的调用方迁移影响，确保与 decision-log D1/D2/D4/D5 的变更一一对应。
+- [blocking] 位置: spec.md:226 | 问题: 部分验收标准仍不可操作或不可判定。`AC4-2` 的“报告文件路径可预测”、`AC11-2` 的“本地跑通”、`AC-D7` 的“可跑通”都缺少具体命令、观察物和失败判据，不满足进入 plan 阶段所需的可验证性。 | 建议: 把这些 AC 改成可执行 oracle：写明命令/手动步骤、输入前提、预期文件或日志、以及反向断言（什么不能发生）。例如固定 stage、固定报告路径、固定 grep/ls/jq 检查项，避免“跑通”“可预测”这类主观词。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：场景集缺显式失败场景。当前 UC-1~UC-7 只覆盖正常流、升级流、路由流，没有把 `stage` 缺失/未知、合同缺失、result-file 缺失或不可解析等 fail-loud 路径写成 Given/When/Then 场景。
+- 必须修复：`Business Impact Scope` 不完整。第 8 章只列了路由、pass 门、报告、轮次等影响，遗漏了 decision-log D4/D5 带来的既有行为变化：make-decision 审查现在要按 C1-C6 卡口，verify-code 审查现在要按 F1-F6 新鲜性卡口；这些都会改变现有 stop/go 判定。
+- 必须修复：部分验收标准仍不可操作或不可判定。`AC4-2` 的“报告文件路径可预测”、`AC11-2` 的“本地跑通”、`AC-D7` 的“可跑通”都缺少具体命令、观察物和失败判据，不满足进入 plan 阶段所需的可验证性。
+

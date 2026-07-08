@@ -1,0 +1,29 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "自动推进设计违反 F7 人工边界确认原则",
+      "detail": "规格在 FR-D2-001 明确写明 `build-spec` 与 `build-code` 的 pass 路径可自动推进，但 `CONSTITUTION.md` 的 F7 规定“阶段推进…必须经人在边界确认，不由系统自动越界执行”。这不是实现细节分歧，是顶层治理冲突；若不改，方案先天不合宪。"
+    },
+    {
+      "severity": "blocking",
+      "title": "第4轮强制转同源与 Q3 异源裁决底线冲突",
+      "detail": "FR-WHREVIEW-003 规定“异源审查最多3轮；第4轮起强制转同源”。但 `CONSTITUTION.md` 的 Q3 要求质量裁决必须由独立来源、独立上下文产出，禁止自审自判。若第4轮仍承担质量裁决职责，则直接失去异源性；若不承担裁决职责，规格又未说明第4轮存在的必要性与边界，当前定义不可落地。"
+    },
+    {
+      "severity": "blocking",
+      "title": "最终裁决归属写在 wh-review，破坏独立裁决责任边界",
+      "detail": "FR-WHREVIEW-004 写的是“wh-review 综合轮次与 findings 做裁决”，而 FR-THIRDREVIEW-001 又让 3rd-review 返回 `{verdict, findings, actual_mode}`。这造成两个裁决源：独立 reviewer 一份，workflowhub 自己再算一份。按 Q3，质量裁决必须由独立来源产出；宿主层最多只能记录事实、决定是否升级人工，不能重算 `pass/revise_required`。当前契约边界不清，存在自审自判风险。"
+    },
+    {
+      "severity": "minor",
+      "title": "新建 wh-review 未写入统一执行记录/指标底座",
+      "detail": "规格要求状态文件和报告落盘，但没有把 wh-review 的指标采集、来源路径、统一执行记录接入写成明确需求。这里与 F6“统一外置执行记录”和 S4“自定义技能必须有指标系统”不对齐，建议在 FR 或 NFR 中补齐最小字段、落点和消费方。"
+    }
+  ],
+  "resolutionSummary": "先改三处硬冲突：取消任何自动推进、删除或重定义“第4轮同源裁决”、把 `pass/revise_required` 的唯一裁决权锁定给独立 reviewer；再补统一执行记录与指标要求。",
+  "reviewRequestId": "standalone-build-spec-wh-review-rebuild-20260705T160512Z-766077-r16",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-16.md"
+}

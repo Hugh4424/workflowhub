@@ -1,0 +1,24 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "实现边界和文件路径写错，当前范围下主交付不可落地",
+      "detail": "spec 把主改动面写成 `skills/3rd-review/SKILL.md` 和 5 个 `skills/<stage>/SKILL.md`，但当前仓库实际可执行 stage 在 `workflows/make-decision/SKILL.md`、`workflows/build-spec/SKILL.md`、`workflows/build-plan/SKILL.md`、`workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md`；仓库内也不存在 `skills/3rd-review/SKILL.md`。同时 `skills/reuse-registry.md` 已把 `3rd-review` 登记为外部依赖 `packages/core/agenthub/skills/3rd-review`。在你又声明“agenthub 侧任何文件不改”的前提下，FR-THIRDREVIEW-001/002 和相关 AC 作为当前仓库内交付物没有可执行落点，build-plan 无法据此排出可实现任务。"
+    },
+    {
+      "severity": "blocking",
+      "title": "影响范围严重漏项，无法真正把 5 个 stage 从 3rd-review 迁到 wh-review",
+      "detail": "spec 把 stage 侧改动描述成“5 个 stage 收尾步骤统一调用 `docs/human-brief-template.md`”和少量收尾改动，但现有直接调用 3rd-review 的真实入口在执行主流程里，不在收尾：`workflows/make-decision/SKILL.md:297`、`workflows/build-spec/SKILL.md:171`、`workflows/build-plan/SKILL.md:185`、`workflows/build-code/SKILL.md:140` 起的 review 段与 `§7`、`workflows/verify-code/SKILL.md:226`。如果不把这些调用点、runner 入口、失败语义、产物路径、pass/revise_required/escalate_to_human 处理一并纳入 scope 和 AC，stage→wh-review 路由切换不会真正发生，验收会出现“文档改了但运行路径没迁走”的假完成。"
+    },
+    {
+      "severity": "minor",
+      "title": "文档事实有过期项，降低 spec 可信度",
+      "detail": "Known Gaps 仍写“`docs/human-brief-template.md` 是否已存在未经确认”，但仓库已有该文件，且 5 个 workflow 已有模板引用（如 `workflows/build-spec/SKILL.md:328`、`workflows/build-code/SKILL.md:315`、`workflows/verify-code/SKILL.md:212`）。这不是阻断，但说明现状核对未回写到 spec，建议清理所有类似“未确认”陈述。"
+    }
+  ],
+  "resolutionSummary": "先把 spec 改成基于真实仓库边界：明确 3rd-review 的可修改落点或调整 scope，然后把 5 个 workflow 里的真实 3rd-review 调用迁移点完整列入影响范围、FR 和 AC。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r20",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-20.md"
+}

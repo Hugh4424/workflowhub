@@ -40,6 +40,12 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 **异源审查（cross-source review）**：
 由独立来源、在独立上下文中对交付物做的审查，用于质量把关，禁止自审自判。
 
+**3rd-review**：
+全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。
+
+**wh-review**：
+workflowhub 专属的审查编排层（skill，新建于 ADR 0001，2026-07-05）。承接原来分散在 3rd-review 下的全部 workflowhub 专属知识：stage→合同映射（make-decision←intake / build-spec←design / build-plan←plan / build-code←code / verify-code←test-acceptance）、5 套 stage 专属合同、轮次状态管理、降级/升级大脑、Delta Package 构造、报告模板与渲染脚本。wh-review 在内部调用 3rd-review 完成实际审查，对 stage executor 暴露统一入口。
+
 ## verify-code 深化术语（m13e）
 
 **查痕（trace-check）**：

@@ -1,0 +1,84 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/plan.md",
+      "line": 117,
+      "issue": "三个 Phase 都只有“目的 + Step + Checkpoint”，缺少合同要求的六段结构 `Goal / Files / Tasks / Verify / Knowledge / STOP`。现在无法在阶段边界判断完成定义、知识沉淀和人工停止点，执行不可控。",
+      "recommendation": "把 Phase 1-3 全部改成六段格式；每段都写清可检查的 Goal、精确 Files、任务清单、可执行 Verify、Knowledge 落盘位置、以及明确 STOP 条件。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 6,
+      "issue": "任务与阶段检查点没有任何可运行的验证命令，只有“可静态核查/可复核通过/端到端冒烟方案”等描述。缺少 `gate_cmd`/`display_cmd` 级别的客观校验后，Fake Command 审查、行为验收、失败复现都无法落地。",
+      "recommendation": "为每个代码阶段或关键任务补双列验证：机器判定用 `gate_cmd`，人工摘要用 `display_cmd`；覆盖 route-decision、round-state、report 渲染、D2 门、3rd-review 单次调用、threatAuditor 语义防误判等关键验收点。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 58,
+      "issue": "FR-D2-001 的关键执行面没有完整落到任务：任务只写了“接入 D2 人工确认门”，但 spec 还强制要求 `post_review_action` 落盘、`tasks/{task-id}/reviews/human-confirmation-{stage}-{total_round}.json` 人工确认 artifact、以及 orchestrator 重启后的读取/恢复逻辑。当前 FR → task → verify 链断裂。",
+      "recommendation": "新增显式任务，分别覆盖：1) 轮次状态文件写入 `post_review_action`；2) 生成/读取 human-confirmation artifact；3) orchestrator 重启恢复判断；4) AC8-1~AC8-4 的对应验证。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 58,
+      "issue": "Business Impact Scope 里最核心的破坏性变更是“5 个 stage 从直接调用 3rd-review 迁移为调用 wh-review”，但 T019-T023 只写“回归校验收尾统一调用点 / 接入 D2 门 / 确认自动推进不变”，没有把 5 个 stage 的真实调用迁移、`stage/task_id` 透传、以及接口变更后的未覆盖 stage 不报错作为独立任务落下来。",
+      "recommendation": "按 5 个 stage 分别补迁移任务，明确替换 direct 3rd-review call 为 wh-review call、透传 `stage` 与 `task_id`、校验 route-decision 命中专属合同；同时补一项验证未纳入冒烟覆盖的 stage 不因接口变更报错或阻塞。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/plan.md",
+      "line": 59,
+      "issue": "计划触及 workflows、reviewer contract/合同、schema 化落盘文件、runtime runner 发现、knowledge/test 文档、以及潜在自动化验证，但 plan 里没有合同要求的 7 类 Governance Sync Matrix。缺少“changed/unchanged + reason + 对应 Task ID”后，实施者无法判断哪些治理面必须同步更新。",
+      "recommendation": "补一张 7 类治理同步矩阵，逐项覆盖 Project rules、Workflow definitions、Reviewer contract、Schema、Runtime config、Knowledge/doc、Automation gates/CI/hooks；凡标记 changed 的项都要指向具体任务 ID。"
+    }
+  ],
+  "resolutionSummary": "已按 speckit-analyze、plan-eng-review、review 三个 lens 做只读复核。当前主要问题不是方向错，而是执行控制面不够：阶段格式不合约、验证不可运行、D2 人工确认链条没落全、5-stage 调用迁移没拆实、治理同步矩阵缺失。",
+  "reviewSnapshot": [
+    {
+      "path": "wh-review-rebuild-build-plan-review-package.md",
+      "hash": null,
+      "lines": 990,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wh-review-rebuild-build-plan-review-package.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

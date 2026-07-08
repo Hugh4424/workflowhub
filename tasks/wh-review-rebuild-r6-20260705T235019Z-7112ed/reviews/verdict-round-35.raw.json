@@ -1,0 +1,32 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "规格与权威 decision-log 的判据已漂移，关键验收被改写",
+      "detail": "包内 FR-INTAKE-001 把 C5/C6 写成“关键假设已记录”“非目标明确声明”，但任务侧权威源 `tasks/wh-review-rebuild/decision-log.md` 的 D4 明确定义 C5/C6 为“方向与上游输入一致”“决策产物格式可机器消费”。同类漂移也出现在 verify-code 新鲜性判据：包内 F5 写成“L2/RED/GREEN 报告 content_hash 未变”，而 D5 定义是 `freshness.mjs checkEvidenceFreshness` 的 `mtime_violations` 为空。验收标准已不再对应批准过的决策源，后续实现会按错合同做。"
+    },
+    {
+      "severity": "blocking",
+      "title": "自动推进规则违反当前宪法 F7，未给出修宪或特批",
+      "detail": "包内 D2/FR-D2-001 明确要求 `build-spec` 和 `build-code` 的 `pass` 路径自动推进下一 stage；但 `CONSTITUTION.md` 的 F7 明写“阶段推进与不可逆操作必须经人在边界确认”，正例也是“进入下一阶段前停下来等人确认”。项目治理又声明宪法高于其它文档。当前规格没有同步修宪、没有例外条款，属于顶层规则冲突。"
+    },
+    {
+      "severity": "blocking",
+      "title": "影响面和现状判断基于不存在的仓库对象，导致范围定义失真",
+      "detail": "包内多处把本次工作描述成“精简 `skills/3rd-review/SKILL.md`”“统一 5 个 stage 的 SKILL.md 收尾段”“现有 5 个 stage 都直接调用 3rd-review”，但当前仓库内实际不存在 `skills/3rd-review/`、`skills/wh-review/`，也不存在任何 `make-decision/build-spec/build-plan/build-code/verify-code` 的 stage SKILL 目录。现状更接近‘先补齐骨架再实现新架构’，不是对既有文件做破坏性重构。按现在写法，影响范围、验收对象、迁移成本都被低估了。"
+    },
+    {
+      "severity": "minor",
+      "title": "来源路径不可解析，追溯链不完整",
+      "detail": "规格首页写来源为 `wh-review-rebuild/decision-log.md`，但仓库内对应文件实际在 `tasks/wh-review-rebuild/decision-log.md`，且文件头还注明是从仓库外路径迁移回来。对照源路径写错会让后续审查和实现者无法稳定定位权威输入。"
+    },
+    {
+      "severity": "minor",
+      "title": "Known Gaps 与仓库事实不一致",
+      "detail": "包内仍把 `docs/human-brief-template.md` 标成“是否已存在未经确认”，但该文件当前已存在且内容完整；相关检查清单也把这个未核实项当成未决问题继续传播。这个问题不阻断设计方向，但会污染后续计划与检查结果。"
+    }
+  ],
+  "resolutionSummary": "先把 spec 对齐权威 decision-log 和宪法，再按仓库真实现状重写范围：哪些是新建骨架，哪些才是重构，最后重算验收项。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r35"
+}

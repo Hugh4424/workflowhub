@@ -1,0 +1,77 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 100,
+      "issue": "端到端 gate 依赖 `specs/wh-review-rebuild/__tests__/test-plan-smoke.test.mjs`，但 plan/tasks 的 Files 清单和任务列表都没有创建或维护这个测试文件。执行到 Stage 3 时，主验收命令没有已声明的落点，计划不可执行。",
+      "recommendation": "把 `specs/wh-review-rebuild/__tests__/test-plan-smoke.test.mjs` 纳入 plan.md Phase 3 Files，并新增对应任务负责创建和维护；或者把 gate_cmd 改成已在任务中明确产出的现有脚本/测试入口。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/plan.md",
+      "line": 203,
+      "issue": "`grep -cE 'make-decision|build-spec|build-plan|build-code|verify-code|round' /Users/Hugh/Hugh/Project/3rd-review/SKILL.md` 这个 gate 不可信。它把合法的说明性文本也当失败条件，3rd-review 的文档只要写出“does not accept stage/round”就会误报；同时它也不能证明“无 stage 枚举路由、无轮次管理逻辑”这两个真正要验的约束。",
+      "recommendation": "把验证改成针对具体禁用模式的双向检查：例如只 grep 5 个 stage 枚举值和具体轮次管理结构/字段，或新增专门 fixture/test 断言 SKILL.md 仅保留零知识接口说明而不含路由/轮次实现语义。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 63,
+      "issue": "计划要修改现有 CLI/runner 边界（`run-heterologous-review.mjs`、`route-review.mjs`、`standalone.sh`），但 plan/tasks 没有登记任何 Existing Interface Signature Anchor（SIG-xxx）来冻结这些现有接口的当前签名。按合同，这类改动缺少签名锚点时，实施者无法证明改动前后接口边界、flag 语义和调用面是否被完整覆盖。",
+      "recommendation": "在 plan.md 增加现有接口签名锚点章节，逐个记录 `run-heterologous-review.mjs`、`route-review.mjs`、`standalone.sh` 当前 CLI/输入输出签名，并让 T015a/T017 的实现与 verify 明确引用对应 SIG-xxx。"
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/plan.md",
+      "line": 236,
+      "issue": "Scope Boundary 校验只对当前 workflowhub 仓库执行 `git diff --name-only`，但本计划明确包含 `/Users/Hugh/Hugh/Project/3rd-review/` 的跨仓库改动。现有 gate 无法检查 repo B 是否只改了计划允许的文件，也无法发现越界修改，导致跨仓库变更面不可控、不可审计。",
+      "recommendation": "为 3rd-review 仓库补一条独立的范围校验命令，至少显式扫描 `/Users/Hugh/Hugh/Project/3rd-review/` 的实际变更文件并限定到计划声明的文件集；若要保留双仓执行，两个仓库都要有各自的 boundary 验证。"
+    }
+  ],
+  "resolutionSummary": "上一轮 3 个阻断已补上：wh-review 调度入口已落到 T010a，D2 批准态 artifact 已拆到 T011b/T023a，round-state 字段集也已恢复。当前剩余阻断转到“怎么验、怎么控”层：Stage 3 主测试文件未落任务，3rd-review 文档/CLI 校验命令不可信，现有接口缺 SIG 锚点，跨仓库 scope gate 也还不成立。",
+  "reviewSnapshot": [
+    {
+      "path": "wh-review-rebuild-build-plan-review-package-r3.md",
+      "hash": null,
+      "lines": 1073,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wh-review-rebuild-build-plan-review-package-r3.md",
+      "round": 7
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

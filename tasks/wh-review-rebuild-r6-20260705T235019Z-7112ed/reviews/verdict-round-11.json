@@ -1,0 +1,24 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "自动推进规则违反宪法 F7",
+      "detail": "Spec 在 FR-D2-001、FR-STAGE-001、影响范围 §7/§8 中明确要求 build-spec 和 build-code 在审查 pass 后可自动推进下一 stage，仅 make-decision/build-plan/verify-code 走人工确认门。但仓库宪法 CONSTITUTION.md 的 F7 写明“阶段推进与不可逆操作必须经人在边界确认，不由系统自动越界执行”。这不是实现细节分歧，是顶层治理冲突。当前文本不能直接落地；要么把所有 stage 推进都改成人工确认，要么先正式修宪再继续。"
+    },
+    {
+      "severity": "blocking",
+      "title": "3rd-review 改造目标路径与当前仓库事实不一致",
+      "detail": "Spec 把核心改造对象定义为 skills/3rd-review/SKILL.md，并要求重写其 §7、精简其 stage/轮次逻辑、把它作为本仓库内可修改模块处理。但当前仓库不存在 skills/3rd-review/SKILL.md；现有 stage workflow 实际是调用外部 3rd-review standalone.sh，build-plan 还显式依赖跨仓路径 /Users/Hugh/Hugh/Project/3rd-review/verifiers/vibecoding/。这意味着 spec 的 in-scope、影响面、验收点和“不改 agenthub/外部系统文件”的边界彼此打架：要实现两层重构，必须先把 3rd-review 的真实所有权、修改仓库、同步方式、跨仓交付责任写清，否则实现者无法判断该改哪里、哪些改动被允许。"
+    },
+    {
+      "severity": "minor",
+      "title": "Known Gaps 含过时/自相矛盾条目",
+      "detail": "Known Gaps 仍写“docs/human-brief-template.md 是否已存在未经确认”，但仓库里该文件已存在；同时又写“6章结构名称未明确，build-plan 阶段需核实”，而 FR-WHREVIEW-004 已经把 6 章的名称、顺序、语义全部定死。保留这些条目会误导后续 build-plan 再次打开已关闭的问题，建议删除或改成真正未决依赖。"
+    }
+  ],
+  "resolutionSummary": "先修正两处基础矛盾：统一阶段推进是否必须人工确认，并把 3rd-review 的真实改造边界改成与当前跨仓事实一致；再清理过时 Known Gaps。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r11",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-11.md"
+}

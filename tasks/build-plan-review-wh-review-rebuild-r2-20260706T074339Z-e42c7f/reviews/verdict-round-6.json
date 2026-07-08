@@ -1,0 +1,136 @@
+{
+  "verdict": "revise_required",
+  "skillResults": [
+    {
+      "name": "speckit-analyze",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback read from /Users/Hugh/.claude/skills/speckit-analyze/SKILL.md in this session; (2) checked specs/wh-review-rebuild/spec.md, plan.md, tasks.md for FR→plan→task coverage, cross-artifact contract consistency, state/evidence fields, and constitution alignment; (3) found unresolved contract drift in D2 approval artifact semantics, missing traceable coverage for the core wh-review orchestration path, and incomplete round-state coverage."
+    },
+    {
+      "name": "plan-eng-review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback read from /Users/Hugh/.claude/skills/gstack/plan-eng-review/SKILL.md in this session; (2) checked architecture boundary between workflowhub and /Users/Hugh/Hugh/Project/3rd-review/, execution ordering, runner invocation obligations, failure/timeout handling, restart behavior, and verification strategy across plan.md/tasks.md; (3) found the main wh-review→3rd-review execution path is still not assigned to a concrete file/task, and the human-confirmation recovery flow remains unsafe as written."
+    },
+    {
+      "name": "review",
+      "status": "executed",
+      "mode": "read-only verifier; skill-file fallback",
+      "evidence": "(1) SKILL.md fallback read from /Users/Hugh/.claude/skills/gstack/review/SKILL.md in this session; (2) checked scope/boundary drift, impacted surfaces from spec.md Business Impact Scope, fake-command patterns, evidence file coverage, and cross-repo verification commands in plan.md/tasks.md; (3) found required review evidence/output surfaces still under-covered and several gate_cmd entries remain non-runnable due to placeholders/escaped shell syntax."
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 58,
+      "issue": "D2 人工确认 artifact 契约仍然写反。spec 要求 `human-confirmation-{stage}-{total_round}.json` 是“人工批准后”的 artifact，至少含 `approved_by`、`approved_at`、`stage`、`total_round`；现在 T011b 仍在等待态就生成该文件，字段还是 `stage/total_round/verdict/awaiting_since`，T023a 也继续按这个等待态文件做恢复判断。",
+      "recommendation": "把等待态与批准态拆开：等待态只依赖 `post_review_action=await_human_confirmation` 停住；批准后再写入 spec 定义的 approval artifact，并让重启恢复只在 artifact 存在且字段匹配时推进。",
+      "repeat": true,
+      "rootCause": "plan/tasks 仍把“等待人工确认”和“人工已批准”复用成同一个文件语义。",
+      "scanScope": "spec.md FR-D2-001，plan.md Phase 2 Goal/Files/Verify，tasks.md T011b/T019-T021/T023a。",
+      "closureChecklist": [
+        "T011b 改为批准后落盘 artifact",
+        "artifact 字段改为 `approved_by/approved_at/stage/total_round`",
+        "T023a 改为无 artifact 则继续等待",
+        "补一条区分“未批准重启”和“已批准重启”的可执行验证"
+      ]
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/plan.md",
+      "line": 172,
+      "issue": "wh-review→3rd-review 的核心执行面仍未落到具体文件/任务。spec 已定死 runner discovery、`node <runner> --diff=<file> --output=<file>` 单次调用、timeout/非零退出/结果缺失→`escalate_to_human`、以及 `tasks/{task-id}/reviews/verdict-round-{total_round}.raw.json` 落盘；但 Phase 2 Files/Tasks 仍只有 route-decision、round-state、human-confirmation、report render、stage 接入，没有负责主调度调用链的实现文件或任务。",
+      "recommendation": "新增明确的 wh-review 调度入口文件和任务，覆盖 runner 发现、三元组序列化写入 `--diff`、`--output` 原始 JSON 落盘、timeout/失败映射、结果解析、Delta Package 构造与 mode 切换，并为这些点补独立 gate_cmd。",
+      "repeat": true,
+      "rootCause": "计划把外围件列全了，但漏掉了真正执行 3rd-review 的 orchestrator 主入口。",
+      "scanScope": "spec.md FR-THIRDREVIEW-001 runner/结果契约，plan.md Phase 2 Files/Tasks/Verify，tasks.md Stage 2 全部 WHREVIEW 任务。",
+      "closureChecklist": [
+        "补 wh-review 主调度入口文件",
+        "补对应任务 ID",
+        "覆盖 `THIRD_REVIEW_RUNNER`、`--diff`、`--output`、timeout、non-zero、missing output",
+        "覆盖 raw verdict JSON 落盘路径",
+        "补 AC5-3/AC5-4/AC3-2 的可执行验证"
+      ]
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/plan.md",
+      "line": 167,
+      "issue": "round-state 最小字段集仍然不完整。plan/tasks 继续只覆盖 `heterologous_round`、`same_source_round`、`total_round`、`mode`、`post_review_action`，但 spec 的状态契约还要求 `actual_mode`、`verdict`、`report_path`、`blocking_count`、`fingerprint_repeated`；AC-D10 和 AC-D10.1 依赖这些字段。",
+      "recommendation": "把缺失字段补进 Phase 2 Goal、Files、Tasks、Verify 和 T010/T011/T011a，尤其补 `actual_mode=same-source`、`report_path`、`blocking_count`、`fingerprint_repeated` 的机器校验，并校验状态文件与报告 Metadata 一致。",
+      "repeat": true,
+      "rootCause": "plan 只围绕三计数器和 D2 门扩展，没把 spec §6 的完整审计字段带入实现面。",
+      "scanScope": "spec.md §6、AC-D10/AC-D10.1，plan.md Phase 2 Goal/Verify，tasks.md T010/T011/T011a 和 Stage 2 checkpoint。",
+      "closureChecklist": [
+        "T010/T011/T011a 增补 5 个缺失字段",
+        "Phase 2 Goal 改成完整字段集",
+        "Verify 增加状态文件与报告 Metadata 一致性检查",
+        "覆盖 same-source 切换场景的 `actual_mode` 断言"
+      ]
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-review-rebuild/tasks.md",
+      "line": 83,
+      "issue": "多条 gate_cmd 仍不可直接执行，验证链不客观。当前还保留 `<3rd-review repo>` 占位符、`<base>..<head>` 占位符，以及被转义成字面量的 `\\|` 管道写法；这些命令按文面无法直接跑通，也不满足 fake-command 约束。",
+      "recommendation": "把所有 gate_cmd 改成真实可运行命令：用确定路径或明确的环境变量约定替换占位符，去掉会破坏 shell 语义的转义，必要时拆分为 `gate_cmd` 和 `display_cmd`，并确保退出码真实反映通过/失败。",
+      "repeat": true,
+      "rootCause": "计划仍把示意命令和真实 gate 混写，没有把 reviewer contract 的 fake-command 规则落实到每条命令。",
+      "scanScope": "tasks.md Stage 2/3 Checkpoint，plan.md Phase 3 Verify。",
+      "closureChecklist": [
+        "替换 `<3rd-review repo>` 占位符",
+        "替换 `<base>..<head>` 占位符或定义固定变量约定",
+        "移除 `\\|` 这类破坏 shell 语义的写法",
+        "逐条确认 gate_cmd 可直接运行且退出码可信"
+      ]
+    }
+  ],
+  "resolutionSummary": "Round 6 仍不能 pass。Round 5 的 4 个阻断项都还开着：D2 批准 artifact 语义仍冲突、wh-review 主调度调用链仍无实现任务、round-state 仍缺审计字段、Verify 命令仍有占位符和不可执行写法。",
+  "reviewSnapshot": [
+    {
+      "path": "wh-review-rebuild-build-plan-review-package-r2.md",
+      "hash": null,
+      "lines": 1060,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wh-review-rebuild-build-plan-review-package-r2.md",
+      "round": 6
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  },
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-6.md"
+}

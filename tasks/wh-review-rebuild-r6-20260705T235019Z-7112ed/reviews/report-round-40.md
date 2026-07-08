@@ -1,0 +1,29 @@
+# 审查报告 — wh-review-rebuild-r6-20260705T235019Z-7112ed (round 40)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+先补齐落盘路径/文件契约与 D2 人工确认状态机，再补 same-source 验收用例和 human-brief-template 依赖闭环。
+
+## Findings
+
+- [blocking] 问题: 关键落盘路径与文件命名未定死 | 建议: 多条验收依赖可预测落盘位置，但 spec 只写了“任务目录下固定子路径”或“记录文件存在”，没有定死 review report、route-decision、round state、Delta Package、fresh-capture 的准确相对路径、文件名规则、是否按 task-id 分层。AC1-3、AC2-2、AC3-1、AC3-2、AC4-2、AC-D4、AC-D10 都会因此出现实现分叉，测试也无法做唯一断言。
+- [blocking] 问题: D2 人工确认门缺少可执行合同 | 建议: FR-D2-001 要求 make-decision / build-plan / verify-code 在 pass 后“挂起等待 human orchestrator 明确批准”，但没有定义批准输入来自哪里、用什么文件/状态字段表示 pending/approved/rejected、由谁消费、超时和拒绝如何收束。没有这个状态机，‘不自动推进’可以实现，但‘人工确认后再推进’无法一致实现或验收。
+- [minor] 问题: same-source 阶段的验收覆盖不足 | 建议: 正文定义了同源模式独立计数、最多 3 轮、失败后强制 escalate_to_human，但验收主要覆盖异源 3 轮升级，缺少针对同源第 1-3 轮与第 3 轮末强制升级的独立行为用例，容易实现出与正文不一致的终止逻辑。
+- [minor] 问题: human-brief-template 依赖处理方式不闭合 | 建议: Known Gaps 承认 `docs/human-brief-template.md` 是否存在未确认，但 in-scope 和 FR-STAGE-001 已强制 5 个 stage 统一调用它。若文件不存在，spec 没有明确是本期创建、还是作为阻断前置条件，实施边界不够干净。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：关键落盘路径与文件命名未定死
+- 必须修复：D2 人工确认门缺少可执行合同
+

@@ -1,0 +1,27 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "3rd-review 调用契约自相矛盾：wh-review 持有合同，但实现又要求用 `--checkpoint` 路由合同",
+      "detail": "规格前半段明确把 5 套 stage 专属合同搬到 `skills/wh-review/contracts/`，并把 3rd-review 精简为只吃 `{mode, contract, materials}` 的纯引擎；但 FR-THIRDREVIEW-001 又规定实现时 `contract` 映射到 `--checkpoint`，且 `--checkpoint` 的实测语义是按 stage 前缀在 3rd-review/agenthub 侧路由合同。这会导致实现者无法判断真实权责：究竟是 wh-review 直接选择合同并传给引擎，还是仍由 3rd-review 根据 `--checkpoint` 选合同。该矛盾直接影响目录设计、CLI 适配、合同迁移位置和验收方式，必须先定一套。"
+    },
+    {
+      "severity": "blocking",
+      "title": "合同来源与日志验收口径冲突，无法客观验证“已使用 wh-review 专属合同”",
+      "detail": "AC2-2、AC-D4 要求日志/报告证明加载的是 wh-review 的专属合同而非通用合同；但当前调用契约仍绑定 `standalone.sh --checkpoint=<stage>`，这只能证明传了 stage 标识，不能证明实际消费的是 `skills/wh-review/contracts/` 下的文件。若 3rd-review 仍按自身 checkpoint 规则取合同，日志可能显示 stage 路由成功，但实际使用的仍是旧位置/旧合同。规格缺少一个可机器验证的合同解析来源定义，例如显式 `--contract-file=<path>`、materials 内嵌合同快照、或报告中记录最终合同绝对路径与 hash。没有这个，核心目标“stage 专属合同被正确路由”不可验证。"
+    },
+    {
+      "severity": "minor",
+      "title": "D2 人工确认门的输出接口未定，`pass` 结果下的编排动作仍有实现分叉空间",
+      "detail": "规格规定 make-decision / build-plan / verify-code 的 `pass` 路径不得自动推进，但 wh-review 最终裁决又只能返回 `pass | revise_required | escalate_to_human`。目前没有定义 stage agent 应通过哪个显式字段、状态文件字段或报告元数据来区分“pass 且需人工确认”与“pass 且可自动推进”，容易导致各 stage 自行解释 `pass`。建议补一个机器可消费信号，例如 `next_action=await_human|auto_advance`。"
+    },
+    {
+      "severity": "minor",
+      "title": "端到端验收缺少固定样例与成功证据格式，AC11-2 可执行但不可复核",
+      "detail": "AC11-2 只要求“至少一个端到端冒烟用例可在本地跑通”，但没有定义样例输入、执行命令、成功产物、或最小日志断言。实现方可以各自选择不同样例，评审时难以判断是否真的覆盖了 wh-review + 3rd-review 的关键链路。建议固定一个 stage、一个最小任务目录样例，以及必须产出的状态文件/报告/合同路径日志。"
+    }
+  ],
+  "resolutionSummary": "先统一合同所有权与 CLI 契约，再补 D2 机器信号和固定 E2E 验收样例；否则核心目标无法稳定实现或验证。",
+  "reviewRequestId": "standalone-build-spec-wh-review-rebuild-r2-20260705T164034Z-2d15d9-r2"
+}

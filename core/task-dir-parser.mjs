@@ -21,7 +21,7 @@
  */
 
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, dirname, basename, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 
 /**
@@ -56,6 +56,25 @@ function expandHome(p) {
     return p.replace(/^~/, homedir());
   }
   return p;
+}
+
+/**
+ * Determine the repo root that a relative yaml task_dir value should resolve
+ * against, given the workflowhub.yaml configPath.
+ *
+ * By contract the config file lives at `<repo-root>/config/workflowhub.yaml`
+ * (see DEFAULT_CONFIG_PATH above), so the repo root is the parent of the
+ * config file's own directory — but only when that directory is actually
+ * named "config" per the contract. When configPath does not follow that
+ * layout (e.g. a bare fixture path used in tests), its own directory is the
+ * closest available root and is used as-is.
+ *
+ * @param {string} configPath - Path to workflowhub.yaml.
+ * @returns {string} Directory that relative task_dir values resolve against.
+ */
+function resolveConfigRepoRoot(configPath) {
+  const configDir = dirname(configPath);
+  return basename(configDir) === "config" ? dirname(configDir) : configDir;
 }
 
 /**
@@ -147,7 +166,13 @@ export function parseTaskDir(configPath = DEFAULT_CONFIG_PATH) {
   const rawYaml = readTaskDirFromYaml(configPath);
   if (rawYaml !== null) {
     const trimmed = trimTasksSuffix(rawYaml);
-    const resolved = resolve(expandHome(trimmed));
+    const expanded = expandHome(trimmed);
+    // Relative paths are resolved against the repo root that owns this config
+    // file (see resolveConfigRepoRoot), not against the config file's own
+    // directory, so ./tasks/ works on any machine regardless of cwd.
+    const resolved = isAbsolute(expanded)
+      ? expanded
+      : resolve(resolveConfigRepoRoot(configPath), expanded);
     validateDir(resolved, `yaml task_dir (${configPath})`);
     return resolved;
   }
