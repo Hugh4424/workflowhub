@@ -1,0 +1,10 @@
+{
+  "stage": "build-plan",
+  "contract_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/skills/wh-review/contracts/plan.md",
+  "contract_hash": "3a2d36f5972322a6cdc7fa6630da17510a5123d8d243a51586b710e1c843f0c4",
+  "timestamp": "2026-07-08T13:43:19.638Z",
+  "input_mode": "full",
+  "review_flow_id": "1c30b6df-2cf8-4300-ba9d-da34571b4e89",
+  "total_round": 1,
+  "review_input_hash": "8927e7d606a7d1374c565d32d276c53503a4cdf2651501b6df694ecf5f4974c9"
+}
