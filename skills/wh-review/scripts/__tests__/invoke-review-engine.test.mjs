@@ -13,13 +13,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   discoverThirdReviewRepoRoot,
   discoverRunner,
+  effectiveRunnerTimeoutMs,
   invokeReviewEngine,
   assembleReviewPayload,
   assembleAndInvokeReviewEngine,
@@ -77,6 +78,28 @@ function writeStubRunner(body) {
   const stubPath = join(stubDir, "stub-runner.mjs");
   writeFileSync(stubPath, body);
   return stubPath;
+}
+
+function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0 } = {}) {
+  const fakePath = join(stubDir, "fake-claude.mjs");
+  const countPath = join(stubDir, "fake-claude-count.txt");
+  const result = resultText ?? JSON.stringify(resultObject ?? {
+    verdict: "pass",
+    findings: [],
+    resolutionSummary: "fake claude review passed",
+  });
+  writeFileSync(fakePath, `#!/usr/bin/env node
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const prompt = readFileSync(0, "utf8");
+if (!prompt.includes("## REVIEW CONTRACT") || !prompt.includes("## MATERIALS")) process.exit(7);
+const countPath = ${JSON.stringify(countPath)};
+const current = existsSync(countPath) ? Number(readFileSync(countPath, "utf8")) : 0;
+writeFileSync(countPath, String(current + 1));
+if (current < ${Number(emptyAttempts)}) process.exit(0);
+process.stdout.write(JSON.stringify({ type: "result", result: ${JSON.stringify(result)} }));
+`);
+  chmodSync(fakePath, 0o755);
+  return fakePath;
 }
 
 // A runner stub that reads --diff, echoes a canned verdict to --output, exit 0.
@@ -154,10 +177,41 @@ describe("discoverRunner", () => {
     expect(result).toBe("/x/y/3rd-review/scripts/run-heterologous-review.mjs");
   });
 
+  it("WH_REVIEW_PROVIDER=claude-code routes to the in-repo Claude Code runner", () => {
+    const result = discoverRunner({ env: { WH_REVIEW_PROVIDER: "claude-code" }, workflowhubRepoRoot: "/x/y/workflowhub" });
+    expect(result).toMatch(/skills\/wh-review\/scripts\/runners\/claude-code-reviewer\.mjs$/);
+  });
+
+  it("THIRD_REVIEW_RUNNER=claude-code routes to the in-repo Claude Code runner", () => {
+    const result = discoverRunner({ env: { THIRD_REVIEW_RUNNER: "claude-code" }, workflowhubRepoRoot: "/x/y/workflowhub" });
+    expect(result).toMatch(/skills\/wh-review\/scripts\/runners\/claude-code-reviewer\.mjs$/);
+  });
+
   it("no machine-specific absolute path is hardcoded in the module source", () => {
     const src = readFileSync(new URL("../invoke-review-engine.mjs", import.meta.url), "utf8");
     expect(src).not.toMatch(/\/Users\//);
     expect(src).not.toMatch(/\/home\//);
+  });
+});
+
+describe("effectiveRunnerTimeoutMs", () => {
+  it("extends the outer timeout for the built-in Claude Code runner to cover retry attempts", () => {
+    const runnerPath = discoverRunner({
+      env: { WH_REVIEW_PROVIDER: "claude-code" },
+      workflowhubRepoRoot: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../"),
+    });
+
+    expect(
+      effectiveRunnerTimeoutMs({
+        runnerPath,
+        timeoutMs: 300000,
+        env: { CLAUDE_CODE_REVIEW_TIMEOUT_MS: "300000", CLAUDE_CODE_REVIEW_ATTEMPTS: "3" },
+      })
+    ).toBe(930000);
+  });
+
+  it("keeps the caller timeout for non-Claude runners", () => {
+    expect(effectiveRunnerTimeoutMs({ runnerPath: "/tmp/custom-runner.mjs", timeoutMs: 1234, env: {} })).toBe(1234);
   });
 });
 
@@ -183,6 +237,99 @@ describe("invokeReviewEngine — success path", () => {
     const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
     expect(artifact).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
     expect(artifact.synthetic).toBeUndefined();
+  });
+
+  it("runs the built-in Claude Code runner through wh-review when WH_REVIEW_PROVIDER=claude-code", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude();
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 13,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-13.raw.json`);
+      const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+      expect(artifact.provider).toBe("claude-code");
+      expect(artifact.provider_cli).toBe("claude");
+      expect(artifact.host).toBe("codex");
+      expect(artifact.trueCrossEngine).toBe(true);
+      expect(artifact.reviewMode).toBe("claude-code-cli");
+      expect(artifact.resolutionSummary).toBe("fake claude review passed");
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("normalizes Claude Code's occasional {pass:true} JSON into verdict=pass", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({ resultText: JSON.stringify({ pass: true, findings: [] }) });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 14,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-14.raw.json`);
+      const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+      expect(artifact.trueCrossEngine).toBe(true);
+      expect(artifact.resolutionSummary).toContain("normalized to verdict=pass");
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("retries transient Claude Code empty stdout before writing a failure verdict", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const savedAttempts = process.env.CLAUDE_CODE_REVIEW_ATTEMPTS;
+    const fakeClaude = writeFakeClaude({ emptyAttempts: 2 });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    process.env.CLAUDE_CODE_REVIEW_ATTEMPTS = "3";
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 15,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-15.raw.json`);
+      const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+      expect(artifact.trueCrossEngine).toBe(true);
+      expect(artifact.claudeCodeAttempts).toBe(3);
+      expect(artifact.failure_reason).toBeUndefined();
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+      if (savedAttempts === undefined) delete process.env.CLAUDE_CODE_REVIEW_ATTEMPTS;
+      else process.env.CLAUDE_CODE_REVIEW_ATTEMPTS = savedAttempts;
+    }
   });
 });
 

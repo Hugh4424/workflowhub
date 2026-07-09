@@ -6,7 +6,10 @@
  *
  * ① Runner discovery — code here MUST NOT hardcode any single machine's
  *    absolute path:
- *    - `THIRD_REVIEW_RUNNER` env, when set, wins: absolute path used as-is;
+ *    - `WH_REVIEW_PROVIDER=claude-code` or `THIRD_REVIEW_RUNNER=claude-code`
+ *      routes to workflowhub's in-repo Claude Code runner.
+ *    - `THIRD_REVIEW_RUNNER` env, when set to any other value, wins:
+ *      absolute path used as-is;
  *      bare filename resolved by joining against the discovered 3rd-review
  *      repo root (NOT its scripts/ subdir — only the convention default
  *      below reaches into scripts/).
@@ -54,6 +57,7 @@ import { writeRouteExecutePhase } from "./route-decision-writer.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
+const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
 const DEFAULT_TIMEOUT_MS = 120000;
 
 export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable"]);
@@ -82,6 +86,8 @@ export function discoverThirdReviewRepoRoot({ env = process.env, workflowhubRepo
 export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) {
   const repoRoot = discoverThirdReviewRepoRoot({ env, workflowhubRepoRoot });
   const runnerEnv = env.THIRD_REVIEW_RUNNER;
+  const provider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  if (provider === "claude-code" || runnerEnv === "claude-code") return CLAUDE_CODE_RUNNER;
   if (runnerEnv) {
     return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
   }
@@ -90,6 +96,13 @@ export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) 
 
 function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, totalRound }) {
   return join(taskRoot(taskTrackingRoot, taskId), "reviews", `verdict-${stage}-${reviewFlowId}-round-${totalRound}.raw.json`);
+}
+
+export function effectiveRunnerTimeoutMs({ runnerPath, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
+  if (runnerPath !== CLAUDE_CODE_RUNNER) return timeoutMs;
+  const perAttempt = Math.max(1, Number(env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || process.env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || 300000));
+  const attempts = Math.max(1, Number(env.CLAUDE_CODE_REVIEW_ATTEMPTS || process.env.CLAUDE_CODE_REVIEW_ATTEMPTS || 3));
+  return Math.max(timeoutMs, perAttempt * attempts + 30000);
 }
 
 // Contract 2/FR-THIRDREVIEW-001: the backend returns a structured stage-agnostic
@@ -388,6 +401,7 @@ export function invokeReviewEngine({
   if (!existsSync(runnerPath)) {
     return synthesizeFailure({ artifactPath, failureReason: "runner-missing" });
   }
+  const runnerTimeoutMs = effectiveRunnerTimeoutMs({ runnerPath, timeoutMs, env });
 
   const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
   const diffFile = join(workDir, "diff.json");
@@ -397,7 +411,7 @@ export function invokeReviewEngine({
   let proc;
   try {
     proc = spawnSync("node", [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`], {
-      timeout: timeoutMs,
+      timeout: runnerTimeoutMs,
       encoding: "utf8",
     });
 
