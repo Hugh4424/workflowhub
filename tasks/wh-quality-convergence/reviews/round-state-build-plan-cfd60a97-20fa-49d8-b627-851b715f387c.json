@@ -1,0 +1,18 @@
+{
+  "stage": "build-plan",
+  "review_flow_id": "cfd60a97-20fa-49d8-b627-851b715f387c",
+  "heterologous_round": 0,
+  "same_source_round": 0,
+  "total_round": 0,
+  "mode": "full",
+  "actual_mode": null,
+  "verdict": null,
+  "report_path": null,
+  "blocking_count": null,
+  "fingerprint_repeated": null,
+  "post_review_action": null,
+  "finding_fingerprints": [],
+  "root_cause_diagnoses": [],
+  "history": [],
+  "round_started_at": 1783518882864
+}

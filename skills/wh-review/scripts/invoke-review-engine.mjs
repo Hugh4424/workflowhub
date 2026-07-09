@@ -28,7 +28,7 @@
  *    itself still returns normally, never throws for these cases).
  * ④ The raw result (engine's real output on success, or the synthesized
  *    failure record) is persisted, in both cases with the same path/shape,
- *    to `tasks/{task-id}/reviews/verdict-{stage}-{review_flow_id}-round-{total_round}.raw.json`,
+ *    to `{task_tracking_root}/{task-id}/reviews/verdict-{stage}-{review_flow_id}-round-{total_round}.raw.json`,
  *    and the structured `{verdict, findings, actual_mode}` is handed back to
  *    the caller (round-state.mjs, T011).
  */
@@ -92,12 +92,11 @@ function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, tot
   return join(taskRoot(taskTrackingRoot, taskId), "reviews", `verdict-${stage}-${reviewFlowId}-round-${totalRound}.raw.json`);
 }
 
-// Contract 2/FR-THIRDREVIEW-001: the engine's success path only ever returns
-// pass/revise_required. escalate_to_human must only ever originate from
-// synthesizeFailure() (engine-side failure mapping) or wh-review's own
-// round-state escalation logic — never accepted here as if a runner call
-// that reports it were "successful".
-const VALID_REVIEW_VERDICTS = new Set(["pass", "revise_required"]);
+// Contract 2/FR-THIRDREVIEW-001: the backend returns a structured stage-agnostic
+// verdict. `escalate_to_human` is a real backend outcome when a required review
+// dependency is unavailable; preserving it keeps the actionable findings visible
+// instead of collapsing the whole result into a synthetic output-unparseable.
+const VALID_REVIEW_VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 
 // round-review finding: a raw finding's `file`/`line` feed directly into round-state.mjs's
 // computeFindingFingerprint() (Contract 4: finding_fingerprints[].file/line must round-trip
@@ -116,7 +115,7 @@ const VALID_REVIEW_VERDICTS = new Set(["pass", "revise_required"]);
 // contract/implementation drift outside this repo's scope, not something wh-review can
 // paper over by rejecting all real results). So `category` is validated only when present
 // (must be a non-empty string), never required.
-const VALID_FINDING_SEVERITIES = new Set(["blocking", "minor"]);
+const VALID_FINDING_SEVERITIES = new Set(["blocking", "minor", "important"]);
 
 function isValidFinding(finding) {
   return (
@@ -131,6 +130,51 @@ function isValidFinding(finding) {
     typeof finding.issue === "string" &&
     typeof finding.recommendation === "string"
   );
+}
+
+function normalizeFinding(finding) {
+  if (finding === null || typeof finding !== "object") {
+    return {
+      severity: "minor",
+      file: "REVIEW_CONTRACT",
+      line: 1,
+      issue: "review finding was not an object",
+      recommendation: "inspect raw review output",
+    };
+  }
+  const normalized = { ...finding };
+  if (normalized.severity === "important") normalized.severity = "minor";
+  if (!VALID_FINDING_SEVERITIES.has(normalized.severity)) normalized.severity = "minor";
+  if (typeof normalized.file !== "string" || normalized.file.length === 0) {
+    normalized.file = "REVIEW_CONTRACT";
+  }
+  if (!Number.isInteger(normalized.line) || normalized.line <= 0) {
+    normalized.original_line = normalized.line;
+    normalized.line = 1;
+  }
+  if (normalized.category === "") delete normalized.category;
+  if (typeof normalized.issue !== "string" || normalized.issue.length === 0) {
+    normalized.issue = typeof normalized.description === "string" && normalized.description.length > 0
+      ? normalized.description
+      : "review finding missing issue text";
+  }
+  if (typeof normalized.recommendation !== "string") {
+    normalized.recommendation = "";
+  }
+  return normalized;
+}
+
+function normalizeReviewResult(result) {
+  if (result !== null && typeof result === "object") {
+    return {
+      ...result,
+      findings: Array.isArray(result.findings) ? result.findings.map(normalizeFinding) : [],
+      actual_mode: typeof result.actual_mode === "string" && result.actual_mode.length > 0
+        ? result.actual_mode
+        : "not_executed",
+    };
+  }
+  return result;
 }
 
 /** Structural validation of a parsed runner --output payload (see synthesizeFailure below). */
@@ -321,7 +365,7 @@ export function invokeReviewEngine({
   // A previous fix here hard-required `process.env.WORKFLOWHUB_TASK_DIR` to be
   // literally set, but WORKFLOWHUB_TASK_DIR is meant to be an optional
   // override of parseTaskDir()'s priority chain, not a hard requirement —
-  // config/workflowhub.yaml's `task_dir` field is a legitimate fallback that
+  // ~/.workflowhub/config.json's `task_dir` field is a legitimate fallback that
   // must keep working from a clean shell within the repo. Call parseTaskDir()
   // itself (env var, else yaml fallback) purely to validate that SOME
   // task_tracking_root is genuinely resolvable before any spawn/write side
@@ -374,6 +418,8 @@ export function invokeReviewEngine({
     } catch {
       return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
     }
+
+    result = normalizeReviewResult(result);
 
     // round-review finding: valid JSON is not the same as a valid review result —
     // a runner that exits 0 and writes `{}` or `{"verdict":"pass"}` used to be

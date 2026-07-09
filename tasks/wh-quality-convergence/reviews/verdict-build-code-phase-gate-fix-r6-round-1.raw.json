@@ -1,0 +1,58 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "scripts/phase-gate.mjs",
+      "line": 154,
+      "issue": "The commit/no-change gate treats any non-empty commit_sha as a valid commit record. A phase-result with commit_records:[{commit_sha:\"not-a-real-commit\"}] and a clean worktree can pass, so the new completion fact gate can still false-green the exact physical fact it is meant to verify. The test fixture also uses \"abc1234\", which codifies this weak check instead of proving the commit exists.",
+      "recommendation": "Validate commit records against the target worktree, e.g. require a full commit SHA shape and run git cat-file -e <sha>^{commit} in worktreeRoot. Add a negative phase-gate test for a fake commit_sha and update the positive fixture to use a real commit from the temp repo."
+    },
+    {
+      "severity": "blocking",
+      "file": "scripts/phase-gate.mjs",
+      "line": 68,
+      "issue": "RED evidence is required to have exit_code exactly 1, but the build-code contract only says RED is valid when the command exits non-zero. Valid failing commands can return other non-zero codes, so the phase gate can incorrectly block a legitimate RED/GREEN phase completion.",
+      "recommendation": "Change the RED check to require a non-zero exit_code, not exactly 1. Add a regression test with RED exit_code 7 and GREEN exit_code 0."
+    }
+  ],
+  "resolutionSummary": "Targeted verification passed: 96 tests across phase-gate, facts-subschema, verify-code capture, and receipt verification; git diff --check passed. Review still requires revision because the new gate can accept fake commit records and can reject valid non-1 RED failures.",
+  "reviewSnapshot": [
+    {
+      "path": "diff.json",
+      "hash": null,
+      "lines": 837,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "diff.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

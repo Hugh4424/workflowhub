@@ -70,7 +70,7 @@ try {
   if (prep.status !== "ready") throw new Error("prepare status !== ready: " + prep.status);
   const { review_flow_id: reviewFlowId, total_round: totalRound } = prep;
 
-  const promptPath = join(taskTrackingRoot, "tasks", taskId, "reviews", \`prompt-\${reviewFlowId}-r\${totalRound}.md\`);
+  const promptPath = join(taskTrackingRoot, taskId, "reviews", \`prompt-\${reviewFlowId}-r\${totalRound}.md\`);
   mkdirSync(dirname(promptPath), { recursive: true });
   writeFileSync(promptPath, "supplementary context (stub)");
 
@@ -146,14 +146,12 @@ describe.each(STAGES)("stage invocation chain — %s", (stage) => {
 
     const routeDecisionPath = join(
       root,
-      "tasks",
       TASK_ID,
       "reviews",
       `route-decision-${stage}-${reviewFlowId}.json`
     );
     const verdictRawPath = join(
       root,
-      "tasks",
       TASK_ID,
       "reviews",
       `verdict-${stage}-${reviewFlowId}-round-${totalRound}.raw.json`

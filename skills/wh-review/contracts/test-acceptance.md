@@ -23,7 +23,7 @@
 
 required skill 不可用且 SKILL.md 文件不可读、无法以 report-only lens 执行或输出缺关键结论 → `escalate_to_human`。pass/revise 输出必须含顶层 `skillResults`，逐项记录 executed / unavailable / failed。本仓库命名禁止 `openspec-*` 回流。
 
-**Skill 执行回退规则**：审查员必须先尝试 Skill 工具调用 required skill。如果 Skill 工具在 headless/read-only 环境下失败，必须回退——直接 Read 该 skill 的 SKILL.md 文件，从中提取审查维度和检查清单，独立应用到 acceptance sources。回退成功时记录 `status=executed`，并在 `mode` 或 `evidence` 标明 `skill-file fallback`。不得使用 `qa` 替代 `qa-only`，不得使用 `openspec-*` 名称。
+**Skill 执行回退规则**：审查员必须先尝试 Skill 工具调用 required skill。如果 Skill 工具在 headless/read-only 环境下失败，必须回退——直接 Read 该 skill 的 SKILL.md 文件，从中提取审查维度和检查清单，独立应用到 acceptance sources。`verify-change --light` 的仓库内 fallback 路径是 `skills/verify-change/SKILL.md`；该文件可读且检查清单已按 report-only lens 应用时，不得仅因 runtime skill registry 没暴露 `verify-change` 而升级为 `escalate_to_human`。回退成功时记录 `status=executed`，并在 `mode` 或 `evidence` 标明 `skill-file fallback`。不得使用 `qa` 替代 `qa-only`，不得使用 `openspec-*` 名称。
 
 **三要素执行摘要要求（FR-REVIEW-006）**：每个必需技能的 `evidence` 字段必须包含三要素：（1）**在哪执行** — 会话位置/记录路径；（2）**具体输入/检查点** — 实际检查的内容；（3）**结论** — 发现了什么。禁止只写 "已执行"、"通过" 或无具体内容的占位符。
 
@@ -44,6 +44,42 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 3. **Verifier 闭环了吗** — 最新 verdict 都是 pass 吗？fix_status 剩余 open/in_progress **列出但不据此判 blocking**（仅当前阶段，前序阶段已裁决不重扫；`accepted`/`closed_inband` 视为已闭合）。
 4. **Knowledge 完整吗** — `tasks/{task-id}/apply/phase`、`tasks/{task-id}/test/final-test-report.md`、verifier reports、`tasks/{task-id}/progress.md` 都齐吗？
 5. **交付边界清晰吗** — keep/exclude/split、生成物、治理改动是否分类完毕？
+
+## 当前轮 wh-review 自举闭环规则
+
+verify-code 的 close 顺序是：先生成 fresh evidence / final-test-report
+/ report-index / reviews.jsonl / stage-result 的候选包，再执行当前轮
+wh-review；只有当前轮 wh-review 真实返回 `pass` 后，stage agent 才能把
+stage-result/final-test-report 改成最终 `review_status=pass` 并进入 merge
+gate。因此，审查员不得要求“当前轮 wh-review 的 pass raw artifact”在当前
+轮 wh-review 执行前已经存在。
+
+允许的候选闭环状态：
+
+- `stage-result.status` 为 `unknown`。
+- `facts.verdict` 表示 fresh acceptance 结论，可为 `pass`。
+- `facts.review_status` 为 `pending_current_wh_review`。
+- `facts.close_ready_for_merge_gate` 为 `false`。
+- `final-test-report.md` 可写 `Verdict: ready_for_wh_review`，并明确
+  “fresh test passed; current wh-review pending; merge/cleanup blocked until
+  this wh-review returns pass”。
+- `reports/report-index.md` / `reviews.jsonl` 可列出当前阶段
+  `pending_current_wh_review` 或 `in_progress` 行；这些行必须指向本轮候选
+  包和上一轮失败的诊断 artifact，不能伪称已 pass。
+
+以上候选状态不是交付完成态，只是当前轮 wh-review 的输入态。若 fresh
+evidence 全绿、验收矩阵完整、required skills 已执行或有可读 fallback、且
+候选包没有把上一轮 `revise_required` artifact 伪装成 `pass`，不得仅因
+`review_status=pending_current_wh_review` 或缺少“当前轮未来 pass artifact”
+而出 blocking。
+
+必须阻断的伪闭合：
+
+- `stage-result` / `final-test-report.md` 声称 wh-review 已 `pass`，但引用的
+  raw artifact 实际为 `revise_required` 或 `escalate_to_human`。
+- `facts.review.verdict=pass`，但 `facts.review.artifact_path` 指向的 raw
+  verdict 不是 `pass`。
+- 候选包没有明确把 merge/cleanup 置为 blocked-until-current-wh-review-pass。
 
 ## 增量审查规则
 

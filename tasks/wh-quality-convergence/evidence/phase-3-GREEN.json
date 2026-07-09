@@ -1,0 +1,17 @@
+{
+  "command": "npx vitest run -t receipt",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "git_sha": "1ce3e6f84eba107724a3cf279ee4bbb840aae641",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 0,
+  "timestamp": "2026-07-08T17:25:48.565Z",
+  "test_files_line": " Test Files  3 passed | 65 skipped (68)",
+  "content_hash": "60464726861171293f5b4114daa7f5f1a1f775afd6dfea67966afe7ec4f5de01",
+  "stdout_path": "tasks/wh-quality-convergence/evidence/phase-3-GREEN.json.stdout",
+  "stderr_path": "tasks/wh-quality-convergence/evidence/phase-3-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

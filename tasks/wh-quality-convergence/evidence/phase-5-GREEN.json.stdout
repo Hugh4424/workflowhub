@@ -1,0 +1,90 @@
+
+> workflowhub@0.0.0 test
+> vitest run --reporter=dot
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence
+
+ ✓ tests/m12-spec-plan.test.mjs (17 tests) 2ms
+ ✓ tests/m12-build-plan-v1.test.mjs (35 tests) 6ms
+ ✓ tests/m12-spec-analyze.test.mjs (33 tests) 5ms
+ ✓ tests/build-code-diff-only.test.mjs (23 tests) 3ms
+ ✓ tests/m13b-build-spec-deepening.test.mjs (61 tests) 8ms
+ ✓ tests/five-skills-present.test.mjs (59 tests) 7ms
+ ✓ tests/facts-subschema.test.mjs (40 tests) 4ms
+ ✓ tests/m13-make-decision.test.mjs (163 tests) 29ms
+ ✓ tests/metric-scan.test.mjs (24 tests) 95ms
+ ✓ tests/m12-spec-tasks.test.mjs (20 tests) 3ms
+ ✓ tests/stage-result-contract.test.mjs (17 tests) 3ms
+ ✓ tests/m13d-build-code-deepening.test.mjs (19 tests) 4ms
+ ✓ tests/baseline.test.mjs (19 tests) 6ms
+ ✓ tests/boundary-confirm.test.mjs (10 tests) 19ms
+ ✓ tests/metrics-collector.test.mjs (25 tests) 262ms
+ ✓ specs/wh-review-rebuild/__tests__/test-plan-smoke.test.mjs (3 tests) 143ms
+ ✓ tests/spike-intake-design.test.mjs (7 tests) 6ms
+ ✓ skills/wh-review/scripts/__tests__/snapshot-writer.test.mjs (12 tests) 14ms
+ ✓ tests/knowledge-card.test.mjs (19 tests) 4ms
+ ✓ core/__tests__/receipt-writer.test.mjs (49 tests) 444ms
+ ✓ tests/moat-skills-phase1.test.mjs (10 tests) 4ms
+ ✓ tests/m12-templates.test.mjs (19 tests) 3ms
+ ✓ tests/stage-quality.test.mjs (7 tests) 97ms
+ ✓ tests/moat-skills.test.mjs (14 tests) 9ms
+ ✓ skills/wh-review/scripts/__tests__/render-review-report.test.mjs (11 tests) 14ms
+ ✓ core/__tests__/parse-framework-config.test.mjs (8 tests) 3ms
+ ✓ skills/wh-review/scripts/__tests__/invoke-review-engine.test.mjs (27 tests) 609ms
+ ✓ skills/wh-review/scripts/__tests__/route-decision-writer.test.mjs (12 tests) 452ms
+ ✓ skills/wh-review/__tests__/human-brief-behavioral.test.mjs (20 tests) 3ms
+ ✓ core/__tests__/check-anti-host.test.mjs (17 tests) 407ms
+ ✓ core/__tests__/check-contract.test.mjs (13 tests) 398ms
+ ✓ tests/execution-record.test.mjs (14 tests) 4ms
+ ✓ core/__tests__/resolve-path.test.mjs (12 tests) 3ms
+ ✓ tests/verify-code-facts.test.mjs (19 tests) 5ms
+ ✓ tests/m12-reuse-registry.test.mjs (15 tests) 2ms
+ ✓ skills/wh-review/scripts/__tests__/stage-invocation-chain.test.mjs (4 tests) 526ms
+ ✓ core/__tests__/task-dir-parser-config.test.mjs (8 tests) 298ms
+ ✓ tests/build-code-review.test.mjs (12 tests) 2ms
+ ✓ skills/wh-review/scripts/__tests__/report-index.test.mjs (6 tests) 8ms
+ ✓ tests/fact-collector.test.mjs (3 tests) 155ms
+ ✓ core/__tests__/worktree-reuse-guard.test.mjs (5 tests) 164ms
+ ✓ skills/wh-review/scripts/__tests__/human-confirmation.test.mjs (9 tests) 13ms
+ ✓ core/__tests__/kernel.test.mjs (9 tests) 261ms
+ ✓ tests/moat-skills-phase2.test.mjs (5 tests) 10ms
+ ✓ core/__tests__/task-dir-parser.test.mjs (8 tests) 261ms
+ ✓ tests/verify-code-capture.test.mjs (15 tests) 407ms
+ ✓ core/__tests__/validate-contract.test.mjs (7 tests) 2ms
+ ✓ tests/m12-subskill-exclusion.test.mjs (2 tests) 7ms
+ ✓ core/__tests__/load-config.test.mjs (8 tests) 8ms
+ ✓ tests/moat-skills-phase3.test.mjs (8 tests) 2ms
+ ✓ tests/build-code-facts.test.mjs (10 tests) 3ms
+ ✓ core/__tests__/task-index.test.mjs (6 tests) 46ms
+ ✓ tests/verify-code-freshness.test.mjs (9 tests) 3ms
+ ✓ tests/contract-freeze.test.mjs (5 tests) 2ms
+ ✓ tests/flow-profile-decision-log.test.mjs (4 tests) 3ms
+ ✓ tests/reuse-registry.test.mjs (3 tests) 2ms
+ ✓ skills/wh-review/scripts/__tests__/round-state.test.mjs (57 tests) 1285ms
+ ✓ workflows/build-code/__tests__/section7-machine-checkable.test.mjs (4 tests) 2ms
+ ✓ core/__tests__/protected-paths.test.mjs (7 tests) 2ms
+ ✓ tests/receipt-wiring.test.mjs (4 tests) 2ms
+ ✓ tests/metrics-smoke.test.mjs (4 tests) 70ms
+ ✓ tests/smoke.test.mjs (1 test) 1ms
+ ✓ tests/build-code-target.test.mjs (4 tests) 1ms
+ ✓ tests/agenthub-baseline.test.mjs (9 tests) 379ms
+ ✓ tests/build-code-capture.test.mjs (23 tests) 1489ms
+ ✓ tests/receipt-verification.test.mjs (25 tests) 3468ms
+ ✓ core/__tests__/check-extensibility.test.mjs (13 tests) 3639ms
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > resolves successfully with { passed: true } 497ms
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports component_id matching the stub, not any original component 500ms
+   ✓ FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports coreDiffEmpty = true (no core files were modified) 423ms
+ ✓ core/__tests__/run-checks.test.mjs (11 tests) 4017ms
+   ✓ FR-CI-001: aggregate mode (no args) > exits 0 on a clean repo 988ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-anti-host (checker was invoked) 631ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-extensibility (checker was invoked) 605ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-contract (checker was invoked) 632ms
+   ✓ FR-CI-001: non-zero propagation > exits non-zero when a checker signals failure 500ms
+   ✓ FR-CI-001: non-zero propagation > reports which checker failed 482ms
+
+ Test Files  68 passed (68)
+      Tests  1181 passed (1181)
+   Start at  02:19:05
+   Duration  5.15s (transform 792ms, setup 0ms, collect 2.25s, tests 19.62s, environment 6ms, prepare 2.27s)
+

@@ -6,7 +6,7 @@
 
 ## Summary
 
-给 `workflows/build-code/SKILL.md` 补齐三项质量能力——P0-P3 风险定级、L2 集成冒烟、两阶段独立审查+原子提交——同时把 `metrics/capture.mjs` 扩展四个字段（commit_sha/base_sha/head_sha/risk_level），并将散落在根目录和 `config/` 的两份 `reuse-registry.md` 合并迁移到 `skills/reuse-registry.md` 唯一权威版本。worktree.json 跨阶段复用协议已在 make-decision 阶段落地（`tasks/m13d-build-code-deepening/worktree.json`），本任务直接复用，不新建。设计上四项能力全部走"记录事实、不阻断推进"（宪法 F3/Q1），复用优先于新建（四个复用/改造技能均为本项目自研技能）。
+给 `workflows/build-code/SKILL.md` 补齐三项质量能力——P0-P3 风险定级、L2 集成冒烟、两阶段独立审查+phase 级提交留痕——同时把 `metrics/capture.mjs` 扩展四个字段（commit_sha/base_sha/head_sha/risk_level），并将散落在根目录和 `config/` 的两份 `reuse-registry.md` 合并迁移到 `skills/reuse-registry.md` 唯一权威版本。worktree.json 跨阶段复用协议已在 make-decision 阶段落地（`tasks/m13d-build-code-deepening/worktree.json`），本任务直接复用，不新建。设计上四项能力全部走"记录事实、不阻断推进"（宪法 F3/Q1），复用优先于新建（四个复用/改造技能均为本项目自研技能）。
 
 ## Technical Context
 
@@ -17,7 +17,7 @@
 **Target Platform**: 本地 CLI / Claude Code agent 执行环境
 **Project Type**: workflow orchestration tool（workflowhub 核心项目）
 **Performance Goals**: N/A（无性能类需求）
-**Constraints**: 不引入阻断式质量门（宪法 F4/Q1/Q2）；两阶段审查须独立子代理独立上下文（避免自审自判，Q3）；原子提交时机集中在 orchestrating skill，实现子代理禁止自行 commit
+**Constraints**: 不引入阻断式质量门（宪法 F4/Q1/Q2）；两阶段审查须独立子代理独立上下文（避免自审自判，Q3）；phase 级 implementation commit 由 phase executor 在当前 phase 内完成，orchestrating skill 只复核 commit/no-change 记录和 phase-gate
 **Scale/Scope**: 3 个既有文件修订（`workflows/build-code/SKILL.md`、`workflows/build-code/capture.mjs`、`reuse-registry.md` 合并迁移），预估 ~400-600 行改动（含新增章节）
 
 **Cross-Repo Dependency Lock（spec §Known Gap #5 要求）**：`test-routing-advisor` 跨仓依赖版本/路径锁定如下——
@@ -38,7 +38,7 @@
 - [x] **F4 质量靠异源审查与人而非阻断式质量门** — 判据：FR-REVIEW-001 把原单链自审拆为两个独立子代理（各自独立上下文），取代自审自判；局限：两子代理共用同一引擎（codex），非严格异源引擎，用户已确认接受（spec 附录 B Known Gap #3，非阻断）。
 - [x] **F5 gate 谨慎添加出事再补无用则移除** — 判据：mtime 时序防伪机制已因 F10 四问不达标（安全剧场，`touch` 可绕过）被用户决策整条移除，体现"无用则移除"。
 - [x] **F6 统一外置执行记录** — 判据：新增四字段（commit_sha/base_sha/head_sha/risk_level）统一落 `capture.mjs` 采集，纳入 evidence 五件套 + journal，可回溯。
-- [x] **F7 推进与不可逆操作不自动越过人** — 判据：原子提交时机收敛在 orchestrating skill（非子代理自行 commit）；C 类升级（连续 3 次 revise_required）触发 escalate_to_human，不自动越过人处理。
+- [x] **F7 推进与不可逆操作不自动越过人** — 判据：常规 phase implementation commit 由 phase executor 按 phase 契约执行；merge、push、删分支、reset/checkout 覆盖他人改动等高风险 git 操作仍需人工确认；C 类升级（连续 3 次 revise_required）触发 escalate_to_human，不自动越过人处理。
 - [x] **F8 简单优先** — 判据：simplicity-guard 四阶梯判断结论为"复用优先"（见下方 Complexity Tracking），四个新增/改造能力全部基于本项目已有的 checkpoint-protocol / review-trigger / verdict-handler 三技能改造，无新造轮子。
 - [x] **F9 可证伪不假绿** — 判据：Step6 M10 baseline 对照严格遵守"不可得写 unknown + 原因"，不使用占位值（0/-/--）。
 - [x] **F10 自动化按真实收益添加** — 判据：本计划提出的每个新机制均过 F10 四问（见下方 F10 Anti-Over-Engineering Gate 章节），无法四问皆答的机制已被移除（mtime 防伪）。
@@ -83,7 +83,7 @@ specs/m13d-build-code-deepening/
 ### Source Code (repository root)
 
 ```text
-workflows/build-code/SKILL.md       # MODIFY — 新增 P0-P3 风险定级、L2 冒烟、两阶段审查+原子提交三大章节
+workflows/build-code/SKILL.md       # MODIFY — 新增 P0-P3 风险定级、L2 冒烟、两阶段审查+phase 级提交留痕三大章节
 workflows/build-code/capture.mjs    # MODIFY — 新增 commit_sha/base_sha/head_sha/risk_level 四字段（向后兼容，不删旧字段）
 skills/reuse-registry.md            # NEW — 合并根目录 reuse-registry.md + config/reuse-registry.md 为唯一权威版本
 reuse-registry.md（根目录）           # DELETE — 迁移后删除，避免双份不同步
@@ -104,7 +104,7 @@ simplicity-guard 四阶梯判断结论（P0-P3 全部走到"改造复用"档）�
 - **风险定级能力**：P0 需要（用户场景明确要求）→ P1 仓库无现成 →P2 checkpoint-protocol 已有 phase 元数据挂载点，改造复用（新增 risk_level 字段挂载）。
 - **L2 集成冒烟**：P0 需要 → P1 agenthub 仓库已有 test-routing-advisor → 直接复用（P1 命中，不进 P2/P3）。
 - **两阶段独立审查**：P0 需要 → P1 无现成拆分实现 → P2 review-trigger + verdict-handler 改造（拆分触发逻辑 + A/B/C 升级判定），复用。
-- **原子提交留痕**：P0 需要 → P1 无现成 → P2 checkpoint-protocol 已有 commit 时机挂载点，改造复用（只取字段落 GREEN.json）。
+- **phase 级提交留痕**：P0 需要 → P1 无现成 → P2 checkpoint-protocol 已有 commit 字段挂载点，改造复用（只取 commit/base/head 字段和 phase-result commit_records 记录方式）。
 
 WHY: 四项能力均选择"改造已有自研技能"而非新造独立组件。
 TRADEOFF: 改造已有技能需要兼容其原有调用方，字段/接口改动需保证向后兼容（已在 data-contracts.md 逐一注明版本兼容规则）。
@@ -122,7 +122,7 @@ JUSTIFICATION: 避免维护面翻倍（宪法 F1 薄核心 + S1 不造轮子）�
 | L2 集成冒烟 | phase 级测试通过但集成层断裂未被发现 | 无（现状无集成层测试） | 冒烟失败不阻断，非门禁，无绕过意义 | 低——复用 agenthub 现成 test-routing-advisor，非自建 | **KEEP** |
 | 两阶段独立审查拆分 | 单链自审自判导致审查盲区（历史教训 m13c 记录在案） | 现状单链 3rd-review 覆盖不足两个正交维度 | 两子代理独立触发，无法用改一处绕过全部；局限是同引擎非异源（已知非阻断） | 中——两套 verdict 文件+A/B/C 升级判定逻辑，维护成本高于单链，但对应真实历史缺陷 | **KEEP** |
 | verdict-handler A/B/C 升级 | 连续失败无自动升级机制，问题被反复忽略 | 无（现状无升级计数逻辑） | 计数逻辑清晰，无法静默绕过（升级触发写入结构化记录） | 低——复用改造 verdict-handler，非新建 | **KEEP** |
-| 原子提交留痕 | 提交历史噪音、无法追溯 phase 对应的 commit 边界 | 无（现状 GREEN.json 无 commit_sha 字段） | 记录事实类字段，非阻断门，无绕过意义 | 低——checkpoint-protocol 改造，只加三字段 | **KEEP** |
+| phase 级提交留痕 | 提交历史噪音、无法追溯 phase 对应的 commit 边界 | 无（现状 GREEN.json 无 commit_sha 字段，phase-result 无 commit_records 事实） | 记录事实类字段，phase-gate 只校验 concrete completion facts | 低——checkpoint-protocol 改造，只加字段和 commit_records 契约 | **KEEP** |
 | mtime 时序防伪（对照组，已移除） | 意图防止证据文件被篡改时间戳 | 无原生机制 | **可被 `touch -t` 直接绕过**，跨文件系统精度不一致 | 维护成本存在但换不来真实防御 | **PRUNE**（已被用户决策移除，不在本计划范围内，列此行仅作 F10 判断对照） |
 
 结论：本计划新增的 5 项机制全部通过 F10 四问，判定 KEEP；唯一未通过的 mtime 防伪机制已在 build-spec 阶段被移除，不在本轮实施范围内。
@@ -163,8 +163,8 @@ JUSTIFICATION: 避免维护面翻倍（宪法 F1 薄核心 + S1 不造轮子）�
 **Files**: `workflows/build-code/SKILL.md`
 **Maps to**: FR-REVIEW-002, AC-REVIEW-006
 
-#### 2.5: 原子提交留痕
-描述：提交时机收敛在 orchestrating skill 层，语义完整点才 commit；`commit_sha`/`base_sha`/`head_sha` 写入 GREEN.json，实现子代理不得自行 commit。
+#### 2.5: phase 级提交留痕
+描述：file-changing phase 由 phase executor 在当前 phase 内完成 phase-scoped implementation commit；`commit_sha`/`base_sha`/`head_sha` 字段保留在 GREEN.json，最终 `PHASE_RESULT.commit_records[]` 必须记录当前 phase 的真实 implementation commit；orchestrating skill 只复核，不做常规 implementation commit，并汇总到 stage-result `facts.phase_completion`。
 **Files**: `workflows/build-code/SKILL.md`，`workflows/build-code/capture.mjs`
 **Maps to**: FR-COMMIT-001
 
@@ -195,7 +195,7 @@ JUSTIFICATION: 避免维护面翻倍（宪法 F1 薄核心 + S1 不造轮子）�
 | 2.2 L2 集成冒烟 | FR-SMOKE-001 | AC-SMOKE-001, AC-SMOKE-002, AC-SMOKE-003 |
 | 2.3 两阶段独立审查 | FR-REVIEW-001 | AC-REVIEW-001, AC-REVIEW-002, AC-REVIEW-003 |
 | 2.4 verdict-handler A/B/C | FR-REVIEW-002 | AC-REVIEW-004, AC-REVIEW-005, AC-REVIEW-006 |
-| 2.5 原子提交留痕 | FR-COMMIT-001 | （spec §4 对应 AC，字段落 GREEN.json） |
+| 2.5 phase 级提交留痕 | FR-COMMIT-001 | （spec §4 对应 AC，字段落 GREEN.json、PHASE_RESULT.commit_records 与 stage-result facts.phase_completion） |
 | 2.6 worktree 协议对齐 | FR-WORKTREE-001 | worktree.json 已验证复用成功（决策阶段验收标准）；AC-WORKTREE-003（checkout 失败不写文件） |
 | 3.1 文档一致性核对 | 跨 FR | 全部 evidence 字段命名与 data-contracts.md 一致 |
 | 3.2 单测补充 | 跨 FR | AC-RISK-001, AC-SMOKE-001, AC-SMOKE-003, AC-METRICS-001~003 |

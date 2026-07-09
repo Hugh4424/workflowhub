@@ -1,0 +1,56 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "tasks/wh-quality-convergence/stage-result-build-code.json",
+      "line": 7,
+      "issue": "Current receipt verification is not closed: the worktree contains `tasks/wh-quality-convergence/reviews/review-input-verify-code-final-r2.json`, but `facts.changed` omits it. Running `node scripts/validate-stage-result.mjs build-code tasks/wh-quality-convergence/stage-result-build-code.json .` fails with declared changed files not matching git diff. This contradicts the submitted claim that receipt checks are passing and real.",
+      "recommendation": "Regenerate `stage-result-build-code.json` after creating the round-2 review input, include every current changed/untracked file in `facts.changed`, recompute `diff_sha`, then rerun the receipt check and full tests from that exact worktree state."
+    }
+  ],
+  "resolutionSummary": "Previous `no_code_change` issue is mostly addressed and build-code SKILL now requires `WORKFLOWHUB_DIFF_BASE` with `{ baseRef }`. Active wh-quality-convergence spec no longer uses Multica terminology in the reviewed paths. Blocking issue remains: fresh receipt verification fails against the current worktree because the stage-result changed list is stale.",
+  "reviewSnapshot": [
+    {
+      "path": "review-input-verify-code-final-r2.json",
+      "hash": null,
+      "lines": 2236,
+      "truncated": true,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "review-input-verify-code-final-r2.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

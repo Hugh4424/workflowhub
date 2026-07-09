@@ -7,6 +7,7 @@
  *   - check-contract      (FR-NC-005)
  *   - check-metrics-schema (M4 FR-CI-001/002)
  *   - check-stage-quality  (M5 FR-GATE-001/002)
+ *   - check-task-record-paths (FR-TASKDIR-001)
  *
  * Modes:
  *   node scripts/run-checks.mjs            — aggregate mode (default)
@@ -67,6 +68,23 @@ function runChecker(checkerName, checkerArgs) {
   return result.status ?? 1;
 }
 
+function retryTransientCheckerFailure(checkerName, checkerArgs, code) {
+  if (code === 0 || checkerName !== "check-extensibility") return code;
+
+  // check-extensibility.test intentionally mutates core/kernel.mjs for a
+  // falsifiability window. Full-suite runs can overlap this aggregate check;
+  // bounded short retries remove that transient race while persistent core
+  // diffs still fail.
+  let nextCode = code;
+  const blocker = new Int32Array(new SharedArrayBuffer(4));
+  for (let attempt = 1; attempt <= 6 && nextCode !== 0; attempt += 1) {
+    Atomics.wait(blocker, 0, 0, 750);
+    console.log(`[run-checks] retrying ${checkerName} after transient failure (${attempt}/6) ...`);
+    nextCode = runChecker(checkerName, checkerArgs);
+  }
+  return nextCode;
+}
+
 // ---------------------------------------------------------------------------
 // Aggregate mode (default)
 // ---------------------------------------------------------------------------
@@ -83,7 +101,11 @@ function runAggregate() {
 
   // 2. check-extensibility (no args, CLI self-builds tmpdir config)
   console.log("[run-checks] running check-extensibility ...");
-  const extCode = runChecker("check-extensibility", []);
+  const extCode = retryTransientCheckerFailure(
+    "check-extensibility",
+    [],
+    runChecker("check-extensibility", [])
+  );
   if (extCode !== 0) {
     failures.push({ name: "check-extensibility", code: extCode });
   }
@@ -107,6 +129,13 @@ function runAggregate() {
   const stageQualityCode = runChecker("check-stage-quality", []);
   if (stageQualityCode !== 0) {
     failures.push({ name: "check-stage-quality", code: stageQualityCode });
+  }
+
+  // 6. check-task-record-paths (FR-TASKDIR-001 — all stage records use canonical task_dir)
+  console.log("[run-checks] running check-task-record-paths ...");
+  const taskRecordPathsCode = runChecker("check-task-record-paths", []);
+  if (taskRecordPathsCode !== 0) {
+    failures.push({ name: "check-task-record-paths", code: taskRecordPathsCode });
   }
 
   if (failures.length === 0) {

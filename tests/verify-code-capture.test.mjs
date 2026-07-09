@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { runCapture } from '../workflows/verify-code/capture.mjs';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const STUB_SHA = '0'.repeat(40);
+const CAPTURE_MJS = fileURLToPath(new URL('../workflows/verify-code/capture.mjs', import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 let tmpDir;
 
@@ -52,6 +56,20 @@ describe('runCapture', () => {
     const parsed = JSON.parse(raw);
     expect(parsed.exit_code).toBe(1);
     expect(parsed.command).toBe('exit 1');
+  });
+
+  it('should write stdout/stderr sidecars next to the JSON evidence', async () => {
+    const outPath = join(tmpDir, 'sidecars.json');
+    await runCapture(
+      `node -e "process.stdout.write('out'); process.stderr.write('err')"`,
+      outPath,
+      { cwd: tmpDir, gitSha: STUB_SHA }
+    );
+    const parsed = JSON.parse(readFileSync(outPath, 'utf-8'));
+    expect(parsed.stdout_path).toBe(`${outPath}.stdout`);
+    expect(parsed.stderr_path).toBe(`${outPath}.stderr`);
+    expect(readFileSync(`${outPath}.stdout`, 'utf-8')).toBe('out');
+    expect(readFileSync(`${outPath}.stderr`, 'utf-8')).toBe('err');
   });
 
   it('should create outputPath directory if it does not exist', async () => {
@@ -148,5 +166,33 @@ describe('runCapture', () => {
     const cmd = 'echo "specific command"';
     const result = await runCapture(cmd, outPath, { cwd: tmpDir, gitSha: STUB_SHA });
     expect(result.command).toBe(cmd);
+  });
+
+  it('CLI writes JSON evidence for a successful command', () => {
+    const outPath = join(tmpDir, 'cli-success.json');
+    const proc = spawnSync(
+      process.execPath,
+      [CAPTURE_MJS, 'echo "cli ok"', outPath, REPO_ROOT],
+      { encoding: 'utf8' }
+    );
+    expect(proc.status, proc.stderr).toBe(0);
+    expect(existsSync(outPath)).toBe(true);
+    const parsed = JSON.parse(readFileSync(outPath, 'utf-8'));
+    expect(parsed.command).toBe('echo "cli ok"');
+    expect(parsed.exit_code).toBe(0);
+    expect(parsed.cwd).toBe(REPO_ROOT);
+  });
+
+  it('CLI still writes JSON evidence for a failing command and exits with that code', () => {
+    const outPath = join(tmpDir, 'cli-fail.json');
+    const proc = spawnSync(
+      process.execPath,
+      [CAPTURE_MJS, 'node -e "process.exit(7)"', outPath, REPO_ROOT],
+      { encoding: 'utf8' }
+    );
+    expect(proc.status).toBe(7);
+    expect(existsSync(outPath)).toBe(true);
+    const parsed = JSON.parse(readFileSync(outPath, 'utf-8'));
+    expect(parsed.exit_code).toBe(7);
   });
 });

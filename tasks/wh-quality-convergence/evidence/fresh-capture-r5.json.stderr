@@ -1,0 +1,38 @@
+[collectFacts warn] review_invoked not derivable for exec-9; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-cold; defaulting to false.
+[boundary-confirm warn] boundary decision write failed for exec-bound-writefail
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:2d8c0eea-c043-43e3-a9e6-4306c7c9dc32:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-d; defaulting to false.
+[receipt-writer] receipt_write_warn could not be written (disk full); original error: disk full
+[collectFacts warn] review_invoked not derivable for exec-h; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:3d698eb9-5353-42da-9ba5-3b3af82fe330:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-gap; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:3d698eb9-5353-42da-9ba5-3b3af82fe330:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:3d698eb9-5353-42da-9ba5-3b3af82fe330:round3; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:b8e7c94e-6c30-4928-9e87-3a81f0408972:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:b8e7c94e-6c30-4928-9e87-3a81f0408972:round2; defaulting to false.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b4b294ed-58db-4a05-8144-b0eb6a518dc1/task-dir-parser-config-test-9HKAAM/fake-home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[task-dir-parser] FAIL: 配置有问题 (config.json malformed)
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:b8e7c94e-6c30-4928-9e87-3a81f0408972:round3; defaulting to false.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b4b294ed-58db-4a05-8144-b0eb6a518dc1/task-dir-parser-config-test-GsU9YY/fake-home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:e9e000c7-b2ad-4483-bc76-2e32bb0b74dd:round1; defaulting to false.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b4b294ed-58db-4a05-8144-b0eb6a518dc1/task-dir-parser-config-test-Naop1V/fake-home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[task-dir-parser] FAIL: path does not exist (source: config.json (/Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b4b294ed-58db-4a05-8144-b0eb6a518dc1/task-dir-parser-config-test-EJKofu/fake-home/.workflowhub/config.json)): /nonexistent-config-task-dir-1783577133007
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:e9e000c7-b2ad-4483-bc76-2e32bb0b74dd:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:e9e000c7-b2ad-4483-bc76-2e32bb0b74dd:round3; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:66757bd6-369c-4fbe-8312-df86440f2147:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:66757bd6-369c-4fbe-8312-df86440f2147:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:66757bd6-369c-4fbe-8312-df86440f2147:round3; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6548a5cb-66ba-4893-8ee5-5269a4feaa39:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6548a5cb-66ba-4893-8ee5-5269a4feaa39:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:make-decision:31fcf09d-786b-4350-afb3-2a2018b7e3fa:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-facts-001; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6c31d0b0-cd35-4de2-8399-b1d45852b717:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-facts-002; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6c31d0b0-cd35-4de2-8399-b1d45852b717:round2; defaulting to false.
+[collectFacts warn] fact write failed for exec-facts-003
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6c31d0b0-cd35-4de2-8399-b1d45852b717:round3; defaulting to false.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b4b294ed-58db-4a05-8144-b0eb6a518dc1/task-dir-parser-test-6TVK2i/home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[task-dir-parser] FAIL: path does not exist (source: WORKFLOWHUB_TASK_DIR): /nonexistent-task-dir-1783577133749
+[task-dir-parser] FAIL: path exists but is not a directory (source: WORKFLOWHUB_TASK_DIR): /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b4b294ed-58db-4a05-8144-b0eb6a518dc1/task-dir-parser-test-wxauLd/not-a-dir.txt
+[collectFacts warn] review_invoked not derivable for smoke-test-exec-id-001; defaulting to false.

@@ -24,7 +24,7 @@ function failLoud(message) {
 /**
  * Decide whether an existing worktree.json may be reused for the given task-id.
  *
- * @param {string} worktreeJsonPath - Absolute path to {task_tracking_root}/tasks/{task-id}/worktree.json
+ * @param {string} worktreeJsonPath - Absolute path to {task_tracking_root}/{task-id}/worktree.json
  * @param {string} currentTargetRepoRoot - Absolute path to the target repo root for THIS invocation.
  * @param {string} taskId - The task-id being resolved (for error messages only).
  * @returns {{action: "create"|"reuse", worktree: object|null}} Never returns on fail-loud (process.exit(1)).

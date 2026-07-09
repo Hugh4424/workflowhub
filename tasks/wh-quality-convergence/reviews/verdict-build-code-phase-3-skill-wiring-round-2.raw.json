@@ -1,0 +1,37 @@
+{
+  "verdict": "pass",
+  "findings": [],
+  "resolutionSummary": "Round 1 blocking findings are fixed: build-code now runs receipt verification before advancing to verify-code, and tests assert stage-result write < verifyReceipts < next-stage marker. Phase 3 receipt wiring stays within allowed paths, stage names match, host-verified RED/GREEN evidence is reasonable, and no new blocking issue was found.",
+  "reviewSnapshot": [
+    {
+      "path": "diff.json",
+      "hash": null,
+      "lines": 89,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "diff.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

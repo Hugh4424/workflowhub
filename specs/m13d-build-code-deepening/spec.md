@@ -20,10 +20,10 @@ spec_version: 1.0.0
 
 ## 速读卡（30 秒看懂这个需求）
 
-**一句话需求**：在 `workflows/build-code/SKILL.md` 中补齐三项质量能力——P0-P3 风险定级、L2 集成冒烟、两阶段独立审查+原子提交，同时修复 worktree 创建时机使跨任务并行成为可能，并将 reuse-registry.md 统一迁移至 `skills/`。（mtime 时序防伪机制已按用户决策移除，见 §Known Gaps / f10-findings.md：安全剧场风险，touch 即可绕过）
+**一句话需求**：在 `workflows/build-code/SKILL.md` 中补齐三项质量能力——P0-P3 风险定级、L2 集成冒烟、两阶段独立审查+phase 级提交留痕，同时修复 worktree 创建时机使跨任务并行成为可能，并将 reuse-registry.md 统一迁移至 `skills/`。（mtime 时序防伪机制已按用户决策移除，见 §Known Gaps / f10-findings.md：安全剧场风险，touch 即可绕过）
 
 **核心改动点**：
-1. `workflows/build-code/SKILL.md`：新增 §1 风险定级、§L2 冒烟、两阶段审查子代理拆分、原子提交规则
+1. `workflows/build-code/SKILL.md`：新增 §1 风险定级、§L2 冒烟、两阶段审查子代理拆分、phase 级提交留痕规则
 2. `metrics/capture.mjs`：新增 commit_sha / base_sha / head_sha / risk_level 四字段
 3. `skills/reuse-registry.md`：新建并迁移合并原有两份重复文件，补登记三个复用技能
 4. worktree 状态文件 `tasks/{task-id}/worktree.json`：跨阶段共享，make-decision 阶段已建
@@ -56,7 +56,7 @@ spec_version: 1.0.0
 | P0-P3 风险定级 | 高风险 phase 缺测试覆盖导致假绿 | 无（现有 TDD 无优先级区分）| 若跳过读 facts.tasks 可绕过，但行为被记录可追溯 | 低：只读字段、写结论，无新基础设施 |
 | L2 集成冒烟 | 单元绿但集成边界失效 | 无（现有只有 L1 TDD）| 可不触发，但结果记入 evidence 留痕 | 中：需维护 test-routing-advisor 三档逻辑（agenthub 仓库跨仓依赖，来源已定位） |
 | 两阶段独立审查 | 单链审查视角盲区 | 已有单链 3rd-review（不拆分）| 两子代理共用同引擎不构成异源，已用户确认接受 | 中：多一个子代理生命周期 |
-| 原子提交 | phase 产物散落无法追溯 | 现有无提交约束 | orchestrating skill 控制提交时机，实现子代理被禁止 | 低：commit 动作集中在一处 |
+| phase 级提交留痕 | phase 产物散落无法追溯 | 现有无提交约束 | phase executor 在当前 phase 内提交 implementation commit，orchestrating skill 复核 | 低：commit 边界绑定当前 phase |
 | worktree 预建 | 按需建导致任务间抢 repo | 现有 M13c 方案被用户否决 | 无绕过路径（状态文件为 source of truth）| 低：一次建、四阶段复用 |
 
 结论：所有六项机制均有真实防御对象，均无现有覆盖，均由 SKILL.md 执行层强制记录（非 bash 门禁），维护成本合理。无过度工程 finding。
@@ -117,9 +117,9 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
 
 给定某 phase/stage 的某个独立审查子代理，当同一子代理连续 3 次返回 revise_required 时，则 verdict-handler 将该事件分类为 C 类，触发 escalate_to_human，不再继续自动循环。
 
-### 场景 F：原子提交 commit_sha 写入 GREEN.json
+### 场景 F：phase 级提交留痕写入 PHASE_RESULT
 
-给定 phase GREEN 确认后，当 orchestrating skill（非实现子代理）执行原子提交时，则 commit_sha 写入当前 phase 的 GREEN.json，evidence JSON 同时含 base_sha / head_sha，实现子代理在整个 phase 周期内禁止自行提交。
+给定 phase GREEN、diff scan、异源审查均通过后，当 phase executor 执行当前 phase 的 implementation commit，则 PHASE_RESULT.commit_records 写入当前 phase_id 的 commit_sha，evidence JSON 同时保留 base_sha / head_sha / commit_sha 字段；orchestrating skill 复核该记录和 phase-gate 后才推进下一 phase。
 
 ### 场景 G：worktree 跨任务并行不冲突
 
@@ -204,19 +204,20 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
 
 ---
 
-### FR-COMMIT-001：原子提交由 orchestrating skill 统一执行
+### FR-COMMIT-001：phase 级提交由 phase executor 闭环执行，orchestrating skill 复核
 
-**描述**：每个 phase GREEN 确认后，由 orchestrating skill 执行原子提交，commit_sha 写入 GREEN.json，evidence JSON 含 base_sha / head_sha。实现子代理（implementer）在 phase 周期内禁止自行提交。
+**描述**：每个 file-changing phase 在 RED/GREEN、diff scan、异源审查通过后，由当前 phase executor 执行 phase-scoped implementation commit，并把 commit_sha 写入 PHASE_RESULT.commit_records。evidence JSON 保留 base_sha / head_sha / commit_sha 字段；commit_sha 在 GREEN capture 时可为 null，但最终 phase-result 必须记录真实 implementation commit。orchestrating skill 只复核 commit/no-change 记录和 phase-gate 结果，不做常规 implementation commit，并把通过的记录汇总到 stage-result facts.phase_completion。
 
 **场景**：
 - Given: phase GREEN 确认完成
-- When: orchestrating skill 执行原子提交
-- Then: commit_sha 写入 GREEN.json，base_sha 和 head_sha 写入相应 evidence JSON，实现子代理在此前整个 phase 周期内未执行任何 git commit
+- When: diff scan 和异源审查通过
+- Then: phase executor 执行当前 phase 的 implementation commit，PHASE_RESULT.commit_records 写入该 phase_id 的 commit_sha，orchestrating skill 复核该记录并复制到 stage-result facts.phase_completion 后才允许推进下一 phase
 
 **验收条件**：
-- AC-COMMIT-001: GREEN.json 含 commit_sha 字段，值为合法 git commit SHA
+- AC-COMMIT-001: GREEN.json 含 commit_sha 字段，字段可为 null；最终 PHASE_RESULT.commit_records 含当前 phase 的合法 git commit SHA
 - AC-COMMIT-002: evidence JSON 含 base_sha（提交前最后一个 SHA）和 head_sha（提交后 SHA）
-- AC-COMMIT-003: SKILL.md 中实现子代理（implementer）段落存在"DO NOT commit"或等效禁止指令
+- AC-COMMIT-003: SKILL.md 中 phase executor 段落要求 file-changing phase 完成 phase-scoped implementation commit；orchestrating skill 段落只允许复核，禁止常规 implementation commit
+- AC-COMMIT-004: build-code stage-result facts.phase_completion 含 commit_records[] 和 no_change_records[]，下游可稳定消费
 
 ---
 
@@ -319,7 +320,7 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
 
 | 受影响模块 | 变更类型 | 影响描述 |
 |---|---|---|
-| workflows/build-code/SKILL.md | 内容修订 | 主要改动：新增 §1 风险定级、L2 冒烟、两阶段审查、原子提交四个新机制 |
+| workflows/build-code/SKILL.md | 内容修订 | 主要改动：新增 §1 风险定级、L2 冒烟、两阶段审查、phase 级提交留痕四个新机制 |
 | metrics/capture.mjs | 字段扩展 | 新增四字段，向后兼容，不影响现有字段读写 |
 | skills/reuse-registry.md | 新建 + 迁移 | 合并两个旧文件，删除旧位置（不可逆，build-code 实施阶段执行） |
 | tasks/{task-id}/worktree.json | 新协议约定 | 跨 4 个阶段（build-spec/plan/code/verify）均需先读此文件 |
@@ -342,7 +343,7 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
 ### 隐性必达
 
 - 所有质量检查均为"记录事实、不阻断"（宪法原则）：L2 冒烟失败、risk_level P0 提示——均记录，不自动阻断 build-code 继续，只有 escalate_to_human 情况才停等人工
-- 实现子代理（implementer）在 phase 周期内禁止自行 git commit（FR-COMMIT-001 隐性边界）
+- phase executor 在当前 phase 内负责 phase-scoped implementation commit；orchestrating skill 只复核 commit/no-change 记录和 phase-gate，禁止常规 implementation commit（FR-COMMIT-001 隐性边界）
 - 字段扩展不破坏 metrics/capture.mjs 现有字段（向后兼容）
 - `skills/reuse-registry.md` 内三个条目（review-trigger/verdict-handler/checkpoint-protocol）均为本项目自研，来源字段标注"本项目自研"，不写成外部 URL
 
@@ -366,9 +367,10 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
 | AC-REVIEW-004 | A/B/C 分类阈值明确写入 SKILL.md | SKILL.md 无 A/B/C 分类说明 | FR-REVIEW-002 |
 | AC-REVIEW-005 | C 类触发时产出升级记录 | C 类触发无结构化记录 | FR-REVIEW-002 |
 | AC-REVIEW-006 | escalate_to_human 后不自动推进 | 升级后仍自动继续循环 | FR-REVIEW-002 |
-| AC-COMMIT-001 | GREEN.json 含 commit_sha | commit_sha 字段缺失或为空 | FR-COMMIT-001 |
+| AC-COMMIT-001 | GREEN.json 含 commit_sha 字段；最终 PHASE_RESULT.commit_records 含当前 phase 的真实 commit_sha | 字段缺失，或 file-changing phase 没有当前 phase 的真实 commit_sha | FR-COMMIT-001 |
 | AC-COMMIT-002 | evidence JSON 含 base_sha / head_sha | 任一字段缺失 | FR-COMMIT-001 |
-| AC-COMMIT-003 | SKILL.md 实现子代理段存在禁止提交指令 | 无"DO NOT commit"或等效指令 | FR-COMMIT-001 |
+| AC-COMMIT-003 | SKILL.md 明确 phase executor 拥有 phase-scoped implementation commit，orchestrating skill 只复核 | 仍要求实现子代理不得 commit，或要求 coordinator 做常规 implementation commit | FR-COMMIT-001 |
+| AC-COMMIT-004 | stage-result facts.phase_completion 含 commit_records[] 和 no_change_records[] | 下游只能从临时 PHASE_RESULT 或评论推断 commit/no-change 事实 | FR-COMMIT-001 |
 | AC-WORKTREE-001 | 两 task 并行时 worktree_root 路径不冲突 | 两 task 使用同一路径 | FR-WORKTREE-001 |
 | AC-WORKTREE-002 | worktree.json 含三个必填字段 | 任一字段缺失 | FR-WORKTREE-001 |
 | AC-WORKTREE-003 | checkout 失败时不写 worktree.json | 失败时写入损坏/空文件 | FR-WORKTREE-001 |
@@ -420,7 +422,7 @@ v3 设计文档（`.stage-deepening-milestones-v3.md` M13d 段）给出的字段
    - 状态：FR-REVIEW-002"禁止自审自判"要求的异源独立审查已真实执行，发现的 2 项问题已修复
 
 5. ~~test-routing-advisor 具体来源不明~~ — **已关闭**
-   - 事实：已核实该技能不在本仓库 `skills/` 目录下，但已在 agenthub 仓库定位到源文件：`multica-agenthub/packages/core/agenthub/skills/test-routing-advisor/SKILL.md`。是同一技术体系（agenthub → workflowhub）内的跨仓库依赖，不是无主外部黑盒
+   - 事实：已核实该技能不在本仓库 `skills/` 目录下，但已在 AgentHub 仓库定位到源文件：`packages/core/agenthub/skills/test-routing-advisor/SKILL.md`。是同一技术体系（agenthub → workflowhub）内的跨仓库依赖，不是无主外部黑盒
    - 影响：L2 集成冒烟（FR-SMOKE-001）依赖此技能，维护主体明确为 agenthub 仓库，跨仓库依赖需在 build-plan 阶段声明版本/路径锁定，非无主风险
    - 状态：来源已定位，不再是待议项
 

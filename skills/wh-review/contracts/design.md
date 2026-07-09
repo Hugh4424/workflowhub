@@ -161,8 +161,8 @@ required skill 不可用且 SKILL.md 文件不可读 → `escalate_to_human`。p
 
 > 迁移自源合同的「Knowledge 路径规则」；路径解析方式已改为 workflowhub 的 `core/task-dir-parser.mjs`，判断标准（禁止硬编码路径、task 目录归属）保持不变。
 
-- 正确 project root 为 `task_tracking_root`，由 `core/task-dir-parser.mjs` 的 `parseTaskDir()` 解析：优先取 `WORKFLOWHUB_TASK_DIR` 环境变量，否则回退 `config/workflowhub.yaml` 的 `task_dir` 字段，二者皆缺则 fail-loud（非零退出）。
-- task 文件位于 `tasks/{task-id}/`（相对 task_tracking_root 拼接，不得再自行拼接第二套路径方案）；`task-id` 必须匹配 `^[A-Za-z0-9._-]+$`（无路径分隔符、无 `..`），不满足即视为调用方 bug，fail-loud，不得静默纠正。
+- 正确 project root 为 `task_tracking_root`，由 `core/task-dir-parser.mjs` 的 `parseTaskDir()` 解析：优先取 `WORKFLOWHUB_TASK_DIR` 环境变量作为直接根，否则回退 `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config 值是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器返回项目级 task_tracking_root；二者皆缺则 fail-loud（非零退出）。
+- task 文件位于 `{task_tracking_root}/{task-id}/`（不得再自行拼接第二套路径方案）；`task-id` 必须匹配 `^[A-Za-z0-9._-]+$`（无路径分隔符、无 `..`），不满足即视为调用方 bug，fail-loud，不得静默纠正。
 - 出现绕过 `parseTaskDir()` 解析结果、直接硬编码绝对路径当作 task_tracking_root → `escalate_to_human`。
 - 禁止把 repo 内 `specs/{feature}/spec.md` 当 task 目录。
 

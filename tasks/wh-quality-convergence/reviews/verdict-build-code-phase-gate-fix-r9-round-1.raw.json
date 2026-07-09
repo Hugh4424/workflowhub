@@ -1,0 +1,51 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "scripts/phase-gate.mjs",
+      "line": 201,
+      "issue": "phase gate accepts HEAD^ as the implementation commit when HEAD contains phase-result.json, but it does not verify that HEAD is only the same-phase tracking-artifact commit. Any commit that includes phase-result.json plus unrelated source changes passes as a tracking commit. This violates the documented order in workflows/build-code/SKILL.md: commit only the tracking artifacts before running the gate. It also leaves a direct bypass for half-recorded or unrelated changes.",
+      "recommendation": "Change isTrackingCommit to require every file in HEAD to be allowed tracking artifact for this phase, not just some file ending with phase-result.json. Add a regression test where HEAD contains phase-result.json plus an unrelated file and the gate fails."
+    }
+  ],
+  "resolutionSummary": "Tests pass, but phase-gate has a blocking correctness gap in the HEAD^ tracking-commit allowance. I also reproduced the bypass with a temporary git repo: a HEAD commit containing phase-result.json plus unrelated-source-change.txt returned ok:true.",
+  "reviewSnapshot": [
+    {
+      "path": "diff.json",
+      "hash": null,
+      "lines": 961,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "diff.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

@@ -7,7 +7,8 @@
 | 契约名 | Owner 侧 | Consumer 侧 | 必填字段 | 校验规则 | 版本兼容 |
 |---|---|---|---|---|---|
 | phase-N-RED.json | build-code orchestrating skill | verify-code / M13e 查痕 | phase_id, content_hash, ts, risk_level | risk_level ∈ {P0,P1,P2,P3}；字段必须存在，值可暂缺但不可省字段 | 新增 risk_level，向后兼容旧文件（历史文件无此字段时按缺失处理，不报错） |
-| phase-N-GREEN.json | build-code orchestrating skill | verify-code / M13e 查痕 | phase_id, content_hash, ts, risk_level, commit_sha, base_sha, head_sha | commit_sha 须为合法 git SHA；base_sha/head_sha 成对出现 | 新增四字段（commit_sha/base_sha/head_sha/risk_level），旧字段不变 |
+| phase-N-GREEN.json | build-code phase executor / capture | verify-code / M13e 查痕 | phase_id, content_hash, ts, risk_level, commit_sha, base_sha, head_sha | commit_sha 字段必须存在但可为 null；最终 implementation commit 以 PHASE_RESULT.commit_records 为准；base_sha/head_sha 成对出现 | 新增四字段（commit_sha/base_sha/head_sha/risk_level），旧字段不变 |
+| stage-result-build-code.json facts.phase_completion | build-code orchestrating skill | verify-code / M13e 查痕 | commit_records[], no_change_records[] | 两数组必须存在；至少一条记录；commit_records 条目含 phase_id + 40-hex commit_sha；no_change_records 条目含 phase_id + no_change_reason | 新增结构化 completion facts，供下游稳定消费 |
 | l2-integration-test-report.json | build-code（test-routing-advisor 触发） | verify-code / M13e 查痕 | routing_tier, routing_rationale, result(pass/fail), ts | routing_tier ∈ {simple,feature,fullstack}；**routing_rationale 为非空字符串，说明为何选此档位（AC-SMOKE-003 可追溯性要求）**；result 失败不阻断 | 新文件，无历史版本 |
 | spec-compliance-verdict.md | 独立审查子代理1（3rd-review） | build-code orchestrating skill / verdict-handler | verdict(pass/revise_required), findings | 仅含 spec 合规性维度，不与 code-quality 交叉 | 新文件 |
 | code-quality-verdict.md | 独立审查子代理2（3rd-review） | build-code orchestrating skill / verdict-handler | verdict(pass/revise_required), findings | 仅含代码质量维度，不与 spec-compliance 交叉 | 新文件 |
@@ -28,7 +29,7 @@
 
 | 契约名 | Owner 侧 | Consumer 侧 | 必填字段 | 校验规则 | 版本兼容 |
 |---|---|---|---|---|---|
-| capture.mjs 输出扩展 | `workflows/build-code/capture.mjs`（spec.md 泛称"metrics/capture.mjs"，仓库实际路径以此为准，独立审查发现后订正） | build-code orchestrating skill / evidence JSON | commit_sha, base_sha, head_sha, risk_level | 值可为 null 但字段必须存在 | 向后兼容，现有 command/cwd/git_sha/exit_code/timestamp/content_hash/anomaly_flags 字段不变 |
+| capture.mjs 输出扩展 | `workflows/build-code/capture.mjs`（spec.md 泛称"metrics/capture.mjs"，仓库实际路径以此为准，独立审查发现后订正） | phase executor / evidence JSON | commit_sha, base_sha, head_sha, risk_level | 值可为 null 但字段必须存在 | 向后兼容，现有 command/cwd/git_sha/exit_code/timestamp/content_hash/anomaly_flags 字段不变 |
 
 ## 5. skills/reuse-registry.md 条目格式
 

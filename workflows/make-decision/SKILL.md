@@ -16,7 +16,7 @@ description: Clarify requirements with the user via structured debate/review护�
 | `THIRD_REVIEW_RUNNER` | `run-heterologous-review.mjs` | 自定义 reviewer runner 文件路径；文件不可达时记录 `runner_invalid`，用默认 runner，继续 | `export THIRD_REVIEW_RUNNER=/path/to/runner.mjs` |
 | `REVIEW_DISPATCH_CONFIG` | （空，走内置默认调度） | 允许值：有效 JSON/YAML **配置文件路径**；文件不可达或解析失败时记录 `dispatch_config_invalid`，用默认调度继续；缺省为空时 3rd-review 使用内部默认调度 | `export REVIEW_DISPATCH_CONFIG=/path/to/dispatch.json` |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
-| `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` 的 `task_dir` 字段；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
+| `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量（直接 task root）→ `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器会基于当前 git remote / `repo_root_map` 返回项目级 task root；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
 
 ## Metrics — Stage Start（最前置步骤）
 
@@ -61,15 +61,17 @@ Work with the user to surface the real problem, agree on the narrowest viable sc
 
 ## S0 背景扎根
 
-**task_dir parser (AC-16)**: 在读取或写入任何任务跟踪文件前，必须通过 `core/task-dir-parser.mjs` 获取基础路径，禁止硬编码 `tasks/{task-id}/`。
+**task record path bootstrap (AC-16 / FR-TASKDIR-001)**: 在读取、搜索、创建、或写入任何任务执行记录前，必须先通过 `core/task-record-paths.mjs` 解析当前任务目录；该入口内部调用 `parseTaskDir()`，并把 `~/.workflowhub/config.json` 的全局 Knowledge `task_dir` 自动落到 `Projects/<project-key>/tasks`。
 
 ```javascript
-// AC-16 consumable call — grep: parseTaskDir
-import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // reads WORKFLOWHUB_TASK_DIR env var; missing → fail-loud, no fallback
+// AC-16 consumable call — grep: resolveTaskRecordPaths
+import { resolveTaskRecordPaths } from "./core/task-record-paths.mjs";
+const taskRecords = resolveTaskRecordPaths(taskId);
+const taskDir = taskRecords.task_tracking_root;
+const taskRoot = taskRecords.task_root;
 ```
 
-本 skill 中所有 `tasks/{task-id}/` 路径均为速记写法，运行时必须使用 `path.join(taskDir, taskId, ...)` 构造实际路径。
+本 skill 中所有 `tasks/{task-id}/` 路径均为文档速记写法。运行时必须使用 `taskRecords.*` 或 `path.join(taskRoot, ...)` 构造实际路径。不得在 repo-local `tasks/` 下查找或落盘任务执行记录，除非 `resolveTaskRecordPaths(taskId).task_tracking_root` 本身返回的就是该目录。
 
 **目标**：加载当前任务上下文，建立调研基础。
 
@@ -231,6 +233,7 @@ Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.m
    6. **开放问题** — items still ambiguous or awaiting approval.
    7. **验收标准** — acceptance criteria verifiable after implementation.
 3. Record the path of this file as facts key `decision_log_path`.
+4. Record `flow_profile` in `decision-log.md` as a 字符串 field on the task's decision record, using `full_vibecoding` or `fast_make_decision_to_code` as the suggested values. This is an informational placeholder only.
 
 ## Produce stage-result
 
@@ -244,13 +247,21 @@ When the stage is complete, write a `stage-result` record with:
   "facts": {
     "decision": "<one-sentence summary of the agreed direction>",
     "scope": "<brief description of what is in scope and what is explicitly excluded>",
-    "decision_log_path": "tasks/<task>/decision-log.md"
+    "decision_log_path": "tasks/<task>/decision-log.md",
+    "flow_profile": "<full_vibecoding | fast_make_decision_to_code>"
   },
   "missing_items": [],
   "user_decision": true,
   "reason": "User confirmed direction and scope."
 }
 ```
+
+`facts.flow_profile` contract:
+
+- `flow_profile` is required and must be a 字符串. If the field is 缺失 or 非字符串, fail-loud before handing off to downstream stages.
+- Suggested values are `full_vibecoding` and `fast_make_decision_to_code`, but this round does 不做枚举约束; 枚举校验逻辑接入推迟.
+- Downstream build-spec/build-plan/build-code/verify-code may read `flow_profile` as 只读 context only: 不得写入, 不得校验, 不得据此分支, 不得阻断.
+- `flow_profile` 本轮不驱动任何行为差异.
 
 Also record a metrics entry via the collector. Call `recordSkeleton` at stage start and `updateOwnResult` at stage end, passing at minimum:
 
@@ -534,16 +545,16 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 
 ### 2. 确定写入根目录
 
-通过 `core/task-dir-parser.mjs` 解析 `taskDir`（即 task_tracking_root），以确定本次任务跟踪文件写入根目录：
+通过 `core/task-record-paths.mjs` 解析 `taskRecords`，以确定本次任务跟踪文件写入根目录：
 
-- 优先级 1：`WORKFLOWHUB_TASK_DIR` 环境变量（已设置且非空时直接使用，无 `/tasks` 后缀截断）
-- 优先级 2：`config/workflowhub.yaml` 的 `task_dir` 字段（yaml fallback，自动截断 trailing `/tasks[/]`）
+- 优先级 1：`WORKFLOWHUB_TASK_DIR` 环境变量（已设置且非空时直接作为 task_tracking_root 使用，无 `/tasks` 后缀截断）
+- 优先级 2：`~/.workflowhub/config.json` 的 `task_dir` 字段；若该值是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，`resolveTaskRecordPaths(taskId)` 必须返回项目级 task_tracking_root
 - 两者均缺失：fail-loud，非零退出，明确报错；无默认路径，不静默降级
-- 获取 `taskDir` 后推导 `tasks/{task-id}/decision-log.md` 等路径
+- 获取 `taskRecords` 后使用 `taskRecords.decision_log`、`taskRecords.journal`、`taskRecords.worktree_json` 等路径，不得再额外拼接一层 repo-local `tasks/`
 
 ### 3. 产出 decision-log.md
 
-产出 `tasks/{task-id}/decision-log.md`，包含 7 节结构 + 执行环境字段：
+产出 `taskRecords.decision_log`，包含 7 节结构 + 执行环境字段：
 
 1. **原始需求**——用户原始需求原文（verbatim）
 2. **问题与目标**——核心问题与明确目标
@@ -568,7 +579,7 @@ user_decision: true
 
 decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"就判定完成，必须真跑以下机器级自检：
 
-1. **落盘存在性校验**：真跑一次 `parseTaskDir()` 解析出的路径，对 `tasks/{task-id}/decision-log.md` 做真实文件存在性校验（例如 `test -f` / `fs.existsSync` 或等价真实检测），不是 agent 凭记忆或凭"应该已经写了"主观判断。校验失败（文件不存在或路径不对）视为 S10 未完成，fail-loud 报错，不得静默继续。
+1. **落盘存在性校验**：真跑一次 `parseTaskDir()` 解析出的路径，对 `{taskDir}/{task-id}/decision-log.md` 做真实文件存在性校验（例如 `test -f` / `fs.existsSync` 或等价真实检测），不是 agent 凭记忆或凭"应该已经写了"主观判断。校验失败（文件不存在或路径不对）视为 S10 未完成，fail-loud 报错，不得静默继续。
 2. **占位符扫描**：对落盘后的 decision-log.md 全文做占位符词表 grep 扫描（词表至少包含 `[占位符]`、`TBD`、`待后续` 等），若命中出现在决策性字段（第 3 节决策记录、第 7 节验收标准、权威定义表、外部依赖接口核实记录）中，直接 fail-loud，不得放行落盘。
 3. **校验留痕**：本步骤实际执行的校验命令与校验结果，必须写进收尾评论/journal，不得只写"已校验"这类无证据结论。
 
@@ -603,7 +614,7 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 
 **task-id 归一化步骤（先归一化，再校验分支命名）**：branch 命名校验前必须先对 task-id 做归一化（normalize），步骤依次为：①小写（lower case，全部转小写）；②非字母数字字符折叠为连字符；③合并连续连字符为单个连字符（连续连字符须合并，例如 `--` → `-`）；④去除首尾连字符（去除首尾连字符，例如结尾的 `-` 须去掉）。归一化完成后才允许进入分支命名校验步骤。例如 "Worktree Unification" 归一化后得到 "worktree-unification"；"--foo--bar--" 归一化后得到 "foo-bar"。
 
-- R1 task_tracking_root 读取：make-decision 阶段须通过 `parseTaskDir()`（`core/task-dir-parser.mjs`）读取 task_tracking_root，遵循 env var 优先、yaml fallback 次之、两者缺失 fail-loud 的顺序。**target_repo_root 不等于当前 checkout 上下文**：make-decision 阶段被调用时所在的 checkout 目录（例如沙箱临时 workdir）不得被默认当作 target_repo_root——该目录可能只是临时产物，非用户可见的持久 clone；target_repo_root 的真实来源须完全依照 R2 定义的 config 查表流程解析，不允许任何阶段绕过 R2 直接假定"当前工作目录即 target_repo_root"。
+- R1 task_tracking_root 读取：make-decision 阶段须通过 `parseTaskDir()`（`core/task-dir-parser.mjs`）读取最终 task_tracking_root，遵循 env var 直接根优先、`~/.workflowhub/config.json` 的 `task_dir` 次之、config 全局 Knowledge 根自动解析到 `Projects/<project-key>/tasks`、两者缺失 fail-loud 的顺序。**target_repo_root 不等于当前 checkout 上下文**：make-decision 阶段被调用时所在的 checkout 目录（例如沙箱临时 workdir）不得被默认当作 target_repo_root——该目录可能只是临时产物，非用户可见的持久 clone；target_repo_root 的真实来源须完全依照 R2 定义的 config 查表流程解析，不允许任何阶段绕过 R2 直接假定"当前工作目录即 target_repo_root"。
 - R2 target_repo_root 探测与固化：解析逻辑须为通用的"探测 remote → 查表 → 校验"流程，不得在判断分支里写死任何具体仓库名（`repo_root_map` 里允许存在具体仓库条目，但代码/规则本身的判断逻辑必须是遍历查表的通用写法）。执行时序为「① 在当前 checkout 上下文执行 `git remote get-url origin`（或等价方式）取得该 checkout 的 git remote origin url → ② 读取 `~/.workflowhub/config.json` 的 `repo_root_map` 字段（结构为 `{"<git remote url>": "<持久本地 clone 路径>"}`），以①取得的 remote url 为 key 在该表中查找 → ③ 命中：取对应 value 作为候选 target_repo_root，须依次校验（a）该路径存在（`fs.existsSync` 或等价）、（b）该路径是合法 git 仓库（`git rev-parse --show-toplevel` 可执行且指向自身）、（c）该仓库的 `git remote get-url origin` 与①取得的 url 一致；三项全部通过才允许固化为 target_repo_root，任一项失败按未命中处理 → ④ 未命中（`repo_root_map` 中无此 remote url 对应 key，或候选路径三项校验未全部通过）：不得静默 fallback 到当前沙箱 checkout 路径或任何猜测路径，须 fail-loud 并 escalate_to_human，报错须附带该 remote url 与 `repo_root_map` 现有 key 列表，等待人工补充映射或确认后再继续 → ⑤ target_repo_root 固化后，按 R4 创建 worktree → ⑥ 基于该 target_repo_root 执行 `git worktree list --porcelain`，校验刚创建的 worktree 的 `worktree_root`/`branch`/同仓关系（commondir 须同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）→ ⑦ 校验通过后按 R5 首次写入 worktree.json」。任一环节不一致须 fail-loud，不得固化、不得跳步。**步骤⑥/⑦失败时的清理契约**：步骤⑥校验失败，或步骤⑦首次写入 `worktree.json` 失败，均须按顺序执行两步清理（`git worktree remove` 只移除 worktree 目录，不会删除本地分支，须显式补第二步）：(a) `git worktree remove` 清理步骤⑤刚创建的 worktree；(b) 若步骤⑥校验涉及的分支为本次新建（非复用已有分支），额外执行 `git branch -D` 删除该本地分支。两步任一失败均单独记录失败详情（区分是 worktree 清理失败还是分支删除失败），并 escalate_to_human 附带残留路径/分支名，不得静默吞掉分支残留。固化后的 `target_repo_root` 后续阶段不再重新探测，直接读取该固化值。
 - R3 分支命名 `workflowhub/{task-id}`：task-id 先执行归一化（见上文步骤①-④）完成后才继续。
   分支命名正则校验分两层：① 归一化产物本身（task-id slug，不含 `workflowhub/` 前缀）须满足正则 `^[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，不允许数字，与 decision-log D3 及 spec.md §274/321 保持一致）；② 拼接 `workflowhub/` 前缀后得到的最终分支名须满足正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`。下游（build-code §17 / verify-code）对 `branch` 字段的校验统一引用②的最终分支名正则，不引用①的裸 slug 正则。校验顺序须在归一化之后，不得颠倒。
@@ -612,7 +623,6 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 - R5 worktree.json 首次写入：worktree.json 首次写入须包含 6 个字段，且一次性满足下游（build-code §17 / verify-code close①）common 校验，不得写出下游必然拒收的值：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径，须满足上方 worktree_root 路径公式）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（固定值 `"verify-code-only"`，其他值 fail-loud，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
 - R6 存在性/冲突检测：使用 `git worktree list --porcelain` 检测 worktree 是否已存在或冲突；发现僵尸 worktree（目录不存在但仍在 git 记录中）须 fail-loud 报错退出；发现路径/分支被其他 worktree 占用同样须 fail-loud，不得静默覆盖。
 - R7 make-decision stage commit 规则：本规则仅约束 `target_repo_root`（代码仓库）——本阶段在 target_repo_root 内涉及文件变更（如 decision-log 等产物写入代码仓库路径）时须在 target_repo_root 执行 commit（message 含 `workflowhub(make-decision)` 前缀）；无变更时须在 stage-result 的 `missing_items` 或 journal 中记录无变更原因。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）不受本规则约束，不要求 commit。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"，不因此触发本规则的 commit 要求。
-
 **task 子目录创建职责**：make-decision 阶段负责幂等地创建 task_tracking_root 下的 task 子目录（`{task_tracking_root}/{task-id}/`）；若父目录（task_tracking_root）不存在，须 fail-loud 报错退出，不得自动创建父目录；若该 task 已处于 `status=cleaned`（已归档）状态，须 fail-loud 报错 "task 已归档"，不得继续复用。
 
 **幂等复用前的 target_repo_root 一致性校验（FR-WORKTREE-MAKEDECISION-002 延伸）**：`{task_tracking_root}/{task-id}/worktree.json` 已存在且 `status=active` 时，不得仅凭 task-id 相同就静默复用——须先比对该 worktree.json 中记录的 `target_repo_root` 与本次调用（R2 探测得到）的 `target_repo_root` 是否完全一致；调用 `core/worktree-reuse-guard.mjs` 的 `checkWorktreeReuse(worktreeJsonPath, currentTargetRepoRoot, taskId)` 执行该判定：一致则返回 `{action: "reuse"}`，按现有 worktree.json 继续；不一致（同一 task-id 撞到不同项目）则 fail-loud 退出，报错须包含 task-id、worktree.json 中记录的 target_repo_root、本次调用的 target_repo_root 三项，提示用户更换 task-id 或核实目标仓库，不得把新一轮请求静默接到旧项目的仓库/worktree 上；worktree.json 不存在时返回 `{action: "create"}`，走 R4/R5 首次创建路径。

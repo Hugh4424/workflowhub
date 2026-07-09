@@ -1,0 +1,9 @@
+{
+  "violations": [],
+  "safe": true,
+  "changed_files": [
+    "specs/wh-quality-convergence/tasks.md",
+    "workflows/make-decision/SKILL.md"
+  ],
+  "note": "Phase 1 revise scan only; pre-existing Phase 2 dirty files intentionally excluded per instruction."
+}

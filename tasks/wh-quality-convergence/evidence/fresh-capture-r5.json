@@ -1,0 +1,11 @@
+{
+  "command": "HOME=/tmp/workflowhub-phase5-home WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks npm test -- --reporter=dot",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "git_sha": "a63f17150b6c7b5cff15b2512f3b6dd6629c4c93",
+  "exit_code": 0,
+  "timestamp": "2026-07-09T06:05:37.421Z",
+  "test_files_line": "Test Files  71 passed (71)",
+  "content_hash": "bc9dbfecb547673ca46377cd5186eca6a288031ce9bf4ae55449cc9d7c798935",
+  "stdout_path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/wh-quality-convergence/evidence/fresh-capture-r5.json.stdout",
+  "stderr_path": "/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/wh-quality-convergence/evidence/fresh-capture-r5.json.stderr"
+}

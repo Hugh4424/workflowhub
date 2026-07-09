@@ -80,7 +80,7 @@ try {
   const { review_flow_id: reviewFlowId, total_round: totalRound } = prep;
 
   // assembleReviewPayload() 要求的 prompt 补充上下文文件必须先于调用存在。
-  const promptPath = join(taskTrackingRoot, "tasks", taskId, "reviews", \`prompt-\${reviewFlowId}-r\${totalRound}.md\`);
+  const promptPath = join(taskTrackingRoot, taskId, "reviews", \`prompt-\${reviewFlowId}-r\${totalRound}.md\`);
   mkdirSync(dirname(promptPath), { recursive: true });
   writeFileSync(promptPath, "supplementary context for build-spec smoke test");
 
@@ -166,14 +166,12 @@ describe("冒烟用例：build-spec 全链路 (AC11-2, T025)", () => {
       // 三类产物路径真实落盘存在。
       const routeDecisionPath = join(
         taskTrackingRoot,
-        "tasks",
         taskId,
         "reviews",
         `route-decision-${stage}-${reviewFlowId}.json`
       );
       const verdictRawPath = join(
         taskTrackingRoot,
-        "tasks",
         taskId,
         "reviews",
         `verdict-${stage}-${reviewFlowId}-round-${totalRound}.raw.json`

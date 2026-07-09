@@ -1,0 +1,33 @@
+{
+  "task_id": "wh-quality-convergence",
+  "phase_id": "phase-5-polish",
+  "checked": "staged and untracked current-phase delta",
+  "staged_name_status": [
+    "M\tspecs/wh-quality-convergence/tasks.md",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-GREEN.json",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-GREEN.json.stderr",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-GREEN.json.stdout",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-RED.json",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-RED.json.stderr",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-RED.json.stdout",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-completion-checklist.json",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-diff-scan.json",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-no-marker-scan.json",
+    "A\ttasks/wh-quality-convergence/evidence/phase-5-scope-scan.json",
+    "M\ttasks/wh-quality-convergence/phase-result.json",
+    "A\ttasks/wh-quality-convergence/reviews/verdict-build-code-phase-5-polish-round-1.raw.json"
+  ],
+  "untracked_files": [],
+  "allowed_paths": [
+    "tasks/wh-quality-convergence/evidence/**",
+    "tasks/wh-quality-convergence/reviews/**",
+    "tasks/wh-quality-convergence/phase-result.json",
+    "specs/wh-quality-convergence/tasks.md checkbox-only review fix"
+  ],
+  "violations": [],
+  "verdict": "pass",
+  "notes": [
+    "Initial worktree status was clean before phase-5 evidence generation.",
+    "tasks.md was touched only to mark T018-T020 complete after review requested authoritative task completion state."
+  ]
+}

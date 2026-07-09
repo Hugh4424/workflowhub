@@ -65,7 +65,7 @@ describe("appendReportIndexRow", () => {
 
   it("inserts a newline before appending when the existing index file has no trailing newline (regression: appendFileSync used to glue the new row onto the previous line, corrupting the table)", () => {
     const path = reportIndexPathFor({ taskTrackingRoot: root, taskId: TASK_ID });
-    mkdirSync(join(root, "tasks", TASK_ID, "reports"), { recursive: true });
+    mkdirSync(join(root, TASK_ID, "reports"), { recursive: true });
     const headerNoTrailingNewline =
       "| seq | timestamp | stage | report_kind | verdict | report_path | summary |\n" +
       "|---|---|---|---|---|---|---|\n" +

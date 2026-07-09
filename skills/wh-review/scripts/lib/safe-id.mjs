@@ -17,16 +17,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CONTRACTS_DIR = resolve(here, "../../contracts");
 
 /**
- * Canonical per-task root directory. data-contracts.md requires every
- * wh-review artifact (reviews/reports/snapshots/baselines/human-confirmation)
- * live under `task_tracking_root/tasks/{task-id}/...` — the literal `tasks/`
- * segment is NOT optional. All path builders in this skill must go through
- * this helper instead of joining `taskTrackingRoot, taskId` directly, so the
- * segment can never be silently dropped again (round1 heterologous review
- * finding, phase-2).
+ * Canonical per-task root directory. parseTaskDir() returns the final
+ * task_tracking_root, so every wh-review artifact lives under
+ * `task_tracking_root/{task-id}/...`. All path builders in this skill must go
+ * through this helper instead of inventing a second task path formula.
  */
 export function taskRoot(taskTrackingRoot, taskId) {
-  return join(taskTrackingRoot, "tasks", taskId);
+  return join(taskTrackingRoot, taskId);
 }
 
 /** stage → contract file name (spec.md FR-WHREVIEW-002 mapping table) */

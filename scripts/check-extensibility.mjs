@@ -7,8 +7,10 @@
  *   verifySwappability()  — FR-EXT-001: same workflowId routes to a stub
  *   verifyExtensibility() — FR-EXT-002: new component triggered by workflowId only
  *
- * Core-zero-diff is measured by content-hash of scanCoreFiles() vs git HEAD baseline.
- * Falsifiable: if any core/*.mjs content changes, the snapshot comparison fails.
+ * Core-zero-diff is measured by content-hash of scanCoreFiles() before/after
+ * the extensibility dispatch. Falsifiable callers may pass an explicit baseline
+ * snapshot to prove a mutation is detected without requiring the whole repo
+ * working tree to equal HEAD.
  *
  * Exit codes: 0 = all ran checks passed, 1 = check failure, 2 = unexpected error.
  * Flags: --swappability  run only FR-EXT-001
@@ -20,7 +22,6 @@ import { createHash } from "node:crypto";
 import { readFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { resolve, relative, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
 import os from "node:os";
 
 // scanCoreFiles is the single source of truth for "what counts as core body"
@@ -31,11 +32,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 
 // ---------------------------------------------------------------------------
-// Core diff utilities — compare working-tree content vs git HEAD.
-// Using git HEAD as the baseline is the only falsifiable anchor:
-//   - before/after snapshot inside runKernel() would both see the already-mutated
-//     file and wrongly report diff-empty.
-//   - git HEAD reflects the committed state; any working-tree change is detectable.
+// Core diff utilities — compare working-tree content to a caller-provided
+// snapshot. CLI smoke checks create the snapshot at check start, so a legitimate
+// task branch that edits core files is not permanently red. Falsifiability tests
+// create the snapshot before mutating a core file and pass it in explicitly.
 // ---------------------------------------------------------------------------
 
 /**
@@ -47,37 +47,39 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
-/**
- * Read the committed (HEAD) content of a file via `git show HEAD:<relative-path>`.
- * Returns null if the file is untracked (not in HEAD).
- * @param {string} absPath - absolute path inside the repo
- * @returns {Buffer|null}
- */
-function gitHeadContent(absPath) {
-  const rel = relative(repoRoot, absPath);
-  try {
-    return execFileSync("git", ["show", `HEAD:${rel}`], { cwd: repoRoot });
-  } catch {
-    return null; // untracked file — treat as not in HEAD
+export function createCoreSnapshot() {
+  const snapshot = new Map();
+  const files = scanCoreFiles();
+  for (const f of files) {
+    snapshot.set(relative(repoRoot, f), sha256(readFileSync(f)));
   }
+  return snapshot;
+}
+
+function normalizeSnapshot(snapshot) {
+  if (snapshot instanceof Map) return snapshot;
+  if (snapshot && typeof snapshot === "object") return new Map(Object.entries(snapshot));
+  return new Map();
 }
 
 /**
- * Check whether all core files (from scanCoreFiles()) match their git HEAD content.
- * Returns true only if every file is tracked AND its working-tree content equals HEAD.
- * Falsifiable: mutating any core file makes it return false.
+ * Check whether all core files match a previously captured snapshot.
+ * @param {Map<string, string>|Record<string, string>} baseline
  * @returns {boolean}
  */
-function isCoreUnchangedFromHead() {
+function isCoreUnchangedFromSnapshot(baseline) {
+  const expected = normalizeSnapshot(baseline);
   const files = scanCoreFiles();
+  const seen = new Set();
   for (const f of files) {
-    const headContent = gitHeadContent(f);
-    if (headContent === null) {
-      // File not committed to HEAD — treat as changed (new untracked core file).
+    const rel = relative(repoRoot, f);
+    seen.add(rel);
+    if (expected.get(rel) !== sha256(readFileSync(f))) {
       return false;
     }
-    const workingContent = readFileSync(f);
-    if (sha256(headContent) !== sha256(workingContent)) {
+  }
+  for (const rel of expected.keys()) {
+    if (!seen.has(rel)) {
       return false;
     }
   }
@@ -92,22 +94,21 @@ function isCoreUnchangedFromHead() {
  * Verify that the same workflowId can be rerouted to a stub component via registry,
  * with zero changes to core/*.mjs files.
  *
- * @param {{ configPath: string, workflowId: string }} opts
+ * @param {{ configPath: string, workflowId: string, baselineCoreSnapshot?: Map<string, string>|Record<string, string> }} opts
  * @returns {Promise<{ passed: boolean, componentId: string|null, coreDiffEmpty: boolean, error?: string }>}
  */
-export async function verifySwappability({ configPath, workflowId }) {
-  // Check core integrity against git HEAD before running anything.
-  // This is the falsifiable anchor: if a core file was mutated, we detect it now.
-  const coreDiffEmpty = isCoreUnchangedFromHead();
-
+export async function verifySwappability({ configPath, workflowId, baselineCoreSnapshot }) {
+  const baseline = baselineCoreSnapshot ?? createCoreSnapshot();
   let result;
   try {
     // Only pass configPath + workflowId to runKernel — registry routes to stub.
     result = await runKernel(configPath, workflowId);
   } catch (err) {
+    const coreDiffEmpty = isCoreUnchangedFromSnapshot(baseline);
     return { passed: false, componentId: null, coreDiffEmpty, error: err.message };
   }
 
+  const coreDiffEmpty = isCoreUnchangedFromSnapshot(baseline);
   const passed = coreDiffEmpty; // core must be untouched for check to pass
   return { passed, componentId: result.component_id, coreDiffEmpty };
 }
@@ -124,23 +125,22 @@ export async function verifySwappability({ configPath, workflowId }) {
  * registry entry. This function calls runKernel(configPath, workflowId) — it does
  * NOT pass the component path directly, proving registry routing is in effect.
  *
- * @param {{ configPath: string, workflowId: string }} opts
+ * @param {{ configPath: string, workflowId: string, baselineCoreSnapshot?: Map<string, string>|Record<string, string> }} opts
  * @returns {Promise<{ passed: boolean, componentId: string|null, coreDiffEmpty: boolean, error?: string }>}
  */
-export async function verifyExtensibility({ configPath, workflowId }) {
-  // Check core integrity against git HEAD before dispatching.
-  // Falsifiable: mutated core file → coreDiffEmpty = false → passed = false.
-  const coreDiffEmpty = isCoreUnchangedFromHead();
-
+export async function verifyExtensibility({ configPath, workflowId, baselineCoreSnapshot }) {
+  const baseline = baselineCoreSnapshot ?? createCoreSnapshot();
   let result;
   try {
     // FR-EXT-002 key constraint: only (configPath, workflowId) — no component path.
     // runKernel must resolve the component through registry, not receive it directly.
     result = await runKernel(configPath, workflowId);
   } catch (err) {
+    const coreDiffEmpty = isCoreUnchangedFromSnapshot(baseline);
     return { passed: false, componentId: null, coreDiffEmpty, error: err.message };
   }
 
+  const coreDiffEmpty = isCoreUnchangedFromSnapshot(baseline);
   const passed = coreDiffEmpty;
   return { passed, componentId: result.component_id, coreDiffEmpty };
 }

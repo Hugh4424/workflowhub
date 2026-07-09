@@ -52,19 +52,18 @@ skip_reason: "已有同类 research，复用 specs/auth-v2/research.md"
 
 ## task_dir 解析器接入（AC-16）
 
-Research 阶段产出写入 `specs/{task_id}/research.md`，路径基准由 `task_dir` 字段决定。
+Research 阶段产出写入 `specs/{task_id}/research.md`。任务执行记录路径基准由 `parseTaskDir()` 返回的最终项目 task_tracking_root 决定。
 `task_dir` 通过以下解析器读取（AC-16 grep anchor: parseTaskDir）：
 
 ```javascript
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "../../core/task-dir-parser.mjs";
 
-const taskDir = parseTaskDir(); // 读 config/workflowhub.yaml 的 task_dir 字段
-                                 // 缺失时回退 ~/Knowledge/workflowhub/（FR-TASKDIR-001）
+const taskDir = parseTaskDir(); // final project task_tracking_root; env direct root → ~/.workflowhub/config.json task_dir → Projects/<project-key>/tasks when present; both absent → fail-loud
 ```
 
 - `parseTaskDir()` 无第三方依赖（FR-TASKDIR-001）。
-- 返回值为字符串路径（已配置值 或 `~/Knowledge/workflowhub/`）。
+- 返回值为最终项目 task_tracking_root。任务执行文件必须位于 `path.join(taskDir, taskId, ...)`。
 - 解析失败时 fail-loud 抛出，不静默。
 
 ---

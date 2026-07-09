@@ -233,11 +233,11 @@ For every ambiguity finding, produce an entry in `stage-result.facts.ambiguity_i
 // AC-16 consumable call — grep: parseTaskDir
 import { parseTaskDir } from "../../core/task-dir-parser.mjs";
 
-const taskDir = parseTaskDir(); // reads config/workflowhub.yaml task_dir, falls back to ~/Knowledge/workflowhub/
+const taskDir = parseTaskDir(); // final project task_tracking_root; env direct root → ~/.workflowhub/config.json task_dir → Projects/<project-key>/tasks when present; both absent → fail-loud
 ```
 
 - `parseTaskDir()` has no third-party dependencies (FR-TASKDIR-001).
-- The returned value is a string path (configured value or `~/Knowledge/workflowhub/`).
+- The returned value is the final project task_tracking_root. Task execution files must be under `path.join(taskDir, taskId, ...)`.
 - Parse failures are fail-loud and must not be swallowed.
 
 ## 去耦约束

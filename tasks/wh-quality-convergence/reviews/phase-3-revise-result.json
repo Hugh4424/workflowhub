@@ -1,0 +1,15 @@
+{
+  "task_id": "wh-quality-convergence",
+  "phase_id": "phase-3-skill-wiring",
+  "source": "heterogeneous",
+  "provider": "wh-review/invoke-review-engine + 3rd-review runner",
+  "verdict": "pass",
+  "actual_mode": "full",
+  "findings": [],
+  "artifact_paths": [
+    "tasks/wh-quality-convergence/reviews/phase-3-revise-heterogeneous-review-input.json",
+    "tasks/wh-quality-convergence/reviews/verdict-build-code-phase-3-skill-wiring-round-2.raw.json"
+  ],
+  "contract_path": "skills/wh-review/contracts/code.md",
+  "contract_hash": "cc049cefd8479a70de7b86985932b0a858624aebb5dc76b5e2facfa94d76c86b"
+}

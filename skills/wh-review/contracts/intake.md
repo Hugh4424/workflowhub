@@ -48,8 +48,8 @@
 
 ### 路径规则
 
-- 正确 project root：`task_tracking_root`，通过 `core/task-dir-parser.mjs` 的 `parseTaskDir()` 解析（优先级：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` 的 `task_dir` 字段 → 两者皆缺时 fail-loud，见 FR-TASKDIR-001）。
-- task 文件位于 `{task_tracking_root}/tasks/{task-id}/`，其中 `task-id` 必须匹配 `^[A-Za-z0-9._-]+$`（无路径分隔符、无 `..`）；不匹配的 `task-id` 是调用方 bug，fail-loud，不得静默修正。
+- 正确 project root：`task_tracking_root`，通过 `core/task-dir-parser.mjs` 的 `parseTaskDir()` 解析（优先级：`WORKFLOWHUB_TASK_DIR` 环境变量直接根 → `~/.workflowhub/config.json` 的 `task_dir` 字段 → config 全局 Knowledge 根自动解析到 `Projects/<project-key>/tasks` → 两者皆缺时 fail-loud，见 FR-TASKDIR-001）。
+- task 文件位于 `{task_tracking_root}/{task-id}/`，其中 `task-id` 必须匹配 `^[A-Za-z0-9._-]+$`（无路径分隔符、无 `..`）；不匹配的 `task-id` 是调用方 bug，fail-loud，不得静默修正。
 - 材料中出现硬编码绝对路径替代 `task_tracking_root`（即未经 `parseTaskDir()` 解析的路径）→ `escalate_to_human`。
 
 ---

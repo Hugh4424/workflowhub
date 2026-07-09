@@ -1,0 +1,17 @@
+{
+  "command": "npx vitest run tests/flow-profile-decision-log.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "git_sha": "0c08b63bed4aabd4f0cb2740e2234c1d96b27bdd",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 0,
+  "timestamp": "2026-07-08T14:44:43.577Z",
+  "test_files_line": " Test Files  1 passed (1)",
+  "content_hash": "e41610da4df2cd853be900695ed266c5a5a5c8322f0f6f6a8dc97a16b48e1658",
+  "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-GREEN.json.stdout",
+  "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-1-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

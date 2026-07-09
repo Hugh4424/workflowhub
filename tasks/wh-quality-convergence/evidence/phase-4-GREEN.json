@@ -1,0 +1,17 @@
+{
+  "command": "npx vitest run tests/receipt-verification.test.mjs core/__tests__/task-index.test.mjs core/__tests__/task-dir-parser-config.test.mjs",
+  "cwd": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence",
+  "git_sha": "a54240cccc83a31ad08f28d00985d35dccb8b8a9",
+  "commit_sha": null,
+  "base_sha": null,
+  "head_sha": null,
+  "risk_level": null,
+  "exit_code": 0,
+  "timestamp": "2026-07-08T17:44:45.932Z",
+  "test_files_line": " Test Files  3 passed (3)",
+  "content_hash": "1383bb56d9d34af9b6765e85d7f701e0a707e71da63f2e02d209af5cb63234c3",
+  "stdout_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-4-GREEN.json.stdout",
+  "stderr_path": "/Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/tasks/wh-quality-convergence/evidence/phase-4-GREEN.json.stderr",
+  "anomaly_flags": [],
+  "warning": ""
+}

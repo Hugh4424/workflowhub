@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const MAX_BUFFER = 50 * 1024 * 1024; // 50 MB, handles large vitest/build output
 
@@ -32,6 +33,8 @@ export async function runCapture(command, outputPath, { cwd, gitSha } = {}) {
 
   const stdout = (result.stdout || '').toString();
   const stderr = (result.stderr || '').toString();
+  writeFileSync(`${outputPath}.stdout`, stdout, 'utf-8');
+  writeFileSync(`${outputPath}.stderr`, stderr, 'utf-8');
 
   // exit_code: signal → 128+signal, otherwise status ?? error→1
   let exit_code;
@@ -68,7 +71,38 @@ export async function runCapture(command, outputPath, { cwd, gitSha } = {}) {
   const content_hash = createHash('sha256').update(combined).digest('hex');
   const timestamp = new Date().toISOString();
 
-  const record = { command, cwd: resolvedCwd, git_sha: sha, exit_code, timestamp, test_files_line, content_hash };
+  const record = {
+    command,
+    cwd: resolvedCwd,
+    git_sha: sha,
+    exit_code,
+    timestamp,
+    test_files_line,
+    content_hash,
+    stdout_path: `${outputPath}.stdout`,
+    stderr_path: `${outputPath}.stderr`,
+  };
   writeFileSync(outputPath, JSON.stringify(record, null, 2), 'utf-8');
   return record;
+}
+
+const isMain =
+  process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+
+if (isMain) {
+  const [command, outputPath, cwd] = process.argv.slice(2);
+
+  if (!command || !outputPath) {
+    console.error('Usage: node workflows/verify-code/capture.mjs <command> <outputPath> [cwd]');
+    process.exit(2);
+  }
+
+  try {
+    const record = await runCapture(command, outputPath, { cwd });
+    console.log(JSON.stringify(record, null, 2));
+    process.exit(record.exit_code);
+  } catch (err) {
+    console.error(`[verify-code/capture] FAIL: ${err.message}`);
+    process.exit(1);
+  }
 }

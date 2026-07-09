@@ -1,0 +1,14 @@
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence
+
+ ✓ core/__tests__/task-index.test.mjs (6 tests) 60ms
+ ✓ core/__tests__/task-dir-parser-config.test.mjs (8 tests) 200ms
+ ❯ tests/receipt-verification.test.mjs (25 tests | 1 failed) 2276ms
+   × T005 — verifyReceipts > fails when stage-result belongs to a different stage 102ms
+     → expected true to be false // Object.is equality
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 38 passed (39)
+   Start at  01:43:17
+   Duration  2.44s (transform 30ms, setup 0ms, collect 62ms, tests 2.54s, environment 0ms, prepare 95ms)
+

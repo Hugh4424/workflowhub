@@ -14,9 +14,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
 
 // Import the checker module — will fail (RED) until scripts/check-extensibility.mjs exists.
-let verifySwappability, verifyExtensibility;
+let createCoreSnapshot, verifySwappability, verifyExtensibility;
 beforeAll(async () => {
   const mod = await import(resolve(repo, "scripts/check-extensibility.mjs"));
+  createCoreSnapshot = mod.createCoreSnapshot;
   verifySwappability = mod.verifySwappability;
   verifyExtensibility = mod.verifyExtensibility;
 });
@@ -87,10 +88,12 @@ describe("FR-EXT-001 falsifiability: core file modified → verifySwappability f
   // We'll temporarily mutate a core file to prove diff anchoring is real.
   const kernelPath = resolve(repo, "core/kernel.mjs");
   let originalContent;
+  let baselineCoreSnapshot;
 
   beforeAll(() => {
     // Save original kernel.mjs content
     originalContent = readFileSync(kernelPath, "utf8");
+    baselineCoreSnapshot = createCoreSnapshot();
 
     tmpDir = mkdtempSync(join(os.tmpdir(), "wfh-ext-swap-falsify-"));
     stubPath = join(tmpDir, "stub-falsify.mjs");
@@ -117,7 +120,11 @@ describe("FR-EXT-001 falsifiability: core file modified → verifySwappability f
   });
 
   it("returns passed=false when a core file has been modified (coreDiffEmpty=false)", async () => {
-    const result = await verifySwappability({ configPath, workflowId: "test-falsify" });
+    const result = await verifySwappability({
+      configPath,
+      workflowId: "test-falsify",
+      baselineCoreSnapshot,
+    });
     expect(result.passed).toBe(false);
     expect(result.coreDiffEmpty).toBe(false);
   });
@@ -186,9 +193,11 @@ describe("FR-EXT-002 falsifiability: core file modified → verifyExtensibility 
   let dummyPath;
   const kernelPath = resolve(repo, "core/kernel.mjs");
   let originalContent;
+  let baselineCoreSnapshot;
 
   beforeAll(() => {
     originalContent = readFileSync(kernelPath, "utf8");
+    baselineCoreSnapshot = createCoreSnapshot();
 
     tmpDir = mkdtempSync(join(os.tmpdir(), "wfh-ext-new-falsify-"));
     dummyPath = join(tmpDir, "dummy-ext-falsify.mjs");
@@ -216,7 +225,11 @@ describe("FR-EXT-002 falsifiability: core file modified → verifyExtensibility 
   });
 
   it("returns passed=false when a core file has been modified", async () => {
-    const result = await verifyExtensibility({ configPath, workflowId: "test-ext-falsify" });
+    const result = await verifyExtensibility({
+      configPath,
+      workflowId: "test-ext-falsify",
+      baselineCoreSnapshot,
+    });
     expect(result.passed).toBe(false);
     expect(result.coreDiffEmpty).toBe(false);
   });
