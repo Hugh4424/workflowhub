@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execSync } from "child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "fs";
 import { existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -37,22 +37,36 @@ function sh(cmd, cwd) {
   return execSync(cmd, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
 }
 
-function diffSha(repo) {
-  return diffShaFor(repo, "HEAD");
+function diffSha(repo, ignoredPath = null) {
+  return diffShaFor(repo, "HEAD", ignoredPath);
 }
 
 function diffShaFromBase(repo, baseRef) {
   return diffShaFor(repo, baseRef);
 }
 
-function diffShaFor(repo, baseRef) {
+function pathspec(ignoredPath) {
+  const excludes = [
+    '":(glob,exclude)tasks/**/stage-result-*.json"',
+    '":(glob,exclude)tasks/**/reviews/**"',
+  ];
+  if (ignoredPath) excludes.push(`":(exclude)${ignoredPath}"`);
+  return ` -- . ${excludes.join(" ")}`;
+}
+
+function diffShaFor(repo, baseRef, ignoredPath = null) {
   const baseDiff =
-    baseRef === "HEAD" ? "" : sh(`git diff ${JSON.stringify(baseRef)}...HEAD`, repo);
-  const worktreeDiff = sh("git diff HEAD", repo);
+    baseRef === "HEAD" ? "" : sh(`git diff ${JSON.stringify(baseRef)}...HEAD${pathspec(ignoredPath)}`, repo);
+  const worktreeDiff = sh(`git diff HEAD${pathspec(ignoredPath)}`, repo);
   const untracked = sh("git ls-files --others --exclude-standard", repo)
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
+    .filter((file) =>
+      file !== ignoredPath &&
+      !/^tasks\/[^/]+\/stage-result-[^/]+\.json$/.test(file) &&
+      !/^tasks\/[^/]+\/reviews\//.test(file)
+    )
     .sort()
     .map((file) => {
       const content = execSync(`cat ${JSON.stringify(join(repo, file))}`);
@@ -261,6 +275,82 @@ describe("T005 — verifyReceipts", () => {
     const result = verifyReceipts("build-code", path, repo);
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
+  });
+
+  it("excludes the stage-result artifact itself from receipt diff evidence", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "README.md"), "# Hello\nmodified\n");
+    const artifactDir = join(repo, "tasks", "demo");
+    mkdirSync(artifactDir, { recursive: true });
+    const stageResultPath = join(artifactDir, "stage-result-build-code.json");
+    writeFileSync(
+      stageResultPath,
+      JSON.stringify({
+        stage: "build-code",
+        status: "success",
+        facts: {
+          changed: ["README.md"],
+          diff_sha: diffSha(repo, "tasks/demo/stage-result-build-code.json"),
+          test_result_log: writeTestResult(workDir, "build-code"),
+        },
+      })
+    );
+
+    const result = verifyReceipts("build-code", stageResultPath, repo);
+    expect(result.ok).toBe(true);
+    expect(result.changed).toEqual(["README.md"]);
+  });
+
+  it("excludes sibling task stage-result artifacts from receipt diff evidence", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "README.md"), "# Hello\nmodified\n");
+    const artifactDir = join(repo, "tasks", "demo");
+    mkdirSync(artifactDir, { recursive: true });
+    const stageResultPath = join(artifactDir, "stage-result-build-code.json");
+    const siblingStageResultPath = join(artifactDir, "stage-result-verify-code.json");
+    writeFileSync(siblingStageResultPath, JSON.stringify({ status: "success" }));
+    writeFileSync(
+      stageResultPath,
+      JSON.stringify({
+        stage: "build-code",
+        status: "success",
+        facts: {
+          changed: ["README.md"],
+          diff_sha: diffSha(repo, "tasks/demo/stage-result-build-code.json"),
+          test_result_log: writeTestResult(workDir, "build-code"),
+        },
+      })
+    );
+
+    const result = verifyReceipts("build-code", stageResultPath, repo);
+    expect(result.ok).toBe(true);
+    expect(result.changed).toEqual(["README.md"]);
+  });
+
+  it("excludes review ledger artifacts from receipt diff evidence", () => {
+    const repo = initCleanRepo();
+    writeFileSync(join(repo, "README.md"), "# Hello\nmodified\n");
+    const reviewDir = join(repo, "tasks", "demo", "reviews");
+    mkdirSync(reviewDir, { recursive: true });
+    writeFileSync(join(reviewDir, "review-input-demo.json"), JSON.stringify({ mode: "full" }));
+    const artifactDir = join(repo, "tasks", "demo");
+    const stageResultPath = join(artifactDir, "stage-result-build-code.json");
+    writeFileSync(
+      stageResultPath,
+      JSON.stringify({
+        stage: "build-code",
+        status: "success",
+        facts: {
+          changed: ["README.md"],
+          diff_sha: diffSha(repo, "tasks/demo/stage-result-build-code.json"),
+          test_result_log: writeTestResult(workDir, "build-code"),
+        },
+      })
+    );
+
+    const result = verifyReceipts("build-code", stageResultPath, repo);
+    expect(result.ok).toBe(true);
+    expect(result.changed).toEqual(["README.md"]);
   });
 
   it("fails when no facts.changed and no no_code_change", () => {

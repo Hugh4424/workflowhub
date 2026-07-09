@@ -32,8 +32,8 @@ build-plan **不新增 worktree 条目**（不调用 git 的 worktree-创建子�
 
 ```bash
 # worktree.json 路径构造规则（与 build-code §17 一致）：
-# taskDir 通过 parseTaskDir() 获取（WORKFLOWHUB_TASK_DIR env var 优先，yaml fallback，两者缺失 fail-loud）
-node core/worktree-context.mjs {taskDir}/{task-id}/worktree.json
+# 先通过 resolveTaskRecordPaths(taskId) 获取 taskRecords.worktree_json
+node core/worktree-context.mjs "$(node core/task-record-paths.mjs {task-id} worktree.json --must-exist)"
 ```
 
 调用上述命令读取 `worktree.json`：两字段（`target_repo_root`/`worktree_root`）任一缺失时该脚本以非零退出码 fail-loud，build-plan 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。
@@ -47,15 +47,18 @@ Read the spec from upstream `build-spec`:
 - If the spec does not exist, fail with clear error: "spec not found at specs/{task-id}/spec.md"
 - Read the decision log from the task directory for any constraints the spec may not capture.
 
-**task_dir parser (AC-16)**: Before reading any task-tracking file, call `core/task-dir-parser.mjs` to obtain the base path. Do not hard-code `tasks/{task-id}/`.
+**task record path bootstrap (AC-16)**: Before reading or writing any task execution record, call `core/task-record-paths.mjs` to obtain the current task's canonical record paths. Do not hard-code repo-local `tasks/{task-id}/`.
 
 ```javascript
-// AC-16 consumable call — grep: parseTaskDir
-import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
+// AC-16 consumable call — grep: resolveTaskRecordPaths
+import { resolveTaskRecordPaths } from "./core/task-record-paths.mjs";
+const taskRecords = resolveTaskRecordPaths(taskId);
+const taskDir = taskRecords.task_tracking_root;
+const taskRoot = taskRecords.task_root;
 ```
 
 The `task-id` must be explicitly provided. If missing, fail with "task-id required" and non-zero exit. No git branch inference fallback.
+All task execution files (`worktree.json`, `stage-result-*.json`, evidence, reviews, journal, decision-log) must be read/written through `taskRecords.*` or under `path.join(taskRoot, ...)`. Repo-local `tasks/` is not a fallback unless `resolveTaskRecordPaths(taskId).task_tracking_root` returned it.
 
 ### Step 1.5: Produce data-contracts
 

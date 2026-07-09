@@ -7,7 +7,7 @@
 
 **Organization**: Tasks grouped by phase (Setup → Core → Polish) to enable independent implementation.
 
-## Format: `- [ ] [TaskID] [P?] [Story] Description`
+## Format: task checkbox + task id + optional `[P]` + story + description
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - Include exact file paths in descriptions
@@ -29,12 +29,12 @@
 
 **Purpose**: Core mechanisms that downstream wiring tasks depend on
 
-- [ ] T004 Implement getRealChangedFiles() in scripts/validate-stage-result.mjs — git diff to get actual changed files list FR: FR-RECEIPT-001
-- [ ] T005 Implement verifyReceipts() in scripts/validate-stage-result.mjs — compare declared vs actual changes FR: FR-RECEIPT-001, FR-RECEIPT-002
-- [ ] T006 Implement appendTaskIndex(taskId, projectKey, repoUrl) in core/task-index.mjs — append-only JSON index writer FR: FR-PROJECTINDEX-001
-- [ ] T007 Implement lookupProjectKey(taskId) in core/task-index.mjs — indexed query from manifest file FR: FR-PROJECTINDEX-002
-- [ ] T008 Implement config.json read path in core/task-dir-parser.mjs — priority: WORKFLOWHUB_TASK_DIR > config.json > fail-loud FR: FR-TASKDIR-001, FR-TASKDIR-002, FR-TASKDIR-003
-- [ ] T009 Define ~/.workflowhub/config.json format with fail-loud rules (no default fallback) FR: FR-TASKDIR-001
+- [x] T004 Implement getRealChangedFiles() in scripts/validate-stage-result.mjs — git diff to get actual changed files list FR: FR-RECEIPT-001
+- [x] T005 Implement verifyReceipts() in scripts/validate-stage-result.mjs — compare declared vs actual changes FR: FR-RECEIPT-001, FR-RECEIPT-002
+- [x] T006 Implement appendTaskIndex(taskId, projectKey, repoUrl) in core/task-index.mjs — append-only JSON index writer FR: FR-PROJECTINDEX-001
+- [x] T007 Implement lookupProjectKey(taskId) in core/task-index.mjs — indexed query from manifest file FR: FR-PROJECTINDEX-002
+- [x] T008 Implement config.json read path in core/task-dir-parser.mjs — priority: WORKFLOWHUB_TASK_DIR direct root > config.json task_dir > project-scoped `Projects/<project-key>/tasks` when config points at a global Knowledge root > fail-loud FR: FR-TASKDIR-001, FR-TASKDIR-002, FR-TASKDIR-003
+- [x] T009 Define ~/.workflowhub/config.json format with fail-loud rules (no default fallback) FR: FR-TASKDIR-001
 
 **Checkpoint**: All core mechanisms (receipt verification, task-index, config persistence) implemented and unit-tested individually.
 
@@ -60,10 +60,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T010 Wire receipt verification into workflows/build-spec/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
-- [ ] T011 Wire receipt verification into workflows/build-plan/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
-- [ ] T012 Wire receipt verification into workflows/build-code/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
-- [ ] T013 Wire receipt verification into workflows/verify-code/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
+- [x] T010 Wire receipt verification into workflows/build-spec/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
+- [x] T011 Wire receipt verification into workflows/build-plan/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
+- [x] T012 Wire receipt verification into workflows/build-code/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
+- [x] T013 Wire receipt verification into workflows/verify-code/SKILL.md stage-result post-write step FR: FR-RECEIPT-001, FR-RECEIPT-002
 
 **Gate**: Each SKILL.md wiring must be verified independently — verify that the receipt call uses correct file paths for that stage.
 
@@ -89,10 +89,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T014 Write tests/receipt-verification.test.mjs — receipt verification tests: positive (valid git diff + test stdout/stderr/exit code + facts.diff_sha + facts.test_result_log must pass), negative (empty diff, test not run, evidence mismatch, wrong-stage test log, no_code_change missing) FR: FR-RECEIPT-002
-- [ ] T015 Write core/__tests__/task-index.test.mjs — task-index tests: append, lookup, concurrent write, file corruption FR: FR-PROJECTINDEX-002
-- [ ] T016 Write core/__tests__/task-dir-parser-config.test.mjs — config.json tests: file exists, missing, malformed, priority chain FR: FR-TASKDIR-002, FR-TASKDIR-003
-- [ ] T017 Run full regression test suite — all existing tests + new tests must pass FR: All FRs
+- [x] T014 Write tests/receipt-verification.test.mjs — receipt verification tests: positive (valid git diff + test stdout/stderr/exit code + facts.diff_sha + facts.test_result_log must pass), negative (empty diff, test not run, evidence mismatch, wrong-stage test log, no_code_change missing) FR: FR-RECEIPT-002
+- [x] T015 Write core/__tests__/task-index.test.mjs — task-index tests: append, lookup, concurrent write, file corruption FR: FR-PROJECTINDEX-002
+- [x] T016 Write core/__tests__/task-dir-parser-config.test.mjs — config.json tests: file exists, missing, malformed, priority chain, global Knowledge root to project task_tracking_root FR: FR-TASKDIR-002, FR-TASKDIR-003
+- [x] T017 Run full regression test suite — all existing tests + new tests must pass FR: All FRs
 
 **Gate**: Full `npm test` green.
 
@@ -164,4 +164,4 @@
 - [P] tasks = different files, no dependencies
 - Every task references at least one FR from spec.md (inline FR annotation)
 - Do NOT touch scope-red-line files: make-decision SKILL.md, wh-review/ infra, worktree-reuse-guard.mjs
-- D5 config.json writing and task-dir-parser integration: Step T008-T009 (design ready, code to build-code)
+- D5 config.json writing and task-dir-parser integration: Step T008-T009, including project-scoped task_tracking_root resolution from global Knowledge root

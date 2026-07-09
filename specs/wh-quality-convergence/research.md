@@ -6,7 +6,7 @@
 1. **D1 receipt 校验形同虚设** — 仅验证 schema/格式，不验证真实工作是否完成
 2. **D3 project-key 多项目隔离缺失** — 多项目场景下 task-id 无法反查所属 project/repo
 3. **D4 决策日志引用准确性存疑** — 此前存在未核实的引用风险
-4. **D5 task_dir 配置在 Multica 沙箱不可见** — 环境变量在 agent 沙箱中不可继承
+4. **D5 task_dir 配置在 agent 沙箱不可见** — 环境变量在 agent 沙箱中不可继承
 
 ## 已有决策（D1-D6）
 

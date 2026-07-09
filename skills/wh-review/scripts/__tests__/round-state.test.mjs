@@ -36,7 +36,7 @@ afterEach(() => {
 
 function writeRoundStateFixture(reviewFlowId, overrides = {}) {
   const path = recordPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: STAGE, reviewFlowId });
-  mkdirSync(join(root, "tasks", TASK_ID, "reviews"), { recursive: true });
+  mkdirSync(join(root, TASK_ID, "reviews"), { recursive: true });
   const base = {
     stage: STAGE,
     review_flow_id: reviewFlowId,
@@ -98,12 +98,11 @@ describe("prepareRoundState — brand new flow", () => {
         writeRoutePreparePhase: (args) => {
           const roundStatePath = join(
             root,
-            "tasks",
             TASK_ID,
             "reviews",
             `round-state-${args.stage}-${args.reviewFlowId}.json`
           );
-          const activeFlowPath = join(root, "tasks", TASK_ID, "reviews", `active-flow-${args.stage}.json`);
+          const activeFlowPath = join(root, TASK_ID, "reviews", `active-flow-${args.stage}.json`);
           roundStateExistedAtRouteDecisionTime = existsSync(roundStatePath);
           activeFlowExistedAtRouteDecisionTime = existsSync(activeFlowPath);
           return actual.writeRoutePreparePhase(args);
@@ -889,7 +888,7 @@ describe("metrics integration (T024)", () => {
   // metricsConfigFor() previously passed taskTrackingRoot directly as configForCollector's
   // taskDir, instead of the per-task directory (tasks/{task-id}/). Effect: task-level metrics
   // would land at <taskTrackingRoot>/task-metrics.jsonl instead of
-  // <taskTrackingRoot>/tasks/{task-id}/task-metrics.jsonl (data-contracts.md/collector.mjs
+  // <taskTrackingRoot>/{task-id}/task-metrics.jsonl (data-contracts.md/collector.mjs
   // contract violation).
   it("metricsConfigFor derives taskDir from taskRoot(taskTrackingRoot, taskId), not the raw taskTrackingRoot", async () => {
     const configForCollectorSpy = vi.fn(() => ({ mocked: true }));
@@ -911,7 +910,7 @@ describe("metrics integration (T024)", () => {
 
     expect(configForCollectorSpy).toHaveBeenCalledTimes(1);
     const [, opts] = configForCollectorSpy.mock.calls[0];
-    expect(opts.taskDir).toBe(join(root, "tasks", TASK_ID));
+    expect(opts.taskDir).toBe(join(root, TASK_ID));
   });
 
   // round-review finding (真实异源审查 codex, cfe72075-301a-4e81-b464-7137e9f90ece round-2, minor)：
@@ -934,7 +933,7 @@ describe("metrics integration (T024)", () => {
       const prep = freshPrepareRoundState({ taskId: TASK_ID, stage: STAGE, taskTrackingRoot: root });
       expect(prep.status).toBe("ready");
 
-      const taskMetricsPath = join(root, "tasks", TASK_ID, "task-metrics.jsonl");
+      const taskMetricsPath = join(root, TASK_ID, "task-metrics.jsonl");
       expect(existsSync(taskMetricsPath)).toBe(true);
       const record = JSON.parse(readFileSync(taskMetricsPath, "utf8").trim().split("\n")[0]);
 

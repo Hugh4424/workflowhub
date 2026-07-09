@@ -10,6 +10,10 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { execSync } from "node:child_process";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { validateStageResult } from "../scripts/validate-stage-result.mjs";
 
 // Base valid stage-result that satisfies the top-level stage-result.contract.json
@@ -276,10 +280,58 @@ describe("build-plan facts sub-schema (FR-CONTRACT-002 D11)", () => {
 // ── build-code ────────────────────────────────────────────────────────────────
 
 describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
-  it("positive: changed + tests non-empty → ok", () => {
+  function buildCodeFacts(overrides = {}) {
+    return {
+      changed: ["f.ts"],
+      tests: "ok",
+      review: { status: "executed", source: "third_party", verdict: "pass", artifact_path: "reviews/verdict-build-code-phase-1-round-1.raw.json" },
+      worktree_root: "/repo/workflowhub-task",
+      task_tracking_root: "/repo/tasks",
+      phase_completion: {
+        commit_records: [],
+        no_change_records: [{ phase_id: "phase-1", no_change_reason: "no file changes" }],
+      },
+      ...overrides,
+    };
+  }
+
+  function sh(cmd, cwd) {
+    return execSync(cmd, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  }
+
+  function withGitFixture(callback) {
+    const root = mkdtempSync(join(tmpdir(), "stage-result-build-code-"));
+    const repo = join(root, "repo");
+    try {
+      mkdirSync(repo, { recursive: true });
+      sh("git init", repo);
+      sh('git config user.email "stage-result@example.invalid"', repo);
+      sh('git config user.name "Stage Result Test"', repo);
+      writeFileSync(join(repo, "README.md"), "# fixture\n", "utf8");
+      sh("git add README.md", repo);
+      sh('git commit -m "init"', repo);
+      return callback(repo);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  function commitFile(repo, relativePath, content, message) {
+    const path = join(repo, relativePath);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, content, "utf8");
+    sh(`git add ${relativePath}`, repo);
+    sh(`git commit -m "${message}"`, repo);
+    return sh("git rev-parse HEAD", repo).trim();
+  }
+
+  it("positive: changed + tests + handoff roots non-empty -> ok", () => {
     const artifact = {
       ...base(),
-      facts: { changed: ["src/foo.ts", "src/bar.ts"], tests: "12 passed, 0 failed" },
+      facts: buildCodeFacts({
+        changed: ["src/foo.ts", "src/bar.ts"],
+        tests: "12 passed, 0 failed",
+      }),
     };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
@@ -292,38 +344,286 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
   });
 
   it("negative: missing 'changed' → fails", () => {
-    const artifact = { ...base(), facts: { tests: "5 passed" } };
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ changed: undefined, tests: "5 passed" }),
+    };
+    delete artifact.facts.changed;
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/changed/);
   });
 
   it("negative: missing 'tests' → fails", () => {
-    const artifact = { ...base(), facts: { changed: ["file.ts"] } };
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ changed: ["file.ts"], tests: undefined }),
+    };
+    delete artifact.facts.tests;
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/tests/);
   });
 
   it("negative: 'changed' empty array → fails", () => {
-    const artifact = { ...base(), facts: { changed: [], tests: "ok" } };
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ changed: [] }),
+    };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/changed/);
   });
 
   it("negative: 'changed' empty string → fails", () => {
-    const artifact = { ...base(), facts: { changed: "", tests: "ok" } };
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ changed: "" }),
+    };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/changed/);
   });
 
   it("negative: 'tests' empty string → fails", () => {
-    const artifact = { ...base(), facts: { changed: ["f.ts"], tests: "" } };
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ tests: "" }),
+    };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/tests/);
+  });
+
+  it("negative: missing 'worktree_root' -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ worktree_root: undefined }),
+    };
+    delete artifact.facts.worktree_root;
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/worktree_root/);
+  });
+
+  it("negative: missing 'task_tracking_root' -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ task_tracking_root: undefined }),
+    };
+    delete artifact.facts.task_tracking_root;
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/task_tracking_root/);
+  });
+
+  it("negative: missing 'phase_completion' -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ phase_completion: undefined }),
+    };
+    delete artifact.facts.phase_completion;
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/phase_completion/);
+  });
+
+  it("negative: relative handoff roots -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        worktree_root: ".",
+        task_tracking_root: "tasks",
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/worktree_root/);
+    expect(result.errors.join(" ")).toMatch(/task_tracking_root/);
+  });
+
+  it("negative: non-string handoff roots -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        worktree_root: 123,
+        task_tracking_root: true,
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/worktree_root/);
+    expect(result.errors.join(" ")).toMatch(/task_tracking_root/);
+  });
+
+  it("negative: missing 'review' -> fails", () => {
+    const artifact = { ...base(), facts: buildCodeFacts({ review: undefined }) };
+    delete artifact.facts.review;
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/review/);
+  });
+
+  it("negative: review without artifact path -> fails", () => {
+    const artifact = { ...base(), facts: buildCodeFacts({ review: { verdict: "pass" } }) };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/artifact_path|artifact_paths/);
+  });
+
+  it("negative: review scalar -> fails", () => {
+    const artifact = { ...base(), facts: buildCodeFacts({ review: "pass" }) };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/review.*object/);
+  });
+
+  it("negative: review array -> fails", () => {
+    const artifact = { ...base(), facts: buildCodeFacts({ review: [] }) };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/review.*object/);
+  });
+
+  it("negative: review number -> fails", () => {
+    const artifact = { ...base(), facts: buildCodeFacts({ review: 1 }) };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/review.*object/);
+  });
+
+  it("negative: review artifact path must be raw JSON -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ review: { verdict: "pass", artifact_path: "reviews/build-code-phase-1.md" } }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/raw JSON/);
+  });
+
+  it("negative: phase_completion must include at least one commit or no-change record -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        phase_completion: { commit_records: [], no_change_records: [] },
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/phase_completion/);
+  });
+
+  it("negative: commit_records require phase_id and 40-hex commit_sha -> fails", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        phase_completion: {
+          commit_records: [{ phase_id: "phase-1", commit_sha: "not-a-sha" }],
+          no_change_records: [],
+        },
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/commit_records/);
+  });
+
+  it("positive: no-change phase completion records are accepted", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        phase_completion: {
+          commit_records: [],
+          no_change_records: [{ phase_id: "phase-docs", no_change_reason: "documentation-only verification phase" }],
+        },
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
+  });
+
+  it("positive: commit_records are accepted only when they match worktree HEAD implementation commit", () => {
+    withGitFixture((repo) => {
+      const commitSha = commitFile(repo, "src/implementation.txt", "phase work\n", "phase implementation");
+      const artifact = {
+        ...base(),
+        facts: buildCodeFacts({
+          worktree_root: repo,
+          task_tracking_root: join(repo, "tasks"),
+          phase_completion: {
+            commit_records: [{ phase_id: "phase-1", commit_sha: commitSha }],
+            no_change_records: [],
+          },
+        }),
+      };
+      const result = validateStageResult("build-code", artifact);
+      expect(result.ok, result.errors?.join("; ")).toBe(true);
+    });
+  });
+
+  it("positive: multi-phase commit_records accept earlier implementation commits before final HEAD", () => {
+    withGitFixture((repo) => {
+      const phaseOneCommit = commitFile(repo, "src/phase-one.txt", "phase one\n", "phase one implementation");
+      const phaseTwoCommit = commitFile(repo, "src/phase-two.txt", "phase two\n", "phase two implementation");
+      const artifact = {
+        ...base(),
+        facts: buildCodeFacts({
+          worktree_root: repo,
+          task_tracking_root: join(repo, "tasks"),
+          phase_completion: {
+            commit_records: [
+              { phase_id: "phase-1", commit_sha: phaseOneCommit },
+              { phase_id: "phase-2", commit_sha: phaseTwoCommit },
+            ],
+            no_change_records: [],
+          },
+        }),
+      };
+      const result = validateStageResult("build-code", artifact);
+      expect(result.ok, result.errors?.join("; ")).toBe(true);
+    });
+  });
+
+  it("negative: commit_records fail when implementation commit is behind HEAD", () => {
+    withGitFixture((repo) => {
+      const implementationCommit = commitFile(repo, "src/implementation.txt", "phase work\n", "phase implementation");
+      commitFile(repo, "phase-result.json", "{}\n", "tracking artifact");
+      const artifact = {
+        ...base(),
+        facts: buildCodeFacts({
+          worktree_root: repo,
+          task_tracking_root: join(repo, "tasks"),
+          phase_completion: {
+            commit_records: [{ phase_id: "phase-1", commit_sha: implementationCommit }],
+            no_change_records: [],
+          },
+        }),
+      };
+      const result = validateStageResult("build-code", artifact);
+      expect(result.ok).toBe(false);
+      expect(result.errors.join(" ")).toMatch(/final implementation commit.*must match worktree HEAD/);
+    });
+  });
+
+  it("negative: commit_records fail when HEAD only changes tracking artifacts", () => {
+    withGitFixture((repo) => {
+      const trackingCommit = commitFile(repo, "phase-result.json", "{}\n", "tracking artifact");
+      const artifact = {
+        ...base(),
+        facts: buildCodeFacts({
+          worktree_root: repo,
+          task_tracking_root: join(repo, "tasks"),
+          phase_completion: {
+            commit_records: [{ phase_id: "phase-1", commit_sha: trackingCommit }],
+            no_change_records: [],
+          },
+        }),
+      };
+      const result = validateStageResult("build-code", artifact);
+      expect(result.ok).toBe(false);
+      expect(result.errors.join(" ")).toMatch(/non-tracking implementation\/test file/);
+    });
   });
 });
 

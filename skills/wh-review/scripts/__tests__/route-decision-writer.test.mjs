@@ -86,7 +86,6 @@ describe("AC2-2/AC2-3: route-decision two-phase write", () => {
 
     const recordPath = join(
       taskDir,
-      "tasks",
       taskId,
       "reviews",
       `route-decision-${stage}-${reviewFlowId}.json`
@@ -161,7 +160,7 @@ describe("AC2-2/AC2-3: route-decision two-phase write", () => {
       { WORKFLOWHUB_TASK_DIR: taskDir }
     );
 
-    const reviewsDir = join(taskDir, "tasks", taskId, "reviews");
+    const reviewsDir = join(taskDir, taskId, "reviews");
     const files = readdirSync(reviewsDir);
     expect(files.length).toBe(1);
 

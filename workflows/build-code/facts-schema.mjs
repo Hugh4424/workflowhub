@@ -33,6 +33,9 @@ export function buildReviewFact({ status, source, verdict, artifactPath }) {
     if (!artifactPath) {
       throw new Error(`executed review requires a non-empty artifactPath`);
     }
+    if (typeof artifactPath !== 'string' || !artifactPath.endsWith('.json')) {
+      throw new Error(`executed review requires a raw JSON artifactPath`);
+    }
     return { status, source, verdict, artifact_path: artifactPath };
   }
   return { status };

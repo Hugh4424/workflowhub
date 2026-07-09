@@ -1,0 +1,63 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "specs/wh-quality-convergence/plan.md",
+      "line": 177,
+      "issue": "Active spec material still references \"Multica 沙箱\" in the D5 mechanism row. The review contract requires active specs/prompts to be platform-neutral, and the supplied host claim of no Multica/multica matches is not true for active specs.",
+      "recommendation": "Replace the platform-specific phrase with neutral wording such as \"agent 沙箱\" or \"非登录 agent 执行环境\", and rerun the active spec/workflow scan."
+    },
+    {
+      "severity": "blocking",
+      "file": "specs/wh-quality-convergence/research.md",
+      "line": 9,
+      "issue": "Active research spec still references \"Multica 沙箱\" while describing the task_dir root cause. This leaves the platform-neutral cleanup incomplete.",
+      "recommendation": "Rewrite the line to use platform-neutral wording, for example \"agent 沙箱不可见\" or \"非登录执行环境不可见\", then rerun the freshness and grep checks."
+    }
+  ],
+  "resolutionSummary": "Build-code receipt validation is stable locally, WORKFLOWHUB_DIFF_BASE wiring is present in build-code, and fresh npm test is green with 69 files passed. Prior platform-neutral cleanup is not fully closed because two active wh-quality-convergence spec files still contain Multica references.",
+  "reviewSnapshot": [
+    {
+      "path": "review-input-verify-code-final-r3.json",
+      "hash": null,
+      "lines": 2229,
+      "truncated": true,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "review-input-verify-code-final-r3.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

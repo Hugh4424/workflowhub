@@ -7,12 +7,12 @@ describe('buildReviewFact', () => {
       status: 'executed',
       source: 'third_party',
       verdict: 'pass',
-      artifactPath: 'x.md',
+      artifactPath: 'verdict-build-code-phase-1-round-1.raw.json',
     });
     expect(fact.status).toBe('executed');
     expect(fact.source).toBe('third_party');
     expect(fact.verdict).toBe('pass');
-    expect(fact.artifact_path).toBe('x.md');
+    expect(fact.artifact_path).toBe('verdict-build-code-phase-1-round-1.raw.json');
   });
 
   it('not_executed status omits source/verdict (may be undefined/null)', () => {
@@ -28,13 +28,13 @@ describe('buildReviewFact', () => {
       status: 'executed',
       source: 'same_source',
       verdict: 'revise_required',
-      artifactPath: 'y.md',
+      artifactPath: 'verdict-build-code-phase-1-round-1.raw.json',
     });
     expect(fact.source).toBe('same_source');
     // status must NOT be changed to not_executed
     expect(fact.status).toBe('executed');
     expect(fact.verdict).toBe('revise_required');
-    expect(fact.artifact_path).toBe('y.md');
+    expect(fact.artifact_path).toBe('verdict-build-code-phase-1-round-1.raw.json');
   });
 
   it('not_executed fact may have empty/absent artifact_path (FR-REVIEW-004)', () => {
@@ -54,7 +54,7 @@ describe('buildReviewFact', () => {
         status: 'executed',
         source: 'third_party',
         verdict: 'invalid_verdict',
-        artifactPath: 'z.md',
+        artifactPath: 'verdict-build-code-phase-1-round-1.raw.json',
       })
     ).toThrow();
   });
@@ -71,10 +71,16 @@ describe('buildReviewFact', () => {
     ).toThrow();
   });
 
-  it('executed with real artifactPath does NOT throw (positive case)', () => {
+  it('executed with raw JSON artifactPath does NOT throw (positive case)', () => {
+    expect(() =>
+      buildReviewFact({ status: 'executed', source: 'third_party', verdict: 'pass', artifactPath: 'verdict-build-code-phase-1-round-1.raw.json' })
+    ).not.toThrow();
+  });
+
+  it('executed with Markdown artifactPath throws', () => {
     expect(() =>
       buildReviewFact({ status: 'executed', source: 'third_party', verdict: 'pass', artifactPath: 'review.md' })
-    ).not.toThrow();
+    ).toThrow(/raw JSON/);
   });
 
   it('not_executed without artifactPath does NOT throw (FR-REVIEW-004 preserved)', () => {
@@ -104,7 +110,7 @@ describe('getWarnings', () => {
       status: 'executed',
       source: 'third_party',
       verdict: 'pass',
-      artifactPath: 'x.md',
+      artifactPath: 'verdict-build-code-phase-1-round-1.raw.json',
     });
     const warnings = getWarnings(fact);
     const match = warnings.find(

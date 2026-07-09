@@ -1,0 +1,56 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "scripts/validate-stage-result.mjs",
+      "line": 84,
+      "issue": "`validateBuildCodeCommitRecordAgainstWorktree()` requires every `facts.phase_completion.commit_records[].commit_sha` to equal current worktree `HEAD`. But the spec now defines `phase_completion` as copied from accepted PHASE_RESULT records across phases. A multi-phase build with two file-changing phases will have multiple implementation commits; only the latest one can equal `HEAD`. Earlier valid phase commits become invalid, so final `stage-result-build-code.json` is rejected for normal multi-phase delivery.",
+      "recommendation": "Validate each commit record exists in the worktree and changes at least one non-tracking implementation/test file. Separately validate the final accepted file-changing phase commit matches current `HEAD`, or define `phase_completion` to include only the final commit if that is the intended contract. Add a regression test with two file-changing phase commits where both commit records are present and the final HEAD is the second commit."
+    }
+  ],
+  "resolutionSummary": "revise_required: implementation closes the tracking-only HEAD case but breaks valid multi-phase file-changing completion facts by requiring all historical phase commits to be HEAD.",
+  "reviewSnapshot": [
+    {
+      "path": "review-input-build-code-commit-ownership-sync-r3.json",
+      "hash": null,
+      "lines": 1017,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "review-input-build-code-commit-ownership-sync-r3.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

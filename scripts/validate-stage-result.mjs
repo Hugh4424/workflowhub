@@ -16,7 +16,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateContract } from "../core/validate-contract.mjs";
 
@@ -45,6 +45,69 @@ function isNonEmpty(value) {
   if (typeof value === "object") return Object.keys(value).length > 0;
   // number, boolean — truthy wins
   return Boolean(value);
+}
+
+function isTrackingArtifactPath(file) {
+  return (
+    file === "phase-result.json" ||
+    file.endsWith("/phase-result.json") ||
+    file === "stage-result-build-code.json" ||
+    file.endsWith("/stage-result-build-code.json") ||
+    file.startsWith("tasks/") ||
+    file.includes("/evidence/") ||
+    file.startsWith("evidence/") ||
+    file.includes("/reviews/") ||
+    file.startsWith("reviews/")
+  );
+}
+
+function commitChangedFiles(worktreeRoot, sha) {
+  return execFileSync("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", sha], {
+    cwd: worktreeRoot,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  })
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function worktreeHead(worktreeRoot, errors) {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: worktreeRoot,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch (err) {
+    errors.push(`facts["worktree_root"] for stage "build-code" must be a readable git worktree: ${err.message}`);
+    return null;
+  }
+}
+
+function validateBuildCodeCommitRecordAgainstWorktree(record, worktreeRoot, errors) {
+  let changed;
+  try {
+    changed = commitChangedFiles(worktreeRoot, record.commit_sha);
+  } catch (err) {
+    errors.push(`facts["phase_completion"].commit_records commit_sha for phase "${record.phase_id}" must be readable in worktree: ${err.message}`);
+    return;
+  }
+  if (!changed.some((file) => !isTrackingArtifactPath(file))) {
+    errors.push(`facts["phase_completion"].commit_records commit_sha for phase "${record.phase_id}" must include at least one non-tracking implementation/test file`);
+  }
+}
+
+function validateBuildCodeCommitRecordsAgainstWorktree(records, worktreeRoot, errors) {
+  const head = worktreeHead(worktreeRoot, errors);
+  if (!head) return;
+  for (const record of records) {
+    validateBuildCodeCommitRecordAgainstWorktree(record, worktreeRoot, errors);
+  }
+  const finalRecord = records.at(-1);
+  if (finalRecord && finalRecord.commit_sha !== head) {
+    errors.push(`facts["phase_completion"].commit_records final implementation commit for phase "${finalRecord.phase_id}" must match worktree HEAD`);
+  }
 }
 
 /**
@@ -82,6 +145,77 @@ export function validateStageResult(stage, artifact) {
     }
   }
 
+  if (stage === "build-code") {
+    for (const key of ["worktree_root", "task_tracking_root"]) {
+      if (key in facts && (typeof facts[key] !== "string" || !isAbsolute(facts[key]))) {
+        errors.push(`facts["${key}"] for stage "build-code" must be an absolute path string`);
+      }
+    }
+    if (facts.review && typeof facts.review === "object" && !Array.isArray(facts.review)) {
+      const artifactPaths = [
+        facts.review.artifact_path,
+        ...(
+          Array.isArray(facts.review.artifact_paths)
+            ? facts.review.artifact_paths
+            : []
+        ),
+      ].filter((path) => typeof path === "string" && path.trim() !== "");
+      if (artifactPaths.length === 0) {
+        errors.push(`facts["review"] for stage "build-code" must include artifact_path or artifact_paths`);
+      } else if (!artifactPaths.some((path) => path.endsWith(".json"))) {
+        errors.push(`facts["review"] for stage "build-code" must reference a raw JSON review artifact`);
+      }
+    } else if ("review" in facts) {
+      errors.push(`facts["review"] for stage "build-code" must be an object`);
+    }
+    if (facts.phase_completion && typeof facts.phase_completion === "object" && !Array.isArray(facts.phase_completion)) {
+      const commitRecords = Array.isArray(facts.phase_completion.commit_records)
+        ? facts.phase_completion.commit_records
+        : null;
+      const noChangeRecords = Array.isArray(facts.phase_completion.no_change_records)
+        ? facts.phase_completion.no_change_records
+        : null;
+      if (!commitRecords) {
+        errors.push(`facts["phase_completion"].commit_records for stage "build-code" must be an array`);
+      }
+      if (!noChangeRecords) {
+        errors.push(`facts["phase_completion"].no_change_records for stage "build-code" must be an array`);
+      }
+      const validCommitRecords = (commitRecords ?? []).filter(
+        (record) =>
+          record &&
+          typeof record === "object" &&
+          typeof record.phase_id === "string" &&
+          record.phase_id.trim() !== "" &&
+          typeof record.commit_sha === "string" &&
+          /^[a-f0-9]{40}$/.test(record.commit_sha)
+      );
+      const validNoChangeRecords = (noChangeRecords ?? []).filter(
+        (record) =>
+          record &&
+          typeof record === "object" &&
+          typeof record.phase_id === "string" &&
+          record.phase_id.trim() !== "" &&
+          typeof record.no_change_reason === "string" &&
+          record.no_change_reason.trim() !== ""
+      );
+      if ((commitRecords?.length ?? 0) + (noChangeRecords?.length ?? 0) === 0) {
+        errors.push(`facts["phase_completion"] for stage "build-code" must include at least one commit_records or no_change_records entry`);
+      }
+      if (commitRecords && validCommitRecords.length !== commitRecords.length) {
+        errors.push(`facts["phase_completion"].commit_records entries must include phase_id and a real 40-hex commit_sha shape`);
+      }
+      if (noChangeRecords && validNoChangeRecords.length !== noChangeRecords.length) {
+        errors.push(`facts["phase_completion"].no_change_records entries must include phase_id and non-empty no_change_reason`);
+      }
+      if (validCommitRecords.length > 0 && typeof facts.worktree_root === "string" && isAbsolute(facts.worktree_root)) {
+        validateBuildCodeCommitRecordsAgainstWorktree(validCommitRecords, facts.worktree_root, errors);
+      }
+    } else if ("phase_completion" in facts) {
+      errors.push(`facts["phase_completion"] for stage "build-code" must be an object`);
+    }
+  }
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -93,16 +227,45 @@ export function validateStageResult(stage, artifact) {
  * triple-dot diff so committed stage work is compared against the merge-base
  * of the target ref and HEAD.
  */
-export function getRealChangedFiles(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD") {
+function normalizeGitPath(file) {
+  return file.replaceAll("\\", "/");
+}
+
+function ignoredReceiptPath(worktreeRoot, stageResultPath) {
+  if (!stageResultPath) return null;
+  const rel = normalizeGitPath(relative(worktreeRoot, stageResultPath));
+  if (!rel || rel === ".." || rel.startsWith("../") || isAbsolute(rel)) return null;
+  return rel;
+}
+
+function pathspecArgs(ignoredPath) {
+  const excludes = [
+    ":(glob,exclude)tasks/**/stage-result-*.json",
+    ":(glob,exclude)tasks/**/reviews/**",
+  ];
+  if (ignoredPath) excludes.push(`:(exclude)${ignoredPath}`);
+  return ["--", ".", ...excludes];
+}
+
+function isReceiptBookkeepingPath(file, ignoredPath) {
+  return (
+    file === ignoredPath ||
+    /^tasks\/[^/]+\/stage-result-[^/]+\.json$/.test(file) ||
+    /^tasks\/[^/]+\/reviews\//.test(file)
+  );
+}
+
+export function getRealChangedFiles(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD", options = {}) {
+  const ignoredPath = options.ignoredPath ?? null;
   const baseOutput =
     baseRef === "HEAD"
       ? ""
-      : execFileSync("git", ["diff", "--name-only", `${baseRef}...HEAD`], {
+      : execFileSync("git", ["diff", "--name-only", `${baseRef}...HEAD`, ...pathspecArgs(ignoredPath)], {
           cwd: worktreeRoot,
           encoding: "utf8",
           stdio: ["pipe", "pipe", "pipe"],
         });
-  const worktreeOutput = execFileSync("git", ["diff", "--name-only", "HEAD"], {
+  const worktreeOutput = execFileSync("git", ["diff", "--name-only", "HEAD", ...pathspecArgs(ignoredPath)], {
     cwd: worktreeRoot,
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
@@ -115,21 +278,23 @@ export function getRealChangedFiles(worktreeRoot, baseRef = process.env.WORKFLOW
   const files = new Set();
   for (const line of `${baseOutput}\n${worktreeOutput}\n${untrackedOutput}`.split("\n")) {
     const file = line.trim();
+    if (isReceiptBookkeepingPath(file, ignoredPath)) continue;
     if (file) files.add(file);
   }
   return [...files].sort();
 }
 
-function getDiffSha(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD") {
+function getDiffSha(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD", options = {}) {
+  const ignoredPath = options.ignoredPath ?? null;
   const baseDiff =
     baseRef === "HEAD"
       ? ""
-      : execFileSync("git", ["diff", `${baseRef}...HEAD`], {
+      : execFileSync("git", ["diff", `${baseRef}...HEAD`, ...pathspecArgs(ignoredPath)], {
           cwd: worktreeRoot,
           encoding: "utf8",
           stdio: ["pipe", "pipe", "pipe"],
         });
-  const worktreeDiff = execFileSync("git", ["diff", "HEAD"], {
+  const worktreeDiff = execFileSync("git", ["diff", "HEAD", ...pathspecArgs(ignoredPath)], {
     cwd: worktreeRoot,
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
@@ -141,6 +306,7 @@ function getDiffSha(worktreeRoot, baseRef = process.env.WORKFLOWHUB_DIFF_BASE ??
   })
     .split("\n")
     .map((line) => line.trim())
+    .filter((line) => !isReceiptBookkeepingPath(line, ignoredPath))
     .filter(Boolean)
     .sort();
   const untrackedPayload = untrackedFiles
@@ -222,6 +388,7 @@ function verifyTestResultLog(stage, facts) {
 export function verifyReceipts(stage, stageResultPath, worktreeRoot, options = {}) {
   const errors = [];
   const baseRef = options.baseRef ?? process.env.WORKFLOWHUB_DIFF_BASE ?? "HEAD";
+  const ignoredPath = ignoredReceiptPath(worktreeRoot, stageResultPath);
 
   // Read and parse stage-result
   let stageResult;
@@ -235,7 +402,7 @@ export function verifyReceipts(stage, stageResultPath, worktreeRoot, options = {
   // Get real changed files from git
   let realChanged;
   try {
-    realChanged = getRealChangedFiles(worktreeRoot, baseRef);
+    realChanged = getRealChangedFiles(worktreeRoot, baseRef, { ignoredPath });
   } catch (err) {
     return {
       ok: false,
@@ -303,7 +470,7 @@ export function verifyReceipts(stage, stageResultPath, worktreeRoot, options = {
   }
   let actualDiffSha;
   try {
-    actualDiffSha = getDiffSha(worktreeRoot, baseRef);
+    actualDiffSha = getDiffSha(worktreeRoot, baseRef, { ignoredPath });
   } catch (err) {
     errors.push(`stage "${stage}" cannot compute git diff sha: ${err.message}`);
     return { ok: false, errors, changed: realChanged };

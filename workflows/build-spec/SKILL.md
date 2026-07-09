@@ -16,30 +16,32 @@ Translate the decision log from `make-decision` into a full spec via an orchestr
 
 #### WORKFLOWHUB_TASK_DIR
 
-全局环境变量 `WORKFLOWHUB_TASK_DIR` 约定所有阶段跟踪文件的存储根目录（即 task_tracking_root）。实际路径解析通过 `core/task-dir-parser.mjs` 完成（优先级：`WORKFLOWHUB_TASK_DIR` 环境变量 → `config/workflowhub.yaml` 的 `task_dir` 字段 → 两者均缺失则 fail-loud 非零退出）：
+全局环境变量 `WORKFLOWHUB_TASK_DIR` 约定所有阶段跟踪文件的存储根目录（即 task_tracking_root）。实际路径解析通过 `core/task-dir-parser.mjs` 完成（优先级：`WORKFLOWHUB_TASK_DIR` 环境变量 → `~/.workflowhub/config.json` 的 `task_dir` 字段 → config 全局 Knowledge 根自动解析到 `Projects/<project-key>/tasks` → 两者均缺失则 fail-loud 非零退出）：
 
-- **优先级 1**：`WORKFLOWHUB_TASK_DIR` 环境变量（已设置且非空时直接使用）
-- **优先级 2**：`config/workflowhub.yaml` 的 `task_dir` 字段（yaml fallback）
+- **优先级 1**：`WORKFLOWHUB_TASK_DIR` 环境变量（已设置且非空时直接作为 task_tracking_root 使用）
+- **优先级 2**：`~/.workflowhub/config.json` 的 `task_dir` 字段；若该值是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器须基于当前 git remote / `repo_root_map` 返回项目级 task_tracking_root
 - **两者均缺失**：fail-loud，非零退出，明确报错；无默认路径，不静默降级
 - **禁止绕过（FR-TRACKING-002）**：所有 stage（包括 spec-specify、spec-clarify 等）必须通过 `core/task-dir-parser.mjs` 获取跟踪文件路径，禁止硬编码绝对跟踪路径
 
-#### --task-dir 参数约定（FR-TASKDIR-001）
+#### task record path bootstrap（FR-TASKDIR-001）
 
-`--task-dir` 控制本次运行的任务目录，所有输入/产物路径均基于它推导：
+所有阶段执行记录路径必须通过 `core/task-record-paths.mjs` 解析：
 
-- **路径推导**：`{task-dir}/decision-log.md` 为输入；`specs/{task-id}/` 为产物目录
-- **参数缺失时**：回退到 `tasks/{task-id}/` 默认路径并记录 warn（不依赖 cwd 猜测）
+- **路径推导**：`taskRecords.decision_log` 为输入；`specs/{task-id}/` 为代码仓库内 spec 产物目录
+- **参数缺失时**：不得回退到 repo-local `tasks/{task-id}/`；必须由 `resolveTaskRecordPaths(taskId)` 通过 env/config 解析
 - **严禁 cwd 猜测**：路径推导不得依赖当前工作目录
 
-**task_dir parser (AC-16)**: 在读取或写入任何任务跟踪文件前，必须通过 `core/task-dir-parser.mjs` 获取基础路径，禁止硬编码 `tasks/{task-id}/` 或 `specs/{task-id}/`。
+**task record path bootstrap (AC-16)**: 在读取或写入任何任务跟踪文件前，必须通过 `core/task-record-paths.mjs` 获取当前 task 的执行记录路径，禁止硬编码 repo-local `tasks/{task-id}/`。`specs/{task-id}/` 是代码仓库内产品规格路径，不属于 task execution record。
 
 ```javascript
-// AC-16 consumable call — grep: parseTaskDir
-import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
+// AC-16 consumable call — grep: resolveTaskRecordPaths
+import { resolveTaskRecordPaths } from "./core/task-record-paths.mjs";
+const taskRecords = resolveTaskRecordPaths(taskId);
+const taskDir = taskRecords.task_tracking_root;
+const taskRoot = taskRecords.task_root;
 ```
 
-本 skill 中所有 `specs/{task-id}/` 路径均为速记写法，运行时必须使用 `path.join(taskDir, taskId, ...)` 构造实际路径。
+本 skill 中所有任务执行记录路径均以 `taskRecords.*` 或 `path.join(taskRoot, ...)` 构造；不得在 repo-local `tasks/` 下查找或落盘任务执行记录，除非 `resolveTaskRecordPaths(taskId).task_tracking_root` 本身返回的就是该目录。`specs/{task-id}/` 仍是代码仓库内的产品规格路径，不属于 task execution record。
 
 ---
 
@@ -87,7 +89,7 @@ build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，
 
 ### 0. Pre-read: decision-log
 
-Read `{--task-dir}/decision-log.md` — the upstream `make-decision` output (default path when `--task-dir` absent: `tasks/{task-id}/decision-log.md`, per FR-TASKDIR-001). Extract the functional description, recorded decisions, and constraints. If the file is missing or the description is empty, stop and report "decision-log missing or empty for {task-id}" before any further work.
+Read `taskRecords.decision_log` — the upstream `make-decision` output resolved through `core/task-record-paths.mjs`. Extract the functional description, recorded decisions, and constraints. If the file is missing or the description is empty, stop and report "decision-log missing or empty for {task-id}" before any further work.
 
 ### 0.5. Worktree context 读取 (FR-WORKTREE-SCOPE-008)
 
@@ -95,8 +97,8 @@ build-spec **不新增 worktree 条目**（不调用 git 的 worktree-创建子�
 
 ```bash
 # worktree.json 路径构造规则（与 build-code §17 一致）：
-# taskDir 通过 parseTaskDir() 获取（WORKFLOWHUB_TASK_DIR env var 优先，yaml fallback，两者缺失 fail-loud）
-node core/worktree-context.mjs {taskDir}/{task-id}/worktree.json
+# 先通过 resolveTaskRecordPaths(taskId) 获取 taskRecords.worktree_json
+node core/worktree-context.mjs "$(node core/task-record-paths.mjs {task-id} worktree.json --must-exist)"
 ```
 
 调用上述命令读取 `worktree.json`：两字段（`target_repo_root`/`worktree_root`）任一缺失时该脚本以非零退出码 fail-loud，build-spec 须据此立即停止推进并 `escalate_to_human`，不得静默回退或自行猜测路径。

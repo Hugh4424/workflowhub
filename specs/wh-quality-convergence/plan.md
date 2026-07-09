@@ -6,7 +6,7 @@
 
 ## Summary
 
-收敛 workflowhub 全链路交付质量：把 receipt 校验从"只查格式"真升为"核验真实工作发生"（git diff + 测试结果比对）；新增 project-key 索引（manifest 追加式，不改变目录结构）；task_dir 配置持久化到 `~/.workflowhub/config.json`；新增 flow_profile 占位字段。全程不引入新阻断型质量门，失败路径统一为"报错停下不静默兜底"。本计划覆盖 build-plan 可规划范围，D1-B/D3-B/D5 的实现代码推迟到 build-code 阶段。
+收敛 workflowhub 全链路交付质量：把 receipt 校验从"只查格式"真升为"核验真实工作发生"（git diff + 测试结果比对）；新增 project-key 索引（manifest 追加式，不改变目录结构）；task_dir 配置持久化到 `~/.workflowhub/config.json`，并在 config 指向全局 Knowledge 根时解析到 `Projects/<project-key>/tasks`；新增 flow_profile 占位字段。全程不引入新阻断型质量门，失败路径统一为"报错停下不静默兜底"。
 
 ## Technical Context
 
@@ -174,7 +174,7 @@ flow_profile 由 make-decision 写入该任务的 decision-log.md（facts.flow_p
 | receipt 真核验 | D1: 校验只查格式不查真实工作（历史已发生多次空跑） | No — 现有校验仅验证 schema | 绕不过 — 证据缺失时 fail-loud | 低 — 复用现有 validate-stage-result.mjs | KEEP |
 | flow_profile 字段 | D2: 无区分 full/fast 模式的标记位，后续自动化无依据 | No — 不存在 | N/A — 仅占位不驱动行为 | 低 — 单字段 schema 变更 | KEEP |
 | manifest 索引 | D3: 多项目 task-id 无法反查 project-key/repo | No — 现有目录结构无索引 | 破坏索引文件会报错停下 | 低 — 追加式文件，无定期维护 | KEEP |
-| config.json task_dir 持久化 | D5: Multica 沙箱看不到 WORKFLOWHUB_TASK_DIR env var | No — 仅有 env var 和 yaml fallback | 读不出时报错，不静默 | 低 — 单字段配置文件 + 解析器修改 | KEEP |
+| config.json task_dir 持久化 | D5: agent 沙箱看不到 WORKFLOWHUB_TASK_DIR env var，且 stage 需要从全局 Knowledge 根定位项目 task records | No — 仅有 env var 和 yaml fallback | 读不出时报错，不静默；config 全局根须项目级展开 | 低 — 单字段配置文件 + 解析器修改 | KEEP |
 
 **F10 Gate Result**: 4 mechanisms evaluated, 4 kept, 0 pruned.
 
@@ -199,7 +199,7 @@ flow_profile 由 make-decision 写入该任务的 decision-log.md（facts.flow_p
 | SIG ID | 模块 | 当前签名描述 | 对应 Task |
 |--------|------|-------------|-----------|
 | SIG-001 | `scripts/validate-stage-result.mjs` | 导出 `validateStageResult({stage, stageResultPath, worktreeRoot})`，exit code 0/1。需扩展 `getRealChangedFiles()` / `verifyReceipts()` | T004, T005 |
-| SIG-002 | `core/task-dir-parser.mjs` | 导出 `parseTaskDir()`，优先级：WORKFLOWHUB_TASK_DIR env → yaml.task_dir → fail-loud。需新增 config.json 读取路径 | T008 |
+| SIG-002 | `core/task-dir-parser.mjs` | 导出 `parseTaskDir()`，优先级：WORKFLOWHUB_TASK_DIR env 直接根 → `~/.workflowhub/config.json` task_dir → 若 config 为全局 Knowledge 根则解析 `Projects/<project-key>/tasks` → fail-loud；不得回退到 `~` 或 yaml.task_dir | T008 |
 | SIG-003 | `contracts/stage-result.contract.json` | 定义 `{status, error_code, retryable, facts, missing_items, user_decision, reason, review}` schema。flow_profile 字段加在 stage-result facts（由 make-decision 写入），本 stage schema 不变更 | N/A |
 | SIG-004 | `workflows/build-plan/SKILL.md` step 8 | wh-review Phase 1 (prepareRoundState) + Phase 2 (invoke-review-engine) 调用点。需保证 stage-result 落盘后校验入口正确 | T011 |
 

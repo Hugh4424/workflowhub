@@ -1,0 +1,58 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "scripts/validate-stage-result.mjs",
+      "line": 91,
+      "issue": "build-code facts.review is only checked for artifact_path/artifact_paths when it is an object. The generic required-key check treats any non-empty scalar as valid, so a stage-result with facts.review:\"pass\" currently passes validateStageResult without any raw JSON review artifact. I reproduced this locally with validateStageResult(\"build-code\", artifact) returning ok:true for review:\"pass\".",
+      "recommendation": "Require facts.review to be an object for build-code before accepting it, then require artifact_path or artifact_paths to contain at least one non-empty .json path. Add a negative test for facts.review as a string/array/number."
+    },
+    {
+      "severity": "blocking",
+      "file": "workflows/build-code/SKILL.md",
+      "line": 118,
+      "issue": "The updated workflow says buildReviewFact enforces the facts.review schema and now documents raw JSON verdict paths, but the actual producer helper still accepts any non-empty artifactPath and existing tests still assert review.md/x.md are valid. That keeps the producer contract inconsistent with the new gate/stage facts contract: build-code can still construct Markdown review facts that later fail validation.",
+      "recommendation": "Update workflows/build-code/facts-schema.mjs and its tests so executed review facts require a raw JSON artifact path, or change this SKILL.md line to stop claiming the helper enforces that contract and add an explicit validation step before stage-result assembly. Recommended: enforce .json in buildReviewFact and update tests/build-code-review.test.mjs away from .md positives."
+    }
+  ],
+  "resolutionSummary": "revise_required: targeted tests and git diff --check pass, but build-code review fact validation still has a false-pass scalar path, and the documented raw JSON producer contract is not enforced by buildReviewFact.",
+  "reviewSnapshot": [
+    {
+      "path": "diff.json",
+      "hash": null,
+      "lines": 1103,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "diff.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

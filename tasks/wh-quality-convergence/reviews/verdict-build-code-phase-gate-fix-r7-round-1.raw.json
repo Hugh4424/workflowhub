@@ -1,0 +1,58 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "scripts/phase-gate.mjs",
+      "line": 87,
+      "issue": "diff scan 事实可被空对象伪造。checkDiffScan 只要求 diff_scan 是 object；当 diff_scan:{} 时，scan.safe 不是 false，violations/c2_violations/allowlist_violations 都被 asArray(undefined) 当作空数组，gate 会通过。这违背 phase completion fact gate 的目标：必须有真实 diff scan result，不能假绿。",
+      "recommendation": "要求 diff scan artifact/inline result 至少包含 safe:true 和 violations:Array；如果使用 c2_violations/allowlist_violations 作为合同字段，也要求它们存在且为数组。补充 negative test：diff_scan:{}、{safe:true}、{violations:[]} 都应失败，完整 scan shape 才通过。"
+    },
+    {
+      "severity": "blocking",
+      "file": "scripts/phase-gate.mjs",
+      "line": 173,
+      "issue": "commit record 只验证“仓库里存在这个 commit”，不验证它是本 phase 的完成提交。hasCommitRecord 对任意历史 40-hex commit 返回 true；我用初始提交作为 commit_records，随后又提交 phase 变更，validatePhaseGate 仍返回 ok:true。这会让 file-changing phase 用旧 commit 冒充当前 phase commit。",
+      "recommendation": "对 commit_intent:\"file_changes\" 要求 recorded commit 与当前 clean worktree 的 HEAD 一致，或至少要求 recorded commit 覆盖当前 phase 产物并是 gate 运行时 HEAD。补充 negative test：commit_records 使用旧 commit、HEAD 另有 phase commit 时必须失败。"
+    }
+  ],
+  "resolutionSummary": "Spec/Standards/Structural Quality 已覆盖。测试命令和 git diff --check 通过，但 phase-gate 仍有两个假绿路径：diff scan 可空对象通过，commit record 可用旧 commit 通过。需要返修。",
+  "reviewSnapshot": [
+    {
+      "path": "diff.json",
+      "hash": null,
+      "lines": 871,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "diff.json"
+    }
+  ],
+  "provider": "codex",
+  "host": "unknown",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "actual_mode": "full",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

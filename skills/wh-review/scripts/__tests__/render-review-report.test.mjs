@@ -104,9 +104,9 @@ describe("reportPathFor (AC4-2: fixed path rule, verdict->suffix mapping)", () =
     const pass = reportPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: STAGE, reviewFlowId: FLOW, totalRound: 3, verdict: "pass" });
     const revise = reportPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: STAGE, reviewFlowId: FLOW, totalRound: 2, verdict: "revise_required" });
     const escalated = reportPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: STAGE, reviewFlowId: FLOW, totalRound: 4, verdict: "escalate_to_human" });
-    expect(pass).toBe(join(root, "tasks", TASK_ID, "reports", `${STAGE}--${FLOW}--3-pass.md`));
-    expect(revise).toBe(join(root, "tasks", TASK_ID, "reports", `${STAGE}--${FLOW}--2-revise.md`));
-    expect(escalated).toBe(join(root, "tasks", TASK_ID, "reports", `${STAGE}--${FLOW}--4-escalated.md`));
+    expect(pass).toBe(join(root, TASK_ID, "reports", `${STAGE}--${FLOW}--3-pass.md`));
+    expect(revise).toBe(join(root, TASK_ID, "reports", `${STAGE}--${FLOW}--2-revise.md`));
+    expect(escalated).toBe(join(root, TASK_ID, "reports", `${STAGE}--${FLOW}--4-escalated.md`));
     const suffixes = new Set([pass, revise, escalated].map((p) => p.split("-").pop()));
     expect(suffixes.size).toBe(3);
   });
@@ -114,8 +114,8 @@ describe("reportPathFor (AC4-2: fixed path rule, verdict->suffix mapping)", () =
   it("the same fixed join rule holds across different stages/rounds", () => {
     const p1 = reportPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: "build-spec", reviewFlowId: FLOW, totalRound: 1, verdict: "pass" });
     const p2 = reportPathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage: "verify-code", reviewFlowId: "flow-xyz", totalRound: 5, verdict: "pass" });
-    expect(p1.startsWith(join(root, "tasks", TASK_ID, "reports"))).toBe(true);
-    expect(p2.startsWith(join(root, "tasks", TASK_ID, "reports"))).toBe(true);
+    expect(p1.startsWith(join(root, TASK_ID, "reports"))).toBe(true);
+    expect(p2.startsWith(join(root, TASK_ID, "reports"))).toBe(true);
   });
 
   it("fails loud on an unknown verdict", () => {
@@ -133,6 +133,6 @@ describe("writeReviewReport (end-to-end)", () => {
     });
     expect(existsSync(path)).toBe(true);
     expect(readFileSync(path, "utf8")).toBe(markdown);
-    expect(path).toBe(join(root, "tasks", TASK_ID, "reports", `${STAGE}--${FLOW}--1-pass.md`));
+    expect(path).toBe(join(root, TASK_ID, "reports", `${STAGE}--${FLOW}--1-pass.md`));
   });
 });

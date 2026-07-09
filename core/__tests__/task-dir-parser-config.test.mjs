@@ -53,6 +53,32 @@ function runParser(env = {}) {
   }
 }
 
+function runParserFrom(cwd, env = {}) {
+  const code = `import { parseTaskDir } from ${JSON.stringify(parserPath)}; process.stdout.write(parseTaskDir());`;
+  const childEnv = { ...process.env };
+  delete childEnv.WORKFLOWHUB_TASK_DIR;
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) {
+      delete childEnv[k];
+    } else {
+      childEnv[k] = v;
+    }
+  }
+  try {
+    const stdout = execSync(
+      `node --input-type=module -e ${JSON.stringify(code)}`,
+      { cwd, env: childEnv, encoding: "utf8" }
+    );
+    return { exitCode: 0, stdout, stderr: "" };
+  } catch (err) {
+    return {
+      exitCode: err.status ?? 1,
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? "",
+    };
+  }
+}
+
 describe("FR-TASKDIR-002 config.json task_dir parser", () => {
   let tmpDir;
 
@@ -79,6 +105,35 @@ describe("FR-TASKDIR-002 config.json task_dir parser", () => {
     const result = runParser({ HOME: fakeHome });
     assert.equal(result.exitCode, 0);
     assert.equal(result.stdout, tmpDir);
+  });
+
+  it("config.json knowledge root resolves to project-scoped task_tracking_root", () => {
+    const fakeHome = join(tmpDir, "fake-home");
+    const configDir = join(fakeHome, ".workflowhub");
+    const knowledgeRoot = join(tmpDir, "Knowledge");
+    const projectTasksRoot = join(knowledgeRoot, "Projects", "workflowhub", "tasks");
+    const repoRoot = join(tmpDir, "workflowhub");
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectTasksRoot, { recursive: true });
+    mkdirSync(repoRoot, { recursive: true });
+    execSync("git init", { cwd: repoRoot, stdio: "ignore" });
+    execSync("git remote add origin https://github.com/Hugh4424/workflowhub.git", {
+      cwd: repoRoot,
+      stdio: "ignore",
+    });
+    writeFileSync(
+      join(configDir, "config.json"),
+      JSON.stringify({
+        task_dir: knowledgeRoot,
+        repo_root_map: {
+          "https://github.com/Hugh4424/workflowhub.git": repoRoot,
+        },
+      })
+    );
+
+    const result = runParserFrom(repoRoot, { HOME: fakeHome });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, projectTasksRoot);
   });
 
   // --- env var takes priority over config.json ---

@@ -33,7 +33,7 @@ const REVIEW_FLOW_ID = "flow-abc123";
 
 function writeRoundStateFixture({ root, stage = STAGE, reviewFlowId = REVIEW_FLOW_ID, mode = "full" }) {
   const path = roundStatePathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage, reviewFlowId });
-  mkdirSync(join(root, "tasks", TASK_ID, "reviews"), { recursive: true });
+  mkdirSync(join(root, TASK_ID, "reviews"), { recursive: true });
   writeFileSync(
     path,
     JSON.stringify(
@@ -55,7 +55,7 @@ function writeRoundStateFixture({ root, stage = STAGE, reviewFlowId = REVIEW_FLO
 }
 
 function writePromptFixture({ root, reviewFlowId = REVIEW_FLOW_ID, totalRound, content = "prompt supplementary text" }) {
-  const path = join(root, "tasks", TASK_ID, "reviews", `prompt-${reviewFlowId}-r${totalRound}.md`);
+  const path = join(root, TASK_ID, "reviews", `prompt-${reviewFlowId}-r${totalRound}.md`);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
 }
@@ -178,7 +178,7 @@ describe("invokeReviewEngine — success path", () => {
 
     expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
 
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
     expect(existsSync(artifactPath)).toBe(true);
     const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
     expect(artifact).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
@@ -194,7 +194,7 @@ describe("invokeReviewEngine — task_tracking_root resolvability guard (round-1
   // A previous round hard-required `process.env.WORKFLOWHUB_TASK_DIR` to be literally
   // set, which broke every clean-shell / CI invocation: WORKFLOWHUB_TASK_DIR is an
   // optional override of parseTaskDir()'s priority chain, not a hard requirement —
-  // config/workflowhub.yaml's `task_dir` yaml fallback must keep resolving a valid
+  // ~/.workflowhub/config.json's `task_dir` fallback must keep resolving a valid
   // task_tracking_root on its own when invoked from within the repo. The guard now
   // only fails loud when NEITHER the env var NOR the yaml fallback can resolve one.
   let savedTaskDir;
@@ -230,7 +230,7 @@ describe("invokeReviewEngine — task_tracking_root resolvability guard (round-1
     expect(result.verdict).toBe("pass");
     // The explicit taskTrackingRoot override is still honored — the artifact lands
     // in the test's own temp dir, never the real repo tasks/ directory.
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
     expect(existsSync(artifactPath)).toBe(true);
   });
 
@@ -276,7 +276,7 @@ describe("invokeReviewEngine — failure mapping (AC5-5)", () => {
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: missingPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-1.raw.json`);
     assertSynthesizedFailure(result, artifactPath, "runner-missing");
   });
 
@@ -293,7 +293,7 @@ describe("invokeReviewEngine — failure mapping (AC5-5)", () => {
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-2.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-2.raw.json`);
     assertSynthesizedFailure(result, artifactPath, "non-zero-exit");
   });
 
@@ -311,7 +311,7 @@ describe("invokeReviewEngine — failure mapping (AC5-5)", () => {
       timeoutMs: 200,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-3.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-3.raw.json`);
     assertSynthesizedFailure(result, artifactPath, "timeout");
   }, 10000);
 
@@ -328,7 +328,7 @@ describe("invokeReviewEngine — failure mapping (AC5-5)", () => {
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-4.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-4.raw.json`);
     assertSynthesizedFailure(result, artifactPath, "output-unparseable");
   });
 
@@ -345,7 +345,7 @@ describe("invokeReviewEngine — failure mapping (AC5-5)", () => {
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-5.raw.json`);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-5.raw.json`);
     assertSynthesizedFailure(result, artifactPath, "output-unparseable");
   });
 
@@ -386,7 +386,136 @@ process.exit(0);
     expect(result.findings).toEqual([{ severity: "blocking", file: "a.mjs", line: 10, issue: "x", recommendation: "y" }]);
   });
 
-  it("output-unparseable: a finding has a blank `category` string (present but empty)", () => {
+  it("normalizes a line 0 finding instead of discarding the whole real review result", () => {
+    const runnerPath = writeFindingStub({
+      severity: "blocking",
+      file: "reports/report-index.md",
+      line: 0,
+      issue: "missing file",
+      recommendation: "write report index",
+    });
+    const result = invokeReviewEngine({
+      taskId: TASK_ID,
+      stage: STAGE,
+      reviewFlowId: REVIEW_FLOW_ID,
+      totalRound: 10,
+      mode: "full",
+      contract: "c",
+      materials: "m",
+      taskTrackingRoot: root,
+      env: { THIRD_REVIEW_RUNNER: runnerPath },
+    });
+
+    expect(result.verdict).toBe("revise_required");
+    expect(result.findings).toEqual([
+      {
+        severity: "blocking",
+        file: "reports/report-index.md",
+        line: 1,
+        original_line: 0,
+        issue: "missing file",
+        recommendation: "write report index",
+      },
+    ]);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-10.raw.json`);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+    expect(artifact.findings[0].original_line).toBe(0);
+  });
+
+  it("preserves backend escalate_to_human with findings instead of synthesizing output-unparseable", () => {
+    const runnerPath = writeStubRunner(`
+import { writeFileSync } from "node:fs";
+const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
+writeFileSync(args.output, JSON.stringify({
+  verdict: "escalate_to_human",
+  findings: [{
+    severity: "blocking",
+    file: "verify-change --light",
+    line: 0,
+    issue: "required skill unavailable",
+    recommendation: "install or provide fallback"
+  }],
+  actual_mode: "full",
+}));
+process.exit(0);
+`);
+    const result = invokeReviewEngine({
+      taskId: TASK_ID,
+      stage: STAGE,
+      reviewFlowId: REVIEW_FLOW_ID,
+      totalRound: 11,
+      mode: "full",
+      contract: "c",
+      materials: "m",
+      taskTrackingRoot: root,
+      env: { THIRD_REVIEW_RUNNER: runnerPath },
+    });
+
+    expect(result.verdict).toBe("escalate_to_human");
+    expect(result.actual_mode).toBe("full");
+    expect(result.findings).toEqual([
+      {
+        severity: "blocking",
+        file: "verify-change --light",
+        line: 1,
+        original_line: 0,
+        issue: "required skill unavailable",
+        recommendation: "install or provide fallback",
+      },
+    ]);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-11.raw.json`);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+    expect(artifact.synthetic).toBeUndefined();
+    expect(artifact.findings[0].original_line).toBe(0);
+  });
+
+  it("normalizes non-blocking important findings and missing actual_mode instead of synthesizing output-unparseable", () => {
+    const runnerPath = writeStubRunner(`
+import { writeFileSync } from "node:fs";
+const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
+writeFileSync(args.output, JSON.stringify({
+  verdict: "pass",
+  findings: [{
+    severity: "important",
+    file: "",
+    line: null,
+    description: "non-blocking note"
+  }]
+}));
+process.exit(0);
+`);
+    const result = invokeReviewEngine({
+      taskId: TASK_ID,
+      stage: STAGE,
+      reviewFlowId: REVIEW_FLOW_ID,
+      totalRound: 12,
+      mode: "full",
+      contract: "c",
+      materials: "m",
+      taskTrackingRoot: root,
+      env: { THIRD_REVIEW_RUNNER: runnerPath },
+    });
+
+    expect(result.verdict).toBe("pass");
+    expect(result.actual_mode).toBe("not_executed");
+    expect(result.findings).toEqual([
+      {
+        severity: "minor",
+        file: "REVIEW_CONTRACT",
+        line: 1,
+        original_line: null,
+        description: "non-blocking note",
+        issue: "non-blocking note",
+        recommendation: "",
+      },
+    ]);
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-12.raw.json`);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+    expect(artifact.synthetic).toBeUndefined();
+    expect(artifact.verdict).toBe("pass");
+  });
+
+  it("normalizes a finding with a blank `category` string", () => {
     const runnerPath = writeFindingStub({
       severity: "blocking",
       file: "a.mjs",
@@ -406,11 +535,17 @@ process.exit(0);
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-9.raw.json`);
-    assertSynthesizedFailure(result, artifactPath, "output-unparseable");
+    expect(result).toEqual({
+      verdict: "revise_required",
+      findings: [{ severity: "blocking", file: "a.mjs", line: 10, issue: "x", recommendation: "y" }],
+      actual_mode: "full",
+    });
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-9.raw.json`);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+    expect(artifact.synthetic).toBeUndefined();
   });
 
-  it("output-unparseable: a finding has a non-integer `line`", () => {
+  it("normalizes a finding with a non-integer `line`", () => {
     const runnerPath = writeFindingStub({
       severity: "blocking",
       file: "a.mjs",
@@ -430,11 +565,25 @@ process.exit(0);
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-7.raw.json`);
-    assertSynthesizedFailure(result, artifactPath, "output-unparseable");
+    expect(result).toEqual({
+      verdict: "revise_required",
+      findings: [{
+        severity: "blocking",
+        file: "a.mjs",
+        line: 1,
+        original_line: "10",
+        category: "cat",
+        issue: "x",
+        recommendation: "y",
+      }],
+      actual_mode: "full",
+    });
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-7.raw.json`);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+    expect(artifact.synthetic).toBeUndefined();
   });
 
-  it("output-unparseable: a finding has an out-of-enum `severity`", () => {
+  it("normalizes a finding with an out-of-enum `severity`", () => {
     const runnerPath = writeFindingStub({
       severity: "critical",
       file: "a.mjs",
@@ -454,8 +603,21 @@ process.exit(0);
       taskTrackingRoot: root,
       env: { THIRD_REVIEW_RUNNER: runnerPath },
     });
-    const artifactPath = join(root, "tasks", TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-8.raw.json`);
-    assertSynthesizedFailure(result, artifactPath, "output-unparseable");
+    expect(result).toEqual({
+      verdict: "revise_required",
+      findings: [{
+        severity: "minor",
+        file: "a.mjs",
+        line: 10,
+        category: "cat",
+        issue: "x",
+        recommendation: "y",
+      }],
+      actual_mode: "full",
+    });
+    const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-8.raw.json`);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+    expect(artifact.synthetic).toBeUndefined();
   });
 });
 
@@ -488,7 +650,7 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
     expect(payload.materials).toContain("supplementary context r1");
 
     // this round's own snapshot must now exist for round 2 to diff against
-    expect(existsSync(join(root, "tasks", TASK_ID, "reviews", "snapshots", `spec-${REVIEW_FLOW_ID}-r1.md`))).toBe(true);
+    expect(existsSync(join(root, TASK_ID, "reviews", "snapshots", `spec-${REVIEW_FLOW_ID}-r1.md`))).toBe(true);
   });
 
   it("doc-type round 2: materials is the round1->round2 snapshot diff, not full text again", () => {
@@ -531,7 +693,7 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
     expect(payload.materials).toContain("diff --git a/foo.js b/foo.js");
     expect(payload.materials).toContain("supplementary context");
     expect(
-      existsSync(join(root, "tasks", TASK_ID, "reviews", `materials-baseline-${STAGE}-${REVIEW_FLOW_ID}-r1.json`))
+      existsSync(join(root, TASK_ID, "reviews", `materials-baseline-${STAGE}-${REVIEW_FLOW_ID}-r1.json`))
     ).toBe(true);
   });
 

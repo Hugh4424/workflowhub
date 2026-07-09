@@ -40,9 +40,12 @@
 |---|---|
 | 配置文件 | `~/.workflowhub/config.json` |
 | 字段名 | `task_dir`（string） |
-| 优先级链 | WORKFLOWHUB_TASK_DIR env > config.json > 默认 `~` |
-| 未配置默认值 | `~`（用户主目录） |
-| 失败路径 | 读不出/格式错时报错，不得套用默认值 |
+| 语义 | 可为直接 task_tracking_root，也可为包含 `Projects/<project-key>/tasks` 的全局 Knowledge 根 |
+| 优先级链 | WORKFLOWHUB_TASK_DIR env（直接 task root） > `~/.workflowhub/config.json` task_dir > fail-loud |
+| 项目级解析 | 当 config task_dir 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks` 时，`parseTaskDir()` 基于当前 git remote / `repo_root_map` 返回项目级 task_tracking_root |
+| 任务执行目录 | 所有 stage 执行文件位于 `{task_tracking_root}/{task-id}/`，不得额外拼接 repo-local `tasks/` |
+| 未配置默认值 | 无默认值；不得套用 `~` 或任何猜测路径 |
+| 失败路径 | env 与 config 均缺失、config 读不出/格式错、task_dir 为空或路径不可用时均报错，不得套用默认值 |
 
 ## 5. stage-result schema（build-plan 新增 facts）
 

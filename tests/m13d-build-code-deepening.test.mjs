@@ -12,6 +12,7 @@ import { parseTaskDir } from "../core/task-dir-parser.mjs";
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const SKILL_PATH = join(REPO_ROOT, "workflows", "build-code", "SKILL.md");
 const CONTRACTS_PATH = join(REPO_ROOT, "specs", "m13d-build-code-deepening", "data-contracts.md");
+const SPEC_PATH = join(REPO_ROOT, "specs", "m13d-build-code-deepening", "spec.md");
 
 const TASK_DIR = parseTaskDir();
 const EVIDENCE_DIR = join(TASK_DIR, "m13d-build-code-deepening", "evidence");
@@ -51,6 +52,7 @@ function parseFrontmatterLike(text) {
 describe("T009: build-code SKILL.md aligns with data-contracts.md field naming", () => {
   const skill = readText(SKILL_PATH);
   const contracts = readText(CONTRACTS_PATH);
+  const spec = readText(SPEC_PATH);
 
   it("names all five evidence artifacts from the data contract", () => {
     const artifacts = [
@@ -111,6 +113,39 @@ describe("T009: build-code SKILL.md aligns with data-contracts.md field naming",
         `SKILL.md must not use alias "${alias}" for rework_proxy_count`
       );
     }
+  });
+
+  it("assigns phase-scoped implementation commits to the phase executor, not the coordinator", () => {
+    const oldCommitInstruction = ["DO", "NOT", "commit"].join(" ");
+    assert.ok(
+      skill.includes("phase executor owns the phase-scoped implementation commit"),
+      "SKILL.md must assign phase-scoped implementation commits to the phase executor"
+    );
+    assert.match(
+      skill,
+      /coordinator\).*verifies the commit\/no-change record/,
+      "SKILL.md must keep the coordinator in a verification role"
+    );
+    assert.ok(
+      !skill.includes(oldCommitInstruction),
+      `SKILL.md must not pass the old ${oldCommitInstruction} instruction to implementation subagents`
+    );
+    assert.ok(
+      spec.includes("phase executor"),
+      "spec.md must document phase executor commit ownership"
+    );
+    assert.ok(
+      skill.includes("facts.phase_completion"),
+      "SKILL.md must define a stable stage-result phase_completion fact"
+    );
+    assert.ok(
+      skill.includes("commit_records"),
+      "SKILL.md must expose commit_records for downstream verification"
+    );
+    assert.ok(
+      !spec.includes(oldCommitInstruction),
+      `active spec.md must not preserve the old ${oldCommitInstruction} acceptance criterion`
+    );
   });
 });
 

@@ -45,3 +45,12 @@ describe("receipt wiring in workflow skills", () => {
     });
   }
 });
+
+describe("build-code committed-diff receipt base", () => {
+  it("requires WORKFLOWHUB_DIFF_BASE and passes baseRef to verifyReceipts", () => {
+    const content = readFileSync(resolve("workflows/build-code/SKILL.md"), "utf8");
+    expect(content).toContain("WORKFLOWHUB_DIFF_BASE");
+    expect(content).toContain("const baseRef = process.env.WORKFLOWHUB_DIFF_BASE");
+    expect(content).toContain('verifyReceipts("build-code", "<stageResultPath>", "<worktreeRoot>", { baseRef })');
+  });
+});

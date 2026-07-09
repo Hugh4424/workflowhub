@@ -17,7 +17,7 @@
 
 ## 速读卡（30 秒看懂这个需求）
 
-- **一句话需求**：在不引入新阻断型质量门的前提下，收敛 workflowhub make-decision 阶段与全链路交付质量的四个根因（receipt 校验形同虚设、project-key 多项目隔离缺失、决策日志引用准确性存疑、task_dir 配置在 Multica 沙箱不可见）。
+- **一句话需求**：在不引入新阻断型质量门的前提下，收敛 workflowhub make-decision 阶段与全链路交付质量的四个根因（receipt 校验形同虚设、project-key 多项目隔离缺失、决策日志引用准确性存疑、task_dir 配置在 agent 沙箱不可见）。
 - **核心改动点**：
   1. receipt 校验从"只查格式"升级为"真核验"（比对 git diff 与测试执行结果）。
   2. 新增 flow_profile 占位字段（full/fast 两档），本轮只定字段与取值，行为接入推迟。
@@ -28,7 +28,7 @@
 
 ## 1. 问题陈述
 
-当前：workflowhub 各 stage 的 receipt 检查仅验证 schema/格式，不验证真实工作是否完成；task_dir 依赖用户 shell 环境变量，Multica agent 沙箱看不到该变量（"睁眼瞎"问题）；project 间任务目录无隔离机制，多项目场景下 task-id 无法反查所属 project/repo；决策日志引用来源的准确性此前存在未核实的风险。
+当前：workflowhub 各 stage 的 receipt 检查仅验证 schema/格式，不验证真实工作是否完成；task_dir 依赖用户 shell 环境变量，agent 沙箱看不到该变量（"睁眼瞎"问题）；project 间任务目录无隔离机制，多项目场景下 task-id 无法反查所属 project/repo；决策日志引用来源的准确性此前存在未核实的风险。
 
 问题：这四类根因导致质量收敛机制"形同虚设"——receipt 校验可能对未完成的工作放行；task_dir 在沙箱环境中解析失败或退化为不可控默认值；多项目并行时任务目录可能互相干扰或无法定位归属；决策依据的引用可能失真，影响后续 plan/code/verify 阶段的可信度。
 
@@ -36,13 +36,13 @@
 
 ### 背景
 
-本任务是 workflowhub `make-decision` 阶段收敛工作的延续，直接消费上游 decision-log 中已用户批准的 D1-D6 决策记录（`tasks/wh-quality-convergence/decision-log.md` 说明见文档头部「来源」字段）。D1-B、D3-B 设计已定（`scripts/validate-stage-result.mjs` 改造、新建 `core/task-index.mjs`），但代码实现待 build-code 阶段完成——此前在旧 Multica 沙箱临时目录里做的实现 commit 因目录清理已丢失，本 spec 的职责是把这些已决策但代码待实现的机制正式转化为可追溯的规格文档，供 build-plan/build-code/build-verify 阶段引用；同时明确哪些部分（D1-B、D3-B 的具体代码，以及 D5 config.json 接入 `core/task-dir-parser.mjs`）仍待 build-code 阶段完成。
+本任务是 workflowhub `make-decision` 阶段收敛工作的延续，直接消费上游 decision-log 中已用户批准的 D1-D6 决策记录（`tasks/wh-quality-convergence/decision-log.md` 说明见文档头部「来源」字段）。D1-B、D3-B 设计已定（`scripts/validate-stage-result.mjs` 改造、新建 `core/task-index.mjs`），但代码实现待 build-code 阶段完成——此前在旧 agent 沙箱临时目录里做的实现 commit 因目录清理已丢失，本 spec 的职责是把这些已决策但代码待实现的机制正式转化为可追溯的规格文档，供 build-plan/build-code/build-verify 阶段引用；同时明确哪些部分（D1-B、D3-B 的具体代码，以及 D5 config.json 接入 `core/task-dir-parser.mjs`）仍待 build-code 阶段完成。
 
 ### 目标
 
 - receipt 校验能够真实核验工作是否发生（git diff + 测试执行结果比对），而非仅比对 schema。
 - 任务目录具备跨 project 的索引能力，可通过 task-id 反查所属 project-key/repo，且不改变现有目录结构。
-- task_dir 配置在 Multica 沙箱等不继承 shell 环境变量的环境中仍可正确解析（config.json 优先于环境变量缺失的场景）。
+- task_dir 配置在 agent 沙箱等非登录执行环境中仍可正确解析（config.json 优先于环境变量缺失的场景）。
 - 全程不引入新的阻断型质量门（CONSTITUTION F4），失败路径统一为"报错停下，不静默兜底"。
 
 ### 语义澄清："不引入阻断型质量门"（F4）与"报错停下"（F9）不矛盾
@@ -60,7 +60,7 @@
 
 ### 假设
 
-- **假设 1**：Multica agent 沙箱不继承用户 shell 环境变量，这是 D5 问题的根本原因，非偶发 bug。来源：decision-log 第四节「假设」。理由：decision-log 已由用户批准的调查结论直接给出，本 spec 不重新论证。
+- **假设 1**：agent 沙箱不继承用户 shell 环境变量，这是 D5 问题的根本原因，非偶发 bug。来源：decision-log 第四节「假设」。理由：decision-log 已由用户批准的调查结论直接给出，本 spec 不重新论证。
 - **假设 2**：`scripts/validate-stage-result.mjs` 非死代码，保留不删（`tests/facts-subschema.test.mjs` 中有 30+ 真实调用）。来源：decision-log D1-A + 第四节「假设」。理由：D1-A 是对既有前置调查结论的核实性维持，不涉及新行为，因此本 spec 不为其单独设 FR，仅作为背景假设记录。
 - **假设 3**：decision-log 对 `tasks/worktree-unification/artifacts/make-decision-decision-log.md`（105 行/7 节）的引用已核实准确——**核实范围说明**：该路径同样未在本次 checkout 工作树中持久化，本假设记录的是决策发生当时（make-decision 阶段）已完成的核实结论供下游阶段参考，本 spec 不对该外部路径当前是否可访问做二次担保。来源：decision-log D4。理由：D4 是元层面的引用来源核实（文档溯源事实），不是产品功能需求，因此不产出对应 FR，仅在此记录核实结论供下游阶段信任该引用。
 - **假设 4**：D6（worktree 碰撞保护）维持现状、不做任何改动，复用现有 `core/worktree-reuse-guard.mjs`。来源：decision-log D6。理由：D6 明确是"不变更"决策，没有新行为可供 FR 描述，因此本 spec 不为其设 FR，改在「非目标」性质上记录（该机制不属于本次变更范围，任何后续阶段不得因本任务而改动它）。
@@ -84,9 +84,9 @@
 ### 场景三：task_dir 从 config.json 正常解析（正常路径）
 
 - **角色**：workflowhub 任一 stage 启动时的 task_dir 解析逻辑
-- **前置条件**：`~/.workflowhub/config.json` 中已配置合法的 `task_dir` 字段；`WORKFLOWHUB_TASK_DIR` 环境变量未设置（如 Multica 沙箱环境）。
-- **操作步骤**：解析器按优先级读取 config.json 的 `task_dir` 字段。
-- **预期结果**：使用 config.json 中的配置值作为 task_tracking_root，不因环境变量缺失而报错或"睁眼瞎"。
+- **前置条件**：`~/.workflowhub/config.json` 中已配置合法的 `task_dir` 字段；`WORKFLOWHUB_TASK_DIR` 环境变量未设置（如 agent 沙箱环境）。
+- **操作步骤**：解析器按优先级读取 config.json 的 `task_dir` 字段；若该值是全局 Knowledge 根，则基于当前 git remote / `repo_root_map` 查找 `Projects/<project-key>/tasks`。
+- **预期结果**：使用 config.json 推导出的最终项目级 task_tracking_root，不因环境变量缺失而报错或"睁眼瞎"。
 
 ### 场景四：config.json 格式错误或 task_dir 未配置（失败/边界路径）
 
@@ -100,7 +100,7 @@
 - **角色**：需要判定某任务归属的 workflowhub 编排逻辑
 - **前置条件**：该 task-id 此前已通过追加写入操作登记进索引文件 `~/.workflowhub/task-index.json`。
 - **操作步骤**：按该 task-id 执行反查操作。
-- **预期结果**：返回该 task-id 对应的 project-key/repo 映射记录；原有 `{task_tracking_root}/tasks/{task-id}/` 目录结构不受影响。
+- **预期结果**：返回该 task-id 对应的 project-key/repo 映射记录；原有 `{task_tracking_root}/{task-id}/` 目录结构不受影响。
 
 ## 4. 功能需求
 
@@ -108,7 +108,7 @@
 
 #### 域：RECEIPT（receipt 真核验）
 
-- **FR-RECEIPT-001**：receipt 校验须比对该 stage 关联的 git diff 与测试执行结果，确认工作真实发生，不得仅校验 schema/格式。来源：D1-B。状态：待实现（build-code 阶段实现，本阶段仅完成设计与规格固化；此前旧 Multica 沙箱临时目录中的实现 commit 已因目录清理丢失）。实现文件：`scripts/validate-stage-result.mjs`。
+- **FR-RECEIPT-001**：receipt 校验须比对该 stage 关联的 git diff 与测试执行结果，确认工作真实发生，不得仅校验 schema/格式。来源：D1-B。状态：待实现（build-code 阶段实现，本阶段仅完成设计与规格固化；此前旧 agent 沙箱临时目录中的实现 commit 已因目录清理丢失）。实现文件：`scripts/validate-stage-result.mjs`。
   - **场景**：Given 某 stage 产出 stage-result 声称完成, When 校验器执行 receipt 校验, Then 校验器需同时核对 git diff 与测试执行结果，二者均可验证工作真实发生时才判定通过。
 - **FR-RECEIPT-002**：git diff 或测试执行结果不可获取时，receipt 校验须报错停下，不得静默兜底判定为通过。来源：D1-B。状态：待实现（build-code 阶段实现）。
   - **场景**：Given git diff 或测试结果不可获取, When receipt 校验执行, Then 报错并停止，不默认判定通过。
@@ -141,21 +141,21 @@
 
 #### 域：PROJECTINDEX（project-key 隔离索引）
 
-- **FR-PROJECTINDEX-001**：多项目任务目录隔离采用追加式 manifest 索引文件（task-id → project-key/repo 映射），不改变现有 `{task_tracking_root}/tasks/{task-id}/` 目录结构。来源：D3-A。
+- **FR-PROJECTINDEX-001**：多项目任务目录隔离采用追加式 manifest 索引文件（task-id → project-key/repo 映射），不改变现有 `{task_tracking_root}/{task-id}/` 目录结构。来源：D3-A。
   - **场景**：Given 新任务在某 project 下创建, When 记录 task-id 与 project-key/repo 映射, Then 写入追加式索引文件，原有任务目录结构保持不变。
-- **FR-PROJECTINDEX-002**：索引机制通过 `core/task-index.mjs` 提供两个操作：一是按 task-id 追加写入一条 task-id → project-key/repo 映射记录；二是按 task-id 反查，查到时返回对应的 project-key 与 repo，查不到时返回明确的"未找到"结果（不得抛错代替"未找到"语义）。索引文件路径为 `~/.workflowhub/task-index.json`。**重复 task-id 处理（本轮明确定义，不留给下游）**：追加写入时若该 task-id 已存在记录，一律报错拒绝写入（fail-loud），不覆盖、不追加重复条目、也不静默丢弃旧记录；调用方需先反查确认该 task-id 不存在再写入。来源：D3-B。状态：待实现（build-code 阶段实现；此前旧 Multica 沙箱临时目录中的实现 commit 已因目录清理丢失，索引数据文件 `~/.workflowhub/task-index.json` 本机仍存在，可直接复用）。
+- **FR-PROJECTINDEX-002**：索引机制通过 `core/task-index.mjs` 提供两个操作：一是按 task-id 追加写入一条 task-id → project-key/repo 映射记录；二是按 task-id 反查，查到时返回对应的 project-key 与 repo，查不到时返回明确的"未找到"结果（不得抛错代替"未找到"语义）。索引文件路径为 `~/.workflowhub/task-index.json`。**重复 task-id 处理（本轮明确定义，不留给下游）**：追加写入时若该 task-id 已存在记录，一律报错拒绝写入（fail-loud），不覆盖、不追加重复条目、也不静默丢弃旧记录；调用方需先反查确认该 task-id 不存在再写入。来源：D3-B。状态：待实现（build-code 阶段实现；此前旧 agent 沙箱临时目录中的实现 commit 已因目录清理丢失，索引数据文件 `~/.workflowhub/task-index.json` 本机仍存在，可直接复用）。
   - **场景**：Given 已存在的 task-id, When 按该 task-id 反查, Then 返回对应的 project-key/repo 映射；Given 不存在的 task-id, When 反查, Then 返回"未找到"结果。
   - **场景 2**：Given 已存在记录的 task-id, When 再次追加写入同一 task-id 的映射, Then 报错拒绝写入，原记录保持不变，不产生重复条目。
 
 #### 域：TASKDIR（task_dir 配置机制）
 
-- **FR-TASKDIR-001**：task_dir 配置持久化在 `~/.workflowhub/config.json`，字段名 `task_dir`；已配置时使用配置值；未配置该字段时不得套用任何默认值，须报错并停止（fail-loud）。来源：D5。
+- **FR-TASKDIR-001**：task_dir 配置持久化在 `~/.workflowhub/config.json`，字段名 `task_dir`；已配置时使用配置值推导最终项目级 task_tracking_root（直接 task root 或全局 Knowledge 根下的 `Projects/<project-key>/tasks`）；未配置该字段时不得套用任何默认值，须报错并停止（fail-loud）。来源：D5。
   - **场景**：Given `~/.workflowhub/config.json` 未配置 `task_dir` 字段且 `WORKFLOWHUB_TASK_DIR` 环境变量也未设置, When 解析 task_dir, Then 报错并停止，不套用用户主目录 `~` 或任何其他默认值。
 - **FR-TASKDIR-002**：config.json 读取失败或格式错误时须报错"配置有问题"并停止，不得悄悄套用默认值。来源：D5。
   - **场景**：Given config.json 内容格式错误或读取失败, When 解析 task_dir 配置, Then 报错提示配置有问题并停止，不静默套用默认值。
 - **FR-TASKDIR-003**：`WORKFLOWHUB_TASK_DIR` 环境变量降级为可选临时覆盖项——若设置且非空则优先于 config.json；未设置时改按 config.json 解析；env 变量与 config.json `task_dir` 字段二者皆缺失时须报错并停止（fail-loud），不作为可静默省略的可选项组合。来源：D5。
   - **场景**：Given `WORKFLOWHUB_TASK_DIR` 环境变量已设置且非空, When 解析 task_dir, Then 优先使用该环境变量值，忽略 config.json。
-  - **场景 2**：Given `WORKFLOWHUB_TASK_DIR` 未设置但 config.json 已配置 `task_dir`, When 解析 task_dir, Then 使用 config.json 配置值，不因该环境变量缺失而报错。
+  - **场景 2**：Given `WORKFLOWHUB_TASK_DIR` 未设置但 config.json 已配置 `task_dir`, When 解析 task_dir, Then 使用 config.json 推导最终项目级 task_tracking_root，不因该环境变量缺失而报错。
   - **场景 3**：Given `WORKFLOWHUB_TASK_DIR` 未设置且 config.json 不存在或未配置 `task_dir` 字段, When 解析 task_dir, Then 报错并停止（fail-loud），不套用默认值。
 
 ## 5. 模块划分（条件触发）
@@ -174,12 +174,12 @@
 - **需要哪些上游业务能力**：需要任务创建流程在新建 task-id 时提供 project-key/repo 信息。
 - **验收边界**：给定一批 task-id/project-key 写入操作，可独立验证追加写入不覆盖旧记录、查询结果与写入记录一致。
 
-### task_dir 配置解析模块（`~/.workflowhub/config.json` + `core/task-dir-parser.mjs`，本轮仅决策机制，接入延后至 build-code）
+### task_dir 配置解析模块（`~/.workflowhub/config.json` + `core/task-dir-parser.mjs`）
 
-- **负责什么**：解析 task_tracking_root 路径，按 `WORKFLOWHUB_TASK_DIR` 环境变量（非空时）→ config.json `task_dir` 字段的优先级链输出最终路径；二者皆缺失时报错并停止（fail-loud），不输出任何默认路径（与 FR-TASKDIR-003 顺序一致）。
+- **负责什么**：解析最终项目级 task_tracking_root 路径，按 `WORKFLOWHUB_TASK_DIR` 环境变量（非空时，直接根）→ config.json `task_dir` 字段的优先级链输出最终路径；当 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks` 时，须基于当前 git remote / `repo_root_map` 返回项目级 task_tracking_root；二者皆缺失时报错并停止（fail-loud），不输出任何默认路径（与 FR-TASKDIR-003 顺序一致）。
 - **对外提供什么业务能力**：向所有 workflowhub stage 提供统一、明确报错而非静默兜底的 task_dir 解析结果。
-- **需要哪些上游业务能力**：需要 `~/.workflowhub/config.json` 文件可读且已配置 `task_dir`，或 `WORKFLOWHUB_TASK_DIR` 环境变量已设置；二者皆不满足时由调用方处理该 fail-loud 报错。
-- **验收边界**：给定固定的 config.json 内容与环境变量状态组合，解析结果（路径或报错）可独立验证；具体接入代码验收留待 build-code 阶段的 spec/plan。
+- **需要哪些上游业务能力**：需要 `~/.workflowhub/config.json` 文件可读且已配置 `task_dir`，或 `WORKFLOWHUB_TASK_DIR` 环境变量已设置；config 使用全局 Knowledge 根时，需要当前 git remote 可解析出 project-key，且对应 `Projects/<project-key>/tasks` 已存在；二者皆不满足时由调用方处理该 fail-loud 报错。
+- **验收边界**：给定固定的 config.json 内容、项目 git remote 与环境变量状态组合，解析结果（路径或报错）可独立验证。
 
 ## 6. 关键实体（条件触发）
 
@@ -187,13 +187,13 @@
 
 - **定义**：一条 task-id 到其所属 project-key/repo 的映射记录。
 - **字段**：`task-id`、`project-key`、`repo`（具体字段命名以 `core/task-index.mjs` 实现为准，本 spec 只约束语义，不锁定实现细节）。
-- **关系**：与 `{task_tracking_root}/tasks/{task-id}/` 目录一一对应，但物理上是独立的追加式索引文件，不嵌入该目录结构内部。
+- **关系**：与 `{task_tracking_root}/{task-id}/` 目录一一对应，但物理上是独立的追加式索引文件，不嵌入该目录结构内部。
 
 ### task_dir 配置实体（`~/.workflowhub/config.json` 中的 `task_dir` 字段）
 
-- **定义**：持久化保存的 task_tracking_root 根路径配置。
+- **定义**：持久化保存的任务记录根路径配置；可为直接 task_tracking_root，也可为包含 `Projects/<project-key>/tasks` 的全局 Knowledge 根。
 - **字段**：`task_dir`（string，用户主目录展开前的原始配置值）。
-- **关系**：与 `WORKFLOWHUB_TASK_DIR` 环境变量构成优先级覆盖关系（环境变量存在且非空时覆盖此配置）。
+- **关系**：与 `WORKFLOWHUB_TASK_DIR` 环境变量构成优先级覆盖关系（环境变量存在且非空时覆盖此配置）；config 全局根通过当前 git remote / `repo_root_map` 派生项目级 task_tracking_root。
 
 ### flow_profile 值（占位字段，本轮不建模为独立实体，仅为字符串字段）
 
@@ -236,10 +236,10 @@
 
 **验收覆盖范围与边界说明**：AC1-AC4 是第 4 节全部 8 条 FR（FR-RECEIPT-001/002、FR-FLOWPROFILE-001、FR-PROJECTINDEX-001/002、FR-TASKDIR-001/002/003）的完整、一一对应覆盖（分母为 8，每条 FR 恰好被 1 条 AC 的"←"标注覆盖一次，无遗漏、无重复计数）。每条 AC 内部同时包含正向路径（前置条件成立时的预期行为）与至少一个反向/边界路径（前置条件缺失、非法或冲突时的预期行为），二者均验证通过才算该 AC 满足；AC4 的反向路径进一步区分（a）config.json 格式错误、（b）env 变量与 config.json 皆缺失两种边界子情形，需分别验证。验收范围以第 3 节已列出的 5 个场景为准，不外延到场景未覆盖的输入形态（如多字节路径、并发写入等留待 build-code 阶段设计具体测试用例时另行覆盖，非本轮验收范围）。
 
-- [ ] **AC1**：给定 git diff 与测试执行结果均可获取且证明工作发生，receipt 校验判定通过；反向：证据缺失时判定必须报错，不得默认通过。← FR-RECEIPT-001 / FR-RECEIPT-002
-- [ ] **AC2**：正向：`flow_profile` 字段作为字符串由 make-decision 阶段写入 decision-log 记录，下游阶段读取到的值与写入值一致；本轮不做枚举校验（字符串取值不做约束，校验逻辑推迟到后续任务接入）。反向：`flow_profile` 缺失、非字符串（NaN/数字/null/数组）、或下游阶段错误地以此字段驱动枚举校验/阻断行为时，验收判 fail。← FR-FLOWPROFILE-001
-- [ ] **AC3**：追加写入的记录可按 task-id 正确反查回，且 `{task_tracking_root}/tasks/{task-id}/` 目录结构不变；反向：（a）索引文件写入冲突或损坏时不得静默丢弃记录，（b）追加写入时 task-id 已存在须报错拒绝，不覆盖、不产生重复记录。← FR-PROJECTINDEX-001 / FR-PROJECTINDEX-002
-- [ ] **AC4**：未设置 `WORKFLOWHUB_TASK_DIR` 但 config.json 已配置 `task_dir` 时，task_dir 使用 config.json 配置值正确解析；反向：（a）config.json 格式错误，或（b）`WORKFLOWHUB_TASK_DIR` 与 config.json `task_dir` 字段二者皆缺失，两种情况下均必须报错"配置有问题"/fail-loud 并停止，不得静默套用任何默认值（含 `~`）。← FR-TASKDIR-001 / FR-TASKDIR-002 / FR-TASKDIR-003
+- [x] **AC1**：给定 git diff 与测试执行结果均可获取且证明工作发生，receipt 校验判定通过；反向：证据缺失时判定必须报错，不得默认通过。← FR-RECEIPT-001 / FR-RECEIPT-002
+- [x] **AC2**：正向：`flow_profile` 字段作为字符串由 make-decision 阶段写入 decision-log 记录，下游阶段读取到的值与写入值一致；本轮不做枚举校验（字符串取值不做约束，校验逻辑推迟到后续任务接入）。反向：`flow_profile` 缺失、非字符串（NaN/数字/null/数组）、或下游阶段错误地以此字段驱动枚举校验/阻断行为时，验收判 fail。← FR-FLOWPROFILE-001
+- [x] **AC3**：追加写入的记录可按 task-id 正确反查回，且 `{task_tracking_root}/{task-id}/` 目录结构不变；反向：（a）索引文件写入冲突或损坏时不得静默丢弃记录，（b）追加写入时 task-id 已存在须报错拒绝，不覆盖、不产生重复记录。← FR-PROJECTINDEX-001 / FR-PROJECTINDEX-002
+- [x] **AC4**：未设置 `WORKFLOWHUB_TASK_DIR` 但 config.json 已配置 `task_dir` 时，task_dir 正确解析为最终项目级 task_tracking_root；当 config 值是全局 Knowledge 根且存在 `Projects/<project-key>/tasks` 时必须返回项目级 tasks 根；反向：（a）config.json 格式错误，或（b）`WORKFLOWHUB_TASK_DIR` 与 config.json `task_dir` 字段二者皆缺失，两种情况下均必须报错"配置有问题"/fail-loud 并停止，不得静默套用任何默认值（含 `~`）。← FR-TASKDIR-001 / FR-TASKDIR-002 / FR-TASKDIR-003
 
 ### 未决风险和问题
 
@@ -247,7 +247,7 @@
 - **未决 2（技能改名待办）**：`skills/intake-decision-review` 需改名为 `decision-blind-review`（用户 2026-07-08 确认），本轮不做，列入 build-code 阶段实现范围。
 - **未决 3（同名函数混淆）**：`scripts/validate-stage-result.mjs` 导出的 `validateStageResult` 与 `tests/stage-quality.test.mjs` 从 `./contracts/stage-result.contract.mjs` 导入的同名 `validateStageResult` 是两个不同实现，命名混淆，待排期澄清（非阻塞）。
 - **未决 4（extensibility gate 误报）**：新建的 `core/task-index.mjs` 会触发仓库已有的 `scripts/check-extensibility.mjs` git-HEAD-diff 门（凡 `core/` 下有未提交变更就报违规），这是该 gate 的既有设计行为，不是新 bug，提交代码后自动清除，不阻塞本轮决策，仅记录供 build-code 阶段知悉。
-- **未决 5（spec-clarify 发现——D1-B/D3-B"已落地"与代码现状不符）**：**已解决，解决方式=B**（用户 2026-07-08 明确回复："改口径，推迟到 build-code 做，不现在补代码"）。原始发现：decision-log 曾称 D1-B（receipt 真核验）、D3-B（`core/task-index.mjs`）本轮已落地，但实测当前 worktree 及多个已检查分支代码均不存在对应实现。经核实：此前在旧 Multica 沙箱临时目录里做的实现 commit 因目录清理已丢失（索引数据文件 `~/.workflowhub/task-index.json` 因位于本机全局状态目录未受影响，仍存在 112 条记录（来源：decision-log D3-B + 现场 `wc -l` 核验））。`tasks/wh-quality-convergence/decision-log.md` 改口径结论已直接固化在本 spec 内：第 2 节背景已同步改口径，不再声称已实现；第 4 节 FR-RECEIPT-001/002、FR-PROJECTINDEX-002 已加"状态：待实现（build-code 阶段）"字段。本 spec 内文视为该口径变更的权威记录。
+- **未决 5（spec-clarify 发现——D1-B/D3-B"已落地"与代码现状不符）**：**已解决，解决方式=B**（用户 2026-07-08 明确回复："改口径，推迟到 build-code 做，不现在补代码"）。原始发现：decision-log 曾称 D1-B（receipt 真核验）、D3-B（`core/task-index.mjs`）本轮已落地，但实测当前 worktree 及多个已检查分支代码均不存在对应实现。经核实：此前在旧 agent 沙箱临时目录里做的实现 commit 因目录清理已丢失（索引数据文件 `~/.workflowhub/task-index.json` 因位于本机全局状态目录未受影响，仍存在 112 条记录（来源：decision-log D3-B + 现场 `wc -l` 核验））。`tasks/wh-quality-convergence/decision-log.md` 改口径结论已直接固化在本 spec 内：第 2 节背景已同步改口径，不再声称已实现；第 4 节 FR-RECEIPT-001/002、FR-PROJECTINDEX-002 已加"状态：待实现（build-code 阶段）"字段。本 spec 内文视为该口径变更的权威记录。
 - **未决 6（F10 反过度工程发现——flow_profile 占位字段）**：按 F10 四问核查 FR-FLOWPROFILE-001：Q1「具体防御的真实威胁」回答为"无特定"（none in particular）——本轮 flow_profile 不驱动任何行为分支，仅为未来 full/fast 执行路径差异化预留占位，非应对已观测到的具体故障。Q2 现有机制未覆盖此需求（当前无该字段）。Q3 无 bypass 风险（非校验/阻断机制，只是枚举字段）。Q4 维护成本低（纯字段无逻辑）。按 SKILL.md 规则，Q1=none in particular 已达记录门槛：记入本未解风险，供后续独立审查/人工判断是否有必要现在就引入该占位字段，还是等真正需要驱动行为时再新增（非阻断，不自动移除该字段）。其余三个新增机制（receipt 真核验、task-index 索引、config.json 持久化）经四问核查均有明确根因驱动、无重复建设、bypass 风险可控、维护成本可接受，未触发 F10 记录门槛。
 
 ## 11. 影响范围（业务性质）
@@ -260,10 +260,10 @@
 - **受影响功能：任务目录 project-key 归属**
   - 既有行为：无索引机制，task-id 与 project/repo 的映射关系不可查询。
   - 本需求影响：新增追加式索引，支持写入与反查。
-  - 回归要点：不得改变现有 `{task_tracking_root}/tasks/{task-id}/` 目录结构；已有记录不得被覆盖或丢失。基线记录数：`~/.workflowhub/task-index.json` 当前 112 条（来源：decision-log D3-B + 本 agent 2026-07-08 `wc -l` 现场核验：114 lines = 2 braces + 112 KV entries；任务项目分布例如 rewrite-universal-review、004-upstream-align、005-checkpoint-engine）。
+  - 回归要点：不得改变现有 `{task_tracking_root}/{task-id}/` 目录结构；已有记录不得被覆盖或丢失。基线记录数：`~/.workflowhub/task-index.json` 当前 112 条（来源：decision-log D3-B + 本 agent 2026-07-08 `wc -l` 现场核验：114 lines = 2 braces + 112 KV entries；任务项目分布例如 rewrite-universal-review、004-upstream-align、005-checkpoint-engine）。
 
 - **受影响功能：task_dir 解析优先级**
-  - 既有行为：强依赖 `WORKFLOWHUB_TASK_DIR` 环境变量，Multica 沙箱等环境中不可见导致"睁眼瞎"。
+  - 既有行为：强依赖 `WORKFLOWHUB_TASK_DIR` 环境变量，agent 沙箱等非登录执行环境中不可见导致"睁眼瞎"。
   - 本需求影响：新增 config.json 持久化机制作为主路径，环境变量降级为可选覆盖；具体代码接入留待 build-code。
   - 回归要点：已设置 `WORKFLOWHUB_TASK_DIR` 的现有环境行为不能改变（该变量仍应优先生效）。
 
@@ -291,7 +291,7 @@ user_decision: true
 核查来源依据：artifacts/make-decision-grill-with-docs.md + artifacts/make-decision-ledger-final.md + artifacts/make-decision-debate-2.md。本文件为 S10 落盘的正式版。经 S9 用户批准后转为规范落盘产物。
 
 ## 一、原始需求（原文）
-收敛 workflowhub make-decision 阶段与全链路交付质量：解决 D1 receipt 校验形同虚设、D3 project-key 多项目隔离缺失、D4 决策日志引用准确性存疑、D5 task_dir 配置在 Multica 沙箱中不可见等根因。
+收敛 workflowhub make-decision 阶段与全链路交付质量：解决 D1 receipt 校验形同虚设、D3 project-key 多项目隔离缺失、D4 决策日志引用准确性存疑、D5 task_dir 配置在 agent 沙箱中不可见等根因。
 
 ## 二、问题与目标
 - 现状：receipt 检查仅验证 schema/格式；task_dir 依赖用户 shell 环境变量；project 间无隔离机制。
@@ -318,13 +318,13 @@ D3-A 方案的实现代码待 build-code 阶段（旧沙箱实现已丢失）。
 沿用 tasks/worktree-unification/artifacts/make-decision-decision-log.md（105行/7节）为原始引用来源，引用已核实准确。→ section 2 假设3
 
 ### D5（task_dir 配置机制，设计已定待 build-code）
-配置写入 ~/.workflowhub/config.json，字段名 task_dir；未配置默认 ~；格式错误时报错。解析器接入 task-dir-parser.mjs 推迟到 build-code。env 变量降级为可选覆盖。→ FR-TASKDIR-001/002/003, AC4
+配置写入 ~/.workflowhub/config.json，字段名 task_dir；未配置时 fail-loud，不得默认 ~；格式错误时报错。解析器接入 task-dir-parser.mjs，并在 config 指向全局 Knowledge 根时解析到 `Projects/<project-key>/tasks`。env 变量降级为可选直接根覆盖。→ FR-TASKDIR-001/002/003, AC4
 
 ### D6（worktree 碰撞保护维持现状）
 复用 core/worktree-reuse-guard.mjs，不做改动。→ section 9「明确不做」第4条
 
 ## 四、假设
-- Multica 沙箱不继承 shell 环境变量，是 D5 根因
+- agent 沙箱不继承 shell 环境变量，是 D5 根因
 - scripts/validate-stage-result.mjs 非死代码（37处调用核验）
 
 ## 五、明确不做

@@ -62,7 +62,7 @@ Exact orchestration logic (`round-state.mjs`, `invoke-review-engine.mjs`) is imp
 
 ## 落盘路径解析
 
-All filesystem paths (`route-decision-*`, `verdict-*.raw.json`, round-state files, reports) are resolved exclusively via `core/task-dir-parser.mjs`'s `parseTaskDir()`, following the same precedence as FR-TASKDIR-001: `WORKFLOWHUB_TASK_DIR` env var → `config/workflowhub.yaml` `task_dir` field → fail-loud if both are absent. `wh-review` must not hardcode a task directory path or implement a second, parallel path-resolution scheme (AC1-4, statically grep-verifiable).
+All filesystem paths (`route-decision-*`, `verdict-*.raw.json`, round-state files, reports) are resolved exclusively via `core/task-dir-parser.mjs`'s `parseTaskDir()`, following the same precedence as FR-TASKDIR-001: `WORKFLOWHUB_TASK_DIR` env var as a direct task root → `~/.workflowhub/config.json` `task_dir` field → `Projects/<project-key>/tasks` when the config value is a global Knowledge root → fail-loud if both are absent. `wh-review` must write task artifacts under `{taskTrackingRoot}/{task-id}/...`, must not hardcode a task directory path, and must not implement a second, parallel path-resolution scheme (AC1-4, statically grep-verifiable).
 
 ## Contracts directory (this phase)
 

@@ -32,13 +32,17 @@ skill. The exact first-line payload must include `"event":"stage_summary"` and
 
 ### 2. 前置读取
 
-**Path resolution (FR-TASKDIR-001)**: Resolve all task-dir paths via `parseTaskDir` — do not hard-code `tasks/{task-id}/`.
+**Path resolution (FR-TASKDIR-001)**: Resolve all task execution record paths via `core/task-record-paths.mjs` and treat `taskRecords.task_root` as the final task execution-record directory — do not hard-code repo-local `tasks/{task-id}/`.
 
 ```javascript
-// AC-16 consumable call — grep: parseTaskDir
-import { parseTaskDir } from "./core/task-dir-parser.mjs";
-const taskDir = parseTaskDir(); // priority: WORKFLOWHUB_TASK_DIR env var → config/workflowhub.yaml task_dir; both absent → fail-loud
+// AC-16 consumable call — grep: resolveTaskRecordPaths
+import { resolveTaskRecordPaths } from "./core/task-record-paths.mjs";
+const taskRecords = resolveTaskRecordPaths(taskId);
+const taskDir = taskRecords.task_tracking_root;
+const taskRoot = taskRecords.task_root;
 ```
+
+All task execution files (`worktree.json`, `stage-result-*.json`, evidence, reviews, final-test-report, journal, decision-log) must be read/written through `taskRecords.*` or under `path.join(taskRoot, ...)`. Do not search repo-local `tasks/` as a fallback unless `resolveTaskRecordPaths(taskId).task_tracking_root` returned that directory.
 
 Read `{taskDir}/{task-id}/stage-result-build-code.json`, extract `facts.tests.command`. If the command field is missing, surface an explicit error and stop. Do not proceed silently without a test command.
 
@@ -48,7 +52,7 @@ marker that suppresses missing L3 report alarms for non-UI work.
 
 **Handoff 累积（补读上游）**：无条件读取以下三份上游产物，作为 build-code 结果之外的补充上下文：
 
-- `specs/{task-id}/spec.md` 的验收标准部分 — 用于第 8.5 步核对实现是否覆盖每条验收标准。spec 产物按项目约定落在 `specs/{task-id}/`，不在 `taskDir` 下（`taskDir` 是 task-execution-record 目录，见 `config/workflowhub.yaml` 的 `task_dir`）；路径写法参考 `workflows/build-plan/SKILL.md` 读 spec 的方式。
+- `specs/{task-id}/spec.md` 的验收标准部分 — 用于第 8.5 步核对实现是否覆盖每条验收标准。spec 产物按项目约定落在代码仓库 `specs/{task-id}/`，不在 `taskDir` 下（`taskDir` 是最终项目 task_tracking_root，由 `parseTaskDir()` 解析）；路径写法参考 `workflows/build-plan/SKILL.md` 读 spec 的方式。
 - `{taskDir}/{task-id}/plan.md` — 了解原定实现步骤和范围边界。
 - decision-log（`{taskDir}/{task-id}/decision-log.md` 或等价记录）— 了解最初决策与需求覆盖范围。
 
@@ -189,6 +193,16 @@ verify-code 阶段的收尾（close）流程严格按以下 5 个步骤顺序执
 
 ② **质量事实记录**（对应 §8.5 + §9）（final-test-report, warn 不阻断, needs_human=true）：记录 `final-test-report.md`（含步骤 8.5 逐条覆盖清单）；§9 产出七要素明文停顿摘要。质量事实记录本身若出现非致命异常，只 warn 不阻断流程；若发现需要人工介入的问题，设置 `needs_human=true` 并继续往下记录，不因此中止。
 
+**当前轮 wh-review 前的候选闭环写法**：步骤②到步骤③之间，当前轮
+wh-review 的 pass artifact 尚不存在，禁止把 `final-test-report.md` 或
+`stage-result-verify-code.json` 写成已通过 wh-review。此时只能表达候选态：
+fresh acceptance 可写 `pass`，但 `review_status` 必须写
+`pending_current_wh_review`，`stage-result.status` 用 `unknown`，并明确
+`close_ready_for_merge_gate=false`、merge/cleanup blocked until current
+wh-review pass。不得让 `facts.review.verdict=pass` 指向上一轮
+`revise_required` artifact。当前轮 wh-review 返回 `pass` 后，才允许在步骤⑤
+最终落盘时把 `review_status=pass`、`status=success` 写入 stage-result。
+
 ③ **3rd-review 独立审查**（merge 前，evidence/ 落盘，verdict=pass 继续）：详见步骤 10——在人工确认 merge 之前，作为独立子代理执行 3rd-review。审查输入范围须明确为：命令须在 `worktree_root`（任务自身的 linked worktree 工作目录，而非 `target_repo_root` 的主工作树）中执行，以便正确读到该 worktree 自身的 staged/unstaged 未提交改动。先解析该仓库的默认主线分支（`git symbolic-ref refs/remotes/origin/HEAD` 或等价方式取得实际配置的默认分支，不得硬编码为 `main`），以任务分支相对该主线的待合并总增量为准，取 `git diff <merge-base(默认主线, task-branch)>`（不指定终点 ref，天然对比到当前工作树，因此自动包含尚未 commit 的 staged/unstaged 改动，覆盖步骤①归档 commit 之前的全部待合并内容）（覆盖 make-decision/build-spec/build-plan/build-code/verify-code 全部阶段在该任务分支上产生的、尚未合并进主线的改动，不只是本次 verify-code 运行内新增的增量）；不得包含 merge-base 之前主线自身的历史改动，也不得包含 worktree 外或与本任务无关的文件。产物落盘至 `evidence/`。仅当 `verdict=pass` 才继续进入步骤④；`revise_required`、`escalate_to_human`、或 3rd-review 不可用/不可达，均按下方"pre-merge revise_required 契约"处理（`needs_human=true`，跳过步骤④，直接进入步骤⑤）。
 
 ④ **不可逆动作 8 步线性序列**（严格顺序，仅在步骤三 verdict=pass 且用户确认后执行）：
@@ -325,6 +339,27 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
 ```
 
 路径 B 须在 `stageResult.facts.review = reviewFact` 赋值后、`writeStageResult` 调用前确保 `needs_human=true` 字段写入。无论哪条路径，stage-result 文件必须存在，不得因未 merge 而跳过落盘。
+
+**路径 C — 当前轮 wh-review 输入候选态（仅用于步骤③前，不是最终完成态）：**
+```json
+{
+  "status": "unknown",
+  "error_code": "wh_review_pending",
+  "retryable": true,
+  "facts": {
+    "verdict": "pass",
+    "review_status": "pending_current_wh_review",
+    "evidence_ref": "test/final-test-report.md",
+    "close_ready_for_merge_gate": false
+  },
+  "missing_items": ["current wh-review pending"],
+  "user_decision": false,
+  "needs_human": false,
+  "reason": "Fresh acceptance passed; current wh-review must pass before merge gate."
+}
+```
+
+路径 C 的存在是为了解决 current wh-review artifact 的时序自引用问题；不得把它当作 merge 许可。
 
 D7 color semantics must stay compatible with the current stage-result contract:
 use `success|failed|unknown`, not new status enum values. Never write `green`, `yellow`, or `red` to `stage-result.status`.

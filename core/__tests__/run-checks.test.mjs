@@ -38,7 +38,7 @@ function run(args = [], opts = {}) {
 describe("FR-CI-001: aggregate mode (no args)", () => {
   test("exits 0 on a clean repo", () => {
     const r = run();
-    expect(r.status).toBe(0);
+    expect(r.status, r.output).toBe(0);
   });
 
   test("stdout mentions check-anti-host (checker was invoked)", () => {
@@ -128,4 +128,3 @@ describe("FR-CI-002: self-test validates detection, not empty pass", () => {
     expect(r.output).not.toMatch(/anti-host.*FAILED|FAILED.*anti-host/i);
   });
 });
-

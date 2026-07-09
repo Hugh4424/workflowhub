@@ -1,0 +1,97 @@
+
+> workflowhub@0.0.0 test
+> vitest run --reporter=dot
+
+
+ RUN  v2.1.9 /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence
+
+ ✓ tests/build-code-diff-only.test.mjs (23 tests) 3ms
+ ✓ tests/m12-spec-plan.test.mjs (17 tests) 3ms
+ ✓ tests/m12-spec-analyze.test.mjs (33 tests) 4ms
+ ✓ tests/m12-build-plan-v1.test.mjs (35 tests) 4ms
+ ✓ tests/five-skills-present.test.mjs (59 tests) 7ms
+ ✓ tests/m13b-build-spec-deepening.test.mjs (61 tests) 7ms
+ ✓ tests/m13-make-decision.test.mjs (163 tests) 28ms
+ ✓ tests/metric-scan.test.mjs (24 tests) 91ms
+ ✓ tests/m12-spec-tasks.test.mjs (20 tests) 5ms
+ ✓ tests/stage-result-contract.test.mjs (17 tests) 3ms
+ ✓ tests/m13d-build-code-deepening.test.mjs (20 tests) 5ms
+ ✓ tests/boundary-confirm.test.mjs (10 tests) 24ms
+ ✓ tests/baseline.test.mjs (19 tests) 5ms
+ ✓ tests/metrics-collector.test.mjs (25 tests) 370ms
+ ✓ core/__tests__/receipt-writer.test.mjs (49 tests) 396ms
+ ✓ specs/wh-review-rebuild/__tests__/test-plan-smoke.test.mjs (3 tests) 204ms
+ ✓ tests/spike-intake-design.test.mjs (7 tests) 9ms
+ ✓ core/__tests__/check-extensibility.test.mjs (13 tests) 464ms
+ ✓ skills/wh-review/scripts/__tests__/snapshot-writer.test.mjs (12 tests) 17ms
+ ✓ tests/knowledge-card.test.mjs (19 tests) 4ms
+ ✓ core/__tests__/task-dir-parser-config.test.mjs (9 tests) 484ms
+ ✓ tests/moat-skills-phase1.test.mjs (10 tests) 4ms
+ ✓ core/__tests__/check-anti-host.test.mjs (17 tests) 428ms
+ ✓ skills/wh-review/scripts/__tests__/route-decision-writer.test.mjs (12 tests) 533ms
+ ✓ core/__tests__/check-contract.test.mjs (13 tests) 418ms
+ ✓ tests/m12-templates.test.mjs (19 tests) 3ms
+ ✓ tests/moat-skills.test.mjs (14 tests) 9ms
+ ✓ tests/stage-quality.test.mjs (7 tests) 121ms
+ ✓ skills/wh-review/scripts/__tests__/render-review-report.test.mjs (11 tests) 8ms
+ ✓ tests/verify-code-capture.test.mjs (18 tests) 740ms
+ ✓ core/__tests__/parse-framework-config.test.mjs (8 tests) 12ms
+ ✓ tests/execution-record.test.mjs (14 tests) 3ms
+ ✓ skills/wh-review/__tests__/human-brief-behavioral.test.mjs (20 tests) 3ms
+ ✓ core/__tests__/resolve-path.test.mjs (12 tests) 3ms
+ ✓ tests/m12-reuse-registry.test.mjs (15 tests) 4ms
+ ✓ tests/verify-code-facts.test.mjs (19 tests) 7ms
+ ✓ skills/wh-review/scripts/__tests__/invoke-review-engine.test.mjs (29 tests) 1242ms
+ ✓ skills/wh-review/scripts/__tests__/stage-invocation-chain.test.mjs (4 tests) 798ms
+ ✓ skills/wh-review/scripts/__tests__/report-index.test.mjs (6 tests) 7ms
+ ✓ tests/build-code-review.test.mjs (13 tests) 7ms
+ ✓ skills/wh-review/scripts/__tests__/human-confirmation.test.mjs (9 tests) 9ms
+ ✓ core/__tests__/worktree-reuse-guard.test.mjs (5 tests) 221ms
+ ✓ core/__tests__/kernel.test.mjs (9 tests) 287ms
+ ✓ tests/moat-skills-phase2.test.mjs (5 tests) 5ms
+ ✓ tests/fact-collector.test.mjs (3 tests) 283ms
+ ✓ tests/facts-subschema.test.mjs (58 tests) 1593ms
+   ✓ build-code facts sub-schema (FR-CONTRACT-002 D11) > positive: commit_records are accepted only when they match worktree HEAD implementation commit 345ms
+   ✓ build-code facts sub-schema (FR-CONTRACT-002 D11) > positive: multi-phase commit_records accept earlier implementation commits before final HEAD 432ms
+   ✓ build-code facts sub-schema (FR-CONTRACT-002 D11) > negative: commit_records fail when implementation commit is behind HEAD 461ms
+   ✓ build-code facts sub-schema (FR-CONTRACT-002 D11) > negative: commit_records fail when HEAD only changes tracking artifacts 350ms
+ ✓ core/__tests__/validate-contract.test.mjs (7 tests) 2ms
+ ✓ tests/m12-subskill-exclusion.test.mjs (2 tests) 5ms
+ ✓ core/__tests__/load-config.test.mjs (8 tests) 6ms
+ ✓ tests/moat-skills-phase3.test.mjs (8 tests) 2ms
+ ✓ tests/build-code-facts.test.mjs (10 tests) 3ms
+ ✓ core/__tests__/task-record-paths.test.mjs (3 tests) 148ms
+ ✓ tests/verify-code-freshness.test.mjs (9 tests) 2ms
+ ✓ core/__tests__/task-index.test.mjs (6 tests) 57ms
+ ✓ tests/contract-freeze.test.mjs (5 tests) 2ms
+ ✓ core/__tests__/task-dir-parser.test.mjs (8 tests) 403ms
+ ✓ tests/flow-profile-decision-log.test.mjs (4 tests) 2ms
+ ✓ skills/wh-review/scripts/__tests__/round-state.test.mjs (57 tests) 1885ms
+ ✓ tests/receipt-wiring.test.mjs (5 tests) 3ms
+ ✓ tests/reuse-registry.test.mjs (3 tests) 2ms
+ ✓ core/__tests__/protected-paths.test.mjs (7 tests) 2ms
+ ✓ workflows/build-code/__tests__/section7-machine-checkable.test.mjs (4 tests) 1ms
+ ✓ tests/build-code-target.test.mjs (4 tests) 2ms
+ ✓ tests/agenthub-baseline.test.mjs (9 tests) 428ms
+ ✓ tests/metrics-smoke.test.mjs (4 tests) 60ms
+ ✓ tests/smoke.test.mjs (1 test) 1ms
+ ✓ tests/task-record-paths-check.test.mjs (3 tests) 230ms
+ ✓ tests/build-code-capture.test.mjs (23 tests) 1979ms
+ ✓ core/__tests__/run-checks.test.mjs (11 tests) 1731ms
+   ✓ FR-CI-001: aggregate mode (no args) > exits 0 on a clean repo 349ms
+   ✓ FR-CI-001: aggregate mode (no args) > stdout mentions check-anti-host (checker was invoked) 329ms
+ ✓ tests/receipt-verification.test.mjs (28 tests) 4547ms
+   ✓ T004 — getRealChangedFiles > can diff committed stage work against a base ref 303ms
+   ✓ T005 — verifyReceipts > passes when declared changes match actual diff 363ms
+ ✓ tests/phase-gate.test.mjs (22 tests) 5110ms
+   ✓ phase-gate > passes a completed phase with RED/GREEN, diff scan, independent review, commit record, and clean worktree 401ms
+   ✓ phase-gate > passes when RED evidence has a non-one failing exit code 368ms
+   ✓ phase-gate > fails an empty inline diff scan object 424ms
+   ✓ phase-gate > fails partial diff scan shapes 453ms
+   ✓ phase-gate > fails same_source/pass review because it is not independent evidence 359ms
+
+ Test Files  71 passed (71)
+      Tests  1239 passed (1239)
+   Start at  13:26:24
+   Duration  5.54s (transform 822ms, setup 0ms, collect 2.41s, tests 25.50s, environment 7ms, prepare 2.68s)
+

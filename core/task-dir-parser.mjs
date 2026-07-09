@@ -2,9 +2,14 @@
  * task-dir-parser.mjs — FR-TASKDIR-001 / FR-WORKTREE-ENVVAR-003 / FR-TASKDIR-002
  *
  * Reads task_tracking_root via priority order:
- *   1. WORKFLOWHUB_TASK_DIR env var (if set and non-empty)
+ *   1. WORKFLOWHUB_TASK_DIR env var (if set and non-empty, direct task root)
  *   2. ~/.workflowhub/config.json `task_dir` field (config fallback)
  *   3. Both absent → fail-loud (non-zero exit, explicit error message)
+ *
+ * Config `task_dir` may be either a direct task_tracking_root or a global
+ * knowledge root that contains Projects/<project-key>/tasks. When the latter
+ * layout is present, this parser derives the project key from the current git
+ * remote / repo_root_map and returns the project-scoped task_tracking_root.
  *
  * Path validation: returned path must exist and be a directory; otherwise fail-loud.
  * No third-party dependencies (FR-TASKDIR-001).
@@ -17,29 +22,9 @@
  */
 
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { resolve, dirname, basename, isAbsolute } from "node:path";
+import { execFileSync } from "node:child_process";
+import { resolve, basename, join } from "node:path";
 import { homedir } from "node:os";
-
-/**
- * Yaml fallback resolves config/workflowhub.yaml relative to process.cwd().
- * Callers relying on yaml fallback (not WORKFLOWHUB_TASK_DIR) must invoke from
- * repo root. Production callers should prefer setting WORKFLOWHUB_TASK_DIR to
- * avoid cwd sensitivity.
- */
-const DEFAULT_CONFIG_PATH = resolve(process.cwd(), "config", "workflowhub.yaml");
-
-/**
- * Trim at most one trailing `/tasks` or `/tasks/` suffix from a path value.
- * Only trims when the path ends exactly with `/tasks` or `/tasks/`.
- * `/mytasks` and similar are NOT trimmed.
- *
- * @param {string} value - Raw path value from yaml task_dir field.
- * @returns {string} Path with at most one trailing `/tasks[/]` removed.
- */
-function trimTasksSuffix(value) {
-  // Remove one trailing `/tasks/` or `/tasks` (exact word boundary)
-  return value.replace(/\/tasks\/?$/, "");
-}
 
 /**
  * Expand a leading `~` to the home directory.
@@ -52,25 +37,6 @@ function expandHome(p) {
     return p.replace(/^~/, homedir());
   }
   return p;
-}
-
-/**
- * Determine the repo root that a relative yaml task_dir value should resolve
- * against, given the workflowhub.yaml configPath.
- *
- * By contract the config file lives at `<repo-root>/config/workflowhub.yaml`
- * (see DEFAULT_CONFIG_PATH above), so the repo root is the parent of the
- * config file's own directory — but only when that directory is actually
- * named "config" per the contract. When configPath does not follow that
- * layout (e.g. a bare fixture path used in tests), its own directory is the
- * closest available root and is used as-is.
- *
- * @param {string} configPath - Path to workflowhub.yaml.
- * @returns {string} Directory that relative task_dir values resolve against.
- */
-function resolveConfigRepoRoot(configPath) {
-  const configDir = dirname(configPath);
-  return basename(configDir) === "config" ? dirname(configDir) : configDir;
 }
 
 /**
@@ -112,6 +78,72 @@ function validateDir(resolvedPath, source) {
   }
 }
 
+function normalizeRemoteUrl(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "");
+}
+
+function projectKeyFromRemote(value) {
+  const normalized = normalizeRemoteUrl(value);
+  if (!normalized) return null;
+  const lastPart = normalized.split(/[/:]/).filter(Boolean).at(-1);
+  return lastPart || null;
+}
+
+function currentGitRemote(cwd = process.cwd()) {
+  try {
+    return execFileSync("git", ["-C", cwd, "remote", "get-url", "origin"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function currentProjectKey(config, cwd = process.cwd()) {
+  const envProjectKey = process.env.WORKFLOWHUB_PROJECT_KEY;
+  if (envProjectKey && envProjectKey.trim() !== "") {
+    return envProjectKey.trim();
+  }
+
+  const remote = currentGitRemote(cwd);
+  if (!remote) return null;
+
+  const normalizedRemote = normalizeRemoteUrl(remote);
+  const repoRootMap = config?.repo_root_map;
+  if (repoRootMap && typeof repoRootMap === "object") {
+    for (const [configuredRemote, repoRoot] of Object.entries(repoRootMap)) {
+      if (normalizeRemoteUrl(configuredRemote) !== normalizedRemote) continue;
+      if (typeof repoRoot === "string" && repoRoot.trim() !== "") {
+        return basename(resolve(expandHome(repoRoot.trim())));
+      }
+    }
+  }
+
+  return projectKeyFromRemote(remote);
+}
+
+function maybeProjectScopedTaskRoot(configTaskDir, config) {
+  const projectKey = currentProjectKey(config);
+  if (!projectKey) return configTaskDir;
+
+  if (basename(configTaskDir) === "tasks") {
+    return configTaskDir;
+  }
+
+  const projectsDir = join(configTaskDir, "Projects");
+  if (!existsSync(projectsDir)) {
+    return configTaskDir;
+  }
+
+  const candidate = join(projectsDir, projectKey, "tasks");
+  validateDir(candidate, `config.json project task_dir (${projectKey})`);
+  return candidate;
+}
+
 /**
  * Read task_dir from ~/.workflowhub/config.json.
  * - File doesn't exist → return null (not configured)
@@ -146,39 +178,14 @@ function readTaskDirFromConfig() {
 
   const resolved = resolve(expandHome(config.task_dir.trim()));
   validateDir(resolved, `config.json (${configPath})`);
-  return resolved;
-}
-
-/**
- * Parse a single top-level `task_dir:` key from a YAML config file.
- * Uses a line-level scan — no third-party YAML parser required.
- *
- * @param {string} configPath - Absolute path to workflowhub.yaml.
- * @returns {string|null} The raw task_dir value, or null if absent/unreadable.
- */
-function readTaskDirFromYaml(configPath) {
-  if (!existsSync(configPath)) return null;
-  let raw;
-  try {
-    raw = readFileSync(configPath, "utf8");
-  } catch {
-    return null;
-  }
-  for (const line of raw.split("\n")) {
-    if (line.trimStart().startsWith("#")) continue;
-    const match = line.match(/^task_dir:\s*(.+)$/);
-    if (match) {
-      const value = match[1].trim().replace(/^['"]|['"]$/g, "");
-      if (value) return value;
-    }
-  }
-  return null;
+  return maybeProjectScopedTaskRoot(resolved, config);
 }
 
 /**
  * Resolve task_tracking_root via priority:
- *   1. WORKFLOWHUB_TASK_DIR env var
- *   2. ~/.workflowhub/config.json task_dir field
+ *   1. WORKFLOWHUB_TASK_DIR env var (direct task root)
+ *   2. ~/.workflowhub/config.json task_dir field. If this is a knowledge root
+ *      containing Projects/<current-project>/tasks, return that project root.
  *   3. fail-loud
  *
  * Returned path is validated to exist and be a directory.

@@ -13,6 +13,20 @@ Each phase follows a strict RED → implement → GREEN cycle. No phase is done 
 
 ## What to do
 
+### 0. 路径解析纪律
+
+Before reading, searching, creating, or writing any task execution record, call `core/task-record-paths.mjs` and treat the returned `task_root` as the only directory for this task's execution records. This helper calls `parseTaskDir()` internally and resolves `~/.workflowhub/config.json` global Knowledge roots to `Projects/<project-key>/tasks`.
+
+```javascript
+// AC-16 consumable call — grep: resolveTaskRecordPaths
+import { resolveTaskRecordPaths } from "./core/task-record-paths.mjs";
+const taskRecords = resolveTaskRecordPaths(taskId);
+const taskDir = taskRecords.task_tracking_root;
+const taskRoot = taskRecords.task_root;
+```
+
+All task execution files (`worktree.json`, `stage-result-*.json`, evidence, reviews, journal, decision-log, build-code-summary) must be read/written through `taskRecords.*` or under `path.join(taskRoot, ...)`. Do not search repo-local `tasks/` as a fallback unless `resolveTaskRecordPaths(taskId).task_tracking_root` returned that directory.
+
 ### 1. 前置读取
 
 Read the `stage-result` produced by the previous stage and extract the relevant `facts`:
@@ -82,16 +96,17 @@ Use the available dispatch backend to run implementation work outside the main c
 
 Preferred backends:
 
-- In Multica issue mode: create phase child issues under the current build-code issue and assign them to implementation agents.
-- Outside Multica issue mode: use Worker-Mode as the fallback dispatch backend (external semver dependency — version-pin it in the skill config).
+- In issue-tracker mode: create phase child tasks under the current build-code task and assign them to implementation agents.
+- Outside issue-tracker mode: use Worker-Mode as the fallback dispatch backend (external semver dependency — version-pin it in the skill config).
 
 When dispatching implementation work, regardless of backend:
 
 - Pass **ABSOLUTE paths** for all file references (source files, evidence output paths, task dir).
 - Pass the configured `worktree_root`.
 - Include the phase TASK_SLICE, allowed paths, RED/GREEN evidence output paths, and the required PHASE_RESULT format.
-- Explicitly forbid `git commit` — include the instruction `DO NOT commit. Leave changes in the working tree.` (FR-SUB-002).
-- The implementer returns only its PHASE_RESULT summary and artifact paths; the orchestrating skill (this SKILL.md) reads those outputs and proceeds to the next step.
+- Require the phase executor to complete the current phase end to end: RED, implementation, GREEN, diff scan, independent review, phase-scoped implementation commit or no-change record, PHASE_RESULT, and phase-gate.
+- File-changing phases must produce a phase-scoped implementation commit before the phase can be considered complete. No-change phases must record a non-empty `no_change_reason` instead of creating an empty commit.
+- The implementer returns its PHASE_RESULT summary, artifact paths, commit/no-change record, and phase-gate result. The orchestrating skill (this SKILL.md) reads those outputs and verifies them before proceeding.
 
 ### 7. 3rd-review standalone
 
@@ -104,10 +119,11 @@ After 3rd-review completes for each phase, construct the review fact using `fact
 ```js
 import { buildReviewFact } from "./facts-schema.mjs";
 // When review ran successfully:
-const artifact_path = "{taskDir}/{task-id}/reviews/build-code-phase-N.md";
+const artifact_path = "{taskDir}/{task-id}/reviews/verdict-build-code-phase-N-round-M.raw.json";
 const reviewFact = buildReviewFact({ status: "executed", source, verdict, artifactPath: artifact_path });
 // source must be "third_party" or "same_source"; verdict must be "pass" | "revise_required" | "escalate_to_human"
-// artifact_path is the durable path to the review report, resolved via parseTaskDir, e.g. "{taskDir}/{task-id}/reviews/build-code-phase-N.md"
+// artifact_path is the durable machine-readable raw verdict JSON, resolved via parseTaskDir, e.g. "{taskDir}/{task-id}/reviews/verdict-build-code-phase-N-round-M.raw.json"
+// A Markdown combined report may also be written for humans, but it is not the artifact path consumed by phase-gate.
 // Note: buildReviewFact's parameter is named artifactPath (camelCase), but the value stored in the fact is artifact_path (snake_case).
 
 // When review was skipped or could not run:
@@ -118,11 +134,14 @@ Write the result into `stage-result` under the `facts.review` key. The `buildRev
 
 ### 9. 事实包产出
 
-When all phases are complete, assemble the stage-result content as a structured facts package in memory (a draft — do **not** write it to disk yet) (FR-PKG-001/002/003). The three required keys are:
+When all phases are complete, assemble the stage-result content as a structured facts package in memory (a draft — do **not** write it to disk yet) (FR-PKG-001/002/003). The required keys are:
 
 - `facts.changed` — **array** of changed file paths (one entry per file, not a comma-joined string).
 - `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...], command: <string>, risk_level: <P0|P1|P2|P3|null> }`. The `command` field is required for verify-code downstream consumption (M9 C1). For multi-phase tasks, also include `phases: [{ phase_id, risk_level }, ...]` so each phase's risk level is traceable (FR-RISK-001).
 - `facts.review` — **struct** produced by `buildReviewFact` (see §8 above).
+- `facts.worktree_root` — **absolute path string** for the task implementation worktree that downstream stages must enter before reading or verifying implementation artifacts.
+- `facts.task_tracking_root` — **absolute path string** for the task execution-record root used to locate `{task-id}` stage artifacts. This must be explicit; downstream stages must not infer it from their current checkout.
+- `facts.phase_completion` — **struct** copied from accepted PHASE_RESULT records: `{ commit_records: [{ phase_id, commit_sha }], no_change_records: [{ phase_id, no_change_reason }] }`. At least one record must exist across the two arrays. File-changing phases use `commit_records`; no-change phases use `no_change_records`.
 
 This draft is held in memory and carried forward; it is **not** persisted here. The actual file write happens exactly once, at §16 step 5, after §15's atomic-commit-evidence-capture has completed (so the final `commit_sha`/`base_sha`/`head_sha` can be included). The durable path, resolved via `parseTaskDir` (AC-16), is `{taskDir}/{task-id}/stage-result-build-code.json`. Do not hard-code `tasks/{task-id}/`, and do not write this file at this step.
 
@@ -136,7 +155,13 @@ Example shape (the content to assemble now, to be written later at §16):
   "facts": {
     "changed": ["core/text-utils.mjs", "tests/text-utils.test.mjs"],
     "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"], "command": "pnpm exec vitest run tests/text-utils.test.mjs", "risk_level": "P1", "phases": [{ "phase_id": "phase-1", "risk_level": "P1" }] },
-    "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "{taskDir}/{task-id}/reviews/build-code-phase-1.md" }
+    "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "{taskDir}/{task-id}/reviews/verdict-build-code-phase-1-round-1.raw.json" },
+    "worktree_root": "/absolute/path/to/worktree",
+    "task_tracking_root": "/absolute/path/to/task-records",
+    "phase_completion": {
+      "commit_records": [{ "phase_id": "phase-1", "commit_sha": "0123456789abcdef0123456789abcdef01234567" }],
+      "no_change_records": []
+    }
   },
   "missing_items": [],
   "user_decision": false,
@@ -173,7 +198,7 @@ During §1 pre-read, inspect `facts.tasks` for the ordered phase list. Each phas
 2. If it is missing, malformed, or out of range, log a non-blocking warning and default to `P2`. Do **not** halt build-code because of a classification failure.
 3. Write the current phase's `risk_level` into the per-phase evidence:
    - `phase-N-RED.json` must contain `risk_level` (capture.mjs writes this field; see §2).
-   - `phase-N-GREEN.json` must contain `risk_level`, `base_sha`, `head_sha`, and `commit_sha` (capture.mjs writes these fields; see §2 and §15). At GREEN capture time the commit has usually not happened yet, so `commit_sha` will be `null`; the coordinator backfills it after the final commit. `base_sha` and `head_sha` reflect the working tree state and are available immediately.
+   - `phase-N-GREEN.json` must contain `risk_level`, `base_sha`, `head_sha`, and `commit_sha` (capture.mjs writes these fields; see §2 and §15). At GREEN capture time the implementation commit has usually not happened yet, so `commit_sha` may be `null`; the phase executor records the final implementation commit in `PHASE_RESULT.commit_records[]`. `base_sha` and `head_sha` reflect the working tree state and are available immediately.
 4. When assembling the stage-result, set `facts.tests.risk_level` to the current phase's level and append `{ phase_id, risk_level }` to `facts.tests.phases` for multi-phase traceability.
 
 **P0 coverage prompt:** For any phase classified as `P0`, emit an explicit log line such as:
@@ -231,7 +256,7 @@ Replace the single post-GREEN 3rd-review call with two independent subagent invo
   - `pass` only if both subagents return `pass`.
   - `revise_required` if at least one returns `revise_required` and neither returns `escalate_to_human`.
   - `escalate_to_human` if either subagent returns `escalate_to_human`. A direct `escalate_to_human` from a subagent is treated as a C-class escalation: produce the escalation record, pause automatic progression, and wait for human confirmation (see §14).
-- The `artifact_path` should point to a durable combined report (e.g. `{taskDir}/{task-id}/reviews/build-code-phase-N.md`) that references the two underlying verdict files.
+- The `artifact_path` should point to the durable machine-readable raw JSON verdict used by phase-gate (e.g. `{taskDir}/{task-id}/reviews/verdict-build-code-phase-N-round-M.raw.json`). A combined Markdown report may reference the two underlying verdict files for human reading, but the gate input must be JSON.
 
 If the 3rd-review skill is unavailable for either subagent, downgrade that side to `same_source` review and record the degraded source.
 
@@ -259,25 +284,21 @@ Track the per-subagent verdict history after each review round. Classify the res
 
 The escalation record is a durable artifact for downstream traceability.
 
-### 15. 原子提交留痕 (FR-COMMIT-001)
+### 15. phase 级提交留痕 (FR-COMMIT-001)
 
-**Commit authority:** The orchestrating skill (this SKILL.md / the build-code coordinator) owns the commit decision. Implementation subagents must **never** run `git commit` themselves.
-
-Explicit instruction to pass to every implementation subagent:
-
-> DO NOT commit. Leave changes in the working tree.
+**Commit authority:** The phase executor owns the phase-scoped implementation commit for the current phase. The orchestrating skill (this SKILL.md / the build-code coordinator) verifies the commit/no-change record and the phase-gate result before advancing. The coordinator must not perform routine implementation commits; it may only create an explicitly human-approved repair commit, and must record that path as an exception.
 
 **Per-phase commit rule (FR-WORKTREE-COMMIT-004):**
 
 Each phase that produces file changes **must** be followed by `git add` + `git commit` with message pattern `workflowhub(build-code/<phase-name>): <description>` before the next phase begins. This ensures each phase's changes are independently traceable.
 
-- **File-changing phase**: run `git add -A && git commit -m "workflowhub(build-code/<phase-name>): <description>"` after the phase reaches GREEN and before advancing to the next phase.
+- **File-changing phase**: the phase executor runs `git add -A && git commit -m "workflowhub(build-code/<phase-name>): <description>"` after the phase reaches GREEN, diff scan and independent review have passed, and before marking the phase complete.
 - **No-change phase**: if a phase produces no file changes, do **not** create a commit (empty/marker-only commits are forbidden). Instead, write a no-change reason into the phase's stage-result or journal entry (e.g. `"no_change_reason": "phase skipped — no files modified"`). This no-change record is **mandatory**; a phase may not complete silently with neither a commit nor a no-change record.
 
 **Commit timing (per-phase, not a single final atomic commit):**
 
 - Each file-changing phase commits immediately after reaching GREEN and before the next phase begins (see per-phase commit rule above). There is no single final atomic commit that bundles all phases.
-- The coordinator computes `base_sha` and `head_sha` at commit time for each phase and captures the resulting `commit_sha`.
+- The phase executor records the resulting implementation `commit_sha` in `PHASE_RESULT.commit_records[]`. The coordinator verifies that record and does not advance if it is missing or contradictory.
 
 **Evidence fields:**
 
@@ -288,13 +309,28 @@ Each phase that produces file changes **must** be followed by `git add` + `git c
 - `head_sha`
 - `risk_level`
 
-These fields are required by the evidence contract (see §11). When the coordinator finally commits, it should also record `commit_sha`, `base_sha`, and `head_sha` in the stage-result notes or in a dedicated `commit_record` fact.
+These fields are required by the evidence contract (see §11). When the phase executor commits, it must record the implementation commit in `PHASE_RESULT.commit_records[]`; `commit_sha` in the GREEN capture may remain `null` if the capture happened before commit.
 
-**This commit-evidence capture must complete before §16's stage-result write and before advancing to `verify-code`.** The final stage-result written in §16 records the resulting `commit_sha`/`base_sha`/`head_sha`, so the commit must already be finalized by the time §16 runs.
+**This commit-evidence capture must complete before §16's stage-result write and before advancing to `verify-code`.** The final stage-result written in §16 records the resulting commit/no-change facts, so every phase must already be finalized by the time §16 runs.
+
+**Phase completion fact check:** Use this executable order for file-changing phases:
+
+1. The phase executor commits the implementation/evidence changes for the current phase.
+2. The phase executor captures that implementation commit SHA in `phase-result.json` under `commit_records[]` with the current `phase_id`.
+3. The phase executor writes/updates `phase-result.json` as a completion-fact draft; the draft must already contain `status:"done"` plus evidence, diff scan, review facts, and the current-phase commit record.
+4. Do not create a post-review tracking-only commit inside the implementation worktree. The file-changing phase's recorded implementation commit must match final `HEAD` and must contain at least one non-tracking implementation/test file. If tracking artifacts must be stored separately, keep them outside the implementation worktree or include them before the final review/commit boundary.
+5. For a no-change phase, either keep task tracking outside the implementation worktree, or commit only the tracking artifacts needed to record the mandatory no-change reason; do not leave uncommitted tracking files behind.
+6. The phase executor invokes the workflowhub package's phase gate script from the workflowhub tooling/package root, passing the task worktree path as data:
+
+```bash
+node <workflowhub_package_root>/scripts/phase-gate.mjs <phase-result-json> <worktree_root>
+```
+
+Only after this command returns ok may the coordinator treat that draft as accepted completion and advance to the next phase. A failure means the phase facts are incomplete or contradictory; stop, return the same phase to the phase executor, and fix the phase result or missing artifact before advancing. This check covers only concrete completion facts: RED/GREEN evidence, diff scan result, independent review evidence, commit/no-change record, and clean worktree state.
 
 ### 16. 自动进度摘要（人向，问题 1+2）
 
-This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** all per-phase commits in §15 have completed.
+This is a separate path from the escalation handling in §14 above and does not change it. It only applies on the **normal pass path** — when all phases are GREEN and the final two-stage review verdict is `pass` (no `revise_required`, no `escalate_to_human`), **and** all per-phase commit/no-change records in §15 have completed and passed phase-gate.
 
 When that condition holds:
 
@@ -304,7 +340,7 @@ When that condition holds:
    > 本阶段已通过异源审查，自动进入下一阶段。以上仅供你了解进度，无需操作。
 3. Follow the template's hard rules: plain Chinese a high-schooler can follow, no internal artifact names/field names/IDs (translate them into human terms).
 4. **Landing point (explicit):** write the brief text to `{taskDir}/{task-id}/build-code-summary.md`. This is the durable artifact. (Consistent with how other build-code artifacts resolve under `{taskDir}/{task-id}/...` via `parseTaskDir`, e.g. the stage-result path below.)
-5. This brief is informational only — it is not a quality gate and does not block advancing. **This is the single point where the stage-result is persisted to disk.** Take the in-memory facts draft assembled in §9, fill in the `commit_sha`/`base_sha`/`head_sha` commit evidence now available from §15, and write the final stage-result to `{taskDir}/{task-id}/stage-result-build-code.json` (resolved via `parseTaskDir`, AC-16). Then run Receipt verification below.
+5. This brief is informational only — it is not a quality gate and does not block advancing. **This is the single point where the stage-result is persisted to disk.** Take the in-memory facts draft assembled in §9, fill in the commit/no-change facts accepted by §15, and write the final stage-result to `{taskDir}/{task-id}/stage-result-build-code.json` (resolved via `parseTaskDir`, AC-16). Then run Receipt verification below.
 
 ### Receipt verification
 
@@ -312,7 +348,12 @@ After writing stage-result, call:
 
 ```js
 const { verifyReceipts } = await import("../../scripts/validate-stage-result.mjs");
-const receiptResult = verifyReceipts("build-code", "<stageResultPath>", "<worktreeRoot>");
+const baseRef = process.env.WORKFLOWHUB_DIFF_BASE;
+if (!baseRef) {
+  process.stderr.write("[receipt] FAIL: WORKFLOWHUB_DIFF_BASE is required so committed build-code work is verified against the task branch base\n");
+  process.exit(1);
+}
+const receiptResult = verifyReceipts("build-code", "<stageResultPath>", "<worktreeRoot>", { baseRef });
 if (!receiptResult.ok) {
   process.stderr.write(`[receipt] FAIL: ${receiptResult.errors.join("; ")}\n`);
   process.exit(1);
@@ -323,7 +364,7 @@ Only after `receiptResult.ok` is true, proceed automatically into `verify-code`.
 
 ### 17. worktree.json 复用协议 (FR-WORKTREE-001)
 
-Before starting implementation, locate the worktree descriptor at `{taskDir}/{task-id}/worktree.json`.
+Before starting implementation, locate the worktree descriptor at `taskRecords.worktree_json`.
 
 **Normal path:**
 

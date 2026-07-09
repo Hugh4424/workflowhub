@@ -1,0 +1,226 @@
+[collectFacts warn] review_invoked not derivable for exec-9; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-cold; defaulting to false.
+[boundary-confirm warn] boundary decision write failed for exec-bound-writefail
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:9a8964ec-2da1-4a20-b217-7ec3b9b008a0:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-d; defaulting to false.
+[receipt-writer] receipt_write_warn could not be written (disk full); original error: disk full
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6653fb2b-d627-4625-9c11-d5e031440f00:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-h; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6653fb2b-d627-4625-9c11-d5e031440f00:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-gap; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6653fb2b-d627-4625-9c11-d5e031440f00:round3; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:64b34a31-f3ee-41b4-aa63-6a050c7f1638:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:64b34a31-f3ee-41b4-aa63-6a050c7f1638:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:64b34a31-f3ee-41b4-aa63-6a050c7f1638:round3; defaulting to false.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b1583def-2859-4989-b955-83103fc42748/task-dir-parser-config-test-DuPP6t/fake-home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[task-dir-parser] FAIL: 配置有问题 (config.json malformed)
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:09b61fdf-dd9b-4840-b2e2-5b84b3f50fc1:round1; defaulting to false.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b1583def-2859-4989-b955-83103fc42748/task-dir-parser-config-test-PseM3T/fake-home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b1583def-2859-4989-b955-83103fc42748/task-dir-parser-config-test-Y2zYuY/fake-home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:09b61fdf-dd9b-4840-b2e2-5b84b3f50fc1:round2; defaulting to false.
+[task-dir-parser] FAIL: path does not exist (source: config.json (/Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b1583def-2859-4989-b955-83103fc42748/task-dir-parser-config-test-iPnNDf/fake-home/.workflowhub/config.json)): /nonexistent-config-task-dir-1783572485316
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:09b61fdf-dd9b-4840-b2e2-5b84b3f50fc1:round3; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:037ecbe3-3682-4e7a-8e19-bf3f8347e521:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:037ecbe3-3682-4e7a-8e19-bf3f8347e521:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:037ecbe3-3682-4e7a-8e19-bf3f8347e521:round3; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:452965a6-337a-4176-b793-f619759844cc:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:452965a6-337a-4176-b793-f619759844cc:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:make-decision:60758f83-c7fe-49af-88d7-d4ac8159faf5:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6c19efb9-071d-4964-a3a1-19fb7d332b95:round1; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6c19efb9-071d-4964-a3a1-19fb7d332b95:round2; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-facts-001; defaulting to false.
+[collectFacts warn] review_invoked not derivable for exec-facts-002; defaulting to false.
+[collectFacts warn] review_invoked not derivable for wh-review-rebuild-test:build-code:6c19efb9-071d-4964-a3a1-19fb7d332b95:round3; defaulting to false.
+[collectFacts warn] fact write failed for exec-facts-003
+[task-dir-parser] FAIL: WORKFLOWHUB_TASK_DIR is not set and no task_dir found in /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b1583def-2859-4989-b955-83103fc42748/task-dir-parser-test-mAYax8/home/.workflowhub/config.json. Set the WORKFLOWHUB_TASK_DIR environment variable to the task tracking root directory, or add a task_dir entry to ~/.workflowhub/config.json.
+[task-dir-parser] FAIL: path does not exist (source: WORKFLOWHUB_TASK_DIR): /nonexistent-task-dir-1783572486074
+[task-dir-parser] FAIL: path exists but is not a directory (source: WORKFLOWHUB_TASK_DIR): /Users/Hugh/multica_workspaces_desktop-api.multica.ai/75f83904-e6ad-4897-bd9e-b2fcc5602d33/f1d690a8/tmp/b1583def-2859-4989-b955-83103fc42748/task-dir-parser-test-yE6F4O/not-a-dir.txt
+[collectFacts warn] review_invoked not derivable for smoke-test-exec-id-001; defaulting to false.
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-001: verifySwappability — stub dispatched + core diff empty > resolves successfully with { passed: true }
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:66:27
+     64|   it("resolves successfully with { passed: true }", async () => {
+     65|     const result = await verifySwappability({ configPath, workflowId: …
+     66|     expect(result.passed).toBe(true);
+       |                           ^
+     67|   });
+     68| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-001: verifySwappability — stub dispatched + core diff empty > reports coreDiffEmpty = true (no core files were modified)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:76:34
+     74|   it("reports coreDiffEmpty = true (no core files were modified)", asy…
+     75|     const result = await verifySwappability({ configPath, workflowId: …
+     76|     expect(result.coreDiffEmpty).toBe(true);
+       |                                  ^
+     77|   });
+     78| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-002: verifyExtensibility — new dummy triggered by workflowId only > resolves with { passed: true }
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:155:27
+    153|   it("resolves with { passed: true }", async () => {
+    154|     const result = await verifyExtensibility({ configPath, workflowId:…
+    155|     expect(result.passed).toBe(true);
+       |                           ^
+    156|   });
+    157| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-002: verifyExtensibility — new dummy triggered by workflowId only > reports coreDiffEmpty = true (no core files were modified)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:165:34
+    163|   it("reports coreDiffEmpty = true (no core files were modified)", asy…
+    164|     const result = await verifyExtensibility({ configPath, workflowId:…
+    165|     expect(result.coreDiffEmpty).toBe(true);
+       |                                  ^
+    166|   });
+    167| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-003: independence — each check returns only its own result shape > verifySwappability returns a result with the swap component_id (FR-EXT-001 only)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:271:27
+    269|   it("verifySwappability returns a result with the swap component_id (…
+    270|     const result = await verifySwappability({ configPath: swapConfigPa…
+    271|     expect(result.passed).toBe(true);
+       |                           ^
+    272|     expect(result.componentId).toBe("stub-indep");
+    273|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  core/__tests__/check-extensibility.test.mjs > FR-EXT-003: independence — each check returns only its own result shape > verifyExtensibility returns a result with the ext component_id (FR-EXT-002 only)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ core/__tests__/check-extensibility.test.mjs:277:27
+    275|   it("verifyExtensibility returns a result with the ext component_id (…
+    276|     const result = await verifyExtensibility({ configPath: extConfigPa…
+    277|     expect(result.passed).toBe(true);
+       |                           ^
+    278|     expect(result.componentId).toBe("dummy-indep");
+    279|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  core/__tests__/run-checks.test.mjs > FR-CI-001: aggregate mode (no args) > exits 0 on a clean repo
+AssertionError: [run-checks] running check-anti-host ...
+check-anti-host: OK — scanned 21 file(s), no violations
+[run-checks] running check-extensibility ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] retrying check-extensibility after transient failure (1/6) ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] retrying check-extensibility after transient failure (2/6) ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] retrying check-extensibility after transient failure (3/6) ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] retrying check-extensibility after transient failure (4/6) ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] retrying check-extensibility after transient failure (5/6) ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] retrying check-extensibility after transient failure (6/6) ...
+[FR-EXT-001] verifySwappability ...
+[FR-EXT-002] verifyExtensibility ...
+[run-checks] running check-contract ...
+[check-contract] checking: /Users/Hugh/Hugh/Project/workflowhub-wh-quality-convergence/contracts/component-output.contract.json
+[check-contract] valid sample PASS — validateContract accepted { component_id, output_path }
+[check-contract] invalid sample correctly rejected by validateContract
+[check-contract] PASS — contract structure and FR-NC-005 path-only constraint verified
+[run-checks] running check-metrics-schema ...
+[check-metrics-schema] validating execution-record + knowledge-card schemas
+[check-metrics-schema] PASS — metrics schemas + contracts validated
+[run-checks] running check-stage-quality ...
+[check-stage-quality] scanning 20 file(s) in metrics/ + scripts/ ...
+[check-stage-quality] scanning 5 SKILL.md file(s) for metrics wiring ...
+[check-stage-quality] PASS — quality-class blocking gates = 0, metric wiring = complete
+[run-checks] running check-task-record-paths ...
+[check-task-record-paths] PASS
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+  FAIL  component_id=dummy-ok coreDiffEmpty=false
+[run-checks] FAILED: check-extensibility (exit 1)
+[run-checks] 1 checker(s) failed — aggregated exit 1
+: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ core/__tests__/run-checks.test.mjs:41:32
+     39|   test("exits 0 on a clean repo", () => {
+     40|     const r = run();
+     41|     expect(r.status, r.output).toBe(0);
+       |                                ^
+     42|   });
+     43| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+

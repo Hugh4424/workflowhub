@@ -23,9 +23,10 @@ describe("Phase 1 / AC-06: WORKFLOWHUB_TASK_DIR env var declared", () => {
     assert.ok(skill().includes("WORKFLOWHUB_TASK_DIR"),
       "WORKFLOWHUB_TASK_DIR must appear in build-spec SKILL.md (FR-TRACKING-001)");
   });
-  test("SKILL.md declares config/workflowhub.yaml task_dir as fallback", () => {
-    assert.ok(skill().includes("config/workflowhub.yaml") && skill().includes("task_dir"),
-      "config/workflowhub.yaml task_dir fallback must be declared (FR-TRACKING-001)");
+  test("SKILL.md declares config.json task_dir fail-loud fallback", () => {
+    const c = skill();
+    assert.ok(c.includes("~/.workflowhub/config.json") && c.includes("task_dir") && c.includes("fail-loud"),
+      "~/.workflowhub/config.json task_dir fail-loud fallback must be declared (FR-TRACKING-001)");
   });
   test("SKILL.md states fail-loud behaviour for missing WORKFLOWHUB_TASK_DIR", () => {
     const c = skill();
@@ -34,15 +35,16 @@ describe("Phase 1 / AC-06: WORKFLOWHUB_TASK_DIR env var declared", () => {
   });
 });
 
-describe("Phase 1 / AC-13: --task-dir parameter convention", () => {
-  test("SKILL.md declares --task-dir parameter", () => {
-    assert.ok(skill().includes("--task-dir"),
-      "--task-dir parameter must be declared in build-spec SKILL.md (FR-TASKDIR-001)");
-  });
-  test("SKILL.md states fallback behaviour for missing --task-dir", () => {
+describe("Phase 1 / AC-13: task record path convention", () => {
+  test("SKILL.md declares task-record-paths bootstrap", () => {
     const c = skill();
-    assert.ok(c.includes("--task-dir") && (c.includes("回退") || c.includes("fallback") || c.includes("默认路径")),
-      "SKILL.md must declare fallback/default path when --task-dir is absent (FR-TASKDIR-001)");
+    assert.ok(c.includes("core/task-record-paths.mjs") && c.includes("resolveTaskRecordPaths"),
+      "build-spec SKILL.md must resolve task records through core/task-record-paths.mjs (FR-TASKDIR-001)");
+  });
+  test("SKILL.md forbids repo-local tasks fallback", () => {
+    const c = skill();
+    assert.ok(c.includes("不得回退到 repo-local `tasks/{task-id}/`") || c.includes("Do not hard-code repo-local `tasks/{task-id}/`"),
+      "build-spec SKILL.md must forbid repo-local tasks/{task-id}/ fallback (FR-TASKDIR-001)");
   });
 });
 
