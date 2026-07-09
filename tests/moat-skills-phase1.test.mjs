@@ -120,12 +120,12 @@ describe("intake-decision-review execution protocol", () => {
     }
   });
 
-  test("defines the three-angle review contract and exactly three findings", () => {
+  test("defines multi-angle review contract with no fixed findings cap", () => {
     const content = readRequiredFile("skills", "intake-decision-review", "SKILL.md");
     assert.match(content, /direction/, "must include direction review angle");
     assert.match(content, /framing/, "must include framing review angle");
     assert.match(content, /scope/, "must include scope review angle");
-    assert.match(content, /恰好\s*3\s*条|exactly\s*3|3\s*条\s*findings/i, "must require exactly 3 findings");
+    assert.match(content, /不设条数上限|0-N\s*条|no\s*(fixed\s*)?cap/i, "must state no fixed cap on findings count");
     assert.match(content, /单次|single\s+call|一次调用/i, "must require a single 3rd-review call");
   });
 

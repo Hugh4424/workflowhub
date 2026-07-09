@@ -128,7 +128,7 @@ F10 反过度工程四问（FR-LADDER-002）在档位判断时一并执行，结
 Invoke `skills/spec-specify/SKILL.md` (spec-specify):
 
 - **Input**: task-id (from the current stage context) and the functional description text extracted from the decision-log.
-- **Expected output**: `specs/{task-id}/spec.md` (first draft) and `specs/{task-id}/checklists/requirements.md` (quality checklist).
+- **Expected output**: `specs/{task-id}/spec.md` (first draft) and `tasks/{task-id}/artifacts/build-spec-requirements.md` (quality checklist).
 - If spec-specify reports failure or the output files are missing, stop and surface the error — do not proceed to spec-clarify.
 
 ### 3. spec-clarify: ambiguity scan and interactive refinement
@@ -177,14 +177,13 @@ spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-r
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
 - 可 grep 到 `3rd-review` 或 `异源独立审查`
 
-**调用命令模板：**
-```bash
-bash /path/to/3rd-review/standalone.sh \
-  --checkpoint=build-spec \
-  --input specs/{task-id}/spec.md \
-  --engine codex \
-  --output specs/{task-id}/reviews/build-spec-review.md
-```
+**调用方式（wh-review 两段式协议，取代直接 shell 出 `standalone.sh`）：**
+
+不再需要手动 `cd` 到 workflowhub worktree 根目录或猜测 `standalone.sh` 的动态任务目录——`taskTrackingRoot` 由 `parseTaskDir()` 统一解析，路径确定、非猜测。
+
+1. **准备阶段**：调用 `prepareRoundState({ taskId, stage: "build-spec", taskTrackingRoot })`。`{status:"ready", review_flow_id, total_round, contract_path}` 时，`contract_path` 必须命中 build-spec 专属合同；命中其它 stage 合同视为配置错误，停止并报告。build-spec 是 auto-advance stage（无人工确认门），正常路径不应返回 `blocked_by_human_confirmation`；若意外返回，视为异常，不得静默忽略或伪造确认继续，需按第 7 节 auto-advance 判断点的 `unknown` 语义处理（转人工确认）。
+2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派生审查子代理前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许派发。子代理只拿 `review_flow_id`/`total_round`，据此写出 `prompt-{review_flow_id}-r{total_round}.md`（仅补充说明，不含 materials 本体），**不下发 `contract_path`**。
+3. **执行阶段**：主 agent 调用 `invoke-review-engine.mjs`（携带 `review_flow_id`/`contract_path`/子代理补充说明文件路径，`specs/{task-id}/spec.md` 作为审查材料），驱动实际审查引擎；结果写回 `round-state-build-spec-{review_flow_id}.json`，并渲染确定路径的报告产物（不再依赖 stdout 提示的动态任务目录）。
 
 ---
 
@@ -272,7 +271,7 @@ The 21 items are:
 
 **Rule**: non-compliance does NOT block build-spec progression. Any `[ ]` marks are recorded transparently and surfaced in the stage-result facts, but the pipeline continues. The constitution check is a factual recording step, not a gate — per constitution principle Q1 (记录事实而非阻断).
 
-Write the completed checklist as an appendix to the spec or as a standalone file `specs/{task-id}/constitution-check.md`.
+Write the completed checklist as an appendix to the spec or as a standalone file `tasks/{task-id}/artifacts/build-spec-constitution-check.md`.
 
 ### 5. Baseline comparison
 
@@ -293,7 +292,7 @@ Compare the current M11 task execution against the M10 baseline using 5 metrics 
 - **Thresholds are set by humans, not by this stage.** The M10 baseline values are reference points only — non-compliance with any of them does NOT block progression (F3, Q1).
 - The fifth metric must be named `rework_proxy_count` — do NOT use any previous naming for this metric.
 
-Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as a standalone file `specs/{task-id}/baseline-report.md`.
+Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as a standalone file `tasks/{task-id}/artifacts/build-spec-baseline-report.md`.
 
 ### 6. F10 anti-over-engineering gate (apply while the spec can still be revised, before the 3rd-review pass in step 7)
 

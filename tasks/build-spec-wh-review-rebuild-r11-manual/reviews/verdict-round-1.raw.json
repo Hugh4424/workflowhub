@@ -1,0 +1,72 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "file": "spec.md",
+      "line": 372,
+      "issue": "`FR-INTAKE-001` 把 C1-C6 标成“来源 decision-log D4”，但真实 `decision-log` 的 D4 只定义裁决枚举；同一问题也出现在 `FR-TESTACCEPTANCE-001`，把 F1-F6 标成“来源 decision-log D5”，而 D5 只定义报告 6 章结构。两组核心判据都没有在 decision-log 中找到真实来源，属于错误源追溯 + 未获批核心概念注入。",
+      "recommendation": "把 C1-C6、F1-F6 的真实上游决策逐条补进 decision-log 后再回填 spec；如果它们只是实现建议而非已批准需求，就从 FR 降级为非阻断说明或移出本期范围。"
+    },
+    {
+      "severity": "blocking",
+      "file": "spec.md",
+      "line": 320,
+      "issue": "`FR-THIRDREVIEW-003` 新增 `standalone.sh` revise 循环 round-cap 缺陷修复，直接把“旧 bug 修复”写进本期范围；但 decision-log 明确写了“本任务不修旧 bug，只做重设计”，而且开放问题里也把 3rd-review 代码边界留给后续阶段明确。这个 FR 改变了用户批准的目标。",
+      "recommendation": "删除 `FR-THIRDREVIEW-003` 及其验收项，或先把“修 standalone.sh 无限循环”补成新的用户批准决策，再重新进 spec。"
+    },
+    {
+      "severity": "blocking",
+      "file": "spec.md",
+      "line": 278,
+      "issue": "3rd-review 调用契约自相矛盾。`FR-THIRDREVIEW-001` 的 runner 调用格式强制 `--round=<n>`，并要求 wh-review 显式传入当前 `round_number`；但 `AC-D1` 又要求实际调用参数中“不含 stage 或 round 字段”。实现方无法同时满足两条验收。",
+      "recommendation": "统一调用契约：要么允许 `round` 作为引擎调用元数据并改写 `AC-D1`，要么彻底禁止 `round` 透传并移除 runner 格式里的 `--round=<n>` 要求。"
+    },
+    {
+      "severity": "blocking",
+      "file": "spec.md",
+      "line": 229,
+      "issue": "报告验收仍未闭合。正文明确承认 6 章的名称/顺序/语义只是草案，要到 build-plan 阶段再核实并写入 `wh-review/SKILL.md`；但 `AC4-3` 却要求当前实现必须与那个未来文档“最终定义”完全一致。当前 spec 不能给出可直接规划的稳定验收边界。",
+      "recommendation": "二选一：现在就把 6 章最终名称/顺序/语义定死并回写到 spec；或者把 `AC4-3` 收敛为当前已批准的硬约束，只验“章数=6 + 必含哪些最小信息”，不要依赖未来文档。"
+    }
+  ],
+  "resolutionSummary": "已按 decision-log 对照审。主要问题不是措辞，而是 4 个阻断项：两组 FR 错误声称来源、把旧 bug 修复扩进本期、3rd-review 调用契约前后冲突、报告验收依赖未来未定义文档。",
+  "reviewSnapshot": [
+    {
+      "path": "spec.md",
+      "hash": null,
+      "lines": 574,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "spec.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}

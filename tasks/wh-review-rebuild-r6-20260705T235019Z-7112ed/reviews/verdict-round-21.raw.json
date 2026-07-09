@@ -1,0 +1,27 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "3rd-review 调用契约前后冲突",
+      "detail": "规格同时定义了两套互斥接口：前文与数据流写的是 3rd-review 接收 `{mode, contract, materials}`，而 FR-THIRDREVIEW-001 方案A又要求 wh-review 先把合同与材料装配成一份纯文本审查包，且禁止向 3rd-review 传入任何 stage 路由或合同路由信息。实现方无法据此确定 3rd-review 的真实输入边界、日志字段和测试夹具。需统一为单一调用契约，并同步改写 §2/§3/§6/FR-WHREVIEW-001/FR-THIRDREVIEW-001/AC-D1。"
+    },
+    {
+      "severity": "blocking",
+      "title": "stage 参数是否还能传给 3rd-review 的要求自相矛盾",
+      "detail": "FR-THIRDREVIEW-001 明确禁止向 3rd-review 传入 `--checkpoint` 等 stage 路由参数，但 AC-D1 又要求“去掉/加上 stage 参数的两次调用返回结果一致”。这会把已移除的接口重新引回验收面，导致实现和测试方向冲突。需二选一：要么彻底禁止并删除相关验收，要么保留兼容入口并写清其仅被忽略。"
+    },
+    {
+      "severity": "blocking",
+      "title": "human-brief-template 依赖未定却被当作硬验收",
+      "detail": "FR-STAGE-001 与 AC7/AC-D6 把 `docs/human-brief-template.md` 作为 5 个 stage 的统一收尾依赖，但 Known Gaps 明确承认该文件“是否已存在未经确认”，且规格未规定若不存在时是本期创建还是改范围。这个前置依赖未封口，会直接阻塞实现与验收。需把它改成明确要求：文件必须已存在并被复用，或本期 in-scope 新建该文件。"
+    },
+    {
+      "severity": "minor",
+      "title": "报告 6 章结构已定死，但 Known Gaps 仍写待核实",
+      "detail": "FR-WHREVIEW-004 已把 6 章名称、顺序、语义写成不可更改；Known Gaps 又写“6章结构名称未在 decision-log 中明确列出，build-plan 阶段需核实并定义”。这会误导后续阶段再次改动已冻结的验收面。应删除该 gap，或把“核实”限定为仅验证来源，不得修改当前规格。"
+    }
+  ],
+  "resolutionSummary": "先统一 3rd-review 的唯一调用契约，删掉残留 stage 参数验收，再明确 `docs/human-brief-template.md` 是现有依赖还是本期交付物。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r21"
+}

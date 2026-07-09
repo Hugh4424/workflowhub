@@ -31,6 +31,8 @@ Produce `tasks/<task-id>/decision-log.md` with exactly **7 sections** in this or
    - `用户批准`: yes / no / pending
    - **Dead rule**: decisions with `来源类型=新增` AND `用户批准=否` MUST NOT appear in any FR in the spec; they belong only in section 6 (开放问题) or section 7 (明确不做).
    - **Conflict rule**: later clarifications override earlier ones. Keep the earlier text but mark it `superseded` and cite the overriding approval.
+   - **权威定义表**（新增子节，附属于第 3 节）: table of `字段/路径/命名 → 值 → 唯一来源文件`. Any field/path/name expected to be reused by multiple downstream artifacts MUST have exactly one row here. If a later spec/plan re-defines the same concept differently, that re-definition is a decision-log violation and must be rejected (打回), not silently reconciled.
+   - **外部依赖接口核实记录**（新增子节，附属于第 3 节）: for every decision that involves calling an external script/tool, the entry MUST state "已读取目标工具真实 CLI/源码，接口为 XXX" with the concrete interface description. Writing only "计划调用 XXX" (a plan/intent, not a verified fact) is insufficient and MUST be treated as an open item, not a settled decision.
 4. **假设** — explicit assumptions made that are not stated in the requirement.
 5. **明确不做** — items explicitly excluded from this change, with a brief reason each.
 6. **开放问题** — items still ambiguous or awaiting user approval.
@@ -45,6 +47,7 @@ At least one decision record in section 3 MUST carry a non-empty `来源证据` 
 3. Resolve ambiguous items: ask ONE focused question per item; do not assume.
 4. Write the 7-section `tasks/<task-id>/decision-log.md` file.
 5. Do NOT expand scope beyond what the inputs explicitly authorise (YAGNI).
+6. **落盘后存在性自检**: after issuing the write, actually verify the file exists at the expected path (e.g. grep/stat the real path) before treating this step as done. Having "executed a write command" is NOT sufficient evidence of completion — confirm the artifact is really on disk at the expected location.
 
 ## "agenthub-clean" requirement
 

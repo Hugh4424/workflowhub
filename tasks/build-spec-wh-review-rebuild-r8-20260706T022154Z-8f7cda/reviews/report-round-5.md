@@ -1,0 +1,30 @@
+# 审查报告 — build-spec-wh-review-rebuild-r8-20260706T022154Z-8f7cda (round 5)
+
+- verdict: revise_required
+- provenance: single-context
+
+## Summary
+
+当前 spec 主要还差三件硬事：冻结 3rd-review 的真实集成契约，消除 AC-D1 与零 stage 知识的自冲突，补齐 `unknown`/审查不可用路径的业务影响说明。其余像 5 stage 总结模板更适合改写为“保持现状不回退”的验收项。
+
+## Findings
+
+- [blocking] 位置: specs/wh-review-rebuild/spec.md:504 | 问题: 3rd-review 的真实执行入口仍被下放为后续 tracking item，核心集成契约没有在 spec 阶段冻结。当前 spec 要求 wh-review 向 3rd-review 传 `{mode, contract, materials}`，但同一份 spec 又承认 `standalone.sh` 的实际参数和返回结构与文档不一致，且只计划在 build-plan 再建 issue。这样 planning 阶段无法确定 wh-review 到现有执行入口的权威桥接方式，也无法设计稳定验收。 | 建议: 在 spec 中直接定死权威集成边界：3rd-review 的宿主位置、wh-review 调用到现有执行入口的映射方式、结果提取来源、失败语义，以及若需 wrapper/vendoring 时的明确落点；不要把这条主链路合同继续留到 build-plan 之后。
+- [blocking] 位置: specs/wh-review-rebuild/spec.md:489 | 问题: 验收项 AC-D1 与前文契约自相矛盾。FR-THIRDREVIEW-001 明确禁止向 3rd-review 传 stage 名称或轮次号，但 AC-D1 又要求“去掉/加上 stage 参数的两次调用返回结果一致”。一个实现无法同时满足“禁止传入”和“带参调用应正常且等价”两种口径。 | 建议: 二选一并全篇统一：如果 3rd-review 真是零 stage 知识，就删除带 stage 参数的成功场景验收；如果要兼容带参输入，就把忽略/报错的明确行为写入 FR、场景和验收，并同步修正“禁止传入”的表述。
+- [blocking] 位置: specs/wh-review-rebuild/spec.md:440 | 问题: Business Impact Scope 低估了受影响的既有业务行为。现有 build-spec 流程已经存在 `3rd-review verdict = unknown` 时停下并转人工的真实路径；本 spec 一方面把 wh-review 对外裁决收敛为三值，另一方面又把 3rd-review 结果文件缺失映射到 `escalate_to_human`，但 Impact Scope 没有列出这条 review-unavailable/unknown 人工停顿语义将如何变化。按现状，用户可见行为是否保持、哪个枚举接管、日志/报告如何体现都仍不透明。 | 建议: 在 Business Impact Scope 明确补一条“审查不可用/结果未知”现有行为的变更说明：当前行为、变更后行为、人工介入点、对外枚举映射、报告/状态文件表现。未补齐前不要进入 planning。
+- [important] 位置: specs/wh-review-rebuild/spec.md:285 | 问题: spec 把“5 个 stage 收尾统一调用 `docs/human-brief-template.md`”写成主要改动和 FR，但 decision-log D6 已确认这件事在当前仓库现状中已经成立，不是待修缺陷。按现在写法，planning 容易把一项“保持不回退的既有事实”误拆成 5 个无必要改动任务。 | 建议: 把这部分从“新增改动目标”改写为“既有行为保持不回退 + 逐项验收核实”。如果确实仍有要改的 stage，逐个点名真实偏差位置；如果没有，就把 FR 收窄为回归保护要求。
+
+## Checks
+
+审查维度覆盖：方向、盲点、细节
+- 维度[方向]：已覆盖
+- 维度[盲点]：已覆盖
+- 维度[细节]：已覆盖
+
+## Required Revisions
+
+降级理由：(未提供，需补充)
+- 必须修复：3rd-review 的真实执行入口仍被下放为后续 tracking item，核心集成契约没有在 spec 阶段冻结。当前 spec 要求 wh-review 向 3rd-review 传 `{mode, contract, materials}`，但同一份 spec 又承认 `standalone.sh` 的实际参数和返回结构与文档不一致，且只计划在 build-plan 再建 issue。这样 planning 阶段无法确定 wh-review 到现有执行入口的权威桥接方式，也无法设计稳定验收。
+- 必须修复：验收项 AC-D1 与前文契约自相矛盾。FR-THIRDREVIEW-001 明确禁止向 3rd-review 传 stage 名称或轮次号，但 AC-D1 又要求“去掉/加上 stage 参数的两次调用返回结果一致”。一个实现无法同时满足“禁止传入”和“带参调用应正常且等价”两种口径。
+- 必须修复：Business Impact Scope 低估了受影响的既有业务行为。现有 build-spec 流程已经存在 `3rd-review verdict = unknown` 时停下并转人工的真实路径；本 spec 一方面把 wh-review 对外裁决收敛为三值，另一方面又把 3rd-review 结果文件缺失映射到 `escalate_to_human`，但 Impact Scope 没有列出这条 review-unavailable/unknown 人工停顿语义将如何变化。按现状，用户可见行为是否保持、哪个枚举接管、日志/报告如何体现都仍不透明。
+

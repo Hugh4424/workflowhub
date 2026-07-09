@@ -1,0 +1,34 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "审查轮次规则自相矛盾",
+      "detail": "FR-WHREVIEW-003 同时写了“异源审查最多3轮”和“第4轮起强制转同源”。如果最多只到3轮，第4轮规则不可达；如果允许第4轮，则“最多3轮”不成立。需要先统一轮次上限、同源切换时点、以及升级人工的优先级。"
+    },
+    {
+      "severity": "blocking",
+      "title": "升级人工触发条件未定量，核心裁决不可一致实现",
+      "detail": "核心规则写了“连续3轮出现大量 blocking 或指纹重复 blocking → 升级人工”，但“大量”没有数值定义，Known Gaps 也承认 GAP-4 未定。这个条件直接决定 verdict=escalate_to_human，属于核心行为，不应留到后续再猜。"
+    },
+    {
+      "severity": "blocking",
+      "title": "报告6章结构未定义，验收标准无法落地",
+      "detail": "FR-WHREVIEW-004 和 AC4-3 要求 render-review-report.mjs 输出固定6章结构，但 Known Gaps 明确说 6 章名称尚未核实。没有章节清单，实施者无法确定模板内容，验收也无法机器化判断。"
+    },
+    {
+      "severity": "blocking",
+      "title": "D2 人工确认门的落点不明确",
+      "detail": "规格要求 make-decision/build-plan/verify-code 的 pass 不自动推进，但未明确这个门禁由 wh-review 实现、由各 stage SKILL.md 实现，还是由外层 orchestrator 实现。当前文档同时要求 wh-review 只返回 verdict，又要求 stage 收尾统一调用 human-brief-template，责任边界未定，容易出现重复拦截或遗漏拦截。"
+    },
+    {
+      "severity": "blocking",
+      "title": "3rd-review 接口定义与已知实现不一致但未给出裁决基准",
+      "detail": "OPEN-1 已承认 standalone.sh 的实际参数/输出与 SKILL.md 描述不一致，但本规格又把 3rd-review 纯引擎接口定成 {mode, contract, materials} -> {verdict, findings, actual_mode}。如果不先明确哪个为真，wh-review 的调用契约、测试方案、以及迁移边界都不稳定。"
+    }
+  ],
+  "resolutionSummary": "先补齐并统一 5 个核心合同点：轮次规则、升级阈值、6章报告结构、D2 门禁责任边界、3rd-review 最终接口，再进入实现。",
+  "reviewRequestId": "standalone-build-spec-wh-review-rebuild-20260705T160512Z-766077-r21",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-21.md"
+}

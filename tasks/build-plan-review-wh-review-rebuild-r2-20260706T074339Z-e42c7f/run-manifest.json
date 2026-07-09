@@ -1,0 +1,12 @@
+{
+  "taskName": "build-plan-review-wh-review-rebuild-r2-20260706T074339Z-e42c7f",
+  "status": "completed",
+  "startedAt": "2026-07-06T07:43:39Z",
+  "versionAnchor": "b915e389418c8069c02db2ca7dbadfac7dff1204",
+  "input": "/tmp/wh-review-rebuild-build-plan-review-package-r2.md",
+  "maxReviseRounds": 1,
+  "reviseRounds": 6,
+  "endedAt": "2026-07-06T08:00:18Z",
+  "verdict": "escalate_to_human",
+  "exitCode": 2
+}

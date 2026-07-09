@@ -1,0 +1,34 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "任务目录与落盘路径未定义，报告/状态验收无法实现",
+      "detail": "多处验收依赖固定落盘位置，但规格没有定义 `task-dir`、`task-id` 的来源、解析规则、目录结构、以及 route-decision / round-state / Delta Package / report 各自的确定路径。FR-WHREVIEW-001 AC1-3 直接写 `<task-dir>/<task-id>/reviews/`，FR-WHREVIEW-004 只说“固定子路径”，AC-D10 又要求状态文件存在，但没有统一路径合同。实现者无法稳定落盘，验证者也无法一致验收。"
+    },
+    {
+      "severity": "blocking",
+      "title": "D2 人工确认门只有结果要求，没有可执行控制面定义",
+      "detail": "FR-D2-001 要求 make-decision / build-plan / verify-code 在 `verdict=pass` 后“暂停、等待人工回应，不自动推进”，但规格没有定义暂停载体、状态字段、人工批准输入方式、批准后如何恢复、以及谁负责阻止下一 stage 被调用。仅改 5 个 stage 的 SKILL.md 收尾段和调用 `docs/human-brief-template.md` 不足以实现 AC8-1/AC8-2 的行为级验收，当前属于需求缺关键控制面。"
+    },
+    {
+      "severity": "blocking",
+      "title": "3rd-review 结果契约不完整，wh-review 无法稳定裁决",
+      "detail": "FR-THIRDREVIEW-001 说 3rd-review 返回“结构化 verdict + findings”，又说 result-file 缺失或不可解析视为 `unknown` 并升级人工，但没有定义 findings 最小结构、`blocking_count` 与 `fingerprint` 的来源字段、`actual_mode` 的必填性、以及进程退出码与结果文件冲突时的仲裁规则。wh-review 的升级判定和报告 6 章都依赖这些结构，没有明确 JSON schema 或等价合同，集成实现会出现多种不兼容解释。"
+    },
+    {
+      "severity": "minor",
+      "title": "6 章报告结构已定死，但 Known Gaps 仍写“需核实原实现”",
+      "detail": "FR-WHREVIEW-004 已把 6 章的章数、顺序、语义定死，Known Gaps 又写“build-plan 阶段需在 agenthub 原实现中核实并在 SKILL.md 中定义”，与现规格状态不一致。虽不必然阻断实现，但会让执行者误判哪些内容还能改。"
+    },
+    {
+      "severity": "minor",
+      "title": "§7 机器检验规则过窄，无法覆盖中文条件分支表达",
+      "detail": "FR-THIRDREVIEW-002 主要用 `^\\s*\\d+\\.` 和 `/\\bif\\b.*\\belse\\b/` 做机器校验，但当前文档主体是中文，完全可能出现“如果/否则/当...则...”而绕过规则。你在文字里要求删除条件分支逻辑，机器规则却不足以保证这一点。"
+    }
+  ],
+  "resolutionSummary": "先补齐落盘路径合同、D2 人工确认控制面、3rd-review 结构化结果 schema，再进入实现。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r39",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-39.md"
+}

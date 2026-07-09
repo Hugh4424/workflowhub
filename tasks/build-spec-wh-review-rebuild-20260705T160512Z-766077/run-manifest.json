@@ -1,0 +1,9 @@
+{
+  "taskName": "build-spec-wh-review-rebuild-20260705T160512Z-766077",
+  "status": "in_progress",
+  "startedAt": "2026-07-05T16:05:12Z",
+  "versionAnchor": "e0af6b0d8438135324a14bc9dc09821808253cec",
+  "input": "specs/wh-review-rebuild/spec.md",
+  "maxReviseRounds": 3,
+  "reviseRounds": 0
+}

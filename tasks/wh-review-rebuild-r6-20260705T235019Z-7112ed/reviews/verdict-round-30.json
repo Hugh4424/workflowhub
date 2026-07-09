@@ -1,0 +1,29 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "blocking",
+      "title": "3rd-review 调用契约前后矛盾",
+      "detail": "文档前部多处把 3rd-review 定义成接收 `{mode, contract, materials}`（速读卡、目标、数据流、FR-WHREVIEW-001/006），但 FR-THIRDREVIEW-001 方案A又要求 wh-review 先把合同与材料装配成一份纯文本审查包，3rd-review 不再接收合同路由信息。当前没有唯一权威接口，实施方无法判断 3rd-review 的真实输入边界，也无法稳定设计测试桩与日志断言。"
+    },
+    {
+      "severity": "blocking",
+      "title": "落盘路径与状态文件结构未定，验收无法机器化",
+      "detail": "多个验收项要求机器验证固定产物，但 spec 只写“任务目录下固定子路径”“route-decision 记录文件”“轮次状态文件”“Delta Package 文件”，没有给出确定路径、文件名规则、JSON schema、字段类型与最小示例。AC1-3、AC2-2、AC3-1、AC4-2、AC-D4、AC-D10 都依赖这些细节；没有统一约定，开发与验证会各自实现，最终无法客观验收。"
+    },
+    {
+      "severity": "blocking",
+      "title": "D2 人工确认门缺少可执行协议",
+      "detail": "spec 要求 make-decision / build-plan / verify-code 在 `verdict=pass` 后“暂停等待人工回应”，但没有定义暂停状态如何落盘、人工批准通过什么文件/命令/字段表达、恢复执行时读取什么信号、超时或拒绝如何处理。AC8-1/2 需要端到端复现这一门禁；没有明确协议，5 个 stage 无法一致实现，也无法证明“未自动推进”。"
+    },
+    {
+      "severity": "minor",
+      "title": "同源/异源轮次计数口径不清",
+      "detail": "FR-WHREVIEW-003 说同源轮次独立计数、不与异源合并，但最小状态字段只定义一个 `round_number`。如果不补充 `heterogeneous_round` / `same_source_round` 或等价字段，升级人工与终止条件会出现实现分歧。"
+    }
+  ],
+  "resolutionSummary": "先补齐唯一的 3rd-review 接口定义、所有落盘产物的确定路径与 schema、以及 D2 人工确认门的暂停/恢复协议，再进入实现。",
+  "reviewRequestId": "standalone-wh-review-rebuild-r6-20260705T235019Z-7112ed-r30",
+  "provenance": "single-context",
+  "reportPath": "reviews/report-round-30.md"
+}

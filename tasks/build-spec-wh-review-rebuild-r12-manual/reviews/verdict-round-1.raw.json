@@ -1,0 +1,70 @@
+{
+  "verdict": "revise_required",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "spec.md",
+      "line": 246,
+      "issue": "FR-THIRDREVIEW-001 simultaneously defines 3rd-review as a zero-stage/zero-round single-call engine and keeps `--checkpoint=<stage>` on the same runner entry for standalone use. That leaves the canonical contract ambiguous: either the entrypoint still accepts stage routing, or it has been fully stripped of stage knowledge. As written, AC5-1/AC5-3/AC-D1 cannot be verified consistently.",
+      "recommendation": "Freeze one canonical runner contract. If 3rd-review must be stage-agnostic, remove `--checkpoint` from the runner entry entirely and move any standalone routing/debug behavior to a separate wrapper or separate debug-only script."
+    },
+    {
+      "severity": "high",
+      "file": "spec.md",
+      "line": 164,
+      "issue": "FR-WHREVIEW-003 requires heterologous rounds and same-source rounds to be counted independently, but the persisted state model later only defines a single `round_number`. After mode switching, the implementation cannot prove or replay whether it is on heterologous round 3, same-source round 2, or total round 5, so the stop/escalate rules are not machine-auditable.",
+      "recommendation": "Extend the round-state contract to store separate counters such as `heterologous_round`, `same_source_round`, and `total_round`, then update AC3-1/AC-D10 to validate those fields explicitly."
+    },
+    {
+      "severity": "high",
+      "file": "spec.md",
+      "line": 331,
+      "issue": "FR-D2-001 requires make-decision/build-plan/verify-code to stop at a human confirmation gate on `pass`, but no machine-consumable state or resume contract distinguishes `pass but waiting for approval` from `pass and auto-advance`. With only the three verdict enums, an orchestrator restart cannot deterministically decide whether to pause or continue.",
+      "recommendation": "Add an explicit persisted confirmation state, such as `post_review_action=await_human_confirmation|auto_advance`, and define the artifact/command used to resume after human approval so AC8 can be implemented and tested."
+    }
+  ],
+  "resolutionSummary": "规格主方向清楚，但还有 3 个会直接卡实现和验收的契约缺口：3rd-review 入口定义前后冲突、轮次状态模型不足、人工确认门缺少可恢复状态。先补齐这三处，再进入实现。",
+  "reviewSnapshot": [
+    {
+      "path": "wh-review-rebuild-r12-materials.md",
+      "hash": null,
+      "lines": 798,
+      "truncated": false,
+      "tokenUsage": {
+        "total": null
+      },
+      "diffFile": "wh-review-rebuild-r12-materials.md",
+      "round": 1
+    }
+  ],
+  "provider": "codex",
+  "host": "claude-code",
+  "riskDisposition": [],
+  "worktreeInventory": {
+    "included": [],
+    "unrelated": [],
+    "excluded": []
+  },
+  "trueCrossEngine": true,
+  "reviewMode": "omc-ask",
+  "threatAuditor": {
+    "ran": true,
+    "findings": [
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes a schema/contract/gate (cluster A) with soft-fail, optional, or warning-only validation — or a check that bypasses its own control switch (cluster B: soft-fail/swallow/bypass-flag terms). A gate that does not hard-block on failure allows output drift — schema-drift blocking."
+      },
+      {
+        "severity": "blocking",
+        "category": "schema-drift",
+        "description": "Spec describes or requires eliminating internal contradictions between field contracts or rule statements (cluster A: schema/contract terms + cluster B: conflict/contradiction/duplicate terms). Multiple conflicting schemas for the same entity cause silent drift — schema-drift blocking."
+      }
+    ],
+    "categories": [
+      "forgery-bypass",
+      "proof-independence",
+      "schema-drift"
+    ]
+  }
+}
