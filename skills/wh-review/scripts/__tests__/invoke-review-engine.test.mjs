@@ -14,6 +14,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +32,10 @@ import { writeRoutePreparePhase } from "../route-decision-writer.mjs";
 const TASK_ID = "wh-review-rebuild-test";
 const STAGE = "build-code";
 const REVIEW_FLOW_ID = "flow-abc123";
+
+function sha256(text) {
+  return createHash("sha256").update(String(text ?? "")).digest("hex");
+}
 
 function writeRoundStateFixture({ root, stage = STAGE, reviewFlowId = REVIEW_FLOW_ID, mode = "full" }) {
   const path = roundStatePathFor({ taskTrackingRoot: root, taskId: TASK_ID, stage, reviewFlowId });
@@ -243,6 +248,8 @@ describe("invokeReviewEngine — success path", () => {
   it("runs the built-in Claude Code runner through wh-review when WH_REVIEW_PROVIDER=claude-code", () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude();
+    const supplementaryPrompt = "SUPPLEMENTARY PROMPT TEXT";
+    const materials = `MATERIALS TEXT\n\n---\n\n## Supplementary context (agent-authored prompt)\n\n${supplementaryPrompt}`;
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
       const result = invokeReviewEngine({
@@ -252,7 +259,7 @@ describe("invokeReviewEngine — success path", () => {
         totalRound: 13,
         mode: "full",
         contract: "CONTRACT TEXT",
-        materials: "MATERIALS TEXT",
+        materials,
         taskTrackingRoot: root,
         env: { WH_REVIEW_PROVIDER: "claude-code" },
       });
@@ -266,6 +273,13 @@ describe("invokeReviewEngine — success path", () => {
       expect(artifact.trueCrossEngine).toBe(true);
       expect(artifact.reviewMode).toBe("claude-code-cli");
       expect(artifact.resolutionSummary).toBe("fake claude review passed");
+      expect(artifact.prompt_char_count).toBeGreaterThan("CONTRACT TEXT".length + "MATERIALS TEXT".length);
+      expect(artifact.contract_char_count).toBe("CONTRACT TEXT".length);
+      expect(artifact.materials_char_count).toBe(materials.length);
+      expect(artifact.contract_hash).toBe(sha256("CONTRACT TEXT"));
+      expect(artifact.materials_hash).toBe(sha256(materials));
+      expect(artifact.supplementary_prompt_present).toBe(true);
+      expect(artifact.supplementary_prompt_hash).toBe(sha256(supplementaryPrompt));
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;

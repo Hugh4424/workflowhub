@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const SEVERITIES = new Set(["blocking", "important", "minor"]);
+const SUPPLEMENTARY_CONTEXT_MARKER = "\n\n---\n\n## Supplementary context (agent-authored prompt)\n\n";
 
 function arg(name) {
   const prefix = `--${name}=`;
@@ -80,6 +82,30 @@ function findVerdictJson(text) {
     }
   }
   return null;
+}
+
+function sha256(text) {
+  return createHash("sha256").update(String(text ?? "")).digest("hex");
+}
+
+function extractSupplementaryPrompt(materials) {
+  if (typeof materials !== "string") return null;
+  const index = materials.indexOf(SUPPLEMENTARY_CONTEXT_MARKER);
+  if (index === -1) return null;
+  return materials.slice(index + SUPPLEMENTARY_CONTEXT_MARKER.length);
+}
+
+function reviewInputProvenance({ contract, materials, prompt }) {
+  const supplementaryPrompt = extractSupplementaryPrompt(materials);
+  return {
+    prompt_char_count: prompt.length,
+    contract_char_count: typeof contract === "string" ? contract.length : 0,
+    materials_char_count: typeof materials === "string" ? materials.length : 0,
+    contract_hash: sha256(contract),
+    materials_hash: sha256(materials),
+    supplementary_prompt_present: supplementaryPrompt !== null,
+    supplementary_prompt_hash: supplementaryPrompt === null ? null : sha256(supplementaryPrompt),
+  };
 }
 
 function normalizeFinding(finding) {
@@ -202,6 +228,11 @@ ${payload.contract}
 ## MATERIALS
 
 ${payload.materials}`;
+const inputProvenance = reviewInputProvenance({
+  contract: payload.contract,
+  materials: payload.materials,
+  prompt,
+});
 
 const claudeBin = process.env.CLAUDE_CODE_BIN || "claude";
 let output;
@@ -223,6 +254,7 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   if (verdict) {
     output = {
       ...verdict,
+      ...inputProvenance,
       claudeCodeAttempts: attempt,
     };
     break;
@@ -238,7 +270,12 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   };
 }
 
-if (!output) output = failureRecord(lastFailure ?? { mode, reason: "claude-code-output-unparseable", attempts: maxAttempts });
+if (!output) {
+  output = {
+    ...failureRecord(lastFailure ?? { mode, reason: "claude-code-output-unparseable", attempts: maxAttempts }),
+    ...inputProvenance,
+  };
+}
 
 writeFileSync(outputFile, JSON.stringify(output, null, 2));
 process.exit(0);
