@@ -12,6 +12,10 @@ export default defineConfig({
       "skills/**/*.test.mjs",
       "workflows/build-code/__tests__/**/*.test.mjs",
     ],
+    exclude: [
+      "node_modules/**",
+      "specs/archive/**",
+    ],
     // Fail the run when a filter matches no files, so a mis-typed path can never
     // produce a false-green exit 0 (see memory: vitest-run-path-false-green-exit0).
     passWithNoTests: false,

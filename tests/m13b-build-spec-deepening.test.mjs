@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const SKILL_PATH = join(REPO_ROOT, "workflows", "build-spec", "SKILL.md");
-const COUNT_PATH = join(REPO_ROOT, "specs", "m13b-build-spec-deepening", "spec-acceptance-count.json");
+const COUNT_PATH = join(REPO_ROOT, "specs", "archive", "m13b-build-spec-deepening", "spec-acceptance-count.json");
 
 function skill() {
   return readFileSync(SKILL_PATH, "utf8");
@@ -385,7 +385,7 @@ describe("Phase 3 / AC-21: D3 deleted items not present as active mechanisms", (
 describe("Phase 3 / AC-17: spec-acceptance-count.json file validity", () => {
   test("spec-acceptance-count.json exists", () => {
     assert.ok(existsSync(COUNT_PATH),
-      "specs/m13b-build-spec-deepening/spec-acceptance-count.json must exist (FR-ACCOUNT-001 AC-17)");
+      "specs/archive/m13b-build-spec-deepening/spec-acceptance-count.json must exist (FR-ACCOUNT-001 AC-17)");
   });
   test("spec-acceptance-count.json has non-null ac_count", () => {
     const obj = JSON.parse(readFileSync(COUNT_PATH, "utf8"));

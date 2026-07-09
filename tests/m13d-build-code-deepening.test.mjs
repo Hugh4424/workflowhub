@@ -11,8 +11,8 @@ import { parseTaskDir } from "../core/task-dir-parser.mjs";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const SKILL_PATH = join(REPO_ROOT, "workflows", "build-code", "SKILL.md");
-const CONTRACTS_PATH = join(REPO_ROOT, "specs", "m13d-build-code-deepening", "data-contracts.md");
-const SPEC_PATH = join(REPO_ROOT, "specs", "m13d-build-code-deepening", "spec.md");
+const CONTRACTS_PATH = join(REPO_ROOT, "specs", "archive", "m13d-build-code-deepening", "data-contracts.md");
+const SPEC_PATH = join(REPO_ROOT, "specs", "archive", "m13d-build-code-deepening", "spec.md");
 
 const TASK_DIR = parseTaskDir();
 const EVIDENCE_DIR = join(TASK_DIR, "m13d-build-code-deepening", "evidence");
