@@ -92,6 +92,7 @@ function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0 } = {}) {
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 const prompt = readFileSync(0, "utf8");
 if (!prompt.includes("## REVIEW CONTRACT") || !prompt.includes("## MATERIALS")) process.exit(7);
+if (!process.argv.includes("--bare")) process.exit(8);
 const countPath = ${JSON.stringify(countPath)};
 const current = existsSync(countPath) ? Number(readFileSync(countPath, "utf8")) : 0;
 writeFileSync(countPath, String(current + 1));

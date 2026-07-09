@@ -133,7 +133,7 @@ function failureRecord({ mode, reason, status, stderr, raw, attempts }) {
 function runClaude({ claudeBin, prompt, schema }) {
   return spawnSync(
     claudeBin,
-    ["-p", "--output-format", "json", "--json-schema", JSON.stringify(schema), "--no-session-persistence"],
+    ["-p", "--bare", "--output-format", "json", "--json-schema", JSON.stringify(schema), "--no-session-persistence"],
     {
       input: prompt,
       encoding: "utf8",
