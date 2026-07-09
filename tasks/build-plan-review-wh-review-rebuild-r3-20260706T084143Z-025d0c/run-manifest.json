@@ -1,9 +1,0 @@
-{
-  "taskName": "build-plan-review-wh-review-rebuild-r3-20260706T084143Z-025d0c",
-  "status": "in_progress",
-  "startedAt": "2026-07-06T08:41:43Z",
-  "versionAnchor": "b915e389418c8069c02db2ca7dbadfac7dff1204",
-  "input": "/tmp/wh-review-rebuild-build-plan-review-package-r3.md",
-  "maxReviseRounds": 3,
-  "reviseRounds": 0
-}
