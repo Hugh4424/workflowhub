@@ -26,16 +26,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const testPlanPath = join(__dirname, "..", "test-plan.md");
+const testPlanPath = join(__dirname, "..", "specs", "archive", "wh-review-rebuild", "test-plan.md");
 
 const ROUND_STATE_URL = pathToFileURL(
-  join(__dirname, "../../../skills/wh-review/scripts/round-state.mjs")
+  join(__dirname, "..", "skills", "wh-review", "scripts", "round-state.mjs")
 ).href;
 const ENGINE_URL = pathToFileURL(
-  join(__dirname, "../../../skills/wh-review/scripts/invoke-review-engine.mjs")
+  join(__dirname, "..", "skills", "wh-review", "scripts", "invoke-review-engine.mjs")
 ).href;
 const REPORT_URL = pathToFileURL(
-  join(__dirname, "../../../skills/wh-review/scripts/render-review-report.mjs")
+  join(__dirname, "..", "skills", "wh-review", "scripts", "render-review-report.mjs")
 ).href;
 
 describe("test-plan.md document self-check (build-plan stage)", () => {
