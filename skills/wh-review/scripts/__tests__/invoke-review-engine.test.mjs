@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -111,12 +112,27 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 const prompt = readFileSync(0, "utf8");
-if (!prompt.includes("## REVIEW CONTRACT") || !prompt.includes("## MATERIALS")) process.exit(7);
+if (!prompt.includes("Manifest content hash:") || prompt.includes("MATERIALS TEXT") || prompt.includes("CONTRACT TEXT")) process.exit(7);
 if (!process.argv.includes("--bare")) process.exit(8);
 const settingsIndex = process.argv.indexOf("--settings");
 const expectedSettings = process.env.FAKE_CLAUDE_EXPECTED_SETTINGS || join(homedir(), ".claude/settings.json");
 if (settingsIndex < 0 || process.argv[settingsIndex + 1] !== expectedSettings) process.exit(9);
-process.stdout.write(${JSON.stringify(JSON.stringify(envelope))});
+const addDirIndex = process.argv.indexOf("--add-dir");
+if (addDirIndex < 0 || addDirIndex !== process.argv.length - 2) process.exit(10);
+const manifest = JSON.parse(readFileSync(join(process.argv[addDirIndex + 1], "manifest.json"), "utf8"));
+const coverage = manifest.entries.map(({id, sha256}) => ({id, sha256, status:"read", evidence:"fake read evidence"}));
+const envelope = ${JSON.stringify(envelope)};
+function addCoverage(value) {
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!parsed || !["pass","revise_required","escalate_to_human"].includes(parsed.verdict)) return value;
+    if (parsed.artifactCoverage === undefined) parsed.artifactCoverage = coverage;
+    return typeof value === "string" ? JSON.stringify(parsed) : parsed;
+  } catch { return value; }
+}
+envelope.result = addCoverage(envelope.result);
+if (envelope.structured_output !== undefined) envelope.structured_output = addCoverage(envelope.structured_output);
+process.stdout.write(JSON.stringify(envelope));
 `);
   chmodSync(fakePath, 0o755);
   return fakePath;
@@ -291,10 +307,27 @@ describe("invokeReviewEngine — success path", () => {
       expect(artifact.trueCrossEngine).toBe(true);
       expect(artifact.reviewMode).toBe("claude-code-cli");
       expect(artifact.resolutionSummary).toBe("fake claude review passed");
+      const packageBase = join(root, TASK_ID, "reviews", ".claude-review-packages");
+      const [packageName] = readdirSync(packageBase);
+      expect(readFileSync(join(packageBase, packageName, "contract.md"), "utf8")).toBe("CONTRACT TEXT");
+      expect(readFileSync(join(packageBase, packageName, "materials.md"), "utf8")).toBe(materials);
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
     }
+  });
+
+  it("keeps custom runner payload bytes on the legacy mode/contract/materials contract", () => {
+    const captured = join(stubDir, "captured-diff.json");
+    const runnerPath = writeStubRunner(`
+import {readFileSync,writeFileSync} from "node:fs";
+const args=Object.fromEntries(process.argv.slice(2).map(a=>a.replace(/^--/,"").split("=")));
+const bytes=readFileSync(args.diff); writeFileSync(process.env.CAPTURED_DIFF,bytes);
+const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdict:"pass",findings:[],actual_mode:payload.mode}));`);
+    const mode = "full", contract = "CONTRACT TEXT", materials = "MATERIALS TEXT";
+    invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 29, mode, contract, materials, taskTrackingRoot: root, env: { THIRD_REVIEW_RUNNER: runnerPath, CAPTURED_DIFF: captured } });
+    const inputHash = createHash("sha256").update(JSON.stringify({ mode, contract, materials })).digest("hex");
+    expect(readFileSync(captured, "utf8")).toBe(JSON.stringify({ mode, contract, materials, input_hash: inputHash }));
   });
 
   it("resumes one stalled Claude stream without resending the original materials", () => {
@@ -311,7 +344,10 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
   setInterval(() => {}, 1000);
 } else {
   if (!process.argv.includes("--resume") || input.includes("MATERIALS TEXT")) process.exit(12);
-  process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed",skillResults:[]}}) + "\\n");
+  const addDir = process.argv.indexOf("--add-dir");
+  const manifest = JSON.parse(readFileSync(process.argv[addDir+1]+"/manifest.json","utf8"));
+  const artifactCoverage = manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"resumed read"}));
+  process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed",skillResults:[],artifactCoverage}}) + "\\n");
 }
 `);
     chmodSync(fakeClaude, 0o755);

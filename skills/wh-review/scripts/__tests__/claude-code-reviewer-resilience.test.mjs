@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, wr
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createArtifactReviewPackage } from "../artifact-review-package.mjs";
 
 const runner = resolve("skills/wh-review/scripts/runners/claude-code-reviewer.mjs");
 const roots = [];
@@ -15,13 +16,18 @@ const completeSkillResults = requiredSkills.map((skill) => ({
   evidence: `${skill} evidence`,
 }));
 
-function fixture(script, { state, contract = "C" } = {}) {
+function fixture(script, { state, contract = "C", artifact = false, materials = "MATERIAL SECRET" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "claude-runner-resilience-")); roots.push(root);
-  const diff = join(root, "input.json"), output = join(root, "output.json"), stateDir = join(root, "state");
-  mkdirSync(stateDir); writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", contract, materials: "M" }));
+  const reviewsRoot = join(root, "reviews"), diff = join(root, "input.json"), output = join(root, "output.json"), stateDir = join(reviewsRoot, ".claude-review-state", "fixture");
+  mkdirSync(stateDir, { recursive: true });
+  let artifactPackage;
+  if (artifact) {
+    artifactPackage = createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "fixture", totalRound: 1, contract, materials });
+    writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", artifact_manifest: { package_root: artifactPackage.packageRoot, manifest_path: artifactPackage.manifestPath, content_hash: artifactPackage.manifest.content_hash, entries: artifactPackage.manifest.entries } }));
+  } else writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", contract, materials: "M" }));
   if (state) writeFileSync(join(stateDir, "state.json"), JSON.stringify(state));
   const fake = join(root, "fake-claude.mjs"); writeFileSync(fake, `#!/usr/bin/env node\n${script}`); chmodSync(fake, 0o755);
-  return { root, diff, output, stateDir, fake };
+  return { root, diff, output, stateDir, fake, artifactPackage };
 }
 
 function execute(f, env = {}, signalAfter) {
@@ -147,5 +153,54 @@ describe("Claude streamed reviewer resilience", () => {
     const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
     const result = await execute(f);
     expect(result.output).toMatchObject({ verdict: "escalate_to_human", skillResults, execution_status: "completed", synthetic: false });
+  });
+
+  it("uses a small manifest prompt, puts --add-dir last, and accepts complete read coverage", async () => {
+    const script = `
+import {readFileSync} from "node:fs"; import {join} from "node:path";
+const input=readFileSync(0,"utf8"), i=process.argv.indexOf("--add-dir");
+if(i!==process.argv.length-2 || input.includes("MATERIAL SECRET")) process.exit(31);
+const manifest=JSON.parse(readFileSync(join(process.argv[i+1],"manifest.json"),"utf8"));
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read full artifact"}));
+console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`;
+    const f = fixture(script, { artifact: true });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", synthetic: false });
+    const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
+    expect(journal).not.toContain("MATERIAL SECRET");
+  });
+
+  it.each(["missing", "wrong hash", "failed status"])("rejects pass with %s artifact coverage", async (kind) => {
+    const f = fixture("", { artifact: true });
+    const coverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "read" }));
+    if (kind === "missing") coverage.pop();
+    if (kind === "wrong hash") coverage[0].sha256 = "0".repeat(64);
+    if (kind === "failed status") coverage[0].status = "failed";
+    writeFileSync(f.fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "invalid", skillResults: [], artifactCoverage: coverage })}}));`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-output-unparseable", synthetic: true });
+  });
+
+  it("allows a well-formed failed subset only for semantic escalation", async () => {
+    const f = fixture("", { artifact: true });
+    const first = f.artifactPackage.manifest.entries[0];
+    const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "read blocked", skillResults: [], artifactCoverage: [{ id: first.id, sha256: first.sha256, status: "failed", evidence: "Read tool failed" }] };
+    writeFileSync(f.fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", execution_status: "completed", synthetic: false });
+  });
+
+  it("fails closed if an artifact changes after package creation", async () => {
+    const f = fixture("process.exit(99);", { artifact: true });
+    writeFileSync(join(f.artifactPackage.packageRoot, "materials.md"), "tampered");
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "artifact-package-tampered", synthetic: true, execution_status: "failed" });
+  });
+
+  it("retains bounded terminal diagnostics without journaling the error body", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",subtype:"error_during_execution",is_error:true,error_code:"prompt_too_long",stop_reason:"error",result:"Prompt is too long token=secret-value"})); process.exit(1);`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ error_code: "prompt_too_long", is_error: true, terminal_subtype: "error_during_execution", stop_reason: "error", error_summary: "Prompt is too long credential=[REDACTED]" });
+    expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).not.toContain("secret-value");
   });
 });

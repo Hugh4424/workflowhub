@@ -20,8 +20,11 @@
  *      the sibling-directory convention (`../3rd-review` next to the
  *      workflowhub repo root). Only when the final resolved runner path does
  *      not exist on disk does this become a "runner-missing" failure.
- * ② The assembled {mode, contract, materials} triple is serialized into a
- *    temp `--diff` file; the runner is invoked as
+ * ② Legacy/custom runners receive the assembled {mode, contract, materials}
+ *    triple byte-for-byte. The built-in Claude runner instead receives a
+ *    small path/hash manifest for a persistent content-addressed package
+ *    containing the complete contract, materials, and required skills. The
+ *    selected payload is serialized into a temp `--diff` file; the runner is invoked as
  *    `node <runner> --diff=<file> --output=<file>` (canonical two-flag form
  *    only — never `--checkpoint`/`--round`).
  * ③ Failure mapping — runner missing, non-zero exit, timeout, or `--output`
@@ -54,7 +57,8 @@ import {
 import { readRoundState } from "./round-state.mjs";
 import { writeDocSnapshot, computeDocSnapshotDiff, writeMaterialsBaseline } from "./snapshot-writer.mjs";
 import { writeRouteExecutePhase } from "./route-decision-writer.mjs";
-import { appendRequiredSkillDefinitions, resolveRequiredSkills } from "./required-skill-resolver.mjs";
+import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
+import { createArtifactReviewPackage } from "./artifact-review-package.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
@@ -401,17 +405,40 @@ export function invokeReviewEngine({
   }
   const runnerTimeoutMs = effectiveRunnerTimeoutMs({ runnerPath, timeoutMs, env });
 
-  let runnerContract = contract;
-  let runnerMaterials = materials;
+  let resolution;
   if (runnerPath === CLAUDE_CODE_RUNNER) {
-    const resolution = resolveRequiredSkills({ contract, env });
-    ({ contract: runnerContract, materials: runnerMaterials } = appendRequiredSkillDefinitions({ contract, materials, resolution }));
+    resolution = resolveRequiredSkills({ contract, env });
+  }
+  let inputHash;
+  let runnerPayload;
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    const reviewPackage = createArtifactReviewPackage({
+      reviewsRoot: dirname(artifactPath),
+      stage,
+      reviewFlowId,
+      totalRound,
+      contract,
+      materials,
+      skillDefinitions: resolution.definitions,
+    });
+    const artifactManifest = {
+      package_root: reviewPackage.packageRoot,
+      manifest_path: reviewPackage.manifestPath,
+      content_hash: reviewPackage.manifest.content_hash,
+      entries: reviewPackage.manifest.entries,
+    };
+    inputHash = createHash("sha256").update(JSON.stringify({ mode, artifact_manifest: artifactManifest })).digest("hex");
+    runnerPayload = { mode, artifact_manifest: artifactManifest, input_hash: inputHash };
+  } else {
+    // Preserve the legacy runner payload byte-for-byte. Artifact transport is
+    // Claude-only; custom/Codex/default providers keep their existing contract.
+    inputHash = createHash("sha256").update(JSON.stringify({ mode, contract, materials })).digest("hex");
+    runnerPayload = { mode, contract, materials, input_hash: inputHash };
   }
   const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
   const diffFile = join(workDir, "diff.json");
   const outputFile = join(workDir, "output.json");
-  const inputHash = createHash("sha256").update(JSON.stringify({ mode, contract: runnerContract, materials: runnerMaterials })).digest("hex");
-  writeFileSync(diffFile, JSON.stringify({ mode, contract: runnerContract, materials: runnerMaterials, input_hash: inputHash }));
+  writeFileSync(diffFile, JSON.stringify(runnerPayload));
   const runnerArgs = [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`];
   if (runnerPath === CLAUDE_CODE_RUNNER) {
     const stateDir = join(dirname(artifactPath), ".claude-review-state", `${stage}-${reviewFlowId}-round-${totalRound}-${inputHash}`);
