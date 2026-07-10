@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
@@ -488,6 +488,21 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
     expect(existsSync(join(live.stateDir, "owner.lock"))).toBe(true);
     expect(readdirSync(live.stateDir).some((name) => name.startsWith(".owner-lock-start-"))).toBe(false);
+  });
+
+  it("recovers after the entire lock utility process group is killed", async () => {
+    const f = fixture(`setInterval(()=>{},1000);`);
+    const holder = spawn(process.execPath, [runner, `--diff=${f.diff}`, `--output=${f.output}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "10000" } });
+    let lockPid = 0;
+    for (let i = 0; i < 100 && !lockPid; i += 1) {
+      try { lockPid = Number(execFileSync("pgrep", ["-P", String(holder.pid)], { encoding: "utf8" }).trim().split("\n")[0]); } catch {}
+      if (!lockPid) await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(lockPid).toBeGreaterThan(0);
+    process.kill(-lockPid, "SIGKILL"); await new Promise((resolveClose) => holder.once("close", resolveClose));
+    writeFileSync(f.fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`); chmodSync(f.fake, 0o755);
+    expect((await execute(f)).output).toMatchObject({ verdict: "pass", synthetic: false });
+    expect(readdirSync(f.stateDir).some((name) => name.startsWith(".owner-lock-start-"))).toBe(false);
   });
 
   it("allows only one of six kernel-lock contenders to run", async () => {

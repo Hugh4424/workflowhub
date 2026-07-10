@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { homedir, platform } from "node:os";
@@ -71,31 +71,31 @@ if (lockNonce) {
     && Number.isInteger(wrapperPid) && wrapperPid > 0 && processStart(wrapperPid) === process.env.WH_REVIEW_WRAPPER_START
     && Number.isInteger(hostPid) && hostPid > 0 && processStart(hostPid) === process.env.WH_REVIEW_ATTEST_HOST_START;
   if (!attested) process.exit(LOCK_EXIT.attestation);
-  try { writeFileSync(process.env.WH_REVIEW_INNER_START_MARKER, lockNonce, { mode: 0o600, flag: "wx" }); }
+  try { writeFileSync(4, "1"); closeSync(4); }
   catch { process.exit(LOCK_EXIT.attestation); }
   rmSync(outputFile, { force: true });
   const testInnerExit = Number(process.env.WH_REVIEW_TEST_INNER_EXIT_AFTER_START);
   if (Number.isInteger(testInnerExit) && testInnerExit > 0) process.exit(testInnerExit);
 } else {
   const utility = process.env.WH_REVIEW_LOCK_BIN || (runtimePlatform === "darwin" ? "/usr/bin/lockf" : "flock");
-  const nonce = randomBytes(32).toString("hex"), startMarker = join(stateDir, `.owner-lock-start-${process.pid}-${nonce}`);
+  const nonce = randomBytes(32).toString("hex");
   const lockArgs = runtimePlatform === "darwin"
     ? ["-kst", "0", ownerLockFile]
     : ["-E", String(LOCK_EXIT.contention), "-n", "-F", ownerLockFile];
-  const innerEnv = { ...process.env, WH_REVIEW_LOCK_NONCE: nonce, WH_REVIEW_WRAPPER_PID: String(process.pid), WH_REVIEW_WRAPPER_START: processStart(process.pid), WH_REVIEW_ATTEST_HOST_PID: String(process.ppid), WH_REVIEW_ATTEST_HOST_START: processStart(process.ppid), WH_REVIEW_INNER_START_MARKER: startMarker, WH_REVIEW_EXPECTED_HOST_PID: process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID || String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || "20" };
+  const innerEnv = { ...process.env, WH_REVIEW_LOCK_NONCE: nonce, WH_REVIEW_WRAPPER_PID: String(process.pid), WH_REVIEW_WRAPPER_START: processStart(process.pid), WH_REVIEW_ATTEST_HOST_PID: String(process.ppid), WH_REVIEW_ATTEST_HOST_START: processStart(process.ppid), WH_REVIEW_EXPECTED_HOST_PID: process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID || String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || "20" };
   delete innerEnv.WH_REVIEW_KERNEL_LOCK_HELD;
   delete innerEnv.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID;
-  let child = null, spawnError = null, forwardedSignal = null;
+  let child = null, spawnError = null, forwardedSignal = null, innerStarted = false;
   const result = await new Promise((resolveLock) => {
-    child = spawn(utility, [...lockArgs, process.execPath, resolve(process.argv[1]), ...process.argv.slice(2)], { env: innerEnv, stdio: ["inherit", "inherit", "inherit", "pipe"], detached: true });
+    child = spawn(utility, [...lockArgs, process.execPath, resolve(process.argv[1]), ...process.argv.slice(2)], { env: innerEnv, stdio: ["inherit", "inherit", "inherit", "pipe", "pipe"], detached: true });
     child.stdio[3]?.on("error", () => {});
     child.stdio[3]?.end(nonce);
+    child.stdio[4]?.on("data", () => { innerStarted = true; });
+    child.stdio[4]?.resume();
     for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => { forwardedSignal = signal; try { process.kill(-child.pid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; } });
     child.once("error", (error) => { spawnError = error; });
     child.once("close", (code, signal) => resolveLock({ code, signal }));
   });
-  const innerStarted = existsSync(startMarker);
-  rmSync(startMarker, { force: true });
   if (spawnError?.code === "ENOENT") process.exit(LOCK_EXIT.missing);
   const utilityContention = runtimePlatform === "darwin" ? 75 : LOCK_EXIT.contention;
   if (!innerStarted && result.code === utilityContention) process.exit(LOCK_EXIT.contention);
@@ -501,10 +501,6 @@ async function onSignal(signal, interruption = signal === "SIGHUP" ? "host-inter
     atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: null, failure_reason: output.failure_reason, completed: state.progress.completed, total: state.progress.total }));
   }
   clearInterval(parentWatch);
-  if (expectedWrapper) {
-    try { process.kill(expectedWrapper, 0); }
-    catch (error) { if (error.code === "ESRCH") rmSync(process.env.WH_REVIEW_INNER_START_MARKER, { force: true }); }
-  }
   process.exit(signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143);
 }
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => void onSignal(signal));
