@@ -229,9 +229,9 @@ After **all** implementation phases have GREEN evidence, trigger an L2 integrati
 Replace the single post-GREEN 3rd-review call with two independent subagent invocations. They must run in separate contexts so that a failure in one does not terminate the other.
 
 **调用方式（wh-review 两段式协议，stage="build-code"）：** 与 §7 相同的调用语义（详见 §7 指针），落到本节的具体分工是：
-1. **准备阶段（orchestrator 单次调用）**：由 orchestrator（不是子代理）调用一次 `prepareRoundState({ taskId, stage: "build-code", taskTrackingRoot })`，得到本轮唯一的 `{review_flow_id, total_round, contract_path}`（build-code 是 auto-advance stage，正常不应返回 `blocked_by_human_confirmation`；意外返回时按 auto-advance 的 `unknown` 语义转人工确认，见 §7/T016 的改写）。两个子代理共用同一个 `review_flow_id`/`total_round`，不各自独立准备，避免同一 stage 的 `active-flow-build-code.json` 指针被并发覆盖。
+1. **准备阶段（orchestrator 单次调用）**：由 orchestrator（不是子代理）调用一次稳定 CLI `node skills/wh-review/scripts/wh-review.mjs prepare`（JSON stdin/stdout；内部语义等同 `prepareRoundState({ taskId, stage: "build-code", taskTrackingRoot })`），得到本轮唯一的 `{review_flow_id, total_round, contract_path}`（build-code 是 auto-advance stage，正常不应返回 `blocked_by_human_confirmation`；意外返回时按 auto-advance 的 `unknown` 语义转人工确认，见 §7/T016 的改写）。两个子代理共用同一个 `review_flow_id`/`total_round`，不各自独立准备，避免同一 stage 的 `active-flow-build-code.json` 指针被并发覆盖。
 2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派发下面两个子代理之前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许并行派发。两个子代理各自只拿 `review_flow_id`/`total_round`（**不下发 `contract_path`**），各自写出角色专属的补充说明文件 `prompt-{review_flow_id}-r{total_round}-spec-compliance.md` / `prompt-{review_flow_id}-r{total_round}-code-quality.md`（文件名带角色后缀，避免并行写入互相覆盖）。
-3. **执行阶段（orchestrator 单次调用）**：等两个子代理都返回、按下方规则聚合出统一 verdict 后，orchestrator 再调用一次 `invoke-review-engine.mjs`（携带该 `review_flow_id`/`contract_path`/聚合后的结果），驱动实际审查引擎并写回 `round-state-build-code-{review_flow_id}.json`。
+3. **执行阶段（orchestrator 单次调用）**：等两个子代理都返回、按下方规则聚合出统一 verdict 后，orchestrator 再调用一次稳定 CLI `node skills/wh-review/scripts/wh-review.mjs execute`（保留 `THIRD_REVIEW_RUNNER` 兼容并透传底层 provenance/failure diagnostics）（携带该 `review_flow_id`/`contract_path`/聚合后的结果），驱动实际审查引擎并写回 `round-state-build-code-{review_flow_id}.json`。
 
 **Subagent 1 — spec compliance review:**
 

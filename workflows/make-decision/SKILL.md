@@ -307,7 +307,7 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **入口检测（REVIEW_DISPATCH_CONFIG）**：读取 `REVIEW_DISPATCH_CONFIG` 环境变量（默认为空，走内置默认调度）。若设置了该变量，检查对应配置文件是否可达且可解析；文件不可达或解析失败时写 journal 事件 `event: "dispatch_config_invalid", config: "<值>"`，并回退使用内置默认调度，继续执行，不阻断流程。若未设置（空），直接使用内置默认调度。
 
-通过 `wh-review` 两段式协议（非 `standalone.sh`）：①`prepareRoundState({taskId, stage:"make-decision", taskTrackingRoot})`→`ready{review_flow_id,total_round,contract_path}`或 `blocked_by_human_confirmation`（D2 门未过，不得绕过/伪造批准）；②派发前 `assertSafeTaskId` 校验 task_id，子代理只拿 `review_flow_id`/`total_round`，写 `prompt-{review_flow_id}-r{total_round}.md`，不下发 `contract_path`；③主 agent 调 `invoke-review-engine.mjs` 驱动引擎，写回 `round-state-make-decision-{review_flow_id}.json`，渲染 review 产物。
+通过稳定 CLI `node skills/wh-review/scripts/wh-review.mjs prepare|execute` 执行两段式协议（JSON stdin/stdout，非 `standalone.sh`；保留 `THIRD_REVIEW_RUNNER` 兼容并透传底层 provenance/failure diagnostics）：①内部 `prepareRoundState({taskId, stage:"make-decision", taskTrackingRoot})`→`ready{review_flow_id,total_round,contract_path}`或 `blocked_by_human_confirmation`（D2 门未过，不得绕过/伪造批准）；②派发前 `assertSafeTaskId` 校验 task_id，子代理只拿 `review_flow_id`/`total_round`，写 `prompt-{review_flow_id}-r{total_round}.md`，不下发 `contract_path`；③主 agent 通过 stable execute CLI 驱动引擎，写回 `round-state-make-decision-{review_flow_id}.json`，渲染 review 产物。
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性、技术可行性（D8 新增第四维 `feasibility`）。
 

@@ -183,9 +183,9 @@ spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-r
 
 不再需要手动 `cd` 到 workflowhub worktree 根目录或猜测 `standalone.sh` 的动态任务目录——`taskTrackingRoot` 由 `parseTaskDir()` 统一解析，路径确定、非猜测。
 
-1. **准备阶段**：调用 `prepareRoundState({ taskId, stage: "build-spec", taskTrackingRoot })`。`{status:"ready", review_flow_id, total_round, contract_path}` 时，`contract_path` 必须命中 build-spec 专属合同；命中其它 stage 合同视为配置错误，停止并报告。build-spec 是 auto-advance stage（无人工确认门），正常路径不应返回 `blocked_by_human_confirmation`；若意外返回，视为异常，不得静默忽略或伪造确认继续，需按第 7 节 auto-advance 判断点的 `unknown` 语义处理（转人工确认）。
+1. **准备阶段**：调用稳定 CLI `node skills/wh-review/scripts/wh-review.mjs prepare`（JSON stdin/stdout；内部语义等同 `prepareRoundState({ taskId, stage: "build-spec", taskTrackingRoot })`）。`{status:"ready", review_flow_id, total_round, contract_path}` 时，`contract_path` 必须命中 build-spec 专属合同；命中其它 stage 合同视为配置错误，停止并报告。build-spec 是 auto-advance stage（无人工确认门），正常路径不应返回 `blocked_by_human_confirmation`；若意外返回，视为异常，不得静默忽略或伪造确认继续，需按第 7 节 auto-advance 判断点的 `unknown` 语义处理（转人工确认）。
 2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派生审查子代理前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许派发。子代理只拿 `review_flow_id`/`total_round`，据此写出 `prompt-{review_flow_id}-r{total_round}.md`（仅补充说明，不含 materials 本体），**不下发 `contract_path`**。
-3. **执行阶段**：主 agent 调用 `invoke-review-engine.mjs`（携带 `review_flow_id`/`contract_path`/子代理补充说明文件路径，`specs/{task-id}/spec.md` 作为审查材料），驱动实际审查引擎；结果写回 `round-state-build-spec-{review_flow_id}.json`，并渲染确定路径的报告产物（不再依赖 stdout 提示的动态任务目录）。
+3. **执行阶段**：主 agent 调用稳定 CLI `node skills/wh-review/scripts/wh-review.mjs execute`（保留 `THIRD_REVIEW_RUNNER` 兼容并透传底层 provenance/failure diagnostics）（携带 `review_flow_id`/`contract_path`/子代理补充说明文件路径，`specs/{task-id}/spec.md` 作为审查材料），驱动实际审查引擎；结果写回 `round-state-build-spec-{review_flow_id}.json`，并渲染确定路径的报告产物（不再依赖 stdout 提示的动态任务目录）。
 
 ---
 
