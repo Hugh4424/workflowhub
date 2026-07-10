@@ -104,6 +104,33 @@ describe("Claude streamed reviewer resilience", () => {
     expect(result.output).toMatchObject({ verdict: "pass", resume_count: 0, synthetic: false });
   });
 
+  it("migrates a legacy in-flight SIGHUP state to a fresh host-interrupted attempt", async () => {
+    const legacyState = { input_hash: "fixed-hash", session_id: "bba-legacy-session", resume_count: 0, attempt: 1, attempt_id: "fixed-hash-1", phase: "attempt_settled", status: "interrupted", signal: "SIGHUP", progress: { completed: 0, total: 0, last_semantic_at: null } };
+    const f = fixture(`if(process.argv.includes("--resume")) process.exit(72); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`, { state: legacyState });
+    writeFileSync(join(f.stateDir, "terminal-receipt.json"), JSON.stringify({ input_hash: "fixed-hash", execution_status: "running", verdict_hash: null, failure_reason: null, completed: 0, total: 0 }));
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 0, synthetic: false, execution_status: "completed" });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ status: "completed", session_id: null, resume_count: 0, resume_reservation: null });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "completed" });
+  });
+
+  it("rolls back only a legacy SIGHUP attempt reservation and preserves historical resume usage", async () => {
+    const f = fixture(`if(process.argv.includes("--resume")) process.exit(72); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`, { state: { input_hash: "fixed-hash", session_id: "legacy-resume-session", resume_count: 2, resume_reservation: { attempt: 4, previous_resume_count: 1 }, attempt: 4, attempt_id: "fixed-hash-4", phase: "resume_running", status: "interrupted", signal: "SIGHUP" } });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 1, synthetic: false });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ session_id: null, resume_count: 1, resume_reservation: null });
+  });
+
+  it("does not decrement historical usage or generalize legacy migration beyond SIGHUP", async () => {
+    const historical = fixture(`if(process.argv.includes("--resume")) process.exit(72); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`, { state: { input_hash: "fixed-hash", session_id: "legacy-session", resume_count: 1, resume_reservation: null, attempt: 3, phase: "initial_running", status: "interrupted", signal: "SIGHUP" } });
+    const recovered = await execute(historical);
+    expect(recovered.output).toMatchObject({ verdict: "pass", resume_count: 1, synthetic: false });
+
+    const sigterm = fixture(`process.exit(process.argv.includes("--resume") ? 73 : 74);`, { state: { input_hash: "fixed-hash", session_id: "sigterm-session", resume_count: 0, attempt: 1, phase: "initial_running", status: "interrupted", signal: "SIGTERM" } });
+    const notMigrated = await execute(sigterm);
+    expect(notMigrated.output).toMatchObject({ failure_reason: "claude-code-non-zero-exit", resume_count: 1, exit_status: 73 });
+  });
+
   it("settles after a terminal event even when the child never closes voluntarily", async () => {
     const f = fixture(`process.on("SIGINT",()=>{}); process.on("SIGTERM",()=>{}); console.log(JSON.stringify({type:"result",session_id:"s",structured_output:${JSON.stringify(verdict)}})); setInterval(()=>{},1000);`);
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" });

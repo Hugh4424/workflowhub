@@ -283,7 +283,20 @@ atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_statu
 
 let state = { input_hash: inputHash, session_id: null, resume_count: 0, resume_reservation: null, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
 try {
-  const old = JSON.parse(readFileSync(stateFile, "utf8"));
+  let old = JSON.parse(readFileSync(stateFile, "utf8"));
+  const legacySighupInterruption = old.status === "interrupted"
+    && old.signal === "SIGHUP"
+    && (old.phase === "initial_running" || old.phase === "resume_running" || old.phase === "attempt_settled")
+    && (old.failure_reason === undefined || old.failure_reason === null)
+    && typeof old.session_id === "string"
+    && old.session_id.length > 0;
+  if (legacySighupInterruption) {
+    const reservation = old.resume_reservation;
+    const resumeCount = reservation?.attempt === old.attempt && Number.isInteger(reservation.previous_resume_count)
+      ? reservation.previous_resume_count
+      : old.resume_count;
+    old = { ...old, failure_reason: "host-interrupted", interruption: "host-interrupted", session_id: null, resume_count: resumeCount, resume_reservation: null };
+  }
   const resumableSession = typeof old.session_id === "string" && old.session_id;
   const preservedHostInterruption = old.failure_reason === "host-interrupted" && old.status === "interrupted";
   if (old.input_hash === inputHash && old.status !== "completed" && (resumableSession || preservedHostInterruption)) state = { ...state, ...old, progress: state.progress };
