@@ -483,10 +483,31 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).not.toContain("secret-value");
   });
 
-  it("fails immediately on a Read outside the manifest boundary", async () => {
-    const f = fixture(`console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:"escape",name:"Read",input:{file_path:"/etc/hosts"}}]}}));setInterval(()=>{},1000);`, { artifact: true });
+  it("accepts a denied off-boundary Read request and excludes it from coverage", async () => {
+    const materials = `${"x".repeat(999)}\n`.repeat(900);
+    const f = fixture(`import {readFileSync} from "node:fs";import {join} from "node:path";
+console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:"denied-escape",name:"Read",input:{file_path:"/etc/hosts"}}]}}));
+console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:"denied-escape",is_error:true,content:"permission denied"}]}}));
+${fullReadEvents}
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read full artifact"}));
+console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`, { artifact: true, materials });
+    expect(f.artifactPackage.manifest.entries.reduce((sum, entry) => sum + entry.chunks.length, 0)).toBe(15);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", synthetic: false });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ completed: 15, total: 15 });
+  });
+
+  it("fails when an off-boundary Read request returns non-error content", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:"escape",name:"Read",input:{file_path:"/etc/hosts"}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:"escape",content:"1\\tactual content"}]}}));setInterval(()=>{},1000);`, { artifact: true });
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" });
     expect(result.output).toMatchObject({ synthetic: true, failure_reason: "artifact-read-boundary-violation" });
+    expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).not.toContain("/etc/hosts");
+  });
+
+  it("fails closed when an off-boundary Read request has no matching result before terminal", async () => {
+    const f = fixture(`import {readFileSync} from "node:fs";import {join} from "node:path";console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:"unresolved-escape",name:"Read",input:{file_path:"/etc/hosts"}}]}}));${fullReadEvents}const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read full artifact"}));console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`, { artifact: true });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ synthetic: true, failure_reason: "artifact-coverage-unattested" });
     expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).not.toContain("/etc/hosts");
   });
 
