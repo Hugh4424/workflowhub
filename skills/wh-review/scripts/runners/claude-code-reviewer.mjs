@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { appendFileSync, closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -48,15 +48,60 @@ function parseJsonCandidate(v) { try { return typeof v === "string" ? JSON.parse
 function candidatesFromEvent(event) { return [event?.structured_output, event?.result, event].map(parseJsonCandidate).filter((candidate) => candidate && typeof candidate === "object"); }
 function verdictFromEvent(event, requiredSkills, expectedEntries, hostAttestation) { for (const candidate of candidatesFromEvent(event)) if (isVerdict(candidate, requiredSkills, expectedEntries, hostAttestation)) return candidate; return null; }
 function failure(mode, reason, details = {}) { return { verdict: "escalate_to_human", findings: [], resolutionSummary: reason, actual_mode: "not_executed", provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: false, reviewMode: "claude-code-cli", synthetic: true, execution_status: "failed", failure_reason: reason, requested_mode: mode, ...details }; }
+const LOCK_EXIT = Object.freeze({ unsupported: 70, missing: 71, attestation: 72, contention: 73 });
+function processStart(pid) { try { return execFileSync("/bin/ps", ["-p", String(pid), "-o", "lstart="], { encoding: "utf8" }).trim(); } catch { return ""; } }
 
 const diffFile = arg("diff"), outputFile = arg("output"), stateDir = arg("state-dir");
 if (!diffFile || !outputFile || !stateDir) { process.stderr.write("Usage: claude-code-reviewer.mjs --diff=<file> --output=<file> --state-dir=<dir>\n"); process.exit(2); }
 const payload = JSON.parse(readFileSync(diffFile, "utf8"));
 const mode = typeof payload.mode === "string" && payload.mode ? payload.mode : "full";
-if ((process.env.WH_REVIEW_TEST_PLATFORM || platform()) === "win32") {
-  mkdirSync(dirname(outputFile), { recursive: true });
-  writeFileSync(outputFile, JSON.stringify(failure(mode, "claude-artifact-review-unsupported-platform"), null, 2));
-  process.exit(0);
+const runtimePlatform = process.env.WH_REVIEW_TEST_PLATFORM || platform();
+if (runtimePlatform !== "darwin" && runtimePlatform !== "linux") {
+  process.exit(LOCK_EXIT.unsupported);
+}
+mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+const ownerLockFile = join(stateDir, "owner.lock");
+const lockNonce = process.env.WH_REVIEW_LOCK_NONCE;
+if (lockNonce) {
+  const wrapperPid = Number(process.env.WH_REVIEW_WRAPPER_PID), hostPid = Number(process.env.WH_REVIEW_ATTEST_HOST_PID);
+  let inheritedNonce = "";
+  try { inheritedNonce = readFileSync(3, "utf8"); } catch {}
+  const attested = /^[a-f0-9]{64}$/u.test(lockNonce)
+    && inheritedNonce === lockNonce
+    && Number.isInteger(wrapperPid) && wrapperPid > 0 && processStart(wrapperPid) === process.env.WH_REVIEW_WRAPPER_START
+    && Number.isInteger(hostPid) && hostPid > 0 && processStart(hostPid) === process.env.WH_REVIEW_ATTEST_HOST_START;
+  if (!attested) process.exit(LOCK_EXIT.attestation);
+  try { writeFileSync(4, "1"); closeSync(4); }
+  catch { process.exit(LOCK_EXIT.attestation); }
+  rmSync(outputFile, { force: true });
+  const testInnerExit = Number(process.env.WH_REVIEW_TEST_INNER_EXIT_AFTER_START);
+  if (Number.isInteger(testInnerExit) && testInnerExit > 0) process.exit(testInnerExit);
+} else {
+  const utility = process.env.WH_REVIEW_LOCK_BIN || (runtimePlatform === "darwin" ? "/usr/bin/lockf" : "flock");
+  const nonce = randomBytes(32).toString("hex");
+  const lockArgs = runtimePlatform === "darwin"
+    ? ["-kst", "0", ownerLockFile]
+    : ["-E", String(LOCK_EXIT.contention), "-n", "-F", ownerLockFile];
+  const innerEnv = { ...process.env, WH_REVIEW_LOCK_NONCE: nonce, WH_REVIEW_WRAPPER_PID: String(process.pid), WH_REVIEW_WRAPPER_START: processStart(process.pid), WH_REVIEW_ATTEST_HOST_PID: String(process.ppid), WH_REVIEW_ATTEST_HOST_START: processStart(process.ppid), WH_REVIEW_EXPECTED_HOST_PID: process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID || String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || "20" };
+  delete innerEnv.WH_REVIEW_KERNEL_LOCK_HELD;
+  delete innerEnv.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID;
+  let child = null, spawnError = null, forwardedSignal = null, innerStarted = false;
+  const result = await new Promise((resolveLock) => {
+    child = spawn(utility, [...lockArgs, process.execPath, resolve(process.argv[1]), ...process.argv.slice(2)], { env: innerEnv, stdio: ["inherit", "inherit", "inherit", "pipe", "pipe"], detached: true });
+    child.stdio[3]?.on("error", () => {});
+    child.stdio[3]?.end(nonce);
+    child.stdio[4]?.on("data", () => { innerStarted = true; });
+    child.stdio[4]?.resume();
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => { forwardedSignal = signal; try { process.kill(-child.pid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; } });
+    child.once("error", (error) => { spawnError = error; });
+    child.once("close", (code, signal) => resolveLock({ code, signal }));
+  });
+  if (spawnError?.code === "ENOENT") process.exit(LOCK_EXIT.missing);
+  const utilityContention = runtimePlatform === "darwin" ? 75 : LOCK_EXIT.contention;
+  if (!innerStarted && result.code === utilityContention) process.exit(LOCK_EXIT.contention);
+  const terminalSignal = forwardedSignal || result.signal;
+  const innerCode = result.code === LOCK_EXIT.contention ? 1 : result.code;
+  process.exit(terminalSignal === "SIGINT" ? 130 : terminalSignal === "SIGHUP" ? 129 : terminalSignal === "SIGTERM" ? 143 : innerCode ?? 1);
 }
 let artifactPackage = null, canonicalArtifactManifest = null;
 if (payload.artifact_manifest) {
@@ -238,13 +283,12 @@ const schema = { type: "object", additionalProperties: false, properties: { verd
 const prompt = artifactPackage
   ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete immutable review package is your working directory. Use only Read. Read every declared chunk in sequence; do not read any path not listed below. Concatenating each entry's chunks reconstructs the exact logical artifact. The contract entry is authoritative; required_skill entries are report-only lenses. Review every role=materials entry.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete evidence. For escalate_to_human, a well-formed attested subset is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
   : `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
-mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson"), lockFile = join(stateDir, "owner.lock"), receiptFile = join(stateDir, "terminal-receipt.json"), settingsFile = join(stateDir, "safe-settings.json");
+const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson"), receiptFile = join(stateDir, "terminal-receipt.json"), settingsFile = join(stateDir, "safe-settings.json");
 const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 300000));
 const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS || 2000));
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
 const maxStderr = Math.max(128, Math.min(16 * 1024, Number(process.env.CLAUDE_CODE_REVIEW_STDERR_MAX_BYTES || 4096)));
-let currentChild = null, idleTimer = null, shuttingDown = false, lockToken = null;
+let currentChild = null, idleTimer = null, shuttingDown = false;
 function atomicWrite(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   const nonce = `${process.pid}.${Date.now()}`;
@@ -252,38 +296,24 @@ function atomicWrite(path, value) {
   writeFileSync(tmp, value, { mode: 0o600, flag: "wx" });
   try { renameSync(tmp, path); } catch (error) { rmSync(tmp, { force: true }); throw error; }
 }
-function processStart(pid) { try { return execFileSync("ps", ["-p", String(pid), "-o", "lstart="], { encoding: "utf8" }).trim(); } catch { return ""; } }
-function liveOwner(owner) {
-  if (!owner || !Number.isInteger(owner.pid) || typeof owner.start !== "string" || !owner.start) return false;
-  try { process.kill(owner.pid, 0); } catch (error) { return error.code !== "ESRCH"; }
-  return processStart(owner.pid) === owner.start;
-}
-function acquireLock() {
-  const owner = { pid: process.pid, start: processStart(process.pid), token: randomUUID() };
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const fd = openSync(lockFile, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-      writeFileSync(fd, JSON.stringify(owner)); closeSync(fd); lockToken = owner.token; return true;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      let prior; try { prior = JSON.parse(readFileSync(lockFile, "utf8")); } catch {}
-      if (liveOwner(prior)) return false;
-      try { unlinkSync(lockFile); } catch (unlinkError) { if (unlinkError.code !== "ENOENT") throw unlinkError; }
-    }
-  }
-  return false;
-}
-function releaseLock() { try { const owner = JSON.parse(readFileSync(lockFile, "utf8")); if (owner.token === lockToken) unlinkSync(lockFile); } catch {} }
-if (!acquireLock()) {
-  atomicWrite(outputFile, JSON.stringify(failure(mode, "review-already-running"), null, 2));
-  process.exit(0);
-}
-process.on("exit", releaseLock);
 atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: "running", verdict_hash: null, failure_reason: null, completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0) }));
 
 let state = { input_hash: inputHash, session_id: null, resume_count: 0, resume_reservation: null, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
 try {
-  const old = JSON.parse(readFileSync(stateFile, "utf8"));
+  let old = JSON.parse(readFileSync(stateFile, "utf8"));
+  const legacySighupInterruption = old.status === "interrupted"
+    && old.signal === "SIGHUP"
+    && (old.phase === "initial_running" || old.phase === "resume_running" || old.phase === "attempt_settled")
+    && (old.failure_reason === undefined || old.failure_reason === null)
+    && typeof old.session_id === "string"
+    && old.session_id.length > 0;
+  if (legacySighupInterruption) {
+    const reservation = old.resume_reservation;
+    const resumeCount = reservation?.attempt === old.attempt && Number.isInteger(reservation.previous_resume_count)
+      ? reservation.previous_resume_count
+      : old.resume_count;
+    old = { ...old, failure_reason: "host-interrupted", interruption: "host-interrupted", session_id: null, resume_count: resumeCount, resume_reservation: null };
+  }
   const resumableSession = typeof old.session_id === "string" && old.session_id;
   const preservedHostInterruption = old.failure_reason === "host-interrupted" && old.status === "interrupted";
   if (old.input_hash === inputHash && old.status !== "completed" && (resumableSession || preservedHostInterruption)) state = { ...state, ...old, progress: state.progress };
@@ -471,17 +501,22 @@ async function onSignal(signal, interruption = signal === "SIGHUP" ? "host-inter
     atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: null, failure_reason: output.failure_reason, completed: state.progress.completed, total: state.progress.total }));
   }
   clearInterval(parentWatch);
-  releaseLock();
   process.exit(signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143);
 }
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => void onSignal(signal));
 const configuredParent = Number(process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID);
 const originalParent = Number.isInteger(configuredParent) && configuredParent > 0 ? configuredParent : process.ppid;
+const configuredHost = Number(process.env.WH_REVIEW_EXPECTED_HOST_PID);
+const expectedHost = Number.isInteger(configuredHost) && configuredHost > 0 ? configuredHost : null;
+const configuredWrapper = Number(process.env.WH_REVIEW_WRAPPER_PID);
+const expectedWrapper = Number.isInteger(configuredWrapper) && configuredWrapper > 0 ? configuredWrapper : null;
 const parentWatchMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || 500));
 let parentConfirmed = false;
 const parentWatch = setInterval(() => {
   try {
     process.kill(originalParent, 0);
+    if (expectedHost) process.kill(expectedHost, 0);
+    if (expectedWrapper) process.kill(expectedWrapper, 0);
     if (process.ppid !== originalParent) void onSignal("SIGHUP", "parent-changed");
     else if (!parentConfirmed) { parentConfirmed = true; record("parent_watch_confirmed"); }
   } catch (error) {
@@ -545,4 +580,3 @@ persist(output.execution_status, { failure_reason: output.failure_reason, termin
 atomicWrite(outputFile, JSON.stringify(output, null, 2));
 atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total }));
 clearInterval(parentWatch);
-releaseLock();

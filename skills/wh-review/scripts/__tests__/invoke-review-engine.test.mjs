@@ -337,6 +337,17 @@ describe("invokeReviewEngine — success path", () => {
     }
   });
 
+  it("maps lock contention without reading a stale review artifact", async () => {
+    const totalRound = 61, artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-${totalRound}.raw.json`);
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(artifactPath, JSON.stringify({ verdict: "pass", findings: [], actual_mode: "full", stale: true }));
+    const utility = join(stubDir, "contended-flock.mjs");
+    writeFileSync(utility, "#!/usr/bin/env node\nprocess.exit(73);\n"); chmodSync(utility, 0o755);
+    const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_TEST_PLATFORM: "linux", WH_REVIEW_LOCK_BIN: utility } });
+    expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+    expect(JSON.parse(readFileSync(artifactPath, "utf8"))).toMatchObject({ failure_reason: "review-already-running", synthetic: true });
+  });
+
   it("keeps custom runner payload bytes on the legacy mode/contract/materials contract", () => {
     const captured = join(stubDir, "captured-diff.json");
     const runnerPath = writeStubRunner(`
