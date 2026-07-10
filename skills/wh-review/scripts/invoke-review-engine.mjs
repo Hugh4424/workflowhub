@@ -65,7 +65,7 @@ const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
 const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
 const DEFAULT_TIMEOUT_MS = 120000;
 
-export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed"]);
+export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed", "review-already-running", "review-lock-unsupported-platform", "review-lock-utility-missing", "review-lock-attestation-invalid"]);
 
 /**
  * Resolve the 3rd-review repo root. `THIRD_REVIEW_REPO_ROOT` env wins when
@@ -512,6 +512,10 @@ export function invokeReviewEngine({
       child.once("error", () => finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" })));
       child.once("close", (code, signal) => {
         if (signal) finish(synthesizeFailure({ artifactPath, failureReason: "timeout" }));
+        else if (code === 73) finish(synthesizeFailure({ artifactPath, failureReason: "review-already-running" }));
+        else if (code === 70) finish(synthesizeFailure({ artifactPath, failureReason: "review-lock-unsupported-platform" }));
+        else if (code === 71) finish(synthesizeFailure({ artifactPath, failureReason: "review-lock-utility-missing" }));
+        else if (code === 72) finish(synthesizeFailure({ artifactPath, failureReason: "review-lock-attestation-invalid" }));
         else if (code !== 0) finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" }));
         else finish(finalizeOutput());
       });

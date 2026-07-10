@@ -470,7 +470,7 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     const marker = join(mkdtempSync(join(tmpdir(), "claude-win-marker-")), "spawned");
     const f = fixture(`import {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},"spawned");`);
     const result = await execute(f, { WH_REVIEW_TEST_PLATFORM: "win32" });
-    expect(result.output).toMatchObject({ synthetic: true, failure_reason: "review-lock-unsupported-platform" });
+    expect(result.code).toBe(70); expect(result.output).toBeNull();
     expect(existsSync(marker)).toBe(false);
   });
 
@@ -479,13 +479,15 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     const first = spawn(process.execPath, [runner, `--diff=${live.diff}`, `--output=${live.output}`, `--state-dir=${live.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: live.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "10000", CLAUDE_CODE_REVIEW_STOP_GRACE_MS: "20" } });
     for (let i = 0; i < 50 && !existsSync(join(live.stateDir, "owner.lock")); i += 1) await new Promise((r) => setTimeout(r, 10));
     const contender = { ...live, output: join(live.root, "contender.json") };
+    writeFileSync(contender.output, JSON.stringify({ verdict: "pass", stale: true }));
     const denied = await execute(contender, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" });
-    expect(denied.output).toMatchObject({ failure_reason: "review-already-running" });
+    expect(denied.code).toBe(73); expect(denied.output).toEqual({ verdict: "pass", stale: true });
     first.kill("SIGKILL"); await new Promise((resolveClose) => first.once("close", resolveClose));
     writeFileSync(live.fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`); chmodSync(live.fake, 0o755);
     const recovered = await execute(contender);
     expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
     expect(existsSync(join(live.stateDir, "owner.lock"))).toBe(true);
+    expect(readdirSync(live.stateDir).some((name) => name.startsWith(".owner-lock-start-"))).toBe(false);
   });
 
   it("allows only one of six kernel-lock contenders to run", async () => {
@@ -494,7 +496,7 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     const contenders = Array.from({ length: 6 }, (_, index) => ({ ...f, output: join(f.root, `contender-${index}.json`) }));
     const results = await Promise.all(contenders.map((contender) => execute(contender)));
     expect(results.filter(({ output }) => output?.verdict === "pass")).toHaveLength(1);
-    expect(results.filter(({ output }) => output?.failure_reason === "review-already-running")).toHaveLength(5);
+    expect(results.filter(({ code, output }) => code === 73 && output === null)).toHaveLength(5);
     expect(readFileSync(marker, "utf8")).toMatch(/^\d+$/u);
     expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ status: "completed" });
     expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "completed" });
@@ -505,20 +507,42 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
   it("fails closed when the kernel lock utility is missing", async () => {
     const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
     const result = await execute(f, { WH_REVIEW_LOCK_BIN: join(f.root, "missing-lock-utility") });
-    expect(result.output).toMatchObject({ synthetic: true, failure_reason: "review-lock-utility-missing" });
+    expect(result.code).toBe(71); expect(result.output).toBeNull();
+  });
+
+  it("rejects a forged lock marker without the inherited attestation fd", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f, { WH_REVIEW_LOCK_NONCE: "a".repeat(64), WH_REVIEW_WRAPPER_PID: String(process.pid), WH_REVIEW_ATTEST_HOST_PID: String(process.pid) });
+    expect(result.code).toBe(72); expect(result.output).toBeNull();
+  });
+
+  it("rejects an inherited fd whose nonce does not match the marker", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    const utility = join(f.root, "wrong-nonce-lock.mjs");
+    writeFileSync(utility, `#!/usr/bin/env node\nimport {spawnSync} from "node:child_process";const args=process.argv.slice(2),i=args.indexOf(process.execPath),r=spawnSync(args[i],args.slice(i+1),{env:{...process.env,WH_REVIEW_LOCK_NONCE:"${"b".repeat(64)}"},stdio:["inherit","inherit","inherit","inherit"]});process.exit(r.status??1);`); chmodSync(utility, 0o755);
+    const result = await execute(f, { WH_REVIEW_LOCK_BIN: utility });
+    expect(result.code).toBe(72); expect(result.output).toBeNull();
+  });
+
+  it("does not mistake an attested inner crash using lockf's code for contention", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    writeFileSync(f.output, JSON.stringify({ verdict: "pass", stale: true }));
+    const result = await execute(f, { WH_REVIEW_TEST_INNER_EXIT_AFTER_START: "75" });
+    expect(result.code).toBe(75); expect(result.output).toBeNull();
+    expect(existsSync(f.output)).toBe(false);
   });
 
   it.each([
     ["darwin", ["-kst", "0"], 75],
-    ["linux", ["-n", "-F"], 1],
+    ["linux", ["-E", "73", "-n", "-F"], 73],
   ])("uses the required %s kernel-lock flags", async (runtime, expectedFlags, contentionCode) => {
     const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
     const marker = join(f.root, `${runtime}-lock-argv.json`), utility = join(f.root, `fake-${runtime}-lock.mjs`);
     writeFileSync(utility, `#!/usr/bin/env node\nimport {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},JSON.stringify(process.argv.slice(2)));process.exit(${contentionCode});`); chmodSync(utility, 0o755);
     const result = await execute(f, { WH_REVIEW_TEST_PLATFORM: runtime, WH_REVIEW_LOCK_BIN: utility });
-    expect(result.output).toMatchObject({ failure_reason: "review-already-running" });
-    expect(JSON.parse(readFileSync(marker, "utf8")).slice(0, 2)).toEqual(expectedFlags);
-    expect(JSON.parse(readFileSync(marker, "utf8"))[2]).toBe(join(f.stateDir, "owner.lock"));
+    expect(result.code).toBe(73); expect(result.output).toBeNull();
+    expect(JSON.parse(readFileSync(marker, "utf8")).slice(0, expectedFlags.length)).toEqual(expectedFlags);
+    expect(JSON.parse(readFileSync(marker, "utf8"))[expectedFlags.length]).toBe(join(f.stateDir, "owner.lock"));
   });
 
   it("reuses one fixed kernel lock inode without lock-file growth", async () => {

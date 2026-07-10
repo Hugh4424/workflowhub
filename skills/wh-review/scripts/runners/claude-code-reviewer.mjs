@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { execFileSync, spawn } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -48,6 +48,8 @@ function parseJsonCandidate(v) { try { return typeof v === "string" ? JSON.parse
 function candidatesFromEvent(event) { return [event?.structured_output, event?.result, event].map(parseJsonCandidate).filter((candidate) => candidate && typeof candidate === "object"); }
 function verdictFromEvent(event, requiredSkills, expectedEntries, hostAttestation) { for (const candidate of candidatesFromEvent(event)) if (isVerdict(candidate, requiredSkills, expectedEntries, hostAttestation)) return candidate; return null; }
 function failure(mode, reason, details = {}) { return { verdict: "escalate_to_human", findings: [], resolutionSummary: reason, actual_mode: "not_executed", provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: false, reviewMode: "claude-code-cli", synthetic: true, execution_status: "failed", failure_reason: reason, requested_mode: mode, ...details }; }
+const LOCK_EXIT = Object.freeze({ unsupported: 70, missing: 71, attestation: 72, contention: 73 });
+function processStart(pid) { try { return execFileSync("/bin/ps", ["-p", String(pid), "-o", "lstart="], { encoding: "utf8" }).trim(); } catch { return ""; } }
 
 const diffFile = arg("diff"), outputFile = arg("output"), stateDir = arg("state-dir");
 if (!diffFile || !outputFile || !stateDir) { process.stderr.write("Usage: claude-code-reviewer.mjs --diff=<file> --output=<file> --state-dir=<dir>\n"); process.exit(2); }
@@ -55,37 +57,51 @@ const payload = JSON.parse(readFileSync(diffFile, "utf8"));
 const mode = typeof payload.mode === "string" && payload.mode ? payload.mode : "full";
 const runtimePlatform = process.env.WH_REVIEW_TEST_PLATFORM || platform();
 if (runtimePlatform !== "darwin" && runtimePlatform !== "linux") {
-  mkdirSync(dirname(outputFile), { recursive: true });
-  writeFileSync(outputFile, JSON.stringify(failure(mode, "review-lock-unsupported-platform"), null, 2));
-  process.exit(0);
+  process.exit(LOCK_EXIT.unsupported);
 }
 mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 const ownerLockFile = join(stateDir, "owner.lock");
-if (process.env.WH_REVIEW_KERNEL_LOCK_HELD !== "1") {
+const lockNonce = process.env.WH_REVIEW_LOCK_NONCE;
+if (lockNonce) {
+  const wrapperPid = Number(process.env.WH_REVIEW_WRAPPER_PID), hostPid = Number(process.env.WH_REVIEW_ATTEST_HOST_PID);
+  let inheritedNonce = "";
+  try { inheritedNonce = readFileSync(3, "utf8"); } catch {}
+  const attested = /^[a-f0-9]{64}$/u.test(lockNonce)
+    && inheritedNonce === lockNonce
+    && Number.isInteger(wrapperPid) && wrapperPid > 0 && processStart(wrapperPid) === process.env.WH_REVIEW_WRAPPER_START
+    && Number.isInteger(hostPid) && hostPid > 0 && processStart(hostPid) === process.env.WH_REVIEW_ATTEST_HOST_START;
+  if (!attested) process.exit(LOCK_EXIT.attestation);
+  try { writeFileSync(process.env.WH_REVIEW_INNER_START_MARKER, lockNonce, { mode: 0o600, flag: "wx" }); }
+  catch { process.exit(LOCK_EXIT.attestation); }
+  rmSync(outputFile, { force: true });
+  const testInnerExit = Number(process.env.WH_REVIEW_TEST_INNER_EXIT_AFTER_START);
+  if (Number.isInteger(testInnerExit) && testInnerExit > 0) process.exit(testInnerExit);
+} else {
   const utility = process.env.WH_REVIEW_LOCK_BIN || (runtimePlatform === "darwin" ? "/usr/bin/lockf" : "flock");
+  const nonce = randomBytes(32).toString("hex"), startMarker = join(stateDir, `.owner-lock-start-${process.pid}-${nonce}`);
   const lockArgs = runtimePlatform === "darwin"
     ? ["-kst", "0", ownerLockFile]
-    : ["-n", "-F", ownerLockFile];
-  const innerEnv = { ...process.env, WH_REVIEW_KERNEL_LOCK_HELD: "1", WH_REVIEW_WRAPPER_PID: String(process.pid), WH_REVIEW_EXPECTED_HOST_PID: process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID || String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || "20" };
+    : ["-E", String(LOCK_EXIT.contention), "-n", "-F", ownerLockFile];
+  const innerEnv = { ...process.env, WH_REVIEW_LOCK_NONCE: nonce, WH_REVIEW_WRAPPER_PID: String(process.pid), WH_REVIEW_WRAPPER_START: processStart(process.pid), WH_REVIEW_ATTEST_HOST_PID: String(process.ppid), WH_REVIEW_ATTEST_HOST_START: processStart(process.ppid), WH_REVIEW_INNER_START_MARKER: startMarker, WH_REVIEW_EXPECTED_HOST_PID: process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID || String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || "20" };
+  delete innerEnv.WH_REVIEW_KERNEL_LOCK_HELD;
   delete innerEnv.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID;
   let child = null, spawnError = null, forwardedSignal = null;
   const result = await new Promise((resolveLock) => {
-    child = spawn(utility, [...lockArgs, process.execPath, resolve(process.argv[1]), ...process.argv.slice(2)], { env: innerEnv, stdio: "inherit", detached: true });
+    child = spawn(utility, [...lockArgs, process.execPath, resolve(process.argv[1]), ...process.argv.slice(2)], { env: innerEnv, stdio: ["inherit", "inherit", "inherit", "pipe"], detached: true });
+    child.stdio[3]?.on("error", () => {});
+    child.stdio[3]?.end(nonce);
     for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => { forwardedSignal = signal; try { process.kill(-child.pid, signal); } catch (error) { if (error.code !== "ESRCH") throw error; } });
     child.once("error", (error) => { spawnError = error; });
     child.once("close", (code, signal) => resolveLock({ code, signal }));
   });
-  if (spawnError?.code === "ENOENT") {
-    writeFileSync(outputFile, JSON.stringify(failure(mode, "review-lock-utility-missing"), null, 2));
-    process.exit(0);
-  }
-  const contentionCode = runtimePlatform === "darwin" ? 75 : 1;
-  if (result.code === contentionCode && !existsSync(outputFile)) {
-    writeFileSync(outputFile, JSON.stringify(failure(mode, "review-already-running"), null, 2));
-    process.exit(0);
-  }
+  const innerStarted = existsSync(startMarker);
+  rmSync(startMarker, { force: true });
+  if (spawnError?.code === "ENOENT") process.exit(LOCK_EXIT.missing);
+  const utilityContention = runtimePlatform === "darwin" ? 75 : LOCK_EXIT.contention;
+  if (!innerStarted && result.code === utilityContention) process.exit(LOCK_EXIT.contention);
   const terminalSignal = forwardedSignal || result.signal;
-  process.exit(terminalSignal === "SIGINT" ? 130 : terminalSignal === "SIGHUP" ? 129 : terminalSignal === "SIGTERM" ? 143 : result.code ?? 1);
+  const innerCode = result.code === LOCK_EXIT.contention ? 1 : result.code;
+  process.exit(terminalSignal === "SIGINT" ? 130 : terminalSignal === "SIGHUP" ? 129 : terminalSignal === "SIGTERM" ? 143 : innerCode ?? 1);
 }
 let artifactPackage = null, canonicalArtifactManifest = null;
 if (payload.artifact_manifest) {
@@ -485,6 +501,10 @@ async function onSignal(signal, interruption = signal === "SIGHUP" ? "host-inter
     atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: null, failure_reason: output.failure_reason, completed: state.progress.completed, total: state.progress.total }));
   }
   clearInterval(parentWatch);
+  if (expectedWrapper) {
+    try { process.kill(expectedWrapper, 0); }
+    catch (error) { if (error.code === "ESRCH") rmSync(process.env.WH_REVIEW_INNER_START_MARKER, { force: true }); }
+  }
   process.exit(signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143);
 }
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => void onSignal(signal));
