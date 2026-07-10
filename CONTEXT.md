@@ -40,6 +40,21 @@ spec-plan 动手写代码前的复用检查，依次问四步：①需要存在�
 **异源审查（cross-source review）**：
 由独立来源、在独立上下文中对交付物做的审查，用于质量把关，禁止自审自判。
 
+**需求保真链（requirement-fidelity chain）**：
+从权威 source，经 immutable requirement ID、decision、artifact，到 acceptance criteria 的可复算链路。任何 accepted requirement 缺少其中一环都不能算 covered。
+
+**expected topology / observed facts authority**：
+stage manifest 定义应执行的 step 集合（expected topology）；journal 与 receipt 记录实际发生的执行事实（observed facts）。两者职责不同，audit 必须对比二者，不能互相替代。
+
+**audit 单一真相源（single source of truth）**：
+audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘要，validator 只验证一致性，facts assembly 只装配事实，不另算第二套 audit 结论。
+
+**consumer/evidence matrix**：
+跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
+
+**generic core / Multica adapter**：
+需求保真机制的边界。generic core 只处理 canonical source bundle、ledger、coverage 与验证；Multica adapter 只读取并规范化 issue/comment 等平台对象，不计算 coverage、不裁决语义冲突。
+
 **3rd-review**：
 全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。
 
