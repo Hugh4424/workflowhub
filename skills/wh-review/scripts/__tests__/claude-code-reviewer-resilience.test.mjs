@@ -75,6 +75,69 @@ const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8
 for(const [i,e] of manifest.entries.entries())for(const c of e.chunks){const id="read-"+i+"-"+c.sequence,path=join(process.cwd(),c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
+  it("treats idle before and after resume as retryable transport stalls", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"idle-chain"}));
+if(n<3)setInterval(()=>{},1000);
+else console.log(JSON.stringify({type:"result",session_id:"idle-chain",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "700" });
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 2, synthetic: false });
+    expect(result.output.attempt_history.map(({ result: kind }) => kind)).toEqual(["retryable", "retryable", "verdict"]);
+    expect(readFileSync(join(f.root, "n"), "utf8")).toBe("3");
+  });
+
+  it("survives six consecutive idle stalls in one session", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"six-idles"}));
+if(n<7)setInterval(()=>{},1000);
+else console.log(JSON.stringify({type:"result",session_id:"six-idles",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "800" });
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 6, synthetic: false });
+    expect(result.output.attempt_history.map(({ result: kind }) => kind)).toEqual([...Array(6).fill("retryable"), "verdict"]);
+  }, 10000);
+
+  it("stops on a fatal authentication error after an idle resume", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"idle-fatal"}));
+if(n===1)setInterval(()=>{},1000);else{console.log(JSON.stringify({type:"result",session_id:"idle-fatal",subtype:"error_during_execution",error_code:"authentication_failed"}));process.exit(1);}`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "700" });
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-non-zero-exit", resume_count: 1, error_category: "authentication" });
+    expect(readFileSync(join(f.root, "n"), "utf8")).toBe("2");
+  });
+
+  it("keeps idling and resuming until an explicit host cancellation", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));if(n===7)writeFileSync(new URL("seventh",import.meta.url),"1");
+console.log(JSON.stringify({type:"system",session_id:"idle-until-cancel"}));setInterval(()=>{},1000);`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "800" }, { waitFor: join(f.root, "seventh"), signal: "SIGTERM" });
+    expect(result.output).toBeNull();
+    const receipt = JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"));
+    expect(receipt).toMatchObject({ execution_status: "interrupted", failure_reason: "user-cancelled", verdict_hash: null });
+    expect(receipt.attempt_history.length).toBeGreaterThanOrEqual(6);
+  }, 10000);
+
+  it("keeps completed coverage monotonic across idle resumes", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";import {join} from "node:path";
+readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"coverage-idle"}));const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));const chunks=manifest.entries.flatMap(entry=>entry.chunks.map(chunk=>({entry,chunk})));const limit=[2,5,15][n-1]??15;
+for(const {chunk} of chunks.slice(0,limit)){const id="r-"+n+"-"+chunk.sequence+"-"+chunk.path,path=join(process.cwd(),chunk.path),src=readFileSync(path,"utf8"),lines=src===""?[]:src.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,i)=>String(i+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",session_id:"coverage-idle",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}));console.log(JSON.stringify({type:"user",session_id:"coverage-idle",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}
+if(n<3)setInterval(()=>{},1000);else{const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read"}));console.log(JSON.stringify({type:"result",session_id:"coverage-idle",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));}`,
+      { artifact: true, materials: `${"z".repeat(999)}\n`.repeat(900) });
+    expect(f.artifactPackage.manifest.entries.reduce((sum, entry) => sum + entry.chunks.length, 0)).toBe(15);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "700" });
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 2 });
+    expect(result.output.attempt_history.map(({ progress_before, progress_after }) => [progress_before, progress_after])).toEqual([[0, 2], [2, 5], [5, 15]]);
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ completed: 15, total: 15 });
+  });
+
   it("retries 524 six times in the same session and then accepts a valid verdict", async () => {
     const f = fixture(`
 import {readFileSync,writeFileSync} from "node:fs";
@@ -255,10 +318,12 @@ const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"r
   });
 
   it("escalates INT/TERM to KILL and settles when the child ignores graceful signals", async () => {
-    const f = fixture(`process.on("SIGINT",()=>{}); process.on("SIGTERM",()=>{}); console.log(JSON.stringify({type:"system",session_id:"s"})); setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: "s", resume_count: 0, attempt: 0, status: "running" } });
-    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1500" });
-    expect(result.code).toBe(0); expect(result.output.failure_reason).toBe("claude-code-idle-after-resume");
-    const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8"); expect(journal).toContain('"signal":"SIGKILL"');
+    const f = fixture(`import {writeFileSync} from "node:fs";process.on("SIGINT",()=>{});process.on("SIGTERM",()=>{});writeFileSync(new URL("child-pid",import.meta.url),String(process.pid));console.log(JSON.stringify({type:"system",session_id:"s"}));setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: "s", resume_count: 0, attempt: 0, status: "running" } });
+    const marker = join(f.root, "child-pid");
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, { waitFor: marker, signal: "SIGTERM" });
+    expect(result.output).toBeNull();
+    expect(() => process.kill(Number(readFileSync(marker, "utf8")), 0)).toThrow();
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "interrupted", failure_reason: "user-cancelled" });
   });
 
   it("forwards external SIGINT, reaps the child, and exits 130", async () => {

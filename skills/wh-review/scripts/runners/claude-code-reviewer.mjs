@@ -665,7 +665,7 @@ for (;;) {
   const checkpoint = artifactPackage && !outcome.verdict && !outcome.validation_failure && Boolean(state.session_id)
     && outcome.code === 0 && outcome.progress_after > outcome.progress_before;
   const retryable = !outcome.verdict && !outcome.validation_failure && Boolean(state.session_id)
-    && (RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category) || checkpoint || (outcome.stalled && state.resume_count === 0));
+    && (RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category) || checkpoint || outcome.stalled);
   const fingerprint = retryable ? outcomeFingerprint(outcome) : null;
   if (retryable) {
     consecutiveNoProgress = progressMade ? 0 : consecutiveNoProgress + 1;
