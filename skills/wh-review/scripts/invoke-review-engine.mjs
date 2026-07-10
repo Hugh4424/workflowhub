@@ -6,7 +6,10 @@
  *
  * ① Runner discovery — code here MUST NOT hardcode any single machine's
  *    absolute path:
- *    - `THIRD_REVIEW_RUNNER` env, when set, wins: absolute path used as-is;
+ *    - `WH_REVIEW_PROVIDER=claude-code` or `THIRD_REVIEW_RUNNER=claude-code`
+ *      routes to workflowhub's in-repo Claude Code runner.
+ *    - `THIRD_REVIEW_RUNNER` env, when set to any other value, wins:
+ *      absolute path used as-is;
  *      bare filename resolved by joining against the discovered 3rd-review
  *      repo root (NOT its scripts/ subdir — only the convention default
  *      below reaches into scripts/).
@@ -17,8 +20,11 @@
  *      the sibling-directory convention (`../3rd-review` next to the
  *      workflowhub repo root). Only when the final resolved runner path does
  *      not exist on disk does this become a "runner-missing" failure.
- * ② The assembled {mode, contract, materials} triple is serialized into a
- *    temp `--diff` file; the runner is invoked as
+ * ② Legacy/custom runners receive the assembled {mode, contract, materials}
+ *    triple byte-for-byte. The built-in Claude runner instead receives a
+ *    small path/hash manifest for a persistent content-addressed package
+ *    containing the complete contract, materials, and required skills. The
+ *    selected payload is serialized into a temp `--diff` file; the runner is invoked as
  *    `node <runner> --diff=<file> --output=<file>` (canonical two-flag form
  *    only — never `--checkpoint`/`--round`).
  * ③ Failure mapping — runner missing, non-zero exit, timeout, or `--output`
@@ -33,10 +39,10 @@
  *    the caller (round-state.mjs, T011).
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTaskDir } from "../../../core/task-dir-parser.mjs";
@@ -51,12 +57,15 @@ import {
 import { readRoundState } from "./round-state.mjs";
 import { writeDocSnapshot, computeDocSnapshotDiff, writeMaterialsBaseline } from "./snapshot-writer.mjs";
 import { writeRouteExecutePhase } from "./route-decision-writer.mjs";
+import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
+import { createArtifactReviewPackage } from "./artifact-review-package.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
+const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
 const DEFAULT_TIMEOUT_MS = 120000;
 
-export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable"]);
+export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed"]);
 
 /**
  * Resolve the 3rd-review repo root. `THIRD_REVIEW_REPO_ROOT` env wins when
@@ -82,6 +91,9 @@ export function discoverThirdReviewRepoRoot({ env = process.env, workflowhubRepo
 export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) {
   const repoRoot = discoverThirdReviewRepoRoot({ env, workflowhubRepoRoot });
   const runnerEnv = env.THIRD_REVIEW_RUNNER;
+  const provider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  if (runnerEnv && runnerEnv !== "claude-code") return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
+  if (provider === "claude-code" || runnerEnv === "claude-code") return CLAUDE_CODE_RUNNER;
   if (runnerEnv) {
     return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
   }
@@ -90,6 +102,10 @@ export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) 
 
 function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, totalRound }) {
   return join(taskRoot(taskTrackingRoot, taskId), "reviews", `verdict-${stage}-${reviewFlowId}-round-${totalRound}.raw.json`);
+}
+
+export function effectiveRunnerTimeoutMs({ runnerPath, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
+  return runnerPath === CLAUDE_CODE_RUNNER ? undefined : timeoutMs;
 }
 
 // Contract 2/FR-THIRDREVIEW-001: the backend returns a structured stage-agnostic
@@ -198,8 +214,16 @@ function synthesizeFailure({ artifactPath, failureReason }) {
     synthetic: true,
     failure_reason: failureReason,
   };
-  writeFileSync(artifactPath, JSON.stringify(record, null, 2));
+  atomicWriteJson(artifactPath, record);
   return { verdict: record.verdict, findings: record.findings, actual_mode: record.actual_mode };
+}
+
+function atomicWriteJson(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(temporary, JSON.stringify(value, null, 2), { flag: "wx" });
+  try { renameSync(temporary, path); }
+  catch (error) { rmSync(temporary, { force: true }); throw error; }
 }
 
 // ---- T010c: materials/mode/contract assembly (FR-WHREVIEW-007, Contract 11) ----
@@ -300,9 +324,11 @@ export function assembleReviewPayload({
     });
   }
 
+  // Keep the legacy/custom payload byte-for-byte compatible. Claude calls
+  // with canonical materialSources ignore this aggregate and package only the
+  // sources plus supplementaryContext; Claude legacy calls snapshot it whole.
   const materials = `${materialsCore}\n\n---\n\n## Supplementary context (agent-authored prompt)\n\n${promptContent}`;
-
-  return { mode, contract, materials };
+  return { mode, contract, materials, supplementaryContext: promptContent };
 }
 
 /**
@@ -315,20 +341,16 @@ export function assembleReviewPayload({
  * record is silently left stuck in prepare-only state (review_input_hash never backfilled).
  */
 export function assembleAndInvokeReviewEngine(params) {
-  const { mode, contract, materials } = assembleReviewPayload(params);
+  const { mode, contract, materials, supplementaryContext } = assembleReviewPayload(params);
   const root = params.taskTrackingRoot ?? parseTaskDir();
-  // review_input_hash covers the materials content only (Contract 2/data-contracts.md:
-  // "本次传给引擎的 materials 内容 hash") — mode/contract are tracked separately by
-  // route-decision fields, not folded into this hash.
-  const reviewInputHash = createHash("sha256").update(materials).digest("hex");
-  writeRouteExecutePhase({
-    taskId: params.taskId,
-    stage: params.stage,
-    reviewFlowId: params.reviewFlowId,
-    reviewInputHash,
-    taskTrackingRoot: root,
+  return invokeReviewEngine({
+    ...params,
+    mode,
+    contract,
+    materials,
+    supplementaryContext,
+    routeDecisionContext: { taskId: params.taskId, stage: params.stage, reviewFlowId: params.reviewFlowId, taskTrackingRoot: root },
   });
-  return invokeReviewEngine({ ...params, mode, contract, materials });
 }
 
 /**
@@ -346,10 +368,13 @@ export function invokeReviewEngine({
   mode,
   contract,
   materials,
+  materialSources,
+  supplementaryContext,
   taskTrackingRoot,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   env = process.env,
   workflowhubRepoRoot,
+  routeDecisionContext,
 }) {
   assertSafeTaskId(taskId);
   assertKnownStage(stage);
@@ -388,17 +413,120 @@ export function invokeReviewEngine({
   if (!existsSync(runnerPath)) {
     return synthesizeFailure({ artifactPath, failureReason: "runner-missing" });
   }
+  const runnerTimeoutMs = effectiveRunnerTimeoutMs({ runnerPath, timeoutMs, env });
 
+  let resolution;
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    resolution = resolveRequiredSkills({ contract, env });
+  }
+  let inputHash;
+  let runnerPayload;
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    let reviewPackage;
+    try {
+      reviewPackage = createArtifactReviewPackage({
+        reviewsRoot: dirname(artifactPath),
+        stage,
+        reviewFlowId,
+        totalRound,
+        contract,
+        materials,
+        materialSources,
+        supplementaryContext,
+        skillDefinitions: resolution.definitions,
+      });
+    } catch (error) {
+      const known = new Set(["artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered"]);
+      return synthesizeFailure({ artifactPath, failureReason: known.has(error?.code) ? error.code : "artifact-package-publish-failed" });
+    }
+    const artifactManifest = {
+      package_root: reviewPackage.packageRoot,
+      manifest_path: reviewPackage.manifestPath,
+      content_hash: reviewPackage.manifest.content_hash,
+      entries: reviewPackage.manifest.entries,
+    };
+    const contentDescriptor = artifactManifest.entries.map(({ id, role, kind, bytes, lines, sha256, chunks }) => ({
+      id, role, kind, bytes, lines, sha256,
+      chunks: chunks.map(({ sequence, bytes: chunkBytes, lines: chunkLines, sha256: chunkHash }) => ({ sequence, bytes: chunkBytes, lines: chunkLines, sha256: chunkHash })),
+    }));
+    inputHash = createHash("sha256").update(JSON.stringify({ mode, content_hash: artifactManifest.content_hash, entries: contentDescriptor })).digest("hex");
+    runnerPayload = { mode, artifact_manifest: artifactManifest, input_hash: inputHash };
+  } else {
+    // Preserve the legacy runner payload byte-for-byte. Artifact transport is
+    // Claude-only; custom/Codex/default providers keep their existing contract.
+    inputHash = createHash("sha256").update(JSON.stringify({ mode, contract, materials })).digest("hex");
+    runnerPayload = { mode, contract, materials, input_hash: inputHash };
+  }
+  if (routeDecisionContext) {
+    writeRouteExecutePhase({
+      ...routeDecisionContext,
+      reviewInputHash: runnerPath === CLAUDE_CODE_RUNNER ? inputHash : createHash("sha256").update(materials).digest("hex"),
+    });
+  }
   const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
   const diffFile = join(workDir, "diff.json");
   const outputFile = join(workDir, "output.json");
-  writeFileSync(diffFile, JSON.stringify({ mode, contract, materials }));
+  writeFileSync(diffFile, JSON.stringify(runnerPayload));
+  const runnerArgs = [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`];
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    const stateDir = join(dirname(artifactPath), ".claude-review-state", `${stage}-${reviewFlowId}-round-${totalRound}-${inputHash}`);
+    mkdirSync(stateDir, { recursive: true });
+    runnerArgs.push(`--state-dir=${stateDir}`);
+  }
+
+  const finalizeOutput = () => {
+    if (!existsSync(outputFile)) return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
+    let result;
+    try { result = JSON.parse(readFileSync(outputFile, "utf8")); }
+    catch { return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" }); }
+    result = normalizeReviewResult(result);
+    if (!isValidReviewResult(result)) return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
+    atomicWriteJson(artifactPath, result);
+    return { verdict: result.verdict, findings: result.findings, actual_mode: result.actual_mode };
+  };
+
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    return new Promise((resolveResult) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        rmSync(workDir, { recursive: true, force: true });
+        resolveResult(value);
+      };
+      let child;
+      try {
+        child = spawn("node", runnerArgs, {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, ...env },
+          detached: platform() !== "win32",
+        });
+      } catch {
+        finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" }));
+        return;
+      }
+      // The runner persists its own bounded journal/terminal receipt. Drain but
+      // never forward its output into the calling agent's conversation.
+      child.stdout.resume();
+      child.stderr.resume();
+      child.once("error", () => finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" })));
+      child.once("close", (code, signal) => {
+        if (signal) finish(synthesizeFailure({ artifactPath, failureReason: "timeout" }));
+        else if (code !== 0) finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" }));
+        else finish(finalizeOutput());
+      });
+    });
+  }
 
   let proc;
   try {
-    proc = spawnSync("node", [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`], {
-      timeout: timeoutMs,
+    proc = spawnSync("node", runnerArgs, {
+      ...(runnerTimeoutMs === undefined ? {} : { timeout: runnerTimeoutMs }),
       encoding: "utf8",
+      // Runner selection and runner behavior both depend on the invocation
+      // environment. Without this, CLAUDE_CODE_REVIEW_TIMEOUT_MS only affects
+      // the outer guard while the Claude runner silently uses its process default.
+      env: { ...process.env, ...env },
     });
 
     // Node kills a timed-out child with a signal; status is left null.
@@ -408,30 +536,7 @@ export function invokeReviewEngine({
     if (proc.status !== 0) {
       return synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" });
     }
-    if (!existsSync(outputFile)) {
-      return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
-    }
-
-    let result;
-    try {
-      result = JSON.parse(readFileSync(outputFile, "utf8"));
-    } catch {
-      return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
-    }
-
-    result = normalizeReviewResult(result);
-
-    // round-review finding: valid JSON is not the same as a valid review result —
-    // a runner that exits 0 and writes `{}` or `{"verdict":"pass"}` used to be
-    // accepted as-is, silently persisting/returning undefined findings/actual_mode
-    // into round-state instead of being mapped to the "output-unparseable"
-    // failure the contract requires for a malformed runner response.
-    if (!isValidReviewResult(result)) {
-      return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
-    }
-
-    writeFileSync(artifactPath, JSON.stringify(result, null, 2));
-    return { verdict: result.verdict, findings: result.findings, actual_mode: result.actual_mode };
+    return finalizeOutput();
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
