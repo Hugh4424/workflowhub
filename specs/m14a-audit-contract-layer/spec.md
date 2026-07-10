@@ -318,13 +318,13 @@
 ### 3. 独立审查摘要
 
 - **verdict**：unknown
-- **摘要路径**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/verdict-build-spec-4d2ed697-9369-4f04-b9ec-c22e61bdbe01-round-1.raw.json`
-- **说明**：Step 3.7 的 runner 已修复 timeout env 透传、timeout 归类、payload-only 限制、required-source Read allowlist 和 `skillResults` schema 冲突；定向测试 41/41 通过。最终 Read-only 审查仍返回 `escalate_to_human` / `actual_mode=not_executed`，`failure_reason=claude-code-empty-output`，`attempts=3`，`status=0`。这是外部 Claude CLI 未产出内容，不是异源审查通过证据；按 auto-advance unknown 分支停止等待人工裁决。
+- **摘要路径**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/verdict-build-spec-116205b4-632c-4c1a-b820-4b373148e8bd-round-1.raw.json`
+- **说明**：最小 parser 修复已提交为 `1ea56e4 workflowhub(wh-review): parse Claude structured output`，定向测试 42/42 通过，真实小 probe 在 4.3s 内返回 `pass` / `full` / `trueCrossEngine=true`。正式 flow `116205b4-632c-4c1a-b820-4b373148e8bd` 使用 244179-byte 完整材料，在约 583386ms 后返回 `escalate_to_human` / `actual_mode=not_executed` / `trueCrossEngine=false`，`failure_reason=claude-code-timeout`。本次异源审查未完成，不是假称通过的证据；按 unknown 分支等待人工决定。
 
 ### 4. 未解风险
 
 - `[FRICTION] spec-purity grep`: 契约规格不可避免包含 schema 文件名和字段名；建议审查时区分“契约字段定义”和“实现细节泄露”。
-- `[FRICTION] 3rd-review unavailable`: Claude Code runner 的 timeout、工具隔离和 skill fallback 透传已修复并测试；最终 Read-only 审查仍连续 3 次 `status=0` 空输出，未得到可解析 pass/revise verdict，按 auto-advance 规则停止等待人工裁决。详见 `build-spec-review-runner-diagnosis.md`。
+- `[FRICTION] full-material Claude review timeout`: 完整材料的 Claude review 在 600s 预算内未产出 verdict；建议缩减审查材料到合同必需内容后再审，或其他任务继续使用 Codex，不新增 runner 基建。
 - 当前无 decision-log 覆盖缺口。
 - scope-triage 命中 `blocking` / `阻断`，均位于“明确不做”或“非阻断记录语义”上下文；不是执行阻断语义。
 
