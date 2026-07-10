@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/schemas/execution-trace.schema.json",
+  "title": "WorkflowHub Execution Trace Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "session_id",
+    "stage",
+    "step_id",
+    "attempt_id",
+    "skill",
+    "skill_version",
+    "task_id",
+    "task_dir",
+    "worktree_root",
+    "started_at",
+    "status",
+    "transcript_refs",
+    "artifact_refs",
+    "facts_refs",
+    "provenance",
+    "schema_version",
+    "collector_version"
+  ],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "step_id": { "type": "string", "minLength": 1 },
+    "attempt_id": { "type": "string", "minLength": 1 },
+    "parent_step_id": { "type": ["string", "null"] },
+    "skill": { "type": "string", "minLength": 1 },
+    "skill_version": { "type": "string", "minLength": 1 },
+    "agent_id": { "type": ["string", "null"] },
+    "issue_id": { "type": ["string", "null"] },
+    "task_id": { "type": "string", "minLength": 1 },
+    "task_dir": { "type": "string", "minLength": 1 },
+    "target_repo_root": { "type": ["string", "null"] },
+    "worktree_root": { "type": "string", "minLength": 1 },
+    "branch": { "type": ["string", "null"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": ["string", "null"], "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "success", "failed", "blocked", "unknown", "skipped"]
+    },
+    "exit_code": { "type": ["integer", "null"] },
+    "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+    "retry_of": { "type": ["string", "null"] },
+    "transcript_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "facts_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source_type", "source_ref", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "source_type": { "type": "string", "enum": ["machine", "human", "mixed", "unknown"] },
+        "source_ref": { "type": ["string", "null"] },
+        "confidence": { "type": "string", "enum": ["observed", "declared", "unknown"] }
+      }
+    },
+    "schema_version": { "type": "string", "minLength": 1 },
+    "collector_version": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["transcript", "artifact", "facts", "provenance", "human"] },
+        "ref": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean", "default": false },
+        "note": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
