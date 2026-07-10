@@ -99,9 +99,7 @@ function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, tot
 }
 
 export function effectiveRunnerTimeoutMs({ runnerPath, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
-  if (runnerPath !== CLAUDE_CODE_RUNNER) return timeoutMs;
-  const claudeTimeout = Math.max(1, Number(env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || process.env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || 300000));
-  return Math.max(timeoutMs, claudeTimeout + 30000);
+  return runnerPath === CLAUDE_CODE_RUNNER ? undefined : timeoutMs;
 }
 
 // Contract 2/FR-THIRDREVIEW-001: the backend returns a structured stage-agnostic
@@ -410,7 +408,7 @@ export function invokeReviewEngine({
   let proc;
   try {
     proc = spawnSync("node", [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`], {
-      timeout: runnerTimeoutMs,
+      ...(runnerTimeoutMs === undefined ? {} : { timeout: runnerTimeoutMs }),
       encoding: "utf8",
       // Runner selection and runner behavior both depend on the invocation
       // environment. Without this, CLAUDE_CODE_REVIEW_TIMEOUT_MS only affects

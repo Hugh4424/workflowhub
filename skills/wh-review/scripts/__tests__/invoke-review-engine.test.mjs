@@ -219,7 +219,7 @@ describe("discoverRunner", () => {
 });
 
 describe("effectiveRunnerTimeoutMs", () => {
-  it("extends the outer timeout for the built-in Claude Code runner", () => {
+  it("disables the outer wall timeout for the built-in Claude Code runner", () => {
     const runnerPath = discoverRunner({
       env: { WH_REVIEW_PROVIDER: "claude-code" },
       workflowhubRepoRoot: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../"),
@@ -231,7 +231,7 @@ describe("effectiveRunnerTimeoutMs", () => {
         timeoutMs: 300000,
         env: { CLAUDE_CODE_REVIEW_TIMEOUT_MS: "300000" },
       })
-    ).toBe(330000);
+    ).toBeUndefined();
   });
 
   it("keeps the caller timeout for non-Claude runners", () => {
@@ -294,6 +294,49 @@ describe("invokeReviewEngine — success path", () => {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
     }
+  });
+
+  it("resumes one stalled Claude stream without resending the original materials", () => {
+    const saved = { bin: process.env.CLAUDE_CODE_BIN, idle: process.env.CLAUDE_CODE_REVIEW_IDLE_MS, marker: process.env.FAKE_CLAUDE_MARKER };
+    const marker = join(stubDir, "resume-marker");
+    const fakeClaude = join(stubDir, "fake-resumable-claude.mjs");
+    writeFileSync(fakeClaude, `#!/usr/bin/env node
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const input = readFileSync(0, "utf8");
+if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
+  writeFileSync(process.env.FAKE_CLAUDE_MARKER, input);
+  console.log(JSON.stringify({type:"system",subtype:"init",session_id:"resume-session"}));
+  process.on("SIGINT", () => process.exit(0));
+  setInterval(() => {}, 1000);
+} else {
+  if (!process.argv.includes("--resume") || input.includes("MATERIALS TEXT")) process.exit(12);
+  process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed"}}) + "\\n");
+}
+`);
+    chmodSync(fakeClaude, 0o755);
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    process.env.CLAUDE_CODE_REVIEW_IDLE_MS = "1000";
+    process.env.FAKE_CLAUDE_MARKER = marker;
+    try {
+      const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 26, mode: "full", contract: "CONTRACT TEXT", materials: "MATERIALS TEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const artifact = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-26.raw.json`), "utf8"));
+      expect(result, JSON.stringify(artifact)).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      expect(artifact).toMatchObject({ execution_status: "completed", session_id: "resume-session", resume_count: 1, synthetic: false });
+    } finally {
+      for (const [key, value] of Object.entries({ CLAUDE_CODE_BIN: saved.bin, CLAUDE_CODE_REVIEW_IDLE_MS: saved.idle, FAKE_CLAUDE_MARKER: saved.marker })) value === undefined ? delete process.env[key] : process.env[key] = value;
+    }
+  });
+
+  it("fails a stalled Claude stream when no session id was observed", () => {
+    const savedBin = process.env.CLAUDE_CODE_BIN, savedIdle = process.env.CLAUDE_CODE_REVIEW_IDLE_MS;
+    const fakeClaude = join(stubDir, "fake-stalled-claude.mjs");
+    writeFileSync(fakeClaude, `#!/usr/bin/env node\nprocess.on("SIGINT",()=>process.exit(0)); setInterval(()=>{},1000);`); chmodSync(fakeClaude, 0o755);
+    process.env.CLAUDE_CODE_BIN = fakeClaude; process.env.CLAUDE_CODE_REVIEW_IDLE_MS = "50";
+    try {
+      const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 27, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+      expect(JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-27.raw.json`), "utf8"))).toMatchObject({ execution_status: "failed", failure_reason: "claude-code-idle-without-session", synthetic: true });
+    } finally { savedBin === undefined ? delete process.env.CLAUDE_CODE_BIN : process.env.CLAUDE_CODE_BIN = savedBin; savedIdle === undefined ? delete process.env.CLAUDE_CODE_REVIEW_IDLE_MS : process.env.CLAUDE_CODE_REVIEW_IDLE_MS = savedIdle; }
   });
 
   it.each([
