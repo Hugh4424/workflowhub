@@ -210,7 +210,7 @@ wh-review pass。不得让 `facts.review.verdict=pass` 指向上一轮
      - 历史补归档例外：仅当一次性清理多个已完成历史 task spec 且这些 task 已经不处于活跃 stage 时，允许 batch archive commit，message 可为 `workflowhub(close): archive completed specs`。batch gate 必须同时满足：①每个被移动目录都是 `specs/{task-id}` 到 `specs/archive/{task-id}` 的 rename/move；②`specs/` 顶层除 `archive/` 外无已完成 task 目录残留；③可执行测试不因归档被静默排除（若归档目录下存在 `*.test.*`，须迁到活跃 `tests/` 或保证仍被测试发现）；④`npm test` 通过；⑤batch commit push 前必须有异源 3rd-review `verdict=pass`。任一条件不满足，不得 push。
   2. 切主 checkout（切换到主分支）
   3. no-ff merge（`git merge --no-ff`，将任务分支合入主分支）
-  4. 移除 worktree 目录（`git worktree remove`）
+  4. 移除 worktree 目录（`git worktree remove`）；命令成功后检查被移除 worktree 的父级目录，若父级目录因此变空，须执行 `rmdir` 清理该空容器；父级目录非空时不得删除
   5. push main（推送主分支到远端）
   6. 删远端分支（存在则删；不存在则 skip 并记录 info，不视为失败）
   7. 删本地分支
