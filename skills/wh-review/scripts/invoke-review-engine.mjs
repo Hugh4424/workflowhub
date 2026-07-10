@@ -100,9 +100,8 @@ function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, tot
 
 export function effectiveRunnerTimeoutMs({ runnerPath, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
   if (runnerPath !== CLAUDE_CODE_RUNNER) return timeoutMs;
-  const perAttempt = Math.max(1, Number(env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || process.env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || 300000));
-  const attempts = Math.max(1, Number(env.CLAUDE_CODE_REVIEW_ATTEMPTS || process.env.CLAUDE_CODE_REVIEW_ATTEMPTS || 3));
-  return Math.max(timeoutMs, perAttempt * attempts + 30000);
+  const claudeTimeout = Math.max(1, Number(env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || process.env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || 300000));
+  return Math.max(timeoutMs, claudeTimeout + 30000);
 }
 
 // Contract 2/FR-THIRDREVIEW-001: the backend returns a structured stage-agnostic
