@@ -18,7 +18,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:p
 
 const SAFE_SKILL = /^[a-z0-9][a-z0-9-]*$/;
 const SAFE_SOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const MAX_CHUNK_BYTES = 8 * 1024;
+const MAX_CHUNK_BYTES = 64 * 1024;
 const MAX_CHUNK_LINE_CODEPOINTS = 1000;
 
 export class ArtifactReviewPackageError extends Error {
@@ -35,6 +35,16 @@ function inside(root, target) {
   return rel === "" || (!isAbsolute(rel) && !win32.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`));
 }
 function canonical(value) { return `${JSON.stringify(value, null, 2)}\n`; }
+function assertNoSymlinkComponents(path, label) {
+  const absolute = resolve(path), parts = absolute.split(sep).filter(Boolean);
+  let current = absolute.startsWith(sep) ? sep : parts.shift();
+  for (const part of parts) {
+    current = join(current, part);
+    if (!existsSync(current)) break;
+    const stat = lstatSync(current);
+    if (stat.isSymbolicLink()) throw new ArtifactReviewPackageError("artifact-package-escape", `${label} contains symlink component`);
+  }
+}
 function safeRelativePath(value) {
   if (typeof value !== "string" || !value || value.includes("\\")) return false;
   const normalized = value.split("/");
@@ -124,7 +134,11 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
   }
   if (trustedRoot) {
     let realTrusted;
-    try { realTrusted = realpathSync(resolve(trustedRoot)); }
+    try {
+      const trustedStat = lstatSync(resolve(trustedRoot));
+      if (!trustedStat.isDirectory() || trustedStat.isSymbolicLink()) throw new Error("trusted root must be a real directory");
+      realTrusted = realpathSync(resolve(trustedRoot));
+    }
     catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `unreadable trusted root: ${error.message}`); }
     if (!inside(realTrusted, realRoot)) throw new ArtifactReviewPackageError("artifact-package-escape", "package escapes trusted root");
   }
@@ -139,7 +153,7 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
   } catch (error) {
     throw new ArtifactReviewPackageError("artifact-package-invalid", `invalid manifest: ${error.message}`);
   }
-  if (parsed?.version !== 5 || parsed.chunk_max_bytes !== MAX_CHUNK_BYTES || parsed.chunk_max_line_codepoints !== MAX_CHUNK_LINE_CODEPOINTS || !Array.isArray(parsed.entries) || typeof parsed.content_hash !== "string") {
+  if (parsed?.version !== 6 || parsed.chunk_max_bytes !== MAX_CHUNK_BYTES || parsed.chunk_max_line_codepoints !== MAX_CHUNK_LINE_CODEPOINTS || !Array.isArray(parsed.entries) || typeof parsed.content_hash !== "string") {
     throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest shape is invalid");
   }
   const ids = new Set();
@@ -225,7 +239,7 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
   return { packageRoot: realRoot, manifestPath: realpathSync(manifest), manifest: parsed };
 }
 
-function stableSourceBytes(path) {
+function stableSource(path) {
   let descriptor;
   try {
     if (!Number.isInteger(constants.O_NOFOLLOW) || !Number.isInteger(constants.O_NONBLOCK)) throw new Error("platform lacks O_NOFOLLOW/O_NONBLOCK");
@@ -235,23 +249,32 @@ function stableSourceBytes(path) {
       if (!before.isFile() || !sourceStat.isFile() || sourceStat.isSymbolicLink() || sourceStat.dev !== before.dev || sourceStat.ino !== before.ino) throw new Error("source is not the opened regular file");
       const bytes = readFileSync(fd), after = fstatSync(fd);
       if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || bytes.length !== after.size) throw new Error("source changed while snapshotting");
-      descriptor = bytes;
+      descriptor = { bytes, realpath: realpathSync(path), identity: `${before.dev}:${before.ino}:${sha256(bytes)}` };
     } finally { closeSync(fd); }
   } catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `material source unreadable: ${error.message}`); }
   return descriptor;
 }
 
-export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, totalRound, contract, materials, materialSources = [], skillDefinitions = [] }) {
+export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, totalRound, contract, materials, materialSources = [], supplementaryContext, skillDefinitions = [] }) {
+  let realReviewsRoot;
+  try { realReviewsRoot = realpathSync(resolve(reviewsRoot)); }
+  catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `reviews root unreadable: ${error.message}`); }
   const files = [{ id: "contract", role: "contract", kind: "contract", path: "contract.md", bytes: Buffer.from(contract, "utf8") }];
   if (materialSources.length) {
-    const seen = new Set();
+    const seenIds = new Set(), seenCanonical = new Set();
     for (const [index, source] of [...materialSources].sort((a, b) => String(a.id).localeCompare(String(b.id))).entries()) {
-      if (!source || !SAFE_SOURCE_ID.test(source.id) || seen.has(source.id) || typeof source.path !== "string") throw new ArtifactReviewPackageError("artifact-package-invalid", "material source descriptors require unique safe id/path");
-      seen.add(source.id);
-      const suffix = source.path.split(/[\\/]/).at(-1).replace(/[^A-Za-z0-9._-]/g, "_") || "source.txt";
-      files.push({ id: source.id, role: "materials", kind: "material_source", path: `materials/${String(index + 1).padStart(3, "0")}-${suffix}`, bytes: stableSourceBytes(source.path) });
+      if (!source || !SAFE_SOURCE_ID.test(source.id) || source.id === "contract" || source.id === "materials" || source.id === "context:supplementary" || source.id.startsWith("skill:") || seenIds.has(source.id) || typeof source.path !== "string") throw new ArtifactReviewPackageError("artifact-package-invalid", "material source descriptors require unique non-reserved safe id/path");
+      seenIds.add(source.id);
+      const captured = stableSource(source.path);
+      if (seenCanonical.has(captured.identity)) continue;
+      seenCanonical.add(captured.identity);
+      const suffix = `${source.id.replace(/[^A-Za-z0-9._-]/g, "_")}.txt`;
+      files.push({ id: source.id, role: "materials", kind: "material_source", path: `materials/${String(index + 1).padStart(3, "0")}-${suffix}`, bytes: captured.bytes });
     }
-    files.push({ id: "context:aggregate", role: "materials", kind: "material_context", path: "materials/context-aggregate.md", bytes: Buffer.from(materials, "utf8") });
+    if (supplementaryContext !== undefined && supplementaryContext !== "") {
+      if (typeof supplementaryContext !== "string") throw new ArtifactReviewPackageError("artifact-package-invalid", "supplementaryContext must be a string");
+      files.push({ id: "context:supplementary", role: "materials", kind: "supplementary_context", path: "materials/supplementary-context.md", bytes: Buffer.from(supplementaryContext, "utf8") });
+    }
   } else {
     files.push({ id: "materials", role: "materials", kind: "material_snapshot", path: "materials.md", bytes: Buffer.from(materials, "utf8") });
   }
@@ -271,9 +294,14 @@ export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, 
   });
   const packageFiles = [...files, ...chunkFiles];
   const contentHash = sha256(Buffer.from(canonical(entries)));
-  const packageRoot = join(reviewsRoot, ".claude-review-packages", `${stage}-${reviewFlowId}-round-${totalRound}-${contentHash}`);
+  const packageContainer = join(realReviewsRoot, ".claude-review-packages");
+  if (!existsSync(packageContainer)) mkdirSync(packageContainer, { recursive: false });
+  assertNoSymlinkComponents(packageContainer, "package container");
+  const realContainer = realpathSync(packageContainer);
+  if (!inside(realReviewsRoot, realContainer)) throw new ArtifactReviewPackageError("artifact-package-escape", "package container escapes reviews root");
+  const packageRoot = join(realContainer, `${stage}-${reviewFlowId}-round-${totalRound}-${contentHash}`);
   const manifestPath = join(packageRoot, "manifest.json");
-  const manifest = { version: 5, chunk_max_bytes: MAX_CHUNK_BYTES, chunk_max_line_codepoints: MAX_CHUNK_LINE_CODEPOINTS, content_hash: contentHash, entries };
+  const manifest = { version: 6, chunk_max_bytes: MAX_CHUNK_BYTES, chunk_max_line_codepoints: MAX_CHUNK_LINE_CODEPOINTS, content_hash: contentHash, entries };
   if (existsSync(packageRoot)) {
     verifyArtifactReviewPackage({ packageRoot, manifestPath, expectedContentHash: contentHash, requireSealed: false });
     sealPackage(packageRoot, packageFiles);

@@ -39,10 +39,10 @@
  *    the caller (round-state.mjs, T011).
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTaskDir } from "../../../core/task-dir-parser.mjs";
@@ -92,6 +92,7 @@ export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) 
   const repoRoot = discoverThirdReviewRepoRoot({ env, workflowhubRepoRoot });
   const runnerEnv = env.THIRD_REVIEW_RUNNER;
   const provider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  if (runnerEnv && runnerEnv !== "claude-code") return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
   if (provider === "claude-code" || runnerEnv === "claude-code") return CLAUDE_CODE_RUNNER;
   if (runnerEnv) {
     return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
@@ -213,8 +214,16 @@ function synthesizeFailure({ artifactPath, failureReason }) {
     synthetic: true,
     failure_reason: failureReason,
   };
-  writeFileSync(artifactPath, JSON.stringify(record, null, 2));
+  atomicWriteJson(artifactPath, record);
   return { verdict: record.verdict, findings: record.findings, actual_mode: record.actual_mode };
+}
+
+function atomicWriteJson(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(temporary, JSON.stringify(value, null, 2), { flag: "wx" });
+  try { renameSync(temporary, path); }
+  catch (error) { rmSync(temporary, { force: true }); throw error; }
 }
 
 // ---- T010c: materials/mode/contract assembly (FR-WHREVIEW-007, Contract 11) ----
@@ -315,9 +324,11 @@ export function assembleReviewPayload({
     });
   }
 
+  // Keep the legacy/custom payload byte-for-byte compatible. Claude calls
+  // with canonical materialSources ignore this aggregate and package only the
+  // sources plus supplementaryContext; Claude legacy calls snapshot it whole.
   const materials = `${materialsCore}\n\n---\n\n## Supplementary context (agent-authored prompt)\n\n${promptContent}`;
-
-  return { mode, contract, materials };
+  return { mode, contract, materials, supplementaryContext: promptContent };
 }
 
 /**
@@ -330,20 +341,16 @@ export function assembleReviewPayload({
  * record is silently left stuck in prepare-only state (review_input_hash never backfilled).
  */
 export function assembleAndInvokeReviewEngine(params) {
-  const { mode, contract, materials } = assembleReviewPayload(params);
+  const { mode, contract, materials, supplementaryContext } = assembleReviewPayload(params);
   const root = params.taskTrackingRoot ?? parseTaskDir();
-  // review_input_hash covers the materials content only (Contract 2/data-contracts.md:
-  // "本次传给引擎的 materials 内容 hash") — mode/contract are tracked separately by
-  // route-decision fields, not folded into this hash.
-  const reviewInputHash = createHash("sha256").update(materials).digest("hex");
-  writeRouteExecutePhase({
-    taskId: params.taskId,
-    stage: params.stage,
-    reviewFlowId: params.reviewFlowId,
-    reviewInputHash,
-    taskTrackingRoot: root,
+  return invokeReviewEngine({
+    ...params,
+    mode,
+    contract,
+    materials,
+    supplementaryContext,
+    routeDecisionContext: { taskId: params.taskId, stage: params.stage, reviewFlowId: params.reviewFlowId, taskTrackingRoot: root },
   });
-  return invokeReviewEngine({ ...params, mode, contract, materials });
 }
 
 /**
@@ -362,10 +369,12 @@ export function invokeReviewEngine({
   contract,
   materials,
   materialSources,
+  supplementaryContext,
   taskTrackingRoot,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   env = process.env,
   workflowhubRepoRoot,
+  routeDecisionContext,
 }) {
   assertSafeTaskId(taskId);
   assertKnownStage(stage);
@@ -423,6 +432,7 @@ export function invokeReviewEngine({
         contract,
         materials,
         materialSources,
+        supplementaryContext,
         skillDefinitions: resolution.definitions,
       });
     } catch (error) {
@@ -435,13 +445,23 @@ export function invokeReviewEngine({
       content_hash: reviewPackage.manifest.content_hash,
       entries: reviewPackage.manifest.entries,
     };
-    inputHash = createHash("sha256").update(JSON.stringify({ mode, artifact_manifest: artifactManifest })).digest("hex");
+    const contentDescriptor = artifactManifest.entries.map(({ id, role, kind, bytes, lines, sha256, chunks }) => ({
+      id, role, kind, bytes, lines, sha256,
+      chunks: chunks.map(({ sequence, bytes: chunkBytes, lines: chunkLines, sha256: chunkHash }) => ({ sequence, bytes: chunkBytes, lines: chunkLines, sha256: chunkHash })),
+    }));
+    inputHash = createHash("sha256").update(JSON.stringify({ mode, content_hash: artifactManifest.content_hash, entries: contentDescriptor })).digest("hex");
     runnerPayload = { mode, artifact_manifest: artifactManifest, input_hash: inputHash };
   } else {
     // Preserve the legacy runner payload byte-for-byte. Artifact transport is
     // Claude-only; custom/Codex/default providers keep their existing contract.
     inputHash = createHash("sha256").update(JSON.stringify({ mode, contract, materials })).digest("hex");
     runnerPayload = { mode, contract, materials, input_hash: inputHash };
+  }
+  if (routeDecisionContext) {
+    writeRouteExecutePhase({
+      ...routeDecisionContext,
+      reviewInputHash: runnerPath === CLAUDE_CODE_RUNNER ? inputHash : createHash("sha256").update(materials).digest("hex"),
+    });
   }
   const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
   const diffFile = join(workDir, "diff.json");
@@ -452,6 +472,50 @@ export function invokeReviewEngine({
     const stateDir = join(dirname(artifactPath), ".claude-review-state", `${stage}-${reviewFlowId}-round-${totalRound}-${inputHash}`);
     mkdirSync(stateDir, { recursive: true });
     runnerArgs.push(`--state-dir=${stateDir}`);
+  }
+
+  const finalizeOutput = () => {
+    if (!existsSync(outputFile)) return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
+    let result;
+    try { result = JSON.parse(readFileSync(outputFile, "utf8")); }
+    catch { return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" }); }
+    result = normalizeReviewResult(result);
+    if (!isValidReviewResult(result)) return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
+    atomicWriteJson(artifactPath, result);
+    return { verdict: result.verdict, findings: result.findings, actual_mode: result.actual_mode };
+  };
+
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    return new Promise((resolveResult) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        rmSync(workDir, { recursive: true, force: true });
+        resolveResult(value);
+      };
+      let child;
+      try {
+        child = spawn("node", runnerArgs, {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, ...env },
+          detached: platform() !== "win32",
+        });
+      } catch {
+        finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" }));
+        return;
+      }
+      // The runner persists its own bounded journal/terminal receipt. Drain but
+      // never forward its output into the calling agent's conversation.
+      child.stdout.resume();
+      child.stderr.resume();
+      child.once("error", () => finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" })));
+      child.once("close", (code, signal) => {
+        if (signal) finish(synthesizeFailure({ artifactPath, failureReason: "timeout" }));
+        else if (code !== 0) finish(synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" }));
+        else finish(finalizeOutput());
+      });
+    });
   }
 
   let proc;
@@ -472,30 +536,7 @@ export function invokeReviewEngine({
     if (proc.status !== 0) {
       return synthesizeFailure({ artifactPath, failureReason: "non-zero-exit" });
     }
-    if (!existsSync(outputFile)) {
-      return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
-    }
-
-    let result;
-    try {
-      result = JSON.parse(readFileSync(outputFile, "utf8"));
-    } catch {
-      return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
-    }
-
-    result = normalizeReviewResult(result);
-
-    // round-review finding: valid JSON is not the same as a valid review result —
-    // a runner that exits 0 and writes `{}` or `{"verdict":"pass"}` used to be
-    // accepted as-is, silently persisting/returning undefined findings/actual_mode
-    // into round-state instead of being mapped to the "output-unparseable"
-    // failure the contract requires for a malformed runner response.
-    if (!isValidReviewResult(result)) {
-      return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
-    }
-
-    writeFileSync(artifactPath, JSON.stringify(result, null, 2));
-    return { verdict: result.verdict, findings: result.findings, actual_mode: result.actual_mode };
+    return finalizeOutput();
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

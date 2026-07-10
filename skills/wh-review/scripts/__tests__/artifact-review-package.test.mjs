@@ -81,11 +81,33 @@ describe("artifact review package", () => {
     writeFileSync(spec, "spec original\n"); writeFileSync(decision, "decision original\n");
     const pkg = createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "sources", totalRound: 1, contract: "C", materials: "legacy aggregate ignored", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }] });
     const sources = pkg.manifest.entries.filter(({ role }) => role === "materials");
-    expect(sources.map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"], ["context:aggregate", "material_context"]]);
+    expect(sources.map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"]]);
     writeFileSync(spec, "mutated after snapshot\n");
     expect(readFileSync(join(pkg.packageRoot, sources.find(({ id }) => id === "source:spec").path), "utf8")).toBe("spec original\n");
     expect(pkg.manifest.entries.some(({ kind }) => kind === "material_snapshot")).toBe(false);
-    expect(readFileSync(join(pkg.packageRoot, sources.find(({ id }) => id === "context:aggregate").path), "utf8")).toBe("legacy aggregate ignored");
+    expect(pkg.manifest.entries.some(({ id }) => id === "context:aggregate")).toBe(false);
+  });
+
+  it("deduplicates canonical source identity and includes only explicit supplementaryContext bytes", () => {
+    const reviewsRoot = makeRoot(), sourceRoot = makeRoot(), source = join(sourceRoot, "source.md");
+    writeFileSync(source, "canonical source\n");
+    const pkg = createArtifactReviewPackage({
+      reviewsRoot, stage: "build-spec", reviewFlowId: "dedup", totalRound: 1, contract: "C",
+      materials: "must not be copied", supplementaryContext: "new context only",
+      materialSources: [{ id: "source:a", path: source }, { id: "source:b", path: source }],
+    });
+    const materials = pkg.manifest.entries.filter(({ role }) => role === "materials");
+    expect(materials.map(({ id }) => id)).toEqual(["source:a", "context:supplementary"]);
+    expect(materials.reduce((sum, item) => sum + item.bytes, 0)).toBe(Buffer.byteLength("canonical source\nnew context only"));
+    expect(readFileSync(join(pkg.packageRoot, materials[1].path), "utf8")).toBe("new context only");
+    expect(readFileSync(pkg.manifestPath, "utf8")).not.toContain("must not be copied");
+  });
+
+  it("rejects a symlinked package container before publishing", () => {
+    const reviewsRoot = makeRoot(), outside = makeRoot();
+    symlinkSync(outside, join(reviewsRoot, ".claude-review-packages"));
+    expect(() => createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "container-link", totalRound: 1, contract: "C", materials: "M" })).toThrow(/artifact-package-escape/);
+    expect(readdirSync(outside)).toEqual([]);
   });
 
   it("rejects symlink material source descriptors", () => {
@@ -99,11 +121,11 @@ describe("artifact review package", () => {
     for (const path of [fifo, "/dev/null"]) expect(() => createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "unsafe-source", totalRound: 1, contract: "C", materials: "M", materialSources: [{ id: "source:unsafe", path }] })).toThrow(/opened regular file/);
   });
 
-  it("groups short lines near 8KiB and splits long lines at Unicode codepoint boundaries", () => {
+  it("groups short lines near 64KiB and splits long lines at Unicode codepoint boundaries", () => {
     const short = "short review line\n".repeat(45000), long = "汉".repeat(2501);
     const pkg = createArtifactReviewPackage({ reviewsRoot: makeRoot(), stage: "build-spec", reviewFlowId: "chunks", totalRound: 1, contract: "C", materials: `${short}${long}` });
     const material = pkg.manifest.entries.find(({ id }) => id === "materials");
-    expect(material.chunks).toHaveLength(102);
+    expect(material.chunks.length).toBeLessThan(25);
     const reconstructed = Buffer.concat(material.chunks.map((chunk) => readFileSync(join(pkg.packageRoot, chunk.path))));
     expect(reconstructed.equals(readFileSync(join(pkg.packageRoot, material.path)))).toBe(true);
     for (const chunk of material.chunks) for (const line of readFileSync(join(pkg.packageRoot, chunk.path), "utf8").split("\n")) expect([...line].length).toBeLessThanOrEqual(1000);

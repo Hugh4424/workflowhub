@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-import { appendFileSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { appendFileSync, closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { ArtifactReviewPackageError, verifyArtifactReviewPackage } from "../artifact-review-package.mjs";
+import { parseRequiredSkillManifest } from "../required-skill-resolver.mjs";
 
 const VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const SEVERITIES = new Set(["blocking", "important", "minor"]);
@@ -16,16 +18,6 @@ const COVERAGE_STATUSES = new Set(["read", "failed"]);
 const PACKAGE_FAILURES = new Set(["artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered"]);
 const packageFailureCode = (error) => PACKAGE_FAILURES.has(error?.code) ? error.code : "artifact-package-invalid";
 const isCoverageResult = (v) => v && typeof v === "object" && typeof v.id === "string" && v.id && /^[a-f0-9]{64}$/.test(v.sha256) && COVERAGE_STATUSES.has(v.status) && typeof v.evidence === "string" && v.evidence.trim();
-function requiredSkillsFromContract(contract) {
-  const match = contract.match(/<!--\s*wh-review-skills:\s*(\{[^\n]*\})\s*-->/);
-  if (!match) return [];
-  try {
-    const manifest = JSON.parse(match[1]);
-    return Array.isArray(manifest.required) && manifest.required.every((skill) => typeof skill === "string" && skill.trim())
-      ? manifest.required
-      : [];
-  } catch { return []; }
-}
 function hasValidSkillCoverage(v, requiredSkills) {
   if (!Array.isArray(v.skillResults) || !v.skillResults.every(isSkillResult)) return false;
   const required = new Set(requiredSkills);
@@ -61,6 +53,11 @@ const diffFile = arg("diff"), outputFile = arg("output"), stateDir = arg("state-
 if (!diffFile || !outputFile || !stateDir) { process.stderr.write("Usage: claude-code-reviewer.mjs --diff=<file> --output=<file> --state-dir=<dir>\n"); process.exit(2); }
 const payload = JSON.parse(readFileSync(diffFile, "utf8"));
 const mode = typeof payload.mode === "string" && payload.mode ? payload.mode : "full";
+if ((process.env.WH_REVIEW_TEST_PLATFORM || platform()) === "win32") {
+  mkdirSync(dirname(outputFile), { recursive: true });
+  writeFileSync(outputFile, JSON.stringify(failure(mode, "claude-artifact-review-unsupported-platform"), null, 2));
+  process.exit(0);
+}
 let artifactPackage = null, canonicalArtifactManifest = null;
 if (payload.artifact_manifest) {
   try {
@@ -100,6 +97,7 @@ const expectedPathEntries = new Map((expectedEntries || []).flatMap((item) => it
 const pendingReads = new Map();
 const readCoverage = new Map((expectedEntries || []).map((item) => [item.id, { chunkRanges: new Map(item.chunks.map((chunk) => [chunk.sequence, []])), failed: false, emptyChunks: new Set() }]));
 let attestationInvalid = false;
+let boundaryViolation = false;
 function mergeRanges(ranges) {
   const merged = [];
   for (const [start, end] of [...ranges].sort((a, b) => a[0] - b[0])) {
@@ -124,8 +122,31 @@ function hostAttestation() {
   }
   return result;
 }
+function completeChunkCount() {
+  if (!artifactPackage || attestationInvalid) return 0;
+  let completed = 0;
+  for (const item of expectedEntries) {
+    const coverage = readCoverage.get(item.id);
+    for (const chunk of item.chunks) {
+      const ranges = mergeRanges(coverage.chunkRanges.get(chunk.sequence));
+      if (chunk.lines === 0 ? coverage.emptyChunks.has(chunk.sequence) : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= chunk.lines) completed += 1;
+    }
+  }
+  return completed;
+}
+function textFromToolResult(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return null;
+  let text = "";
+  for (const block of content) {
+    if (!block || block.type !== "text" || typeof block.text !== "string") return null;
+    text += block.text;
+  }
+  return text;
+}
 function actualReadRanges(content, pending) {
-  if (typeof content !== "string") return null;
+  content = textFromToolResult(content);
+  if (content === null) return null;
   if (pending.entry.chunk.lines === 0) return content === "" ? [] : null;
   const rawLines = content.split("\n");
   const ranges = [];
@@ -156,10 +177,14 @@ function observeReadEvents(event) {
         attestationInvalid = true;
         continue;
       }
-      let entry;
-      try { entry = expectedPathEntries.get(realpathSync(resolve(input.file_path))); } catch {}
+      let entry, requested;
+      try { requested = realpathSync(resolve(input.file_path)); entry = expectedPathEntries.get(requested); } catch {}
+      const manifestRead = requested === artifactPackage.manifestPath;
+      if (!entry && !manifestRead) {
+        boundaryViolation = true;
+        record("read_boundary_violation", { path_hash: createHash("sha256").update(String(input.file_path)).digest("hex") });
+      }
       pendingReads.set(id, entry ? { entry, offset, limit } : null);
-      if (entry) record("read_tool_use", { entry_id: entry.item.id, chunk: entry.chunk.sequence, offset, ...(Number.isFinite(limit) ? { limit } : {}) });
     }
   } else if (event.type === "user") {
     if (event.message?.role !== "user" || !Array.isArray(event.message.content)) return;
@@ -180,12 +205,28 @@ function observeReadEvents(event) {
         else if (pending.entry.chunk.lines === 0) stateForEntry.emptyChunks.add(pending.entry.chunk.sequence);
         else stateForEntry.chunkRanges.get(pending.entry.chunk.sequence).push(...actual);
       }
-      record("read_tool_result", { entry_id: pending.entry.item.id, chunk: pending.entry.chunk.sequence, status: block.is_error === true ? "failed" : "success" });
     }
   }
 }
-const requiredSkills = requiredSkillsFromContract(contractText);
-const computedArtifactInputHash = artifactPackage ? createHash("sha256").update(JSON.stringify({ mode, artifact_manifest: canonicalArtifactManifest })).digest("hex") : null;
+let requiredSkills;
+try { requiredSkills = parseRequiredSkillManifest(contractText).required; }
+catch {
+  mkdirSync(dirname(outputFile), { recursive: true });
+  writeFileSync(outputFile, JSON.stringify(failure(mode, "required-skill-unavailable"), null, 2));
+  process.exit(0);
+}
+if (artifactPackage) {
+  const packagedSkills = artifactPackage.manifest.entries.filter(({ role }) => role === "required_skill").map(({ id }) => id.replace(/^skill:/, "")).sort();
+  if (JSON.stringify(packagedSkills) !== JSON.stringify([...requiredSkills].sort())) {
+    mkdirSync(dirname(outputFile), { recursive: true });
+    writeFileSync(outputFile, JSON.stringify(failure(mode, "required-skill-manifest-mismatch"), null, 2));
+    process.exit(0);
+  }
+}
+function contentDescriptor(manifest) {
+  return manifest.entries.map(({ id, role, kind, bytes, lines, sha256, chunks }) => ({ id, role, kind, bytes, lines, sha256, chunks: chunks.map(({ sequence, bytes: b, lines: l, sha256: h }) => ({ sequence, bytes: b, lines: l, sha256: h })) }));
+}
+const computedArtifactInputHash = artifactPackage ? createHash("sha256").update(JSON.stringify({ mode, content_hash: artifactPackage.manifest.content_hash, entries: contentDescriptor(artifactPackage.manifest) })).digest("hex") : null;
 if (artifactPackage && payload.input_hash !== computedArtifactInputHash) {
   mkdirSync(dirname(outputFile), { recursive: true });
   writeFileSync(outputFile, JSON.stringify(failure(mode, "artifact-input-hash-mismatch"), null, 2));
@@ -195,46 +236,76 @@ const inputHash = artifactPackage ? computedArtifactInputHash : (payload.input_h
 const coverageProperty = { type: "array", minItems: 1, items: { type: "object", additionalProperties: false, properties: { id: { type: "string" }, sha256: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { enum: [...COVERAGE_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["id", "sha256", "status", "evidence"] } };
 const schema = { type: "object", additionalProperties: false, properties: { verdict: { enum: [...VERDICTS] }, findings: { type: "array", items: { type: "object", additionalProperties: false, properties: { severity: { enum: [...SEVERITIES] }, file: { type: "string" }, line: { type: "integer", minimum: 1 }, issue: { type: "string" }, recommendation: { type: "string" } }, required: ["severity", "file", "line", "issue", "recommendation"] } }, resolutionSummary: { type: "string" }, skillResults: { type: "array", items: { type: "object", additionalProperties: false, properties: { skill: { type: "string" }, status: { enum: [...SKILL_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["skill", "status", "evidence"] } }, ...(artifactPackage ? { artifactCoverage: coverageProperty } : {}) }, required: ["verdict", "findings", "resolutionSummary", "skillResults", ...(artifactPackage ? ["artifactCoverage"] : [])] };
 const prompt = artifactPackage
-  ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete, immutable review package is at ${artifactPackage.packageRoot}. Use only the Read tool. Read ${artifactPackage.manifestPath} first, then read every chunk declared under every logical manifest entry in sequence. Chunks are raw UTF-8 slices: concatenating their bytes exactly reconstructs the logical artifact identified by its original sha256/bytes. Read each chunk in full using offset/limit as needed. The host independently verifies chunk contents and attests a logical entry only after all chunks are covered. The contract entry is authoritative; required_skill entries are report-only lenses and must not cause writes or side effects. Review every role=materials entry, including material_context even when it duplicates source content. Do not omit or summarize source material.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete non-empty evidence. For escalate_to_human, a well-formed attested subset with status read/failed is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
+  ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete immutable review package is your working directory. Use only Read. Read every declared chunk in sequence; do not read any path not listed below. Concatenating each entry's chunks reconstructs the exact logical artifact. The contract entry is authoritative; required_skill entries are report-only lenses. Review every role=materials entry.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete evidence. For escalate_to_human, a well-formed attested subset is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
   : `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
-const continuation = artifactPackage
-  ? `Continue the interrupted review. Treat this as a fresh evidence pass: re-read ${artifactPackage.manifestPath} and every declared chunk in full with Read before returning a verdict. Do not rely on coverage from a previous runner process. Return only the required JSON verdict.`
-  : "Continue the interrupted review. Use the original review contract and materials already present in this session. Return only the required JSON verdict.";
-mkdirSync(stateDir, { recursive: true });
-const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson");
+mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson"), lockFile = join(stateDir, "owner.lock"), receiptFile = join(stateDir, "terminal-receipt.json"), settingsFile = join(stateDir, "safe-settings.json");
 const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 300000));
 const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS || 2000));
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
-let state = { input_hash: inputHash, session_id: null, resume_count: 0, attempt: 0, attempt_id: null, phase: "idle", status: "new" };
-try { const old = JSON.parse(readFileSync(stateFile, "utf8")); if (old.input_hash === inputHash && typeof old.session_id === "string" && old.session_id && old.status !== "completed") state = { ...state, ...old }; else if (old.input_hash !== inputHash) appendFileSync(journal, `${JSON.stringify({ at: new Date().toISOString(), type: "state_hash_mismatch", expected_hash: inputHash, observed_hash: old.input_hash })}\n`); } catch {}
-delete state.artifact_coverage;
-delete state.artifact_manifest_hash;
-let currentChild = null, idleTimer = null, shuttingDown = false;
-// POSIX rename-over-target is atomic. Windows does not guarantee that operation,
-// so use a recoverable swap: preserve the old file until the replacement lands.
-// The Windows path is crash-consistent best effort (a .bak may remain), but never
-// deliberately creates the old implementation's "no target file" window.
+let currentChild = null, idleTimer = null, shuttingDown = false, lockToken = null;
 function atomicWrite(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   const nonce = `${process.pid}.${Date.now()}`;
-  const tmp = `${path}.${nonce}.tmp`, backup = `${path}.${nonce}.bak`;
-  writeFileSync(tmp, value);
-  if (platform() !== "win32") { try { renameSync(tmp, path); } catch (error) { rmSync(tmp, { force: true }); throw error; } return; }
-  let preserved = false;
-  try {
-    try { renameSync(path, backup); preserved = true; } catch (error) { if (error.code !== "ENOENT") throw error; }
-    renameSync(tmp, path);
-    if (preserved) rmSync(backup, { force: true });
-  } catch (error) {
-    if (preserved) { try { renameSync(backup, path); } catch {} }
-    rmSync(tmp, { force: true });
-    throw error;
-  }
+  const tmp = `${path}.${nonce}.tmp`;
+  writeFileSync(tmp, value, { mode: 0o600, flag: "wx" });
+  try { renameSync(tmp, path); } catch (error) { rmSync(tmp, { force: true }); throw error; }
 }
-function persist(status, extra = {}) { state = { ...state, status, updated_at: new Date().toISOString(), ...extra }; atomicWrite(stateFile, JSON.stringify(state)); }
-function record(type, meta = {}) { appendFileSync(journal, `${JSON.stringify({ at: new Date().toISOString(), type, attempt: state.attempt, attempt_id: state.attempt_id, phase: state.phase, ...meta })}\n`); }
-function stopChild(child) { return new Promise((resolve) => { if (!child || child.exitCode !== null || child.signalCode) return resolve(); let done = false; const finish = () => { if (!done) { done = true; resolve(); } }; child.once("close", finish); const send = (signal) => { try { child.kill(signal); record("stop_signal", { signal }); } catch (error) { record("stop_signal_error", { signal, code: error.code }); } }; send("SIGINT"); const term = setTimeout(() => send("SIGTERM"), graceMs); const kill = setTimeout(() => { send("SIGKILL"); setTimeout(finish, graceMs).unref(); }, graceMs * 2); child.once("close", () => { clearTimeout(term); clearTimeout(kill); }); }); }
-function baseArgs() { return ["-p", "--bare", "--settings", process.env.CLAUDE_CODE_SETTINGS || join(homedir(), ".claude/settings.json"), "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--json-schema", JSON.stringify(schema)]; }
+function processStart(pid) { try { return execFileSync("ps", ["-p", String(pid), "-o", "lstart="], { encoding: "utf8" }).trim(); } catch { return ""; } }
+function liveOwner(owner) {
+  if (!owner || !Number.isInteger(owner.pid) || typeof owner.start !== "string" || !owner.start) return false;
+  try { process.kill(owner.pid, 0); } catch (error) { return error.code !== "ESRCH"; }
+  return processStart(owner.pid) === owner.start;
+}
+function acquireLock() {
+  const owner = { pid: process.pid, start: processStart(process.pid), token: randomUUID() };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const fd = openSync(lockFile, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+      writeFileSync(fd, JSON.stringify(owner)); closeSync(fd); lockToken = owner.token; return true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      let prior; try { prior = JSON.parse(readFileSync(lockFile, "utf8")); } catch {}
+      if (liveOwner(prior)) return false;
+      try { unlinkSync(lockFile); } catch (unlinkError) { if (unlinkError.code !== "ENOENT") throw unlinkError; }
+    }
+  }
+  return false;
+}
+function releaseLock() { try { const owner = JSON.parse(readFileSync(lockFile, "utf8")); if (owner.token === lockToken) unlinkSync(lockFile); } catch {} }
+if (!acquireLock()) {
+  atomicWrite(outputFile, JSON.stringify(failure(mode, "review-already-running"), null, 2));
+  process.exit(0);
+}
+process.on("exit", releaseLock);
+atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: "running", verdict_hash: null, failure_reason: null, completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0) }));
+
+let state = { input_hash: inputHash, session_id: null, resume_count: 0, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
+try { const old = JSON.parse(readFileSync(stateFile, "utf8")); if (old.input_hash === inputHash && typeof old.session_id === "string" && old.session_id && old.status !== "completed") state = { ...state, ...old, progress: state.progress }; } catch {}
+let persistedState = existsSync(stateFile) ? readFileSync(stateFile, "utf8") : "";
+function persist(status, extra = {}) {
+  state = { ...state, status, ...extra };
+  const serialized = JSON.stringify(state);
+  if (serialized !== persistedState) { atomicWrite(stateFile, serialized); persistedState = serialized; }
+}
+const JOURNAL_MAX_BYTES = 256 * 1024;
+function record(type, meta = {}) {
+  const line = `${JSON.stringify({ at: new Date().toISOString(), type, attempt: state.attempt, phase: state.phase, ...meta })}\n`;
+  let size = 0; try { size = statSync(journal).size; } catch {}
+  if (size + Buffer.byteLength(line) <= JOURNAL_MAX_BYTES) appendFileSync(journal, line, { mode: 0o600 });
+}
+function stopChild(child) { return new Promise((resolveStop) => { if (!child || child.exitCode !== null || child.signalCode) return resolveStop(); let done = false; const finish = () => { if (!done) { done = true; resolveStop(); } }; child.once("close", finish); const send = (signal) => { try { process.kill(-child.pid, signal); record("stop_signal", { signal }); } catch (error) { if (error.code !== "ESRCH") record("stop_signal_error", { signal, code: error.code }); } }; send("SIGINT"); const term = setTimeout(() => send("SIGTERM"), graceMs); const kill = setTimeout(() => { send("SIGKILL"); setTimeout(finish, graceMs).unref(); }, graceMs * 2); child.once("close", () => { clearTimeout(term); clearTimeout(kill); }); }); }
+const ALLOWED_ENV = new Set(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "CLAUDE_CODE_EFFORT_LEVEL"]);
+function safeSettings() {
+  let source = {};
+  try { source = JSON.parse(readFileSync(process.env.CLAUDE_CODE_SETTINGS || join(homedir(), ".claude/settings.json"), "utf8")); } catch {}
+  const env = Object.fromEntries(Object.entries(source.env || {}).filter(([key, value]) => ALLOWED_ENV.has(key) && typeof value === "string"));
+  const allowedRoot = artifactPackage?.packageRoot || dirname(diffFile);
+  const safe = { ...(Object.keys(env).length ? { env } : {}), ...(typeof source.model === "string" ? { model: source.model } : {}), ...(typeof source.apiKeyHelper === "string" ? { apiKeyHelper: source.apiKeyHelper } : {}), permissions: { allow: [`Read(${allowedRoot}/**)`], defaultMode: "dontAsk" } };
+  atomicWrite(settingsFile, JSON.stringify(safe));
+}
+safeSettings();
+function baseArgs() { return ["-p", "--bare", "--settings", settingsFile, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--permission-mode", "dontAsk", "--output-format", "stream-json", "--verbose", "--json-schema", JSON.stringify(schema)]; }
 const ERROR_CATEGORIES = new Map([
   ["prompt_too_long", "prompt_too_long"],
   ["authentication_failed", "authentication"],
@@ -247,6 +318,7 @@ const SAFE_SUBTYPES = new Set(["success", "error_during_execution", "error_max_t
 const SAFE_STOP_REASONS = new Set(["end_turn", "max_tokens", "stop_sequence", "tool_use", "error"]);
 const SAFE_EVENT_TYPES = new Set(["system", "assistant", "user", "result", "stream_event"]);
 const safeSessionId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : undefined;
+const sessionIdHash = (value) => createHash("sha256").update(value).digest("hex");
 function terminalDiagnostics(event) {
   if (!event || typeof event !== "object" || event.type !== "result") return {};
   return {
@@ -272,24 +344,42 @@ async function run(input, resume) {
   state.attempt_id = `${inputHash.slice(0, 12)}-${state.attempt}`;
   state.phase = resume ? "resume_running" : "initial_running";
   persist(resume ? "resuming" : "running"); record("attempt_start", { resume, input_bytes: Buffer.byteLength(input), input_hash: createHash("sha256").update(input).digest("hex") });
-  let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {};
-  return new Promise((resolve) => {
-    let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); resolve({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal }); } };
-    const args = baseArgs(); if (resume) args.push("--resume", state.session_id); if (artifactPackage) args.push("--tools", "Read", "--add-dir", artifactPackage.packageRoot);
-    const child = spawn(process.env.CLAUDE_CODE_BIN || "claude", args, { stdio: ["pipe", "pipe", "pipe"] }); currentChild = child;
+  pendingReads.clear(); attestationInvalid = false; boundaryViolation = false;
+  let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {}, lastCompleted = state.progress.completed;
+  return new Promise((resolveRun) => {
+    let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); resolveRun({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal }); } };
+    const args = baseArgs(); if (resume) args.push("--resume", state.session_id); if (artifactPackage) {
+      const scopedPackage = `//${artifactPackage.packageRoot.replace(/^\/+/, "")}/**`;
+      args.push("--tools", "Read", "--allowedTools", `Read(${scopedPackage})`);
+    }
+    const child = spawn(process.env.CLAUDE_CODE_BIN || "claude", args, { stdio: ["pipe", "pipe", "pipe"], cwd: artifactPackage?.packageRoot || dirname(diffFile), detached: true }); currentChild = child;
     const arm = () => { clearTimeout(idleTimer); idleTimer = setTimeout(async () => { stalled = true; record("idle_timeout"); await stopChild(child); settle({ stalled: true, code: child.exitCode, signal: child.signalCode }); }, idleMs); };
+    const semantic = (completed = state.progress.completed) => {
+      state.progress = { ...state.progress, completed, last_semantic_at: new Date().toISOString() };
+      persist(state.status, { progress: state.progress }); arm();
+    };
     const consume = (line) => {
       if (!line.trim()) return;
-      if (Buffer.byteLength(line) > maxBuffer) { record("line_too_large", { bytes: Buffer.byteLength(line) }); return; }
+      if (Buffer.byteLength(line) > maxBuffer) { validationFailure = "claude-code-stream-frame-invalid"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
       let event;
-      try { event = JSON.parse(line); } catch { record("parse_anomaly", { bytes: Buffer.byteLength(line) }); return; }
-      record("event", { event_type: SAFE_EVENT_TYPES.has(event?.type) ? event.type : "unknown", ...(SAFE_SUBTYPES.has(event?.subtype) ? { subtype: event.subtype } : {}), ...(safeSessionId(event?.session_id) ? { session_id: safeSessionId(event.session_id) } : {}) });
-      if (safeSessionId(event?.session_id)) { state.session_id = safeSessionId(event.session_id); persist(state.status); }
+      try { event = JSON.parse(line); } catch { validationFailure = "claude-code-stream-frame-invalid"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
+      if (!SAFE_EVENT_TYPES.has(event?.type)) { validationFailure = "claude-code-stream-event-unknown"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
+      const session = safeSessionId(event?.session_id);
+      if (session && state.session_id && session !== state.session_id) {
+        validationFailure = "claude-code-session-mismatch";
+        record("session_mismatch", { expected_session_id_hash: sessionIdHash(state.session_id), observed_session_id_hash: sessionIdHash(session) });
+        void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode }));
+        return;
+      }
+      if (session && !state.session_id) { state.session_id = session; record("session_established", { session_id_hash: sessionIdHash(session) }); semantic(); }
       observeReadEvents(event);
+      if (boundaryViolation) { validationFailure = "artifact-read-boundary-violation"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
       safeTerminal = { ...safeTerminal, ...terminalDiagnostics(event) };
       const attestation = hostAttestation();
-      if (artifactPackage && candidatesFromEvent(event).some((candidate) => VERDICTS.has(candidate.verdict))) record("artifact_attestation_summary", { entries: attestation.map((item) => ({ id: item.id, status: item.status, chunks: item.chunks.length })) });
-      const verdict = verdictFromEvent(event, requiredSkills, expectedEntries, attestation);
+      const completed = completeChunkCount();
+      if (completed > lastCompleted) { lastCompleted = completed; record("coverage_progress", { completed, total: state.progress.total }); semantic(completed); }
+      const terminalCandidate = event.type === "result" && candidatesFromEvent(event).some((candidate) => VERDICTS.has(candidate.verdict));
+      const verdict = event.type === "result" ? verdictFromEvent(event, requiredSkills, expectedEntries, attestation) : null;
       if (verdict) {
         try { verifyPackageAfterReview(); }
         catch (error) { validationFailure = packageFailureCode(error); terminalSeen = true; void stopChild(child).then(() => settle({ code: child.exitCode ?? 0, signal: child.signalCode, terminalSeen: true })); return; }
@@ -304,25 +394,42 @@ async function run(input, resume) {
         } : verdict;
         acceptedAttestation = attestation;
         terminalSeen = true;
-        persist("terminal_observed");
+        record("terminal_observed", { verdict: verdict.verdict, completed, total: state.progress.total }); semantic(completed); persist("terminal_observed");
         void stopChild(child).then(() => settle({ code: child.exitCode ?? 0, signal: child.signalCode, terminalSeen: true }));
-      } else if (artifactPackage && candidatesFromEvent(event).some((candidate) => VERDICTS.has(candidate.verdict))) {
+      } else if (artifactPackage && terminalCandidate) {
         validationFailure = "artifact-coverage-unattested";
         terminalSeen = true;
         void stopChild(child).then(() => settle({ code: child.exitCode ?? 0, signal: child.signalCode, terminalSeen: true }));
       }
     };
-    child.stdout.on("data", (chunk) => { arm(); buffer += chunk; if (Buffer.byteLength(buffer) > maxBuffer) { record("buffer_overflow", { bytes: Buffer.byteLength(buffer) }); buffer = ""; } let i; while ((i = buffer.indexOf("\n")) >= 0) { consume(buffer.slice(0, i)); buffer = buffer.slice(i + 1); } });
-    child.stderr.on("data", (chunk) => { arm(); record("stderr_activity", { bytes: chunk.length }); });
+    const decoder = new StringDecoder("utf8");
+    child.stdout.on("data", (chunk) => { buffer += decoder.write(chunk); if (Buffer.byteLength(buffer) > maxBuffer) { validationFailure = "claude-code-stream-buffer-invalid"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; } let i; while ((i = buffer.indexOf("\n")) >= 0) { consume(buffer.slice(0, i).replace(/\r$/, "")); buffer = buffer.slice(i + 1); } });
+    child.stderr.on("data", () => {});
     child.on("error", (error) => { record("spawn_error", { code: error.code }); settle({ error, code: null }); });
-    child.on("close", (code, signal) => { consume(buffer); state.phase = "attempt_settled"; persist(state.status); record("child_close", { code, signal, stalled, terminalSeen }); settle({ code, signal, stalled, terminalSeen }); });
+    child.on("close", (code, signal) => { buffer += decoder.end(); if (buffer) consume(buffer.replace(/\r$/, "")); pendingReads.clear(); state.phase = "attempt_settled"; persist(state.status); record("child_close", { code, signal, stalled, terminalSeen }); settle({ code, signal, stalled, terminalSeen }); });
     child.stdin.on("error", (error) => { record("stdin_error", { code: error.code }); if (error.code !== "EPIPE") settle({ error, code: null }); });
     try { child.stdin.end(input); } catch (error) { record("stdin_error", { code: error.code }); settle({ error, code: null }); }
     arm();
   });
 }
-async function onSignal(signal) { if (shuttingDown) return; shuttingDown = true; clearTimeout(idleTimer); persist("interrupted", { signal }); record("runner_signal", { signal }); await stopChild(currentChild); process.exit(signal === "SIGINT" ? 130 : 143); }
-process.on("SIGINT", () => void onSignal("SIGINT")); process.on("SIGTERM", () => void onSignal("SIGTERM"));
+async function onSignal(signal) { if (shuttingDown) return; shuttingDown = true; clearTimeout(idleTimer); persist("interrupted", { signal }); record("runner_signal", { signal }); await stopChild(currentChild); releaseLock(); process.exit(signal === "SIGINT" ? 130 : 143); }
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => void onSignal(signal));
+const originalParent = process.ppid;
+const parentWatch = setInterval(() => { try { process.kill(originalParent, 0); if (process.ppid !== originalParent) throw Object.assign(new Error("parent changed"), { code: "ESRCH" }); } catch (error) { if (error.code === "ESRCH") void onSignal("SIGHUP"); } }, 500);
+
+function continuation({ freshProcess }) {
+  if (!artifactPackage) return "Continue the interrupted review. Return only the required JSON verdict.";
+  const missing = [];
+  for (const item of expectedEntries) {
+    const covered = readCoverage.get(item.id);
+    for (const chunk of item.chunks) {
+      const ranges = mergeRanges(covered.chunkRanges.get(chunk.sequence));
+      const complete = chunk.lines === 0 ? covered.emptyChunks.has(chunk.sequence) : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= chunk.lines;
+      if (!complete) missing.push(chunk.path);
+    }
+  }
+  return `Continue the interrupted review. ${freshProcess ? "This is a fresh host process; no prior Read coverage is trusted. " : "Host-attested complete chunks remain valid. "}Read only these missing chunks in full: ${missing.join(", ")}. Return only the required JSON verdict.`;
+}
 
 // resume_count is a persisted lifetime budget, not a per-process retry counter.
 // A restarted runner cannot attach to an already-started recovery child. If the
@@ -336,18 +443,32 @@ if (startupResume && state.resume_count >= 1) {
   outcome = { recoveryBudgetExhausted: true, code: null };
 } else {
   if (startupResume) { state.resume_count += 1; state.phase = "resume_reserved"; persist("resuming"); }
-  outcome = await run(startupResume ? continuation : prompt, startupResume);
+  outcome = await run(startupResume ? continuation({ freshProcess: true }) : prompt, startupResume);
   if (outcome.stalled && state.session_id && state.resume_count < 1) {
     state.resume_count += 1; state.phase = "resume_reserved"; persist("resuming");
-    outcome = await run(continuation, true);
+    // Discard partial ranges; only complete host-attested chunks survive an
+    // in-process resume. This prevents cross-attempt range splicing.
+    for (const [id, coverage] of readCoverage) {
+      const item = expectedEntries.find((entry) => entry.id === id);
+      for (const chunk of item.chunks) {
+        const ranges = mergeRanges(coverage.chunkRanges.get(chunk.sequence));
+        const complete = chunk.lines === 0 ? coverage.emptyChunks.has(chunk.sequence) : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= chunk.lines;
+        if (!complete) coverage.chunkRanges.set(chunk.sequence, []);
+      }
+      coverage.failed = false;
+    }
+    outcome = await run(continuation({ freshProcess: false }), true);
   }
 }
 let output;
-if (outcome.recoveryBudgetExhausted) output = failure(mode, "claude-code-resume-budget-exhausted", { session_id: state.session_id, resume_count: state.resume_count });
-else if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { session_id: state.session_id, resume_count: state.resume_count });
-else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { session_id: state.session_id, resume_count: state.resume_count });
-else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { session_id: state.session_id, resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics });
-else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { session_id: state.session_id, resume_count: state.resume_count, ...outcome.terminal_diagnostics });
-else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", session_id: state.session_id, resume_count: state.resume_count };
+if (outcome.recoveryBudgetExhausted) output = failure(mode, "claude-code-resume-budget-exhausted", { resume_count: state.resume_count });
+else if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { resume_count: state.resume_count });
+else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { resume_count: state.resume_count });
+else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics });
+else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { resume_count: state.resume_count, ...outcome.terminal_diagnostics });
+else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count };
 persist(output.execution_status, { failure_reason: output.failure_reason, terminal_verdict_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || null)).digest("hex") });
 atomicWrite(outputFile, JSON.stringify(output, null, 2));
+atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total }));
+clearInterval(parentWatch);
+releaseLock();

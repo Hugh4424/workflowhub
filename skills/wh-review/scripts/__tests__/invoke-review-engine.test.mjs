@@ -117,16 +117,17 @@ const prompt = readFileSync(0, "utf8");
 if (!prompt.includes("Manifest content hash:") || prompt.includes("MATERIALS TEXT") || prompt.includes("CONTRACT TEXT")) process.exit(7);
 if (!process.argv.includes("--bare")) process.exit(8);
 const settingsIndex = process.argv.indexOf("--settings");
-const expectedSettings = process.env.FAKE_CLAUDE_EXPECTED_SETTINGS || join(homedir(), ".claude/settings.json");
-if (settingsIndex < 0 || process.argv[settingsIndex + 1] !== expectedSettings) process.exit(9);
-const addDirIndex = process.argv.indexOf("--add-dir");
-if (addDirIndex < 0 || addDirIndex !== process.argv.length - 2) process.exit(10);
+if (settingsIndex < 0 || !process.argv[settingsIndex + 1].endsWith("safe-settings.json")) process.exit(9);
+const safeSettings = JSON.parse(readFileSync(process.argv[settingsIndex + 1], "utf8"));
+if (safeSettings.hooks || safeSettings.enabledPlugins || safeSettings.mcpServers || !safeSettings.permissions) process.exit(12);
 const toolsIndex = process.argv.indexOf("--tools");
-if (toolsIndex < 0 || process.argv[toolsIndex + 1] !== "Read" || process.argv.includes("--allowedTools")) process.exit(11);
-const manifest = JSON.parse(readFileSync(join(process.argv[addDirIndex + 1], "manifest.json"), "utf8"));
+const allowedToolsIndex = process.argv.indexOf("--allowedTools");
+const allowed = allowedToolsIndex < 0 ? "" : process.argv[allowedToolsIndex + 1];
+if (toolsIndex < 0 || process.argv[toolsIndex + 1] !== "Read" || process.argv.includes("--add-dir") || !/^Read\\(\\/\\/[^)]+\\/\\*\\*\\)$/.test(allowed) || !allowed.includes(process.cwd().replace(/^\\//, ""))) process.exit(11);
+const manifest = JSON.parse(readFileSync(join(process.cwd(), "manifest.json"), "utf8"));
 const coverage = manifest.entries.map(({id, sha256}) => ({id, sha256, status:"read", evidence:"fake read evidence"}));
 for (const [entryIndex, entry] of manifest.entries.entries()) for (const chunk of entry.chunks) {
-  const toolId = "read-"+entryIndex+"-"+chunk.sequence, path=join(process.argv[addDirIndex + 1],chunk.path);
+  const toolId = "read-"+entryIndex+"-"+chunk.sequence, path=join(process.cwd(),chunk.path);
   const source = readFileSync(path,"utf8"), sourceLines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,""));
   const content = sourceLines.map((line,lineIndex)=>String(lineIndex+1)+"\\t"+line).join("\\n");
   process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:toolId,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,chunk.lines)}}]}})+"\\n");
@@ -239,6 +240,14 @@ describe("discoverRunner", () => {
     expect(result).toBe("/x/y/3rd-review/scripts/run-heterologous-review.mjs");
   });
 
+  it("an explicit non-Claude THIRD_REVIEW_RUNNER wins over WH_REVIEW_PROVIDER=claude-code", () => {
+    expect(discoverRunner({ env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "/explicit/custom.mjs" } })).toBe("/explicit/custom.mjs");
+  });
+
+  it("an explicit THIRD_REVIEW_RUNNER=claude-code still selects Claude", () => {
+    expect(discoverRunner({ env: { WH_REVIEW_PROVIDER: "codex", THIRD_REVIEW_RUNNER: "claude-code" } })).toMatch(/claude-code-reviewer\.mjs$/);
+  });
+
   it("no machine-specific absolute path is hardcoded in the module source", () => {
     const src = readFileSync(new URL("../invoke-review-engine.mjs", import.meta.url), "utf8");
     expect(src).not.toMatch(/\/Users\//);
@@ -291,13 +300,13 @@ describe("invokeReviewEngine — success path", () => {
     expect(artifact.synthetic).toBeUndefined();
   });
 
-  it("runs the built-in Claude Code runner through wh-review when WH_REVIEW_PROVIDER=claude-code", () => {
+  it("runs the built-in Claude Code runner through wh-review when WH_REVIEW_PROVIDER=claude-code", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude();
     const materials = "MATERIALS TEXT";
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = invokeReviewEngine({
+      const result = await invokeReviewEngine({
         taskId: TASK_ID,
         stage: STAGE,
         reviewFlowId: REVIEW_FLOW_ID,
@@ -341,23 +350,24 @@ const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdi
     expect(readFileSync(captured, "utf8")).toBe(JSON.stringify({ mode, contract, materials, input_hash: inputHash }));
   });
 
-  it("uses per-source immutable entries for Claude and preserves the aggregate context", () => {
+  it("uses canonical per-source immutable entries for Claude without duplicating aggregate content", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN, fakeClaude = writeFakeClaude();
     const spec = join(stubDir, "spec.md"), decision = join(stubDir, "decision.md"); writeFileSync(spec, "SPEC\n"); writeFileSync(decision, "DECISION\n");
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = invokeReviewEngine({ taskId: TASK_ID, stage: "build-spec", reviewFlowId: REVIEW_FLOW_ID, totalRound: 32, mode: "full", contract: "C", materials: "LEGACY AGGREGATE MUST NOT ENTER PACKAGE", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: "build-spec", reviewFlowId: REVIEW_FLOW_ID, totalRound: 32, mode: "full", contract: "C", materials: "LEGACY AGGREGATE MUST NOT ENTER PACKAGE", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }], supplementaryContext: "ONLY NEW CONTEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
       expect(result.verdict).toBe("pass");
       const packages = readdirSync(join(root, TASK_ID, "reviews", ".claude-review-packages"));
       const manifest = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], "manifest.json"), "utf8"));
-      expect(manifest.entries.filter(({ role }) => role === "materials").map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"], ["context:aggregate", "material_context"]]);
+      expect(manifest.entries.filter(({ role }) => role === "materials").map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"], ["context:supplementary", "supplementary_context"]]);
       expect(manifest.entries.some(({ kind }) => kind === "material_snapshot")).toBe(false);
-      const context = manifest.entries.find(({ id }) => id === "context:aggregate");
-      expect(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], context.path), "utf8")).toBe("LEGACY AGGREGATE MUST NOT ENTER PACKAGE");
+      const context = manifest.entries.find(({ id }) => id === "context:supplementary");
+      expect(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], context.path), "utf8")).toBe("ONLY NEW CONTEXT");
+      expect(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], "manifest.json"), "utf8")).not.toContain("LEGACY AGGREGATE");
     } finally { savedClaudeBin === undefined ? delete process.env.CLAUDE_CODE_BIN : process.env.CLAUDE_CODE_BIN = savedClaudeBin; }
   });
 
-  it("resumes one stalled Claude stream without resending the original materials", () => {
+  it("resumes one stalled Claude stream without resending the original materials", async () => {
     const saved = { bin: process.env.CLAUDE_CODE_BIN, idle: process.env.CLAUDE_CODE_REVIEW_IDLE_MS, marker: process.env.FAKE_CLAUDE_MARKER };
     const marker = join(stubDir, "resume-marker");
     const fakeClaude = join(stubDir, "fake-resumable-claude.mjs");
@@ -371,10 +381,9 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
   setInterval(() => {}, 1000);
 } else {
   if (!process.argv.includes("--resume") || input.includes("MATERIALS TEXT")) process.exit(12);
-  const addDir = process.argv.indexOf("--add-dir");
-  const manifest = JSON.parse(readFileSync(process.argv[addDir+1]+"/manifest.json","utf8"));
+  const manifest = JSON.parse(readFileSync(process.cwd()+"/manifest.json","utf8"));
   const artifactCoverage = manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"resumed read"}));
-  for (const [i,e] of manifest.entries.entries()) for(const c of e.chunks){ const id="resume-read-"+i+"-"+c.sequence,path=process.argv[addDir+1]+"/"+c.path,source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n"); process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}})+"\\n"); process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}})+"\\n"); }
+  for (const [i,e] of manifest.entries.entries()) for(const c of e.chunks){ const id="resume-read-"+i+"-"+c.sequence,path=process.cwd()+"/"+c.path,source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n"); process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}})+"\\n"); process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}})+"\\n"); }
   process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed",skillResults:[],artifactCoverage}}) + "\\n");
 }
 `);
@@ -383,22 +392,23 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     process.env.CLAUDE_CODE_REVIEW_IDLE_MS = "1000";
     process.env.FAKE_CLAUDE_MARKER = marker;
     try {
-      const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 26, mode: "full", contract: "CONTRACT TEXT", materials: "MATERIALS TEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 26, mode: "full", contract: "CONTRACT TEXT", materials: "MATERIALS TEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
       const artifact = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-26.raw.json`), "utf8"));
       expect(result, JSON.stringify(artifact)).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
-      expect(artifact).toMatchObject({ execution_status: "completed", session_id: "resume-session", resume_count: 1, synthetic: false });
+      expect(artifact).toMatchObject({ execution_status: "completed", resume_count: 1, synthetic: false });
+      expect(artifact.session_id).toBeUndefined();
     } finally {
       for (const [key, value] of Object.entries({ CLAUDE_CODE_BIN: saved.bin, CLAUDE_CODE_REVIEW_IDLE_MS: saved.idle, FAKE_CLAUDE_MARKER: saved.marker })) value === undefined ? delete process.env[key] : process.env[key] = value;
     }
   });
 
-  it("fails a stalled Claude stream when no session id was observed", () => {
+  it("fails a stalled Claude stream when no session id was observed", async () => {
     const savedBin = process.env.CLAUDE_CODE_BIN, savedIdle = process.env.CLAUDE_CODE_REVIEW_IDLE_MS;
     const fakeClaude = join(stubDir, "fake-stalled-claude.mjs");
     writeFileSync(fakeClaude, `#!/usr/bin/env node\nprocess.on("SIGINT",()=>process.exit(0)); setInterval(()=>{},1000);`); chmodSync(fakeClaude, 0o755);
     process.env.CLAUDE_CODE_BIN = fakeClaude; process.env.CLAUDE_CODE_REVIEW_IDLE_MS = "50";
     try {
-      const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 27, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 27, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
       expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
       expect(JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-27.raw.json`), "utf8"))).toMatchObject({ execution_status: "failed", failure_reason: "claude-code-idle-without-session", synthetic: true });
     } finally { savedBin === undefined ? delete process.env.CLAUDE_CODE_BIN : process.env.CLAUDE_CODE_BIN = savedBin; savedIdle === undefined ? delete process.env.CLAUDE_CODE_REVIEW_IDLE_MS : process.env.CLAUDE_CODE_REVIEW_IDLE_MS = savedIdle; }
@@ -417,7 +427,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
       resolutionSummary: "structured string parsed",
       skillResults: [],
     })],
-  ])("parses Claude Code's real structured_output envelope when it contains %s", (_shape, structuredOutput) => {
+  ])("parses Claude Code's real structured_output envelope when it contains %s", async (_shape, structuredOutput) => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude({
       resultText: JSON.stringify({ pass: false }),
@@ -425,7 +435,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     });
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = invokeReviewEngine({
+      const result = await invokeReviewEngine({
         taskId: TASK_ID,
         stage: STAGE,
         reviewFlowId: REVIEW_FLOW_ID,
@@ -449,12 +459,12 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     }
   });
 
-  it("always adds --bare for Claude Code reviews", () => {
+  it("always adds --bare for Claude Code reviews", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude();
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = invokeReviewEngine({
+      const result = await invokeReviewEngine({
         taskId: TASK_ID,
         stage: STAGE,
         reviewFlowId: REVIEW_FLOW_ID,
@@ -473,7 +483,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     }
   });
 
-  it("passes CLAUDE_CODE_SETTINGS to Claude Code when overridden", () => {
+  it("sanitizes CLAUDE_CODE_SETTINGS before passing it to Claude Code", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const savedSettings = process.env.CLAUDE_CODE_SETTINGS;
     const savedExpectedSettings = process.env.FAKE_CLAUDE_EXPECTED_SETTINGS;
@@ -481,9 +491,9 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     const customSettings = join(root, "claude-settings.json");
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     process.env.CLAUDE_CODE_SETTINGS = customSettings;
-    process.env.FAKE_CLAUDE_EXPECTED_SETTINGS = customSettings;
+    writeFileSync(customSettings, JSON.stringify({ model: "test-model", env: { ANTHROPIC_BASE_URL: "http://proxy", SECRET_OTHER: "drop" }, hooks: { PreToolUse: [] }, enabledPlugins: { evil: true }, permissions: { allow: ["Read(/**)"] } }));
     try {
-      const result = invokeReviewEngine({
+      const result = await invokeReviewEngine({
         taskId: TASK_ID,
         stage: STAGE,
         reviewFlowId: REVIEW_FLOW_ID,
@@ -506,12 +516,12 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     }
   });
 
-  it("rejects Claude Code's non-contract {pass:true} output instead of inventing a pass", () => {
+  it("rejects Claude Code's non-contract {pass:true} output instead of inventing a pass", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude({ resultText: JSON.stringify({ pass: true, findings: [] }) });
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = invokeReviewEngine({
+      const result = await invokeReviewEngine({
         taskId: TASK_ID,
         stage: STAGE,
         reviewFlowId: REVIEW_FLOW_ID,
@@ -534,7 +544,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     }
   });
 
-  it("preserves executed and reviewer-decided not_applicable skillResults from the Claude verdict", () => {
+  it("preserves executed and reviewer-decided not_applicable skillResults from the Claude verdict", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude({ resultObject: {
       verdict: "pass",
@@ -548,7 +558,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     } });
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = invokeReviewEngine({
+      const result = await invokeReviewEngine({
         taskId: TASK_ID,
         stage: STAGE,
         reviewFlowId: REVIEW_FLOW_ID,
@@ -568,6 +578,30 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("uses a path-independent Claude input hash and changes it when canonical source bytes change", async () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN, fakeClaude = writeFakeClaude();
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    const otherRoot = mkdtempSync(join(tmpdir(), "invoke-review-engine-other-"));
+    try {
+      const sourceA = join(stubDir, "hash-a.md"), sourceBRoot = mkdtempSync(join(tmpdir(), "source-copy-")), sourceB = join(sourceBRoot, "hash-b.md");
+      writeFileSync(sourceA, "same canonical bytes\n"); writeFileSync(sourceB, "same canonical bytes\n");
+      for (const taskRoot of [root, otherRoot]) mkdirSync(join(taskRoot, TASK_ID, "reviews"), { recursive: true });
+      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 1, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceA }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 1, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceB }], taskTrackingRoot: otherRoot, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const stateName = (taskRoot) => readdirSync(join(taskRoot, TASK_ID, "reviews", ".claude-review-state"))[0];
+      expect(stateName(root).slice(-64)).toBe(stateName(otherRoot).slice(-64));
+      writeFileSync(sourceA, "changed canonical bytes\n");
+      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 2, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceA }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const hashes = readdirSync(join(root, TASK_ID, "reviews", ".claude-review-state")).map((name) => name.slice(-64));
+      expect(new Set(hashes).size).toBe(2);
+      rmSync(sourceBRoot, { recursive: true, force: true });
+    } finally {
+      savedClaudeBin === undefined ? delete process.env.CLAUDE_CODE_BIN : process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+      const makeRemovable = (path) => { let stat; try { stat = lstatSync(path); } catch { return; } if (!stat.isDirectory() || stat.isSymbolicLink()) { try { chmodSync(path, 0o644); } catch {} return; } chmodSync(path, 0o755); for (const name of readdirSync(path)) makeRemovable(join(path, name)); };
+      makeRemovable(otherRoot); rmSync(otherRoot, { recursive: true, force: true });
     }
   });
 
@@ -682,10 +716,10 @@ describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
     expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":"review"} -->', emptySkillRoot)?.message).toMatch(/required-skill-unavailable/);
   });
 
-  it("maps artifact package publication errors to structured not_executed", () => {
+  it("maps artifact package publication errors to structured not_executed", async () => {
     const reviews = join(root, TASK_ID, "reviews"); mkdirSync(reviews, { recursive: true });
     writeFileSync(join(reviews, ".claude-review-packages"), "blocks package directory");
-    const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 31, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+    const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 31, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
     expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
     expect(JSON.parse(readFileSync(join(reviews, `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-31.raw.json`), "utf8"))).toMatchObject({ synthetic: true, failure_reason: "artifact-package-publish-failed" });
   });
@@ -1084,7 +1118,7 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
     expect(payload.mode).toBe("full");
     expect(payload.contract).toBe(readFileSync(record.contract_path, "utf8"));
     expect(payload.materials).toContain("spec content round1");
-    expect(payload.materials).toContain("supplementary context r1");
+    expect(payload.supplementaryContext).toBe("supplementary context r1");
 
     // this round's own snapshot must now exist for round 2 to diff against
     expect(existsSync(join(root, TASK_ID, "reviews", "snapshots", `spec-${REVIEW_FLOW_ID}-r1.md`))).toBe(true);
@@ -1108,7 +1142,7 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
     expect(payload.materials).toContain("- line2");
     expect(payload.materials).toContain("+ line2-changed");
     expect(payload.materials).not.toContain("line1\nline2-changed\n\n---"); // not full text dumped
-    expect(payload.materials).toContain("supplementary context r2");
+    expect(payload.supplementaryContext).toBe("supplementary context r2");
   });
 
   it("non-doc review object: materials is currentContent in full, plus a materials baseline is persisted (Contract 12)", () => {
@@ -1128,7 +1162,7 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
     });
 
     expect(payload.materials).toContain("diff --git a/foo.js b/foo.js");
-    expect(payload.materials).toContain("supplementary context");
+    expect(payload.supplementaryContext).toBe("supplementary context");
     expect(
       existsSync(join(root, TASK_ID, "reviews", `materials-baseline-${STAGE}-${REVIEW_FLOW_ID}-r1.json`))
     ).toBe(true);
