@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const SEVERITIES = new Set(["blocking", "important", "minor"]);
@@ -40,8 +42,16 @@ function isVerdict(value) {
 function parseVerdict(stdout) {
   try {
     const envelope = JSON.parse(stdout);
-    const value = typeof envelope?.result === "string" ? JSON.parse(envelope.result) : envelope;
-    return isVerdict(value) ? value : null;
+    for (const candidate of [envelope?.structured_output, envelope?.result, envelope]) {
+      if (candidate === undefined) continue;
+      try {
+        const value = typeof candidate === "string" ? JSON.parse(candidate) : candidate;
+        if (isVerdict(value)) return value;
+      } catch {
+        // Try the next supported Claude output shape.
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -126,7 +136,16 @@ ${payload.materials}`;
 const claudeBin = process.env.CLAUDE_CODE_BIN || "claude";
 const proc = spawnSync(
   claudeBin,
-  ["-p", "--bare", "--output-format", "json", "--json-schema", JSON.stringify(schema)],
+  [
+    "-p",
+    "--bare",
+    "--settings",
+    process.env.CLAUDE_CODE_SETTINGS || join(homedir(), ".claude/settings.json"),
+    "--output-format",
+    "json",
+    "--json-schema",
+    JSON.stringify(schema),
+  ],
   {
     input: prompt,
     encoding: "utf8",

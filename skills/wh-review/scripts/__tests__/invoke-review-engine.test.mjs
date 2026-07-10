@@ -80,19 +80,42 @@ function writeStubRunner(body) {
   return stubPath;
 }
 
-function writeFakeClaude({ resultObject, resultText } = {}) {
+function writeFakeClaude({ resultObject, resultText, structuredOutput } = {}) {
   const fakePath = join(stubDir, "fake-claude.mjs");
   const result = resultText ?? JSON.stringify(resultObject ?? {
     verdict: "pass",
     findings: [],
     resolutionSummary: "fake claude review passed",
   });
+  const envelope = structuredOutput === undefined
+    ? { type: "result", result }
+    : {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        duration_ms: 1250,
+        duration_api_ms: 1100,
+        num_turns: 1,
+        result,
+        session_id: "fake-session-id",
+        total_cost_usd: 0.01,
+        usage: { input_tokens: 10, output_tokens: 20 },
+        modelUsage: {},
+        permission_denials: [],
+        structured_output: structuredOutput,
+        uuid: "fake-uuid",
+      };
   writeFileSync(fakePath, `#!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 const prompt = readFileSync(0, "utf8");
 if (!prompt.includes("## REVIEW CONTRACT") || !prompt.includes("## MATERIALS")) process.exit(7);
 if (!process.argv.includes("--bare")) process.exit(8);
-process.stdout.write(JSON.stringify({ type: "result", result: ${JSON.stringify(result)} }));
+const settingsIndex = process.argv.indexOf("--settings");
+const expectedSettings = process.env.FAKE_CLAUDE_EXPECTED_SETTINGS || join(homedir(), ".claude/settings.json");
+if (settingsIndex < 0 || process.argv[settingsIndex + 1] !== expectedSettings) process.exit(9);
+process.stdout.write(${JSON.stringify(JSON.stringify(envelope))});
 `);
   chmodSync(fakePath, 0o755);
   return fakePath;
@@ -273,6 +296,49 @@ describe("invokeReviewEngine — success path", () => {
     }
   });
 
+  it.each([
+    ["an object", {
+      verdict: "pass",
+      findings: [],
+      resolutionSummary: "structured object parsed",
+    }],
+    ["a JSON string", JSON.stringify({
+      verdict: "pass",
+      findings: [],
+      resolutionSummary: "structured string parsed",
+    })],
+  ])("parses Claude Code's real structured_output envelope when it contains %s", (_shape, structuredOutput) => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({
+      resultText: JSON.stringify({ pass: false }),
+      structuredOutput,
+    });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 25,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-25.raw.json`);
+      const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+      expect(artifact.provider).toBe("claude-code");
+      expect(artifact.trueCrossEngine).toBe(true);
+      expect(artifact.resolutionSummary).toMatch(/^structured (object|string) parsed$/);
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
   it("always adds --bare for Claude Code reviews", () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude();
@@ -294,6 +360,39 @@ describe("invokeReviewEngine — success path", () => {
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("passes CLAUDE_CODE_SETTINGS to Claude Code when overridden", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const savedSettings = process.env.CLAUDE_CODE_SETTINGS;
+    const savedExpectedSettings = process.env.FAKE_CLAUDE_EXPECTED_SETTINGS;
+    const fakeClaude = writeFakeClaude();
+    const customSettings = join(root, "claude-settings.json");
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    process.env.CLAUDE_CODE_SETTINGS = customSettings;
+    process.env.FAKE_CLAUDE_EXPECTED_SETTINGS = customSettings;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 24,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+      if (savedSettings === undefined) delete process.env.CLAUDE_CODE_SETTINGS;
+      else process.env.CLAUDE_CODE_SETTINGS = savedSettings;
+      if (savedExpectedSettings === undefined) delete process.env.FAKE_CLAUDE_EXPECTED_SETTINGS;
+      else process.env.FAKE_CLAUDE_EXPECTED_SETTINGS = savedExpectedSettings;
     }
   });
 
