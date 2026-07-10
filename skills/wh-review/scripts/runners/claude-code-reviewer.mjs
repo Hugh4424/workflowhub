@@ -240,7 +240,7 @@ const maxAttempts = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_ATTEMPTS |
 let lastFailure = null;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const proc = runClaude({ claudeBin, prompt, schema });
-  if (proc.signal) {
+  if (proc.signal || proc.error?.code === "ETIMEDOUT") {
     lastFailure = { mode, reason: "claude-code-timeout", status: proc.status, stderr: proc.stderr, raw: proc.stdout, attempts: attempt };
     break;
   }

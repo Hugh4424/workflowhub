@@ -413,6 +413,10 @@ export function invokeReviewEngine({
     proc = spawnSync("node", [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`], {
       timeout: runnerTimeoutMs,
       encoding: "utf8",
+      // Runner selection and runner behavior both depend on the invocation
+      // environment. Without this, CLAUDE_CODE_REVIEW_TIMEOUT_MS only affects
+      // the outer guard while the Claude runner silently uses its process default.
+      env: { ...process.env, ...env },
     });
 
     // Node kills a timed-out child with a signal; status is left null.
