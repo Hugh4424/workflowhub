@@ -3,6 +3,7 @@ import { chmodSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, s
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createArtifactReviewPackage, isContainedRelativePath, verifyArtifactReviewPackage } from "../artifact-review-package.mjs";
 
 const roots = [];
@@ -26,6 +27,7 @@ describe("artifact review package", () => {
     expect(readFileSync(join(first.packageRoot, "materials.md"), "utf8")).toBe(params.materials);
     expect(readFileSync(join(first.packageRoot, "skills/review.md"), "utf8")).toBe("完整 skill\n");
     expect(first.manifest.entries.map(({ lines }) => lines)).toEqual([1, 1, 1]);
+    expect(first.manifest.entries.every((item) => Buffer.concat(item.chunks.map((chunk) => readFileSync(join(first.packageRoot, chunk.path)))).equals(readFileSync(join(first.packageRoot, item.path))))).toBe(true);
     expect(lstatSync(first.packageRoot).mode & 0o777).toBe(0o555);
     expect(lstatSync(first.manifestPath).mode & 0o777).toBe(0o444);
   });
@@ -64,13 +66,13 @@ describe("artifact review package", () => {
   it("publishes one verified winner under concurrent content-addressed writers", async () => {
     const reviewsRoot = makeRoot();
     const moduleUrl = new URL("../artifact-review-package.mjs", import.meta.url).href;
-    const script = `import {createArtifactReviewPackage} from ${JSON.stringify(moduleUrl)};const p=createArtifactReviewPackage({reviewsRoot:process.argv[1],stage:"build-spec",reviewFlowId:"race",totalRound:1,contract:"C",materials:"M".repeat(1000000)});process.stdout.write(p.packageRoot);`;
+    const script = `import {createArtifactReviewPackage} from ${JSON.stringify(moduleUrl)};const p=createArtifactReviewPackage({reviewsRoot:process.argv[1],stage:"build-spec",reviewFlowId:"race",totalRound:1,contract:"C",materials:"M\\n".repeat(400000)});process.stdout.write(p.packageRoot);`;
     const run = () => new Promise((resolvePromise, reject) => { const child = spawn(process.execPath, ["--input-type=module", "-e", script, reviewsRoot]); let out = "", err = ""; child.stdout.on("data", (chunk) => { out += chunk; }); child.stderr.on("data", (chunk) => { err += chunk; }); child.on("close", (code) => code === 0 ? resolvePromise(out) : reject(new Error(err))); });
     const winners = await Promise.all([run(), run(), run(), run()]);
     expect(new Set(winners).size).toBe(1);
     const [packageName] = readdirSync(join(reviewsRoot, ".claude-review-packages"));
     const packageRoot = join(reviewsRoot, ".claude-review-packages", packageName);
-    expect(verifyArtifactReviewPackage({ packageRoot, manifestPath: join(packageRoot, "manifest.json") }).manifest.entries[1].bytes).toBe(1000000);
+    expect(verifyArtifactReviewPackage({ packageRoot, manifestPath: join(packageRoot, "manifest.json") }).manifest.entries[1].bytes).toBe(800000);
   });
 
   it("snapshots per-source material descriptors into immutable independent entries", () => {
@@ -79,15 +81,31 @@ describe("artifact review package", () => {
     writeFileSync(spec, "spec original\n"); writeFileSync(decision, "decision original\n");
     const pkg = createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "sources", totalRound: 1, contract: "C", materials: "legacy aggregate ignored", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }] });
     const sources = pkg.manifest.entries.filter(({ role }) => role === "materials");
-    expect(sources.map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"]]);
+    expect(sources.map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"], ["context:aggregate", "material_context"]]);
     writeFileSync(spec, "mutated after snapshot\n");
     expect(readFileSync(join(pkg.packageRoot, sources.find(({ id }) => id === "source:spec").path), "utf8")).toBe("spec original\n");
     expect(pkg.manifest.entries.some(({ kind }) => kind === "material_snapshot")).toBe(false);
+    expect(readFileSync(join(pkg.packageRoot, sources.find(({ id }) => id === "context:aggregate").path), "utf8")).toBe("legacy aggregate ignored");
   });
 
   it("rejects symlink material source descriptors", () => {
     const reviewsRoot = makeRoot(), sourceRoot = makeRoot(), target = join(sourceRoot, "target.md"), link = join(sourceRoot, "link.md");
     writeFileSync(target, "source\n"); symlinkSync(target, link);
-    expect(() => createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "source-link", totalRound: 1, contract: "C", materials: "M", materialSources: [{ id: "source:link", path: link }] })).toThrow(/source is not a regular file/);
+    expect(() => createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "source-link", totalRound: 1, contract: "C", materials: "M", materialSources: [{ id: "source:link", path: link }] })).toThrow(/ELOOP|opened regular file/);
+  });
+
+  it("rejects FIFO and device material sources before reading", () => {
+    const reviewsRoot = makeRoot(), sourceRoot = makeRoot(), fifo = join(sourceRoot, "source.fifo"); execFileSync("mkfifo", [fifo]);
+    for (const path of [fifo, "/dev/null"]) expect(() => createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "unsafe-source", totalRound: 1, contract: "C", materials: "M", materialSources: [{ id: "source:unsafe", path }] })).toThrow(/opened regular file/);
+  });
+
+  it("groups short lines near 8KiB and splits long lines at Unicode codepoint boundaries", () => {
+    const short = "short review line\n".repeat(45000), long = "汉".repeat(2501);
+    const pkg = createArtifactReviewPackage({ reviewsRoot: makeRoot(), stage: "build-spec", reviewFlowId: "chunks", totalRound: 1, contract: "C", materials: `${short}${long}` });
+    const material = pkg.manifest.entries.find(({ id }) => id === "materials");
+    expect(material.chunks).toHaveLength(102);
+    const reconstructed = Buffer.concat(material.chunks.map((chunk) => readFileSync(join(pkg.packageRoot, chunk.path))));
+    expect(reconstructed.equals(readFileSync(join(pkg.packageRoot, material.path)))).toBe(true);
+    for (const chunk of material.chunks) for (const line of readFileSync(join(pkg.packageRoot, chunk.path), "utf8").split("\n")) expect([...line].length).toBeLessThanOrEqual(1000);
   });
 });

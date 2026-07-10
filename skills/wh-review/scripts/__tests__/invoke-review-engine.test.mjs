@@ -125,11 +125,11 @@ const toolsIndex = process.argv.indexOf("--tools");
 if (toolsIndex < 0 || process.argv[toolsIndex + 1] !== "Read" || process.argv.includes("--allowedTools")) process.exit(11);
 const manifest = JSON.parse(readFileSync(join(process.argv[addDirIndex + 1], "manifest.json"), "utf8"));
 const coverage = manifest.entries.map(({id, sha256}) => ({id, sha256, status:"read", evidence:"fake read evidence"}));
-for (const [index, entry] of manifest.entries.entries()) {
-  const toolId = "read-"+index;
-  const source = readFileSync(join(process.argv[addDirIndex + 1],entry.path),"utf8"), sourceLines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,""));
+for (const [entryIndex, entry] of manifest.entries.entries()) for (const chunk of entry.chunks) {
+  const toolId = "read-"+entryIndex+"-"+chunk.sequence, path=join(process.argv[addDirIndex + 1],chunk.path);
+  const source = readFileSync(path,"utf8"), sourceLines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,""));
   const content = sourceLines.map((line,lineIndex)=>String(lineIndex+1)+"\\t"+line).join("\\n");
-  process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:toolId,name:"Read",input:{file_path:join(process.argv[addDirIndex + 1],entry.path),offset:1,limit:Math.max(1,entry.lines)}}]}})+"\\n");
+  process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:toolId,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,chunk.lines)}}]}})+"\\n");
   process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:toolId,content}]}})+"\\n");
 }
 const envelope = ${JSON.stringify(envelope)};
@@ -341,7 +341,7 @@ const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdi
     expect(readFileSync(captured, "utf8")).toBe(JSON.stringify({ mode, contract, materials, input_hash: inputHash }));
   });
 
-  it("uses per-source immutable entries for Claude while ignoring the legacy aggregate snapshot", () => {
+  it("uses per-source immutable entries for Claude and preserves the aggregate context", () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN, fakeClaude = writeFakeClaude();
     const spec = join(stubDir, "spec.md"), decision = join(stubDir, "decision.md"); writeFileSync(spec, "SPEC\n"); writeFileSync(decision, "DECISION\n");
     process.env.CLAUDE_CODE_BIN = fakeClaude;
@@ -350,8 +350,10 @@ const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdi
       expect(result.verdict).toBe("pass");
       const packages = readdirSync(join(root, TASK_ID, "reviews", ".claude-review-packages"));
       const manifest = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], "manifest.json"), "utf8"));
-      expect(manifest.entries.filter(({ role }) => role === "materials").map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"]]);
+      expect(manifest.entries.filter(({ role }) => role === "materials").map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"], ["context:aggregate", "material_context"]]);
       expect(manifest.entries.some(({ kind }) => kind === "material_snapshot")).toBe(false);
+      const context = manifest.entries.find(({ id }) => id === "context:aggregate");
+      expect(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], context.path), "utf8")).toBe("LEGACY AGGREGATE MUST NOT ENTER PACKAGE");
     } finally { savedClaudeBin === undefined ? delete process.env.CLAUDE_CODE_BIN : process.env.CLAUDE_CODE_BIN = savedClaudeBin; }
   });
 
@@ -372,7 +374,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
   const addDir = process.argv.indexOf("--add-dir");
   const manifest = JSON.parse(readFileSync(process.argv[addDir+1]+"/manifest.json","utf8"));
   const artifactCoverage = manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"resumed read"}));
-  for (const [i,e] of manifest.entries.entries()) { const id="resume-read-"+i,path=process.argv[addDir+1]+"/"+e.path,source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n"); process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,e.lines)}}]}})+"\\n"); process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}})+"\\n"); }
+  for (const [i,e] of manifest.entries.entries()) for(const c of e.chunks){ const id="resume-read-"+i+"-"+c.sequence,path=process.argv[addDir+1]+"/"+c.path,source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n"); process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}})+"\\n"); process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}})+"\\n"); }
   process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed",skillResults:[],artifactCoverage}}) + "\\n");
 }
 `);

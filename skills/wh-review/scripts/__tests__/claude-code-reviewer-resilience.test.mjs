@@ -3,6 +3,7 @@ import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync,
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { createArtifactReviewPackage } from "../artifact-review-package.mjs";
 
 const runner = resolve("skills/wh-review/scripts/runners/claude-code-reviewer.mjs");
@@ -23,7 +24,9 @@ function fixture(script, { state, contract = "C", artifact = false, materials = 
   let artifactPackage;
   if (artifact) {
     artifactPackage = createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "fixture", totalRound: 1, contract, materials });
-    writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", artifact_manifest: { package_root: artifactPackage.packageRoot, manifest_path: artifactPackage.manifestPath, content_hash: artifactPackage.manifest.content_hash, entries: artifactPackage.manifest.entries } }));
+    const artifact_manifest = { package_root: artifactPackage.packageRoot, manifest_path: artifactPackage.manifestPath, content_hash: artifactPackage.manifest.content_hash, entries: artifactPackage.manifest.entries };
+    const input_hash = createHash("sha256").update(JSON.stringify({ mode: "full", artifact_manifest })).digest("hex");
+    writeFileSync(diff, JSON.stringify({ input_hash, mode: "full", artifact_manifest }));
   } else writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", contract, materials: "M" }));
   if (state) writeFileSync(join(stateDir, "state.json"), JSON.stringify(state));
   const fake = join(root, "fake-claude.mjs"); writeFileSync(fake, `#!/usr/bin/env node\n${script}`); chmodSync(fake, 0o755);
@@ -45,7 +48,7 @@ afterEach(() => { for (const root of roots.splice(0)) { makeRemovable(root); rmS
 const fullReadEvents = `
 const addDir=process.argv.indexOf("--add-dir");
 const manifest=JSON.parse(readFileSync(join(process.argv[addDir+1],"manifest.json"),"utf8"));
-for(const [i,e] of manifest.entries.entries()){const id="read-"+i,path=join(process.argv[addDir+1],e.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,e.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
+for(const [i,e] of manifest.entries.entries())for(const c of e.chunks){const id="read-"+i+"-"+c.sequence,path=join(process.argv[addDir+1],c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
   it("does not resume again across restart after the lifetime budget was consumed", async () => {
@@ -171,9 +174,9 @@ const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"r
 console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`;
     const f = fixture(script, { artifact: true });
     const result = await execute(f);
-    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", synthetic: false });
+    expect(result.output, readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).toMatchObject({ verdict: "pass", execution_status: "completed", synthetic: false });
     expect(result.output.artifactCoverage.every(({ evidence }) => evidence.startsWith("host-attested Read read"))).toBe(true);
-    expect(Object.keys(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8")).artifact_coverage)).toEqual(f.artifactPackage.manifest.entries.map(({ id }) => id));
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8")).artifact_coverage).toBeUndefined();
     const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
     expect(journal).not.toContain("MATERIAL SECRET");
     expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
@@ -194,7 +197,7 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     const f = fixture("", { artifact: true });
     const first = f.artifactPackage.manifest.entries[0];
     const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "read blocked", skillResults: [], artifactCoverage: [{ id: first.id, sha256: first.sha256, status: "failed", evidence: "Read tool failed" }] };
-    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs"; import {join} from "node:path"; const addDir=process.argv.indexOf("--add-dir"),manifest=JSON.parse(readFileSync(join(process.argv[addDir+1],"manifest.json"),"utf8")),e=manifest.entries[0],id="failed-read"; console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:join(process.argv[addDir+1],e.path),offset:1,limit:Math.max(1,e.lines)}}]}})); console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,is_error:true,content:"SECRET FAILURE"}]}})); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`);
+    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs"; import {join} from "node:path"; const addDir=process.argv.indexOf("--add-dir"),manifest=JSON.parse(readFileSync(join(process.argv[addDir+1],"manifest.json"),"utf8")),e=manifest.entries[0],c=e.chunks[0],id="failed-read"; console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:join(process.argv[addDir+1],c.path),offset:1,limit:Math.max(1,c.lines)}}]}})); console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,is_error:true,content:"SECRET FAILURE"}]}})); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`);
     const result = await execute(f);
     expect(result.output).toMatchObject({ verdict: "escalate_to_human", execution_status: "completed", synthetic: false });
   });
@@ -222,20 +225,34 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(result.output).toMatchObject({ failure_reason: "artifact-coverage-unattested", synthetic: true });
   });
 
-  it("restores safe coverage ranges across a resumed runner process", async () => {
+  it("does not trust persisted coverage across a resumed runner process", async () => {
     const f = fixture("", { artifact: true });
-    const artifact_coverage = Object.fromEntries(f.artifactPackage.manifest.entries.map((entry) => [entry.id, { ranges: entry.lines ? [[1, entry.lines]] : [], failed: false, emptyRead: entry.lines === 0 }]));
-    writeFileSync(join(f.stateDir, "state.json"), JSON.stringify({ input_hash: "fixed-hash", session_id: "resume-safe", resume_count: 0, attempt: 1, status: "running", artifact_coverage, artifact_manifest_hash: f.artifactPackage.manifest.content_hash }));
+    const payload = JSON.parse(readFileSync(f.diff, "utf8"));
+    writeFileSync(join(f.stateDir, "state.json"), JSON.stringify({ input_hash: payload.input_hash, session_id: "resume-safe", resume_count: 0, attempt: 1, status: "running", artifact_coverage: { forged: { ranges: [[1, 999999]] } }, artifact_manifest_hash: f.artifactPackage.manifest.content_hash }));
     const artifactCoverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "resume" }));
     writeFileSync(f.fake, `#!/usr/bin/env node\nif(!process.argv.includes("--resume"))process.exit(2);console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "resumed", skillResults: [], artifactCoverage })}}));`);
     const result = await execute(f);
-    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", resume_count: 1 });
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "artifact-coverage-unattested", synthetic: true, resume_count: 1 });
+  });
+
+  it("rejects a caller-supplied artifact input hash mismatch before spawn", async () => {
+    const f = fixture("process.exit(99);", { artifact: true });
+    const payload = JSON.parse(readFileSync(f.diff, "utf8")); payload.input_hash = "0".repeat(64); writeFileSync(f.diff, JSON.stringify(payload));
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "artifact-input-hash-mismatch", synthetic: true, execution_status: "failed" });
+  });
+
+  it("accepts only a leading-whitespace system reminder after exact chunk content", async () => {
+    const f = fixture("", { artifact: true });
+    const artifactCoverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "read" }));
+    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";${fullReadEvents.replace('content}]}}));}', 'content:content+"\\n   <system-reminder>safe metadata</system-reminder>"}]}}));}')}console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "reminder", skillResults: [], artifactCoverage })}}));`);
+    const result = await execute(f); expect(result.output).toMatchObject({ verdict: "pass", synthetic: false });
   });
 
   it.each([["complete", false, "pass"], ["truncated", true, "escalate_to_human"]])("uses actual returned characters for a long single line: %s", async (_label, truncate, expectedVerdict) => {
     const f = fixture("", { artifact: true, materials: "x".repeat(5000) });
     const artifactCoverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "actual chars" }));
-    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries()){const id="default-"+i,path=join(process.argv[a+1],e.path),source=readFileSync(path,"utf8"),line=source.replace(/\\n$/u,"");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content:"1\\t"+(e.id==="materials"&&${truncate}?line.slice(0,2000):line)}]}}));}console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "long", skillResults: [], artifactCoverage })}}));`);
+    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries())for(const c of e.chunks){const id="default-"+i+"-"+c.sequence,path=join(process.argv[a+1],c.path),source=readFileSync(path,"utf8"),line=source.replace(/\\n$/u,""),bad=e.id==="materials"&&c.sequence===1&&${truncate};console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content:"1\\t"+(bad?line.slice(0,Math.max(1,line.length-1)):line)}]}}));}console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "long", skillResults: [], artifactCoverage })}}));`);
     const result = await execute(f);
     expect(result.output.verdict).toBe(expectedVerdict);
     if (truncate) expect(result.output).toMatchObject({ failure_reason: "artifact-coverage-unattested", synthetic: true });
@@ -245,7 +262,7 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
   it("rejects partial Read ranges and unknown stream event variants", async () => {
     const f = fixture("", { artifact: true, materials: "one\ntwo\nthree\n" });
     const coverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "claimed" }));
-    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries()){const id="r"+i,limit=e.id==="materials"?2:Math.max(1,e.lines),path=join(process.argv[a+1],e.path),source=readFileSync(path,"utf8"),lines=source.replace(/\\n$/u,"").split("\\n").slice(0,limit),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}console.log(JSON.stringify({type:"tool_use",id:"unknown",name:"Read",input:{file_path:join(process.argv[a+1],"materials.md"),offset:3,limit:1}}));console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "partial", skillResults: [], artifactCoverage: coverage })}}));`);
+    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries())for(const c of e.chunks){const id="r"+i+"-"+c.sequence,limit=e.id==="materials"?2:Math.max(1,c.lines),path=join(process.argv[a+1],c.path),source=readFileSync(path,"utf8"),lines=source.replace(/\\n$/u,"").split("\\n").slice(0,limit),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}console.log(JSON.stringify({type:"tool_use",id:"unknown",name:"Read",input:{file_path:join(process.argv[a+1],"materials.md"),offset:3,limit:1}}));console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "partial", skillResults: [], artifactCoverage: coverage })}}));`);
     const result = await execute(f);
     expect(result.output).toMatchObject({ failure_reason: "artifact-coverage-unattested", synthetic: true });
   });

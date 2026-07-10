@@ -12,11 +12,14 @@ import {
   renameSync,
   rmSync,
   writeFileSync,
+  constants,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 
 const SAFE_SKILL = /^[a-z0-9][a-z0-9-]*$/;
 const SAFE_SOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+const MAX_CHUNK_BYTES = 8 * 1024;
+const MAX_CHUNK_LINE_CODEPOINTS = 1000;
 
 export class ArtifactReviewPackageError extends Error {
   constructor(code, message) {
@@ -49,6 +52,38 @@ function lineCount(bytes) {
 function entry(id, role, kind, path, bytes) {
   return { id, role, kind, path, bytes: bytes.length, lines: lineCount(bytes), sha256: sha256(bytes) };
 }
+function reversibleUtf8Chunks(bytes) {
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { throw new ArtifactReviewPackageError("artifact-package-invalid", "review artifact is not valid UTF-8"); }
+  if (text === "") return [Buffer.alloc(0)];
+  const segments = [];
+  for (let start = 0; start < text.length;) {
+    const newline = text.indexOf("\n", start), end = newline < 0 ? text.length : newline + 1;
+    const physical = text.slice(start, end), body = physical.endsWith("\n") ? physical.slice(0, -1) : physical;
+    if ([...body].length <= MAX_CHUNK_LINE_CODEPOINTS && Buffer.byteLength(physical) <= MAX_CHUNK_BYTES) segments.push({ text: physical, isolated: false });
+    else {
+      let part = "", count = 0;
+      for (const character of body) {
+        if (count === MAX_CHUNK_LINE_CODEPOINTS || Buffer.byteLength(part) + Buffer.byteLength(character) > MAX_CHUNK_BYTES) { segments.push({ text: part, isolated: true }); part = ""; count = 0; }
+        part += character; count += 1;
+      }
+      if (physical.endsWith("\n")) part += "\n";
+      segments.push({ text: part, isolated: true });
+    }
+    start = end;
+  }
+  const chunks = [];
+  let aggregate = "";
+  const flush = () => { if (aggregate !== "") { chunks.push(Buffer.from(aggregate, "utf8")); aggregate = ""; } };
+  for (const segment of segments) {
+    if (segment.isolated) { flush(); chunks.push(Buffer.from(segment.text, "utf8")); }
+    else if (Buffer.byteLength(aggregate) + Buffer.byteLength(segment.text) <= MAX_CHUNK_BYTES) aggregate += segment.text;
+    else { flush(); aggregate = segment.text; }
+  }
+  flush();
+  return chunks;
+}
 function atomicWrite(path, bytes) {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
@@ -57,17 +92,20 @@ function atomicWrite(path, bytes) {
 }
 
 function exactMode(stat, mode) { return (stat.mode & 0o777) === mode; }
+function allDirs(files) {
+  const dirs = new Set();
+  for (const file of files) for (let dir = dirname(file.path); dir !== "."; dir = dirname(dir)) dirs.add(dir);
+  return [...dirs].sort((a, b) => b.length - a.length);
+}
 function sealPackage(packageRoot, files) {
   for (const file of files) chmodSync(join(packageRoot, file.path), 0o444);
   chmodSync(join(packageRoot, "manifest.json"), 0o444);
-  const dirs = [...new Set(files.map((file) => dirname(file.path)).filter((path) => path !== "."))]
-    .sort((a, b) => b.length - a.length);
-  for (const dir of dirs) chmodSync(join(packageRoot, dir), 0o555);
+  for (const dir of allDirs(files)) chmodSync(join(packageRoot, dir), 0o555);
   chmodSync(packageRoot, 0o555);
 }
 function unsealForRemoval(packageRoot, files) {
   try { chmodSync(packageRoot, 0o755); } catch {}
-  for (const dir of [...new Set(files.map((file) => dirname(file.path)).filter((path) => path !== "."))]) {
+  for (const dir of allDirs(files).reverse()) {
     try { chmodSync(join(packageRoot, dir), 0o755); } catch {}
   }
 }
@@ -101,10 +139,11 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
   } catch (error) {
     throw new ArtifactReviewPackageError("artifact-package-invalid", `invalid manifest: ${error.message}`);
   }
-  if (parsed?.version !== 3 || !Array.isArray(parsed.entries) || typeof parsed.content_hash !== "string") {
+  if (parsed?.version !== 5 || parsed.chunk_max_bytes !== MAX_CHUNK_BYTES || parsed.chunk_max_line_codepoints !== MAX_CHUNK_LINE_CODEPOINTS || !Array.isArray(parsed.entries) || typeof parsed.content_hash !== "string") {
     throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest shape is invalid");
   }
   const ids = new Set();
+  const paths = new Set();
   const verifiedDirs = new Set();
   for (const item of parsed.entries) {
     if (typeof item?.path === "string" && (isAbsolute(item.path) || item.path.split(/[\\/]/).some((part) => part === "." || part === ".."))) {
@@ -114,6 +153,8 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
       throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest entry identity/path is invalid");
     }
     ids.add(item.id);
+    if (paths.has(item.path)) throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} path is duplicated`);
+    paths.add(item.path);
     let parent = dirname(item.path);
     while (parent !== ".") {
       if (!verifiedDirs.has(parent)) {
@@ -141,6 +182,38 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
     if (!Number.isInteger(item.bytes) || item.bytes !== bytes.length || item.lines !== lineCount(bytes) || !/^[a-f0-9]{64}$/.test(item.sha256) || item.sha256 !== sha256(bytes)) {
       throw new ArtifactReviewPackageError("artifact-package-tampered", `${item.id} bytes/hash mismatch`);
     }
+    if (!Array.isArray(item.chunks) || item.chunks.length === 0) throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} has no chunks`);
+    const chunkBytes = [];
+    for (const [chunkIndex, chunk] of item.chunks.entries()) {
+      if (!chunk || chunk.sequence !== chunkIndex + 1 || !safeRelativePath(chunk.path) || isAbsolute(chunk.path) || chunk.path.split(/[\\/]/).some((part) => part === "." || part === "..") || paths.has(chunk.path)) throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} chunk descriptor is invalid`);
+      paths.add(chunk.path);
+      let parent = dirname(chunk.path);
+      while (parent !== ".") {
+        if (!verifiedDirs.has(parent)) {
+          try {
+            const parentPath = resolve(realRoot, parent), parentStat = lstatSync(parentPath);
+            if (!parentStat.isDirectory() || parentStat.isSymbolicLink() || !inside(realRoot, realpathSync(parentPath)) || (requireSealed && !exactMode(parentStat, 0o555))) throw new Error("not a sealed directory");
+          } catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} chunk parent is not sealed: ${error.message}`); }
+          verifiedDirs.add(parent);
+        }
+        parent = dirname(parent);
+      }
+      const chunkPath = resolve(realRoot, chunk.path);
+      let observed;
+      try {
+        const stat = lstatSync(chunkPath);
+        if (!stat.isFile() || stat.isSymbolicLink() || !inside(realRoot, realpathSync(chunkPath)) || (requireSealed && !exactMode(stat, 0o444))) throw new Error("not a sealed regular chunk");
+        observed = readFileSync(chunkPath);
+      } catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} chunk unreadable: ${error.message}`); }
+      if (!Number.isInteger(chunk.bytes) || chunk.bytes !== observed.length || chunk.bytes > MAX_CHUNK_BYTES || !Number.isInteger(chunk.lines) || chunk.lines !== lineCount(observed) || !/^[a-f0-9]{64}$/.test(chunk.sha256) || chunk.sha256 !== sha256(observed)) throw new ArtifactReviewPackageError("artifact-package-tampered", `${item.id} chunk bytes/hash mismatch`);
+      let chunkText;
+      try { chunkText = new TextDecoder("utf-8", { fatal: true }).decode(observed); }
+      catch { throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} chunk is not valid UTF-8`); }
+      if (chunkText.split("\n").some((line) => [...line].length > MAX_CHUNK_LINE_CODEPOINTS)) throw new ArtifactReviewPackageError("artifact-package-invalid", `${item.id} chunk contains an overlong physical line`);
+      chunkBytes.push(observed);
+    }
+    const reconstructed = Buffer.concat(chunkBytes);
+    if (reconstructed.length !== bytes.length || sha256(reconstructed) !== item.sha256 || !reconstructed.equals(bytes)) throw new ArtifactReviewPackageError("artifact-package-tampered", `${item.id} chunks do not reconstruct original bytes`);
   }
   if (!ids.has("contract") || !parsed.entries.some((item) => item.role === "materials")) {
     throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest must contain contract and material entries");
@@ -155,12 +228,13 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
 function stableSourceBytes(path) {
   let descriptor;
   try {
-    const sourceStat = lstatSync(path);
-    if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) throw new Error("source is not a regular file");
-    const fd = openSync(path, "r");
+    if (!Number.isInteger(constants.O_NOFOLLOW) || !Number.isInteger(constants.O_NONBLOCK)) throw new Error("platform lacks O_NOFOLLOW/O_NONBLOCK");
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
-      const before = fstatSync(fd), bytes = readFileSync(fd), after = fstatSync(fd);
-      if (sourceStat.dev !== before.dev || sourceStat.ino !== before.ino || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || bytes.length !== after.size) throw new Error("source changed while snapshotting");
+      const before = fstatSync(fd), sourceStat = lstatSync(path);
+      if (!before.isFile() || !sourceStat.isFile() || sourceStat.isSymbolicLink() || sourceStat.dev !== before.dev || sourceStat.ino !== before.ino) throw new Error("source is not the opened regular file");
+      const bytes = readFileSync(fd), after = fstatSync(fd);
+      if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || bytes.length !== after.size) throw new Error("source changed while snapshotting");
       descriptor = bytes;
     } finally { closeSync(fd); }
   } catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `material source unreadable: ${error.message}`); }
@@ -177,6 +251,7 @@ export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, 
       const suffix = source.path.split(/[\\/]/).at(-1).replace(/[^A-Za-z0-9._-]/g, "_") || "source.txt";
       files.push({ id: source.id, role: "materials", kind: "material_source", path: `materials/${String(index + 1).padStart(3, "0")}-${suffix}`, bytes: stableSourceBytes(source.path) });
     }
+    files.push({ id: "context:aggregate", role: "materials", kind: "material_context", path: "materials/context-aggregate.md", bytes: Buffer.from(materials, "utf8") });
   } else {
     files.push({ id: "materials", role: "materials", kind: "material_snapshot", path: "materials.md", bytes: Buffer.from(materials, "utf8") });
   }
@@ -184,33 +259,43 @@ export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, 
     if (!SAFE_SKILL.test(skill.name)) throw new ArtifactReviewPackageError("artifact-package-invalid", `unsafe skill name ${skill.name}`);
     files.push({ id: `skill:${skill.name}`, role: "required_skill", kind: "required_skill", path: `skills/${skill.name}.md`, bytes: Buffer.from(skill.content, "utf8") });
   }
-  const entries = files.map((file) => entry(file.id, file.role, file.kind, file.path, file.bytes));
+  const chunkFiles = [];
+  const entries = files.map((file, entryIndex) => {
+    const logical = entry(file.id, file.role, file.kind, file.path, file.bytes);
+    logical.chunks = reversibleUtf8Chunks(file.bytes).map((bytes, chunkIndex) => {
+      const path = `chunks/${String(entryIndex + 1).padStart(3, "0")}/${String(chunkIndex + 1).padStart(5, "0")}.txt`;
+      chunkFiles.push({ path, bytes });
+      return { sequence: chunkIndex + 1, path, bytes: bytes.length, lines: lineCount(bytes), sha256: sha256(bytes) };
+    });
+    return logical;
+  });
+  const packageFiles = [...files, ...chunkFiles];
   const contentHash = sha256(Buffer.from(canonical(entries)));
   const packageRoot = join(reviewsRoot, ".claude-review-packages", `${stage}-${reviewFlowId}-round-${totalRound}-${contentHash}`);
   const manifestPath = join(packageRoot, "manifest.json");
-  const manifest = { version: 3, content_hash: contentHash, entries };
+  const manifest = { version: 5, chunk_max_bytes: MAX_CHUNK_BYTES, chunk_max_line_codepoints: MAX_CHUNK_LINE_CODEPOINTS, content_hash: contentHash, entries };
   if (existsSync(packageRoot)) {
     verifyArtifactReviewPackage({ packageRoot, manifestPath, expectedContentHash: contentHash, requireSealed: false });
-    sealPackage(packageRoot, files);
+    sealPackage(packageRoot, packageFiles);
   } else {
     const staging = `${packageRoot}.${process.pid}.${Date.now()}.tmp`;
     mkdirSync(dirname(packageRoot), { recursive: true });
     mkdirSync(staging, { recursive: false });
     try {
-      for (const file of files) atomicWrite(join(staging, file.path), file.bytes);
+      for (const file of packageFiles) atomicWrite(join(staging, file.path), file.bytes);
       atomicWrite(join(staging, "manifest.json"), Buffer.from(canonical(manifest)));
-      sealPackage(staging, files);
+      sealPackage(staging, packageFiles);
       try {
         renameSync(staging, packageRoot);
       } catch (error) {
         const publishRace = new Set(["EEXIST", "ENOTEMPTY"]).has(error.code) || (new Set(["EACCES", "EPERM"]).has(error.code) && existsSync(packageRoot));
         if (!publishRace) throw error;
-        unsealForRemoval(staging, files);
+        unsealForRemoval(staging, packageFiles);
         rmSync(staging, { recursive: true, force: true });
         verifyArtifactReviewPackage({ packageRoot, manifestPath, expectedContentHash: contentHash });
       }
     } catch (error) {
-      unsealForRemoval(staging, files);
+      unsealForRemoval(staging, packageFiles);
       rmSync(staging, { recursive: true, force: true });
       throw error;
     }

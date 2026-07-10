@@ -61,7 +61,7 @@ const diffFile = arg("diff"), outputFile = arg("output"), stateDir = arg("state-
 if (!diffFile || !outputFile || !stateDir) { process.stderr.write("Usage: claude-code-reviewer.mjs --diff=<file> --output=<file> --state-dir=<dir>\n"); process.exit(2); }
 const payload = JSON.parse(readFileSync(diffFile, "utf8"));
 const mode = typeof payload.mode === "string" && payload.mode ? payload.mode : "full";
-let artifactPackage = null;
+let artifactPackage = null, canonicalArtifactManifest = null;
 if (payload.artifact_manifest) {
   try {
     if (!/^[a-f0-9]{64}$/.test(payload.artifact_manifest.content_hash) || !Array.isArray(payload.artifact_manifest.entries)) {
@@ -73,8 +73,9 @@ if (payload.artifact_manifest) {
       expectedContentHash: payload.artifact_manifest.content_hash,
       trustedRoot: join(dirname(dirname(stateDir)), ".claude-review-packages"),
     });
-    if (JSON.stringify(payload.artifact_manifest.entries) !== JSON.stringify(artifactPackage.manifest.entries)) {
-      throw new ArtifactReviewPackageError("artifact-package-tampered", "payload manifest entries do not match persisted manifest");
+    canonicalArtifactManifest = { package_root: artifactPackage.packageRoot, manifest_path: artifactPackage.manifestPath, content_hash: artifactPackage.manifest.content_hash, entries: artifactPackage.manifest.entries };
+    if (JSON.stringify(payload.artifact_manifest) !== JSON.stringify(canonicalArtifactManifest)) {
+      throw new ArtifactReviewPackageError("artifact-package-tampered", "payload manifest descriptor does not match persisted package");
     }
   } catch (error) {
     mkdirSync(dirname(outputFile), { recursive: true });
@@ -92,12 +93,12 @@ function fileLines(path) {
   if (text.endsWith("\n")) lines.pop();
   return lines.map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
 }
-const expectedPathEntries = new Map((expectedEntries || []).map((item) => {
-  const path = realpathSync(join(artifactPackage.packageRoot, item.read_path || item.path));
-  return [path, { item, lines: fileLines(path) }];
-}));
+const expectedPathEntries = new Map((expectedEntries || []).flatMap((item) => item.chunks.map((chunk) => {
+  const path = realpathSync(join(artifactPackage.packageRoot, chunk.path));
+  return [path, { item, chunk, lines: fileLines(path) }];
+})));
 const pendingReads = new Map();
-const readCoverage = new Map((expectedEntries || []).map((item) => [item.id, { ranges: [], failed: false, emptyRead: false }]));
+const readCoverage = new Map((expectedEntries || []).map((item) => [item.id, { chunkRanges: new Map(item.chunks.map((chunk) => [chunk.sequence, []])), failed: false, emptyChunks: new Set() }]));
 let attestationInvalid = false;
 function mergeRanges(ranges) {
   const merged = [];
@@ -113,30 +114,19 @@ function hostAttestation() {
   const result = [];
   for (const item of expectedEntries) {
     const stateForEntry = readCoverage.get(item.id);
-    const ranges = mergeRanges(stateForEntry.ranges);
-    const complete = item.lines === 0 ? stateForEntry.emptyRead : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= item.lines;
-    if (complete) result.push({ id: item.id, sha256: item.sha256, status: "read", lines: item.lines, ranges });
-    else if (stateForEntry.failed) result.push({ id: item.id, sha256: item.sha256, status: "failed", lines: item.lines, ranges });
+    const chunks = item.chunks.map((chunk) => {
+      const ranges = mergeRanges(stateForEntry.chunkRanges.get(chunk.sequence));
+      const complete = chunk.lines === 0 ? stateForEntry.emptyChunks.has(chunk.sequence) : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= chunk.lines;
+      return { sequence: chunk.sequence, sha256: chunk.sha256, complete, ranges };
+    });
+    if (chunks.every(({ complete }) => complete)) result.push({ id: item.id, sha256: item.sha256, status: "read", bytes: item.bytes, chunks: chunks.map(({ sequence, sha256, ranges }) => ({ sequence, sha256, ranges })) });
+    else if (stateForEntry.failed) result.push({ id: item.id, sha256: item.sha256, status: "failed", bytes: item.bytes, chunks: chunks.filter(({ complete }) => complete).map(({ sequence, sha256, ranges }) => ({ sequence, sha256, ranges })) });
   }
   return result;
 }
-function coverageSnapshot() {
-  return Object.fromEntries([...readCoverage].map(([id, value]) => [id, { ranges: mergeRanges(value.ranges), failed: value.failed, emptyRead: value.emptyRead }]));
-}
-function restoreCoverage(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return;
-  for (const [id, saved] of Object.entries(snapshot)) {
-    const current = readCoverage.get(id);
-    const entry = expectedEntries.find((item) => item.id === id);
-    if (!current || !entry || !saved || typeof saved !== "object" || !Array.isArray(saved.ranges) || saved.ranges.some((range) => !Array.isArray(range) || range.length !== 2 || !range.every(Number.isInteger) || range[0] < 1 || range[1] < range[0] || range[1] > entry.lines) || typeof saved.failed !== "boolean" || typeof saved.emptyRead !== "boolean") { attestationInvalid = true; continue; }
-    current.ranges = mergeRanges(saved.ranges);
-    current.failed = saved.failed === true;
-    current.emptyRead = saved.emptyRead === true;
-  }
-}
 function actualReadRanges(content, pending) {
   if (typeof content !== "string") return null;
-  if (pending.entry.item.lines === 0) return content === "" ? [] : null;
+  if (pending.entry.chunk.lines === 0) return content === "" ? [] : null;
   const rawLines = content.split("\n");
   const ranges = [];
   let previous = null;
@@ -144,7 +134,7 @@ function actualReadRanges(content, pending) {
     const match = rawLines[index].match(/^\s*(\d+)(?:\t|→)(.*)$/u);
     if (!match) {
       const trailing = rawLines.slice(index).join("\n");
-      if (/^<system-reminder>[^]*<\/system-reminder>\s*$/u.test(trailing)) break;
+      if (/^\s*<system-reminder>[^]*<\/system-reminder>\s*$/u.test(trailing)) break;
       return null;
     }
     const line = Number(match[1]);
@@ -169,7 +159,7 @@ function observeReadEvents(event) {
       let entry;
       try { entry = expectedPathEntries.get(realpathSync(resolve(input.file_path))); } catch {}
       pendingReads.set(id, entry ? { entry, offset, limit } : null);
-      if (entry) record("read_tool_use", { entry_id: entry.item.id, offset, ...(Number.isFinite(limit) ? { limit } : {}) });
+      if (entry) record("read_tool_use", { entry_id: entry.item.id, chunk: entry.chunk.sequence, offset, ...(Number.isFinite(limit) ? { limit } : {}) });
     }
   } else if (event.type === "user") {
     if (event.message?.role !== "user" || !Array.isArray(event.message.content)) return;
@@ -187,22 +177,29 @@ function observeReadEvents(event) {
       else {
         const actual = actualReadRanges(block.content, pending);
         if (actual === null) attestationInvalid = true;
-        else if (pending.entry.item.lines === 0) stateForEntry.emptyRead = true;
-        else stateForEntry.ranges.push(...actual);
+        else if (pending.entry.chunk.lines === 0) stateForEntry.emptyChunks.add(pending.entry.chunk.sequence);
+        else stateForEntry.chunkRanges.get(pending.entry.chunk.sequence).push(...actual);
       }
-      record("read_tool_result", { entry_id: pending.entry.item.id, status: block.is_error === true ? "failed" : "success" });
-      persist(state.status, { artifact_coverage: coverageSnapshot(), artifact_manifest_hash: artifactPackage.manifest.content_hash });
+      record("read_tool_result", { entry_id: pending.entry.item.id, chunk: pending.entry.chunk.sequence, status: block.is_error === true ? "failed" : "success" });
     }
   }
 }
 const requiredSkills = requiredSkillsFromContract(contractText);
-const inputHash = payload.input_hash || createHash("sha256").update(JSON.stringify({ mode: payload.mode, contract: payload.contract, materials: payload.materials, artifact_manifest: payload.artifact_manifest })).digest("hex");
+const computedArtifactInputHash = artifactPackage ? createHash("sha256").update(JSON.stringify({ mode, artifact_manifest: canonicalArtifactManifest })).digest("hex") : null;
+if (artifactPackage && payload.input_hash !== computedArtifactInputHash) {
+  mkdirSync(dirname(outputFile), { recursive: true });
+  writeFileSync(outputFile, JSON.stringify(failure(mode, "artifact-input-hash-mismatch"), null, 2));
+  process.exit(0);
+}
+const inputHash = artifactPackage ? computedArtifactInputHash : (payload.input_hash || createHash("sha256").update(JSON.stringify({ mode: payload.mode, contract: payload.contract, materials: payload.materials })).digest("hex"));
 const coverageProperty = { type: "array", minItems: 1, items: { type: "object", additionalProperties: false, properties: { id: { type: "string" }, sha256: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { enum: [...COVERAGE_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["id", "sha256", "status", "evidence"] } };
 const schema = { type: "object", additionalProperties: false, properties: { verdict: { enum: [...VERDICTS] }, findings: { type: "array", items: { type: "object", additionalProperties: false, properties: { severity: { enum: [...SEVERITIES] }, file: { type: "string" }, line: { type: "integer", minimum: 1 }, issue: { type: "string" }, recommendation: { type: "string" } }, required: ["severity", "file", "line", "issue", "recommendation"] } }, resolutionSummary: { type: "string" }, skillResults: { type: "array", items: { type: "object", additionalProperties: false, properties: { skill: { type: "string" }, status: { enum: [...SKILL_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["skill", "status", "evidence"] } }, ...(artifactPackage ? { artifactCoverage: coverageProperty } : {}) }, required: ["verdict", "findings", "resolutionSummary", "skillResults", ...(artifactPackage ? ["artifactCoverage"] : [])] };
 const prompt = artifactPackage
-  ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete, immutable review package is at ${artifactPackage.packageRoot}. Use only the Read tool. Read ${artifactPackage.manifestPath} first, then read every manifest entry in full using explicit 1-based offset and positive limit values. Chunk large files until every declared line is covered. The host independently verifies package hashes before and after review and attests only successful Read ranges; your artifactCoverage must exactly match that observed evidence. The contract entry is authoritative; required_skill entries are report-only lenses and must not cause writes or side effects. Review only the materials entry. Do not omit or summarize source material.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every manifest id exactly once with its declared sha256, status=read, and concrete non-empty evidence. For escalate_to_human, a well-formed attested subset with status read/failed is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nManifest entries: ${artifactPackage.manifest.entries.map(({ id, path, bytes, lines, sha256 }) => `${id}|${path}|${bytes}|${lines}|${sha256}`).join("\n")}`
+  ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete, immutable review package is at ${artifactPackage.packageRoot}. Use only the Read tool. Read ${artifactPackage.manifestPath} first, then read every chunk declared under every logical manifest entry in sequence. Chunks are raw UTF-8 slices: concatenating their bytes exactly reconstructs the logical artifact identified by its original sha256/bytes. Read each chunk in full using offset/limit as needed. The host independently verifies chunk contents and attests a logical entry only after all chunks are covered. The contract entry is authoritative; required_skill entries are report-only lenses and must not cause writes or side effects. Review every role=materials entry, including material_context even when it duplicates source content. Do not omit or summarize source material.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete non-empty evidence. For escalate_to_human, a well-formed attested subset with status read/failed is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
   : `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
-const continuation = "Continue the interrupted review. Use the original review contract and materials already present in this session. Return only the required JSON verdict.";
+const continuation = artifactPackage
+  ? `Continue the interrupted review. Treat this as a fresh evidence pass: re-read ${artifactPackage.manifestPath} and every declared chunk in full with Read before returning a verdict. Do not rely on coverage from a previous runner process. Return only the required JSON verdict.`
+  : "Continue the interrupted review. Use the original review contract and materials already present in this session. Return only the required JSON verdict.";
 mkdirSync(stateDir, { recursive: true });
 const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson");
 const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 300000));
@@ -210,10 +207,8 @@ const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
 let state = { input_hash: inputHash, session_id: null, resume_count: 0, attempt: 0, attempt_id: null, phase: "idle", status: "new" };
 try { const old = JSON.parse(readFileSync(stateFile, "utf8")); if (old.input_hash === inputHash && typeof old.session_id === "string" && old.session_id && old.status !== "completed") state = { ...state, ...old }; else if (old.input_hash !== inputHash) appendFileSync(journal, `${JSON.stringify({ at: new Date().toISOString(), type: "state_hash_mismatch", expected_hash: inputHash, observed_hash: old.input_hash })}\n`); } catch {}
-if (artifactPackage && state.artifact_coverage) {
-  if (state.artifact_manifest_hash !== artifactPackage.manifest.content_hash) attestationInvalid = true;
-  else restoreCoverage(state.artifact_coverage);
-}
+delete state.artifact_coverage;
+delete state.artifact_manifest_hash;
 let currentChild = null, idleTimer = null, shuttingDown = false;
 // POSIX rename-over-target is atomic. Windows does not guarantee that operation,
 // so use a recoverable swap: preserve the old file until the replacement lands.
@@ -293,6 +288,7 @@ async function run(input, resume) {
       observeReadEvents(event);
       safeTerminal = { ...safeTerminal, ...terminalDiagnostics(event) };
       const attestation = hostAttestation();
+      if (artifactPackage && candidatesFromEvent(event).some((candidate) => VERDICTS.has(candidate.verdict))) record("artifact_attestation_summary", { entries: attestation.map((item) => ({ id: item.id, status: item.status, chunks: item.chunks.length })) });
       const verdict = verdictFromEvent(event, requiredSkills, expectedEntries, attestation);
       if (verdict) {
         try { verifyPackageAfterReview(); }
@@ -303,7 +299,7 @@ async function run(input, resume) {
             id: item.id,
             sha256: item.sha256,
             status: item.status,
-            evidence: `host-attested Read ${item.status}; lines=${item.lines}; ranges=${item.ranges.map(([start, end]) => `${start}-${end}`).join(",") || "none"}`,
+            evidence: `host-attested Read ${item.status}; bytes=${item.bytes}; chunks=${item.chunks.map(({ sequence }) => sequence).join(",") || "none"}`,
           })),
         } : verdict;
         acceptedAttestation = attestation;
