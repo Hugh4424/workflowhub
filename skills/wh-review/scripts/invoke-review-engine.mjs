@@ -65,7 +65,7 @@ const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
 const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
 const DEFAULT_TIMEOUT_MS = 120000;
 
-export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable"]);
+export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed"]);
 
 /**
  * Resolve the 3rd-review repo root. `THIRD_REVIEW_REPO_ROOT` env wins when
@@ -412,15 +412,21 @@ export function invokeReviewEngine({
   let inputHash;
   let runnerPayload;
   if (runnerPath === CLAUDE_CODE_RUNNER) {
-    const reviewPackage = createArtifactReviewPackage({
-      reviewsRoot: dirname(artifactPath),
-      stage,
-      reviewFlowId,
-      totalRound,
-      contract,
-      materials,
-      skillDefinitions: resolution.definitions,
-    });
+    let reviewPackage;
+    try {
+      reviewPackage = createArtifactReviewPackage({
+        reviewsRoot: dirname(artifactPath),
+        stage,
+        reviewFlowId,
+        totalRound,
+        contract,
+        materials,
+        skillDefinitions: resolution.definitions,
+      });
+    } catch (error) {
+      const known = new Set(["artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered"]);
+      return synthesizeFailure({ artifactPath, failureReason: known.has(error?.code) ? error.code : "artifact-package-publish-failed" });
+    }
     const artifactManifest = {
       package_root: reviewPackage.packageRoot,
       manifest_path: reviewPackage.manifestPath,

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { delimiter, dirname, join, resolve } from "node:path";
@@ -71,6 +71,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  const makeRemovable = (path) => { let stat; try { stat = lstatSync(path); } catch { return; } if (!stat.isDirectory() || stat.isSymbolicLink()) { try { chmodSync(path, 0o644); } catch {} return; } chmodSync(path, 0o755); for (const name of readdirSync(path)) makeRemovable(join(path, name)); };
+  makeRemovable(root);
   rmSync(root, { recursive: true, force: true });
   rmSync(stubDir, { recursive: true, force: true });
 });
@@ -119,8 +121,15 @@ const expectedSettings = process.env.FAKE_CLAUDE_EXPECTED_SETTINGS || join(homed
 if (settingsIndex < 0 || process.argv[settingsIndex + 1] !== expectedSettings) process.exit(9);
 const addDirIndex = process.argv.indexOf("--add-dir");
 if (addDirIndex < 0 || addDirIndex !== process.argv.length - 2) process.exit(10);
+const allowedIndex = process.argv.indexOf("--allowedTools");
+if (allowedIndex < 0 || process.argv[allowedIndex + 1] !== "Read") process.exit(11);
 const manifest = JSON.parse(readFileSync(join(process.argv[addDirIndex + 1], "manifest.json"), "utf8"));
 const coverage = manifest.entries.map(({id, sha256}) => ({id, sha256, status:"read", evidence:"fake read evidence"}));
+for (const [index, entry] of manifest.entries.entries()) {
+  const toolId = "read-"+index;
+  process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:toolId,name:"Read",input:{file_path:join(process.argv[addDirIndex + 1],entry.path),offset:1,limit:Math.max(1,entry.lines)}}]}})+"\\n");
+  process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:toolId,content:"secret file body"}]}})+"\\n");
+}
 const envelope = ${JSON.stringify(envelope)};
 function addCoverage(value) {
   try {
@@ -347,6 +356,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
   const addDir = process.argv.indexOf("--add-dir");
   const manifest = JSON.parse(readFileSync(process.argv[addDir+1]+"/manifest.json","utf8"));
   const artifactCoverage = manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"resumed read"}));
+  for (const [i,e] of manifest.entries.entries()) { const id="resume-read-"+i; process.stdout.write(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:process.argv[addDir+1]+"/"+e.path,offset:1,limit:Math.max(1,e.lines)}}]}})+"\\n"); process.stdout.write(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content:"secret"}]}})+"\\n"); }
   process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed",skillResults:[],artifactCoverage}}) + "\\n");
 }
 `);
@@ -652,6 +662,14 @@ describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
     const emptySkillRoot = join(stubDir, "empty-skills-invalid");
     mkdirSync(emptySkillRoot);
     expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":"review"} -->', emptySkillRoot)?.message).toMatch(/required-skill-unavailable/);
+  });
+
+  it("maps artifact package publication errors to structured not_executed", () => {
+    const reviews = join(root, TASK_ID, "reviews"); mkdirSync(reviews, { recursive: true });
+    writeFileSync(join(reviews, ".claude-review-packages"), "blocks package directory");
+    const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 31, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+    expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+    expect(JSON.parse(readFileSync(join(reviews, `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-31.raw.json`), "utf8"))).toMatchObject({ synthetic: true, failure_reason: "artifact-package-publish-failed" });
   });
 });
 
