@@ -85,7 +85,7 @@ function writeStubRunner(body) {
   return stubPath;
 }
 
-function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0, expectedTimeout, expectedAddDirs = [], sleepMs = 0 } = {}) {
+function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0, attemptOutputs = [], expectedBare = false, expectedTimeout, expectedAddDirs = [], sleepMs = 0 } = {}) {
   const fakePath = join(stubDir, "fake-claude.mjs");
   const countPath = join(stubDir, "fake-claude-count.txt");
   const result = resultText ?? JSON.stringify(resultObject ?? {
@@ -93,11 +93,15 @@ function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0, expected
     findings: [],
     resolutionSummary: "fake claude review passed",
   });
-  writeFileSync(fakePath, `#!/usr/bin/env node
+writeFileSync(fakePath, `#!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+if (process.argv.includes("--version")) {
+  process.stdout.write("fake-claude 1.2.3\\n");
+  process.exit(0);
+}
 const prompt = readFileSync(0, "utf8");
 if (!prompt.includes("## REVIEW CONTRACT") || !prompt.includes("## MATERIALS")) process.exit(7);
-if (!process.argv.includes("--bare")) process.exit(8);
+if (process.argv.includes("--bare") !== ${Boolean(expectedBare)}) process.exit(8);
 const toolsIndex = process.argv.indexOf("--tools");
 if (toolsIndex === -1 || process.argv[toolsIndex + 1] !== "Read") process.exit(10);
 const effortIndex = process.argv.indexOf("--effort");
@@ -108,6 +112,11 @@ if (${expectedTimeout === undefined ? "false" : `process.env.CLAUDE_CODE_REVIEW_
 const countPath = ${JSON.stringify(countPath)};
 const current = existsSync(countPath) ? Number(readFileSync(countPath, "utf8")) : 0;
 writeFileSync(countPath, String(current + 1));
+const attemptOutputs = ${JSON.stringify(attemptOutputs)};
+if (current < attemptOutputs.length) {
+  process.stdout.write(attemptOutputs[current]);
+  process.exit(0);
+}
 if (current < ${Number(emptyAttempts)}) process.exit(0);
 setTimeout(() => process.stdout.write(JSON.stringify({ type: "result", result: ${JSON.stringify(result)} })), ${Number(sleepMs)});
 `);
@@ -200,6 +209,11 @@ describe("discoverRunner", () => {
     expect(result).toMatch(/skills\/wh-review\/scripts\/runners\/claude-code-reviewer\.mjs$/);
   });
 
+  it("WH_REVIEW_PROVIDER=codex keeps the existing default third-party discovery path", () => {
+    const result = discoverRunner({ env: { WH_REVIEW_PROVIDER: "codex" }, workflowhubRepoRoot: "/x/y/workflowhub" });
+    expect(result).toBe("/x/y/3rd-review/scripts/run-heterologous-review.mjs");
+  });
+
   it("no machine-specific absolute path is hardcoded in the module source", () => {
     const src = readFileSync(new URL("../invoke-review-engine.mjs", import.meta.url), "utf8");
     expect(src).not.toMatch(/\/Users\//);
@@ -287,13 +301,56 @@ describe("invokeReviewEngine — success path", () => {
       expect(artifact.materials_hash).toBe(sha256(materials));
       expect(artifact.supplementary_prompt_present).toBe(true);
       expect(artifact.supplementary_prompt_hash).toBe(sha256(supplementaryPrompt));
+      expect(artifact.claudeCodeDiagnostics).toEqual([
+        expect.objectContaining({
+          attempt: 1,
+          outcome: "valid-contract-verdict",
+          exit_status: 0,
+          signal: null,
+          cli: { bin: fakeClaude, version: "fake-claude 1.2.3" },
+          prompt_hash: artifact.prompt_hash,
+          materials_hash: sha256(materials),
+          session_id: null,
+          stop_reason: null,
+        }),
+      ]);
+      expect(artifact.claudeCodeDiagnostics[0].stdout).toEqual(expect.objectContaining({
+        sha256: expect.any(String),
+        char_count: expect.any(Number),
+        preview: expect.any(String),
+        truncated: false,
+      }));
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
     }
   });
 
-  it("normalizes Claude Code's occasional {pass:true} JSON into verdict=pass", () => {
+  it("adds --bare only when CLAUDE_CODE_REVIEW_BARE=true", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({ expectedBare: true });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 23,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_REVIEW_BARE: "true" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("rejects Claude Code's non-contract {pass:true} output instead of inventing a pass", () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude({ resultText: JSON.stringify({ pass: true, findings: [] }) });
     process.env.CLAUDE_CODE_BIN = fakeClaude;
@@ -310,11 +367,12 @@ describe("invokeReviewEngine — success path", () => {
         env: { WH_REVIEW_PROVIDER: "claude-code" },
       });
 
-      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
       const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-14.raw.json`);
       const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
-      expect(artifact.trueCrossEngine).toBe(true);
-      expect(artifact.resolutionSummary).toContain("normalized to verdict=pass");
+      expect(artifact.actual_mode).toBe("not_executed");
+      expect(artifact.failure_reason).toBe("claude-code-output-unparseable");
+      expect(artifact.claudeCodeDiagnostics).toHaveLength(3);
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
@@ -376,12 +434,116 @@ describe("invokeReviewEngine — success path", () => {
       const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
       expect(artifact.trueCrossEngine).toBe(true);
       expect(artifact.claudeCodeAttempts).toBe(3);
+      expect(artifact.claudeCodeDiagnostics.map((diagnostic) => diagnostic.outcome)).toEqual([
+        "claude-code-empty-output",
+        "claude-code-empty-output",
+        "valid-contract-verdict",
+      ]);
       expect(artifact.failure_reason).toBeUndefined();
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
       if (savedAttempts === undefined) delete process.env.CLAUDE_CODE_REVIEW_ATTEMPTS;
       else process.env.CLAUDE_CODE_REVIEW_ATTEMPTS = savedAttempts;
+    }
+  });
+
+  it("maps terminal Claude empty stdout to not_executed with per-attempt diagnostics", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({ emptyAttempts: 3 });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 20,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_REVIEW_ATTEMPTS: "3" },
+      });
+
+      expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+      const artifact = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-20.raw.json`), "utf8"));
+      expect(artifact.failure_reason).toBe("claude-code-empty-output");
+      expect(artifact.claudeCodeDiagnostics).toHaveLength(3);
+      expect(artifact.claudeCodeDiagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ outcome: "claude-code-empty-output", exit_status: 0 }),
+      ]));
+      expect(artifact.claudeCodeDiagnostics[0].stdout).toEqual(expect.objectContaining({
+        char_count: 0,
+        sha256: sha256(""),
+        preview: "",
+      }));
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("maps junk Claude stdout to not_executed and retains bounded diagnostic evidence", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({ attemptOutputs: ["not-json", "still not json", "{}"] });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 21,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_REVIEW_ATTEMPTS: "3" },
+      });
+
+      expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+      const artifact = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-21.raw.json`), "utf8"));
+      expect(artifact.failure_reason).toBe("claude-code-output-unparseable");
+      expect(artifact.claudeCodeDiagnostics.map((diagnostic) => diagnostic.outcome)).toEqual([
+        "claude-code-output-unparseable",
+        "claude-code-output-unparseable",
+        "claude-code-output-unparseable",
+      ]);
+      expect(artifact.claudeCodeDiagnostics[0].stdout).toEqual(expect.objectContaining({
+        sha256: sha256("not-json"),
+        char_count: 8,
+        preview: "not-json",
+      }));
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("does not invoke Claude when the deterministic input limit is exceeded", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude();
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 22,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT THAT EXCEEDS THE LIMIT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_REVIEW_MAX_INPUT_CHARS: "1" },
+      });
+
+      expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+      const artifact = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-22.raw.json`), "utf8"));
+      expect(artifact.failure_reason).toBe("claude-code-input-too-large");
+      expect(artifact.claudeCodeDiagnostics).toEqual([]);
+      expect(artifact.claudeCodePayloadLimit).toEqual(expect.objectContaining({ max_input_chars: 1 }));
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
     }
   });
 

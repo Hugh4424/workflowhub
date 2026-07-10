@@ -6,6 +6,8 @@ import { createHash } from "node:crypto";
 const VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const SEVERITIES = new Set(["blocking", "important", "minor"]);
 const SUPPLEMENTARY_CONTEXT_MARKER = "\n\n---\n\n## Supplementary context (agent-authored prompt)\n\n";
+const DIAGNOSTIC_PREVIEW_CHARS = 2048;
+const DEFAULT_MAX_INPUT_CHARS = 2 * 1024 * 1024;
 
 function arg(name) {
   const prefix = `--${name}=`;
@@ -52,31 +54,65 @@ function findJsonObjects(text) {
   return spans;
 }
 
-function parseClaudeResult(stdout) {
+function parseClaudeResponse(stdout) {
+  const response = { raw: stdout, envelope: null };
   try {
     const wrapped = JSON.parse(stdout);
-    if (typeof wrapped.result === "string") return wrapped.result;
+    if (wrapped && typeof wrapped === "object") {
+      response.envelope = wrapped;
+      if (typeof wrapped.result === "string") response.raw = wrapped.result;
+    }
   } catch {
     // Fall through to raw stdout parsing.
   }
-  return stdout;
+  return response;
+}
+
+function isContractFinding(finding) {
+  return (
+    finding !== null &&
+    typeof finding === "object" &&
+    SEVERITIES.has(finding.severity) &&
+    typeof finding.file === "string" &&
+    finding.file.length > 0 &&
+    Number.isInteger(finding.line) &&
+    finding.line > 0 &&
+    typeof finding.issue === "string" &&
+    typeof finding.recommendation === "string"
+  );
+}
+
+function isContractSkillResult(skillResult) {
+  return (
+    skillResult !== null &&
+    typeof skillResult === "object" &&
+    typeof skillResult.skill === "string" &&
+    skillResult.skill.length > 0 &&
+    ["executed", "not_applicable", "unavailable", "failed"].includes(skillResult.status) &&
+    typeof skillResult.evidence === "string"
+  );
+}
+
+function isContractVerdict(value) {
+  const allowedTopLevelKeys = new Set(["verdict", "findings", "resolutionSummary", "skillResults"]);
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    VERDICTS.has(value.verdict) &&
+    Array.isArray(value.findings) &&
+    value.findings.every(isContractFinding) &&
+    typeof value.resolutionSummary === "string" &&
+    Object.keys(value).every((key) => allowedTopLevelKeys.has(key)) &&
+    (value.skillResults === undefined ||
+      (Array.isArray(value.skillResults) && value.skillResults.every(isContractSkillResult)))
+  );
 }
 
 function findVerdictJson(text) {
   for (const candidate of findJsonObjects(text).reverse()) {
     try {
       const parsed = JSON.parse(candidate);
-      if (parsed && VERDICTS.has(parsed.verdict)) return parsed;
-      if (parsed && parsed.pass === true && !parsed.verdict) {
-        return {
-          ...parsed,
-          verdict: "pass",
-          resolutionSummary:
-            typeof parsed.resolutionSummary === "string"
-              ? parsed.resolutionSummary
-              : "Claude Code returned pass=true; normalized to verdict=pass.",
-        };
-      }
+      if (isContractVerdict(parsed)) return parsed;
     } catch {
       // Try the next balanced object.
     }
@@ -99,12 +135,55 @@ function reviewInputProvenance({ contract, materials, prompt }) {
   const supplementaryPrompt = extractSupplementaryPrompt(materials);
   return {
     prompt_char_count: prompt.length,
+    prompt_hash: sha256(prompt),
     contract_char_count: typeof contract === "string" ? contract.length : 0,
     materials_char_count: typeof materials === "string" ? materials.length : 0,
     contract_hash: sha256(contract),
     materials_hash: sha256(materials),
     supplementary_prompt_present: supplementaryPrompt !== null,
     supplementary_prompt_hash: supplementaryPrompt === null ? null : sha256(supplementaryPrompt),
+  };
+}
+
+function diagnosticText(value) {
+  const text = String(value ?? "");
+  return {
+    sha256: sha256(text),
+    char_count: text.length,
+    preview: text.slice(0, DIAGNOSTIC_PREVIEW_CHARS),
+    truncated: text.length > DIAGNOSTIC_PREVIEW_CHARS,
+  };
+}
+
+function diagnosticError(error) {
+  if (!error) return null;
+  return {
+    code: typeof error.code === "string" ? error.code : null,
+    message: typeof error.message === "string" ? error.message.slice(0, DIAGNOSTIC_PREVIEW_CHARS) : String(error).slice(0, DIAGNOSTIC_PREVIEW_CHARS),
+  };
+}
+
+function envelopeValue(envelope, ...keys) {
+  for (const key of keys) {
+    if (typeof envelope?.[key] === "string" && envelope[key].length > 0) return envelope[key];
+  }
+  return null;
+}
+
+function attemptDiagnostic({ attempt, proc, response, cli, inputProvenance, outcome }) {
+  return {
+    attempt,
+    outcome,
+    exit_status: proc.status ?? null,
+    signal: proc.signal ?? null,
+    error: diagnosticError(proc.error),
+    stdout: diagnosticText(proc.stdout),
+    stderr: diagnosticText(proc.stderr),
+    cli,
+    prompt_hash: inputProvenance.prompt_hash,
+    materials_hash: inputProvenance.materials_hash,
+    session_id: envelopeValue(response?.envelope, "session_id", "sessionId"),
+    stop_reason: envelopeValue(response?.envelope, "stop_reason", "stopReason"),
   };
 }
 
@@ -137,11 +216,11 @@ function normalizeVerdict(result, mode) {
   };
 }
 
-function failureRecord({ mode, reason, status, stderr, raw, attempts }) {
+function failureRecord({ mode, reason, attempts, diagnostics, inputProvenance }) {
   return {
     verdict: "escalate_to_human",
     findings: [],
-    resolutionSummary: `${reason}; attempts=${attempts ?? 1}; status=${status}; stderr=${String(stderr || "").slice(0, 500)}; raw=${String(raw || "").slice(0, 500)}`,
+    resolutionSummary: `${reason}; attempts=${attempts ?? 1}; inspect claudeCodeDiagnostics for exit status and bounded output evidence.`,
     actual_mode: "not_executed",
     provider: "claude-code",
     provider_cli: "claude",
@@ -153,11 +232,18 @@ function failureRecord({ mode, reason, status, stderr, raw, attempts }) {
     reviewSnapshot: [],
     riskDisposition: [],
     worktreeInventory: { included: [], unrelated: [], excluded: [] },
+    claudeCodeAttempts: attempts ?? diagnostics?.length ?? 0,
+    claudeCodeDiagnostics: diagnostics ?? [],
+    ...inputProvenance,
   };
 }
 
 function runClaude({ claudeBin, prompt, schema }) {
   const effort = process.env.CLAUDE_CODE_REVIEW_EFFORT || "low";
+  // Claude Code's normal mode preserves the authenticated interactive/OAuth
+  // execution path. Some non-interactive deployments explicitly require bare
+  // mode; keep that opt-in so a Claude-only review cannot silently lose auth.
+  const bareMode = process.env.CLAUDE_CODE_REVIEW_BARE === "true";
   const allowedDirs = (process.env.CLAUDE_CODE_REVIEW_ADD_DIRS || "")
     .split(":")
     .map((dir) => dir.trim())
@@ -166,7 +252,7 @@ function runClaude({ claudeBin, prompt, schema }) {
     claudeBin,
     [
       "-p",
-      "--bare",
+      ...(bareMode ? ["--bare"] : []),
       "--safe-mode",
       "--tools",
       "Read",
@@ -187,6 +273,17 @@ function runClaude({ claudeBin, prompt, schema }) {
       timeout: Number(process.env.CLAUDE_CODE_REVIEW_TIMEOUT_MS || 300000),
     }
   );
+}
+
+function probeClaudeVersion(claudeBin) {
+  const proc = spawnSync(claudeBin, ["--version"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 10000,
+  });
+  if (proc.status !== 0 || proc.signal || proc.error) return null;
+  const version = String(proc.stdout ?? "").trim();
+  return version.length > 0 ? version.slice(0, 512) : null;
 }
 
 const diffFile = arg("diff");
@@ -269,45 +366,61 @@ const inputProvenance = reviewInputProvenance({
 });
 
 const claudeBin = process.env.CLAUDE_CODE_BIN || "claude";
+const configuredMaxInputChars = Number(process.env.CLAUDE_CODE_REVIEW_MAX_INPUT_CHARS || DEFAULT_MAX_INPUT_CHARS);
+const maxInputChars = Number.isFinite(configuredMaxInputChars) && configuredMaxInputChars > 0
+  ? Math.floor(configuredMaxInputChars)
+  : DEFAULT_MAX_INPUT_CHARS;
+const cli = { bin: claudeBin, version: probeClaudeVersion(claudeBin) };
+const diagnostics = [];
 let output;
 const maxAttempts = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_ATTEMPTS || 3));
 let lastFailure = null;
-for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+if (prompt.length > maxInputChars) {
+  lastFailure = { mode, reason: "claude-code-input-too-large", attempts: 0 };
+} else for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const proc = runClaude({ claudeBin, prompt, schema });
+  const response = parseClaudeResponse(proc.stdout || "");
   if (proc.signal || proc.error?.code === "ETIMEDOUT") {
-    lastFailure = { mode, reason: "claude-code-timeout", status: proc.status, stderr: proc.stderr, raw: proc.stdout, attempts: attempt };
+    diagnostics.push(attemptDiagnostic({ attempt, proc, response, cli, inputProvenance, outcome: "timeout" }));
+    lastFailure = { mode, reason: "claude-code-timeout", attempts: attempt };
     break;
   }
   if (proc.status !== 0) {
-    lastFailure = { mode, reason: "claude-code-non-zero-exit", status: proc.status, stderr: proc.stderr, raw: proc.stdout, attempts: attempt };
+    diagnostics.push(attemptDiagnostic({ attempt, proc, response, cli, inputProvenance, outcome: "non-zero-exit" }));
+    lastFailure = { mode, reason: "claude-code-non-zero-exit", attempts: attempt };
     break;
   }
 
-  const raw = parseClaudeResult(proc.stdout || "");
+  const raw = response.raw;
   const verdict = normalizeVerdict(findVerdictJson(raw), mode);
   if (verdict) {
+    diagnostics.push(attemptDiagnostic({ attempt, proc, response, cli, inputProvenance, outcome: "valid-contract-verdict" }));
     output = {
       ...verdict,
       ...inputProvenance,
       claudeCodeAttempts: attempt,
+      claudeCodeDiagnostics: diagnostics,
     };
     break;
   }
 
+  const reason = raw.trim().length === 0 ? "claude-code-empty-output" : "claude-code-output-unparseable";
+  diagnostics.push(attemptDiagnostic({ attempt, proc, response, cli, inputProvenance, outcome: reason }));
   lastFailure = {
     mode,
-    reason: raw.trim().length === 0 ? "claude-code-empty-output" : "claude-code-output-unparseable",
-    status: proc.status,
-    stderr: proc.stderr,
-    raw,
+    reason,
     attempts: attempt,
   };
 }
 
 if (!output) {
   output = {
-    ...failureRecord(lastFailure ?? { mode, reason: "claude-code-output-unparseable", attempts: maxAttempts }),
-    ...inputProvenance,
+    ...failureRecord({
+      ...(lastFailure ?? { mode, reason: "claude-code-output-unparseable", attempts: maxAttempts }),
+      diagnostics,
+      inputProvenance,
+    }),
+    claudeCodePayloadLimit: { prompt_char_count: prompt.length, max_input_chars: maxInputChars },
   };
 }
 
