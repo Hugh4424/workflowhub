@@ -85,7 +85,7 @@ function writeStubRunner(body) {
   return stubPath;
 }
 
-function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0, expectedTimeout, sleepMs = 0 } = {}) {
+function writeFakeClaude({ resultObject, resultText, emptyAttempts = 0, expectedTimeout, expectedAddDirs = [], sleepMs = 0 } = {}) {
   const fakePath = join(stubDir, "fake-claude.mjs");
   const countPath = join(stubDir, "fake-claude-count.txt");
   const result = resultText ?? JSON.stringify(resultObject ?? {
@@ -99,9 +99,11 @@ const prompt = readFileSync(0, "utf8");
 if (!prompt.includes("## REVIEW CONTRACT") || !prompt.includes("## MATERIALS")) process.exit(7);
 if (!process.argv.includes("--bare")) process.exit(8);
 const toolsIndex = process.argv.indexOf("--tools");
-if (toolsIndex === -1 || process.argv[toolsIndex + 1] !== "") process.exit(10);
+if (toolsIndex === -1 || process.argv[toolsIndex + 1] !== "Read") process.exit(10);
 const effortIndex = process.argv.indexOf("--effort");
 if (effortIndex === -1 || process.argv[effortIndex + 1] !== "low") process.exit(11);
+const addDirs = process.argv.flatMap((arg, index) => arg === "--add-dir" ? [process.argv[index + 1]] : []);
+if (JSON.stringify(addDirs) !== ${JSON.stringify(JSON.stringify(expectedAddDirs))}) process.exit(12);
 if (${expectedTimeout === undefined ? "false" : `process.env.CLAUDE_CODE_REVIEW_TIMEOUT_MS !== ${JSON.stringify(String(expectedTimeout))}`}) process.exit(9);
 const countPath = ${JSON.stringify(countPath)};
 const current = existsSync(countPath) ? Number(readFileSync(countPath, "utf8")) : 0;
@@ -367,6 +369,33 @@ describe("invokeReviewEngine — success path", () => {
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
         env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_REVIEW_TIMEOUT_MS: "4321", CLAUDE_CODE_REVIEW_ATTEMPTS: "1" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
+  it("passes the Read allowlist to the built-in Claude runner", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({ expectedAddDirs: ["/tmp/skill-sources", "/tmp/task-sources"] });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 18,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: {
+          WH_REVIEW_PROVIDER: "claude-code",
+          CLAUDE_CODE_REVIEW_ADD_DIRS: "/tmp/skill-sources:/tmp/task-sources",
+        },
       });
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });

@@ -158,13 +158,19 @@ function failureRecord({ mode, reason, status, stderr, raw, attempts }) {
 
 function runClaude({ claudeBin, prompt, schema }) {
   const effort = process.env.CLAUDE_CODE_REVIEW_EFFORT || "low";
+  const allowedDirs = (process.env.CLAUDE_CODE_REVIEW_ADD_DIRS || "")
+    .split(":")
+    .map((dir) => dir.trim())
+    .filter(Boolean);
   return spawnSync(
     claudeBin,
     [
       "-p",
       "--bare",
+      "--safe-mode",
       "--tools",
-      "",
+      "Read",
+      ...allowedDirs.flatMap((dir) => ["--add-dir", dir]),
       "--effort",
       effort,
       "--output-format",
@@ -233,6 +239,7 @@ Do not return {"pass": true}. Do not return markdown. Do not omit "verdict".
 
 If the caller binding says blind review, do not inspect final decision-log claims as direction evidence.
 If the caller binding says detail review, apply intake-detail-review / 细节节 rules.
+Use Read only for sources explicitly named in the supplied review package. Do not inspect unrelated files.
 
 ## REVIEW CONTRACT
 
