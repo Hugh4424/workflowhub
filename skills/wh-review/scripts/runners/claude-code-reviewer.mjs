@@ -157,9 +157,22 @@ function failureRecord({ mode, reason, status, stderr, raw, attempts }) {
 }
 
 function runClaude({ claudeBin, prompt, schema }) {
+  const effort = process.env.CLAUDE_CODE_REVIEW_EFFORT || "low";
   return spawnSync(
     claudeBin,
-    ["-p", "--bare", "--output-format", "json", "--json-schema", JSON.stringify(schema), "--no-session-persistence"],
+    [
+      "-p",
+      "--bare",
+      "--tools",
+      "",
+      "--effort",
+      effort,
+      "--output-format",
+      "json",
+      "--json-schema",
+      JSON.stringify(schema),
+      "--no-session-persistence",
+    ],
     {
       input: prompt,
       encoding: "utf8",
