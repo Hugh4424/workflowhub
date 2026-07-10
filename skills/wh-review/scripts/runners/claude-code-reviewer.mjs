@@ -7,20 +7,42 @@ import { dirname, join } from "node:path";
 
 const VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const SEVERITIES = new Set(["blocking", "important", "minor"]);
+const SKILL_STATUSES = new Set(["executed", "not_applicable", "unavailable", "failed"]);
 const arg = (name) => process.argv.slice(2).find((x) => x.startsWith(`--${name}=`))?.slice(name.length + 3) || "";
 const isFinding = (v) => v && typeof v === "object" && SEVERITIES.has(v.severity) && typeof v.file === "string" && v.file && Number.isInteger(v.line) && v.line > 0 && typeof v.issue === "string" && typeof v.recommendation === "string";
-const isSkillResult = (v) => v && typeof v === "object" && typeof v.skill === "string" && v.skill && ["executed", "not_applicable", "unavailable", "failed"].includes(v.status) && typeof v.evidence === "string";
-function isVerdict(v) { const keys = new Set(["verdict", "findings", "resolutionSummary", "skillResults"]); return v && typeof v === "object" && VERDICTS.has(v.verdict) && Array.isArray(v.findings) && v.findings.every(isFinding) && typeof v.resolutionSummary === "string" && Object.keys(v).every((k) => keys.has(k)) && (v.skillResults === undefined || (Array.isArray(v.skillResults) && v.skillResults.every(isSkillResult))); }
-function parseCandidate(v) { try { const parsed = typeof v === "string" ? JSON.parse(v) : v; return isVerdict(parsed) ? parsed : null; } catch { return null; } }
-function verdictFromEvent(event) { for (const candidate of [event?.structured_output, event?.result, event]) { const verdict = parseCandidate(candidate); if (verdict) return verdict; } return null; }
+const isSkillResult = (v) => v && typeof v === "object" && typeof v.skill === "string" && v.skill.trim() && SKILL_STATUSES.has(v.status) && typeof v.evidence === "string" && v.evidence.trim();
+function requiredSkillsFromContract(contract) {
+  const match = contract.match(/<!--\s*wh-review-skills:\s*(\{[^\n]*\})\s*-->/);
+  if (!match) return [];
+  try {
+    const manifest = JSON.parse(match[1]);
+    return Array.isArray(manifest.required) && manifest.required.every((skill) => typeof skill === "string" && skill.trim())
+      ? manifest.required
+      : [];
+  } catch { return []; }
+}
+function hasValidSkillCoverage(v, requiredSkills) {
+  if (!Array.isArray(v.skillResults) || !v.skillResults.every(isSkillResult)) return false;
+  const required = new Set(requiredSkills);
+  const observed = v.skillResults.map(({ skill }) => skill);
+  if (new Set(observed).size !== observed.length || observed.some((skill) => !required.has(skill))) return false;
+  // A dependency failure may itself prevent the reviewer from producing every
+  // required lens. Escalation therefore accepts a well-formed subset, while a
+  // pass/revise verdict must prove the complete manifest closure.
+  return v.verdict === "escalate_to_human" || (observed.length === required.size && requiredSkills.every((skill) => observed.includes(skill)));
+}
+function isVerdict(v, requiredSkills) { const keys = new Set(["verdict", "findings", "resolutionSummary", "skillResults"]); return v && typeof v === "object" && VERDICTS.has(v.verdict) && Array.isArray(v.findings) && v.findings.every(isFinding) && typeof v.resolutionSummary === "string" && Object.keys(v).every((k) => keys.has(k)) && hasValidSkillCoverage(v, requiredSkills); }
+function parseCandidate(v, requiredSkills) { try { const parsed = typeof v === "string" ? JSON.parse(v) : v; return isVerdict(parsed, requiredSkills) ? parsed : null; } catch { return null; } }
+function verdictFromEvent(event, requiredSkills) { for (const candidate of [event?.structured_output, event?.result, event]) { const verdict = parseCandidate(candidate, requiredSkills); if (verdict) return verdict; } return null; }
 function failure(mode, reason, details = {}) { return { verdict: "escalate_to_human", findings: [], resolutionSummary: reason, actual_mode: "not_executed", provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: false, reviewMode: "claude-code-cli", synthetic: true, execution_status: "failed", failure_reason: reason, requested_mode: mode, ...details }; }
 
 const diffFile = arg("diff"), outputFile = arg("output"), stateDir = arg("state-dir");
 if (!diffFile || !outputFile || !stateDir) { process.stderr.write("Usage: claude-code-reviewer.mjs --diff=<file> --output=<file> --state-dir=<dir>\n"); process.exit(2); }
 const payload = JSON.parse(readFileSync(diffFile, "utf8"));
+const requiredSkills = requiredSkillsFromContract(payload.contract || "");
 const inputHash = payload.input_hash || createHash("sha256").update(JSON.stringify({ mode: payload.mode, contract: payload.contract, materials: payload.materials })).digest("hex");
 const mode = typeof payload.mode === "string" && payload.mode ? payload.mode : "full";
-const schema = { type: "object", additionalProperties: false, properties: { verdict: { enum: [...VERDICTS] }, findings: { type: "array", items: { type: "object", additionalProperties: false, properties: { severity: { enum: [...SEVERITIES] }, file: { type: "string" }, line: { type: "integer", minimum: 1 }, issue: { type: "string" }, recommendation: { type: "string" } }, required: ["severity", "file", "line", "issue", "recommendation"] } }, resolutionSummary: { type: "string" }, skillResults: { type: "array", items: { type: "object", additionalProperties: false, properties: { skill: { type: "string" }, status: { enum: ["executed", "not_applicable", "unavailable", "failed"] }, evidence: { type: "string" } }, required: ["skill", "status", "evidence"] } } }, required: ["verdict", "findings", "resolutionSummary"] };
+const schema = { type: "object", additionalProperties: false, properties: { verdict: { enum: [...VERDICTS] }, findings: { type: "array", items: { type: "object", additionalProperties: false, properties: { severity: { enum: [...SEVERITIES] }, file: { type: "string" }, line: { type: "integer", minimum: 1 }, issue: { type: "string" }, recommendation: { type: "string" } }, required: ["severity", "file", "line", "issue", "recommendation"] } }, resolutionSummary: { type: "string" }, skillResults: { type: "array", items: { type: "object", additionalProperties: false, properties: { skill: { type: "string" }, status: { enum: [...SKILL_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["skill", "status", "evidence"] } } }, required: ["verdict", "findings", "resolutionSummary", "skillResults"] };
 const prompt = `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
 const continuation = "Continue the interrupted review. Use the original review contract and materials already present in this session. Return only the required JSON verdict.";
 mkdirSync(stateDir, { recursive: true });
@@ -67,7 +89,7 @@ async function run(input, resume) {
     const args = baseArgs(); if (resume) args.push("--resume", state.session_id);
     const child = spawn(process.env.CLAUDE_CODE_BIN || "claude", args, { stdio: ["pipe", "pipe", "pipe"] }); currentChild = child;
     const arm = () => { clearTimeout(idleTimer); idleTimer = setTimeout(async () => { stalled = true; record("idle_timeout"); await stopChild(child); settle({ stalled: true, code: child.exitCode, signal: child.signalCode }); }, idleMs); };
-    const consume = (line) => { if (!line.trim()) return; if (Buffer.byteLength(line) > maxBuffer) { record("line_too_large", { bytes: Buffer.byteLength(line) }); return; } let event; try { event = JSON.parse(line); } catch { record("parse_anomaly", { bytes: Buffer.byteLength(line) }); return; } record("event", { event_type: event?.type || "unknown", subtype: event?.subtype, session_id: event?.session_id }); if (typeof event.session_id === "string" && event.session_id) { state.session_id = event.session_id; persist(state.status); } const verdict = verdictFromEvent(event); if (verdict) { attemptVerdict = verdict; terminalSeen = true; persist("terminal_observed"); void stopChild(child).then(() => settle({ code: child.exitCode ?? 0, signal: child.signalCode, terminalSeen: true })); } };
+    const consume = (line) => { if (!line.trim()) return; if (Buffer.byteLength(line) > maxBuffer) { record("line_too_large", { bytes: Buffer.byteLength(line) }); return; } let event; try { event = JSON.parse(line); } catch { record("parse_anomaly", { bytes: Buffer.byteLength(line) }); return; } record("event", { event_type: event?.type || "unknown", subtype: event?.subtype, session_id: event?.session_id }); if (typeof event.session_id === "string" && event.session_id) { state.session_id = event.session_id; persist(state.status); } const verdict = verdictFromEvent(event, requiredSkills); if (verdict) { attemptVerdict = verdict; terminalSeen = true; persist("terminal_observed"); void stopChild(child).then(() => settle({ code: child.exitCode ?? 0, signal: child.signalCode, terminalSeen: true })); } };
     child.stdout.on("data", (chunk) => { arm(); buffer += chunk; if (Buffer.byteLength(buffer) > maxBuffer) { record("buffer_overflow", { bytes: Buffer.byteLength(buffer) }); buffer = ""; } let i; while ((i = buffer.indexOf("\n")) >= 0) { consume(buffer.slice(0, i)); buffer = buffer.slice(i + 1); } });
     child.stderr.on("data", (chunk) => { arm(); record("stderr_activity", { bytes: chunk.length }); });
     child.on("error", (error) => { record("spawn_error", { code: error.code }); settle({ error, code: null }); });

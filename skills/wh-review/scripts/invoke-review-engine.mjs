@@ -401,15 +401,15 @@ export function invokeReviewEngine({
   }
   const runnerTimeoutMs = effectiveRunnerTimeoutMs({ runnerPath, timeoutMs, env });
 
-  const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
-  const diffFile = join(workDir, "diff.json");
-  const outputFile = join(workDir, "output.json");
   let runnerContract = contract;
   let runnerMaterials = materials;
   if (runnerPath === CLAUDE_CODE_RUNNER) {
     const resolution = resolveRequiredSkills({ contract, env });
     ({ contract: runnerContract, materials: runnerMaterials } = appendRequiredSkillDefinitions({ contract, materials, resolution }));
   }
+  const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
+  const diffFile = join(workDir, "diff.json");
+  const outputFile = join(workDir, "output.json");
   const inputHash = createHash("sha256").update(JSON.stringify({ mode, contract: runnerContract, materials: runnerMaterials })).digest("hex");
   writeFileSync(diffFile, JSON.stringify({ mode, contract: runnerContract, materials: runnerMaterials, input_hash: inputHash }));
   const runnerArgs = [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`];

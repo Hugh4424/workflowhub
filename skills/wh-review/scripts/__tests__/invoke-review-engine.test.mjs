@@ -13,9 +13,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   discoverThirdReviewRepoRoot,
@@ -86,6 +86,7 @@ function writeFakeClaude({ resultObject, resultText, structuredOutput } = {}) {
     verdict: "pass",
     findings: [],
     resolutionSummary: "fake claude review passed",
+    skillResults: [],
   });
   const envelope = structuredOutput === undefined
     ? { type: "result", result }
@@ -310,7 +311,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
   setInterval(() => {}, 1000);
 } else {
   if (!process.argv.includes("--resume") || input.includes("MATERIALS TEXT")) process.exit(12);
-  process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed"}}) + "\\n");
+  process.stdout.write(JSON.stringify({type:"result",session_id:"resume-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed",skillResults:[]}}) + "\\n");
 }
 `);
     chmodSync(fakeClaude, 0o755);
@@ -344,11 +345,13 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
       verdict: "pass",
       findings: [],
       resolutionSummary: "structured object parsed",
+      skillResults: [],
     }],
     ["a JSON string", JSON.stringify({
       verdict: "pass",
       findings: [],
       resolutionSummary: "structured string parsed",
+      skillResults: [],
     })],
   ])("parses Claude Code's real structured_output envelope when it contains %s", (_shape, structuredOutput) => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
@@ -487,7 +490,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
         reviewFlowId: REVIEW_FLOW_ID,
         totalRound: 19,
         mode: "full",
-        contract: "CONTRACT TEXT",
+        contract: '<!-- wh-review-skills: {"required":["plan-ceo-review","review","plan-design-review"]} -->\nCONTRACT TEXT',
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
         env: { WH_REVIEW_PROVIDER: "claude-code" },
@@ -571,6 +574,48 @@ describe("invokeReviewEngine — task_tracking_root resolvability guard (round-1
         env: { THIRD_REVIEW_RUNNER: runnerPath },
       })
     ).not.toThrow();
+  });
+});
+
+describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
+  function invokeFailingPreflight(contract, skillRoots) {
+    const before = new Set(readdirSync(tmpdir()).filter((name) => name.startsWith("invoke-review-engine-")));
+    let thrown;
+    try { invokeReviewEngine({
+      taskId: TASK_ID,
+      stage: STAGE,
+      reviewFlowId: REVIEW_FLOW_ID,
+      totalRound: 30,
+      mode: "full",
+      contract,
+      materials: "MATERIALS TEXT",
+      taskTrackingRoot: root,
+      env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_SKILL_ROOTS: skillRoots },
+    }); } catch (error) { thrown = error; }
+    const leaked = readdirSync(tmpdir()).filter((name) => name.startsWith("invoke-review-engine-") && !before.has(name));
+    expect(leaked).toEqual([]);
+    return thrown;
+  }
+
+  it("does not allocate an invoke temp directory when a required skill is missing", () => {
+    const emptySkillRoot = join(stubDir, "empty-skills");
+    mkdirSync(emptySkillRoot);
+    expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":["missing-review"]} -->', emptySkillRoot)?.message).toMatch(/required-skill-unavailable/);
+  });
+
+  it("does not leak an invoke temp directory when skill definitions conflict", () => {
+    const roots = [join(stubDir, "skills-a"), join(stubDir, "skills-b")];
+    roots.forEach((skillRoot, index) => {
+      mkdirSync(join(skillRoot, "review"), { recursive: true });
+      writeFileSync(join(skillRoot, "review", "SKILL.md"), `definition ${index}`);
+    });
+    expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":["review"]} -->', roots.join(delimiter))?.message).toMatch(/required-skill-conflict/);
+  });
+
+  it("does not leak an invoke temp directory when manifest preflight is invalid", () => {
+    const emptySkillRoot = join(stubDir, "empty-skills-invalid");
+    mkdirSync(emptySkillRoot);
+    expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":"review"} -->', emptySkillRoot)?.message).toMatch(/required-skill-unavailable/);
   });
 });
 

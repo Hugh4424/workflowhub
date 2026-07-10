@@ -6,12 +6,19 @@ import { join, resolve } from "node:path";
 
 const runner = resolve("skills/wh-review/scripts/runners/claude-code-reviewer.mjs");
 const roots = [];
-const verdict = { verdict: "pass", findings: [], resolutionSummary: "ok" };
+const verdict = { verdict: "pass", findings: [], resolutionSummary: "ok", skillResults: [] };
+const requiredSkills = ["plan-ceo-review", "review", "plan-design-review"];
+const designContract = `<!-- wh-review-skills: {"required":["plan-ceo-review","review","plan-design-review"]} -->`;
+const completeSkillResults = requiredSkills.map((skill) => ({
+  skill,
+  status: skill === "plan-design-review" ? "not_applicable" : "executed",
+  evidence: `${skill} evidence`,
+}));
 
-function fixture(script, { state } = {}) {
+function fixture(script, { state, contract = "C" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "claude-runner-resilience-")); roots.push(root);
   const diff = join(root, "input.json"), output = join(root, "output.json"), stateDir = join(root, "state");
-  mkdirSync(stateDir); writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", contract: "C", materials: "M" }));
+  mkdirSync(stateDir); writeFileSync(diff, JSON.stringify({ input_hash: "fixed-hash", mode: "full", contract, materials: "M" }));
   if (state) writeFileSync(join(stateDir, "state.json"), JSON.stringify(state));
   const fake = join(root, "fake-claude.mjs"); writeFileSync(fake, `#!/usr/bin/env node\n${script}`); chmodSync(fake, 0o755);
   return { root, diff, output, stateDir, fake };
@@ -76,5 +83,40 @@ describe("Claude streamed reviewer resilience", () => {
   it("replaces an old output only after a complete new failure artifact exists", async () => {
     const f = fixture(`process.exit(9);`); writeFileSync(f.output, JSON.stringify({ old: true }));
     const result = await execute(f); expect(result.output).toMatchObject({ execution_status: "failed", failure_reason: "claude-code-non-zero-exit" });
+  });
+
+  it.each([
+    ["missing skillResults", undefined],
+    ["missing one required skill", completeSkillResults.slice(0, 2)],
+    ["duplicate required skill", [...completeSkillResults, completeSkillResults[0]]],
+    ["unknown skill", [...completeSkillResults.slice(0, 2), { skill: "unknown-review", status: "executed", evidence: "x" }]],
+    ["empty evidence", completeSkillResults.map((item, index) => index === 0 ? { ...item, evidence: "   " } : item)],
+  ])("rejects pass verdict with %s", async (_label, skillResults) => {
+    const candidate = { verdict: "pass", findings: [], resolutionSummary: "invalid" };
+    if (skillResults !== undefined) candidate.skillResults = skillResults;
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", synthetic: true });
+  });
+
+  it("accepts not_applicable with evidence as complete manifest coverage", async () => {
+    const candidate = { verdict: "pass", findings: [], resolutionSummary: "complete", skillResults: completeSkillResults };
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", skillResults: completeSkillResults, synthetic: false });
+  });
+
+  it("rejects revise_required when manifest coverage is incomplete", async () => {
+    const candidate = { verdict: "revise_required", findings: [], resolutionSummary: "incomplete", skillResults: completeSkillResults.slice(0, 2) };
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", synthetic: true });
+  });
+
+  it("allows an incomplete but well-formed skill subset only for semantic escalation", async () => {
+    const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "dependency prevented remaining lenses", skillResults: [completeSkillResults[0]] };
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", skillResults: [completeSkillResults[0]], execution_status: "completed", synthetic: false });
   });
 });
