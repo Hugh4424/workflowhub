@@ -38,7 +38,11 @@ function execute(f, env = {}, signalAfter) {
   return new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [runner, `--diff=${f.diff}`, `--output=${f.output}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "2000", CLAUDE_CODE_REVIEW_STOP_GRACE_MS: "20", ...env } });
     let stderr = ""; child.stderr.on("data", (x) => { stderr += x; });
-    if (signalAfter) setTimeout(() => child.kill(signalAfter), 40);
+    if (typeof signalAfter === "string") setTimeout(() => child.kill(signalAfter), 40);
+    else if (signalAfter) {
+      const waitAndSignal = () => existsSync(signalAfter.waitFor) ? child.kill(signalAfter.signal) : setTimeout(waitAndSignal, 10);
+      waitAndSignal();
+    }
     child.on("close", (code, signal) => resolvePromise({ code, signal, stderr, output: existsSync(f.output) ? JSON.parse(readFileSync(f.output, "utf8")) : null }));
   });
 }
@@ -85,13 +89,13 @@ describe("Claude streamed reviewer resilience", () => {
 
   it("forwards external SIGINT, reaps the child, and exits 130", async () => {
     const f = fixture(`process.on("SIGINT",()=>process.exit(0)); setInterval(()=>{},1000);`);
-    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGINT");
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, { signal: "SIGINT", waitFor: join(f.stateDir, "journal.ndjson") });
     expect(result.code).toBe(130); expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).toContain('"type":"runner_signal"');
   });
 
   it("classifies SIGHUP as host interruption without reserving resume", async () => {
     const f = fixture(`console.log(JSON.stringify({type:"system",session_id:"host-session"})); process.on("SIGINT",()=>process.exit(0)); setInterval(()=>{},1000);`);
-    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGHUP");
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, { signal: "SIGHUP", waitFor: join(f.stateDir, "journal.ndjson") });
     expect(result.code).toBe(129);
     expect(result.output).toMatchObject({ failure_reason: "host-interrupted", resume_count: 0, external_interruption: true });
     const state = JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"));
@@ -186,11 +190,10 @@ describe("Claude streamed reviewer resilience", () => {
     expect(result.output).toMatchObject({ failure_reason: "host-interrupted", interruption: "parent-lost", resume_count: 0 });
   });
 
-  it("classifies parent identity change as host interruption", async () => {
-    const f = fixture(`setInterval(()=>{},1000);`);
+  it("does not mistake the lock wrapper for a parent identity change", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000", CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID: String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: "10" });
-    expect(result.code).toBe(129);
-    expect(result.output).toMatchObject({ failure_reason: "host-interrupted", interruption: "parent-changed", resume_count: 0 });
+    expect(result.output).toMatchObject({ verdict: "pass", synthetic: false });
   });
 
   it("observes the real parent before classifying a runtime parent change", async () => {
@@ -204,7 +207,7 @@ describe("Claude streamed reviewer resilience", () => {
 
   it("rolls back only the interrupted resume reservation and preserves a later recovery", async () => {
     const f = fixture(`setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: "prior-session", resume_count: 0, attempt: 1, status: "running" } });
-    const interrupted = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGHUP");
+    const interrupted = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, { signal: "SIGHUP", waitFor: join(f.stateDir, "journal.ndjson") });
     expect(interrupted.output).toMatchObject({ failure_reason: "host-interrupted", resume_count: 0 });
     expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ resume_count: 0, resume_reservation: null, session_id: null });
     writeFileSync(f.fake, `#!/usr/bin/env node\nif(process.argv.includes("--resume")){console.log(JSON.stringify({type:"result",session_id:"fresh-session",structured_output:${JSON.stringify(verdict)}}));}else{console.log(JSON.stringify({type:"system",session_id:"fresh-session"}));setInterval(()=>{},1000);}`);
@@ -215,7 +218,7 @@ describe("Claude streamed reviewer resilience", () => {
 
   it("does not decrement historical resume usage when a fresh attempt is host-interrupted", async () => {
     const f = fixture(`setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: null, resume_count: 1, resume_reservation: null, attempt: 3, status: "interrupted", failure_reason: "host-interrupted" } });
-    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGHUP");
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, { signal: "SIGHUP", waitFor: join(f.stateDir, "journal.ndjson") });
     expect(result.output).toMatchObject({ failure_reason: "host-interrupted", resume_count: 1 });
     expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ resume_count: 1, resume_reservation: null });
   });
@@ -463,69 +466,66 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(receipt).not.toContain(rejected);
   });
 
-  it("fails fast on Windows without spawning Claude", async () => {
+  it("fails closed on unsupported lock platforms without spawning Claude", async () => {
     const marker = join(mkdtempSync(join(tmpdir(), "claude-win-marker-")), "spawned");
     const f = fixture(`import {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},"spawned");`);
     const result = await execute(f, { WH_REVIEW_TEST_PLATFORM: "win32" });
-    expect(result.output).toMatchObject({ synthetic: true, failure_reason: "claude-artifact-review-unsupported-platform" });
+    expect(result.output).toMatchObject({ synthetic: true, failure_reason: "review-lock-unsupported-platform" });
     expect(existsSync(marker)).toBe(false);
   });
 
-  it("rejects a live owner lock and reclaims a dead owner lock", async () => {
+  it("rejects a live kernel lock and recovers immediately after its holder is killed", async () => {
     const live = fixture(`setInterval(()=>{},1000);`);
     const first = spawn(process.execPath, [runner, `--diff=${live.diff}`, `--output=${live.output}`, `--state-dir=${live.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: live.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "10000", CLAUDE_CODE_REVIEW_STOP_GRACE_MS: "20" } });
     for (let i = 0; i < 50 && !existsSync(join(live.stateDir, "owner.lock")); i += 1) await new Promise((r) => setTimeout(r, 10));
     const contender = { ...live, output: join(live.root, "contender.json") };
     const denied = await execute(contender, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" });
     expect(denied.output).toMatchObject({ failure_reason: "review-already-running" });
-    first.kill("SIGTERM"); await new Promise((resolveClose) => first.once("close", resolveClose));
-
-    const dead = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
-    writeFileSync(join(dead.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead" }), { mode: 0o600 });
-    const recovered = await execute(dead);
+    first.kill("SIGKILL"); await new Promise((resolveClose) => first.once("close", resolveClose));
+    writeFileSync(live.fake, `#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`); chmodSync(live.fake, 0o755);
+    const recovered = await execute(contender);
     expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
-    expect(existsSync(join(dead.stateDir, "owner.lock"))).toBe(false);
+    expect(existsSync(join(live.stateDir, "owner.lock"))).toBe(true);
   });
 
-  it("recovers a pre-existing abandoned reclaim guard", async () => {
-    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
-    writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-primary" }), { mode: 0o600 });
-    mkdirSync(join(f.stateDir, "owner.lock.reclaim"), { mode: 0o700 });
-    writeFileSync(join(f.stateDir, "owner.lock.reclaim", "owner.json"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-guard" }), { mode: 0o600 });
-    const recovered = await execute(f);
-    expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
-    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(false);
-  });
-
-  it("recovers after a reclaim guard holder is killed", async () => {
-    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
-    writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-primary" }), { mode: 0o600 });
-    const holderOutput = join(f.root, "killed-holder.json");
-    const holder = spawn(process.execPath, [runner, `--diff=${f.diff}`, `--output=${holderOutput}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, WH_REVIEW_TEST_RECLAIM_HOLD_MS: "5000" } });
-    for (let i = 0; i < 100 && !existsSync(join(f.stateDir, "owner.lock.reclaim")); i += 1) await new Promise((r) => setTimeout(r, 10));
-    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(true);
-    holder.kill("SIGKILL"); await new Promise((resolveClose) => holder.once("close", resolveClose));
-    const recovered = await execute(f);
-    expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
-    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(false);
-  });
-
-  it("allows only one contender to reclaim a stale owner lock", async () => {
+  it("allows only one of six kernel-lock contenders to run", async () => {
     const marker = join(mkdtempSync(join(tmpdir(), "claude-lock-race-marker-")), "spawned");
     const f = fixture(`import {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},String(process.pid),{flag:"wx"});setTimeout(()=>console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}})),150);`);
-    writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead" }), { mode: 0o600 });
-    mkdirSync(join(f.stateDir, "owner.lock.reclaim"), { mode: 0o700 });
-    writeFileSync(join(f.stateDir, "owner.lock.reclaim", "owner.json"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-guard" }), { mode: 0o600 });
     const contenders = Array.from({ length: 6 }, (_, index) => ({ ...f, output: join(f.root, `contender-${index}.json`) }));
-    const results = await Promise.all(contenders.map((contender) => execute(contender, { WH_REVIEW_TEST_STALE_RECLAIM_DELAY_MS: "100" })));
+    const results = await Promise.all(contenders.map((contender) => execute(contender)));
     expect(results.filter(({ output }) => output?.verdict === "pass")).toHaveLength(1);
     expect(results.filter(({ output }) => output?.failure_reason === "review-already-running")).toHaveLength(5);
     expect(readFileSync(marker, "utf8")).toMatch(/^\d+$/u);
     expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ status: "completed" });
     expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "completed" });
-    expect(existsSync(join(f.stateDir, "owner.lock"))).toBe(false);
-    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(false);
+    expect(existsSync(join(f.stateDir, "owner.lock"))).toBe(true);
+    expect(readdirSync(f.stateDir).filter((name) => name.startsWith("owner.lock"))).toEqual(["owner.lock"]);
   });
+
+  it("fails closed when the kernel lock utility is missing", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f, { WH_REVIEW_LOCK_BIN: join(f.root, "missing-lock-utility") });
+    expect(result.output).toMatchObject({ synthetic: true, failure_reason: "review-lock-utility-missing" });
+  });
+
+  it.each([
+    ["darwin", ["-kst", "0"], 75],
+    ["linux", ["-n", "-F"], 1],
+  ])("uses the required %s kernel-lock flags", async (runtime, expectedFlags, contentionCode) => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    const marker = join(f.root, `${runtime}-lock-argv.json`), utility = join(f.root, `fake-${runtime}-lock.mjs`);
+    writeFileSync(utility, `#!/usr/bin/env node\nimport {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},JSON.stringify(process.argv.slice(2)));process.exit(${contentionCode});`); chmodSync(utility, 0o755);
+    const result = await execute(f, { WH_REVIEW_TEST_PLATFORM: runtime, WH_REVIEW_LOCK_BIN: utility });
+    expect(result.output).toMatchObject({ failure_reason: "review-already-running" });
+    expect(JSON.parse(readFileSync(marker, "utf8")).slice(0, 2)).toEqual(expectedFlags);
+    expect(JSON.parse(readFileSync(marker, "utf8"))[2]).toBe(join(f.stateDir, "owner.lock"));
+  });
+
+  it("reuses one fixed kernel lock inode without lock-file growth", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    for (let i = 0; i < 100; i += 1) expect((await execute(f)).output.verdict).toBe("pass");
+    expect(readdirSync(f.stateDir).filter((name) => name.startsWith("owner.lock"))).toEqual(["owner.lock"]);
+  }, 60000);
 
   it("preserves complete host coverage across same-process resume and requests only missing chunks", async () => {
     const marker = join(mkdtempSync(join(tmpdir(), "claude-resume-marker-")), "first");
