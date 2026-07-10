@@ -487,6 +487,21 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(existsSync(join(dead.stateDir, "owner.lock"))).toBe(false);
   });
 
+  it("allows only one contender to reclaim a stale owner lock", async () => {
+    const marker = join(mkdtempSync(join(tmpdir(), "claude-lock-race-marker-")), "spawned");
+    const f = fixture(`import {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},String(process.pid),{flag:"wx"});setTimeout(()=>console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}})),150);`);
+    writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead" }), { mode: 0o600 });
+    const contenders = Array.from({ length: 6 }, (_, index) => ({ ...f, output: join(f.root, `contender-${index}.json`) }));
+    const results = await Promise.all(contenders.map((contender) => execute(contender, { WH_REVIEW_TEST_STALE_RECLAIM_DELAY_MS: "100" })));
+    expect(results.filter(({ output }) => output?.verdict === "pass")).toHaveLength(1);
+    expect(results.filter(({ output }) => output?.failure_reason === "review-already-running")).toHaveLength(5);
+    expect(readFileSync(marker, "utf8")).toMatch(/^\d+$/u);
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ status: "completed" });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "completed" });
+    expect(existsSync(join(f.stateDir, "owner.lock"))).toBe(false);
+    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(false);
+  });
+
   it("preserves complete host coverage across same-process resume and requests only missing chunks", async () => {
     const marker = join(mkdtempSync(join(tmpdir(), "claude-resume-marker-")), "first");
     const script = `import {existsSync,readFileSync,writeFileSync} from "node:fs";import {join} from "node:path";

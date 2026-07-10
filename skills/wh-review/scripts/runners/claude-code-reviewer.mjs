@@ -239,7 +239,7 @@ const prompt = artifactPackage
   ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete immutable review package is your working directory. Use only Read. Read every declared chunk in sequence; do not read any path not listed below. Concatenating each entry's chunks reconstructs the exact logical artifact. The contract entry is authoritative; required_skill entries are report-only lenses. Review every role=materials entry.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete evidence. For escalate_to_human, a well-formed attested subset is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
   : `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
 mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson"), lockFile = join(stateDir, "owner.lock"), receiptFile = join(stateDir, "terminal-receipt.json"), settingsFile = join(stateDir, "safe-settings.json");
+const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson"), lockFile = join(stateDir, "owner.lock"), reclaimFile = join(stateDir, "owner.lock.reclaim"), receiptFile = join(stateDir, "terminal-receipt.json"), settingsFile = join(stateDir, "safe-settings.json");
 const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 300000));
 const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS || 2000));
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
@@ -260,18 +260,36 @@ function liveOwner(owner) {
 }
 function acquireLock() {
   const owner = { pid: process.pid, start: processStart(process.pid), token: randomUUID() };
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  const createOwner = () => {
     try {
       const fd = openSync(lockFile, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
       writeFileSync(fd, JSON.stringify(owner)); closeSync(fd); lockToken = owner.token; return true;
     } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      let prior; try { prior = JSON.parse(readFileSync(lockFile, "utf8")); } catch {}
-      if (liveOwner(prior)) return false;
-      try { unlinkSync(lockFile); } catch (unlinkError) { if (unlinkError.code !== "ENOENT") throw unlinkError; }
+      if (error.code === "EEXIST") return false;
+      throw error;
     }
+  };
+  if (createOwner()) return true;
+  let prior; try { prior = JSON.parse(readFileSync(lockFile, "utf8")); } catch {}
+  if (liveOwner(prior)) return false;
+  const testDelay = Number(process.env.WH_REVIEW_TEST_STALE_RECLAIM_DELAY_MS || 0);
+  if (Number.isFinite(testDelay) && testDelay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(testDelay, 1000));
+  const reclaim = { pid: process.pid, start: processStart(process.pid), token: randomUUID() };
+  try {
+    const fd = openSync(reclaimFile, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+    writeFileSync(fd, JSON.stringify(reclaim)); closeSync(fd);
+  } catch (error) {
+    if (error.code === "EEXIST") return false;
+    throw error;
   }
-  return false;
+  try {
+    try { prior = JSON.parse(readFileSync(lockFile, "utf8")); } catch { prior = null; }
+    if (liveOwner(prior)) return false;
+    try { unlinkSync(lockFile); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    return createOwner();
+  } finally {
+    try { const held = JSON.parse(readFileSync(reclaimFile, "utf8")); if (held.token === reclaim.token) unlinkSync(reclaimFile); } catch {}
+  }
 }
 function releaseLock() { try { const owner = JSON.parse(readFileSync(lockFile, "utf8")); if (owner.token === lockToken) unlinkSync(lockFile); } catch {} }
 if (!acquireLock()) {
