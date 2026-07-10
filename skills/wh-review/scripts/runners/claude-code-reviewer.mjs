@@ -366,16 +366,20 @@ const ERROR_CATEGORIES = new Map([
   ["permission_denied", "permission"],
   ["overloaded", "overloaded"],
   ["invalid_request", "invalid_request"],
+  ["origin_response_timeout", "upstream_timeout"],
 ]);
+const RETRYABLE_UPSTREAM_CATEGORIES = new Set(["rate_limit", "overloaded", "upstream_timeout"]);
 const SAFE_SUBTYPES = new Set(["success", "error_during_execution", "error_max_turns", "error_max_budget_usd", "error_max_structured_output_retries", "interrupted"]);
 const SAFE_STOP_REASONS = new Set(["end_turn", "max_tokens", "stop_sequence", "tool_use", "error"]);
 const SAFE_EVENT_TYPES = new Set(["system", "assistant", "user", "result", "stream_event"]);
 const safeSessionId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : undefined;
 const sessionIdHash = (value) => createHash("sha256").update(value).digest("hex");
 function terminalDiagnostics(event) {
-  if (!event || typeof event !== "object" || event.type !== "result") return {};
+  if (!event || typeof event !== "object") return {};
+  const apiErrorCategory = event.isApiErrorMessage === true && event.apiErrorStatus === 524 ? "upstream_timeout" : undefined;
+  if (event.type !== "result" && !apiErrorCategory) return {};
   return {
-    ...(ERROR_CATEGORIES.has(event.error_code) ? { error_category: ERROR_CATEGORIES.get(event.error_code) } : {}),
+    ...(apiErrorCategory || ERROR_CATEGORIES.has(event.error_code) ? { error_category: apiErrorCategory || ERROR_CATEGORIES.get(event.error_code) } : {}),
     ...(SAFE_SUBTYPES.has(event.subtype) ? { terminal_subtype: event.subtype } : {}),
     ...(SAFE_STOP_REASONS.has(event.stop_reason) ? { stop_reason: event.stop_reason } : {}),
   };
@@ -552,7 +556,10 @@ if (startupResume && state.resume_count >= 1) {
   if (startupResume) reserveResume();
   outcome = await run(startupResume ? continuation({ freshProcess: true }) : prompt, startupResume);
   if (startupResume) commitResumeReservation();
-  if (outcome.stalled && state.session_id && state.resume_count < 1) {
+  const retryableUpstreamFailure = outcome.code !== 0
+    && !outcome.verdict
+    && RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category);
+  if ((outcome.stalled || retryableUpstreamFailure) && state.session_id && state.resume_count < 1) {
     reserveResume();
     // Discard partial ranges; only complete host-attested chunks survive an
     // in-process resume. This prevents cross-attempt range splicing.
