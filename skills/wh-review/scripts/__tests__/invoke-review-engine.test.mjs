@@ -467,13 +467,17 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     }
   });
 
-  it("preserves contract-required skillResults from the Claude verdict", () => {
+  it("preserves executed and reviewer-decided not_applicable skillResults from the Claude verdict", () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude({ resultObject: {
       verdict: "pass",
       findings: [],
       resolutionSummary: "skills executed",
-      skillResults: [{ skill: "review", status: "executed", evidence: "SKILL.md fallback: /tmp/review/SKILL.md; checked scope; no drift." }],
+      skillResults: [
+        { skill: "plan-ceo-review", status: "executed", evidence: "SKILL.md fallback: /tmp/plan-ceo-review/SKILL.md; checked premise and scope; no drift." },
+        { skill: "review", status: "executed", evidence: "SKILL.md fallback: /tmp/review/SKILL.md; checked scope; no drift." },
+        { skill: "plan-design-review", status: "not_applicable", evidence: "Reviewer inspected supplied design sources and found no UI scope; no UI review applied." },
+      ],
     } });
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
@@ -491,7 +495,9 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
       const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-19.raw.json`);
-      expect(JSON.parse(readFileSync(artifactPath, "utf8")).skillResults).toHaveLength(1);
+      const skillResults = JSON.parse(readFileSync(artifactPath, "utf8")).skillResults;
+      expect(skillResults).toHaveLength(3);
+      expect(skillResults.find(({ skill }) => skill === "plan-design-review").status).toBe("not_applicable");
     } finally {
       if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
       else process.env.CLAUDE_CODE_BIN = savedClaudeBin;

@@ -2,6 +2,8 @@
 
 # Design Review 审查合同
 
+<!-- wh-review-skills: {"required":["plan-ceo-review","review","plan-design-review"]} -->
+
 > 本文件定义 design-reviewer 的检查维度。合同外发现只能标 `minor`，不能标 `blocking`。
 
 ## 三轴审查
@@ -20,7 +22,7 @@
 
 - `plan-ceo-review`：premise challenge、scope mode、existing leverage、implementation alternatives、dream state delta、risk review。
 - `review`：独立复审设计目标、用户路径、验收边界、diff/scope drift。
-- `plan-design-review`：UI scope 时必需，覆盖信息架构、交互状态、用户旅程、AI slop risk、design system、响应式、无障碍、未决设计问题。
+- `plan-design-review`：定义必须始终可用并纳入审查依赖闭包；是否适用由 reviewer 根据实际 design sources 判断。UI scope 时执行，覆盖信息架构、交互状态、用户旅程、AI slop risk、design system、响应式、无障碍、未决设计问题；确认不涉及 UI 时在 `skillResults` 明确记录 `status=not_applicable` 及证据。不得通过材料中的关键词或固定文本猜测适用性。
 
 required skill 不可用且 SKILL.md 文件不可读 → `escalate_to_human`。pass/revise 输出必须含顶层 `skillResults`，逐项记录 executed / not_applicable / unavailable / failed。
 
