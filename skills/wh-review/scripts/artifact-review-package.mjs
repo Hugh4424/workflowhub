@@ -2,8 +2,11 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   chmodSync,
+  closeSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -13,6 +16,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 
 const SAFE_SKILL = /^[a-z0-9][a-z0-9-]*$/;
+const SAFE_SOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
 export class ArtifactReviewPackageError extends Error {
   constructor(code, message) {
@@ -42,8 +46,8 @@ function lineCount(bytes) {
   for (const byte of bytes) if (byte === 10) lines += 1;
   return lines + (bytes[bytes.length - 1] === 10 ? 0 : 1);
 }
-function entry(id, role, path, bytes) {
-  return { id, role, path, bytes: bytes.length, lines: lineCount(bytes), sha256: sha256(bytes) };
+function entry(id, role, kind, path, bytes) {
+  return { id, role, kind, path, bytes: bytes.length, lines: lineCount(bytes), sha256: sha256(bytes) };
 }
 function atomicWrite(path, bytes) {
   mkdirSync(dirname(path), { recursive: true });
@@ -97,7 +101,7 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
   } catch (error) {
     throw new ArtifactReviewPackageError("artifact-package-invalid", `invalid manifest: ${error.message}`);
   }
-  if (parsed?.version !== 2 || !Array.isArray(parsed.entries) || typeof parsed.content_hash !== "string") {
+  if (parsed?.version !== 3 || !Array.isArray(parsed.entries) || typeof parsed.content_hash !== "string") {
     throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest shape is invalid");
   }
   const ids = new Set();
@@ -106,7 +110,7 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
     if (typeof item?.path === "string" && (isAbsolute(item.path) || item.path.split(/[\\/]/).some((part) => part === "." || part === ".."))) {
       throw new ArtifactReviewPackageError("artifact-package-escape", `${item.id || "entry"} path escapes package root`);
     }
-    if (!item || typeof item.id !== "string" || !item.id || typeof item.role !== "string" || !item.role || ids.has(item.id) || !safeRelativePath(item.path) || !Number.isInteger(item.lines) || item.lines < 0) {
+    if (!item || typeof item.id !== "string" || !item.id || typeof item.role !== "string" || !item.role || typeof item.kind !== "string" || !item.kind || ids.has(item.id) || !safeRelativePath(item.path) || !Number.isInteger(item.lines) || item.lines < 0) {
       throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest entry identity/path is invalid");
     }
     ids.add(item.id);
@@ -138,8 +142,8 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
       throw new ArtifactReviewPackageError("artifact-package-tampered", `${item.id} bytes/hash mismatch`);
     }
   }
-  if (!ids.has("contract") || !ids.has("materials")) {
-    throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest must contain contract and materials entries");
+  if (!ids.has("contract") || !parsed.entries.some((item) => item.role === "materials")) {
+    throw new ArtifactReviewPackageError("artifact-package-invalid", "manifest must contain contract and material entries");
   }
   const contentHash = sha256(Buffer.from(canonical(parsed.entries)));
   if (contentHash !== parsed.content_hash || (expectedContentHash && expectedContentHash !== contentHash)) {
@@ -148,20 +152,43 @@ export function verifyArtifactReviewPackage({ packageRoot, manifestPath, expecte
   return { packageRoot: realRoot, manifestPath: realpathSync(manifest), manifest: parsed };
 }
 
-export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, totalRound, contract, materials, skillDefinitions = [] }) {
-  const files = [
-    { id: "contract", role: "contract", path: "contract.md", bytes: Buffer.from(contract, "utf8") },
-    { id: "materials", role: "materials", path: "materials.md", bytes: Buffer.from(materials, "utf8") },
-  ];
+function stableSourceBytes(path) {
+  let descriptor;
+  try {
+    const sourceStat = lstatSync(path);
+    if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) throw new Error("source is not a regular file");
+    const fd = openSync(path, "r");
+    try {
+      const before = fstatSync(fd), bytes = readFileSync(fd), after = fstatSync(fd);
+      if (sourceStat.dev !== before.dev || sourceStat.ino !== before.ino || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || bytes.length !== after.size) throw new Error("source changed while snapshotting");
+      descriptor = bytes;
+    } finally { closeSync(fd); }
+  } catch (error) { throw new ArtifactReviewPackageError("artifact-package-invalid", `material source unreadable: ${error.message}`); }
+  return descriptor;
+}
+
+export function createArtifactReviewPackage({ reviewsRoot, stage, reviewFlowId, totalRound, contract, materials, materialSources = [], skillDefinitions = [] }) {
+  const files = [{ id: "contract", role: "contract", kind: "contract", path: "contract.md", bytes: Buffer.from(contract, "utf8") }];
+  if (materialSources.length) {
+    const seen = new Set();
+    for (const [index, source] of [...materialSources].sort((a, b) => String(a.id).localeCompare(String(b.id))).entries()) {
+      if (!source || !SAFE_SOURCE_ID.test(source.id) || seen.has(source.id) || typeof source.path !== "string") throw new ArtifactReviewPackageError("artifact-package-invalid", "material source descriptors require unique safe id/path");
+      seen.add(source.id);
+      const suffix = source.path.split(/[\\/]/).at(-1).replace(/[^A-Za-z0-9._-]/g, "_") || "source.txt";
+      files.push({ id: source.id, role: "materials", kind: "material_source", path: `materials/${String(index + 1).padStart(3, "0")}-${suffix}`, bytes: stableSourceBytes(source.path) });
+    }
+  } else {
+    files.push({ id: "materials", role: "materials", kind: "material_snapshot", path: "materials.md", bytes: Buffer.from(materials, "utf8") });
+  }
   for (const skill of skillDefinitions) {
     if (!SAFE_SKILL.test(skill.name)) throw new ArtifactReviewPackageError("artifact-package-invalid", `unsafe skill name ${skill.name}`);
-    files.push({ id: `skill:${skill.name}`, role: "required_skill", path: `skills/${skill.name}.md`, bytes: Buffer.from(skill.content, "utf8") });
+    files.push({ id: `skill:${skill.name}`, role: "required_skill", kind: "required_skill", path: `skills/${skill.name}.md`, bytes: Buffer.from(skill.content, "utf8") });
   }
-  const entries = files.map((file) => entry(file.id, file.role, file.path, file.bytes));
+  const entries = files.map((file) => entry(file.id, file.role, file.kind, file.path, file.bytes));
   const contentHash = sha256(Buffer.from(canonical(entries)));
   const packageRoot = join(reviewsRoot, ".claude-review-packages", `${stage}-${reviewFlowId}-round-${totalRound}-${contentHash}`);
   const manifestPath = join(packageRoot, "manifest.json");
-  const manifest = { version: 2, content_hash: contentHash, entries };
+  const manifest = { version: 3, content_hash: contentHash, entries };
   if (existsSync(packageRoot)) {
     verifyArtifactReviewPackage({ packageRoot, manifestPath, expectedContentHash: contentHash, requireSealed: false });
     sealPackage(packageRoot, files);

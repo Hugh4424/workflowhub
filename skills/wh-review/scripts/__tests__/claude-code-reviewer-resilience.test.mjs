@@ -45,7 +45,7 @@ afterEach(() => { for (const root of roots.splice(0)) { makeRemovable(root); rmS
 const fullReadEvents = `
 const addDir=process.argv.indexOf("--add-dir");
 const manifest=JSON.parse(readFileSync(join(process.argv[addDir+1],"manifest.json"),"utf8"));
-for(const [i,e] of manifest.entries.entries()){const id="read-"+i;console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:join(process.argv[addDir+1],e.path),offset:1,limit:Math.max(1,e.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content:"SECRET TOOL BODY"}]}}));}`;
+for(const [i,e] of manifest.entries.entries()){const id="read-"+i,path=join(process.argv[addDir+1],e.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,e.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
   it("does not resume again across restart after the lifetime budget was consumed", async () => {
@@ -165,7 +165,7 @@ describe("Claude streamed reviewer resilience", () => {
     const script = `
 import {readFileSync} from "node:fs"; import {join} from "node:path";
 const input=readFileSync(0,"utf8");
-if(process.argv.indexOf("--add-dir")!==process.argv.length-2 || process.argv[process.argv.indexOf("--allowedTools")+1]!=="Read" || input.includes("MATERIAL SECRET")) process.exit(31);
+if(process.argv.indexOf("--add-dir")!==process.argv.length-2 || process.argv[process.argv.indexOf("--tools")+1]!=="Read" || process.argv.includes("--allowedTools") || input.includes("MATERIAL SECRET")) process.exit(31);
 ${fullReadEvents}
 const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read full artifact"}));
 console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`;
@@ -173,8 +173,9 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     const result = await execute(f);
     expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", synthetic: false });
     expect(result.output.artifactCoverage.every(({ evidence }) => evidence.startsWith("host-attested Read read"))).toBe(true);
+    expect(Object.keys(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8")).artifact_coverage)).toEqual(f.artifactPackage.manifest.entries.map(({ id }) => id));
     const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
-    expect(journal).not.toContain("MATERIAL SECRET"); expect(journal).not.toContain("SECRET TOOL BODY");
+    expect(journal).not.toContain("MATERIAL SECRET");
     expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
   });
 
@@ -221,10 +222,30 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(result.output).toMatchObject({ failure_reason: "artifact-coverage-unattested", synthetic: true });
   });
 
+  it("restores safe coverage ranges across a resumed runner process", async () => {
+    const f = fixture("", { artifact: true });
+    const artifact_coverage = Object.fromEntries(f.artifactPackage.manifest.entries.map((entry) => [entry.id, { ranges: entry.lines ? [[1, entry.lines]] : [], failed: false, emptyRead: entry.lines === 0 }]));
+    writeFileSync(join(f.stateDir, "state.json"), JSON.stringify({ input_hash: "fixed-hash", session_id: "resume-safe", resume_count: 0, attempt: 1, status: "running", artifact_coverage, artifact_manifest_hash: f.artifactPackage.manifest.content_hash }));
+    const artifactCoverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "resume" }));
+    writeFileSync(f.fake, `#!/usr/bin/env node\nif(!process.argv.includes("--resume"))process.exit(2);console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "resumed", skillResults: [], artifactCoverage })}}));`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", resume_count: 1 });
+  });
+
+  it.each([["complete", false, "pass"], ["truncated", true, "escalate_to_human"]])("uses actual returned characters for a long single line: %s", async (_label, truncate, expectedVerdict) => {
+    const f = fixture("", { artifact: true, materials: "x".repeat(5000) });
+    const artifactCoverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "actual chars" }));
+    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries()){const id="default-"+i,path=join(process.argv[a+1],e.path),source=readFileSync(path,"utf8"),line=source.replace(/\\n$/u,"");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content:"1\\t"+(e.id==="materials"&&${truncate}?line.slice(0,2000):line)}]}}));}console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "long", skillResults: [], artifactCoverage })}}));`);
+    const result = await execute(f);
+    expect(result.output.verdict).toBe(expectedVerdict);
+    if (truncate) expect(result.output).toMatchObject({ failure_reason: "artifact-coverage-unattested", synthetic: true });
+    else expect(result.output).toMatchObject({ execution_status: "completed", synthetic: false });
+  });
+
   it("rejects partial Read ranges and unknown stream event variants", async () => {
     const f = fixture("", { artifact: true, materials: "one\ntwo\nthree\n" });
     const coverage = f.artifactPackage.manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read", evidence: "claimed" }));
-    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries()){const id="r"+i,limit=e.id==="materials"?2:Math.max(1,e.lines);console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:join(process.argv[a+1],e.path),offset:1,limit}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id}]}}));}console.log(JSON.stringify({type:"tool_use",id:"unknown",name:"Read",input:{file_path:join(process.argv[a+1],"materials.md"),offset:3,limit:1}}));console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "partial", skillResults: [], artifactCoverage: coverage })}}));`);
+    writeFileSync(f.fake, `#!/usr/bin/env node\nimport {readFileSync} from "node:fs";import {join} from "node:path";const a=process.argv.indexOf("--add-dir"),m=JSON.parse(readFileSync(join(process.argv[a+1],"manifest.json"),"utf8"));for(const [i,e] of m.entries.entries()){const id="r"+i,limit=e.id==="materials"?2:Math.max(1,e.lines),path=join(process.argv[a+1],e.path),source=readFileSync(path,"utf8"),lines=source.replace(/\\n$/u,"").split("\\n").slice(0,limit),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}console.log(JSON.stringify({type:"tool_use",id:"unknown",name:"Read",input:{file_path:join(process.argv[a+1],"materials.md"),offset:3,limit:1}}));console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "partial", skillResults: [], artifactCoverage: coverage })}}));`);
     const result = await execute(f);
     expect(result.output).toMatchObject({ failure_reason: "artifact-coverage-unattested", synthetic: true });
   });

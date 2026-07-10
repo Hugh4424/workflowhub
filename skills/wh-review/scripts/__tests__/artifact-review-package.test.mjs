@@ -72,4 +72,22 @@ describe("artifact review package", () => {
     const packageRoot = join(reviewsRoot, ".claude-review-packages", packageName);
     expect(verifyArtifactReviewPackage({ packageRoot, manifestPath: join(packageRoot, "manifest.json") }).manifest.entries[1].bytes).toBe(1000000);
   });
+
+  it("snapshots per-source material descriptors into immutable independent entries", () => {
+    const reviewsRoot = makeRoot(), sourceRoot = makeRoot();
+    const spec = join(sourceRoot, "spec.md"), decision = join(sourceRoot, "decision.md");
+    writeFileSync(spec, "spec original\n"); writeFileSync(decision, "decision original\n");
+    const pkg = createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "sources", totalRound: 1, contract: "C", materials: "legacy aggregate ignored", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }] });
+    const sources = pkg.manifest.entries.filter(({ role }) => role === "materials");
+    expect(sources.map(({ id, kind }) => [id, kind])).toEqual([["source:decision", "material_source"], ["source:spec", "material_source"]]);
+    writeFileSync(spec, "mutated after snapshot\n");
+    expect(readFileSync(join(pkg.packageRoot, sources.find(({ id }) => id === "source:spec").path), "utf8")).toBe("spec original\n");
+    expect(pkg.manifest.entries.some(({ kind }) => kind === "material_snapshot")).toBe(false);
+  });
+
+  it("rejects symlink material source descriptors", () => {
+    const reviewsRoot = makeRoot(), sourceRoot = makeRoot(), target = join(sourceRoot, "target.md"), link = join(sourceRoot, "link.md");
+    writeFileSync(target, "source\n"); symlinkSync(target, link);
+    expect(() => createArtifactReviewPackage({ reviewsRoot, stage: "build-spec", reviewFlowId: "source-link", totalRound: 1, contract: "C", materials: "M", materialSources: [{ id: "source:link", path: link }] })).toThrow(/source is not a regular file/);
+  });
 });

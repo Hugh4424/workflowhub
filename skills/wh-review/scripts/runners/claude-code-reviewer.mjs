@@ -85,7 +85,17 @@ if (payload.artifact_manifest) {
 const contractEntry = artifactPackage?.manifest.entries.find((item) => item.id === "contract");
 const contractText = artifactPackage ? readFileSync(join(artifactPackage.packageRoot, contractEntry.path), "utf8") : (payload.contract || "");
 const expectedEntries = artifactPackage?.manifest.entries || null;
-const expectedPathEntries = new Map((expectedEntries || []).map((item) => [realpathSync(join(artifactPackage.packageRoot, item.path)), item]));
+function fileLines(path) {
+  const text = readFileSync(path, "utf8");
+  if (text.length === 0) return [];
+  const lines = text.split("\n");
+  if (text.endsWith("\n")) lines.pop();
+  return lines.map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
+}
+const expectedPathEntries = new Map((expectedEntries || []).map((item) => {
+  const path = realpathSync(join(artifactPackage.packageRoot, item.read_path || item.path));
+  return [path, { item, lines: fileLines(path) }];
+}));
 const pendingReads = new Map();
 const readCoverage = new Map((expectedEntries || []).map((item) => [item.id, { ranges: [], failed: false, emptyRead: false }]));
 let attestationInvalid = false;
@@ -110,6 +120,39 @@ function hostAttestation() {
   }
   return result;
 }
+function coverageSnapshot() {
+  return Object.fromEntries([...readCoverage].map(([id, value]) => [id, { ranges: mergeRanges(value.ranges), failed: value.failed, emptyRead: value.emptyRead }]));
+}
+function restoreCoverage(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  for (const [id, saved] of Object.entries(snapshot)) {
+    const current = readCoverage.get(id);
+    const entry = expectedEntries.find((item) => item.id === id);
+    if (!current || !entry || !saved || typeof saved !== "object" || !Array.isArray(saved.ranges) || saved.ranges.some((range) => !Array.isArray(range) || range.length !== 2 || !range.every(Number.isInteger) || range[0] < 1 || range[1] < range[0] || range[1] > entry.lines) || typeof saved.failed !== "boolean" || typeof saved.emptyRead !== "boolean") { attestationInvalid = true; continue; }
+    current.ranges = mergeRanges(saved.ranges);
+    current.failed = saved.failed === true;
+    current.emptyRead = saved.emptyRead === true;
+  }
+}
+function actualReadRanges(content, pending) {
+  if (typeof content !== "string") return null;
+  if (pending.entry.item.lines === 0) return content === "" ? [] : null;
+  const rawLines = content.split("\n");
+  const ranges = [];
+  let previous = null;
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const match = rawLines[index].match(/^\s*(\d+)(?:\t|→)(.*)$/u);
+    if (!match) {
+      const trailing = rawLines.slice(index).join("\n");
+      if (/^<system-reminder>[^]*<\/system-reminder>\s*$/u.test(trailing)) break;
+      return null;
+    }
+    const line = Number(match[1]);
+    if (!Number.isSafeInteger(line) || line < pending.offset || (Number.isFinite(pending.limit) && line >= pending.offset + pending.limit) || (previous !== null && line !== previous + 1) || line > pending.entry.lines.length || match[2] !== pending.entry.lines[line - 1]) return null;
+    ranges.push([line, line]); previous = line;
+  }
+  return ranges.length ? ranges : null;
+}
 function observeReadEvents(event) {
   if (!artifactPackage || !event || typeof event !== "object") return;
   if (event.type === "assistant") {
@@ -117,14 +160,16 @@ function observeReadEvents(event) {
     for (const block of event.message.content) {
       if (block?.type !== "tool_use" || block.name !== "Read") continue;
       const { id, input } = block;
-      if (typeof id !== "string" || !id || pendingReads.has(id) || !input || typeof input !== "object" || typeof input.file_path !== "string" || !isAbsolute(input.file_path) || !Number.isInteger(input.offset) || input.offset < 1 || !Number.isInteger(input.limit) || input.limit < 1) {
+      const offset = input?.offset === undefined ? 1 : input.offset;
+      const limit = input?.limit === undefined ? Number.POSITIVE_INFINITY : input.limit;
+      if (typeof id !== "string" || !id || pendingReads.has(id) || !input || typeof input !== "object" || typeof input.file_path !== "string" || !isAbsolute(input.file_path) || !Number.isInteger(offset) || offset < 1 || !(limit === Number.POSITIVE_INFINITY || (Number.isInteger(limit) && limit > 0))) {
         attestationInvalid = true;
         continue;
       }
-      let item;
-      try { item = expectedPathEntries.get(realpathSync(resolve(input.file_path))); } catch {}
-      pendingReads.set(id, item ? { item, offset: input.offset, limit: input.limit } : null);
-      if (item) record("read_tool_use", { entry_id: item.id, offset: input.offset, limit: input.limit });
+      let entry;
+      try { entry = expectedPathEntries.get(realpathSync(resolve(input.file_path))); } catch {}
+      pendingReads.set(id, entry ? { entry, offset, limit } : null);
+      if (entry) record("read_tool_use", { entry_id: entry.item.id, offset, ...(Number.isFinite(limit) ? { limit } : {}) });
     }
   } else if (event.type === "user") {
     if (event.message?.role !== "user" || !Array.isArray(event.message.content)) return;
@@ -137,14 +182,16 @@ function observeReadEvents(event) {
       }
       pendingReads.delete(block.tool_use_id);
       if (!pending) continue;
-      const stateForEntry = readCoverage.get(pending.item.id);
+      const stateForEntry = readCoverage.get(pending.entry.item.id);
       if (block.is_error === true) stateForEntry.failed = true;
-      else if (pending.item.lines === 0) stateForEntry.emptyRead = true;
       else {
-        const end = Math.min(pending.item.lines, pending.offset + pending.limit - 1);
-        if (pending.offset <= end) stateForEntry.ranges.push([pending.offset, end]);
+        const actual = actualReadRanges(block.content, pending);
+        if (actual === null) attestationInvalid = true;
+        else if (pending.entry.item.lines === 0) stateForEntry.emptyRead = true;
+        else stateForEntry.ranges.push(...actual);
       }
-      record("read_tool_result", { entry_id: pending.item.id, status: block.is_error === true ? "failed" : "success" });
+      record("read_tool_result", { entry_id: pending.entry.item.id, status: block.is_error === true ? "failed" : "success" });
+      persist(state.status, { artifact_coverage: coverageSnapshot(), artifact_manifest_hash: artifactPackage.manifest.content_hash });
     }
   }
 }
@@ -163,6 +210,10 @@ const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
 let state = { input_hash: inputHash, session_id: null, resume_count: 0, attempt: 0, attempt_id: null, phase: "idle", status: "new" };
 try { const old = JSON.parse(readFileSync(stateFile, "utf8")); if (old.input_hash === inputHash && typeof old.session_id === "string" && old.session_id && old.status !== "completed") state = { ...state, ...old }; else if (old.input_hash !== inputHash) appendFileSync(journal, `${JSON.stringify({ at: new Date().toISOString(), type: "state_hash_mismatch", expected_hash: inputHash, observed_hash: old.input_hash })}\n`); } catch {}
+if (artifactPackage && state.artifact_coverage) {
+  if (state.artifact_manifest_hash !== artifactPackage.manifest.content_hash) attestationInvalid = true;
+  else restoreCoverage(state.artifact_coverage);
+}
 let currentChild = null, idleTimer = null, shuttingDown = false;
 // POSIX rename-over-target is atomic. Windows does not guarantee that operation,
 // so use a recoverable swap: preserve the old file until the replacement lands.
@@ -229,7 +280,7 @@ async function run(input, resume) {
   let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {};
   return new Promise((resolve) => {
     let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); resolve({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal }); } };
-    const args = baseArgs(); if (resume) args.push("--resume", state.session_id); if (artifactPackage) args.push("--allowedTools", "Read", "--add-dir", artifactPackage.packageRoot);
+    const args = baseArgs(); if (resume) args.push("--resume", state.session_id); if (artifactPackage) args.push("--tools", "Read", "--add-dir", artifactPackage.packageRoot);
     const child = spawn(process.env.CLAUDE_CODE_BIN || "claude", args, { stdio: ["pipe", "pipe", "pipe"] }); currentChild = child;
     const arm = () => { clearTimeout(idleTimer); idleTimer = setTimeout(async () => { stalled = true; record("idle_timeout"); await stopChild(child); settle({ stalled: true, code: child.exitCode, signal: child.signalCode }); }, idleMs); };
     const consume = (line) => {

@@ -361,6 +361,7 @@ export function invokeReviewEngine({
   mode,
   contract,
   materials,
+  materialSources,
   taskTrackingRoot,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   env = process.env,
@@ -421,6 +422,7 @@ export function invokeReviewEngine({
         totalRound,
         contract,
         materials,
+        materialSources,
         skillDefinitions: resolution.definitions,
       });
     } catch (error) {
