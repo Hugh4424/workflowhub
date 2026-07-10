@@ -140,6 +140,7 @@ const expectedPathEntries = new Map((expectedEntries || []).flatMap((item) => it
   return [path, { item, chunk, lines: fileLines(path) }];
 })));
 const pendingReads = new Map();
+const MAX_PENDING_READS = 1024;
 const readCoverage = new Map((expectedEntries || []).map((item) => [item.id, { chunkRanges: new Map(item.chunks.map((chunk) => [chunk.sequence, []])), failed: false, emptyChunks: new Set() }]));
 let attestationInvalid = false;
 let boundaryViolation = false;
@@ -222,14 +223,16 @@ function observeReadEvents(event) {
         attestationInvalid = true;
         continue;
       }
+      if (pendingReads.size >= MAX_PENDING_READS) {
+        attestationInvalid = true;
+        continue;
+      }
       let entry, requested;
       try { requested = realpathSync(resolve(input.file_path)); entry = expectedPathEntries.get(requested); } catch {}
       const manifestRead = requested === artifactPackage.manifestPath;
-      if (!entry && !manifestRead) {
-        boundaryViolation = true;
-        record("read_boundary_violation", { path_hash: createHash("sha256").update(String(input.file_path)).digest("hex") });
-      }
-      pendingReads.set(id, entry ? { entry, offset, limit } : null);
+      if (entry) pendingReads.set(id, { kind: "artifact", entry, offset, limit });
+      else if (manifestRead) pendingReads.set(id, { kind: "manifest" });
+      else pendingReads.set(id, { kind: "boundary_candidate", pathHash: createHash("sha256").update(String(input.file_path)).digest("hex") });
     }
   } else if (event.type === "user") {
     if (event.message?.role !== "user" || !Array.isArray(event.message.content)) return;
@@ -241,7 +244,13 @@ function observeReadEvents(event) {
         continue;
       }
       pendingReads.delete(block.tool_use_id);
-      if (!pending) continue;
+      if (pending.kind === "boundary_candidate") {
+        if (block.is_error === true) continue;
+        boundaryViolation = true;
+        record("read_boundary_violation", { path_hash: pending.pathHash });
+        continue;
+      }
+      if (pending.kind === "manifest") continue;
       const stateForEntry = readCoverage.get(pending.entry.item.id);
       if (block.is_error === true) stateForEntry.failed = true;
       else {
@@ -447,6 +456,10 @@ async function run(input, resume) {
       if (session && !state.session_id) { state.session_id = session; record("session_established", { session_id_hash: sessionIdHash(session) }); semantic(); }
       observeReadEvents(event);
       if (boundaryViolation) { validationFailure = "artifact-read-boundary-violation"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
+      if (event.type === "result" && [...pendingReads.values()].some((pending) => pending.kind === "boundary_candidate")) {
+        attestationInvalid = true;
+        record("read_boundary_attestation_unresolved", { count: [...pendingReads.values()].filter((pending) => pending.kind === "boundary_candidate").length });
+      }
       safeTerminal = { ...safeTerminal, ...terminalDiagnostics(event) };
       const attestation = hostAttestation();
       const completed = completeChunkCount();
