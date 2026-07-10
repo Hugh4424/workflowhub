@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { createArtifactReviewPackage } from "../artifact-review-package.mjs";
 
 const runner = resolve("skills/wh-review/scripts/runners/claude-code-reviewer.mjs");
+const df100a3cReadPair = resolve("skills/wh-review/scripts/__tests__/fixtures/claude-stream/df100a3c-read-pair.json");
 const roots = [];
 const verdict = { verdict: "pass", findings: [], resolutionSummary: "ok", skillResults: [] };
 const requiredSkills = ["plan-ceo-review", "review", "plan-design-review"];
@@ -74,6 +75,72 @@ const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8
 for(const [i,e] of manifest.entries.entries())for(const c of e.chunks){const id="read-"+i+"-"+c.sequence,path=join(process.cwd(),c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
+  it.each([
+    ["overloaded", `{type:"result",session_id:"retry-session",subtype:"error_during_execution",error_code:"overloaded",error:"REDACT-ME upstream body"}`],
+    ["rate limit", `{type:"result",session_id:"retry-session",subtype:"error_during_execution",error_code:"rate_limit",error:"REDACT-ME upstream body"}`],
+    ["524 origin timeout", `{type:"assistant",session_id:"retry-session",isApiErrorMessage:true,apiErrorStatus:524,error:"REDACT-ME origin_response_timeout",message:{role:"assistant",content:[]}}`],
+  ])("resumes the same established session once after %s without resending materials", async (_label, terminalEvent) => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+const input=readFileSync(0,"utf8"), resumed=process.argv.includes("--resume");
+writeFileSync(new URL(resumed?"resume-input.txt":"initial-input.txt",import.meta.url),input);
+if(!resumed){
+  console.log(JSON.stringify({type:"system",session_id:"retry-session"}));
+  console.log(JSON.stringify(${terminalEvent}));
+  process.exit(1);
+}
+if(process.argv[process.argv.indexOf("--resume")+1]!=="retry-session") process.exit(52);
+console.log(JSON.stringify({type:"result",session_id:"retry-session",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 1, synthetic: false });
+    expect(readFileSync(join(f.root, "initial-input.txt"), "utf8")).toContain("M");
+    expect(readFileSync(join(f.root, "resume-input.txt"), "utf8")).not.toContain("## MATERIALS");
+    expect(readFileSync(join(f.root, "resume-input.txt"), "utf8")).toContain("Continue the interrupted review");
+    const persisted = `${readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")}\n${readFileSync(join(f.stateDir, "state.json"), "utf8")}\n${JSON.stringify(result.output)}`;
+    expect(persisted).not.toContain("REDACT-ME");
+  });
+
+  it.each(["authentication_failed", "permission_denied", "invalid_request", "prompt_too_long"])("does not retry terminal %s failures", async (errorCode) => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+readFileSync(0,"utf8");
+writeFileSync(new URL("calls.txt",import.meta.url),(process.argv.includes("--resume")?"resume":"initial")+"\\n",{flag:"a"});
+console.log(JSON.stringify({type:"system",session_id:"terminal-session"}));
+console.log(JSON.stringify({type:"result",session_id:"terminal-session",subtype:"error_during_execution",error_code:${JSON.stringify(errorCode)}}));
+process.exit(1);`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-non-zero-exit", resume_count: 0 });
+    expect(readFileSync(join(f.root, "calls.txt"), "utf8")).toBe("initial\n");
+  });
+
+  it("attests all 15 Reads from the redacted df100a3c transcript event shape", async () => {
+    const materials = `${"x".repeat(999)}\n`.repeat(900);
+    const script = `
+import {readFileSync} from "node:fs"; import {join} from "node:path";
+readFileSync(0,"utf8");
+const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));
+const shape=JSON.parse(readFileSync(${JSON.stringify(df100a3cReadPair)},"utf8"));
+let n=0;
+for(const entry of manifest.entries)for(const chunk of entry.chunks){
+  const id="df-read-"+(++n), path=join(process.cwd(),chunk.path), source=readFileSync(path,"utf8");
+  const lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,""));
+  const content=lines.map((line,index)=>String(index+1)+"\\t"+line).join("\\n");
+  const events=structuredClone(shape);
+  events[0].message.content[0].id=id; events[0].message.content[0].input.file_path=path;
+  events[1].message.content[0].tool_use_id=id; events[1].message.content[0].content=content;
+  for(const event of events) console.log(JSON.stringify(event));
+}
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read full artifact"}));
+console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`;
+    const f = fixture(script, { artifact: true, materials });
+    expect(f.artifactPackage.manifest.entries.reduce((sum, entry) => sum + entry.chunks.length, 0)).toBe(15);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed", synthetic: false });
+    expect(result.output.artifact_attestation).toHaveLength(f.artifactPackage.manifest.entries.length);
+    expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ completed: 15, total: 15 });
+  });
+
   it("does not resume again across restart after the lifetime budget was consumed", async () => {
     const f = fixture(`process.exit(91);`, { state: { input_hash: "fixed-hash", session_id: "s1", resume_count: 1, attempt: 2, attempt_id: "a2", phase: "attempt_settled", status: "failed" } });
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1000" });
