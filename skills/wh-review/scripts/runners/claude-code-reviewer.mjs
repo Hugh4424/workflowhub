@@ -211,6 +211,11 @@ function actualReadRanges(content, pending) {
   return ranges.length ? ranges : null;
 }
 function observeReadEvents(event) {
+  // Claude stream-json may wrap complete assistant/user messages in a
+  // stream_event envelope.  Normalize that envelope before attestation.
+  if (event?.type === "stream_event" && event.event && typeof event.event === "object") {
+    event = event.event;
+  }
   if (!artifactPackage || !event || typeof event !== "object") return;
   if (event.type === "assistant") {
     if (event.message?.role !== "assistant" || !Array.isArray(event.message.content)) return;
@@ -416,14 +421,37 @@ function claudeApiErrorCategory(event) {
     return undefined;
   }
 }
+function claudeApiErrorFrame(event) {
+  if (event?.type !== "assistant" || event?.message?.role !== "assistant") return null;
+  const content = event.message.content;
+  const text = typeof content === "string" ? content : Array.isArray(content) && content.length === 1 && content[0]?.type === "text" ? content[0].text : null;
+  if (typeof text !== "string" || !text.startsWith("API Error: 524 ")) return null;
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0, quoted = false, escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+    if (quoted) { if (escaped) escaped = false; else if (char === "\\") escaped = true; else if (char === '"') quoted = false; }
+    else if (char === '"') quoted = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) {
+      try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+    }
+  }
+  return null;
+}
 function terminalDiagnostics(event) {
   if (!event || typeof event !== "object") return {};
   const apiErrorCategory = event.isApiErrorMessage === true && event.apiErrorStatus === 524 ? "upstream_timeout" : claudeApiErrorCategory(event);
   if (event.type !== "result" && !apiErrorCategory) return {};
+  const frame = claudeApiErrorFrame(event);
+  const error = frame?.error && typeof frame.error === "object" ? frame.error : frame;
+  const retryAfter = Number(error?.retry_after ?? event.retry_after);
   return {
     ...(apiErrorCategory || ERROR_CATEGORIES.has(event.error_code) ? { error_category: apiErrorCategory || ERROR_CATEGORIES.get(event.error_code) } : {}),
     ...(SAFE_SUBTYPES.has(event.subtype) ? { terminal_subtype: event.subtype } : {}),
     ...(SAFE_STOP_REASONS.has(event.stop_reason) ? { stop_reason: event.stop_reason } : {}),
+    ...(Number.isFinite(retryAfter) && retryAfter >= 0 ? { retry_after: retryAfter } : {}),
   };
 }
 function verifyPackageAfterReview() {
@@ -444,7 +472,9 @@ async function run(input, resume) {
   state.phase = resume ? "resume_running" : "initial_running";
   persist(resume ? "resuming" : "running"); record("attempt_start", { resume, input_bytes: Buffer.byteLength(input), input_hash: createHash("sha256").update(input).digest("hex") });
   pendingReads.clear(); attestationInvalid = false; boundaryViolation = false;
-  let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {}, lastCompleted = state.progress.completed;
+  const attemptStartCompleted = completeChunkCount();
+  state.progress = { ...state.progress, completed: attemptStartCompleted };
+  let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {}, lastCompleted = attemptStartCompleted;
   let stderrBytes = 0, stderrCaptured = Buffer.alloc(0), stderrFinal = null;
   const stderrSummary = () => {
     if (stderrFinal) return stderrFinal;
@@ -454,7 +484,7 @@ async function run(input, resume) {
     return stderrFinal;
   };
   return new Promise((resolveRun) => {
-    let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); const stderr_summary = stderrSummary(); resolveRun({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal, stderr_summary }); } };
+    let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); const stderr_summary = stderrSummary(); resolveRun({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal, stderr_summary, progress_before: attemptStartCompleted, progress_after: completeChunkCount() }); } };
     const args = baseArgs(); if (resume) args.push("--resume", state.session_id); if (artifactPackage) {
       const scopedPackage = `//${artifactPackage.packageRoot.replace(/^\/+/, "")}/**`;
       args.push("--tools", "Read", "--allowedTools", `Read(${scopedPackage})`);
@@ -479,7 +509,8 @@ async function run(input, resume) {
         persist(state.status, { attempt_timing: state.attempt_timing });
         arm();
       }
-      const session = safeSessionId(event?.session_id);
+      const envelope = event?.type === "stream_event" && event.event && typeof event.event === "object" ? event.event : event;
+      const session = safeSessionId(event?.session_id ?? event?.sessionId ?? envelope?.session_id ?? envelope?.sessionId);
       if (session && state.session_id && session !== state.session_id) {
         validationFailure = "claude-code-session-mismatch";
         record("session_mismatch", { expected_session_id_hash: sessionIdHash(state.session_id), observed_session_id_hash: sessionIdHash(session) });
@@ -493,7 +524,7 @@ async function run(input, resume) {
         attestationInvalid = true;
         record("read_boundary_attestation_unresolved", { count: [...pendingReads.values()].filter((pending) => pending.kind === "boundary_candidate").length });
       }
-      safeTerminal = { ...safeTerminal, ...terminalDiagnostics(event) };
+      safeTerminal = { ...safeTerminal, ...terminalDiagnostics(event), ...terminalDiagnostics(envelope) };
       const attestation = hostAttestation();
       const completed = completeChunkCount();
       if (completed > lastCompleted) { lastCompleted = completed; record("coverage_progress", { completed, total: state.progress.total }); semantic(completed); }
@@ -588,48 +619,75 @@ function continuation({ freshProcess }) {
   return `Continue the interrupted review. ${freshProcess ? "This is a fresh host process; no prior Read coverage is trusted. " : "Host-attested complete chunks remain valid. "}Read only these missing chunks in full: ${missing.join(", ")}. Return only the required JSON verdict.`;
 }
 
-// resume_count is a persisted lifetime budget, not a per-process retry counter.
-// A restarted runner cannot attach to an already-started recovery child. If the
-// one recovery was consumed, fail closed instead of silently launching another.
-let startupResume = Boolean(state.session_id);
-let outcome;
-if (startupResume && state.resume_count >= 1) {
-  state.phase = "recovery_budget_exhausted";
-  persist("failed", { failure_reason: "claude-code-resume-budget-exhausted" });
-  record("resume_budget_exhausted", { resume_count: state.resume_count });
-  outcome = { recoveryBudgetExhausted: true, code: null };
-} else {
-  if (startupResume) reserveResume();
-  outcome = await run(startupResume ? continuation({ freshProcess: true }) : prompt, startupResume);
-  if (startupResume) commitResumeReservation();
-  const retryableUpstreamFailure = outcome.code !== 0
-    && !outcome.verdict
-    && RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category);
-  if ((outcome.stalled || retryableUpstreamFailure) && state.session_id && state.resume_count < 1) {
-    reserveResume();
-    // Discard partial ranges; only complete host-attested chunks survive an
-    // in-process resume. This prevents cross-attempt range splicing.
-    for (const [id, coverage] of readCoverage) {
-      const item = expectedEntries.find((entry) => entry.id === id);
-      for (const chunk of item.chunks) {
-        const ranges = mergeRanges(coverage.chunkRanges.get(chunk.sequence));
-        const complete = chunk.lines === 0 ? coverage.emptyChunks.has(chunk.sequence) : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= chunk.lines;
-        if (!complete) coverage.chunkRanges.set(chunk.sequence, []);
-      }
-      coverage.failed = false;
+const MAX_NO_PROGRESS_FAILURES = 4;
+const MAX_SAME_ERROR_FINGERPRINT = 5;
+const retryBaseMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_RETRY_BASE_MS || 1000));
+const retryJitter = Math.max(0, Number(process.env.CLAUDE_CODE_REVIEW_RETRY_JITTER || 0.2));
+const retrySleepCapMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_RETRY_SLEEP_CAP_MS || 300000));
+const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, process.env.CLAUDE_CODE_REVIEW_TEST_NO_SLEEP === "1" ? 0 : ms));
+function discardPartialCoverage() {
+  if (!expectedEntries) return;
+  for (const [id, coverage] of readCoverage) {
+    const item = expectedEntries.find((entry) => entry.id === id);
+    for (const chunk of item.chunks) {
+      const ranges = mergeRanges(coverage.chunkRanges.get(chunk.sequence));
+      const complete = chunk.lines === 0 ? coverage.emptyChunks.has(chunk.sequence) : ranges.length === 1 && ranges[0][0] === 1 && ranges[0][1] >= chunk.lines;
+      if (!complete) coverage.chunkRanges.set(chunk.sequence, []);
     }
-    outcome = await run(continuation({ freshProcess: false }), true);
-    commitResumeReservation();
+    coverage.failed = false;
   }
 }
+function outcomeFingerprint(outcome) {
+  const category = outcome.terminal_diagnostics?.error_category || (outcome.stalled ? "idle" : outcome.validation_failure || "non_zero");
+  return createHash("sha256").update(`${category}:${outcome.code ?? "null"}`).digest("hex");
+}
+let startupResume = Boolean(state.session_id);
+let outcome;
+let resume = startupResume;
+let consecutiveNoProgress = Number.isInteger(state.consecutive_no_progress) ? state.consecutive_no_progress : 0;
+let fingerprints = state.error_fingerprints && typeof state.error_fingerprints === "object" ? { ...state.error_fingerprints } : {};
+let attemptHistory = Array.isArray(state.attempt_history) ? state.attempt_history.slice(-19) : [];
+let acceptedAttempts = Number.isInteger(state.accepted_attempts) ? state.accepted_attempts : 0;
+let rejectedAttempts = Number.isInteger(state.rejected_attempts) ? state.rejected_attempts : 0;
+let exhaustionReason = null;
+for (;;) {
+  if (resume) reserveResume();
+  outcome = await run(resume ? continuation({ freshProcess: startupResume }) : prompt, resume);
+  if (resume) commitResumeReservation();
+  startupResume = false;
+  const progressMade = outcome.progress_after > outcome.progress_before;
+  const retryable = !outcome.verdict && !outcome.validation_failure && Boolean(state.session_id)
+    && (RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category) || (outcome.stalled && state.resume_count === 0));
+  const fingerprint = retryable ? outcomeFingerprint(outcome) : null;
+  if (retryable) {
+    consecutiveNoProgress = progressMade ? 0 : consecutiveNoProgress + 1;
+    fingerprints[fingerprint] = (fingerprints[fingerprint] || 0) + 1;
+  }
+  attemptHistory.push({ attempt: state.attempt, resumed: resume, result: outcome.verdict ? "verdict" : outcome.validation_failure ? "rejected" : retryable ? "retryable" : "fatal", progress_before: outcome.progress_before, progress_after: outcome.progress_after, ...(outcome.terminal_diagnostics?.error_category ? { error_category: outcome.terminal_diagnostics.error_category } : {}), ...(outcome.terminal_diagnostics?.retry_after !== undefined ? { retry_after: outcome.terminal_diagnostics.retry_after } : {}) });
+  attemptHistory = attemptHistory.slice(-20);
+  if (outcome.verdict) acceptedAttempts += 1; else rejectedAttempts += 1;
+  persist(state.status, { consecutive_no_progress: consecutiveNoProgress, error_fingerprints: fingerprints, attempt_history: attemptHistory, accepted_attempts: acceptedAttempts, rejected_attempts: rejectedAttempts, last_error: outcome.terminal_diagnostics?.error_category || outcome.validation_failure || null, last_retry_after: outcome.terminal_diagnostics?.retry_after ?? null });
+  record(outcome.verdict ? "attempt_accepted" : "attempt_rejected", { reason: outcome.verdict ? "valid_verdict" : outcome.validation_failure || (retryable ? "retryable_upstream" : "fatal"), accepted_count: acceptedAttempts, rejected_count: rejectedAttempts, result_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || { reason: outcome.validation_failure || outcome.terminal_diagnostics?.error_category || "fatal", code: outcome.code ?? null })).digest("hex"), completed: outcome.progress_after, total: state.progress.total });
+  if (!retryable) break;
+  if (consecutiveNoProgress >= MAX_NO_PROGRESS_FAILURES) { exhaustionReason = "claude-code-retry-no-progress-exhausted"; break; }
+  if (fingerprints[fingerprint] >= MAX_SAME_ERROR_FINGERPRINT) { exhaustionReason = "claude-code-retry-fingerprint-exhausted"; break; }
+  const retryAfter = outcome.terminal_diagnostics?.retry_after;
+  const exponential = retryBaseMs * (2 ** Math.max(0, state.resume_count));
+  const jitterFactor = 1 + ((Math.random() * 2 - 1) * retryJitter);
+  const delayMs = Math.min(retrySleepCapMs, retryAfter !== undefined ? retryAfter * 1000 : Math.max(1, Math.round(exponential * jitterFactor)));
+  record("retry_scheduled", { delay_ms: delayMs, source: retryAfter !== undefined ? "server_retry_after" : "exponential_backoff", error_fingerprint: fingerprint, consecutive_no_progress: consecutiveNoProgress });
+  discardPartialCoverage();
+  await sleep(delayMs);
+  resume = true;
+}
 let output;
-if (outcome.recoveryBudgetExhausted) output = failure(mode, "claude-code-resume-budget-exhausted", { resume_count: state.resume_count });
+if (exhaustionReason) output = failure(mode, exhaustionReason, { resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, last_error: state.last_error, last_retry_after: state.last_retry_after, attempt_history: attemptHistory });
 else if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
 else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
 else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
 else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { resume_count: state.resume_count, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
-else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count };
+else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count, attempt_history: attemptHistory };
 persist(output.execution_status, { failure_reason: output.failure_reason, terminal_verdict_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || null)).digest("hex") });
 atomicWrite(outputFile, JSON.stringify(output, null, 2));
-atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total }));
+atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total, attempts: state.attempt, resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, last_error: state.last_error || null, last_retry_after: state.last_retry_after ?? null, attempt_history: attemptHistory }));
 clearInterval(parentWatch);

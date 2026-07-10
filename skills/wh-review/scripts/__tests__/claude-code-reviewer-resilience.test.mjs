@@ -37,7 +37,7 @@ function fixture(script, { state, contract = "C", artifact = false, materials = 
 
 function execute(f, env = {}, signalAfter) {
   return new Promise((resolvePromise) => {
-    const child = spawn(process.execPath, [runner, `--diff=${f.diff}`, `--output=${f.output}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "2000", CLAUDE_CODE_REVIEW_STOP_GRACE_MS: "20", ...env } });
+    const child = spawn(process.execPath, [runner, `--diff=${f.diff}`, `--output=${f.output}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "2000", CLAUDE_CODE_REVIEW_STOP_GRACE_MS: "20", CLAUDE_CODE_REVIEW_TEST_NO_SLEEP: "1", ...env } });
     let stderr = ""; child.stderr.on("data", (x) => { stderr += x; });
     if (typeof signalAfter === "string") setTimeout(() => child.kill(signalAfter), 40);
     else if (signalAfter) {
@@ -75,6 +75,51 @@ const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8
 for(const [i,e] of manifest.entries.entries())for(const c of e.chunks){const id="read-"+i+"-"+c.sequence,path=join(process.cwd(),c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
+  it("retries 524 twice in the same session and then accepts a valid verdict", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+readFileSync(0,"utf8"); const p=new URL("calls.txt",import.meta.url); let n=0; try{n=Number(readFileSync(p,"utf8"))}catch{}; writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"multi-524"}));
+if(n<3){console.log(JSON.stringify({type:"result",session_id:"multi-524",subtype:"error_during_execution",error_code:"origin_response_timeout",retry_after:7}));process.exit(1)}
+console.log(JSON.stringify({type:"result",session_id:"multi-524",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 2, synthetic: false });
+    expect(result.output.attempt_history.map(({ result: kind }) => kind)).toEqual(["retryable", "retryable", "verdict"]);
+    const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
+    expect(journal).toContain('"source":"server_retry_after"');
+    expect(journal).toContain('"delay_ms":7000');
+  });
+
+  it("stops immediately when a retryable 524 is followed by fatal authentication", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"retry-fatal"}));
+console.log(JSON.stringify({type:"result",session_id:"retry-fatal",subtype:"error_during_execution",error_code:n===1?"origin_response_timeout":"authentication_failed"}));process.exit(1);`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-non-zero-exit", resume_count: 1, error_category: "authentication" });
+    expect(readFileSync(join(f.root, "n"), "utf8")).toBe("2");
+  });
+
+  it("fails explicitly after four retryable attempts without host progress", async () => {
+    const f = fixture(`import {readFileSync} from "node:fs";readFileSync(0,"utf8");console.log(JSON.stringify({type:"system",session_id:"no-progress"}));console.log(JSON.stringify({type:"result",session_id:"no-progress",subtype:"error_during_execution",error_code:"overloaded"}));process.exit(1);`);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-retry-no-progress-exhausted", resume_count: 3, consecutive_no_progress: 4 });
+    expect(result.output).not.toHaveProperty("verdict_hash");
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ failure_reason: "claude-code-retry-no-progress-exhausted", attempts: 4 });
+  });
+
+  it("resets the consecutive retryable failure counter when new host-attested coverage appears", async () => {
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";import {join} from "node:path";readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
+console.log(JSON.stringify({type:"system",session_id:"progress-reset"}));const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));const chunks=manifest.entries.flatMap(entry=>entry.chunks.map(chunk=>({entry,chunk})));
+if(n<=2){const {chunk}=chunks[n-1],id="p-"+n,path=join(process.cwd(),chunk.path),src=readFileSync(path,"utf8"),lines=src===""?[]:src.replace(/\\n$/u,"").split("\\n"),content=lines.map((line,i)=>String(i+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",session_id:"progress-reset",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}));console.log(JSON.stringify({type:"user",session_id:"progress-reset",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}
+console.log(JSON.stringify({type:"result",session_id:"progress-reset",subtype:"error_during_execution",error_code:"overloaded"}));process.exit(1);`, { artifact: true, materials: `${"z".repeat(99)}\n`.repeat(100) });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-retry-fingerprint-exhausted", consecutive_no_progress: 3 });
+    expect(result.output.attempt_history).toHaveLength(5);
+    expect(result.output.attempt_history.slice(0, 2).every(({ progress_after, progress_before }) => progress_after > progress_before)).toBe(true);
+  });
+
   it.each([
     ["overloaded", `{type:"result",session_id:"retry-session",subtype:"error_during_execution",error_code:"overloaded",error:"REDACT-ME upstream body"}`],
     ["rate limit", `{type:"result",session_id:"retry-session",subtype:"error_during_execution",error_code:"rate_limit",error:"REDACT-ME upstream body"}`],
@@ -185,10 +230,25 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ completed: 15, total: 15 });
   });
 
-  it("does not resume again across restart after the lifetime budget was consumed", async () => {
+  it("unwraps stream_event assistant tool_use and user tool_result envelopes", async () => {
+    const materials = `${"y".repeat(999)}\n`.repeat(900);
+    const f = fixture(`
+import {readFileSync} from "node:fs";import {join} from "node:path";readFileSync(0,"utf8");
+const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));let n=0;
+for(const entry of manifest.entries)for(const chunk of entry.chunks){const id="wrapped-"+(++n),path=join(process.cwd(),chunk.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,i)=>String(i+1)+"\\t"+line).join("\\n");
+console.log(JSON.stringify({type:"stream_event",event:{type:"assistant",sessionId:"wrapped-session",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}}));
+console.log(JSON.stringify({type:"stream_event",event:{type:"user",sessionId:"wrapped-session",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}}));}
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read"}));console.log(JSON.stringify({type:"result",session_id:"wrapped-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}));`, { artifact: true, materials });
+    expect(f.artifactPackage.manifest.entries.reduce((sum, entry) => sum + entry.chunks.length, 0)).toBe(15);
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed" });
+    expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
+  });
+
+  it("reclassifies a resumed attempt instead of enforcing a lifetime resume budget", async () => {
     const f = fixture(`process.exit(91);`, { state: { input_hash: "fixed-hash", session_id: "s1", resume_count: 1, attempt: 2, attempt_id: "a2", phase: "attempt_settled", status: "failed" } });
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1000" });
-    expect(result.code).toBe(0); expect(result.output).toMatchObject({ failure_reason: "claude-code-resume-budget-exhausted", resume_count: 1 });
+    expect(result.code).toBe(0); expect(result.output).toMatchObject({ failure_reason: "claude-code-non-zero-exit", resume_count: 2 });
   });
 
   it("escalates INT/TERM to KILL and settles when the child ignores graceful signals", async () => {
