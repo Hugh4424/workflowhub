@@ -487,10 +487,35 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
     expect(existsSync(join(dead.stateDir, "owner.lock"))).toBe(false);
   });
 
+  it("recovers a pre-existing abandoned reclaim guard", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-primary" }), { mode: 0o600 });
+    mkdirSync(join(f.stateDir, "owner.lock.reclaim"), { mode: 0o700 });
+    writeFileSync(join(f.stateDir, "owner.lock.reclaim", "owner.json"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-guard" }), { mode: 0o600 });
+    const recovered = await execute(f);
+    expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
+    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(false);
+  });
+
+  it("recovers after a reclaim guard holder is killed", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-primary" }), { mode: 0o600 });
+    const holderOutput = join(f.root, "killed-holder.json");
+    const holder = spawn(process.execPath, [runner, `--diff=${f.diff}`, `--output=${holderOutput}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, WH_REVIEW_TEST_RECLAIM_HOLD_MS: "5000" } });
+    for (let i = 0; i < 100 && !existsSync(join(f.stateDir, "owner.lock.reclaim")); i += 1) await new Promise((r) => setTimeout(r, 10));
+    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(true);
+    holder.kill("SIGKILL"); await new Promise((resolveClose) => holder.once("close", resolveClose));
+    const recovered = await execute(f);
+    expect(recovered.output).toMatchObject({ verdict: "pass", synthetic: false });
+    expect(existsSync(join(f.stateDir, "owner.lock.reclaim"))).toBe(false);
+  });
+
   it("allows only one contender to reclaim a stale owner lock", async () => {
     const marker = join(mkdtempSync(join(tmpdir(), "claude-lock-race-marker-")), "spawned");
     const f = fixture(`import {writeFileSync} from "node:fs";writeFileSync(${JSON.stringify(marker)},String(process.pid),{flag:"wx"});setTimeout(()=>console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}})),150);`);
     writeFileSync(join(f.stateDir, "owner.lock"), JSON.stringify({ pid: 999999, start: "dead", token: "dead" }), { mode: 0o600 });
+    mkdirSync(join(f.stateDir, "owner.lock.reclaim"), { mode: 0o700 });
+    writeFileSync(join(f.stateDir, "owner.lock.reclaim", "owner.json"), JSON.stringify({ pid: 999999, start: "dead", token: "dead-guard" }), { mode: 0o600 });
     const contenders = Array.from({ length: 6 }, (_, index) => ({ ...f, output: join(f.root, `contender-${index}.json`) }));
     const results = await Promise.all(contenders.map((contender) => execute(contender, { WH_REVIEW_TEST_STALE_RECLAIM_DELAY_MS: "100" })));
     expect(results.filter(({ output }) => output?.verdict === "pass")).toHaveLength(1);
@@ -508,7 +533,10 @@ console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",find
 const addDir=process.argv.indexOf("--add-dir"),root=process.cwd(),manifest=JSON.parse(readFileSync(join(root,"manifest.json"),"utf8")),all=manifest.entries.flatMap((e)=>e.chunks.map((c)=>({e,c}))),emit=({e,c},n)=>{const id="r"+n,path=join(root,c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n"),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));};
 if(!existsSync(${JSON.stringify(marker)})){writeFileSync(${JSON.stringify(marker)},"1");console.log(JSON.stringify({type:"system",session_id:"same-process"}));emit(all[0],0);process.on("SIGINT",()=>process.exit(0));setInterval(()=>{},1000);}else{const input=readFileSync(0,"utf8");if(input.includes(all[0].c.path)||!all.slice(1).every(({c})=>input.includes(c.path)))process.exit(41);all.slice(1).forEach((x,i)=>emit(x,i+1));const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"complete"}));console.log(JSON.stringify({type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"resumed missing only",skillResults:[],artifactCoverage}}));}`;
     const f = fixture(script, { artifact: true, materials: "line\n".repeat(20000) });
-    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "500" });
+    // This test asserts resume/coverage semantics, not a 500 ms child startup
+    // deadline. Parallel Vitest workers can consume that entire cold-start
+    // window before the fake emits its first session event.
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1500" });
     expect(result.output).toMatchObject({ verdict: "pass", resume_count: 1, synthetic: false });
     expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
   });

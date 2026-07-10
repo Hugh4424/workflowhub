@@ -275,20 +275,36 @@ function acquireLock() {
   const testDelay = Number(process.env.WH_REVIEW_TEST_STALE_RECLAIM_DELAY_MS || 0);
   if (Number.isFinite(testDelay) && testDelay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(testDelay, 1000));
   const reclaim = { pid: process.pid, start: processStart(process.pid), token: randomUUID() };
-  try {
-    const fd = openSync(reclaimFile, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-    writeFileSync(fd, JSON.stringify(reclaim)); closeSync(fd);
-  } catch (error) {
-    if (error.code === "EEXIST") return false;
-    throw error;
+  const candidate = `${reclaimFile}.candidate-${reclaim.token}`;
+  mkdirSync(candidate, { mode: 0o700 });
+  writeFileSync(join(candidate, "owner.json"), JSON.stringify(reclaim), { mode: 0o600, flag: "wx" });
+  let ownsReclaim = false;
+  for (let attempt = 0; attempt < 2 && !ownsReclaim; attempt += 1) {
+    try {
+      renameSync(candidate, reclaimFile);
+      ownsReclaim = true;
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST" && error.code !== "ENOTEMPTY") throw error;
+    }
+    let raw = "", holder = null;
+    try { raw = readFileSync(join(reclaimFile, "owner.json"), "utf8"); holder = JSON.parse(raw); }
+    catch { try { raw = readFileSync(reclaimFile, "utf8"); holder = JSON.parse(raw); } catch {} }
+    if (liveOwner(holder)) break;
+    const abandoned = `${reclaimFile}.abandoned-${createHash("sha256").update(raw || "missing-owner").digest("hex").slice(0, 24)}`;
+    try { renameSync(reclaimFile, abandoned); }
+    catch (error) { if (error.code !== "ENOENT" && error.code !== "EEXIST" && error.code !== "ENOTEMPTY") throw error; }
   }
+  if (!ownsReclaim) { rmSync(candidate, { recursive: true, force: true }); return false; }
   try {
+    const hold = Number(process.env.WH_REVIEW_TEST_RECLAIM_HOLD_MS || 0);
+    if (Number.isFinite(hold) && hold > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(hold, 5000));
     try { prior = JSON.parse(readFileSync(lockFile, "utf8")); } catch { prior = null; }
     if (liveOwner(prior)) return false;
     try { unlinkSync(lockFile); } catch (error) { if (error.code !== "ENOENT") throw error; }
     return createOwner();
   } finally {
-    try { const held = JSON.parse(readFileSync(reclaimFile, "utf8")); if (held.token === reclaim.token) unlinkSync(reclaimFile); } catch {}
+    try { const held = JSON.parse(readFileSync(join(reclaimFile, "owner.json"), "utf8")); if (held.token === reclaim.token && held.pid === reclaim.pid && held.start === reclaim.start) rmSync(reclaimFile, { recursive: true }); } catch {}
   }
 }
 function releaseLock() { try { const owner = JSON.parse(readFileSync(lockFile, "utf8")); if (owner.token === lockToken) unlinkSync(lockFile); } catch {} }
