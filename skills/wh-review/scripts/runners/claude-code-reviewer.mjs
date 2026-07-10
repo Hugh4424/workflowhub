@@ -29,7 +29,9 @@ function hasValidSkillCoverage(v, requiredSkills) {
   // A dependency failure may itself prevent the reviewer from producing every
   // required lens. Escalation therefore accepts a well-formed subset, while a
   // pass/revise verdict must prove the complete manifest closure.
-  return v.verdict === "escalate_to_human" || (observed.length === required.size && requiredSkills.every((skill) => observed.includes(skill)));
+  if (v.verdict === "escalate_to_human") return true;
+  if (observed.length !== required.size || !requiredSkills.every((skill) => observed.includes(skill))) return false;
+  return v.skillResults.every(({ skill, status }) => status === "executed" || (skill === "plan-design-review" && status === "not_applicable"));
 }
 function isVerdict(v, requiredSkills) { const keys = new Set(["verdict", "findings", "resolutionSummary", "skillResults"]); return v && typeof v === "object" && VERDICTS.has(v.verdict) && Array.isArray(v.findings) && v.findings.every(isFinding) && typeof v.resolutionSummary === "string" && Object.keys(v).every((k) => keys.has(k)) && hasValidSkillCoverage(v, requiredSkills); }
 function parseCandidate(v, requiredSkills) { try { const parsed = typeof v === "string" ? JSON.parse(v) : v; return isVerdict(parsed, requiredSkills) ? parsed : null; } catch { return null; } }

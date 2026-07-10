@@ -99,11 +99,32 @@ describe("Claude streamed reviewer resilience", () => {
     expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", synthetic: true });
   });
 
-  it("accepts not_applicable with evidence as complete manifest coverage", async () => {
-    const candidate = { verdict: "pass", findings: [], resolutionSummary: "complete", skillResults: completeSkillResults };
+  it.each(["pass", "revise_required"])("accepts plan-design-review not_applicable with evidence for %s", async (candidateVerdict) => {
+    const candidate = { verdict: candidateVerdict, findings: [], resolutionSummary: "complete", skillResults: completeSkillResults };
     const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
     const result = await execute(f);
-    expect(result.output).toMatchObject({ verdict: "pass", skillResults: completeSkillResults, synthetic: false });
+    expect(result.output).toMatchObject({ verdict: candidateVerdict, skillResults: completeSkillResults, synthetic: false });
+  });
+
+  it.each([
+    ["pass", "failed"],
+    ["pass", "unavailable"],
+    ["revise_required", "failed"],
+    ["revise_required", "unavailable"],
+  ])("rejects %s when a required skill is %s", async (candidateVerdict, status) => {
+    const skillResults = completeSkillResults.map((item) => item.skill === "review" ? { ...item, status } : item);
+    const candidate = { verdict: candidateVerdict, findings: [], resolutionSummary: "invalid dependency status", skillResults };
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", synthetic: true });
+  });
+
+  it.each(["plan-ceo-review", "review"])("rejects pass when %s is not_applicable", async (skill) => {
+    const skillResults = completeSkillResults.map((item) => item.skill === skill ? { ...item, status: "not_applicable" } : item);
+    const candidate = { verdict: "pass", findings: [], resolutionSummary: "invalid not_applicable", skillResults };
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", synthetic: true });
   });
 
   it("rejects revise_required when manifest coverage is incomplete", async () => {
@@ -118,5 +139,13 @@ describe("Claude streamed reviewer resilience", () => {
     const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
     const result = await execute(f);
     expect(result.output).toMatchObject({ verdict: "escalate_to_human", skillResults: [completeSkillResults[0]], execution_status: "completed", synthetic: false });
+  });
+
+  it.each(["failed", "unavailable"])("allows required skill status %s only for semantic escalation", async (status) => {
+    const skillResults = completeSkillResults.map((item) => item.skill === "review" ? { ...item, status } : item);
+    const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "dependency failure", skillResults };
+    const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", skillResults, execution_status: "completed", synthetic: false });
   });
 });
