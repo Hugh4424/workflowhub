@@ -383,9 +383,42 @@ const SAFE_STOP_REASONS = new Set(["end_turn", "max_tokens", "stop_sequence", "t
 const SAFE_EVENT_TYPES = new Set(["system", "assistant", "user", "result", "stream_event"]);
 const safeSessionId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : undefined;
 const sessionIdHash = (value) => createHash("sha256").update(value).digest("hex");
+function claudeApiErrorCategory(event) {
+  if (event?.type !== "assistant" || event?.message?.role !== "assistant") return undefined;
+  const content = event.message.content;
+  const texts = typeof content === "string"
+    ? [content]
+    : Array.isArray(content) && content.every((item) => item?.type === "text" && typeof item.text === "string")
+      ? content.map((item) => item.text)
+      : [];
+  if (texts.length !== 1) return undefined;
+  const prefix = "API Error: 524 ";
+  if (!texts[0].startsWith(prefix) || texts[0][prefix.length] !== "{") return undefined;
+  let depth = 0, inString = false, escaped = false, jsonEnd = -1;
+  for (let i = prefix.length; i < texts[0].length; i += 1) {
+    const char = texts[0][i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) { jsonEnd = i + 1; break; }
+  }
+  if (jsonEnd < 0) return undefined;
+  const suffix = texts[0].slice(jsonEnd);
+  if (suffix && !/^\. This is a server-side issue, usually temporary — try again in a moment\. If it persists, check your inference gateway \([^()\r\n]+\)\.$/u.test(suffix)) return undefined;
+  try {
+    const frame = JSON.parse(texts[0].slice(prefix.length, jsonEnd));
+    const error = frame?.error && typeof frame.error === "object" ? frame.error : frame;
+    return error?.error_name === "origin_response_timeout" && error?.retryable === true ? "upstream_timeout" : undefined;
+  } catch {
+    return undefined;
+  }
+}
 function terminalDiagnostics(event) {
   if (!event || typeof event !== "object") return {};
-  const apiErrorCategory = event.isApiErrorMessage === true && event.apiErrorStatus === 524 ? "upstream_timeout" : undefined;
+  const apiErrorCategory = event.isApiErrorMessage === true && event.apiErrorStatus === 524 ? "upstream_timeout" : claudeApiErrorCategory(event);
   if (event.type !== "result" && !apiErrorCategory) return {};
   return {
     ...(apiErrorCategory || ERROR_CATEGORIES.has(event.error_code) ? { error_category: apiErrorCategory || ERROR_CATEGORIES.get(event.error_code) } : {}),
