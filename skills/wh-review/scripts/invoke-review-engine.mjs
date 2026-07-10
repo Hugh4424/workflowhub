@@ -403,11 +403,18 @@ export function invokeReviewEngine({
   const workDir = mkdtempSync(join(tmpdir(), "invoke-review-engine-"));
   const diffFile = join(workDir, "diff.json");
   const outputFile = join(workDir, "output.json");
-  writeFileSync(diffFile, JSON.stringify({ mode, contract, materials }));
+  const inputHash = createHash("sha256").update(JSON.stringify({ mode, contract, materials })).digest("hex");
+  writeFileSync(diffFile, JSON.stringify({ mode, contract, materials, input_hash: inputHash }));
+  const runnerArgs = [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`];
+  if (runnerPath === CLAUDE_CODE_RUNNER) {
+    const stateDir = join(dirname(artifactPath), ".claude-review-state", `${stage}-${reviewFlowId}-round-${totalRound}-${inputHash}`);
+    mkdirSync(stateDir, { recursive: true });
+    runnerArgs.push(`--state-dir=${stateDir}`);
+  }
 
   let proc;
   try {
-    proc = spawnSync("node", [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`], {
+    proc = spawnSync("node", runnerArgs, {
       ...(runnerTimeoutMs === undefined ? {} : { timeout: runnerTimeoutMs }),
       encoding: "utf8",
       // Runner selection and runner behavior both depend on the invocation
