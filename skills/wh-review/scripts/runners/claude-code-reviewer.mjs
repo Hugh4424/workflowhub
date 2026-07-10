@@ -219,6 +219,19 @@ const schema = {
       },
     },
     resolutionSummary: { type: "string" },
+    skillResults: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: true,
+        properties: {
+          skill: { type: "string" },
+          status: { enum: ["executed", "not_applicable", "unavailable", "failed"] },
+          evidence: { type: "string" },
+        },
+        required: ["skill", "status", "evidence"],
+      },
+    },
   },
   required: ["verdict", "findings", "resolutionSummary"],
 };
@@ -234,6 +247,7 @@ Return only a JSON object with these exact top-level keys:
 - "verdict": one of "pass", "revise_required", "escalate_to_human"
 - "findings": an array
 - "resolutionSummary": a string
+- "skillResults": an optional array when the REVIEW CONTRACT requires skill execution; each item has "skill", "status", and concrete "evidence".
 
 Do not return {"pass": true}. Do not return markdown. Do not omit "verdict".
 

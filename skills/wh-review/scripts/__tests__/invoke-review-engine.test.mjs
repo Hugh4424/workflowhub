@@ -321,6 +321,37 @@ describe("invokeReviewEngine — success path", () => {
     }
   });
 
+  it("preserves contract-required skillResults from the Claude verdict", () => {
+    const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
+    const fakeClaude = writeFakeClaude({ resultObject: {
+      verdict: "pass",
+      findings: [],
+      resolutionSummary: "skills executed",
+      skillResults: [{ skill: "review", status: "executed", evidence: "SKILL.md fallback: /tmp/review/SKILL.md; checked scope; no drift." }],
+    } });
+    process.env.CLAUDE_CODE_BIN = fakeClaude;
+    try {
+      const result = invokeReviewEngine({
+        taskId: TASK_ID,
+        stage: STAGE,
+        reviewFlowId: REVIEW_FLOW_ID,
+        totalRound: 19,
+        mode: "full",
+        contract: "CONTRACT TEXT",
+        materials: "MATERIALS TEXT",
+        taskTrackingRoot: root,
+        env: { WH_REVIEW_PROVIDER: "claude-code" },
+      });
+
+      expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
+      const artifactPath = join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-19.raw.json`);
+      expect(JSON.parse(readFileSync(artifactPath, "utf8")).skillResults).toHaveLength(1);
+    } finally {
+      if (savedClaudeBin === undefined) delete process.env.CLAUDE_CODE_BIN;
+      else process.env.CLAUDE_CODE_BIN = savedClaudeBin;
+    }
+  });
+
   it("retries transient Claude Code empty stdout before writing a failure verdict", () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const savedAttempts = process.env.CLAUDE_CODE_REVIEW_ATTEMPTS;
