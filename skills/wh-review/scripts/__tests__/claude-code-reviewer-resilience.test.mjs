@@ -75,16 +75,16 @@ const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8
 for(const [i,e] of manifest.entries.entries())for(const c of e.chunks){const id="read-"+i+"-"+c.sequence,path=join(process.cwd(),c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
-  it("retries 524 twice in the same session and then accepts a valid verdict", async () => {
+  it("retries 524 six times in the same session and then accepts a valid verdict", async () => {
     const f = fixture(`
 import {readFileSync,writeFileSync} from "node:fs";
 readFileSync(0,"utf8"); const p=new URL("calls.txt",import.meta.url); let n=0; try{n=Number(readFileSync(p,"utf8"))}catch{}; writeFileSync(p,String(++n));
 console.log(JSON.stringify({type:"system",session_id:"multi-524"}));
-if(n<3){console.log(JSON.stringify({type:"result",session_id:"multi-524",subtype:"error_during_execution",error_code:"origin_response_timeout",retry_after:7}));process.exit(1)}
+if(n<7){console.log(JSON.stringify({type:"result",session_id:"multi-524",subtype:"error_during_execution",error_code:"origin_response_timeout",retry_after:7}));process.exit(1)}
 console.log(JSON.stringify({type:"result",session_id:"multi-524",structured_output:${JSON.stringify(verdict)}}));`);
     const result = await execute(f);
-    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 2, synthetic: false });
-    expect(result.output.attempt_history.map(({ result: kind }) => kind)).toEqual(["retryable", "retryable", "verdict"]);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 6, synthetic: false });
+    expect(result.output.attempt_history.map(({ result: kind }) => kind)).toEqual(["retryable", "retryable", "retryable", "retryable", "retryable", "retryable", "verdict"]);
     const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
     expect(journal).toContain('"source":"server_retry_after"');
     expect(journal).toContain('"delay_ms":7000');
@@ -100,12 +100,15 @@ console.log(JSON.stringify({type:"result",session_id:"retry-fatal",subtype:"erro
     expect(readFileSync(join(f.root, "n"), "utf8")).toBe("2");
   });
 
-  it("fails explicitly after four retryable attempts without host progress", async () => {
-    const f = fixture(`import {readFileSync} from "node:fs";readFileSync(0,"utf8");console.log(JSON.stringify({type:"system",session_id:"no-progress"}));console.log(JSON.stringify({type:"result",session_id:"no-progress",subtype:"error_during_execution",error_code:"overloaded"}));process.exit(1);`);
-    const result = await execute(f);
-    expect(result.output).toMatchObject({ failure_reason: "claude-code-retry-no-progress-exhausted", resume_count: 3, consecutive_no_progress: 4 });
-    expect(result.output).not.toHaveProperty("verdict_hash");
-    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ failure_reason: "claude-code-retry-no-progress-exhausted", attempts: 4 });
+  it("keeps repeated retryable 524 in resuming state until cancellation", async () => {
+    const f = fixture(`import {readFileSync,writeFileSync} from "node:fs";readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));if(n===9)writeFileSync(new URL("ninth",import.meta.url),"1");console.log(JSON.stringify({type:"system",session_id:"no-progress"}));console.log(JSON.stringify({type:"result",session_id:"no-progress",subtype:"error_during_execution",error_code:"origin_response_timeout",retry_after:9}));process.exit(1);`);
+    const result = await execute(f, {}, { waitFor: join(f.root, "ninth"), signal: "SIGTERM" });
+    expect(result.output).toBeNull();
+    const state = JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"));
+    expect(state.status).toBe("interrupted");
+    expect(state.last_error).toBe("upstream_timeout");
+    expect(state.consecutive_no_progress).toBeGreaterThan(4);
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "interrupted", failure_reason: "user-cancelled", verdict_hash: null });
   });
 
   it("resets the consecutive retryable failure counter when new host-attested coverage appears", async () => {
@@ -113,11 +116,11 @@ console.log(JSON.stringify({type:"result",session_id:"retry-fatal",subtype:"erro
 import {readFileSync,writeFileSync} from "node:fs";import {join} from "node:path";readFileSync(0,"utf8");const p=new URL("n",import.meta.url);let n=0;try{n=Number(readFileSync(p,"utf8"))}catch{};writeFileSync(p,String(++n));
 console.log(JSON.stringify({type:"system",session_id:"progress-reset"}));const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));const chunks=manifest.entries.flatMap(entry=>entry.chunks.map(chunk=>({entry,chunk})));
 if(n<=2){const {chunk}=chunks[n-1],id="p-"+n,path=join(process.cwd(),chunk.path),src=readFileSync(path,"utf8"),lines=src===""?[]:src.replace(/\\n$/u,"").split("\\n"),content=lines.map((line,i)=>String(i+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",session_id:"progress-reset",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}}));console.log(JSON.stringify({type:"user",session_id:"progress-reset",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}
-console.log(JSON.stringify({type:"result",session_id:"progress-reset",subtype:"error_during_execution",error_code:"overloaded"}));process.exit(1);`, { artifact: true, materials: `${"z".repeat(99)}\n`.repeat(100) });
+console.log(JSON.stringify({type:"result",session_id:"progress-reset",subtype:"error_during_execution",error_code:n<6?"overloaded":"invalid_request"}));process.exit(1);`, { artifact: true, materials: `${"z".repeat(99)}\n`.repeat(100) });
     const result = await execute(f);
-    expect(result.output).toMatchObject({ failure_reason: "claude-code-retry-fingerprint-exhausted", consecutive_no_progress: 3 });
-    expect(result.output.attempt_history).toHaveLength(5);
-    expect(result.output.attempt_history.slice(0, 2).every(({ progress_after, progress_before }) => progress_after > progress_before)).toBe(true);
+    expect(result.output).toMatchObject({ failure_reason: "claude-code-non-zero-exit" });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8")).consecutive_no_progress).toBe(3);
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8")).attempt_history.slice(0, 2).every(({ progress_after, progress_before }) => progress_after > progress_before)).toBe(true);
   });
 
   it.each([
@@ -770,6 +773,24 @@ if(!existsSync(${JSON.stringify(marker)})){writeFileSync(${JSON.stringify(marker
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1500" });
     expect(result.output).toMatchObject({ verdict: "pass", resume_count: 1, synthetic: false });
     expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
+  });
+
+  it("uses internal checkpoints until coverage is complete, then requests only the final verdict", async () => {
+    const script = `import {readFileSync,writeFileSync} from "node:fs";import {join} from "node:path";
+const input=readFileSync(0,"utf8"),root=process.cwd(),manifest=JSON.parse(readFileSync(join(root,"manifest.json"),"utf8")),all=manifest.entries.flatMap((e)=>e.chunks.map((c)=>({e,c}))),counter=new URL("checkpoint-count",import.meta.url);let n=0;try{n=Number(readFileSync(counter,"utf8"))}catch{};writeFileSync(counter,String(++n));
+const emit=({c},i)=>{const id="checkpoint-read-"+n+"-"+i,path=join(root,c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n"),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",session_id:"checkpoint-session",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",session_id:"checkpoint-session",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));};
+console.log(JSON.stringify({type:"system",session_id:"checkpoint-session"}));
+if(n===1){emit(all[0],0);console.log(JSON.stringify({type:"result",session_id:"checkpoint-session",subtype:"success"}));process.exit(0)}
+if(n===2){if(!input.includes("Coverage is incomplete")||!input.includes("short checkpoint")||input.includes("## MATERIALS"))process.exit(41);all.slice(1).forEach(emit);console.log(JSON.stringify({type:"result",session_id:"checkpoint-session",subtype:"success"}));process.exit(0)}
+if(!input.includes("All host-attested artifact coverage is complete")||!input.includes("required contract JSON verdict")||input.includes("## MATERIALS"))process.exit(42);
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"checkpoint-complete"}));console.log(JSON.stringify({type:"result",session_id:"checkpoint-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"complete after checkpoints",skillResults:[],artifactCoverage}}));`;
+    const f = fixture(script, { artifact: true, materials: "checkpoint material\n".repeat(500) });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 2, synthetic: false });
+    expect(result.output.attempt_history.map(({ result: kind }) => kind)).toEqual(["checkpoint", "checkpoint", "verdict"]);
+    expect(readFileSync(join(f.root, "checkpoint-count"), "utf8")).toBe("3");
+    expect(JSON.parse(readFileSync(join(f.stateDir, "terminal-receipt.json"), "utf8"))).toMatchObject({ execution_status: "completed", checkpoint_attempts: 2 });
+    expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).toContain('"type":"attempt_checkpoint"');
   });
 
   it("accepts content-block tool results and split UTF-8 NDJSON", async () => {
