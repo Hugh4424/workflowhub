@@ -318,13 +318,13 @@
 ### 3. 独立审查摘要
 
 - **verdict**：unknown
-- **摘要路径**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/verdict-build-spec-4af31a97-7382-4973-b8f8-f259189bfb42-round-1.raw.json`
-- **说明**：Step 3.7 在 Claude CLI 修复后重试，仍返回 `escalate_to_human` / `actual_mode=not_executed`，`failure_reason=claude-code-non-zero-exit`，`resolutionSummary=claude-code-non-zero-exit; attempts=1; status=143`。最小 Claude CLI 请求可成功；完整 wh-review 材料调用仍无可解析 verdict。这不是异源审查通过证据，按 build-spec auto-advance unknown 分支停止等待人工裁决。
+- **摘要路径**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/verdict-build-spec-4d2ed697-9369-4f04-b9ec-c22e61bdbe01-round-1.raw.json`
+- **说明**：Step 3.7 的 runner 已修复 timeout env 透传、timeout 归类、payload-only 限制、required-source Read allowlist 和 `skillResults` schema 冲突；定向测试 41/41 通过。最终 Read-only 审查仍返回 `escalate_to_human` / `actual_mode=not_executed`，`failure_reason=claude-code-empty-output`，`attempts=3`，`status=0`。这是外部 Claude CLI 未产出内容，不是异源审查通过证据；按 auto-advance unknown 分支停止等待人工裁决。
 
 ### 4. 未解风险
 
 - `[FRICTION] spec-purity grep`: 契约规格不可避免包含 schema 文件名和字段名；建议审查时区分“契约字段定义”和“实现细节泄露”。
-- `[FRICTION] 3rd-review unavailable`: Claude Code runner 两次返回 `claude-code-non-zero-exit`，第二次发生在最小 Claude CLI 已恢复后；完整审查仍未得到可解析 pass verdict，按 auto-advance 规则停止等待人工裁决。
+- `[FRICTION] 3rd-review unavailable`: Claude Code runner 的 timeout、工具隔离和 skill fallback 透传已修复并测试；最终 Read-only 审查仍连续 3 次 `status=0` 空输出，未得到可解析 pass/revise verdict，按 auto-advance 规则停止等待人工裁决。详见 `build-spec-review-runner-diagnosis.md`。
 - 当前无 decision-log 覆盖缺口。
 - scope-triage 命中 `blocking` / `阻断`，均位于“明确不做”或“非阻断记录语义”上下文；不是执行阻断语义。
 
@@ -338,7 +338,8 @@
 6. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-constitution-check.md`
 7. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-baseline-report.md`
 8. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-f10-analysis.md`
-9. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/`
+9. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-review-runner-diagnosis.md`
+10. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/`
 
 ## 附录 C：设计决策
 
