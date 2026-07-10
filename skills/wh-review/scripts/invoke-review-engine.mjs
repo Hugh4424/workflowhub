@@ -63,6 +63,7 @@ import { createArtifactReviewPackage } from "./artifact-review-package.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
 const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
+const KIMI_CODE_RUNNER = join(here, "runners", "kimi-code-reviewer.mjs");
 const DEFAULT_TIMEOUT_MS = 120000;
 
 export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed", "review-already-running", "review-lock-unsupported-platform", "review-lock-utility-missing", "review-lock-attestation-invalid"]);
@@ -94,6 +95,7 @@ export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) 
   const provider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
   if (runnerEnv && runnerEnv !== "claude-code") return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
   if (provider === "claude-code" || runnerEnv === "claude-code") return CLAUDE_CODE_RUNNER;
+  if (["kimi", "kimi-code", "moonshot", "moonshot-ai"].includes(provider) || ["kimi", "kimi-code"].includes(runnerEnv)) return KIMI_CODE_RUNNER;
   if (runnerEnv) {
     return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
   }
@@ -468,7 +470,7 @@ export function invokeReviewEngine({
   const outputFile = join(workDir, "output.json");
   writeFileSync(diffFile, JSON.stringify(runnerPayload));
   const runnerArgs = [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`];
-  if (runnerPath === CLAUDE_CODE_RUNNER) {
+  if (runnerPath === CLAUDE_CODE_RUNNER || runnerPath === KIMI_CODE_RUNNER) {
     const stateDir = join(dirname(artifactPath), ".claude-review-state", `${stage}-${reviewFlowId}-round-${totalRound}-${inputHash}`);
     mkdirSync(stateDir, { recursive: true });
     runnerArgs.push(`--state-dir=${stateDir}`);

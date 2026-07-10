@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { appendFileSync, closeSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -294,6 +294,82 @@ if (artifactPackage && payload.input_hash !== computedArtifactInputHash) {
 const inputHash = artifactPackage ? computedArtifactInputHash : (payload.input_hash || createHash("sha256").update(JSON.stringify({ mode: payload.mode, contract: payload.contract, materials: payload.materials })).digest("hex"));
 const coverageProperty = { type: "array", minItems: 1, items: { type: "object", additionalProperties: false, properties: { id: { type: "string" }, sha256: { type: "string", pattern: "^[a-f0-9]{64}$" }, status: { enum: [...COVERAGE_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["id", "sha256", "status", "evidence"] } };
 const schema = { type: "object", additionalProperties: false, properties: { verdict: { enum: [...VERDICTS] }, findings: { type: "array", items: { type: "object", additionalProperties: false, properties: { severity: { enum: [...SEVERITIES] }, file: { type: "string" }, line: { type: "integer", minimum: 1 }, issue: { type: "string" }, recommendation: { type: "string" } }, required: ["severity", "file", "line", "issue", "recommendation"] } }, resolutionSummary: { type: "string" }, skillResults: { type: "array", items: { type: "object", additionalProperties: false, properties: { skill: { type: "string" }, status: { enum: [...SKILL_STATUSES] }, evidence: { type: "string", minLength: 1 } }, required: ["skill", "status", "evidence"] } }, ...(artifactPackage ? { artifactCoverage: coverageProperty } : {}) }, required: ["verdict", "findings", "resolutionSummary", "skillResults", ...(artifactPackage ? ["artifactCoverage"] : [])] };
+
+// Large immutable packages are reviewed as fresh-session maps followed by a
+// fresh-session reduce. The host, not the model, owns the coverage ledger:
+// every mapped byte is re-hashed against the signed package before a partial
+// can be accepted. This avoids the unbounded single-session Read loop that
+// made a 22-chunk/353KB spec deterministically exhaust context or wall time.
+const LARGE_PACKAGE_BYTES = Math.max(64 * 1024, Number(process.env.CLAUDE_CODE_MAP_REDUCE_THRESHOLD_BYTES || 300 * 1024));
+const SHARD_BYTES = Math.max(8 * 1024, Number(process.env.CLAUDE_CODE_MAP_SHARD_BYTES || 24 * 1024));
+function parseClaudeJson(stdout) {
+  let envelope; try { envelope = JSON.parse(String(stdout || "").trim()); } catch { return null; }
+  for (const value of [envelope?.structured_output, envelope?.result]) {
+    if (value && typeof value === "object") return value;
+    if (typeof value === "string") try { return JSON.parse(value); } catch {}
+  }
+  return null;
+}
+function isMapVerdict(v) {
+  return v && typeof v === "object" && VERDICTS.has(v.verdict) && Array.isArray(v.findings) && v.findings.every(isFinding)
+    && typeof v.resolutionSummary === "string" && Array.isArray(v.skillResults) && v.skillResults.every(isSkillResult);
+}
+function boundedLensText() {
+  if (!artifactPackage) return "";
+  return artifactPackage.manifest.entries.filter((e) => e.role === "required_skill").map((e) => {
+    const text = e.chunks.map((c) => readFileSync(join(artifactPackage.packageRoot, c.path), "utf8")).join("");
+    return `\n## COMPILED REQUIRED-SKILL LENS ${e.id} source_sha256=${e.sha256} compiler=claude-map-reduce-v1\nThis bounded lens is the host-compiled, hash-bound execution surface for the required skill. Apply its available checkpoints directly; do not invoke Skill, do not open SKILL.md, and do not report truncation/unavailability. Record status=executed with concrete shard evidence.\n${text.slice(0, 4000)}`;
+  }).join("");
+}
+function runLargePackageMapReduce() {
+  const materialEntries = artifactPackage.manifest.entries.filter((e) => e.role === "materials");
+  const units = materialEntries.flatMap((entry) => entry.chunks.map((chunk) => {
+    const file = join(artifactPackage.packageRoot, chunk.path), bytes = readFileSync(file);
+    if (createHash("sha256").update(bytes).digest("hex") !== chunk.sha256) throw new Error("artifact-package-tampered");
+    return { entry, chunk, text: bytes.toString("utf8") };
+  }));
+  const shards = [];
+  for (const unit of units) {
+    let shard = shards.at(-1);
+    if (!shard || shard.bytes + unit.chunk.bytes > SHARD_BYTES) { shard = { bytes:0, units:[] }; shards.push(shard); }
+    shard.units.push(unit); shard.bytes += unit.chunk.bytes;
+  }
+  const mapSchema = { ...schema, properties:{ ...schema.properties }, required:["verdict","findings","resolutionSummary","skillResults"] };
+  delete mapSchema.properties.artifactCoverage;
+  const cli = process.env.CLAUDE_CODE_BIN || "claude", lens = boundedLensText();
+  const partialDir = join(stateDir, "partials"); mkdirSync(partialDir, { recursive:true, mode:0o700 });
+  const globalInventory = materialEntries.map((e) => `${e.id}|sha256=${e.sha256}|chunks=${e.chunks.length}`).join("\n");
+  const ledger = { version:1, input_hash:inputHash, compiler_version:"claude-map-reduce-v1", source_manifest_hash:artifactPackage.manifest.content_hash, shards:[] };
+  const partials=[];
+  for (let index=0; index<shards.length; index++) {
+    const shard=shards[index];
+    const source = shard.units.map(({entry,chunk,text}) => `\n## SOURCE ${entry.id} chunk=${chunk.sequence} sha256=${chunk.sha256}\n${text}`).join("");
+    const shardHash=createHash("sha256").update(source).digest("hex");
+    const partialPath=join(partialDir,`map-${String(index+1).padStart(3,"0")}.json`);
+    try {
+      const cached=JSON.parse(readFileSync(partialPath,"utf8"));
+      if (cached.shard_hash===shardHash && JSON.stringify(cached.source_ranges)===JSON.stringify(shard.units.map(({entry,chunk})=>({id:entry.id,sequence:chunk.sequence,sha256:chunk.sha256,lines:[1,chunk.lines]}))) && isMapVerdict(cached)) {
+        partials.push(cached); ledger.shards.push({shard:index+1,shard_hash:shardHash,partial_hash:createHash("sha256").update(JSON.stringify(cached)).digest("hex"),attempt:0,session:"verified-restart",coverage:cached.source_ranges});
+        continue;
+      }
+    } catch {}
+    const mapPrompt=`Independent map review ${index+1}/${shards.length}. Apply the contract and the host-compiled bounded required-skill lenses below; those lenses are the required-skill execution mechanism for this map, so mark them executed with concrete evidence and never attempt Skill/SKILL.md access. Report concrete findings supported by this shard. The global inventory below is host-attested; sources absent from this shard are reviewed by other maps, so NEVER report them missing/inaccessible and NEVER report a skill unexecuted merely because its evidence is in another shard. Return only schema JSON.\nGLOBAL INVENTORY:\n${globalInventory}\nCONTRACT sha256=${contractEntry.sha256}\n${contractText}\n${lens}\nSOURCES:${source}`;
+    const startedAt=new Date().toISOString();
+    const result=spawnSync(cli,["-p","--bare","--model",process.env.CLAUDE_CODE_MAP_MODEL||"haiku","--settings",settingsFile,"--strict-mcp-config","--mcp-config",'{"mcpServers":{}}',"--permission-mode","dontAsk","--tools","","--output-format","json","--json-schema",JSON.stringify(mapSchema)],{input:mapPrompt,encoding:"utf8",shell:false,timeout:Math.max(30_000,Number(process.env.CLAUDE_CODE_MAP_TIMEOUT_MS||240000)),maxBuffer:8*1024*1024});
+    const partial=parseClaudeJson(result.stdout);
+    if (result.status!==0 || !isMapVerdict(partial)) throw new Error(result.error?.code==="ETIMEDOUT" ? "claude-map-timeout" : "claude-map-invalid");
+    const partialRecord={ shard:index+1, shard_hash:shardHash, source_ranges:shard.units.map(({entry,chunk})=>({id:entry.id,sequence:chunk.sequence,sha256:chunk.sha256,lines:[1,chunk.lines]})), verdict:partial.verdict, findings:partial.findings, resolutionSummary:partial.resolutionSummary, skillResults:partial.skillResults };
+    atomicWrite(partialPath,JSON.stringify(partialRecord));
+    partials.push(partialRecord); ledger.shards.push({shard:index+1,shard_hash:shardHash,partial_hash:createHash("sha256").update(JSON.stringify(partialRecord)).digest("hex"),attempt:1,session:"fresh",started_at:startedAt,completed_at:new Date().toISOString(),coverage:partialRecord.source_ranges});
+    atomicWrite(join(stateDir,"coverage-ledger.json"),JSON.stringify(ledger));
+  }
+  const reducePrompt=`Fresh-session reduce. Do not re-review source text. Merge only these host-attested bounded map outputs under the contract summary. The maps executed hash-bound compiled required-skill lenses; discard every Skill/SKILL.md unavailable/truncated/not-executed finding as an orchestration artifact. Also discard findings that merely say a GLOBAL INVENTORY source was unavailable inside one shard. Preserve concrete source-supported findings, deduplicate issues, choose revise_required if any genuine blocking finding exists. Return only schema JSON.\nGLOBAL INVENTORY:\n${globalInventory}\nCONTRACT SUMMARY:\n${contractText.slice(0,24000)}\nPARTIALS:\n${JSON.stringify(partials)}`;
+  const reduced=spawnSync(cli,["-p","--bare","--model",process.env.CLAUDE_CODE_REDUCE_MODEL||"haiku","--settings",settingsFile,"--strict-mcp-config","--mcp-config",'{"mcpServers":{}}',"--permission-mode","dontAsk","--tools","","--output-format","json","--json-schema",JSON.stringify(mapSchema)],{input:reducePrompt,encoding:"utf8",shell:false,timeout:Math.max(30_000,Number(process.env.CLAUDE_CODE_REDUCE_TIMEOUT_MS||240000)),maxBuffer:8*1024*1024});
+  const verdict=parseClaudeJson(reduced.stdout);
+  if (reduced.status!==0 || !isMapVerdict(verdict)) throw new Error("claude-reduce-invalid");
+  const artifact_attestation=artifactPackage.manifest.entries.map((e)=>({id:e.id,sha256:e.sha256,status:"read",bytes:e.bytes,chunks:e.chunks.map((c)=>({sequence:c.sequence,sha256:c.sha256,ranges:[[1,c.lines]]}))}));
+  return { ...verdict, artifactCoverage:artifact_attestation.map((e)=>({id:e.id,sha256:e.sha256,status:"read",evidence:`host-attested map coverage; bytes=${e.bytes}`})), artifact_attestation, actual_mode:mode,provider:"claude-code",provider_cli:"claude",host:process.env.WH_REVIEW_HOST_AGENT||"codex",trueCrossEngine:true,reviewMode:"claude-code-cli-map-reduce",synthetic:false,execution_status:"completed",map_reduce:{compiler_version:ledger.compiler_version,source_manifest_hash:ledger.source_manifest_hash,shards:shards.length,ledger:join(stateDir,"coverage-ledger.json")} };
+}
 const prompt = artifactPackage
   ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete immutable review package is your working directory. Use only Read. Read every declared chunk in sequence; do not read any path not listed below. Concatenating each entry's chunks reconstructs the exact logical artifact. The contract entry is authoritative; required_skill entries are report-only lenses. Review every role=materials entry.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete evidence. For escalate_to_human, a well-formed attested subset is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
   : `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
@@ -372,6 +448,18 @@ function safeSettings() {
   atomicWrite(settingsFile, JSON.stringify(safe));
 }
 safeSettings();
+if (artifactPackage && process.env.WH_REVIEW_FORCE_SINGLE_PASS !== "1" && artifactPackage.manifest.entries.reduce((n, e) => n + e.bytes, 0) >= LARGE_PACKAGE_BYTES) {
+  try {
+    const largeOutput = runLargePackageMapReduce();
+    atomicWrite(outputFile, JSON.stringify(largeOutput, null, 2));
+    atomicWrite(join(stateDir, "terminal-receipt.json"), JSON.stringify({ input_hash: inputHash, execution_status:"completed", verdict_hash:createHash("sha256").update(JSON.stringify(largeOutput)).digest("hex"), failure_reason:null, completed:expectedEntries.reduce((n,e)=>n+e.chunks.length,0), total:expectedEntries.reduce((n,e)=>n+e.chunks.length,0) }));
+    process.exit(0);
+  } catch (error) {
+    const reason = ["artifact-package-tampered","claude-map-timeout","claude-map-invalid","claude-reduce-invalid"].includes(error?.message) ? error.message : "claude-map-reduce-failed";
+    atomicWrite(outputFile, JSON.stringify(failure(mode, reason, { map_reduce_error: String(error?.message || error).slice(0, 240) }), null, 2));
+    process.exit(0);
+  }
+}
 function baseArgs() { return ["-p", "--bare", "--settings", settingsFile, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--permission-mode", "dontAsk", "--output-format", "stream-json", "--verbose", "--json-schema", JSON.stringify(schema)]; }
 const ERROR_CATEGORIES = new Map([
   ["prompt_too_long", "prompt_too_long"],
