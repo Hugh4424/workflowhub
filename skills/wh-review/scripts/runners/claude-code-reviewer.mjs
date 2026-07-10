@@ -573,9 +573,11 @@ async function onSignal(signal, interruption = signal === "SIGHUP" ? "host-inter
   const hostInterrupted = signal === "SIGHUP" || interruption === "parent-lost" || interruption === "parent-changed";
   const resumeReservationRolledBack = hostInterrupted ? rollbackCurrentResumeReservation() : false;
   if (hostInterrupted) state.session_id = null;
-  persist("interrupted", { signal, interruption, ...(hostInterrupted ? { failure_reason: "host-interrupted" } : {}) });
+  const interruptionReason = hostInterrupted ? "host-interrupted" : "user-cancelled";
+  persist("interrupted", { signal, interruption, failure_reason: interruptionReason });
   record("runner_signal", { signal, interruption, external_interruption: true, resume_reservation_rolled_back: resumeReservationRolledBack });
   await stopChild(currentChild);
+  atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: "interrupted", verdict_hash: null, failure_reason: interruptionReason, completed: state.progress.completed, total: state.progress.total, attempts: state.attempt, resume_count: state.resume_count, consecutive_no_progress: state.consecutive_no_progress || 0, last_error: state.last_error || null, last_retry_after: state.last_retry_after ?? null, attempt_history: state.attempt_history || [] }));
   if (hostInterrupted) {
     const output = failure(mode, "host-interrupted", { resume_count: state.resume_count, external_interruption: true, interruption, ...(state.stderr_summary ? { stderr_summary: state.stderr_summary } : {}) });
     atomicWrite(outputFile, JSON.stringify(output, null, 2));
@@ -605,8 +607,8 @@ const parentWatch = setInterval(() => {
   }
 }, parentWatchMs);
 
-function continuation({ freshProcess }) {
-  if (!artifactPackage) return "Continue the interrupted review. Return only the required JSON verdict.";
+function missingChunks() {
+  if (!artifactPackage) return [];
   const missing = [];
   for (const item of expectedEntries) {
     const covered = readCoverage.get(item.id);
@@ -616,11 +618,15 @@ function continuation({ freshProcess }) {
       if (!complete) missing.push(chunk.path);
     }
   }
-  return `Continue the interrupted review. ${freshProcess ? "This is a fresh host process; no prior Read coverage is trusted. " : "Host-attested complete chunks remain valid. "}Read only these missing chunks in full: ${missing.join(", ")}. Return only the required JSON verdict.`;
+  return missing;
+}
+function continuation({ freshProcess }) {
+  if (!artifactPackage) return "Continue the interrupted review. Return only the required JSON verdict.";
+  const missing = missingChunks();
+  if (missing.length > 0) return `Continue the interrupted review. ${freshProcess ? "This is a fresh host process; no prior Read coverage is trusted. " : "Host-attested complete chunks remain valid. "}Coverage is incomplete. Read the next missing chunks in full: ${missing.join(", ")}. Do not synthesize or return the final verdict yet. After advancing coverage, return only a short checkpoint so this same session can continue.`;
+  return "All host-attested artifact coverage is complete. Immediately return only the required contract JSON verdict; do not reread or summarize materials.";
 }
 
-const MAX_NO_PROGRESS_FAILURES = 4;
-const MAX_SAME_ERROR_FINGERPRINT = 5;
 const retryBaseMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_RETRY_BASE_MS || 1000));
 const retryJitter = Math.max(0, Number(process.env.CLAUDE_CODE_REVIEW_RETRY_JITTER || 0.2));
 const retrySleepCapMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_RETRY_SLEEP_CAP_MS || 300000));
@@ -649,45 +655,46 @@ let fingerprints = state.error_fingerprints && typeof state.error_fingerprints =
 let attemptHistory = Array.isArray(state.attempt_history) ? state.attempt_history.slice(-19) : [];
 let acceptedAttempts = Number.isInteger(state.accepted_attempts) ? state.accepted_attempts : 0;
 let rejectedAttempts = Number.isInteger(state.rejected_attempts) ? state.rejected_attempts : 0;
-let exhaustionReason = null;
+let checkpointAttempts = Number.isInteger(state.checkpoint_attempts) ? state.checkpoint_attempts : 0;
 for (;;) {
   if (resume) reserveResume();
   outcome = await run(resume ? continuation({ freshProcess: startupResume }) : prompt, resume);
   if (resume) commitResumeReservation();
   startupResume = false;
   const progressMade = outcome.progress_after > outcome.progress_before;
+  const checkpoint = artifactPackage && !outcome.verdict && !outcome.validation_failure && Boolean(state.session_id)
+    && outcome.code === 0 && outcome.progress_after > outcome.progress_before;
   const retryable = !outcome.verdict && !outcome.validation_failure && Boolean(state.session_id)
-    && (RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category) || (outcome.stalled && state.resume_count === 0));
+    && (RETRYABLE_UPSTREAM_CATEGORIES.has(outcome.terminal_diagnostics?.error_category) || checkpoint || (outcome.stalled && state.resume_count === 0));
   const fingerprint = retryable ? outcomeFingerprint(outcome) : null;
   if (retryable) {
     consecutiveNoProgress = progressMade ? 0 : consecutiveNoProgress + 1;
     fingerprints[fingerprint] = (fingerprints[fingerprint] || 0) + 1;
   }
-  attemptHistory.push({ attempt: state.attempt, resumed: resume, result: outcome.verdict ? "verdict" : outcome.validation_failure ? "rejected" : retryable ? "retryable" : "fatal", progress_before: outcome.progress_before, progress_after: outcome.progress_after, ...(outcome.terminal_diagnostics?.error_category ? { error_category: outcome.terminal_diagnostics.error_category } : {}), ...(outcome.terminal_diagnostics?.retry_after !== undefined ? { retry_after: outcome.terminal_diagnostics.retry_after } : {}) });
+  attemptHistory.push({ attempt: state.attempt, resumed: resume, result: outcome.verdict ? "verdict" : outcome.validation_failure ? "rejected" : checkpoint ? "checkpoint" : retryable ? "retryable" : "fatal", progress_before: outcome.progress_before, progress_after: outcome.progress_after, ...(outcome.terminal_diagnostics?.error_category ? { error_category: outcome.terminal_diagnostics.error_category } : {}), ...(outcome.terminal_diagnostics?.retry_after !== undefined ? { retry_after: outcome.terminal_diagnostics.retry_after } : {}) });
   attemptHistory = attemptHistory.slice(-20);
-  if (outcome.verdict) acceptedAttempts += 1; else rejectedAttempts += 1;
-  persist(state.status, { consecutive_no_progress: consecutiveNoProgress, error_fingerprints: fingerprints, attempt_history: attemptHistory, accepted_attempts: acceptedAttempts, rejected_attempts: rejectedAttempts, last_error: outcome.terminal_diagnostics?.error_category || outcome.validation_failure || null, last_retry_after: outcome.terminal_diagnostics?.retry_after ?? null });
-  record(outcome.verdict ? "attempt_accepted" : "attempt_rejected", { reason: outcome.verdict ? "valid_verdict" : outcome.validation_failure || (retryable ? "retryable_upstream" : "fatal"), accepted_count: acceptedAttempts, rejected_count: rejectedAttempts, result_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || { reason: outcome.validation_failure || outcome.terminal_diagnostics?.error_category || "fatal", code: outcome.code ?? null })).digest("hex"), completed: outcome.progress_after, total: state.progress.total });
+  if (outcome.verdict) acceptedAttempts += 1; else if (checkpoint) checkpointAttempts += 1; else rejectedAttempts += 1;
+  persist(state.status, { consecutive_no_progress: consecutiveNoProgress, error_fingerprints: fingerprints, attempt_history: attemptHistory, accepted_attempts: acceptedAttempts, rejected_attempts: rejectedAttempts, checkpoint_attempts: checkpointAttempts, last_error: outcome.terminal_diagnostics?.error_category || outcome.validation_failure || null, last_retry_after: outcome.terminal_diagnostics?.retry_after ?? null });
+  record(outcome.verdict ? "attempt_accepted" : checkpoint ? "attempt_checkpoint" : "attempt_rejected", { reason: outcome.verdict ? "valid_verdict" : checkpoint ? "coverage_checkpoint" : outcome.validation_failure || (retryable ? "retryable_upstream" : "fatal"), accepted_count: acceptedAttempts, rejected_count: rejectedAttempts, checkpoint_count: checkpointAttempts, result_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || { reason: checkpoint ? "coverage_checkpoint" : outcome.validation_failure || outcome.terminal_diagnostics?.error_category || "fatal", code: outcome.code ?? null })).digest("hex"), completed: outcome.progress_after, total: state.progress.total });
   if (!retryable) break;
-  if (consecutiveNoProgress >= MAX_NO_PROGRESS_FAILURES) { exhaustionReason = "claude-code-retry-no-progress-exhausted"; break; }
-  if (fingerprints[fingerprint] >= MAX_SAME_ERROR_FINGERPRINT) { exhaustionReason = "claude-code-retry-fingerprint-exhausted"; break; }
   const retryAfter = outcome.terminal_diagnostics?.retry_after;
   const exponential = retryBaseMs * (2 ** Math.max(0, state.resume_count));
   const jitterFactor = 1 + ((Math.random() * 2 - 1) * retryJitter);
-  const delayMs = Math.min(retrySleepCapMs, retryAfter !== undefined ? retryAfter * 1000 : Math.max(1, Math.round(exponential * jitterFactor)));
+  const delayMs = retryAfter !== undefined ? retryAfter * 1000 : Math.min(retrySleepCapMs, Math.max(1, Math.round(exponential * jitterFactor)));
   record("retry_scheduled", { delay_ms: delayMs, source: retryAfter !== undefined ? "server_retry_after" : "exponential_backoff", error_fingerprint: fingerprint, consecutive_no_progress: consecutiveNoProgress });
   discardPartialCoverage();
+  persist("waiting_to_resume", { next_retry_delay_ms: delayMs, next_retry_source: retryAfter !== undefined ? "server_retry_after" : "exponential_backoff" });
+  atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: "retrying", verdict_hash: null, failure_reason: null, completed: state.progress.completed, total: state.progress.total, attempts: state.attempt, resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, checkpoint_attempts: checkpointAttempts, last_error: state.last_error || null, last_retry_after: state.last_retry_after ?? null, attempt_history: attemptHistory }));
   await sleep(delayMs);
   resume = true;
 }
 let output;
-if (exhaustionReason) output = failure(mode, exhaustionReason, { resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, last_error: state.last_error, last_retry_after: state.last_retry_after, attempt_history: attemptHistory });
-else if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
+if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
 else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
 else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
 else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { resume_count: state.resume_count, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
 else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count, attempt_history: attemptHistory };
 persist(output.execution_status, { failure_reason: output.failure_reason, terminal_verdict_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || null)).digest("hex") });
 atomicWrite(outputFile, JSON.stringify(output, null, 2));
-atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total, attempts: state.attempt, resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, last_error: state.last_error || null, last_retry_after: state.last_retry_after ?? null, attempt_history: attemptHistory }));
+atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total, attempts: state.attempt, resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, checkpoint_attempts: checkpointAttempts, last_error: state.last_error || null, last_retry_after: state.last_retry_after ?? null, attempt_history: attemptHistory }));
 clearInterval(parentWatch);
