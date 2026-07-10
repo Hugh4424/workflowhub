@@ -281,13 +281,35 @@ if (!acquireLock()) {
 process.on("exit", releaseLock);
 atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: "running", verdict_hash: null, failure_reason: null, completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0) }));
 
-let state = { input_hash: inputHash, session_id: null, resume_count: 0, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
-try { const old = JSON.parse(readFileSync(stateFile, "utf8")); if (old.input_hash === inputHash && typeof old.session_id === "string" && old.session_id && old.status !== "completed") state = { ...state, ...old, progress: state.progress }; } catch {}
+let state = { input_hash: inputHash, session_id: null, resume_count: 0, resume_reservation: null, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
+try {
+  const old = JSON.parse(readFileSync(stateFile, "utf8"));
+  const resumableSession = typeof old.session_id === "string" && old.session_id;
+  const preservedHostInterruption = old.failure_reason === "host-interrupted" && old.status === "interrupted";
+  if (old.input_hash === inputHash && old.status !== "completed" && (resumableSession || preservedHostInterruption)) state = { ...state, ...old, progress: state.progress };
+} catch {}
 let persistedState = existsSync(stateFile) ? readFileSync(stateFile, "utf8") : "";
 function persist(status, extra = {}) {
   state = { ...state, status, ...extra };
   const serialized = JSON.stringify(state);
   if (serialized !== persistedState) { atomicWrite(stateFile, serialized); persistedState = serialized; }
+}
+function reserveResume() {
+  const previous = state.resume_count;
+  state.resume_count = previous + 1;
+  state.resume_reservation = { attempt: state.attempt + 1, previous_resume_count: previous };
+  state.phase = "resume_reserved";
+  persist("resuming");
+}
+function commitResumeReservation() {
+  if (state.resume_reservation?.attempt === state.attempt) persist(state.status, { resume_reservation: null });
+}
+function rollbackCurrentResumeReservation() {
+  const reservation = state.resume_reservation;
+  if (!reservation || reservation.attempt !== state.attempt || !Number.isInteger(reservation.previous_resume_count)) return false;
+  state.resume_count = reservation.previous_resume_count;
+  state.resume_reservation = null;
+  return true;
 }
 const JOURNAL_MAX_BYTES = 256 * 1024;
 function record(type, meta = {}) {
@@ -347,12 +369,12 @@ async function run(input, resume) {
   persist(resume ? "resuming" : "running"); record("attempt_start", { resume, input_bytes: Buffer.byteLength(input), input_hash: createHash("sha256").update(input).digest("hex") });
   pendingReads.clear(); attestationInvalid = false; boundaryViolation = false;
   let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {}, lastCompleted = state.progress.completed;
-  let stderrBytes = 0, stderrCaptured = Buffer.alloc(0), stderrDigest = createHash("sha256"), stderrFinal = null;
+  let stderrBytes = 0, stderrCaptured = Buffer.alloc(0), stderrFinal = null;
   const stderrSummary = () => {
     if (stderrFinal) return stderrFinal;
     const safeText = stderrCaptured.toString("utf8").toLowerCase();
     const errorCategories = [...new Set([...ERROR_CATEGORIES].filter(([needle]) => safeText.includes(needle)).map(([, category]) => category))];
-    stderrFinal = { bytes: stderrBytes, captured_bytes: stderrCaptured.length, truncated: stderrBytes > stderrCaptured.length, sha256: stderrDigest.digest("hex"), ...(errorCategories.length ? { error_categories: errorCategories } : {}) };
+    stderrFinal = { bytes: stderrBytes, captured_bytes: stderrCaptured.length, truncated: stderrBytes > stderrCaptured.length, ...(errorCategories.length ? { error_categories: errorCategories } : {}) };
     return stderrFinal;
   };
   return new Promise((resolveRun) => {
@@ -424,7 +446,6 @@ async function run(input, resume) {
     child.stderr.on("data", (chunk) => {
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       stderrBytes += bytes.length;
-      stderrDigest.update(bytes);
       if (stderrCaptured.length < maxStderr) stderrCaptured = Buffer.concat([stderrCaptured, bytes.subarray(0, maxStderr - stderrCaptured.length)]);
     });
     child.on("error", (error) => { record("spawn_error", { code: error.code }); settle({ error, code: null }); });
@@ -439,9 +460,10 @@ async function onSignal(signal, interruption = signal === "SIGHUP" ? "host-inter
   shuttingDown = true;
   clearTimeout(idleTimer);
   const hostInterrupted = signal === "SIGHUP" || interruption === "parent-lost" || interruption === "parent-changed";
+  const resumeReservationRolledBack = hostInterrupted ? rollbackCurrentResumeReservation() : false;
   if (hostInterrupted) state.session_id = null;
   persist("interrupted", { signal, interruption, ...(hostInterrupted ? { failure_reason: "host-interrupted" } : {}) });
-  record("runner_signal", { signal, interruption, external_interruption: true });
+  record("runner_signal", { signal, interruption, external_interruption: true, resume_reservation_rolled_back: resumeReservationRolledBack });
   await stopChild(currentChild);
   if (hostInterrupted) {
     const output = failure(mode, "host-interrupted", { resume_count: state.resume_count, external_interruption: true, interruption, ...(state.stderr_summary ? { stderr_summary: state.stderr_summary } : {}) });
@@ -456,10 +478,12 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => v
 const configuredParent = Number(process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID);
 const originalParent = Number.isInteger(configuredParent) && configuredParent > 0 ? configuredParent : process.ppid;
 const parentWatchMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || 500));
+let parentConfirmed = false;
 const parentWatch = setInterval(() => {
   try {
     process.kill(originalParent, 0);
     if (process.ppid !== originalParent) void onSignal("SIGHUP", "parent-changed");
+    else if (!parentConfirmed) { parentConfirmed = true; record("parent_watch_confirmed"); }
   } catch (error) {
     if (error.code === "ESRCH") void onSignal("SIGHUP", "parent-lost");
   }
@@ -490,10 +514,11 @@ if (startupResume && state.resume_count >= 1) {
   record("resume_budget_exhausted", { resume_count: state.resume_count });
   outcome = { recoveryBudgetExhausted: true, code: null };
 } else {
-  if (startupResume) { state.resume_count += 1; state.phase = "resume_reserved"; persist("resuming"); }
+  if (startupResume) reserveResume();
   outcome = await run(startupResume ? continuation({ freshProcess: true }) : prompt, startupResume);
+  if (startupResume) commitResumeReservation();
   if (outcome.stalled && state.session_id && state.resume_count < 1) {
-    state.resume_count += 1; state.phase = "resume_reserved"; persist("resuming");
+    reserveResume();
     // Discard partial ranges; only complete host-attested chunks survive an
     // in-process resume. This prevents cross-attempt range splicing.
     for (const [id, coverage] of readCoverage) {
@@ -506,6 +531,7 @@ if (startupResume && state.resume_count >= 1) {
       coverage.failed = false;
     }
     outcome = await run(continuation({ freshProcess: false }), true);
+    commitResumeReservation();
   }
 }
 let output;
