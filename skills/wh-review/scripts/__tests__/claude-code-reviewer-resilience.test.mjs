@@ -43,6 +43,24 @@ function execute(f, env = {}, signalAfter) {
   });
 }
 
+function executeWithExitingParent(f) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const launcher = join(f.root, "exiting-parent.mjs");
+    writeFileSync(launcher, `import { spawn } from "node:child_process";const child=spawn(process.execPath,${JSON.stringify([runner])}.concat(process.argv.slice(2)),{env:process.env,stdio:"ignore"});setTimeout(()=>process.exit(child.pid?0:2),500);`);
+    const child = spawn(process.execPath, [launcher, `--diff=${f.diff}`, `--output=${f.output}`, `--state-dir=${f.stateDir}`], { env: { ...process.env, CLAUDE_CODE_BIN: f.fake, CLAUDE_CODE_REVIEW_IDLE_MS: "10000", CLAUDE_CODE_REVIEW_STOP_GRACE_MS: "20", CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: "20" } });
+    child.on("error", rejectPromise);
+    child.on("close", () => {
+      const deadline = Date.now() + 4000;
+      const poll = () => {
+        if (existsSync(f.output)) return resolvePromise(JSON.parse(readFileSync(f.output, "utf8")));
+        if (Date.now() >= deadline) return rejectPromise(new Error("runner did not classify parent exit"));
+        setTimeout(poll, 20);
+      };
+      poll();
+    });
+  });
+}
+
 function makeRemovable(path) { let stat; try { stat = lstatSync(path); } catch { return; } if (!stat.isDirectory() || stat.isSymbolicLink()) { try { chmodSync(path, 0o644); } catch {} return; } chmodSync(path, 0o755); for (const name of readdirSync(path)) makeRemovable(join(path, name)); }
 afterEach(() => { for (const root of roots.splice(0)) { makeRemovable(root); rmSync(root, { recursive: true, force: true }); } });
 
@@ -59,7 +77,7 @@ describe("Claude streamed reviewer resilience", () => {
   });
 
   it("escalates INT/TERM to KILL and settles when the child ignores graceful signals", async () => {
-    const f = fixture(`process.on("SIGINT",()=>{}); process.on("SIGTERM",()=>{}); console.log(JSON.stringify({type:"system",session_id:"s"})); setInterval(()=>{},1000);`);
+    const f = fixture(`process.on("SIGINT",()=>{}); process.on("SIGTERM",()=>{}); console.log(JSON.stringify({type:"system",session_id:"s"})); setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: "s", resume_count: 0, attempt: 0, status: "running" } });
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1500" });
     expect(result.code).toBe(0); expect(result.output.failure_reason).toBe("claude-code-idle-after-resume");
     const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8"); expect(journal).toContain('"signal":"SIGKILL"');
@@ -71,17 +89,108 @@ describe("Claude streamed reviewer resilience", () => {
     expect(result.code).toBe(130); expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).toContain('"type":"runner_signal"');
   });
 
+  it("classifies SIGHUP as host interruption without reserving resume", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"system",session_id:"host-session"})); process.on("SIGINT",()=>process.exit(0)); setInterval(()=>{},1000);`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGHUP");
+    expect(result.code).toBe(129);
+    expect(result.output).toMatchObject({ failure_reason: "host-interrupted", resume_count: 0, external_interruption: true });
+    const state = JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"));
+    expect(state).toMatchObject({ status: "interrupted", failure_reason: "host-interrupted", resume_count: 0, session_id: null });
+  });
+
+  it("restarts fresh after host interruption instead of consuming resume budget", async () => {
+    const f = fixture(`if(process.argv.includes("--resume")) process.exit(72); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`, { state: { input_hash: "fixed-hash", session_id: null, resume_count: 0, attempt: 1, status: "interrupted", failure_reason: "host-interrupted" } });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", resume_count: 0, synthetic: false });
+  });
+
   it("settles after a terminal event even when the child never closes voluntarily", async () => {
     const f = fixture(`process.on("SIGINT",()=>{}); process.on("SIGTERM",()=>{}); console.log(JSON.stringify({type:"result",session_id:"s",structured_output:${JSON.stringify(verdict)}})); setInterval(()=>{},1000);`);
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" });
     expect(result.code).toBe(0); expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed" });
   });
 
-  it("does not renew the idle lease on stderr-only activity and never journals its body", async () => {
+  it("captures bounded redacted stderr diagnostics without renewing the idle lease", async () => {
     const f = fixture(`let n=0; const t=setInterval(()=>{process.stderr.write("secret-body"); if(++n===6){clearInterval(t); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));}},300);`);
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1000" });
     expect(result.output).toMatchObject({ synthetic: true, failure_reason: "claude-code-idle-without-session" });
-    expect(readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")).not.toContain("secret-body");
+    expect(result.output.stderr_summary).toMatchObject({ truncated: false });
+    expect(result.output.stderr_summary.bytes).toBeGreaterThan(0);
+    expect(result.output.stderr_summary.captured_bytes).toBe(result.output.stderr_summary.bytes);
+    expect(result.output.stderr_summary).not.toHaveProperty("sha256");
+    const serialized = `${readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")}\n${readFileSync(join(f.stateDir, "state.json"), "utf8")}\n${JSON.stringify(result.output)}`;
+    expect(serialized).not.toContain("secret-body");
+  });
+
+  it("bounds stderr diagnostics and exposes only allowlisted categories", async () => {
+    const secret = "sk-ant-api03-THIS-MUST-NOT-LEAK";
+    const f = fixture(`process.stderr.write("authentication_failed ${secret} "+"x".repeat(10000)); process.exit(23);`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_STDERR_MAX_BYTES: "256" });
+    expect(result.output.stderr_summary).toMatchObject({ captured_bytes: 256, truncated: true, error_categories: ["authentication"] });
+    expect(JSON.stringify(result.output)).not.toContain(secret);
+    expect(Buffer.byteLength(JSON.stringify(result.output.stderr_summary))).toBeLessThan(512);
+  });
+
+  it("does not persist a dictionary-verifiable digest of low-entropy stderr secrets", async () => {
+    const secret = "PIN=1234";
+    const f = fixture(`process.stderr.write(${JSON.stringify(secret)}); process.exit(24);`);
+    const result = await execute(f);
+    const serialized = `${readFileSync(join(f.stateDir, "journal.ndjson"), "utf8")}\n${readFileSync(join(f.stateDir, "state.json"), "utf8")}\n${JSON.stringify(result.output)}`;
+    expect(serialized).not.toContain(secret);
+    expect(serialized).not.toContain(createHash("sha256").update(secret).digest("hex"));
+    expect(result.output.stderr_summary).toEqual({ bytes: Buffer.byteLength(secret), captured_bytes: Buffer.byteLength(secret), truncated: false });
+  });
+
+  it("records child start and first generic stream event timing", async () => {
+    const f = fixture(`console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[]}})); console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(verdict)}}));`);
+    const result = await execute(f);
+    expect(result.output.verdict).toBe("pass");
+    const state = JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"));
+    expect(state.attempt_timing).toMatchObject({ first_event_type: "assistant" });
+    expect(Date.parse(state.attempt_timing.first_event_at)).toBeGreaterThanOrEqual(Date.parse(state.attempt_timing.child_started_at));
+    const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
+    expect(journal).toContain('"type":"first_stream_event"');
+  });
+
+  it("classifies parent loss as host interruption", async () => {
+    const f = fixture(`setInterval(()=>{},1000);`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000", CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID: "2147483647", CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: "10" });
+    expect(result.code).toBe(129);
+    expect(result.output).toMatchObject({ failure_reason: "host-interrupted", interruption: "parent-lost", resume_count: 0 });
+  });
+
+  it("classifies parent identity change as host interruption", async () => {
+    const f = fixture(`setInterval(()=>{},1000);`);
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000", CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID: String(process.ppid), CLAUDE_CODE_REVIEW_PARENT_WATCH_MS: "10" });
+    expect(result.code).toBe(129);
+    expect(result.output).toMatchObject({ failure_reason: "host-interrupted", interruption: "parent-changed", resume_count: 0 });
+  });
+
+  it("observes the real parent before classifying a runtime parent change", async () => {
+    const f = fixture(`setInterval(()=>{},1000);`);
+    const output = await executeWithExitingParent(f);
+    expect(output).toMatchObject({ failure_reason: "host-interrupted", interruption: "parent-lost", resume_count: 0 });
+    const journal = readFileSync(join(f.stateDir, "journal.ndjson"), "utf8");
+    expect(journal).toContain('"type":"parent_watch_confirmed"');
+    expect(journal).toContain('"interruption":"parent-lost"');
+  });
+
+  it("rolls back only the interrupted resume reservation and preserves a later recovery", async () => {
+    const f = fixture(`setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: "prior-session", resume_count: 0, attempt: 1, status: "running" } });
+    const interrupted = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGHUP");
+    expect(interrupted.output).toMatchObject({ failure_reason: "host-interrupted", resume_count: 0 });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ resume_count: 0, resume_reservation: null, session_id: null });
+    writeFileSync(f.fake, `#!/usr/bin/env node\nif(process.argv.includes("--resume")){console.log(JSON.stringify({type:"result",session_id:"fresh-session",structured_output:${JSON.stringify(verdict)}}));}else{console.log(JSON.stringify({type:"system",session_id:"fresh-session"}));setInterval(()=>{},1000);}`);
+    chmodSync(f.fake, 0o755);
+    const recovered = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1000" });
+    expect(recovered.output).toMatchObject({ verdict: "pass", resume_count: 1, synthetic: false });
+  });
+
+  it("does not decrement historical resume usage when a fresh attempt is host-interrupted", async () => {
+    const f = fixture(`setInterval(()=>{},1000);`, { state: { input_hash: "fixed-hash", session_id: null, resume_count: 1, resume_reservation: null, attempt: 3, status: "interrupted", failure_reason: "host-interrupted" } });
+    const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "10000" }, "SIGHUP");
+    expect(result.output).toMatchObject({ failure_reason: "host-interrupted", resume_count: 1 });
+    expect(JSON.parse(readFileSync(join(f.stateDir, "state.json"), "utf8"))).toMatchObject({ resume_count: 1, resume_reservation: null });
   });
 
   it("fails closed after an overflowed frame", async () => {

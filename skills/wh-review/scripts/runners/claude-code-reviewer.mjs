@@ -243,6 +243,7 @@ const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journa
 const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 300000));
 const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS || 2000));
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
+const maxStderr = Math.max(128, Math.min(16 * 1024, Number(process.env.CLAUDE_CODE_REVIEW_STDERR_MAX_BYTES || 4096)));
 let currentChild = null, idleTimer = null, shuttingDown = false, lockToken = null;
 function atomicWrite(path, value) {
   mkdirSync(dirname(path), { recursive: true });
@@ -280,13 +281,35 @@ if (!acquireLock()) {
 process.on("exit", releaseLock);
 atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: "running", verdict_hash: null, failure_reason: null, completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0) }));
 
-let state = { input_hash: inputHash, session_id: null, resume_count: 0, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
-try { const old = JSON.parse(readFileSync(stateFile, "utf8")); if (old.input_hash === inputHash && typeof old.session_id === "string" && old.session_id && old.status !== "completed") state = { ...state, ...old, progress: state.progress }; } catch {}
+let state = { input_hash: inputHash, session_id: null, resume_count: 0, resume_reservation: null, attempt: 0, attempt_id: null, phase: "idle", status: "new", progress: { completed: 0, total: (expectedEntries || []).reduce((n, item) => n + item.chunks.length, 0), last_semantic_at: null } };
+try {
+  const old = JSON.parse(readFileSync(stateFile, "utf8"));
+  const resumableSession = typeof old.session_id === "string" && old.session_id;
+  const preservedHostInterruption = old.failure_reason === "host-interrupted" && old.status === "interrupted";
+  if (old.input_hash === inputHash && old.status !== "completed" && (resumableSession || preservedHostInterruption)) state = { ...state, ...old, progress: state.progress };
+} catch {}
 let persistedState = existsSync(stateFile) ? readFileSync(stateFile, "utf8") : "";
 function persist(status, extra = {}) {
   state = { ...state, status, ...extra };
   const serialized = JSON.stringify(state);
   if (serialized !== persistedState) { atomicWrite(stateFile, serialized); persistedState = serialized; }
+}
+function reserveResume() {
+  const previous = state.resume_count;
+  state.resume_count = previous + 1;
+  state.resume_reservation = { attempt: state.attempt + 1, previous_resume_count: previous };
+  state.phase = "resume_reserved";
+  persist("resuming");
+}
+function commitResumeReservation() {
+  if (state.resume_reservation?.attempt === state.attempt) persist(state.status, { resume_reservation: null });
+}
+function rollbackCurrentResumeReservation() {
+  const reservation = state.resume_reservation;
+  if (!reservation || reservation.attempt !== state.attempt || !Number.isInteger(reservation.previous_resume_count)) return false;
+  state.resume_count = reservation.previous_resume_count;
+  state.resume_reservation = null;
+  return true;
 }
 const JOURNAL_MAX_BYTES = 256 * 1024;
 function record(type, meta = {}) {
@@ -346,13 +369,23 @@ async function run(input, resume) {
   persist(resume ? "resuming" : "running"); record("attempt_start", { resume, input_bytes: Buffer.byteLength(input), input_hash: createHash("sha256").update(input).digest("hex") });
   pendingReads.clear(); attestationInvalid = false; boundaryViolation = false;
   let attemptVerdict = null, acceptedAttestation = [], validationFailure = null, buffer = "", stalled = false, terminalSeen = false, safeTerminal = {}, lastCompleted = state.progress.completed;
+  let stderrBytes = 0, stderrCaptured = Buffer.alloc(0), stderrFinal = null;
+  const stderrSummary = () => {
+    if (stderrFinal) return stderrFinal;
+    const safeText = stderrCaptured.toString("utf8").toLowerCase();
+    const errorCategories = [...new Set([...ERROR_CATEGORIES].filter(([needle]) => safeText.includes(needle)).map(([, category]) => category))];
+    stderrFinal = { bytes: stderrBytes, captured_bytes: stderrCaptured.length, truncated: stderrBytes > stderrCaptured.length, ...(errorCategories.length ? { error_categories: errorCategories } : {}) };
+    return stderrFinal;
+  };
   return new Promise((resolveRun) => {
-    let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); resolveRun({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal }); } };
+    let resolved = false; const settle = (value) => { if (!resolved) { resolved = true; clearTimeout(idleTimer); const stderr_summary = stderrSummary(); resolveRun({ ...value, verdict: attemptVerdict, artifact_attestation: acceptedAttestation, validation_failure: validationFailure, terminal_diagnostics: safeTerminal, stderr_summary }); } };
     const args = baseArgs(); if (resume) args.push("--resume", state.session_id); if (artifactPackage) {
       const scopedPackage = `//${artifactPackage.packageRoot.replace(/^\/+/, "")}/**`;
       args.push("--tools", "Read", "--allowedTools", `Read(${scopedPackage})`);
     }
     const child = spawn(process.env.CLAUDE_CODE_BIN || "claude", args, { stdio: ["pipe", "pipe", "pipe"], cwd: artifactPackage?.packageRoot || dirname(diffFile), detached: true }); currentChild = child;
+    state.attempt_timing = { child_started_at: new Date().toISOString(), first_event_at: null, first_event_type: null };
+    persist(state.status, { attempt_timing: state.attempt_timing });
     const arm = () => { clearTimeout(idleTimer); idleTimer = setTimeout(async () => { stalled = true; record("idle_timeout"); await stopChild(child); settle({ stalled: true, code: child.exitCode, signal: child.signalCode }); }, idleMs); };
     const semantic = (completed = state.progress.completed) => {
       state.progress = { ...state.progress, completed, last_semantic_at: new Date().toISOString() };
@@ -364,6 +397,12 @@ async function run(input, resume) {
       let event;
       try { event = JSON.parse(line); } catch { validationFailure = "claude-code-stream-frame-invalid"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
       if (!SAFE_EVENT_TYPES.has(event?.type)) { validationFailure = "claude-code-stream-event-unknown"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
+      if (!state.attempt_timing.first_event_at) {
+        state.attempt_timing = { ...state.attempt_timing, first_event_at: new Date().toISOString(), first_event_type: event.type };
+        record("first_stream_event", { event_type: event.type });
+        persist(state.status, { attempt_timing: state.attempt_timing });
+        arm();
+      }
       const session = safeSessionId(event?.session_id);
       if (session && state.session_id && session !== state.session_id) {
         validationFailure = "claude-code-session-mismatch";
@@ -404,18 +443,51 @@ async function run(input, resume) {
     };
     const decoder = new StringDecoder("utf8");
     child.stdout.on("data", (chunk) => { buffer += decoder.write(chunk); if (Buffer.byteLength(buffer) > maxBuffer) { validationFailure = "claude-code-stream-buffer-invalid"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; } let i; while ((i = buffer.indexOf("\n")) >= 0) { consume(buffer.slice(0, i).replace(/\r$/, "")); buffer = buffer.slice(i + 1); } });
-    child.stderr.on("data", () => {});
+    child.stderr.on("data", (chunk) => {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      stderrBytes += bytes.length;
+      if (stderrCaptured.length < maxStderr) stderrCaptured = Buffer.concat([stderrCaptured, bytes.subarray(0, maxStderr - stderrCaptured.length)]);
+    });
     child.on("error", (error) => { record("spawn_error", { code: error.code }); settle({ error, code: null }); });
-    child.on("close", (code, signal) => { buffer += decoder.end(); if (buffer) consume(buffer.replace(/\r$/, "")); pendingReads.clear(); state.phase = "attempt_settled"; persist(state.status); record("child_close", { code, signal, stalled, terminalSeen }); settle({ code, signal, stalled, terminalSeen }); });
+    child.on("close", (code, signal) => { buffer += decoder.end(); if (buffer) consume(buffer.replace(/\r$/, "")); pendingReads.clear(); const stderr_summary = stderrSummary(); state.phase = "attempt_settled"; persist(state.status, { stderr_summary }); record("child_close", { code, signal, stalled, terminalSeen, stderr_summary }); settle({ code, signal, stalled, terminalSeen }); });
     child.stdin.on("error", (error) => { record("stdin_error", { code: error.code }); if (error.code !== "EPIPE") settle({ error, code: null }); });
     try { child.stdin.end(input); } catch (error) { record("stdin_error", { code: error.code }); settle({ error, code: null }); }
     arm();
   });
 }
-async function onSignal(signal) { if (shuttingDown) return; shuttingDown = true; clearTimeout(idleTimer); persist("interrupted", { signal }); record("runner_signal", { signal }); await stopChild(currentChild); releaseLock(); process.exit(signal === "SIGINT" ? 130 : 143); }
+async function onSignal(signal, interruption = signal === "SIGHUP" ? "host-interrupted" : "external-signal") {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearTimeout(idleTimer);
+  const hostInterrupted = signal === "SIGHUP" || interruption === "parent-lost" || interruption === "parent-changed";
+  const resumeReservationRolledBack = hostInterrupted ? rollbackCurrentResumeReservation() : false;
+  if (hostInterrupted) state.session_id = null;
+  persist("interrupted", { signal, interruption, ...(hostInterrupted ? { failure_reason: "host-interrupted" } : {}) });
+  record("runner_signal", { signal, interruption, external_interruption: true, resume_reservation_rolled_back: resumeReservationRolledBack });
+  await stopChild(currentChild);
+  if (hostInterrupted) {
+    const output = failure(mode, "host-interrupted", { resume_count: state.resume_count, external_interruption: true, interruption, ...(state.stderr_summary ? { stderr_summary: state.stderr_summary } : {}) });
+    atomicWrite(outputFile, JSON.stringify(output, null, 2));
+    atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: null, failure_reason: output.failure_reason, completed: state.progress.completed, total: state.progress.total }));
+  }
+  clearInterval(parentWatch);
+  releaseLock();
+  process.exit(signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143);
+}
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => void onSignal(signal));
-const originalParent = process.ppid;
-const parentWatch = setInterval(() => { try { process.kill(originalParent, 0); if (process.ppid !== originalParent) throw Object.assign(new Error("parent changed"), { code: "ESRCH" }); } catch (error) { if (error.code === "ESRCH") void onSignal("SIGHUP"); } }, 500);
+const configuredParent = Number(process.env.CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID);
+const originalParent = Number.isInteger(configuredParent) && configuredParent > 0 ? configuredParent : process.ppid;
+const parentWatchMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_PARENT_WATCH_MS || 500));
+let parentConfirmed = false;
+const parentWatch = setInterval(() => {
+  try {
+    process.kill(originalParent, 0);
+    if (process.ppid !== originalParent) void onSignal("SIGHUP", "parent-changed");
+    else if (!parentConfirmed) { parentConfirmed = true; record("parent_watch_confirmed"); }
+  } catch (error) {
+    if (error.code === "ESRCH") void onSignal("SIGHUP", "parent-lost");
+  }
+}, parentWatchMs);
 
 function continuation({ freshProcess }) {
   if (!artifactPackage) return "Continue the interrupted review. Return only the required JSON verdict.";
@@ -442,10 +514,11 @@ if (startupResume && state.resume_count >= 1) {
   record("resume_budget_exhausted", { resume_count: state.resume_count });
   outcome = { recoveryBudgetExhausted: true, code: null };
 } else {
-  if (startupResume) { state.resume_count += 1; state.phase = "resume_reserved"; persist("resuming"); }
+  if (startupResume) reserveResume();
   outcome = await run(startupResume ? continuation({ freshProcess: true }) : prompt, startupResume);
+  if (startupResume) commitResumeReservation();
   if (outcome.stalled && state.session_id && state.resume_count < 1) {
-    state.resume_count += 1; state.phase = "resume_reserved"; persist("resuming");
+    reserveResume();
     // Discard partial ranges; only complete host-attested chunks survive an
     // in-process resume. This prevents cross-attempt range splicing.
     for (const [id, coverage] of readCoverage) {
@@ -458,14 +531,15 @@ if (startupResume && state.resume_count >= 1) {
       coverage.failed = false;
     }
     outcome = await run(continuation({ freshProcess: false }), true);
+    commitResumeReservation();
   }
 }
 let output;
 if (outcome.recoveryBudgetExhausted) output = failure(mode, "claude-code-resume-budget-exhausted", { resume_count: state.resume_count });
-else if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { resume_count: state.resume_count });
-else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { resume_count: state.resume_count });
-else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics });
-else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { resume_count: state.resume_count, ...outcome.terminal_diagnostics });
+else if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-idle-after-resume" : "claude-code-idle-without-session", { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
+else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
+else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
+else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { resume_count: state.resume_count, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
 else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count };
 persist(output.execution_status, { failure_reason: output.failure_reason, terminal_verdict_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || null)).digest("hex") });
 atomicWrite(outputFile, JSON.stringify(output, null, 2));
