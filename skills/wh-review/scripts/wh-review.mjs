@@ -25,8 +25,8 @@ export function prepare(input) {
   });
 }
 
-export function execute(input, env = process.env) {
-  const result = assembleAndInvokeReviewEngine({
+export async function execute(input, env = process.env) {
+  const result = await assembleAndInvokeReviewEngine({
     taskId: input.task_id,
     stage: input.stage,
     reviewFlowId: input.review_flow_id,
@@ -44,14 +44,14 @@ export function execute(input, env = process.env) {
   };
 }
 
-export function runCli(argv = process.argv.slice(2)) {
+export async function runCli(argv = process.argv.slice(2)) {
   const command = argv[0];
   if (!new Set(["prepare", "execute"]).has(command)) throw new Error("usage: wh-review.mjs <prepare|execute> [--input=<json-file>]");
   const input = inputFrom(argv.slice(1));
-  return command === "prepare" ? prepare(input) : execute(input);
+  return command === "prepare" ? prepare(input) : await execute(input);
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  try { process.stdout.write(`${JSON.stringify(runCli())}\n`); }
+  try { process.stdout.write(`${JSON.stringify(await runCli())}\n`); }
   catch (error) { fail("wh-review-cli-error", { name: error?.name, message: error?.message }); }
 }
