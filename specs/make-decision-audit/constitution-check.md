@@ -1,6 +1,6 @@
 # Constitution Check
 
-- [x] **F1 薄核心** — core 仅做 canonical coverage/audit，平台获取下沉 adapter。
+- [x] **F1 薄核心** — core 仅保留平台无关窄合同、纯校验与事实聚合；编排、平台获取和人工裁决分别留在 workflow、adapter 与 STOP，未新增服务或第二裁决引擎。
 - [x] **F2 窄契约** — manifest、ledger、receipt、summary 均以明确 typed boundary 交互。
 - [x] **F3 物理事实靠机器校验但不阻断** — manifest/journal/receipt/hash 机器采集，事实记录不充当质量门。
 - [x] **F4 质量靠异源审查与人而非阻断式质量门** — spec 明确异源审查与人工裁决。
@@ -15,7 +15,7 @@
 - [x] **Q3 异源审查加人工把关** — 要求 wh-review 异源独立审查。
 - [x] **S1 能用外部就不造轮子** — 复用现有 journal/receipt/wh-review 基础设施。
 - [x] **S2 外部技能可针对项目改造合宪** — adapter 允许项目适配但不污染 core。
-- [x] **S3 迭代时保持最新并就地检查** — canonical manifest 与 hash/stale 检测暴露漂移。
+- [x] **S3 迭代时保持最新并就地检查** — T001 把本仓 `constitution-checklist.md`、schema 与同目录 manifest 来源写进五份 SKILL；T020 扫描来源引用和漂移；本 change 无外部技能/依赖版本可查。
 - [x] **S4 自定义技能必须有指标系统** — 五阶段纳入统一 metrics 与 audit summary。
 - [x] **S5 自定义技能方便子代理调用省主上下文** — artifact-first narrow contracts 支持只传路径和摘要。
 - [x] **S6 自定义技能参考市面方案不闭门造车** — consumer/evidence matrix 要求证据驱动复用。
