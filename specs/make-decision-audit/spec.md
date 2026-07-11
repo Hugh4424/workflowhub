@@ -176,6 +176,8 @@ generic core 只能消费 canonical input 并计算 coverage/audit；Multica ada
 
 1. **scope 边界**：IN/OUT 见“范围”；裁剪机制为 final ledger 接受状态、consumer/evidence matrix 与 YAGNI。
 2. **自检结果**：ladder pass；FR 编号 pass；每 FR Given/When/Then pass；五章 pass；R1–R9 对齐 pass；澄清残留 pass；Known Gaps pass；Spec-Purity warn（术语中出现实现产物名，均为合同级示例，无 shell 命令或绝对路径）。
-3. **独立审查摘要**：unknown；待 wh-review build-spec 异源审查后回填 verdict 与报告路径。
-4. **未解风险**：scope-triage 高危词命中“fail-closed/不得/必须”均用于验收语义，不是质量阻断门；decision-log 差异无；[FRICTION] metrics stage-start 首次调用缺 cfg 失败 | 建议：调用方统一提供 configForCollector。
-5. **handoff required_reads**：本 spec；final decision ledger；constitution check；baseline report；异源审查报告；plain-language brief；stage-result-build-spec.json。
+3. **独立审查摘要**：pass；异源独立审查报告：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/make-decision-audit/reports/build-spec--cb68c1c9-431e-443a-a847-9eba8869aa4c--1-pass.md`。
+4. **未解风险**：scope-triage 高危词命中“fail-closed/不得/必须”均用于验收语义，不是质量阻断门；decision-log 差异无；异源审查保留一个可选 minor finding：FR-STRUCTURE-001 将“无重复、无空洞”作为正常场景的行内负向断言，而非单独失败场景，此格式问题不改变既有需求语义；[FRICTION] metrics stage-start 首次调用缺 cfg 失败 | 建议：调用方统一提供 configForCollector。
+5. **handoff required_reads**：本 spec；final decision ledger；constitution check；baseline report。
+
+**本阶段产生的输出**：异源独立审查报告；大白话进度简报；stage-result-build-spec.json。
