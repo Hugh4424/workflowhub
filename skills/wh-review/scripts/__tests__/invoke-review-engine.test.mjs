@@ -1397,6 +1397,30 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
 });
 
 describe("assembleAndInvokeReviewEngine (T010c end-to-end)", () => {
+  it("required-skill preflight failure leaves no immutable baseline pair and a valid retry proceeds", () => {
+    const stage = "build-plan", flow = "preflight-baseline", source = join(stubDir, "plan-source.md");
+    writeFileSync(source, "PLAN SOURCE\n");
+    writeRoundStateFixture({ root, stage, reviewFlowId: flow, mode: "full" });
+    writeRoutePreparePhase({ taskId: TASK_ID, stage, reviewFlowId: flow, totalRound: 1, taskTrackingRoot: root });
+    writePromptFixture({ root, reviewFlowId: flow, totalRound: 1 });
+    const baseline = join(root, TASK_ID, "reviews", `materials-baseline-${stage}-${flow}-r1.json`);
+    const snapshot = join(root, TASK_ID, "reviews", "snapshots", `materials-${stage}-${flow}-r1.txt`);
+    expect(() => assembleReviewPayload({ taskId:TASK_ID, stage, reviewFlowId:flow, totalRound:1, taskTrackingRoot:root,
+      currentContent:"supplement", gitSha:"abc", coveredPaths:[], materialSources:[{id:"source:plan",path:source}],
+      env:{WH_REVIEW_PROVIDER:"claude-code",CLAUDE_CODE_SKILL_ROOTS:join(stubDir,"escaping-skills")} }))
+      .toThrow(/required-skill-unavailable/);
+    expect(existsSync(baseline)).toBe(false); expect(existsSync(snapshot)).toBe(false);
+
+    const validRoot = join(stubDir, "valid-skills");
+    for (const name of ["speckit-analyze","plan-eng-review","review"]) {
+      mkdirSync(join(validRoot,name),{recursive:true}); writeFileSync(join(validRoot,name,"SKILL.md"),`${name}\n`);
+    }
+    const payload = assembleReviewPayload({ taskId:TASK_ID, stage, reviewFlowId:flow, totalRound:1, taskTrackingRoot:root,
+      currentContent:"supplement", gitSha:"abc", coveredPaths:[], materialSources:[{id:"source:plan",path:source}],
+      env:{WH_REVIEW_PROVIDER:"claude-code",CLAUDE_CODE_SKILL_ROOTS:validRoot} });
+    expect(payload.mode).toBe("full"); expect(existsSync(baseline)).toBe(true); expect(existsSync(snapshot)).toBe(true);
+  });
+
   it("assembles the payload and dispatches it through invokeReviewEngine in one call", () => {
     writeRoundStateFixture({ root, mode: "incremental" });
     writeRoutePreparePhase({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 1, taskTrackingRoot: root });

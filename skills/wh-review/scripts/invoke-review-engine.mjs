@@ -336,6 +336,8 @@ export function assembleReviewPayload({
   currentContent,
   gitSha,
   coveredPaths,
+  materialSources,
+  env = process.env,
 }) {
   assertSafeTaskId(taskId);
   assertKnownStage(stage);
@@ -370,6 +372,14 @@ export function assembleReviewPayload({
     );
   }
   const promptContent = readFileSync(promptPath, "utf8");
+
+  // All deterministic transport/dependency checks must precede immutable
+  // baseline writes. A failed preflight must remain safely retryable.
+  const requestedProvider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  if (Array.isArray(materialSources) && materialSources.length > 0 && requestedProvider !== "claude-code") {
+    throw new FailLoudError("materialSources require explicit WH_REVIEW_PROVIDER=claude-code; refusing legacy aggregate transport");
+  }
+  if (requestedProvider === "claude-code") resolveRequiredSkills({ contract, env });
 
   let materialsCore;
   if (docType === "doc") {
