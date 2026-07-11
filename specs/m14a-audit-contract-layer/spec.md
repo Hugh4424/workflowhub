@@ -6,10 +6,9 @@
 
 ## 独立审查摘要
 
-- 2026-07-11 由 Claude Code 在 Codex 主代理之外完成全量异源审查。
-- 审查执行状态为 completed，输入模式为 full，最终结论为 pass。
-- 审查未发现 blocking 或 important 问题；6 条 minor 建议均为可移植性、可读性与场景扩充建议，不影响本期规格正确性或进入计划阶段。
-- 已知非阻断风险：来源引用仍含少量会话现场路径，复杂场景数量低于建议值，来源引用允许空值的语义可在后续计划阶段评估收紧；本阶段不为这些 advisory 扩大范围。
+- 2026-07-11 的 Claude Code 正式 flow 未完成：材料进度为 `0/32`，结果为 `unknown` / `actual_mode=not_executed` / `needs_human=true`；详见附录 B.3。
+- 随后的 Kimi Code CLI 全量异源审查已完成，当前结论为 `revise`，发现 1 条 important 与 5 条 minor；本版正在修复这些问题，尚不能声称 `pass`。
+- 两次记录按时间并存：前者是未执行成功的 Claude flow，后者是已执行完成的 Kimi 审查，不互相覆盖。
 
 ## 速读卡（30 秒看懂这个需求）
 
@@ -337,16 +336,18 @@
 
 ### 5. handoff required_reads
 
+解析基准：`specs/...` 为 repository root 相对路径；`{task_root}` 由 `resolveTaskRecordPaths(taskId).task_root` 在当前运行环境解析。清单不固化任一工作机的用户目录。
+
 1. `specs/m14a-audit-contract-layer/spec.md`
 2. `specs/m14a-audit-contract-layer/execution-trace.schema.json`
 3. `specs/m14a-audit-contract-layer/quality-failure-taxonomy.md`
 4. `specs/m14a-audit-contract-layer/skills-inventory.schema.json`
 5. `specs/m14a-audit-contract-layer/harness-surface.md`
-6. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-constitution-check.md`
-7. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-baseline-report.md`
-8. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-f10-analysis.md`
-9. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/artifacts/build-spec-review-runner-diagnosis.md`
-10. `/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reviews/`
+6. `{task_root}/artifacts/build-spec-constitution-check.md`
+7. `{task_root}/artifacts/build-spec-baseline-report.md`
+8. `{task_root}/artifacts/build-spec-f10-analysis.md`
+9. `{task_root}/artifacts/build-spec-review-runner-diagnosis.md`
+10. `{task_root}/reviews/`
 
 ## 附录 C：设计决策
 
