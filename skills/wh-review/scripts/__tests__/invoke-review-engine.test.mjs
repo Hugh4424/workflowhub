@@ -257,7 +257,7 @@ describe("discoverRunner", () => {
 });
 
 describe("effectiveRunnerTimeoutMs", () => {
-  it("keeps the outer wall timeout for the canonical 3rd-review runner", () => {
+  it("gives canonical Claude an outer deadline beyond its 600s inner budget", () => {
     const runnerPath = discoverRunner({
       env: { WH_REVIEW_PROVIDER: "claude-code" },
       workflowhubRepoRoot: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../"),
@@ -267,9 +267,15 @@ describe("effectiveRunnerTimeoutMs", () => {
       effectiveRunnerTimeoutMs({
         runnerPath,
         timeoutMs: 300000,
-        env: { CLAUDE_CODE_REVIEW_TIMEOUT_MS: "300000" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_REVIEW_TIMEOUT_MS: "300000" },
       })
-    ).toBe(300000);
+    ).toBe(720000);
+    expect(effectiveRunnerTimeoutMs({ runnerPath, env: { WH_REVIEW_PROVIDER: "claude-code" } })).toBeGreaterThan(600000);
+  });
+
+  it("preserves a longer caller deadline for canonical Claude", () => {
+    expect(effectiveRunnerTimeoutMs({ runnerPath: "/repo/3rd-review/scripts/run-heterologous-review.mjs",
+      timeoutMs: 900000, env: { WH_REVIEW_PROVIDER: "claude-code" } })).toBe(900000);
   });
 
   it("keeps the caller timeout for non-Claude runners", () => {

@@ -43,7 +43,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { platform, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTaskDir } from "../../../core/task-dir-parser.mjs";
 import {
@@ -64,6 +64,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
 const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
 const DEFAULT_TIMEOUT_MS = 600000;
+const CANONICAL_CLAUDE_OUTER_TIMEOUT_MS = 720000;
 
 export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed", "review-already-running", "review-lock-unsupported-platform", "review-lock-utility-missing", "review-lock-attestation-invalid"]);
 
@@ -107,7 +108,15 @@ function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, tot
 }
 
 export function effectiveRunnerTimeoutMs({ runnerPath, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
-  return runnerPath === CLAUDE_CODE_RUNNER ? undefined : timeoutMs;
+  if (runnerPath === CLAUDE_CODE_RUNNER) return undefined;
+  const provider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  // 3rd-review owns a 600s inner Claude budget. The parent deadline must also
+  // cover provider preflight, scoped-Read attestation, diagnostics, and atomic
+  // artifact publication; equal inner/outer constants deterministically race.
+  if (provider === "claude-code" && basename(runnerPath) === DEFAULT_RUNNER_BASENAME) {
+    return Math.max(timeoutMs, CANONICAL_CLAUDE_OUTER_TIMEOUT_MS);
+  }
+  return timeoutMs;
 }
 
 const SAFE_RUNNER_ENV_KEYS = new Set([
