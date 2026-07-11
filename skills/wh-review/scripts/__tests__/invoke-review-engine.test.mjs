@@ -348,9 +348,20 @@ describe("invokeReviewEngine — success path", () => {
     const fakeClaude = join(stubDir, "fake-canonical-claude.mjs");
     writeFileSync(fakeClaude, `#!/usr/bin/env node
       import { readFileSync, writeFileSync } from "node:fs";
+      import { join } from "node:path";
       const prompt = readFileSync(0, "utf8");
-      writeFileSync(${JSON.stringify(capturedPrompt)}, prompt);
-      process.stdout.write(JSON.stringify({ structured_output: { verdict:"pass", findings:[], resolutionSummary:"all chunks read" } }));
+      const manifest = JSON.parse(readFileSync(join(process.cwd(), "manifest.json"), "utf8"));
+      let captured = prompt, n = 0;
+      for (const entry of manifest.entries) for (const chunk of entry.chunks) {
+        const id = \`read-\${++n}\`, filePath = join(process.cwd(), chunk.path);
+        process.stdout.write(JSON.stringify({ type:"assistant", message:{ content:[{ type:"tool_use", id, name:"Read", input:{ file_path:filePath, offset:1, limit:Math.max(1, chunk.lines) } }] } }) + "\\n");
+        const source = readFileSync(filePath, "utf8"); captured += source;
+        const lines = source === "" ? [] : source.replace(/\\n$/u, "").split("\\n");
+        const content = lines.map((line, index) => \`\${String(index + 1).padStart(6, " ")}→\${line}\`).join("\\n");
+        process.stdout.write(JSON.stringify({ type:"user", message:{ content:[{ type:"tool_result", tool_use_id:id, content:[{ type:"text", text:content }] }] } }) + "\\n");
+      }
+      writeFileSync(${JSON.stringify(capturedPrompt)}, captured);
+      process.stdout.write(JSON.stringify({ type:"result", structured_output:{ verdict:"pass", findings:[], resolutionSummary:"all chunks read" } }) + "\\n");
     `);
     chmodSync(fakeClaude, 0o755);
     const canonicalUrl = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../3rd-review/scripts/run-heterologous-review.mjs")).href;
@@ -358,7 +369,7 @@ describe("invokeReviewEngine — success path", () => {
     writeFileSync(wrapper, `
       import { runReview } from ${JSON.stringify(canonicalUrl)};
       const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
-      runReview({ diffFile:args.diff, outputFile:args.output, hostProvider:args["host-provider"],
+      await runReview({ diffFile:args.diff, outputFile:args.output, hostProvider:args["host-provider"],
         provider:args.provider, claudeBinaryPath:${JSON.stringify(fakeClaude)}, envOverride:{ PATH:process.env.PATH, HOME:process.env.HOME, LANG:"C" } });
     `);
     const first = "FIRST-MARKER-WH-CROSS-REPO";
