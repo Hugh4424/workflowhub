@@ -1,4 +1,5 @@
 <!-- migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/plan-reviewer-contract.md -->
+<!-- wh-review-skills: {"required":["speckit-analyze","plan-eng-review","review"]} -->
 
 # Plan Review 审查合同
 

@@ -213,9 +213,7 @@ function actualReadRanges(content, pending) {
 function observeReadEvents(event) {
   // Claude stream-json may wrap complete assistant/user messages in a
   // stream_event envelope.  Normalize that envelope before attestation.
-  if (event?.type === "stream_event" && event.event && typeof event.event === "object") {
-    event = event.event;
-  }
+  event = normalizeStreamEvent(event);
   if (!artifactPackage || !event || typeof event !== "object") return;
   if (event.type === "assistant") {
     if (event.message?.role !== "assistant" || !Array.isArray(event.message.content)) return;
@@ -298,7 +296,7 @@ const prompt = artifactPackage
   ? `You are Claude Code acting as a heterologous reviewer.\n\nThe complete immutable review package is your working directory. Use only Read. Read every declared chunk in sequence; do not read any path not listed below. Concatenating each entry's chunks reconstructs the exact logical artifact. The contract entry is authoritative; required_skill entries are report-only lenses. Review every role=materials entry.\n\nReturn only the required JSON verdict. For pass/revise_required, artifactCoverage must contain every logical manifest id exactly once with its original sha256, status=read, and concrete evidence. For escalate_to_human, a well-formed attested subset is allowed.\n\nManifest content hash: ${artifactPackage.manifest.content_hash}\nLogical entries and chunks:\n${artifactPackage.manifest.entries.map((item) => `${item.id}|${item.kind}|${item.bytes}|${item.sha256}\n${item.chunks.map((chunk) => `  chunk=${chunk.sequence}|${chunk.path}|${chunk.bytes}|${chunk.lines}|${chunk.sha256}`).join("\n")}`).join("\n")}`
   : `You are Claude Code acting as a heterologous reviewer.\n\nUse the REVIEW CONTRACT exactly. Review only the supplied MATERIALS.\nReturn the required JSON verdict; do not return markdown.\n\n## REVIEW CONTRACT\n\n${payload.contract}\n\n## MATERIALS\n\n${payload.materials}`;
 const stateFile = join(stateDir, "state.json"), journal = join(stateDir, "journal.ndjson"), receiptFile = join(stateDir, "terminal-receipt.json"), settingsFile = join(stateDir, "safe-settings.json");
-const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 300000));
+const idleMs = Math.max(1, Number(process.env.CLAUDE_CODE_REVIEW_IDLE_MS || 600000));
 const graceMs = Math.max(10, Number(process.env.CLAUDE_CODE_REVIEW_STOP_GRACE_MS || 2000));
 const maxBuffer = Math.max(1024, Number(process.env.CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES || 4 * 1024 * 1024));
 const maxStderr = Math.max(128, Math.min(16 * 1024, Number(process.env.CLAUDE_CODE_REVIEW_STDERR_MAX_BYTES || 4096)));
@@ -386,6 +384,16 @@ const RETRYABLE_UPSTREAM_CATEGORIES = new Set(["rate_limit", "overloaded", "upst
 const SAFE_SUBTYPES = new Set(["success", "error_during_execution", "error_max_turns", "error_max_budget_usd", "error_max_structured_output_retries", "interrupted"]);
 const SAFE_STOP_REASONS = new Set(["end_turn", "max_tokens", "stop_sequence", "tool_use", "error"]);
 const SAFE_EVENT_TYPES = new Set(["system", "assistant", "user", "result", "stream_event"]);
+function normalizeStreamEvent(event) {
+  let normalized = event;
+  const seen = new Set();
+  for (let depth = 0; depth < 16 && normalized?.type === "stream_event"; depth += 1) {
+    if (!normalized.event || typeof normalized.event !== "object" || seen.has(normalized)) return null;
+    seen.add(normalized);
+    normalized = normalized.event;
+  }
+  return normalized?.type === "stream_event" ? null : normalized;
+}
 const safeSessionId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : undefined;
 const sessionIdHash = (value) => createHash("sha256").update(value).digest("hex");
 function claudeApiErrorCategory(event) {
@@ -503,13 +511,14 @@ async function run(input, resume) {
       let event;
       try { event = JSON.parse(line); } catch { validationFailure = "claude-code-stream-frame-invalid"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
       if (!SAFE_EVENT_TYPES.has(event?.type)) { validationFailure = "claude-code-stream-event-unknown"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
+      const envelope = normalizeStreamEvent(event);
+      if (!envelope || !SAFE_EVENT_TYPES.has(envelope.type)) { validationFailure = "claude-code-stream-event-unknown"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
       if (!state.attempt_timing.first_event_at) {
         state.attempt_timing = { ...state.attempt_timing, first_event_at: new Date().toISOString(), first_event_type: event.type };
         record("first_stream_event", { event_type: event.type });
         persist(state.status, { attempt_timing: state.attempt_timing });
         arm();
       }
-      const envelope = event?.type === "stream_event" && event.event && typeof event.event === "object" ? event.event : event;
       const session = safeSessionId(event?.session_id ?? event?.sessionId ?? envelope?.session_id ?? envelope?.sessionId);
       if (session && state.session_id && session !== state.session_id) {
         validationFailure = "claude-code-session-mismatch";
@@ -518,18 +527,18 @@ async function run(input, resume) {
         return;
       }
       if (session && !state.session_id) { state.session_id = session; record("session_established", { session_id_hash: sessionIdHash(session) }); semantic(); }
-      observeReadEvents(event);
+      observeReadEvents(envelope);
       if (boundaryViolation) { validationFailure = "artifact-read-boundary-violation"; void stopChild(child).then(() => settle({ code: child.exitCode, signal: child.signalCode })); return; }
-      if (event.type === "result" && [...pendingReads.values()].some((pending) => pending.kind === "boundary_candidate")) {
+      if (envelope.type === "result" && [...pendingReads.values()].some((pending) => pending.kind === "boundary_candidate")) {
         attestationInvalid = true;
         record("read_boundary_attestation_unresolved", { count: [...pendingReads.values()].filter((pending) => pending.kind === "boundary_candidate").length });
       }
-      safeTerminal = { ...safeTerminal, ...terminalDiagnostics(event), ...terminalDiagnostics(envelope) };
+      safeTerminal = { ...safeTerminal, ...terminalDiagnostics(envelope) };
       const attestation = hostAttestation();
       const completed = completeChunkCount();
       if (completed > lastCompleted) { lastCompleted = completed; record("coverage_progress", { completed, total: state.progress.total }); semantic(completed); }
-      const terminalCandidate = event.type === "result" && candidatesFromEvent(event).some((candidate) => VERDICTS.has(candidate.verdict));
-      const verdict = event.type === "result" ? verdictFromEvent(event, requiredSkills, expectedEntries, attestation) : null;
+      const terminalCandidate = envelope.type === "result" && candidatesFromEvent(envelope).some((candidate) => VERDICTS.has(candidate.verdict));
+      const verdict = envelope.type === "result" ? verdictFromEvent(envelope, requiredSkills, expectedEntries, attestation) : null;
       if (verdict) {
         try { verifyPackageAfterReview(); }
         catch (error) { validationFailure = packageFailureCode(error); terminalSeen = true; void stopChild(child).then(() => settle({ code: child.exitCode ?? 0, signal: child.signalCode, terminalSeen: true })); return; }
@@ -693,7 +702,7 @@ if (outcome.stalled) output = failure(mode, state.resume_count ? "claude-code-id
 else if (outcome.validation_failure) output = failure(mode, outcome.validation_failure, { resume_count: state.resume_count, stderr_summary: outcome.stderr_summary });
 else if (outcome.error || (outcome.code !== 0 && !outcome.verdict)) output = failure(mode, "claude-code-non-zero-exit", { resume_count: state.resume_count, exit_status: outcome.code ?? null, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
 else if (!outcome.verdict) output = failure(mode, "claude-code-output-unparseable", { resume_count: state.resume_count, ...outcome.terminal_diagnostics, stderr_summary: outcome.stderr_summary });
-else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count, attempt_history: attemptHistory };
+else output = { ...outcome.verdict, ...(artifactPackage ? { artifact_attestation: outcome.artifact_attestation } : {}), actual_mode: mode, provider: "claude-code", backend_provider: "claude-code", reviewer_source: "wh-review/internal-claude-code-compat", provider_cli: "claude", host: process.env.WH_REVIEW_HOST_AGENT || "codex", trueCrossEngine: true, reviewMode: "claude-code-cli", synthetic: false, execution_status: "completed", resume_count: state.resume_count, attempt_history: attemptHistory };
 persist(output.execution_status, { failure_reason: output.failure_reason, terminal_verdict_hash: createHash("sha256").update(JSON.stringify(outcome.verdict || null)).digest("hex") });
 atomicWrite(outputFile, JSON.stringify(output, null, 2));
 atomicWrite(receiptFile, JSON.stringify({ input_hash: inputHash, execution_status: output.execution_status, verdict_hash: state.terminal_verdict_hash, failure_reason: output.failure_reason || null, completed: state.progress.completed, total: state.progress.total, attempts: state.attempt, resume_count: state.resume_count, consecutive_no_progress: consecutiveNoProgress, checkpoint_attempts: checkpointAttempts, last_error: state.last_error || null, last_retry_after: state.last_retry_after ?? null, attempt_history: attemptHistory }));

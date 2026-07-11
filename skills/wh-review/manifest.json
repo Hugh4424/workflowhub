@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "name": "wh-review",
+  "contracts": {
+    "plan": {
+      "path": "contracts/plan.md",
+      "required_skills": [
+        "speckit-analyze",
+        "plan-eng-review",
+        "review"
+      ]
+    }
+  }
+}

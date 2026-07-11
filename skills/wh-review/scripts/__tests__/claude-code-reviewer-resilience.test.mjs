@@ -311,6 +311,32 @@ const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"r
     expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
   });
 
+  it("recursively unwraps Claude 2.1 nested stream events including terminal result", async () => {
+    const f = fixture(`
+import {readFileSync} from "node:fs";import {join} from "node:path";readFileSync(0,"utf8");
+const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));let n=0;
+for(const entry of manifest.entries)for(const chunk of entry.chunks){const id="nested-"+(++n),path=join(process.cwd(),chunk.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n"),content=lines.map((line,i)=>String(i+1)+"\\t"+line).join("\\n");
+const wrap=(event)=>({type:"stream_event",event:{type:"stream_event",event}});
+console.log(JSON.stringify(wrap({type:"assistant",sessionId:"nested-session",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path}}]}})));
+console.log(JSON.stringify(wrap({type:"user",sessionId:"nested-session",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content:[{type:"text",text:content}]}]}})));}
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"read"}));
+console.log(JSON.stringify({type:"stream_event",event:{type:"stream_event",event:{type:"result",sessionId:"nested-session",structured_output:{verdict:"pass",findings:[],resolutionSummary:"ok",skillResults:[],artifactCoverage}}}}));`, { artifact: true });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "pass", execution_status: "completed" });
+    expect(result.output.artifact_attestation.every(({ status }) => status === "read")).toBe(true);
+  });
+
+  it("does not let a nested terminal result bypass an unresolved boundary read", async () => {
+    const f = fixture(`
+import {readFileSync} from "node:fs";import {join} from "node:path";readFileSync(0,"utf8");
+const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8"));
+console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id:"escape-pending",name:"Read",input:{file_path:"/etc/hosts"}}]}}));
+const artifactCoverage=manifest.entries.map(({id,sha256})=>({id,sha256,status:"read",evidence:"claimed"}));
+console.log(JSON.stringify({type:"stream_event",event:{type:"stream_event",event:{type:"result",structured_output:{verdict:"pass",findings:[],resolutionSummary:"bad",skillResults:[],artifactCoverage}}}}));`, { artifact: true });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", synthetic: true, failure_reason: "artifact-coverage-unattested" });
+  });
+
   it("reclassifies a resumed attempt instead of enforcing a lifetime resume budget", async () => {
     const f = fixture(`process.exit(91);`, { state: { input_hash: "fixed-hash", session_id: "s1", resume_count: 1, attempt: 2, attempt_id: "a2", phase: "attempt_settled", status: "failed" } });
     const result = await execute(f, { CLAUDE_CODE_REVIEW_IDLE_MS: "1000" });
