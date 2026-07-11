@@ -25,6 +25,18 @@ function temporaryRoot(prefix) {
 }
 
 describe("stable wh-review facade", () => {
+  it.each([
+    [{ provider: "auto" }, /provider must be/],
+    [{ provider: 1 }, /provider must be/],
+    [{ host_provider: "unknown" }, /host_provider is unsupported/],
+  ])("validates top-level provider controls: %j", async (fields, message) => {
+    await expect(executeReview({ current_content: "", ...fields })).rejects.toThrow(message);
+  });
+
+  it("requires current_content to be content bytes", async () => {
+    await expect(executeReview({ provider: "claude-code", host_provider: "codex", current_content: { path: "/tmp/content" } }))
+      .rejects.toThrow(/current_content must contain review content as a string/);
+  });
   it("normalizes exact stage descriptors and supported aliases", () => {
     expect(normalizeMaterialSources([{ id: "source:plan", path: "/tmp/plan.md" }])).toEqual([{ id: "source:plan", path: "/tmp/plan.md" }]);
     expect(normalizeMaterialSources([{ source_id: "source:spec", file_path: "/tmp/spec.md" }])).toEqual([{ id: "source:spec", path: "/tmp/spec.md" }]);

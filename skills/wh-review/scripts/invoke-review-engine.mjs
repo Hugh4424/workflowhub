@@ -449,6 +449,11 @@ export function invokeReviewEngine({
   assertSafeReviewFlowId(reviewFlowId);
   assertValidTotalRound(totalRound);
 
+  const requestedProvider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  if (Array.isArray(materialSources) && materialSources.length > 0 && requestedProvider !== "claude-code") {
+    throw new FailLoudError("materialSources require explicit WH_REVIEW_PROVIDER=claude-code; refusing legacy aggregate transport");
+  }
+
   // round-review finding (round-1, this fix): spawnSync() below has no `env`
   // option, so the runner subprocess (which runs `npm test` on the target repo
   // as review evidence) always inherits the REAL process.env — never the
@@ -477,7 +482,6 @@ export function invokeReviewEngine({
   const artifactPath = rawArtifactPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId, totalRound });
   mkdirSync(dirname(artifactPath), { recursive: true });
 
-  const requestedProvider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
   const rawHost = env.REVIEW_HOST_PROVIDER ?? env.WH_REVIEW_HOST_PROVIDER ?? env.WH_REVIEW_HOST_AGENT;
   const hostAliases = { "openai-codex": "codex", "codex-cli": "codex", claude: "claude-code", "claude-code": "claude-code", codex: "codex" };
   const hostProvider = hostAliases[String(rawHost ?? "").toLowerCase()] ?? "unknown";

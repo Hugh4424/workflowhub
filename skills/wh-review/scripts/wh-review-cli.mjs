@@ -9,8 +9,14 @@ import { assembleAndInvokeReviewEngine } from "./invoke-review-engine.mjs";
 
 function providerEnv(input) {
   const env = { ...process.env, ...(input.env ?? {}) };
-  if (input.provider) env.WH_REVIEW_PROVIDER = input.provider;
-  if (input.host_provider) env.WH_REVIEW_HOST_PROVIDER = input.host_provider;
+  if (input.provider !== undefined) {
+    if (typeof input.provider !== "string" || !new Set(["claude-code", "codex", "gemini", "kimi"]).has(input.provider)) throw new TypeError("provider must be one of claude-code, codex, gemini, kimi");
+    env.WH_REVIEW_PROVIDER = input.provider;
+  }
+  if (input.host_provider !== undefined) {
+    if (typeof input.host_provider !== "string" || !new Set(["claude-code", "claude", "codex", "openai-codex", "codex-cli"]).has(input.host_provider)) throw new TypeError("host_provider is unsupported");
+    env.WH_REVIEW_HOST_PROVIDER = input.host_provider;
+  }
   return env;
 }
 
@@ -51,13 +57,15 @@ export async function executeReview(input) {
   const reviewFlowId = input.review_flow_id ?? input.reviewFlowId;
   const totalRound = input.total_round ?? input.totalRound;
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
+  const currentContent = input.current_content ?? input.currentContent;
+  if (typeof currentContent !== "string") throw new TypeError("current_content must contain review content as a string, not a file path descriptor");
   const result = await assembleAndInvokeReviewEngine({
     taskId,
     stage: input.stage,
     reviewFlowId,
     totalRound,
     taskTrackingRoot,
-    currentContent: input.current_content ?? input.currentContent,
+    currentContent,
     materialSources: normalizeMaterialSources(input.material_sources ?? input.materialSources),
     docType: input.doc_type ?? input.docType,
     gitSha: input.git_sha ?? input.gitSha,

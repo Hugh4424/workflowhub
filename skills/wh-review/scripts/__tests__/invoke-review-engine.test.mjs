@@ -288,6 +288,33 @@ describe("runner boundary", () => {
       OPENAI_API_KEY: "drop", GOOGLE_API_KEY: "drop", UNRELATED_SECRET: "drop",
     } })).toEqual({ PATH: "/usr/bin", HOME: "/home/test", LANG: "C", ANTHROPIC_API_KEY: "allowed" });
   });
+
+  it("fails loud when material sources would fall through a runner-only legacy transport", () => {
+    expect(() => invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID,
+      totalRound: 1, mode: "full", contract: "C", materials: "legacy", materialSources: [{ id: "source:plan", path: "/tmp/plan.md" }],
+      taskTrackingRoot: root, env: { THIRD_REVIEW_RUNNER: "/tmp/custom-runner.mjs" } }))
+      .toThrow(/materialSources require explicit WH_REVIEW_PROVIDER=claude-code/);
+  });
+
+  it("explicit Claude provider packages contract, sources, and required skills", () => {
+    const source = join(stubDir, "plan.md"), skillsRoot = join(stubDir, "skills"), capture = join(stubDir, "manifest-capture.json");
+    writeFileSync(source, "PLAN\n"); mkdirSync(join(skillsRoot, "review"), { recursive: true });
+    writeFileSync(join(skillsRoot, "review", "SKILL.md"), "REVIEW LENS\n");
+    const runnerPath = writeStubRunner(`
+      import { readFileSync, writeFileSync } from "node:fs";
+      const args=Object.fromEntries(process.argv.slice(2).map(a=>a.replace(/^--/,"").split("="))), payload=JSON.parse(readFileSync(args.diff,"utf8"));
+      writeFileSync(${JSON.stringify(capture)},JSON.stringify(payload.artifact_manifest.entries));
+      writeFileSync(args.output,JSON.stringify({verdict:"pass",findings:[],actual_mode:payload.mode,provider:"claude-code",backend_provider:"claude-code",reviewer_source:"test",trueCrossEngine:true,synthetic:false,execution_status:"completed",artifactCoverage:payload.artifact_manifest.entries.map(({id,sha256})=>({id,sha256,status:"read"}))}));
+    `);
+    const result = invokeReviewEngine({ taskId:TASK_ID, stage:STAGE, reviewFlowId:"explicit-package", totalRound:1, mode:"full",
+      contract:'<!-- wh-review-skills: {"required":["review"]} -->\nCONTRACT', materials:"must-not-replace-source",
+      materialSources:[{id:"source:plan",path:source}], taskTrackingRoot:root,
+      env:{WH_REVIEW_PROVIDER:"claude-code",WH_REVIEW_HOST_PROVIDER:"codex",THIRD_REVIEW_RUNNER:runnerPath,CLAUDE_CODE_SKILL_ROOTS:skillsRoot} });
+    expect(result.verdict).toBe("pass");
+    expect(JSON.parse(readFileSync(capture,"utf8")).map(({id,role})=>[id,role])).toEqual([
+      ["contract","contract"], ["source:plan","materials"], ["skill:review","required_skill"],
+    ]);
+  });
 });
 
 describe("invokeReviewEngine — success path", () => {
