@@ -4,7 +4,7 @@
 
 扫描 13 条 FR、13 条 AC、5 个 plan step、7 个 task，并检查各文档内部关键断言。FR 覆盖率 100%。发现 1 项文档内部一致性问题：spec 顶部曾声称 Claude 审查 `pass`，但附录 B.3 记录该 flow 实际 `not_executed`；现已按可追踪事实修正，当前无未解决的一致性、重复、歧义、欠定义或宪法对齐问题。
 
-已解决的一致性问题：spec 独立审查状态冲突。修正后明确区分未完成的 Claude flow 与已完成但 verdict 为 `revise` 的 Kimi 审查，不再声称 `pass`。
+已解决的一致性问题：spec 独立审查状态冲突，以及 plan 对审查背景、T007 对 diff 范围的描述不完整。修正后明确区分未完成的 Claude flow 与首轮、本轮均已完成但 verdict 为 `revise` 的 Kimi 审查；T007 明确覆盖 `spec.md` 和本轮计划产物，不再声称 `pass` 或遗漏 diff 范围。
 
 ## Coverage Summary
 

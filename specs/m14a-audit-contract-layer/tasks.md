@@ -18,7 +18,7 @@
 
 - [ ] T005 [US2] 新增 `tests/m14a-audit-contract-layer.test.mjs`，验证两份 JSON 可解析、required/enum/version/provenance、九 failure domains、五 surfaces、四 permissions、unknown 语义和禁止项；断言必须在实际缺失/越界时失败 (stage:3, depends:T001,T002,T003,T004) FR: FR-CONTRACT-001, FR-CONTRACT-002, FR-CONTRACT-004, FR-CONTRACT-005, FR-CONTRACT-006, FR-CONTRACT-007, FR-CONTRACT-008, FR-CONTRACT-009
 - [ ] T006 [P] [US1] 核对 `specs/m14a-audit-contract-layer/spec.md` 顶部 30 行速读卡、Known Gaps、字段归属表与 required_reads 路径，并确认实施回报只引用长报告路径 (stage:3, depends:T001,T002,T003,T004) FR: FR-CONTRACT-003, FR-CONTRACT-010, FR-STRUCTURE-001, FR-STRUCTURE-002, FR-ARTIFACT-001
-- [ ] T007 [US2] 运行 `npx vitest run tests/m14a-audit-contract-layer.test.mjs`，记录真实结果；复查 git diff 仅含四份契约、聚焦测试及本阶段计划产物，无 parser/gate/权限系统/per-skill runtime/依赖变更 (stage:3, depends:T005,T006) FR: FR-CONTRACT-004, FR-ARTIFACT-001
+- [ ] T007 [US2] 运行 `npx vitest run tests/m14a-audit-contract-layer.test.mjs`，记录真实结果；复查 git diff 仅含四份契约、`spec.md`、聚焦测试及本阶段计划产物（`plan.md`、`tasks.md`、`research.md`、`data-contracts.md`、cross-artifact analysis），无 parser/gate/权限系统/per-skill runtime/依赖变更 (stage:3, depends:T005,T006) FR: FR-CONTRACT-004, FR-ARTIFACT-001
 
 ## Dependencies & Execution Order
 

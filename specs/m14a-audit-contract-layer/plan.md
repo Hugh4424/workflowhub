@@ -76,7 +76,7 @@ tests/
 
 ## Complexity Tracking
 
-No constitution violations requiring justification. 上游 spec 的独立审查为 `unknown`；这是已记录事实，不改变本计划的契约范围，也不能写成通过。
+No constitution violations requiring justification. 上游 spec 的 Claude Code 正式 flow 为 `not_executed/unknown`；Kimi Code CLI 首轮和本轮异源审查均已完成且 verdict 为 `revise`。这些是并存的已记录事实，不改变本计划的契约范围，也不能写成通过。
 
 ## Implementation Steps
 
