@@ -75,6 +75,49 @@ const manifest=JSON.parse(readFileSync(join(process.cwd(),"manifest.json"),"utf8
 for(const [i,e] of manifest.entries.entries())for(const c of e.chunks){const id="read-"+i+"-"+c.sequence,path=join(process.cwd(),c.path),source=readFileSync(path,"utf8"),lines=source===""?[]:source.replace(/\\n$/u,"").split("\\n").map(x=>x.replace(/\\r$/u,"")),content=lines.map((line,j)=>String(j+1)+"\\t"+line).join("\\n");console.log(JSON.stringify({type:"assistant",message:{role:"assistant",content:[{type:"tool_use",id,name:"Read",input:{file_path:path,offset:1,limit:Math.max(1,c.lines)}}]}}));console.log(JSON.stringify({type:"user",message:{role:"user",content:[{type:"tool_result",tool_use_id:id,content}]}}));}`;
 
 describe("Claude streamed reviewer resilience", () => {
+  it("derives the Claude argv schema and prompt skill closure from the contract manifest", async () => {
+    const skills = ["alpha-review", "beta-review"];
+    const contract = `<!-- wh-review-skills: {"required":${JSON.stringify(skills)}} -->`;
+    const skillResults = skills.map((skill) => ({ skill, status: "executed", evidence: `${skill} ran` }));
+    const f = fixture(`
+import {readFileSync,writeFileSync} from "node:fs";
+const prompt=readFileSync(0,"utf8"),schema=JSON.parse(process.argv[process.argv.indexOf("--json-schema")+1]);
+writeFileSync(new URL("capture.json",import.meta.url),JSON.stringify({prompt,schema}));
+console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify({ verdict: "pass", findings: [], resolutionSummary: "ok", skillResults })}}));`, { contract });
+    const result = await execute(f);
+    const capture = JSON.parse(readFileSync(join(f.root, "capture.json"), "utf8"));
+    expect(capture.schema.properties.skillResults).toMatchObject({ minItems: 2, maxItems: 2 });
+    expect(capture.schema.properties.skillResults.items.properties.skill.enum).toEqual(skills);
+    expect(capture.schema.properties.skillResults.items.properties.skill).not.toHaveProperty("type");
+    expect(capture.prompt).toContain(JSON.stringify(skills));
+    expect(capture.prompt).toContain("every listed name exactly once");
+    expect(capture.prompt).toContain("Use escalate_to_human when any required skill is unavailable or failed");
+    expect(result.output).toMatchObject({ verdict: "pass", skillResults, execution_status: "completed" });
+  });
+
+  it.each([
+    ["missing", [{ skill: "alpha-review", status: "executed", evidence: "ran" }]],
+    ["duplicate", [{ skill: "alpha-review", status: "executed", evidence: "ran" }, { skill: "alpha-review", status: "executed", evidence: "again" }]],
+    ["unknown", [{ skill: "alpha-review", status: "executed", evidence: "ran" }, { skill: "gamma-review", status: "executed", evidence: "ran" }]],
+    ["malformed", [{ skill: "alpha-review", status: "executed", evidence: "ran" }, { skill: "beta-review", status: "bogus", evidence: "ran" }]],
+  ])("rejects %s skillResults at the authoritative semantic validator", async (_case, skillResults) => {
+    const contract = '<!-- wh-review-skills: {"required":["alpha-review","beta-review"]} -->';
+    const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "blocked", skillResults };
+    const f = fixture(`import {readFileSync} from "node:fs";readFileSync(0,"utf8");console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", synthetic: true, failure_reason: "claude-code-output-unparseable" });
+  });
+
+  it("preserves a complete escalation skill closure end to end", async () => {
+    const contract = '<!-- wh-review-skills: {"required":["alpha-review","beta-review"]} -->';
+    const skillResults = [{ skill: "alpha-review", status: "executed", evidence: "ran" }, { skill: "beta-review", status: "unavailable", evidence: "dependency absent" }];
+    const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "beta unavailable", skillResults };
+    const f = fixture(`import {readFileSync} from "node:fs";readFileSync(0,"utf8");console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract });
+    const result = await execute(f);
+    expect(result.output).toMatchObject({ ...candidate, execution_status: "completed", synthetic: false });
+    expect(result.output.skillResults).toEqual(skillResults);
+  });
+
   it("treats idle before and after resume as retryable transport stalls", async () => {
     const f = fixture(`
 import {readFileSync,writeFileSync} from "node:fs";
@@ -554,11 +597,11 @@ console.log(JSON.stringify({type:"stream_event",event:{type:"stream_event",event
     expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", synthetic: true });
   });
 
-  it("allows an incomplete but well-formed skill subset only for semantic escalation", async () => {
+  it("rejects an incomplete skill subset for semantic escalation", async () => {
     const candidate = { verdict: "escalate_to_human", findings: [], resolutionSummary: "dependency prevented remaining lenses", skillResults: [completeSkillResults[0]] };
     const f = fixture(`console.log(JSON.stringify({type:"result",structured_output:${JSON.stringify(candidate)}}));`, { contract: designContract });
     const result = await execute(f);
-    expect(result.output).toMatchObject({ verdict: "escalate_to_human", skillResults: [completeSkillResults[0]], execution_status: "completed", synthetic: false });
+    expect(result.output).toMatchObject({ verdict: "escalate_to_human", failure_reason: "claude-code-output-unparseable", execution_status: "failed", synthetic: true });
   });
 
   it.each(["failed", "unavailable"])("allows required skill status %s only for semantic escalation", async (status) => {
