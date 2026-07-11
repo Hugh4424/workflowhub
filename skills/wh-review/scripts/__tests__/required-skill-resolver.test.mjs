@@ -62,7 +62,7 @@ describe("Claude required skill dependency closure", () => {
     const contract = readFileSync(new URL("../../contracts/design.md", import.meta.url), "utf8");
     const taskRoot = mkdtempSync(join(tmpdir(), "tasks-")); const root = mkdtempSync(join(tmpdir(), "skills-"));
     skill(root, "review", "review-full"); skill(root, "plan-ceo-review", "ceo-full");
-    expect(() => invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "missing-design", totalRound: 1, mode: "full", contract, materials: "M", taskTrackingRoot: taskRoot, env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_SKILL_ROOTS: root } })).toThrow(/plan-design-review not found/);
+    expect(() => invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "missing-design", totalRound: 1, mode: "full", contract, materials: "M", taskTrackingRoot: taskRoot, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex", CLAUDE_CODE_SKILL_ROOTS: root } })).toThrow(/plan-design-review not found/);
     expect(existsSync(join(taskRoot, "closure-test", "reviews", "verdict-build-spec-missing-design-round-1.raw.json"))).toBe(false);
   });
 
@@ -70,7 +70,7 @@ describe("Claude required skill dependency closure", () => {
     const taskRoot = mkdtempSync(join(tmpdir(), "tasks-")); const emptySkills = mkdtempSync(join(tmpdir(), "skills-"));
     const previous = process.env.WORKFLOWHUB_TASK_DIR; process.env.WORKFLOWHUB_TASK_DIR = taskRoot;
     try {
-      expect(() => invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "closure-flow", totalRound: 1, mode: "full", contract: '<!-- wh-review-skills: {"required":["review"]} -->', materials: "M", taskTrackingRoot: taskRoot, env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_SKILL_ROOTS: emptySkills } })).toThrow(/required-skill-unavailable/);
+      expect(() => invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "closure-flow", totalRound: 1, mode: "full", contract: '<!-- wh-review-skills: {"required":["review"]} -->', materials: "M", taskTrackingRoot: taskRoot, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex", CLAUDE_CODE_SKILL_ROOTS: emptySkills } })).toThrow(/required-skill-unavailable/);
       expect(existsSync(join(taskRoot, "closure-test", "reviews", "verdict-build-spec-closure-flow-round-1.raw.json"))).toBe(false);
     } finally { if (previous === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previous; }
   });

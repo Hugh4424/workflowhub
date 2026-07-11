@@ -39,7 +39,7 @@
  *    the caller (round-state.mjs, T011).
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { platform, tmpdir } from "node:os";
@@ -63,7 +63,7 @@ import { createArtifactReviewPackage } from "./artifact-review-package.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNNER_BASENAME = "run-heterologous-review.mjs";
 const CLAUDE_CODE_RUNNER = join(here, "runners", "claude-code-reviewer.mjs");
-const DEFAULT_TIMEOUT_MS = 120000;
+const DEFAULT_TIMEOUT_MS = 600000;
 
 export const FAILURE_REASONS = Object.freeze(["runner-missing", "non-zero-exit", "timeout", "output-unparseable", "artifact-package-invalid", "artifact-package-escape", "artifact-package-tampered", "artifact-package-publish-failed", "review-already-running", "review-lock-unsupported-platform", "review-lock-utility-missing", "review-lock-attestation-invalid"]);
 
@@ -93,7 +93,9 @@ export function discoverRunner({ env = process.env, workflowhubRepoRoot } = {}) 
   const runnerEnv = env.THIRD_REVIEW_RUNNER;
   const provider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
   if (runnerEnv && runnerEnv !== "claude-code") return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
-  if (provider === "claude-code" || runnerEnv === "claude-code") return CLAUDE_CODE_RUNNER;
+  // Production Claude reviews go through 3rd-review's canonical backend. Keep
+  // the internal runner reachable only as an explicit compatibility/test seam.
+  if (runnerEnv === "claude-code") return CLAUDE_CODE_RUNNER;
   if (runnerEnv) {
     return isAbsolute(runnerEnv) ? runnerEnv : join(repoRoot, runnerEnv);
   }
@@ -106,6 +108,34 @@ function rawArtifactPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId, tot
 
 export function effectiveRunnerTimeoutMs({ runnerPath, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env } = {}) {
   return runnerPath === CLAUDE_CODE_RUNNER ? undefined : timeoutMs;
+}
+
+const SAFE_RUNNER_ENV_KEYS = new Set([
+  "PATH", "HOME", "TERM", "LANG", "LC_ALL", "TMPDIR", "XDG_CONFIG_HOME",
+  "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "CLAUDE_CONFIG_DIR",
+]);
+
+const INTERNAL_TEST_ENV_KEYS = new Set([
+  "CLAUDE_CODE_BIN", "CLAUDE_CODE_REVIEW_BUFFER_MAX_BYTES", "CLAUDE_CODE_REVIEW_EXPECTED_PARENT_PID",
+  "CLAUDE_CODE_REVIEW_IDLE_MS", "CLAUDE_CODE_REVIEW_PARENT_WATCH_MS", "CLAUDE_CODE_REVIEW_RETRY_BASE_MS",
+  "CLAUDE_CODE_REVIEW_RETRY_JITTER", "CLAUDE_CODE_REVIEW_RETRY_SLEEP_CAP_MS", "CLAUDE_CODE_REVIEW_STDERR_MAX_BYTES",
+  "CLAUDE_CODE_REVIEW_STOP_GRACE_MS", "CLAUDE_CODE_REVIEW_TEST_NO_SLEEP", "CLAUDE_CODE_SETTINGS",
+  "WH_REVIEW_ATTEST_HOST_PID", "WH_REVIEW_ATTEST_HOST_START", "WH_REVIEW_EXPECTED_HOST_PID", "WH_REVIEW_HOST_AGENT",
+  "WH_REVIEW_LOCK_BIN", "WH_REVIEW_LOCK_NONCE", "WH_REVIEW_TEST_INNER_EXIT_AFTER_START", "WH_REVIEW_TEST_PLATFORM",
+  "WH_REVIEW_WRAPPER_PID", "WH_REVIEW_WRAPPER_START",
+  "FAKE_CLAUDE_MARKER",
+]);
+
+export function buildRunnerEnv({ sourceEnv = process.env, requestedProvider, internalTestSeam = false } = {}) {
+  const output = {};
+  for (const key of SAFE_RUNNER_ENV_KEYS) if (sourceEnv[key] !== undefined) output[key] = sourceEnv[key];
+  // API secrets are provider-scoped. CLI login normally uses HOME; only the
+  // selected backend's explicit API credential may cross this boundary.
+  const authKey = { "claude-code": "ANTHROPIC_API_KEY", codex: "OPENAI_API_KEY", gemini: "GOOGLE_API_KEY" }[requestedProvider];
+  if (authKey && sourceEnv[authKey] !== undefined) output[authKey] = sourceEnv[authKey];
+  if (internalTestSeam) for (const key of INTERNAL_TEST_ENV_KEYS) if (sourceEnv[key] !== undefined) output[key] = sourceEnv[key];
+  if (sourceEnv.WH_REVIEW_TEST_MODE === "1" && sourceEnv.CAPTURED_DIFF !== undefined) output.CAPTURED_DIFF = sourceEnv.CAPTURED_DIFF;
+  return output;
 }
 
 // Contract 2/FR-THIRDREVIEW-001: the backend returns a structured stage-agnostic
@@ -194,7 +224,26 @@ function normalizeReviewResult(result) {
 }
 
 /** Structural validation of a parsed runner --output payload (see synthesizeFailure below). */
-function isValidReviewResult(result) {
+function hasCompleteArtifactCoverage(result, manifest) {
+  if (!manifest?.entries?.length) return false;
+  const coverage = Array.isArray(result.artifactCoverage) ? result.artifactCoverage
+    : Array.isArray(result.artifact_attestation) ? result.artifact_attestation
+    : Array.isArray(result.coverage) ? result.coverage : [];
+  return manifest.entries.every((entry) => coverage.some((item) =>
+    item?.id === entry.id && item?.sha256 === entry.sha256 && ["read", "verified"].includes(item?.status)
+  ));
+}
+
+function isValidReviewResult(result, { requestedProvider, artifactManifest } = {}) {
+  const claudeAttested = requestedProvider !== "claude-code" ||
+    (result.verdict === "escalate_to_human" && result.synthetic === true) || (
+    result.synthetic === false &&
+    result.execution_status === "completed" &&
+    result.trueCrossEngine === true &&
+    typeof result.backend_provider === "string" && result.backend_provider.length > 0 &&
+    typeof result.reviewer_source === "string" && result.reviewer_source.length > 0 &&
+    hasCompleteArtifactCoverage(result, artifactManifest)
+  );
   return (
     result !== null &&
     typeof result === "object" &&
@@ -202,17 +251,19 @@ function isValidReviewResult(result) {
     Array.isArray(result.findings) &&
     result.findings.every(isValidFinding) &&
     typeof result.actual_mode === "string" &&
-    result.actual_mode.length > 0
+    result.actual_mode.length > 0 &&
+    claudeAttested
   );
 }
 
-function synthesizeFailure({ artifactPath, failureReason }) {
+function synthesizeFailure({ artifactPath, failureReason, provenance = {} }) {
   const record = {
     verdict: "escalate_to_human",
     findings: [],
     actual_mode: "not_executed",
     synthetic: true,
     failure_reason: failureReason,
+    ...provenance,
   };
   atomicWriteJson(artifactPath, record);
   return { verdict: record.verdict, findings: record.findings, actual_mode: record.actual_mode };
@@ -224,6 +275,23 @@ function atomicWriteJson(path, value) {
   writeFileSync(temporary, JSON.stringify(value, null, 2), { flag: "wx" });
   try { renameSync(temporary, path); }
   catch (error) { rmSync(temporary, { force: true }); throw error; }
+}
+
+function persistRunnerDiagnostic({ result, artifactPath, stage, reviewFlowId, totalRound }) {
+  const source = result?.diagnosticPath ?? result?.diagnostic_path;
+  if (typeof source !== "string" || !existsSync(source)) return result;
+  const stat = lstatSync(source);
+  if (!stat.isFile() || stat.isSymbolicLink()) return result;
+  const bytes = readFileSync(source);
+  const persistent = join(dirname(artifactPath), `diagnostic-${stage}-${reviewFlowId}-round-${totalRound}.json`);
+  const temporary = `${persistent}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(temporary, bytes, { flag: "wx", mode: 0o600 });
+  renameSync(temporary, persistent);
+  chmodSync(persistent, 0o600);
+  const output = { ...result, diagnostic_path: persistent,
+    diagnostic_sha256: createHash("sha256").update(bytes).digest("hex"), diagnostic_bytes: bytes.length };
+  delete output.diagnosticPath;
+  return output;
 }
 
 // ---- T010c: materials/mode/contract assembly (FR-WHREVIEW-007, Contract 11) ----
@@ -409,19 +477,33 @@ export function invokeReviewEngine({
   const artifactPath = rawArtifactPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId, totalRound });
   mkdirSync(dirname(artifactPath), { recursive: true });
 
+  const requestedProvider = env.WH_REVIEW_PROVIDER ?? env.THIRD_REVIEW_PROVIDER;
+  const rawHost = env.REVIEW_HOST_PROVIDER ?? env.WH_REVIEW_HOST_PROVIDER ?? env.WH_REVIEW_HOST_AGENT;
+  const hostAliases = { "openai-codex": "codex", "codex-cli": "codex", claude: "claude-code", "claude-code": "claude-code", codex: "codex" };
+  const hostProvider = hostAliases[String(rawHost ?? "").toLowerCase()] ?? "unknown";
+  if (requestedProvider === "claude-code" && (hostProvider === "unknown" || hostProvider === "claude-code")) {
+    const failureReason = hostProvider === "unknown" ? "host-provider-unknown" : "same-source-provider";
+    return synthesizeFailure({ artifactPath, failureReason, provenance: {
+      provider: "claude-code", backend_provider: "claude-code", reviewer_source: "3rd-review/canonical",
+      trueCrossEngine: false, execution_status: "not_executed",
+    } });
+  }
+
   const runnerPath = discoverRunner({ env, workflowhubRepoRoot });
   if (!existsSync(runnerPath)) {
     return synthesizeFailure({ artifactPath, failureReason: "runner-missing" });
   }
   const runnerTimeoutMs = effectiveRunnerTimeoutMs({ runnerPath, timeoutMs, env });
+  const runnerEnv = buildRunnerEnv({ sourceEnv: { ...process.env, ...env }, requestedProvider, internalTestSeam: env.THIRD_REVIEW_RUNNER === "claude-code" });
 
   let resolution;
-  if (runnerPath === CLAUDE_CODE_RUNNER) {
+  if (requestedProvider === "claude-code") {
     resolution = resolveRequiredSkills({ contract, env });
   }
   let inputHash;
   let runnerPayload;
-  if (runnerPath === CLAUDE_CODE_RUNNER) {
+  let expectedArtifactManifest;
+  if (requestedProvider === "claude-code") {
     let reviewPackage;
     try {
       reviewPackage = createArtifactReviewPackage({
@@ -445,12 +527,15 @@ export function invokeReviewEngine({
       content_hash: reviewPackage.manifest.content_hash,
       entries: reviewPackage.manifest.entries,
     };
+    expectedArtifactManifest = artifactManifest;
     const contentDescriptor = artifactManifest.entries.map(({ id, role, kind, bytes, lines, sha256, chunks }) => ({
       id, role, kind, bytes, lines, sha256,
       chunks: chunks.map(({ sequence, bytes: chunkBytes, lines: chunkLines, sha256: chunkHash }) => ({ sequence, bytes: chunkBytes, lines: chunkLines, sha256: chunkHash })),
     }));
     inputHash = createHash("sha256").update(JSON.stringify({ mode, content_hash: artifactManifest.content_hash, entries: contentDescriptor })).digest("hex");
-    runnerPayload = { mode, artifact_manifest: artifactManifest, input_hash: inputHash };
+    runnerPayload = runnerPath === CLAUDE_CODE_RUNNER
+      ? { mode, artifact_manifest: artifactManifest, input_hash: inputHash }
+      : { mode, contract, materials, artifact_manifest: artifactManifest, input_hash: inputHash };
   } else {
     // Preserve the legacy runner payload byte-for-byte. Artifact transport is
     // Claude-only; custom/Codex/default providers keep their existing contract.
@@ -468,6 +553,10 @@ export function invokeReviewEngine({
   const outputFile = join(workDir, "output.json");
   writeFileSync(diffFile, JSON.stringify(runnerPayload));
   const runnerArgs = [runnerPath, `--diff=${diffFile}`, `--output=${outputFile}`];
+  if (runnerPath !== CLAUDE_CODE_RUNNER) {
+    runnerArgs.push(`--host-provider=${hostProvider}`);
+    if (requestedProvider) runnerArgs.push(`--provider=${requestedProvider}`);
+  }
   if (runnerPath === CLAUDE_CODE_RUNNER) {
     const stateDir = join(dirname(artifactPath), ".claude-review-state", `${stage}-${reviewFlowId}-round-${totalRound}-${inputHash}`);
     mkdirSync(stateDir, { recursive: true });
@@ -480,7 +569,14 @@ export function invokeReviewEngine({
     try { result = JSON.parse(readFileSync(outputFile, "utf8")); }
     catch { return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" }); }
     result = normalizeReviewResult(result);
-    if (!isValidReviewResult(result)) return synthesizeFailure({ artifactPath, failureReason: "output-unparseable" });
+    result = persistRunnerDiagnostic({ result, artifactPath, stage, reviewFlowId, totalRound });
+    if (requestedProvider === "claude-code" && result.verdict === "escalate_to_human" && result.trueCrossEngine !== true) {
+      result = { ...result, synthetic: true, execution_status: "failed",
+        failure_reason: result.failure_reason ?? "claude-provider-failure" };
+    }
+    if (!isValidReviewResult(result, { requestedProvider, artifactManifest: expectedArtifactManifest })) {
+      return synthesizeFailure({ artifactPath, failureReason: requestedProvider === "claude-code" ? "claude-attestation-invalid" : "output-unparseable" });
+    }
     atomicWriteJson(artifactPath, result);
     return { verdict: result.verdict, findings: result.findings, actual_mode: result.actual_mode };
   };
@@ -498,7 +594,7 @@ export function invokeReviewEngine({
       try {
         child = spawn("node", runnerArgs, {
           stdio: ["ignore", "pipe", "pipe"],
-          env: { ...process.env, ...env },
+          env: runnerEnv,
           detached: platform() !== "win32",
         });
       } catch {
@@ -530,7 +626,7 @@ export function invokeReviewEngine({
       // Runner selection and runner behavior both depend on the invocation
       // environment. Without this, CLAUDE_CODE_REVIEW_TIMEOUT_MS only affects
       // the outer guard while the Claude runner silently uses its process default.
-      env: { ...process.env, ...env },
+      env: runnerEnv,
     });
 
     // Node kills a timed-out child with a signal; status is left null.
