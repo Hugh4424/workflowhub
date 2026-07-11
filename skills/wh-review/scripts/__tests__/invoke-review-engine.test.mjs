@@ -17,11 +17,12 @@ import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync,
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   discoverThirdReviewRepoRoot,
   discoverRunner,
   effectiveRunnerTimeoutMs,
+  buildRunnerEnv,
   invokeReviewEngine,
   assembleReviewPayload,
   assembleAndInvokeReviewEngine,
@@ -225,9 +226,9 @@ describe("discoverRunner", () => {
     expect(result).toBe("/x/y/3rd-review/scripts/run-heterologous-review.mjs");
   });
 
-  it("WH_REVIEW_PROVIDER=claude-code routes to the in-repo Claude Code runner", () => {
+  it("WH_REVIEW_PROVIDER=claude-code routes to the canonical 3rd-review runner", () => {
     const result = discoverRunner({ env: { WH_REVIEW_PROVIDER: "claude-code" }, workflowhubRepoRoot: "/x/y/workflowhub" });
-    expect(result).toMatch(/skills\/wh-review\/scripts\/runners\/claude-code-reviewer\.mjs$/);
+    expect(result).toBe("/x/y/3rd-review/scripts/run-heterologous-review.mjs");
   });
 
   it("THIRD_REVIEW_RUNNER=claude-code routes to the in-repo Claude Code runner", () => {
@@ -256,7 +257,7 @@ describe("discoverRunner", () => {
 });
 
 describe("effectiveRunnerTimeoutMs", () => {
-  it("disables the outer wall timeout for the built-in Claude Code runner", () => {
+  it("keeps the outer wall timeout for the canonical 3rd-review runner", () => {
     const runnerPath = discoverRunner({
       env: { WH_REVIEW_PROVIDER: "claude-code" },
       workflowhubRepoRoot: resolve(dirname(fileURLToPath(import.meta.url)), "../../../../"),
@@ -268,11 +269,24 @@ describe("effectiveRunnerTimeoutMs", () => {
         timeoutMs: 300000,
         env: { CLAUDE_CODE_REVIEW_TIMEOUT_MS: "300000" },
       })
-    ).toBeUndefined();
+    ).toBe(300000);
   });
 
   it("keeps the caller timeout for non-Claude runners", () => {
     expect(effectiveRunnerTimeoutMs({ runnerPath: "/tmp/custom-runner.mjs", timeoutMs: 1234, env: {} })).toBe(1234);
+  });
+
+  it("defaults non-Claude runners to a 600 second outer timeout", () => {
+    expect(effectiveRunnerTimeoutMs({ runnerPath: "/tmp/custom-runner.mjs", env: {} })).toBe(600000);
+  });
+});
+
+describe("runner boundary", () => {
+  it("passes only the selected provider secret and safe CLI environment", () => {
+    expect(buildRunnerEnv({ requestedProvider: "claude-code", sourceEnv: {
+      PATH: "/usr/bin", HOME: "/home/test", LANG: "C", ANTHROPIC_API_KEY: "allowed",
+      OPENAI_API_KEY: "drop", GOOGLE_API_KEY: "drop", UNRELATED_SECRET: "drop",
+    } })).toEqual({ PATH: "/usr/bin", HOME: "/home/test", LANG: "C", ANTHROPIC_API_KEY: "allowed" });
   });
 });
 
@@ -300,6 +314,132 @@ describe("invokeReviewEngine — success path", () => {
     expect(artifact.synthetic).toBeUndefined();
   });
 
+  it("canonical Claude adapter receives forced provider, normalized host, and immutable package for large materials", () => {
+    const capture = join(stubDir, "canonical-capture.json");
+    const runnerPath = writeStubRunner(`
+      import { readFileSync, writeFileSync } from "node:fs";
+      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
+      const payload = JSON.parse(readFileSync(args.diff, "utf8"));
+      writeFileSync(${JSON.stringify(capture)}, JSON.stringify({ args, payload }));
+      writeFileSync(args.output, JSON.stringify({ verdict:"pass", findings:[], actual_mode:payload.mode,
+        provider:"claude-code", backend_provider:"claude-code", reviewer_source:"3rd-review/canonical",
+        trueCrossEngine:true, synthetic:false, execution_status:"completed",
+        artifactCoverage:payload.artifact_manifest.entries.map(({id,sha256}) => ({id,sha256,status:"read"})) }));
+    `);
+    const materials = "large-material-line\n".repeat(70_000);
+    const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "canonical-large", totalRound: 1,
+      mode: "full", contract: "C", materials, taskTrackingRoot: root, env: {
+        THIRD_REVIEW_RUNNER: runnerPath, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "openai-codex",
+      } });
+    expect(result.verdict).toBe("pass");
+    const captured = JSON.parse(readFileSync(capture, "utf8"));
+    expect(captured.args.provider).toBe("claude-code");
+    expect(captured.args["host-provider"]).toBe("codex");
+    expect(captured.payload.materials).toBe(materials);
+    expect(captured.payload.artifact_manifest.content_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(captured.payload.artifact_manifest.entries.some((entry) => entry.role === "materials")).toBe(true);
+    const raw = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-canonical-large-round-1.raw.json`), "utf8"));
+    expect(raw).toMatchObject({ provider: "claude-code", reviewer_source: "3rd-review/canonical", trueCrossEngine: true, synthetic: false });
+    expect(raw.artifactCoverage.length).toBeGreaterThan(0);
+  });
+
+  it("cross-repo canonical 3rd-review feeds fake Claude every verified chunk without 120k truncation", () => {
+    const capturedPrompt = join(stubDir, "canonical-claude-prompt.txt");
+    const fakeClaude = join(stubDir, "fake-canonical-claude.mjs");
+    writeFileSync(fakeClaude, `#!/usr/bin/env node
+      import { readFileSync, writeFileSync } from "node:fs";
+      const prompt = readFileSync(0, "utf8");
+      writeFileSync(${JSON.stringify(capturedPrompt)}, prompt);
+      process.stdout.write(JSON.stringify({ structured_output: { verdict:"pass", findings:[], resolutionSummary:"all chunks read" } }));
+    `);
+    chmodSync(fakeClaude, 0o755);
+    const canonicalUrl = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../3rd-review/scripts/run-heterologous-review.mjs")).href;
+    const wrapper = join(stubDir, "canonical-wrapper.mjs");
+    writeFileSync(wrapper, `
+      import { runReview } from ${JSON.stringify(canonicalUrl)};
+      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
+      runReview({ diffFile:args.diff, outputFile:args.output, hostProvider:args["host-provider"],
+        provider:args.provider, claudeBinaryPath:${JSON.stringify(fakeClaude)}, envOverride:{ PATH:process.env.PATH, HOME:process.env.HOME, LANG:"C" } });
+    `);
+    const first = "FIRST-MARKER-WH-CROSS-REPO";
+    const last = "LAST-MARKER-WH-CROSS-REPO";
+    const materials = `${first}\n${"0123456789abcdef\n".repeat(10_000)}${last}\n`;
+    expect(materials.length).toBeGreaterThan(120_000);
+    const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "cross-repo", totalRound: 1,
+      mode: "full", contract: "C", materials, taskTrackingRoot: root, env: {
+        THIRD_REVIEW_RUNNER: wrapper, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
+      } });
+    expect(result.verdict).toBe("pass");
+    const prompt = readFileSync(capturedPrompt, "utf8");
+    expect(prompt).toContain(first);
+    expect(prompt).toContain(last);
+    expect(prompt).not.toContain("[... truncated ...]");
+    const raw = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-cross-repo-round-1.raw.json`), "utf8"));
+    expect(raw).toMatchObject({ provider: "claude-code", backend_provider: "claude-code", reviewer_source: "3rd-review/canonical", trueCrossEngine: true });
+    expect(raw.coverage.length).toBeGreaterThan(1);
+    for (const entry of raw.coverage) {
+      expect(entry.status).toBe("read");
+      expect(entry.sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(entry.chunks.length).toBeGreaterThan(0);
+      for (const chunk of entry.chunks) {
+        expect(chunk.included).toBe(true);
+        expect(chunk.sha256).toMatch(/^[a-f0-9]{64}$/);
+      }
+    }
+    expect(raw.reviewSnapshot.every((item) => item.truncated === false)).toBe(true);
+  });
+
+  it("persists a sanitized canonical Claude failure diagnostic after temp cleanup", () => {
+    const fakeClaude = join(stubDir, "fake-canonical-failure.mjs");
+    writeFileSync(fakeClaude, `#!/usr/bin/env node
+      process.stdout.write("RAW_STDOUT_SECRET_SHOULD_NOT_PERSIST");
+      process.stderr.write("RAW_STDERR_SECRET_SHOULD_NOT_PERSIST");
+      process.exit(1);
+    `);
+    chmodSync(fakeClaude, 0o755);
+    const canonicalUrl = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../3rd-review/scripts/run-heterologous-review.mjs")).href;
+    const wrapper = join(stubDir, "canonical-failure-wrapper.mjs");
+    writeFileSync(wrapper, `
+      import { runReview } from ${JSON.stringify(canonicalUrl)};
+      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
+      runReview({ diffFile:args.diff, outputFile:args.output, hostProvider:args["host-provider"],
+        provider:args.provider, claudeBinaryPath:${JSON.stringify(fakeClaude)}, envOverride:{ PATH:process.env.PATH, HOME:process.env.HOME, LANG:"C" } });
+    `);
+    const materialSecret = "MATERIAL_SECRET_SHOULD_NOT_PERSIST";
+    const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "cross-repo-failure", totalRound: 1,
+      mode: "full", contract: "PROMPT_SECRET_SHOULD_NOT_PERSIST", materials: materialSecret, taskTrackingRoot: root, env: {
+        THIRD_REVIEW_RUNNER: wrapper, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
+      } });
+    expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+    const raw = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-cross-repo-failure-round-1.raw.json`), "utf8"));
+    expect(raw).toMatchObject({ synthetic: true, execution_status: "failed", failure_reason: "claude-code-process-failed" });
+    expect(existsSync(raw.diagnostic_path)).toBe(true);
+    expect((lstatSync(raw.diagnostic_path).mode & 0o777)).toBe(0o600);
+    const diagnosticBytes = readFileSync(raw.diagnostic_path);
+    expect(createHash("sha256").update(diagnosticBytes).digest("hex")).toBe(raw.diagnostic_sha256);
+    expect(diagnosticBytes.length).toBe(raw.diagnostic_bytes);
+    const diagnostic = diagnosticBytes.toString("utf8");
+    for (const forbidden of ["RAW_STDOUT_SECRET_SHOULD_NOT_PERSIST", "RAW_STDERR_SECRET_SHOULD_NOT_PERSIST",
+      "PROMPT_SECRET_SHOULD_NOT_PERSIST", materialSecret]) expect(diagnostic).not.toContain(forbidden);
+  });
+
+  it("fails closed when a Claude pass lacks complete coverage or provenance", () => {
+    const runnerPath = writeStubRunner(`
+      import { readFileSync, writeFileSync } from "node:fs";
+      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
+      const payload = JSON.parse(readFileSync(args.diff, "utf8"));
+      writeFileSync(args.output, JSON.stringify({ verdict:"pass", findings:[], actual_mode:payload.mode,
+        provider:"claude-code", trueCrossEngine:true, synthetic:false, execution_status:"completed", artifactCoverage:[] }));
+    `);
+    const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "unattested-pass", totalRound: 1,
+      mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: {
+        THIRD_REVIEW_RUNNER: runnerPath, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
+      } });
+    expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
+    expect(JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-unattested-pass-round-1.raw.json`), "utf8")))
+      .toMatchObject({ synthetic: true, failure_reason: "claude-attestation-invalid" });
+  });
+
   it("runs the built-in Claude Code runner through wh-review when WH_REVIEW_PROVIDER=claude-code", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude();
@@ -315,7 +455,7 @@ describe("invokeReviewEngine — success path", () => {
         contract: "CONTRACT TEXT",
         materials,
         taskTrackingRoot: root,
-        env: { WH_REVIEW_PROVIDER: "claude-code" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" },
       });
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
@@ -343,7 +483,7 @@ describe("invokeReviewEngine — success path", () => {
     writeFileSync(artifactPath, JSON.stringify({ verdict: "pass", findings: [], actual_mode: "full", stale: true }));
     const utility = join(stubDir, "contended-flock.mjs");
     writeFileSync(utility, "#!/usr/bin/env node\nprocess.exit(73);\n"); chmodSync(utility, 0o755);
-    const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_TEST_PLATFORM: "linux", WH_REVIEW_LOCK_BIN: utility } });
+    const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex", WH_REVIEW_TEST_PLATFORM: "linux", WH_REVIEW_LOCK_BIN: utility } });
     expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
     expect(JSON.parse(readFileSync(artifactPath, "utf8"))).toMatchObject({ failure_reason: "review-already-running", synthetic: true });
   });
@@ -356,7 +496,7 @@ const args=Object.fromEntries(process.argv.slice(2).map(a=>a.replace(/^--/,"").s
 const bytes=readFileSync(args.diff); writeFileSync(process.env.CAPTURED_DIFF,bytes);
 const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdict:"pass",findings:[],actual_mode:payload.mode}));`);
     const mode = "full", contract = "CONTRACT TEXT", materials = "MATERIALS TEXT";
-    invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 29, mode, contract, materials, taskTrackingRoot: root, env: { THIRD_REVIEW_RUNNER: runnerPath, CAPTURED_DIFF: captured } });
+    invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 29, mode, contract, materials, taskTrackingRoot: root, env: { THIRD_REVIEW_RUNNER: runnerPath, WH_REVIEW_TEST_MODE: "1", CAPTURED_DIFF: captured } });
     const inputHash = createHash("sha256").update(JSON.stringify({ mode, contract, materials })).digest("hex");
     expect(readFileSync(captured, "utf8")).toBe(JSON.stringify({ mode, contract, materials, input_hash: inputHash }));
   });
@@ -366,7 +506,7 @@ const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdi
     const spec = join(stubDir, "spec.md"), decision = join(stubDir, "decision.md"); writeFileSync(spec, "SPEC\n"); writeFileSync(decision, "DECISION\n");
     process.env.CLAUDE_CODE_BIN = fakeClaude;
     try {
-      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: "build-spec", reviewFlowId: REVIEW_FLOW_ID, totalRound: 32, mode: "full", contract: "C", materials: "LEGACY AGGREGATE MUST NOT ENTER PACKAGE", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }], supplementaryContext: "ONLY NEW CONTEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: "build-spec", reviewFlowId: REVIEW_FLOW_ID, totalRound: 32, mode: "full", contract: "C", materials: "LEGACY AGGREGATE MUST NOT ENTER PACKAGE", materialSources: [{ id: "source:spec", path: spec }, { id: "source:decision", path: decision }], supplementaryContext: "ONLY NEW CONTEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
       expect(result.verdict).toBe("pass");
       const packages = readdirSync(join(root, TASK_ID, "reviews", ".claude-review-packages"));
       const manifest = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", ".claude-review-packages", packages[0], "manifest.json"), "utf8"));
@@ -403,7 +543,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     process.env.CLAUDE_CODE_REVIEW_IDLE_MS = "1000";
     process.env.FAKE_CLAUDE_MARKER = marker;
     try {
-      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 26, mode: "full", contract: "CONTRACT TEXT", materials: "MATERIALS TEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 26, mode: "full", contract: "CONTRACT TEXT", materials: "MATERIALS TEXT", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
       const artifact = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-26.raw.json`), "utf8"));
       expect(result, JSON.stringify(artifact)).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
       expect(artifact).toMatchObject({ execution_status: "completed", resume_count: 1, synthetic: false });
@@ -419,7 +559,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     writeFileSync(fakeClaude, `#!/usr/bin/env node\nprocess.on("SIGINT",()=>process.exit(0)); setInterval(()=>{},1000);`); chmodSync(fakeClaude, 0o755);
     process.env.CLAUDE_CODE_BIN = fakeClaude; process.env.CLAUDE_CODE_REVIEW_IDLE_MS = "50";
     try {
-      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 27, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 27, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
       expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
       expect(JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-27.raw.json`), "utf8"))).toMatchObject({ execution_status: "failed", failure_reason: "claude-code-idle-without-session", synthetic: true });
     } finally { savedBin === undefined ? delete process.env.CLAUDE_CODE_BIN : process.env.CLAUDE_CODE_BIN = savedBin; savedIdle === undefined ? delete process.env.CLAUDE_CODE_REVIEW_IDLE_MS : process.env.CLAUDE_CODE_REVIEW_IDLE_MS = savedIdle; }
@@ -455,7 +595,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
         contract: "CONTRACT TEXT",
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
-        env: { WH_REVIEW_PROVIDER: "claude-code" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" },
       });
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
@@ -484,7 +624,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
         contract: "CONTRACT TEXT",
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
-        env: { WH_REVIEW_PROVIDER: "claude-code" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" },
       });
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
@@ -513,7 +653,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
         contract: "CONTRACT TEXT",
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
-        env: { WH_REVIEW_PROVIDER: "claude-code" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" },
       });
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
@@ -541,7 +681,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
         contract: "CONTRACT TEXT",
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
-        env: { WH_REVIEW_PROVIDER: "claude-code" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" },
       });
 
       expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
@@ -578,7 +718,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
         contract: '<!-- wh-review-skills: {"required":["plan-ceo-review","review","plan-design-review"]} -->\nCONTRACT TEXT',
         materials: "MATERIALS TEXT",
         taskTrackingRoot: root,
-        env: { WH_REVIEW_PROVIDER: "claude-code" },
+        env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" },
       });
 
       expect(result).toEqual({ verdict: "pass", findings: [], actual_mode: "full" });
@@ -600,12 +740,12 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
       const sourceA = join(stubDir, "hash-a.md"), sourceBRoot = mkdtempSync(join(tmpdir(), "source-copy-")), sourceB = join(sourceBRoot, "hash-b.md");
       writeFileSync(sourceA, "same canonical bytes\n"); writeFileSync(sourceB, "same canonical bytes\n");
       for (const taskRoot of [root, otherRoot]) mkdirSync(join(taskRoot, TASK_ID, "reviews"), { recursive: true });
-      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 1, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceA }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
-      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 1, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceB }], taskTrackingRoot: otherRoot, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 1, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceA }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
+      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 1, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceB }], taskTrackingRoot: otherRoot, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
       const stateName = (taskRoot) => readdirSync(join(taskRoot, TASK_ID, "reviews", ".claude-review-state"))[0];
       expect(stateName(root).slice(-64)).toBe(stateName(otherRoot).slice(-64));
       writeFileSync(sourceA, "changed canonical bytes\n");
-      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 2, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceA }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+      await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "pathless", totalRound: 2, mode: "full", contract: "C", materials: "ignored", materialSources: [{ id: "source:one", path: sourceA }], taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
       const hashes = readdirSync(join(root, TASK_ID, "reviews", ".claude-review-state")).map((name) => name.slice(-64));
       expect(new Set(hashes).size).toBe(2);
       rmSync(sourceBRoot, { recursive: true, force: true });
@@ -699,7 +839,7 @@ describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
       contract,
       materials: "MATERIALS TEXT",
       taskTrackingRoot: root,
-      env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_SKILL_ROOTS: skillRoots },
+      env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex", CLAUDE_CODE_SKILL_ROOTS: skillRoots },
     }); } catch (error) { thrown = error; }
     const leaked = readdirSync(tmpdir()).filter((name) => name.startsWith("invoke-review-engine-") && !before.has(name));
     expect(leaked).toEqual([]);
@@ -730,7 +870,7 @@ describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
   it("maps artifact package publication errors to structured not_executed", async () => {
     const reviews = join(root, TASK_ID, "reviews"); mkdirSync(reviews, { recursive: true });
     writeFileSync(join(reviews, ".claude-review-packages"), "blocks package directory");
-    const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 31, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code" } });
+    const result = await invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: REVIEW_FLOW_ID, totalRound: 31, mode: "full", contract: "C", materials: "M", taskTrackingRoot: root, env: { WH_REVIEW_PROVIDER: "claude-code", THIRD_REVIEW_RUNNER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex" } });
     expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
     expect(JSON.parse(readFileSync(join(reviews, `verdict-${STAGE}-${REVIEW_FLOW_ID}-round-31.raw.json`), "utf8"))).toMatchObject({ synthetic: true, failure_reason: "artifact-package-publish-failed" });
   });
