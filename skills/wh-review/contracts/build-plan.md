@@ -1,5 +1,4 @@
 <!-- migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/plan-reviewer-contract.md -->
-<!-- wh-review-skills: {"required":["spec-analyze","plan-eng-review","review"]} -->
 
 # Build Plan 审查合同
 
@@ -19,7 +18,6 @@
 
 审查员必须直接调用：
 
-- `spec-analyze`：跨 artifact 一致性，覆盖 duplication、ambiguity、underspecification、constitution alignment、coverage gaps、inconsistency。
 - `plan-eng-review`：工程计划审查，覆盖架构、数据流、边界、失败模式、测试策略、性能、worktree/并行策略。
 - `review`：独立复审 diff/scope drift、TODO/文档过期、结构风险、对抗性检查。
 
@@ -33,7 +31,7 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 - evidence 仅含状态词，无检查位置
 - evidence 无具体检查点或输入描述
 - evidence 缺少结论内容
-- 空洞反例：`{"status":"executed","evidence":"ran spec-analyze, plan looks fine"}` — 缺在哪执行、无具体维度
+- 空洞反例：`{"status":"executed","evidence":"ran plan-eng-review, plan looks fine"}` — 缺在哪执行、无具体维度
 - 合规示例：`{"status":"executed","evidence":"(1) skill tool in this session; (2) checked task breakdown for T001-T008 against FR mapping in spec.md; (3) all tasks have FR reference, T005 scope boundary clear"}`
 不依赖执行位置路径的自动机器校验——判断由 reviewer 人工核查，不要求路径可访问。
 
@@ -65,7 +63,6 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 
 **阻断（必须出 revise_required）**：
 
-- `spec-analyze` 报 CRITICAL/HIGH 且影响执行：constitution MUST 冲突、核心 FR 无 task、artifact 互相矛盾、验收不可测试。
 - `plan-eng-review` 报架构/依赖/测试/失败模式不可执行且未处理。
 - 宪法门禁未逐条勾选或漏项。
 - task 未引用 FR 编号，或 FR → task → verify 链路断裂。
@@ -100,8 +97,8 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 
 | 维度 | 验证方法 |
 |------|---------|
-| Required Skills 已执行 | 检查 spec-analyze/plan-eng-review/review 输出；无法执行 required skill → escalate |
-| 跨 artifact 一致性 | 对照 spec-analyze 的 duplication/ambiguity/underspecification/coverage/inconsistency |
+| Required Skills 已执行 | 检查 plan-eng-review/review 输出；无法执行 required skill → escalate |
+| 跨 artifact 一致性 | 对照 spec、plan、tasks 的需求、任务与验证映射 |
 | 宪法门禁 | grep Constitution Check 表，无未勾选项；constitution MUST 冲突自动 blocking |
 | FR 引用完整 | tasks.md 每个 task 引用 FR；每个 FR 至少一个 task |
 | FR→task→verify | 每个 task 的 Verify 能证明对应 FR 被实现 |
@@ -189,7 +186,7 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 
 ## 验证方法
 
-1. **Skill 对照**：逐条核验 spec-analyze/plan-eng-review/review 的 findings 是否进入 verdict；未真实调用 required skill → escalate。
+1. **Skill 对照**：逐条核验 plan-eng-review/review 的 findings 是否进入 verdict；未真实调用 required skill → escalate。
 2. **grep 验证**：FR 引用、phase 六节、test-first、Governance 矩阵、视觉合同 6 维。
 3. **读文件**：完整 Read spec.md、plan.md、tasks.md、`tasks/{task-id}/progress.md`，判断执行顺序和 scope。
 4. **路径检查**：逐路径 `ls` 或按 repo root 验证，禁止模糊路径。

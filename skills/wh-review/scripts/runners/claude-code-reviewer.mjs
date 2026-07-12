@@ -6,7 +6,6 @@ import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { ArtifactReviewPackageError, verifyArtifactReviewPackage } from "../artifact-review-package.mjs";
-import { parseRequiredSkillManifest } from "../required-skill-resolver.mjs";
 
 const VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const SEVERITIES = new Set(["blocking", "important", "minor"]);
@@ -262,16 +261,12 @@ function observeReadEvents(event) {
     }
   }
 }
-let requiredSkills;
-try { requiredSkills = parseRequiredSkillManifest(contractText).required; }
-catch {
-  mkdirSync(dirname(outputFile), { recursive: true });
-  writeFileSync(outputFile, JSON.stringify(failure(mode, "required-skill-unavailable"), null, 2));
-  process.exit(0);
-}
+const requiredSkills = artifactPackage
+  ? artifactPackage.manifest.entries.filter(({ role }) => role === "required_skill").map(({ id }) => id.replace(/^skill:/, "")).sort()
+  : [];
 if (artifactPackage) {
   const packagedSkills = artifactPackage.manifest.entries.filter(({ role }) => role === "required_skill").map(({ id }) => id.replace(/^skill:/, "")).sort();
-  if (JSON.stringify(packagedSkills) !== JSON.stringify([...requiredSkills].sort())) {
+  if (JSON.stringify(packagedSkills) !== JSON.stringify(requiredSkills)) {
     mkdirSync(dirname(outputFile), { recursive: true });
     writeFileSync(outputFile, JSON.stringify(failure(mode, "required-skill-manifest-mismatch"), null, 2));
     process.exit(0);

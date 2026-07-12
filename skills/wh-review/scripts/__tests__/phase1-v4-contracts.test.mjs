@@ -5,8 +5,6 @@ import { describe, expect, it } from "vitest";
 import { STAGE_CONTRACT_MAP } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 
-const contract = '<!-- wh-review-skills: {"required":["review"]} -->';
-
 describe("wh-review v4 Phase 1 contract foundation", () => {
   it("uses the workflow stage names as the only contract names", () => {
     expect(STAGE_CONTRACT_MAP).toEqual({
@@ -23,14 +21,15 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     mkdirSync(join(outside, "review"));
     writeFileSync(join(outside, "review", "SKILL.md"), "external review");
 
-    expect(() => resolveRequiredSkills({ contract, roots: [outside] })).toThrow(/repository skills root/i);
+    expect(() => resolveRequiredSkills({ stage: "build-plan", roots: [outside] })).toThrow(/repository skills root/i);
   });
 
   it("maps make-decision tracks and keeps UI review optional", () => {
     const plan = JSON.parse(readFileSync(new URL("../../stage-skill-plan.json", import.meta.url), "utf8"));
     expect(Object.keys(plan.stages["make-decision"].tracks).sort()).toEqual(["detail", "direction"]);
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
-    expect(plan.stages["build-plan"].required_skills).toContain("spec-analyze");
+    expect(plan.stages["build-plan"].required_skills).not.toContain("spec-analyze");
+    expect(plan.stages["verify-code"].required_skills).not.toContain("verify-change");
   });
 
   it("keeps every bundled review skill self-contained and report-only", () => {

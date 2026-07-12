@@ -14,7 +14,6 @@
     "build-plan": {
       "path": "contracts/build-plan.md",
       "required_skills": [
-        "spec-analyze",
         "plan-eng-review",
         "review"
       ]
@@ -25,7 +24,7 @@
     },
     "verify-code": {
       "path": "contracts/verify-code.md",
-      "required_skills": ["qa-only", "verify-change"]
+      "required_skills": ["qa-only"]
     }
   }
 }

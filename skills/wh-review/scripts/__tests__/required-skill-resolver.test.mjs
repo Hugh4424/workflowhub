@@ -2,43 +2,48 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { appendRequiredSkillDefinitions, parseRequiredSkillManifest, resolveRequiredSkills } from "../required-skill-resolver.mjs";
-
-const manifest = '<!-- wh-review-skills: {"required":["review","plan-ceo-review"]} -->';
+import { appendRequiredSkillDefinitions, resolveRequiredSkills } from "../required-skill-resolver.mjs";
 
 describe("required skill bundles", () => {
-  it("parses and sorts exact repository skill names", () => {
-    expect(parseRequiredSkillManifest(manifest)).toEqual({ required: ["plan-ceo-review", "review"], optional: [] });
-  });
-
-  it("resolves the sealed repository bundle closure", () => {
-    const result = resolveRequiredSkills({ contract: manifest });
+  it("resolves the make-decision direction profile from the stage plan", () => {
+    const result = resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction" });
     expect(result.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
     for (const definition of result.definitions) {
       expect(definition.source).toContain("/workflowhub-wh-review-v4/skills/");
       expect(definition.bundle.files).toEqual(expect.arrayContaining([expect.objectContaining({ path: "SKILL.md" })]));
       expect(definition.bundle.sha256).toMatch(/^[a-f0-9]{64}$/);
     }
+    expect(resolveRequiredSkills({ stage: "make-decision", reviewTrack: "detail" }).definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
   });
 
-  it("rejects external roots, nested host roots, and traversal names", () => {
+  it("rejects external roots and a missing required make-decision track", () => {
     const root = mkdtempSync(join(tmpdir(), "skills-"));
     mkdirSync(join(root, "review"));
     writeFileSync(join(root, "review", "SKILL.md"), "external");
-    expect(() => resolveRequiredSkills({ contract: '<!-- wh-review-skills: {"required":["review"]} -->', roots: [root] })).toThrow(/repository skills root/);
-    expect(() => parseRequiredSkillManifest('<!-- wh-review-skills: {"required":["../escape"]} -->')).toThrow(/required-skill-unavailable/);
+    expect(() => resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction", roots: [root] })).toThrow(/repository skills root/);
+    expect(() => resolveRequiredSkills({ stage: "make-decision" })).toThrow(/review_track/);
   });
 
-  it("fails closed when the repository skill lacks a declared bundle", () => {
-    expect(() => resolveRequiredSkills({ contract: '<!-- wh-review-skills: {"required":["test-strategy"]} -->' })).toThrow(/review-bundle\.json/);
+  it("uses a profile-specific UI lens and keeps default delivery file-only", () => {
+    const plain = resolveRequiredSkills({ stage: "build-spec" });
+    const ui = resolveRequiredSkills({ stage: "build-spec", ui: true });
+    expect(plain.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
+    expect(ui.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "plan-design-review", "review"]);
+    expect(ui.deliveryMode).toBe("file_only");
   });
 
-  it("injects complete skill bytes and immutable bundle metadata", () => {
-    const resolution = resolveRequiredSkills({ contract: manifest });
-    const augmented = appendRequiredSkillDefinitions({ contract: manifest, materials: "M", resolution });
+  it("keeps spec-analyze and verify-change outside the heterologous profiles", () => {
+    const plan = resolveRequiredSkills({ stage: "build-plan" });
+    const verify = resolveRequiredSkills({ stage: "verify-code" });
+    expect(plan.definitions.map((definition) => definition.name)).toEqual(["plan-eng-review", "review"]);
+    expect(verify.definitions.map((definition) => definition.name)).toEqual(["qa-only"]);
+    expect([...plan.definitions, ...verify.definitions].map((definition) => definition.name)).not.toEqual(expect.arrayContaining(["spec-analyze", "verify-change"]));
+  });
+
+  it("does not inject file-only bundles into the provider prompt", () => {
+    const resolution = resolveRequiredSkills({ stage: "build-plan" });
+    const augmented = appendRequiredSkillDefinitions({ contract: "CONTRACT", materials: "M", resolution });
     expect(augmented.materials).toBe("M");
-    expect(augmented.contract).toContain("## Required skill definitions");
-    expect(augmented.contract).toContain("plan-ceo-review");
-    expect(augmented.contract).toContain("review");
+    expect(augmented.contract).toBe("CONTRACT");
   });
 });

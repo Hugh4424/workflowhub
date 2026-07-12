@@ -19,11 +19,10 @@
 审查员必须直接调用：
 
 - `qa-only`：真实用户视角验收，只报告问题，不修复；不得用 `qa` 替代。
-- `verify-change --light`：轻量确认 checkbox 全部勾选、verdict 闭环；index 当前阶段剩余 open finding **列出但不阻断**（前序阶段已裁决不重扫；`accepted`/`closed_inband` 视为已闭合）。
 
 required skill 不可用且 SKILL.md 文件不可读、无法以 report-only lens 执行或输出缺关键结论 → `escalate_to_human`。pass/revise 输出必须含顶层 `skillResults`，逐项记录 executed / unavailable / failed。本仓库命名禁止 `openspec-*` 回流。
 
-**Skill 执行回退规则**：审查员必须先尝试 Skill 工具调用 required skill。如果 Skill 工具在 headless/read-only 环境下失败，必须回退——直接 Read 该 skill 的 SKILL.md 文件，从中提取审查维度和检查清单，独立应用到 acceptance sources。`verify-change --light` 的仓库内 fallback 路径是 `skills/verify-change/SKILL.md`；该文件可读且检查清单已按 report-only lens 应用时，不得仅因 runtime skill registry 没暴露 `verify-change` 而升级为 `escalate_to_human`。回退成功时记录 `status=executed`，并在 `mode` 或 `evidence` 标明 `skill-file fallback`。不得使用 `qa` 替代 `qa-only`，不得使用 `openspec-*` 名称。
+**Skill 执行回退规则**：审查员必须先尝试 Skill 工具调用 required skill。如果 Skill 工具在 headless/read-only 环境下失败，必须回退——直接 Read 该 skill 的 SKILL.md 文件，从中提取审查维度和检查清单，独立应用到 acceptance sources。回退成功时记录 `status=executed`，并在 `mode` 或 `evidence` 标明 `skill-file fallback`。不得使用 `qa` 替代 `qa-only`，不得使用 `openspec-*` 名称。
 
 **三要素执行摘要要求（FR-REVIEW-006）**：每个必需技能的 `evidence` 字段必须包含三要素：（1）**在哪执行** — 会话位置/记录路径；（2）**具体输入/检查点** — 实际检查的内容；（3）**结论** — 发现了什么。禁止只写 "已执行"、"通过" 或无具体内容的占位符。
 

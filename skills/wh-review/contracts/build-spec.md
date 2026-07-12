@@ -2,8 +2,6 @@
 
 # Build Spec 审查合同
 
-<!-- wh-review-skills: {"required":["plan-ceo-review","review"],"optional":["plan-design-review"]} -->
-
 > 本文件定义 design-reviewer 的检查维度。合同外发现只能标 `minor`，不能标 `blocking`。
 
 ## 三轴审查

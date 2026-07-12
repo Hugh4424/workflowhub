@@ -388,7 +388,7 @@ export function assembleReviewPayload({
   if (Array.isArray(materialSources) && materialSources.length > 0 && requestedProvider !== "claude-code") {
     throw new FailLoudError("materialSources require explicit WH_REVIEW_PROVIDER=claude-code; refusing legacy aggregate transport");
   }
-  if (requestedProvider === "claude-code") resolveRequiredSkills({ contract, env });
+  if (requestedProvider === "claude-code") resolveRequiredSkills({ stage, reviewTrack: env.WH_REVIEW_TRACK, ui: env.WH_REVIEW_UI === "true" });
 
   let materialsCore;
   if (docType === "doc") {
@@ -521,7 +521,7 @@ export function invokeReviewEngine({
 
   let resolution;
   if (requestedProvider === "claude-code") {
-    resolution = resolveRequiredSkills({ contract, env });
+    resolution = resolveRequiredSkills({ stage, reviewTrack: env.WH_REVIEW_TRACK, ui: env.WH_REVIEW_UI === "true" });
   }
   let inputHash;
   let runnerPayload;
