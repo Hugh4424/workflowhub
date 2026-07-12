@@ -29,6 +29,8 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     const plan = JSON.parse(readFileSync(new URL("../../stage-skill-plan.json", import.meta.url), "utf8"));
     expect(Object.keys(plan.stages["make-decision"].tracks).sort()).toEqual(["detail", "direction"]);
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
+    const manifest = JSON.parse(readFileSync(new URL("../../manifest.json", import.meta.url), "utf8"));
+    expect(manifest.contracts["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
     expect(plan.stages["build-plan"].required_skills).toContain("spec-analyze");
     expect(plan.stages["verify-code"].required_skills).toContain("verify-change");
   });
