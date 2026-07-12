@@ -19,6 +19,7 @@
 审查员必须直接调用：
 
 - `qa-only`：真实用户视角验收，只报告问题，不修复；不得用 `qa` 替代。
+- `verify-change --light`：只读 packet 内的 `verification_closure`、测试证据和变更文件，确认闭环状态；材料缺失必须标 `material_incomplete`。
 
 required skill 不可用且 SKILL.md 文件不可读、无法以 report-only lens 执行或输出缺关键结论 → `escalate_to_human`。pass/revise 输出必须含顶层 `skillResults`，逐项记录 executed / unavailable / failed。本仓库命名禁止 `openspec-*` 回流。
 

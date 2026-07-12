@@ -31,7 +31,7 @@
       "pass_finding_policy": "contract-only"
     },
     "build-plan": {
-      "required_skills": ["plan-eng-review", "review"],
+      "required_skills": ["spec-analyze", "plan-eng-review", "review"],
       "material_profile": "spec-plan-tasks",
       "review_mode": "lens-only",
       "delivery_mode": "file_only",
@@ -47,7 +47,7 @@
       "pass_finding_policy": "contract-only"
     },
     "verify-code": {
-      "required_skills": ["qa-only"],
+      "required_skills": ["qa-only", "verify-change"],
       "material_profile": "acceptance-and-evidence",
       "review_mode": "lens-only",
       "delivery_mode": "file_only",

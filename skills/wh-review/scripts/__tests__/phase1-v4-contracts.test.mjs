@@ -28,17 +28,20 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     const plan = JSON.parse(readFileSync(new URL("../../stage-skill-plan.json", import.meta.url), "utf8"));
     expect(Object.keys(plan.stages["make-decision"].tracks).sort()).toEqual(["detail", "direction"]);
     expect(plan.stages["build-spec"].optional_skills).toEqual([{ name: "plan-design-review", when: "ui" }]);
-    expect(plan.stages["build-plan"].required_skills).not.toContain("spec-analyze");
-    expect(plan.stages["verify-code"].required_skills).not.toContain("verify-change");
+    expect(plan.stages["build-plan"].required_skills).toContain("spec-analyze");
+    expect(plan.stages["verify-code"].required_skills).toContain("verify-change");
   });
 
   it("keeps every bundled review skill self-contained and report-only", () => {
-    for (const name of ["plan-ceo-review", "review", "plan-design-review", "plan-eng-review", "qa-only"]) {
+    for (const name of ["plan-ceo-review", "review", "plan-design-review", "plan-eng-review", "qa-only", "spec-analyze", "verify-change"]) {
       const body = readFileSync(new URL(`../../../${name}/SKILL.md`, import.meta.url), "utf8");
       const bundle = JSON.parse(readFileSync(new URL(`../../../${name}/review-bundle.json`, import.meta.url), "utf8"));
-      expect(bundle).toEqual({ version: 1, files: ["SKILL.md"] });
+      expect(bundle).toMatchObject({ version: 1, files: ["SKILL.md"] });
+      if (name === "spec-analyze" || name === "verify-change") {
+        expect(bundle).toMatchObject({ mode: "lens-only", delivery_mode: "file_only" });
+      }
       expect(body).toMatch(/report-only/i);
-      expect(body).not.toMatch(/gstack|telemetry|spawn\(|child_process|curl\s|fetch\(|git\s+(diff|status|log)/i);
+      expect(body).not.toMatch(/gstack|telemetry|spawn\(|child_process|curl\s|fetch\(|git\s+(diff|status|log)|task worktree|task_tracking_root|absolute path|落盘/i);
     }
   });
 });

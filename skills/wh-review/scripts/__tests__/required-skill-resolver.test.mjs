@@ -32,12 +32,12 @@ describe("required skill bundles", () => {
     expect(ui.deliveryMode).toBe("file_only");
   });
 
-  it("keeps spec-analyze and verify-change outside the heterologous profiles", () => {
+  it("selects packet-only spec and verification lenses for their stages", () => {
     const plan = resolveRequiredSkills({ stage: "build-plan" });
     const verify = resolveRequiredSkills({ stage: "verify-code" });
-    expect(plan.definitions.map((definition) => definition.name)).toEqual(["plan-eng-review", "review"]);
-    expect(verify.definitions.map((definition) => definition.name)).toEqual(["qa-only"]);
-    expect([...plan.definitions, ...verify.definitions].map((definition) => definition.name)).not.toEqual(expect.arrayContaining(["spec-analyze", "verify-change"]));
+    expect(plan.definitions.map((definition) => definition.name)).toEqual(["plan-eng-review", "review", "spec-analyze"]);
+    expect(verify.definitions.map((definition) => definition.name)).toEqual(["qa-only", "verify-change"]);
+    expect([...plan.definitions, ...verify.definitions].every((definition) => definition.deliveryMode !== "always_embed")).toBe(true);
   });
 
   it("does not inject file-only bundles into the provider prompt", () => {

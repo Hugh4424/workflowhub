@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "review-packet.v1",
   "type": "object",
-  "required": ["version", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "acceptance_design_excerpt", "test_evidence", "contract_hash", "skill_bundle_hash"],
+  "required": ["version", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "acceptance_design_excerpt", "planning_artifacts", "verification_closure", "test_evidence", "contract_hash", "skill_bundle_hash"],
   "properties": {
     "version": { "const": "review-packet.v1" },
     "packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -11,6 +11,8 @@
     "unified_diff": { "type": "string" },
     "changed_files": { "type": "array" },
     "acceptance_design_excerpt": { "type": "string" },
+    "planning_artifacts": { "type": "array" },
+    "verification_closure": { "type": "array" },
     "test_evidence": { "type": "array" },
     "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }

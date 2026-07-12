@@ -44,6 +44,9 @@ function bundleAt(root, name) {
   if (parsed.version !== 1 || !Array.isArray(parsed.files) || !parsed.files.includes("SKILL.md") || parsed.files.some((entry) => !safeBundlePath(entry))) {
     throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} review-bundle.json must declare safe files and SKILL.md`);
   }
+  if ((parsed.mode !== undefined && parsed.mode !== "lens-only") || (parsed.delivery_mode !== undefined && parsed.delivery_mode !== "file_only")) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} bundle may only declare lens-only file_only delivery`);
+  }
   const files = [...new Set(parsed.files)].sort().map((entry) => {
     const file = join(skillDir, entry);
     const resolved = resolve(file);

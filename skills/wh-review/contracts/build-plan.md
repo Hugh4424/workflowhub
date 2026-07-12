@@ -20,6 +20,7 @@
 
 - `plan-eng-review`：工程计划审查，覆盖架构、数据流、边界、失败模式、测试策略、性能、worktree/并行策略。
 - `review`：独立复审 diff/scope drift、TODO/文档过期、结构风险、对抗性检查。
+- `spec-analyze`：只读 packet 内的 specification、plan、task 摘录，检查映射、一致性、重复、歧义和欠定义；材料缺失必须标 `material_incomplete`。
 
 required skill 不可用且 SKILL.md 文件不可读、无法以 report-only lens 执行或输出缺关键结论 → `escalate_to_human`。pass/revise 输出必须含顶层 `skillResults`，逐项记录 executed / unavailable / failed。
 
@@ -97,8 +98,8 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 
 | 维度 | 验证方法 |
 |------|---------|
-| Required Skills 已执行 | 检查 plan-eng-review/review 输出；无法执行 required skill → escalate |
-| 跨 artifact 一致性 | 对照 spec、plan、tasks 的需求、任务与验证映射 |
+| Required Skills 已执行 | 检查 spec-analyze/plan-eng-review/review 输出；无法执行 required skill → escalate |
+| 跨 artifact 一致性 | 对照 packet 内 specification、plan、task 摘录的需求、任务与验证映射 |
 | 宪法门禁 | grep Constitution Check 表，无未勾选项；constitution MUST 冲突自动 blocking |
 | FR 引用完整 | tasks.md 每个 task 引用 FR；每个 FR 至少一个 task |
 | FR→task→verify | 每个 task 的 Verify 能证明对应 FR 被实现 |
@@ -186,7 +187,7 @@ required skill 不可用且 SKILL.md 文件不可读、无法以 report-only len
 
 ## 验证方法
 
-1. **Skill 对照**：逐条核验 plan-eng-review/review 的 findings 是否进入 verdict；未真实调用 required skill → escalate。
+1. **Skill 对照**：逐条核验 spec-analyze/plan-eng-review/review 的 findings 是否进入 verdict；未真实调用 required skill → escalate。
 2. **grep 验证**：FR 引用、phase 六节、test-first、Governance 矩阵、视觉合同 6 维。
 3. **读文件**：完整 Read spec.md、plan.md、tasks.md、`tasks/{task-id}/progress.md`，判断执行顺序和 scope。
 4. **路径检查**：逐路径 `ls` 或按 repo root 验证，禁止模糊路径。
