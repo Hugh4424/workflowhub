@@ -663,3 +663,7 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 | `s8_context_no_change` | S8 | — | CONTEXT 无变化 |
 | `s9_user_approved` | S9 | `s9_user_approved: true` | 用户明确批准 |
 | `s10_decision_log_complete` | S10 | — | decision-log 落盘完成 |
+
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed S0–S10 material above is legacy reference only; its identifiers map to this continuous, one-action sequence: 1 load-context, 2 triage-scope, 3 research-inputs, 4 clarify-direction, 5 review-decision, 6 approve-decision, 7 write-decision-log. Each canonical step has one primary action, explicit entry evidence, terminal evidence, and a declared dependency. Every declared dependency must be represented by entry evidence `step://<dependency-step-id>`; therefore `review-decision` enters from `step://clarify-direction`, not unproduced `task://decision-draft`. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.

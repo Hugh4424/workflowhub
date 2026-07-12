@@ -77,6 +77,10 @@ At stage start, call `metrics/collector.mjs` `recordSkeleton`, passing a seed wi
 }
 ```
 
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-build-result, 2 verify-receipts, 3 run-verification-tests, 4 assemble-facts, 5 review-verification, 6 publish-verification-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
+
 These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`). Use `metrics/collector.mjs` — do not hand-write a raw jsonl line with only `skill/stage/event/ts`.
 
 ### 4. fresh 测试执行

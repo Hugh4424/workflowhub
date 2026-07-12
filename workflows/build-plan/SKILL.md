@@ -355,3 +355,7 @@ if (!receiptResult.ok) {
 七要素摘要 + 请确认块的完整定义已并入 Step 9（人审检查点）——那是人工拍板前看到的唯一界面，本节不重复内容，避免两份摘要打架。摘要落盘位置：写入 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md`（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）。
 
 摘要展示本身以及等待人工确认，是 Step 9 的硬门，无条件阻断，不接受任何旁路。
+
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-spec, 2 research-plan, 3 define-contracts, 4 write-plan, 5 review-plan, 6 approve-plan, 7 publish-plan-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "stage_slug": "build-spec",
+  "steps": [
+    { "step_id": "read-decision-log", "order": 1, "entry_conditions": [{ "kind": "decision_log", "uri_or_path": "task://decision-log" }], "completion_evidence": [{ "kind": "input", "uri_or_path": "task://decision-log-read" }], "observable_result": "Decision input is loaded.", "depends_on": [] },
+    { "step_id": "create-spec-draft", "order": 2, "entry_conditions": [{ "kind": "input", "uri_or_path": "step://read-decision-log" }], "completion_evidence": [{ "kind": "spec", "uri_or_path": "spec://draft" }], "observable_result": "Specification draft exists.", "depends_on": ["read-decision-log"] },
+    { "step_id": "clarify-spec", "order": 3, "entry_conditions": [{ "kind": "spec", "uri_or_path": "step://create-spec-draft" }], "completion_evidence": [{ "kind": "clarification", "uri_or_path": "spec://clarifications" }], "observable_result": "Ambiguities are resolved or recorded.", "depends_on": ["create-spec-draft"] },
+    { "step_id": "check-constitution", "order": 4, "entry_conditions": [{ "kind": "spec", "uri_or_path": "step://clarify-spec" }], "completion_evidence": [{ "kind": "checklist", "uri_or_path": "spec://constitution-check" }], "observable_result": "Constitution compliance is evidenced.", "depends_on": ["clarify-spec"] },
+    { "step_id": "review-spec", "order": 5, "entry_conditions": [{ "kind": "checklist", "uri_or_path": "step://check-constitution" }], "completion_evidence": [{ "kind": "review", "uri_or_path": "spec://review" }], "observable_result": "Independent specification review completes.", "depends_on": ["check-constitution"] },
+    { "step_id": "publish-spec-result", "order": 6, "entry_conditions": [{ "kind": "review", "uri_or_path": "step://review-spec" }], "completion_evidence": [{ "kind": "stage_result", "uri_or_path": "task://stage-result-build-spec" }], "observable_result": "Specification handoff is published.", "depends_on": ["review-spec"] }
+  ]
+}

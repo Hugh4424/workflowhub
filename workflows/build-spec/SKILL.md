@@ -79,6 +79,10 @@ build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，
 }
 ```
 
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-decision-log, 2 create-spec-draft, 3 clarify-spec, 4 check-constitution, 5 review-spec, 6 publish-spec-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
+
 - 三字段（`ac_count`、`fr_count`、`counted_at`）不可为 null
 - `counted_at` 为产出时刻 ISO8601 时间戳
 - 计数方法：grep spec.md 统计 AC- 和 FR- 条目数

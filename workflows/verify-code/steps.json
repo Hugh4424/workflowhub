@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "stage_slug": "verify-code",
+  "steps": [
+    { "step_id": "read-build-result", "order": 1, "entry_conditions": [{ "kind": "stage_result", "uri_or_path": "task://stage-result-build-code" }], "completion_evidence": [{ "kind": "input", "uri_or_path": "verify://build-result-read" }], "observable_result": "Build result is loaded.", "depends_on": [] },
+    { "step_id": "verify-receipts", "order": 2, "entry_conditions": [{ "kind": "input", "uri_or_path": "step://read-build-result" }], "completion_evidence": [{ "kind": "receipt_check", "uri_or_path": "verify://receipts" }], "observable_result": "Execution receipts are verified.", "depends_on": ["read-build-result"] },
+    { "step_id": "run-verification-tests", "order": 3, "entry_conditions": [{ "kind": "receipt_check", "uri_or_path": "step://verify-receipts" }], "completion_evidence": [{ "kind": "test", "uri_or_path": "verify://tests" }], "observable_result": "Verification tests complete.", "depends_on": ["verify-receipts"] },
+    { "step_id": "assemble-facts", "order": 4, "entry_conditions": [{ "kind": "test", "uri_or_path": "step://run-verification-tests" }], "completion_evidence": [{ "kind": "facts", "uri_or_path": "verify://facts" }], "observable_result": "Verification facts are assembled.", "depends_on": ["run-verification-tests"] },
+    { "step_id": "review-verification", "order": 5, "entry_conditions": [{ "kind": "facts", "uri_or_path": "step://assemble-facts" }], "completion_evidence": [{ "kind": "review", "uri_or_path": "verify://review" }], "observable_result": "Independent verification review completes.", "depends_on": ["assemble-facts"] },
+    { "step_id": "publish-verification-result", "order": 6, "entry_conditions": [{ "kind": "review", "uri_or_path": "step://review-verification" }], "completion_evidence": [{ "kind": "stage_result", "uri_or_path": "task://stage-result-verify-code" }], "observable_result": "Verification handoff is published.", "depends_on": ["review-verification"] }
+  ]
+}

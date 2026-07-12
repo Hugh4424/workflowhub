@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "stage_slug": "make-decision",
+  "steps": [
+    { "step_id": "load-context", "order": 1, "entry_conditions": [{ "kind": "task_id", "uri_or_path": "task://context" }], "completion_evidence": [{ "kind": "journal", "uri_or_path": "journal://context-loaded" }], "observable_result": "Task context is available.", "depends_on": [] },
+    { "step_id": "triage-scope", "order": 2, "entry_conditions": [{ "kind": "context", "uri_or_path": "step://load-context" }], "completion_evidence": [{ "kind": "scope", "uri_or_path": "task://scope" }], "observable_result": "Scope profile is recorded.", "depends_on": ["load-context"] },
+    { "step_id": "research-inputs", "order": 3, "entry_conditions": [{ "kind": "scope", "uri_or_path": "step://triage-scope" }], "completion_evidence": [{ "kind": "research", "uri_or_path": "task://research" }], "observable_result": "Decision evidence is collected.", "depends_on": ["triage-scope"] },
+    { "step_id": "clarify-direction", "order": 4, "entry_conditions": [{ "kind": "research", "uri_or_path": "step://research-inputs" }], "completion_evidence": [{ "kind": "conversation", "uri_or_path": "task://clarification" }], "observable_result": "Direction is clarified.", "depends_on": ["research-inputs"] },
+    { "step_id": "review-decision", "order": 5, "entry_conditions": [{ "kind": "conversation", "uri_or_path": "step://clarify-direction" }], "completion_evidence": [{ "kind": "review", "uri_or_path": "task://review" }], "observable_result": "Decision direction has independent review evidence.", "depends_on": ["clarify-direction"] },
+    { "step_id": "approve-decision", "order": 6, "entry_conditions": [{ "kind": "review", "uri_or_path": "step://review-decision" }], "completion_evidence": [{ "kind": "approval", "uri_or_path": "task://approval" }], "observable_result": "User approval is explicit.", "depends_on": ["review-decision"] },
+    { "step_id": "write-decision-log", "order": 7, "entry_conditions": [{ "kind": "approval", "uri_or_path": "step://approve-decision" }], "completion_evidence": [{ "kind": "decision_log", "uri_or_path": "task://decision-log" }], "observable_result": "Canonical decision log is written.", "depends_on": ["approve-decision"] }
+  ]
+}

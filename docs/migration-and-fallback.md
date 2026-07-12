@@ -26,3 +26,21 @@
 
 - agenthub harness 中 state=active 且 currentStatus≠completed 的 task
 - 范围明确，判定可执行
+
+## Canonical step topology v1
+
+`workflows/{stage}/steps.json` is the only expected-step authority. `SKILL.md` retains detailed operational guidance, but its older section labels are not runtime identifiers. Executors must emit and validate the canonical `step_id`; unknown labels return `UNKNOWN_STEP` and do not become a success fact.
+
+| Legacy identifier | Canonical identifier | Status | Migration action |
+| --- | --- | --- | --- |
+| make-decision S0–S1 | `load-context`, `triage-scope`, `research-inputs` | mapped | Use the matching canonical action. |
+| make-decision S2–S8 | `clarify-direction`, `review-decision` | mapped | Record conversation and review evidence at the declared step. |
+| make-decision S9–S10 | `approve-decision`, `write-decision-log` | mapped | Preserve explicit human approval before writing. |
+| build-spec legacy sections | `read-decision-log` through `publish-spec-result` | mapped | Use manifest order 1–6. |
+| build-plan legacy sections | `read-spec` through `publish-plan-result` | mapped | Use manifest order 1–7; approval remains explicit. |
+| build-code legacy sections | `read-plan` through `publish-code-result` | mapped | Use manifest order 1–8 and retain RED/GREEN evidence. |
+| verify-code legacy sections | `read-build-result` through `publish-verification-result` | mapped | Use manifest order 1–6. |
+| R10 | none | withdrawn | Retain history only; exclude from coverage denominator. |
+| Any unmapped action or missing field | none | unknown | Return `UNKNOWN_STEP` or `LEGACY_FIELDS_MISSING`; request migration instead of inferring success. |
+
+Source adapters return `SOURCE_INCOMPLETE` for missing or incomplete authoritative requirements and `SOURCE_UNKNOWN` for an explicitly unknown source. Callers must preserve these states; generic core consumes only canonical source fields.

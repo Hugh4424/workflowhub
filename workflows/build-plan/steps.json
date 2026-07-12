@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "stage_slug": "build-plan",
+  "steps": [
+    { "step_id": "read-spec", "order": 1, "entry_conditions": [{ "kind": "spec", "uri_or_path": "spec://approved" }], "completion_evidence": [{ "kind": "input", "uri_or_path": "plan://spec-read" }], "observable_result": "Approved specification is loaded.", "depends_on": [] },
+    { "step_id": "research-plan", "order": 2, "entry_conditions": [{ "kind": "input", "uri_or_path": "step://read-spec" }], "completion_evidence": [{ "kind": "research", "uri_or_path": "plan://research" }], "observable_result": "Planning research is recorded.", "depends_on": ["read-spec"] },
+    { "step_id": "define-contracts", "order": 3, "entry_conditions": [{ "kind": "research", "uri_or_path": "step://research-plan" }], "completion_evidence": [{ "kind": "contracts", "uri_or_path": "plan://data-contracts" }], "observable_result": "Data contracts are defined.", "depends_on": ["research-plan"] },
+    { "step_id": "write-plan", "order": 4, "entry_conditions": [{ "kind": "contracts", "uri_or_path": "step://define-contracts" }], "completion_evidence": [{ "kind": "plan", "uri_or_path": "plan://implementation" }], "observable_result": "Implementation plan exists.", "depends_on": ["define-contracts"] },
+    { "step_id": "review-plan", "order": 5, "entry_conditions": [{ "kind": "plan", "uri_or_path": "step://write-plan" }], "completion_evidence": [{ "kind": "review", "uri_or_path": "plan://review" }], "observable_result": "Plan review completes.", "depends_on": ["write-plan"] },
+    { "step_id": "approve-plan", "order": 6, "entry_conditions": [{ "kind": "review", "uri_or_path": "step://review-plan" }], "completion_evidence": [{ "kind": "approval", "uri_or_path": "plan://approval" }], "observable_result": "Human plan approval is explicit.", "depends_on": ["review-plan"] },
+    { "step_id": "publish-plan-result", "order": 7, "entry_conditions": [{ "kind": "approval", "uri_or_path": "step://approve-plan" }], "completion_evidence": [{ "kind": "stage_result", "uri_or_path": "task://stage-result-build-plan" }], "observable_result": "Plan handoff is published.", "depends_on": ["approve-plan"] }
+  ]
+}
