@@ -12,7 +12,7 @@
 
 C1 原始需求对位；C2 真实痛点；C3 最小切口；C4 替代路径；C5 脆弱前提；C6 时机与范围。
 
-必需 packet 字段：`raw_requirement`、`host_verified_facts`、`acceptance_design_excerpt`。
+必需 packet 字段：`raw_requirement`、`host_verified_facts`。
 
 只能检查原始用户需求。packet 出现 `decision_log_excerpt`、拟定方向或方案摘要时，立即 `escalate_to_human`。
 

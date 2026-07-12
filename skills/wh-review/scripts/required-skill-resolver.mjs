@@ -40,8 +40,9 @@ export function validateReviewBundle({ skillDir, name }) {
   let parsed;
   try { parsed = JSON.parse(readFileSync(bundlePath, "utf8")); }
   catch (error) { throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} has invalid review-bundle.json: ${error.message}`); }
-  if (parsed.version !== 1 || !Array.isArray(parsed.files) || !parsed.files.includes("SKILL.md") || parsed.files.some((entry) => !safeBundlePath(entry))) {
-    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} review-bundle.json must declare safe files and SKILL.md`);
+  const entrypoint = parsed.entrypoint ?? "SKILL.md";
+  if (parsed.version !== 1 || !Array.isArray(parsed.files) || !parsed.files.includes(entrypoint) || !safeBundlePath(entrypoint) || parsed.files.some((entry) => !safeBundlePath(entry))) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} review-bundle.json must declare a safe entrypoint`);
   }
   if ((parsed.mode !== undefined && parsed.mode !== "lens-only") || (parsed.delivery_mode !== undefined && parsed.delivery_mode !== "file_only")) {
     throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} bundle may only declare lens-only file_only delivery`);
@@ -55,7 +56,7 @@ export function validateReviewBundle({ skillDir, name }) {
     return { path: entry, sha256: createHash("sha256").update(bytes).digest("hex"), content: bytes.toString("utf8") };
   });
   const sha256 = createHash("sha256").update(JSON.stringify(files.map(({ path, sha256: fileHash }) => ({ path, sha256: fileHash })))).digest("hex");
-  return { sha256, files };
+  return { sha256, files, entrypoint, content: files.find((file) => file.path === entrypoint).content };
 }
 
 function bundleAt(root, name) {
@@ -126,7 +127,7 @@ export function resolveRequiredSkills({ stage, reviewTrack, ui = false, roots } 
     const chosen = candidateAt(root, name);
     if (!chosen) throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} not found in repository skills root`);
     const bytes = readFileSync(chosen.real);
-    definitions.push({ name, source: chosen.source, version: versionOf(bytes.toString("utf8")), sha256: createHash("sha256").update(bytes).digest("hex"), content: bytes.toString("utf8"), bundle: chosen.bundle });
+    definitions.push({ name, source: chosen.source, version: versionOf(bytes.toString("utf8")), sha256: createHash("sha256").update(bytes).digest("hex"), content: chosen.bundle.content, bundle: chosen.bundle });
   }
   return { stage, reviewTrack: profile.reviewTrack, deliveryMode, definitions };
 }

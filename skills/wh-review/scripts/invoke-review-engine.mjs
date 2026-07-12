@@ -58,6 +58,7 @@ import { readRoundState } from "./round-state.mjs";
 import { writeDocSnapshot, computeDocSnapshotDiff, writeMaterialsBaseline } from "./snapshot-writer.mjs";
 import { writeRouteExecutePhase } from "./route-decision-writer.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
+import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { createArtifactReviewPackage } from "./artifact-review-package.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -599,6 +600,10 @@ export function invokeReviewEngine({
     }
     if (!isValidReviewResult(result, { requestedProvider, artifactManifest: expectedArtifactManifest })) {
       return synthesizeFailure({ artifactPath, failureReason: requestedProvider === "claude-code" ? "claude-attestation-invalid" : "output-unparseable" });
+    }
+    if (env.WH_REVIEW_SCHEMA_VERSION === "v4") {
+      const validation = validateReviewerOutput({ stage, reviewTrack: env.WH_REVIEW_TRACK, ui: env.WH_REVIEW_UI === "true", output: result });
+      if (!validation.valid) return synthesizeFailure({ artifactPath, failureReason: "reviewer-output-invalid" });
     }
     atomicWriteJson(artifactPath, result);
     return { verdict: result.verdict, findings: result.findings, actual_mode: result.actual_mode };

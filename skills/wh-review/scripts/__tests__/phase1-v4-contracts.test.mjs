@@ -37,7 +37,8 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     for (const name of ["plan-ceo-review", "review", "plan-design-review", "plan-eng-review", "qa-only", "spec-analyze", "verify-change"]) {
       const body = readFileSync(new URL(`../../../${name}/SKILL.md`, import.meta.url), "utf8");
       const bundle = JSON.parse(readFileSync(new URL(`../../../${name}/review-bundle.json`, import.meta.url), "utf8"));
-      expect(bundle).toMatchObject({ version: 1, files: ["SKILL.md"] });
+      expect(bundle).toMatchObject({ version: 1 });
+      expect(bundle.files).toContain(name === "spec-analyze" ? "packet-lens.md" : "SKILL.md");
       if (name === "spec-analyze" || name === "verify-change") {
         expect(bundle).toMatchObject({ mode: "lens-only", delivery_mode: "file_only" });
       }
@@ -67,6 +68,9 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     expect(schema.required).not.toContain("decision_log_excerpt");
     expect(JSON.stringify(schema.allOf)).toContain("direction");
     expect(JSON.stringify(schema.allOf)).toContain("detail");
+    const contract = readFileSync(new URL("../../contracts/make-decision.md", import.meta.url), "utf8");
+    const direction = contract.slice(contract.indexOf("review_track: direction"), contract.indexOf("review_track: detail"));
+    expect(direction).not.toContain("acceptance_design_excerpt");
   });
 
   it("rejects empty skill results for stages with required packet lenses", () => {

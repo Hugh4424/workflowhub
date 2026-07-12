@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "review-packet.v1",
   "type": "object",
-  "required": ["version", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "raw_requirement", "acceptance_design_excerpt", "planning_artifacts", "verification_closure", "test_evidence", "host_verified_facts", "contract_hash", "skill_bundle_hash"],
+  "required": ["version", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "raw_requirement", "planning_artifacts", "verification_closure", "test_evidence", "host_verified_facts", "contract_hash", "skill_bundle_hash"],
   "properties": {
     "version": { "const": "review-packet.v1" },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
@@ -25,11 +25,11 @@
   "allOf": [
     {
       "if": { "properties": { "stage": { "const": "make-decision" }, "review_track": { "const": "direction" } }, "required": ["stage", "review_track"] },
-      "then": { "not": { "required": ["decision_log_excerpt"] } }
+      "then": { "not": { "anyOf": [{ "required": ["decision_log_excerpt"] }, { "required": ["acceptance_design_excerpt"] }] } }
     },
     {
       "if": { "properties": { "stage": { "const": "make-decision" }, "review_track": { "const": "detail" } }, "required": ["stage", "review_track"] },
-      "then": { "required": ["decision_log_excerpt"] }
+      "then": { "required": ["decision_log_excerpt", "acceptance_design_excerpt"] }
     }
   ],
   "additionalProperties": false
