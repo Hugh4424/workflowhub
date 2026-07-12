@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "stages": {
+    "make-decision": {
+      "tracks": {
+        "direction": {
+          "required_skills": ["plan-ceo-review", "review"],
+          "material_profile": "raw-requirement-only",
+          "delivery_mode": "always_embed",
+          "continuation_policy": "initial-runtime-only",
+          "pass_finding_policy": "contract-only"
+        },
+        "detail": {
+          "required_skills": ["plan-ceo-review", "review"],
+          "material_profile": "requirement-and-decision-log",
+          "delivery_mode": "always_embed",
+          "continuation_policy": "initial-runtime-only",
+          "pass_finding_policy": "contract-only"
+        }
+      }
+    },
+    "build-spec": {
+      "required_skills": ["plan-ceo-review", "review"],
+      "optional_skills": [{ "name": "plan-design-review", "when": "ui" }],
+      "material_profile": "spec-and-design",
+      "delivery_mode": "always_embed",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only"
+    },
+    "build-plan": {
+      "required_skills": ["spec-analyze", "plan-eng-review", "review"],
+      "material_profile": "spec-plan-tasks",
+      "delivery_mode": "always_embed",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only"
+    },
+    "build-code": {
+      "required_skills": [],
+      "material_profile": "diff-and-evidence",
+      "delivery_mode": "always_embed",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only"
+    },
+    "verify-code": {
+      "required_skills": ["qa-only", "verify-change"],
+      "material_profile": "acceptance-and-evidence",
+      "delivery_mode": "always_embed",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only"
+    }
+  }
+}

@@ -6,7 +6,7 @@
  * - AC2-2/AC2-3: route-decision two-phase write contract (7 fields non-empty +
  *   empty review_input_hash after prepare; 8 fields non-empty after execute);
  *   unknown stage fails loud (non-zero exit)
- * - AC9-1/AC10-1: intake.md contains C1..C6 markers, test-acceptance.md contains F1..F6 markers
+ * - AC9-1/AC10-1: make-decision.md contains C1..C6 markers, verify-code.md contains F1..F6 markers
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -33,23 +33,23 @@ function runCli(args, env) {
 }
 
 describe("AC2-1: 5 stage contract files exist", () => {
-  it("intake/design/plan/code/test-acceptance all present", () => {
-    for (const name of ["intake", "design", "plan", "code", "test-acceptance"]) {
+  it("make-decision/build-spec/build-plan/build-code/verify-code all present", () => {
+    for (const name of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       expect(existsSync(join(contractsDir, `${name}.md`))).toBe(true);
     }
   });
 });
 
 describe("AC9-1/AC10-1: contract content coverage markers", () => {
-  it("intake.md contains C1..C6", () => {
-    const content = readFileSync(join(contractsDir, "intake.md"), "utf8");
+  it("make-decision.md contains C1..C6", () => {
+    const content = readFileSync(join(contractsDir, "make-decision.md"), "utf8");
     for (const n of [1, 2, 3, 4, 5, 6]) {
       expect(content).toMatch(new RegExp(`\\bC${n}\\b`));
     }
   });
 
-  it("test-acceptance.md contains F1..F6", () => {
-    const content = readFileSync(join(contractsDir, "test-acceptance.md"), "utf8");
+  it("verify-code.md contains F1..F6", () => {
+    const content = readFileSync(join(contractsDir, "verify-code.md"), "utf8");
     for (const n of [1, 2, 3, 4, 5, 6]) {
       expect(content).toMatch(new RegExp(`\\bF${n}\\b`));
     }

@@ -1,6 +1,6 @@
 <!-- migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/code-reviewer-contract.md -->
 
-# Code Review 审查合同
+# Build Code 审查合同
 
 > 本文件定义了 code-reviewer 的检查维度。合同外的发现只能标 `minor`，不能标 `blocking`。
 
@@ -43,7 +43,7 @@
    b) 前轮不可能发现的问题
    c) 架构边界触碰
    其余新发现标 minor，不阻断 pass。
-5. **每轮独立会话**：每轮审查在独立会话/子代理中执行，只接收 delta package。
+5. **固定首轮续跑**：第 2 轮起续跑本 review flow 的首轮 runtime，只接收 packet 指定的 delta 材料。
 
 ## 阻断/非阻断分类
 
@@ -150,5 +150,3 @@
 - **sourceRound={N}**
 - **resubmitRound={N+1}**
 ```
-
-<!-- CONTRACT-DEPTH: placeholder, pending 4-item deepening (Blocking/Non-blocking classification list, Structural Quality Gate red lines, FR Consumption Point Scan, Revision Record append-only write protection) -->

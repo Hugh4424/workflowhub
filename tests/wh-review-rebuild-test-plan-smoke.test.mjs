@@ -111,7 +111,7 @@ try {
     verdict: roundState.verdict, mode: roundState.mode, actualMode: roundState.actual_mode,
     heterologousRound: roundState.heterologous_round, sameSourceRound: roundState.same_source_round,
     findings: [], passItems: ["build-spec smoke test round 1 passed"],
-    contractPath: "skills/wh-review/contracts/design.md",
+    contractPath: "skills/wh-review/contracts/build-spec.md",
     contractHash: "sha256:test-plan-smoke",
     timestamp: new Date().toISOString(),
   });

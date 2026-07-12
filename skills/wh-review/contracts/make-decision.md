@@ -1,6 +1,6 @@
 <!-- migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/intake-reviewer-contract.md -->
 
-# Intake Review 统一审查合同
+# Make Decision 统一审查合同
 
 > 本文件定义 intake 两审（方向/综合）的共享规则和各自维度。
 > 合同外发现只能标 `minor`，不能标 `blocking`。
@@ -11,7 +11,7 @@
 
 ### 范围
 
-本合同适用于 intake-direction-review、intake-detail-review 两份审查 prompt。各 prompt 引用本合同的对应节作为审查维度和阻断规则来源。范围四维维度（Real Pain / Complexity ROI / Risk Scope / Timing）内联在本合同范围节，不再有独立 scope 合同。
+本合同适用于 `direction`、`detail` 两个 `review_track`。各 track 引用本合同的对应节作为审查维度和阻断规则来源。范围四维维度（Real Pain / Complexity ROI / Risk Scope / Timing）内联在本合同范围节，不再有独立 scope 合同。两个 track 是独立 review flow，不共享 runtime 或 session。
 
 ### Finding 分类规则（MR-2）
 
@@ -54,7 +54,7 @@
 
 ---
 
-## 方向节（intake-direction-review 适用）
+## review_track: direction
 
 ### 三轴审查
 
@@ -138,7 +138,7 @@ required skill 不存在、不可运行、无法以 report-only 模式执行或�
 
 ---
 
-## 细节节（intake-detail-review 适用）
+## review_track: detail
 
 > **注**：intake-detail-review 是综合审查，一次覆盖盲点（Blindspot）、细节（Detail）、漂移（Drift）、范围（Scope）四个维度。本节定义各维度的规则；完整审查清单见 `intake-detail-reviewer.md`。
 

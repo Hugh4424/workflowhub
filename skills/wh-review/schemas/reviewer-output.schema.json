@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wh-review reviewer output",
+  "type": "object",
+  "required": ["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash", "verdict", "summary", "findings", "checklist", "skillResults"],
+  "properties": {
+    "packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "verdict": { "enum": ["pass", "revise_required", "escalate_to_human"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "findings": { "type": "array" },
+    "checklist": { "type": "array" },
+    "skillResults": { "type": "array" },
+    "rootCause": { "type": "string" },
+    "fixApproach": { "type": "string" }
+  },
+  "allOf": [{
+    "if": { "properties": { "verdict": { "const": "revise_required" } } },
+    "then": { "required": ["rootCause", "fixApproach"] }
+  }],
+  "additionalProperties": true
+}

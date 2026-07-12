@@ -1,6 +1,6 @@
 <!-- migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/test-acceptance-reviewer-contract.md -->
 
-# Test Acceptance Review 审查合同
+# Verify Code 审查合同
 
 > 本文件定义 test-acceptance-reviewer 的检查维度。合同外发现只能标 `minor`，不能标 `blocking`。
 
@@ -91,7 +91,7 @@ evidence 全绿、验收矩阵完整、required skills 已执行或有可读 fal
 2. 只审本轮修改文件和受影响源。
 3. 如果触碰 RuntimeAdapter / checkpoint / workflow 边界、forbidden files、跨 package 接口 → 对该模块全量复审。
 4. 新 blocking 只能来自本轮新改动、前轮不可能发现的问题、架构/边界触碰；其余 late finding 标 `minor`。
-5. 每轮独立会话，只看 review package。
+5. 第 2 轮起续跑本 review flow 的首轮 runtime，只看 packet 指定的增量材料。
 
 ## 首轮必查项
 

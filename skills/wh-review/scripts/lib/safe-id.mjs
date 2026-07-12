@@ -28,11 +28,11 @@ export function taskRoot(taskTrackingRoot, taskId) {
 
 /** stage → contract file name (spec.md FR-WHREVIEW-002 mapping table) */
 export const STAGE_CONTRACT_MAP = {
-  "make-decision": "intake.md",
-  "build-spec": "design.md",
-  "build-plan": "plan.md",
-  "build-code": "code.md",
-  "verify-code": "test-acceptance.md",
+  "make-decision": "make-decision.md",
+  "build-spec": "build-spec.md",
+  "build-plan": "build-plan.md",
+  "build-code": "build-code.md",
+  "verify-code": "verify-code.md",
 };
 
 const SAFE_ID_RE = /^[A-Za-z0-9._-]+$/;

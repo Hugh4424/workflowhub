@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wh-review review intent",
+  "type": "object",
+  "required": ["task_id", "stage", "review_flow_id", "business_round", "contract_hash", "material_manifest_hash", "skill_bundle_hash", "idempotency_key"],
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "review_track": { "type": ["string", "null"] },
+    "review_flow_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "business_round": { "type": "integer", "minimum": 1 },
+    "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "material_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "initial_runtime_id": { "type": ["string", "null"] },
+    "previous_core_receipt_hash": { "type": ["string", "null"] },
+    "idempotency_key": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

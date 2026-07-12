@@ -2,13 +2,30 @@
   "schema_version": 1,
   "name": "wh-review",
   "contracts": {
-    "plan": {
-      "path": "contracts/plan.md",
+    "make-decision": {
+      "path": "contracts/make-decision.md",
+      "review_tracks": ["direction", "detail"]
+    },
+    "build-spec": {
+      "path": "contracts/build-spec.md",
+      "required_skills": ["plan-ceo-review", "review"],
+      "optional_skills": ["plan-design-review"]
+    },
+    "build-plan": {
+      "path": "contracts/build-plan.md",
       "required_skills": [
-        "speckit-analyze",
+        "spec-analyze",
         "plan-eng-review",
         "review"
       ]
+    },
+    "build-code": {
+      "path": "contracts/build-code.md",
+      "required_skills": []
+    },
+    "verify-code": {
+      "path": "contracts/verify-code.md",
+      "required_skills": ["qa-only", "verify-change"]
     }
   }
 }

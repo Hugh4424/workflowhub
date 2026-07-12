@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
-import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
+const REPOSITORY_SKILLS_ROOT = join(repoRoot, "skills");
 const MANIFEST_RE = /<!--\s*wh-review-skills:\s*(\{[^]*?\})\s*-->/;
 const SAFE_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -27,28 +27,63 @@ export function parseRequiredSkillManifest(contract) {
   return { required: normalize(parsed.required, "required"), optional: normalize(parsed.optional, "optional") };
 }
 
-function trustedRoots(env) {
-  if (env.CLAUDE_CODE_SKILL_ROOTS) return env.CLAUDE_CODE_SKILL_ROOTS.split(delimiter).filter(Boolean);
-  const roots = [join(homedir(), ".claude", "skills")];
-  const codexHome = env.CODEX_HOME || (env.HOME ? join(env.HOME, ".codex") : null);
-  if (codexHome) roots.push(join(codexHome, "skills"));
-  roots.push(join(repoRoot, "skills"));
-  return roots;
-}
-
 function isInside(root, target) { const rel = relative(root, target); return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`)); }
 
-function candidateAt(rootInput, name, nested) {
+function requireRepositoryRoot(roots) {
+  if (!roots) return REPOSITORY_SKILLS_ROOT;
+  if (!Array.isArray(roots) || roots.length !== 1 || resolve(roots[0]) !== REPOSITORY_SKILLS_ROOT) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", "required skills must resolve from the repository skills root");
+  }
+  return REPOSITORY_SKILLS_ROOT;
+}
+
+function safeBundlePath(value) {
+  return typeof value === "string" && value.length > 0 && !value.startsWith("/") && !value.includes("\\") && !value.split("/").includes("..");
+}
+
+function regularSingleLink(pathname, skillName) {
+  let stat;
+  try { stat = lstatSync(pathname); }
+  catch { throw new RequiredSkillResolutionError("required-skill-unavailable", `${skillName} bundle file is missing: ${pathname}`); }
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", `${skillName} bundle file must be a single-link regular file: ${pathname}`);
+  }
+}
+
+function bundleAt(root, name) {
+  const skillDir = join(root, name);
+  const bundlePath = join(skillDir, "review-bundle.json");
+  regularSingleLink(bundlePath, name);
+  let parsed;
+  try { parsed = JSON.parse(readFileSync(bundlePath, "utf8")); }
+  catch (error) { throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} has invalid review-bundle.json: ${error.message}`); }
+  if (parsed.version !== 1 || !Array.isArray(parsed.files) || !parsed.files.includes("SKILL.md") || parsed.files.some((entry) => !safeBundlePath(entry))) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} review-bundle.json must declare safe files and SKILL.md`);
+  }
+  const files = [...new Set(parsed.files)].sort().map((entry) => {
+    const file = join(skillDir, entry);
+    const resolved = resolve(file);
+    if (!isInside(skillDir, resolved)) throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} bundle escapes its skill directory`);
+    regularSingleLink(resolved, name);
+    const bytes = readFileSync(resolved);
+    return { path: entry, sha256: createHash("sha256").update(bytes).digest("hex"), content: bytes.toString("utf8") };
+  });
+  const sha256 = createHash("sha256").update(JSON.stringify(files.map(({ path, sha256: fileHash }) => ({ path, sha256: fileHash })))).digest("hex");
+  return { sha256, files };
+}
+
+function candidateAt(rootInput, name) {
   const root = resolve(rootInput);
   if (!existsSync(root)) return null;
   let realRoot;
   try { realRoot = realpathSync(root); } catch { return null; }
-  const candidate = join(root, ...(nested ? ["gstack", name] : [name]), "SKILL.md");
+  const candidate = join(root, name, "SKILL.md");
   if (!existsSync(candidate)) return null;
   try {
+    regularSingleLink(candidate, name);
     const real = realpathSync(candidate);
     if (!isInside(realRoot, real)) throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} escapes trusted root ${root}`);
-    return { real, source: candidate };
+    return { real, source: candidate, bundle: bundleAt(root, name) };
   } catch (error) {
     if (error instanceof RequiredSkillResolutionError) throw error;
     throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} unreadable at ${candidate}: ${error.message}`);
@@ -57,17 +92,15 @@ function candidateAt(rootInput, name, nested) {
 
 function versionOf(content) { return content.match(/^---\s*\n[^]*?^version:\s*["']?([^\n"']+)/m)?.[1]?.trim() || "unspecified"; }
 
-export function resolveRequiredSkills({ contract, env = process.env, roots } = {}) {
+export function resolveRequiredSkills({ contract, roots } = {}) {
   const manifest = parseRequiredSkillManifest(contract);
+  const root = requireRepositoryRoot(roots);
   const definitions = [];
   for (const name of manifest.required) {
-    const candidates = [];
-    for (const root of (roots ?? trustedRoots(env))) for (const nested of [false, true]) { const found = candidateAt(root, name, nested); if (found) candidates.push(found); }
-    if (!candidates.length) throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} not found in trusted roots`);
-    const copies = candidates.map((candidate) => { const bytes = readFileSync(candidate.real); return { ...candidate, bytes, sha256: createHash("sha256").update(bytes).digest("hex") }; });
-    if (new Set(copies.map((copy) => copy.sha256)).size > 1) throw new RequiredSkillResolutionError("required-skill-conflict", `${name} has conflicting definitions: ${copies.map((copy) => copy.source).join(", ")}`);
-    const chosen = copies[0];
-    definitions.push({ name, source: chosen.source, version: versionOf(chosen.bytes.toString("utf8")), sha256: chosen.sha256, content: chosen.bytes.toString("utf8") });
+    const chosen = candidateAt(root, name);
+    if (!chosen) throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} not found in repository skills root`);
+    const bytes = readFileSync(chosen.real);
+    definitions.push({ name, source: chosen.source, version: versionOf(bytes.toString("utf8")), sha256: createHash("sha256").update(bytes).digest("hex"), content: bytes.toString("utf8"), bundle: chosen.bundle });
   }
   return { manifest, definitions };
 }

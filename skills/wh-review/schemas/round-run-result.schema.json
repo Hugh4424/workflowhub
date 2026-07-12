@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wh-review round run result",
+  "type": "object",
+  "required": ["intent", "provider_outcomes", "merged_findings", "hard_gates", "continuation_eligible", "receipt_draft_ref"],
+  "properties": {
+    "intent": { "$ref": "review-intent.schema.json" },
+    "provider_outcomes": { "type": "array" },
+    "merged_findings": { "type": "array" },
+    "hard_gates": { "type": "array" },
+    "continuation_eligible": { "type": "boolean" },
+    "receipt_draft_ref": { "type": "string" }
+  },
+  "additionalProperties": false
+}

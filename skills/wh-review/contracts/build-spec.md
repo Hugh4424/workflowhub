@@ -1,8 +1,8 @@
 <!-- migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/design-reviewer-contract.md -->
 
-# Design Review 审查合同
+# Build Spec 审查合同
 
-<!-- wh-review-skills: {"required":["plan-ceo-review","review","plan-design-review"]} -->
+<!-- wh-review-skills: {"required":["plan-ceo-review","review"],"optional":["plan-design-review"]} -->
 
 > 本文件定义 design-reviewer 的检查维度。合同外发现只能标 `minor`，不能标 `blocking`。
 
@@ -22,7 +22,7 @@
 
 - `plan-ceo-review`：premise challenge、scope mode、existing leverage、implementation alternatives、dream state delta、risk review。
 - `review`：独立复审设计目标、用户路径、验收边界、diff/scope drift。
-- `plan-design-review`：定义必须始终可用并纳入审查依赖闭包；是否适用由 reviewer 根据实际 design sources 判断。UI scope 时执行，覆盖信息架构、交互状态、用户旅程、AI slop risk、design system、响应式、无障碍、未决设计问题；确认不涉及 UI 时在 `skillResults` 明确记录 `status=not_applicable` 及证据。不得通过材料中的关键词或固定文本猜测适用性。
+- `plan-design-review`：仅在 packet 明确声明 UI scope 时加入依赖闭包并执行，覆盖信息架构、交互状态、用户旅程、设计系统、响应式、无障碍、未决设计问题。非 UI scope 不得伪造该技能结果。
 
 required skill 不可用且 SKILL.md 文件不可读 → `escalate_to_human`。pass/revise 输出必须含顶层 `skillResults`，逐项记录 executed / not_applicable / unavailable / failed。
 
@@ -67,7 +67,7 @@ required skill 不可用且 SKILL.md 文件不可读 → `escalate_to_human`。p
 2. 只审本轮修改文件和受影响源。
 3. 如果触碰 RuntimeAdapter / checkpoint / workflow 边界、forbidden files、跨 package 接口 → 对该模块全量复审。
 4. 新 blocking 只能来自本轮新改动、前轮不可能发现的问题、架构/边界触碰；其余 late finding 标 `minor`。
-5. 每轮独立会话，只看 review package。
+5. 第 2 轮起续跑本 review flow 的首轮 runtime，只看本轮 packet 指定的增量材料。
 
 ## 阻断/非阻断分类
 
@@ -190,5 +190,3 @@ required skill 不可用且 SKILL.md 文件不可读 → `escalate_to_human`。p
 ## 修订记录
 
 主 agent 在收到 `revise_required` 后、发起下一轮审查前，必须 append-only 记录失败根因、修改文件、修改摘要、验证命令和结果。reviewer 只读不写；缺修订记录时按证据缺失处理。
-
-<!-- CONTRACT-DEPTH: placeholder, pending 4-item deepening (Blocking/Non-blocking classification list, Structural Quality Gate red lines, FR Consumption Point Scan, Revision Record append-only write protection) -->
