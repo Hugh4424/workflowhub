@@ -44,4 +44,20 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
       expect(body).not.toMatch(/gstack|telemetry|spawn\(|child_process|curl\s|fetch\(|git\s+(diff|status|log)|task worktree|task_tracking_root|absolute path|落盘/i);
     }
   });
+
+  it("limits every stage contract to packet fields and artifact anchors", () => {
+    const requiredFields = {
+      "make-decision": ["raw_requirement", "decision_log_excerpt", "host_verified_facts"],
+      "build-spec": ["raw_requirement", "acceptance_design_excerpt", "planning_artifacts"],
+      "build-plan": ["planning_artifacts", "acceptance_design_excerpt", "changed_files"],
+      "build-code": ["unified_diff", "changed_files", "test_evidence"],
+      "verify-code": ["acceptance_design_excerpt", "test_evidence", "verification_closure"],
+    };
+    for (const [stage, fields] of Object.entries(requiredFields)) {
+      const contract = readFileSync(new URL(`../../contracts/${stage}.md`, import.meta.url), "utf8");
+      expect(contract).toContain("review-packet.v1");
+      for (const field of fields) expect(contract).toContain(`\`${field}\``);
+      expect(contract).not.toMatch(/git\s+(diff|status|log)|\bgrep\b|\bls\b|执行命令|完整\s*Read|tasks\/|task[-_]id|task_tracking|WORKFLOWHUB/i);
+    }
+  });
 });
