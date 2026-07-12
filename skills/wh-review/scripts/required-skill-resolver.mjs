@@ -34,8 +34,7 @@ function regularSingleLink(pathname, skillName) {
   }
 }
 
-function bundleAt(root, name) {
-  const skillDir = join(root, name);
+export function validateReviewBundle({ skillDir, name }) {
   const bundlePath = join(skillDir, "review-bundle.json");
   regularSingleLink(bundlePath, name);
   let parsed;
@@ -57,6 +56,10 @@ function bundleAt(root, name) {
   });
   const sha256 = createHash("sha256").update(JSON.stringify(files.map(({ path, sha256: fileHash }) => ({ path, sha256: fileHash })))).digest("hex");
   return { sha256, files };
+}
+
+function bundleAt(root, name) {
+  return validateReviewBundle({ skillDir: join(root, name), name });
 }
 
 function candidateAt(rootInput, name) {

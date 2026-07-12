@@ -1,9 +1,10 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { linkSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { STAGE_CONTRACT_MAP } from "../lib/safe-id.mjs";
-import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
+import { resolveRequiredSkills, validateReviewBundle } from "../required-skill-resolver.mjs";
+import { validateReviewerOutput } from "../reviewer-output-validator.mjs";
 
 describe("wh-review v4 Phase 1 contract foundation", () => {
   it("uses the workflow stage names as the only contract names", () => {
@@ -58,6 +59,45 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
       expect(contract).toContain("review-packet.v1");
       for (const field of fields) expect(contract).toContain(`\`${field}\``);
       expect(contract).not.toMatch(/git\s+(diff|status|log)|\bgrep\b|\bls\b|执行命令|完整\s*Read|tasks\/|task[-_]id|task_tracking|WORKFLOWHUB/i);
+    }
+  });
+
+  it("makes packet fields conditional for make-decision tracks", () => {
+    const schema = JSON.parse(readFileSync(new URL("../../schemas/review-packet.schema.json", import.meta.url), "utf8"));
+    expect(schema.required).not.toContain("decision_log_excerpt");
+    expect(JSON.stringify(schema.allOf)).toContain("direction");
+    expect(JSON.stringify(schema.allOf)).toContain("detail");
+  });
+
+  it("rejects empty skill results for stages with required packet lenses", () => {
+    const outcome = validateReviewerOutput({
+      stage: "build-plan",
+      output: { findings: [], checklist: [], skillResults: [] },
+    });
+    expect(outcome.valid).toBe(false);
+    expect(outcome.errors).toContain("missing required skill result: spec-analyze");
+  });
+
+  it("forbids dot-dot in review intent identifiers", () => {
+    const schema = JSON.parse(readFileSync(new URL("../../schemas/review-intent.schema.json", import.meta.url), "utf8"));
+    expect(schema.properties.task_id.pattern).toContain("(?!.*\\.\\.)");
+    expect(schema.properties.review_flow_id.pattern).toContain("(?!.*\\.\\.)");
+  });
+
+  it("rejects traversal, symlink, hardlink, and directory bundle entries", () => {
+    const root = mkdtempSync(join(tmpdir(), "bundle-attack-"));
+    const skill = join(root, "review");
+    mkdirSync(skill);
+    writeFileSync(join(skill, "SKILL.md"), "skill");
+    writeFileSync(join(skill, "outside.md"), "outside");
+    const linked = join(skill, "linked.md");
+    const hardlinked = join(skill, "hardlinked.md");
+    symlinkSync(join(skill, "outside.md"), linked);
+    linkSync(join(skill, "outside.md"), hardlinked);
+    for (const files of [["../outside.md"], ["SKILL.md", "dir"], ["SKILL.md", "linked.md"], ["SKILL.md", "hardlinked.md"]]) {
+      if (files.includes("dir")) mkdirSync(join(skill, "dir"), { recursive: true });
+      writeFileSync(join(skill, "review-bundle.json"), JSON.stringify({ version: 1, files }));
+      expect(() => validateReviewBundle({ skillDir: skill, name: "review" })).toThrow(/bundle/i);
     }
   });
 });

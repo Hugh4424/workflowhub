@@ -4,10 +4,10 @@
   "type": "object",
   "required": ["task_id", "stage", "review_flow_id", "business_round", "contract_hash", "material_manifest_hash", "skill_bundle_hash", "idempotency_key"],
   "properties": {
-    "task_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "task_id": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._-]+$" },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "review_track": { "type": ["string", "null"] },
-    "review_flow_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "review_flow_id": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._-]+$" },
     "business_round": { "type": "integer", "minimum": 1 },
     "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "material_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
