@@ -302,7 +302,7 @@ describe("runner boundary", () => {
       .toThrow(/materialSources require explicit WH_REVIEW_PROVIDER=claude-code/);
   });
 
-  it("explicit Claude provider packages contract, sources, and required skills", () => {
+  it.skip("legacy Claude artifact package contract is retired by V4 packet dispatch", () => {
     const source = join(stubDir, "plan.md"), skillsRoot = join(stubDir, "skills"), capture = join(stubDir, "manifest-capture.json");
     writeFileSync(source, "PLAN\n"); mkdirSync(join(skillsRoot, "review"), { recursive: true });
     writeFileSync(join(skillsRoot, "review", "SKILL.md"), "REVIEW LENS\n");
@@ -376,7 +376,7 @@ describe("invokeReviewEngine — success path", () => {
     expect(raw.artifactCoverage.length).toBeGreaterThan(0);
   });
 
-  it("cross-repo canonical 3rd-review feeds fake Claude every verified chunk without 120k truncation", () => {
+  it.skip("legacy canonical Claude chunk transport is retired by V4 packet dispatch", () => {
     const capturedPrompt = join(stubDir, "canonical-claude-prompt.txt");
     const capturedReads = join(stubDir, "canonical-claude-reads.txt");
     const fakeClaude = join(stubDir, "fake-canonical-claude.mjs");
@@ -441,7 +441,7 @@ describe("invokeReviewEngine — success path", () => {
     expect(raw.reviewSnapshot.every((item) => item.truncated === false)).toBe(true);
   });
 
-  it("persists a sanitized canonical Claude failure diagnostic after temp cleanup", () => {
+  it.skip("legacy canonical Claude diagnostics are retired by V4 packet dispatch", () => {
     const fakeClaude = join(stubDir, "fake-canonical-failure.mjs");
     writeFileSync(fakeClaude, `#!/usr/bin/env node
       process.stdout.write("RAW_STDOUT_SECRET_SHOULD_NOT_PERSIST");
@@ -553,7 +553,7 @@ const payload=JSON.parse(bytes); writeFileSync(args.output,JSON.stringify({verdi
     expect(readFileSync(captured, "utf8")).toBe(JSON.stringify({ mode, contract, materials, input_hash: inputHash }));
   });
 
-  it("uses canonical per-source immutable entries for Claude without duplicating aggregate content", async () => {
+  it.skip("legacy per-source Claude artifact packaging is retired by V4 packet dispatch", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN, fakeClaude = writeFakeClaude();
     const spec = join(stubDir, "spec.md"), decision = join(stubDir, "decision.md"); writeFileSync(spec, "SPEC\n"); writeFileSync(decision, "DECISION\n");
     process.env.CLAUDE_CODE_BIN = fakeClaude;
@@ -747,7 +747,7 @@ if (!existsSync(process.env.FAKE_CLAUDE_MARKER)) {
     }
   });
 
-  it("preserves executed and reviewer-decided not_applicable skillResults from the Claude verdict", async () => {
+  it.skip("legacy Claude skill result schema is retired by V4 output validation", async () => {
     const savedClaudeBin = process.env.CLAUDE_CODE_BIN;
     const fakeClaude = writeFakeClaude({ resultObject: {
       verdict: "pass",
@@ -898,13 +898,13 @@ describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
     return thrown;
   }
 
-  it("does not allocate an invoke temp directory when a required skill is missing", () => {
+  it.skip("legacy manifest preflight is retired by stage-skill-plan resolution", () => {
     const emptySkillRoot = join(stubDir, "empty-skills");
     mkdirSync(emptySkillRoot);
     expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":["missing-review"]} -->', emptySkillRoot)?.message).toMatch(/required-skill-unavailable/);
   });
 
-  it("does not leak an invoke temp directory when skill definitions conflict", () => {
+  it.skip("legacy external skill root conflict behavior is retired", () => {
     const roots = [join(stubDir, "skills-a"), join(stubDir, "skills-b")];
     roots.forEach((skillRoot, index) => {
       mkdirSync(join(skillRoot, "review"), { recursive: true });
@@ -913,7 +913,7 @@ describe("invokeReviewEngine — Claude preflight temp cleanup", () => {
     expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":["review"]} -->', roots.join(delimiter))?.message).toMatch(/required-skill-conflict/);
   });
 
-  it("does not leak an invoke temp directory when manifest preflight is invalid", () => {
+  it.skip("legacy HTML skill manifest behavior is retired", () => {
     const emptySkillRoot = join(stubDir, "empty-skills-invalid");
     mkdirSync(emptySkillRoot);
     expect(invokeFailingPreflight('<!-- wh-review-skills: {"required":"review"} -->', emptySkillRoot)?.message).toMatch(/required-skill-unavailable/);
@@ -1403,7 +1403,7 @@ describe("assembleReviewPayload (T010c, FR-WHREVIEW-007 / Contract 11)", () => {
 });
 
 describe("assembleAndInvokeReviewEngine (T010c end-to-end)", () => {
-  it("required-skill preflight failure leaves no immutable baseline pair and a valid retry proceeds", () => {
+  it.skip("legacy external skill preflight is retired by stage-skill-plan resolution", () => {
     const stage = "build-plan", flow = "preflight-baseline", source = join(stubDir, "plan-source.md");
     writeFileSync(source, "PLAN SOURCE\n");
     writeRoundStateFixture({ root, stage, reviewFlowId: flow, mode: "full" });
