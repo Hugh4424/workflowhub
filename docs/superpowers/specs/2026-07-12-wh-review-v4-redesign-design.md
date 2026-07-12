@@ -80,7 +80,7 @@ delivery mode 只有两种：`file_only` 要求 provider 从私有 workspace 读
 task_id + stage + review_track + review_flow_id
 ```
 
-首轮以完整、冻结的合同、材料和技能 bundle 调用 `3rd-review` v4，保存 `initial_runtime_id`、首轮 completed provider 集、每个 provider 的业务校验结果和全部 hash。`BrokerClient` 的可执行路径来自 workflowhub 配置 `third_review.command`，可为 PATH 命令或显式 node/script argv；不得硬编码个人绝对路径。启动时按需执行 `doctor` 验证该配置。broker 自己保存 provider 原生 session；`wh-review` 不接收、不伪造、不直接传 session id。
+首轮以完整、冻结的合同、材料和技能 bundle 调用 `3rd-review` v4，保存 `initial_runtime_id`、首轮 completed provider 集、每个 provider 的业务校验结果和全部 hash。`BrokerClient` 的可执行路径来自 workflowhub 配置 `third_review.command`，可为 PATH 命令或显式 node/script argv；不得硬编码个人绝对路径。启动时按需执行 `doctor` 验证该配置。BrokerClient 接收并仅在 private RoundReceipt 保存 broker 返回的 `runtime_id`、每 provider `session_id`、raw output ref/hash 与 transport status；它们绝不进入 continuation request、core receipt、报告或 stage-result。续跑唯一传 `initial_runtime_id`，不伪造也不直接传 session id。
 
 第 2 轮及以后总是调用：
 
@@ -129,7 +129,51 @@ publish 再校验 disposition：hard invariant finding 不得被 disposition 标
 
 异常状态矩阵是 ADR 的必需附件，至少覆盖 broker timeout、attachment copy/hash failure、`NO_CAPABLE_PROVIDER`、provider 非 JSON、business-invalid、lock 争用、disposition 超限、runtime 被 TTL 清理和 delta 不一致。每种状态固定 retry、diagnostic 和 blocked 结果。
 
-## 7. 迁移顺序
+## 7. 完整 review packet 与执行语义
+
+`review-packet.v1.json` 是所有 provider 的唯一审查输入。`ReviewRoundFacade.prepare()` 在启动 broker 前生成并校验同一个 `packet_hash`；任一必需材料缺失时写 `MATERIAL_INCOMPLETE` diagnostic 并停止，不能调用 provider。packet 固定含：
+
+```text
+packet_hash / manifest_hash / diff_sha256
+真实 unified diff / changed_files(path, hash, size)
+AC 与设计摘录 / host-verified 测试证据
+stage contract 与 skill bundle hashes / review round 元数据
+```
+
+BrokerClient 唯一允许的生产调用是：
+
+```text
+<third_review.command> run --config=<config> --request=<v4-request> [--attachments=...]
+```
+
+禁止调用 `run-heterologous-review.mjs`，禁止 `--diff`、`--output` 和任何旧 runner payload。静态测试扫描 `skills/wh-review` 和 `workflows/`，发现上述字符串或绕过 BrokerClient 的直接调用即失败。
+
+每个 adapter 的 cwd 只能是 broker provider-private workspace，其中只含 review packet、冻结 skill bundle 和 broker 自身普通配置；不得挂载 workflowhub repo、task 目录或任何绝对宿主路径。provider prompt 明确规定：只审 packet，不执行 git，不读取真实 repo，不以绝对路径索取材料。adapter sandbox/argv fixture 必须证明此约束；provider 返回 `packet_hash` 和 `diff_sha256`，不匹配即 packet incomplete。
+
+每个 provider outcome 采用三轴，互不替代：
+
+```text
+transport_status: completed | cancelled | authentication_failed | timeout | failed
+packet_status: complete | material_incomplete | hash_mismatch
+semantic_verdict: pass | revise_required | escalate_to_human | null
+```
+
+`CANCELLED` 必有 `cancel_source`：`user`、`workflow_shutdown`、`broker_idle_timeout` 或 `broker_max_duration`。认证失败、材料不足、超时、取消、进程失败、非 JSON 都是 transport/packet 诊断，`semantic_verdict=null`；只有 `completed + complete + business_valid` 的输出能拥有语义 verdict。
+
+删除 wh-review 旧 `spawnSync` 600 秒外层 timeout，不得以旧 wall timeout 杀 V4 provider。若 workflow 明确配置等待上限，BrokerClient 只能调用 `3rd-review cancel`，并写 `cancel_source=workflow_shutdown` 与原始 runtime/provider；不得把取消伪装成 reviewer verdict。
+
+aggregate 仅输入满足以下谓词的 provider outcome：
+
+```text
+transport_status == completed
+&& packet_status == complete
+&& business_valid == true
+&& semantic_verdict != null
+```
+
+`cancelled`、认证失败、timeout、材料不足、hash 不符、非 JSON、业务无效和进程失败一律不能参与 finding 合并。private evidence 路径固定为 `<task>/reviews/private/round-.../{review-packet.json,manifest.json,broker-run.json,providers/<provider>.raw.txt,round-receipt.json}`；raw 回显 packet_hash、diff_sha256 与 smoke marker 后才可作为 packet 完整证据。
+
+## 8. 迁移顺序
 
 1. 建立上述 contracts、schema、stage-skill-plan、provider capability 表、legacy-rule-ledger 和附件传输 ADR；冻结旧规则的保留、迁移或删除理由。
 2. 迁移五个 report-only 技能及其必要静态引用；为每个技能写原 gstack 依赖、替代与移除证明；静态检查禁止 gstack、`$HOME`、网络、文件写和子进程引用。将 resolver 改为仓库唯一来源；修正 `spec-analyze`、intake/test manifest。
@@ -139,7 +183,7 @@ publish 再校验 disposition：hard invariant finding 不得被 disposition 标
 
 删除任何旧生产文件前，检查目标是否包含用户未提交修改；有修改立即中止并列出文件，不能覆盖。
 
-## 8. 验收
+## 9. 验收
 
 - contracts 是唯一规则源；没有 reviewers 重复正文；direction 与 detail 材料隔离。
 - 所有 required skills 都从 workflowhub/skills 解析；gstack 根被移除后仍可运行。
@@ -151,3 +195,4 @@ publish 再校验 disposition：hard invariant finding 不得被 disposition 标
 - 五个 workflow 无旧 runner/同级直接调用；至少每个 stage 有 mock E2E，至少一个 stage 有真实 provider 首轮加 continuation smoke。
 - 附件边界拒绝 symlink、hard link、特殊文件、路径逃逸和 hash 不符；manifest root/cwd 解析固定；Kimi、Codex、Claude、OpenCode 的私有 workspace 行为均有 adapter 测试。
 - mock broker 覆盖 A/B provider 选择、技能依赖闭包、reset、TTL 到期和 `RoundFacade.run/publish` schema。
+- OpenCode 与 Kimi 的真实 smoke 使用同一 review-packet.v1，二者都必须从 raw output 回显唯一 diff marker、packet_hash、diff_sha256；证据落入 private evidence 路径。
