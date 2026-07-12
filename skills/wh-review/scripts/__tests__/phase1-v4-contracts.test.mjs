@@ -68,6 +68,11 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     expect(schema.required).not.toContain("decision_log_excerpt");
     expect(JSON.stringify(schema.allOf)).toContain("direction");
     expect(JSON.stringify(schema.allOf)).toContain("detail");
+    expect(schema.required).not.toEqual(expect.arrayContaining(["planning_artifacts", "verification_closure", "test_evidence"]));
+    const directionRule = schema.allOf.find((rule) => rule.if?.properties?.review_track?.const === "direction");
+    expect(JSON.stringify(directionRule.then)).toContain("planning_artifacts");
+    expect(JSON.stringify(directionRule.then)).toContain("verification_closure");
+    expect(JSON.stringify(directionRule.then)).toContain("test_evidence");
     const contract = readFileSync(new URL("../../contracts/make-decision.md", import.meta.url), "utf8");
     const direction = contract.slice(contract.indexOf("review_track: direction"), contract.indexOf("review_track: detail"));
     expect(direction).not.toContain("acceptance_design_excerpt");

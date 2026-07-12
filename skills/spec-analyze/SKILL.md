@@ -23,13 +23,13 @@ Read only `review-packet.v1` and the frozen bundle. Use `planning_artifacts` in 
 
 Return a concise `lens-only` result for `skillResults`. This lens evaluates only the packet and does not create artifacts.
 
-## Local workflow compatibility
+## Review semantics
 
-The standalone local report remains read-only and 不阻断. It accepts spec.md, plan.md, and tasks.md and records its artifact below `specs/{task-id}/cross-artifact-analysis.md` with `facts.analysis_ref`. A missing local artifact is fail-loud. This section is for the local workflow only; the frozen review bundle exposes `packet-lens.md`, not this workflow contract.
-
-Scan categories: inconsistency, duplicate, ambiguity, underdefined, and constitution-alignment. Constitution alignment is record-only, 不阻断.
+This report-only lens is read-only and 不阻断. Scan categories: inconsistency, duplicate, ambiguity, underdefined, and constitution-alignment. Constitution alignment is record-only, 不阻断.
 
 Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, and `line_or_anchor`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
+
+Historical packet anchors can identify `spec.md`, `plan.md`, and `tasks.md`; a supplied anchor may use `specs/{task-id}/cross-artifact-analysis.md` and `facts.analysis_ref`. This lens never creates or updates that artifact.
 
 ## Severity and metrics
 
