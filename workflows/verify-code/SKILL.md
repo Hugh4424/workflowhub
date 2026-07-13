@@ -219,7 +219,7 @@ wh-review 的 pass core receipt 尚不存在，禁止把 `final-test-report.md` 
 fresh acceptance 可写 `pass`，但 `review_status` 必须写
 `pending_current_wh_review`，`stage-result.status` 用 `unknown`，并明确
 `close_ready_for_merge_gate=false`、merge/cleanup blocked until current
-wh-review pass。不得让 `facts.review.verdict=pass` 指向上一轮
+wh-review pass。不得让 `facts.review.semantic_verdict=pass` 指向上一轮
 `revise_required` core receipt。当前轮 wh-review 返回 semantic `pass` 后，才允许在步骤⑤
 最终落盘时把 `review_status=pass`、`status=success` 写入 stage-result。
 

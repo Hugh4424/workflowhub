@@ -152,18 +152,15 @@ export function validateStageResult(stage, artifact) {
       }
     }
     if (facts.review && typeof facts.review === "object" && !Array.isArray(facts.review)) {
-      const artifactPaths = [
-        facts.review.artifact_path,
-        ...(
-          Array.isArray(facts.review.artifact_paths)
-            ? facts.review.artifact_paths
-            : []
-        ),
-      ].filter((path) => typeof path === "string" && path.trim() !== "");
-      if (artifactPaths.length === 0) {
-        errors.push(`facts["review"] for stage "build-code" must include artifact_path or artifact_paths`);
-      } else if (!artifactPaths.some((path) => path.endsWith(".json"))) {
-        errors.push(`facts["review"] for stage "build-code" must reference a raw JSON review artifact`);
+      const review = facts.review;
+      const allowedReviewKeys = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
+      if (Object.keys(review).some((key) => !allowedReviewKeys.has(key))
+        || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
+        || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
+        || typeof review.needs_human !== "boolean") {
+        errors.push(`facts["review"] for stage "build-code" must contain only core_receipt_hash, semantic_verdict, and needs_human`);
+      } else if (review.semantic_verdict !== "pass" || review.needs_human !== false) {
+        errors.push(`facts["review"] for stage "build-code" must be a published pass with needs_human:false`);
       }
     } else if ("review" in facts) {
       errors.push(`facts["review"] for stage "build-code" must be an object`);

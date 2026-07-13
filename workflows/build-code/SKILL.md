@@ -120,7 +120,7 @@ When all phases are complete, assemble the stage-result content as a structured 
 
 - `facts.changed` — **array** of changed file paths (one entry per file, not a comma-joined string).
 - `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...], command: <string>, risk_level: <P0|P1|P2|P3|null> }`. The `command` field is required for verify-code downstream consumption (M9 C1). For multi-phase tasks, also include `phases: [{ phase_id, risk_level }, ...]` so each phase's risk level is traceable (FR-RISK-001).
-- `facts.review` — V4 core receipt hash and semantic verdict.
+- `facts.review` — 仅 `{ core_receipt_hash, semantic_verdict, needs_human }`；不得写入 raw artifact 或私有路径。
 - `facts.worktree_root` — **absolute path string** for the task implementation worktree that downstream stages must enter before reading or verifying implementation artifacts.
 - `facts.task_tracking_root` — **absolute path string** for the task execution-record root used to locate `{task-id}` stage artifacts. This must be explicit; downstream stages must not infer it from their current checkout.
 - `facts.phase_completion` — **struct** copied from accepted PHASE_RESULT records: `{ commit_records: [{ phase_id, commit_sha }], no_change_records: [{ phase_id, no_change_reason }] }`. At least one record must exist across the two arrays. File-changing phases use `commit_records`; no-change phases use `no_change_records`.

@@ -108,53 +108,23 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
   }
 }
 
-function reviewArtifacts(phaseResult, baseDir, errors) {
-  const paths = [
-    ...asArray(phaseResult.review?.artifact_paths),
-    phaseResult.review?.artifact_path,
-  ].filter(nonEmptyString);
-
-  const artifacts = [];
-  for (const path of paths) {
-    const artifact = readArtifact(baseDir, path, "review", errors);
-    if (artifact) artifacts.push(artifact.data);
-  }
-  return artifacts;
-}
-
-function isIndependentReviewArtifact(candidate) {
-  return (
-    candidate.source === "third_party" ||
-    candidate.source === "heterogeneous" ||
-    candidate.trueCrossEngine === true
-  );
-}
-
-function checkReview(phaseResult, baseDir, errors, checked) {
+function checkReview(phaseResult, _baseDir, errors, checked) {
   checked.push("heterogeneous-review");
   const review = phaseResult.review;
   if (!review || typeof review !== "object") {
     errors.push("review result missing");
     return;
   }
-
-  const artifacts = reviewArtifacts(phaseResult, baseDir, errors);
-  if (artifacts.length === 0) {
-    errors.push("review must include at least one readable artifact path");
+  const allowed = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
+  if (Array.isArray(review) || Object.keys(review).some((key) => !allowed.has(key))
+    || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
+    || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
+    || typeof review.needs_human !== "boolean") {
+    errors.push("review must contain only core_receipt_hash, semantic_verdict, and needs_human");
     return;
   }
-  if (review.verdict !== undefined && review.verdict !== "pass") {
-    errors.push(`inline review verdict must not contradict artifact pass (got ${JSON.stringify(review.verdict)})`);
-  }
-  const nonPassArtifacts = artifacts.filter((artifact) => artifact?.verdict !== "pass");
-  if (nonPassArtifacts.length > 0) {
-    errors.push("all readable review artifact verdicts must be \"pass\"");
-  }
-  const independentPass = artifacts.some(
-    (artifact) => artifact?.verdict === "pass" && isIndependentReviewArtifact(artifact)
-  );
-  if (!independentPass) {
-    errors.push("at least one passing review artifact must be third_party/heterogeneous or trueCrossEngine; same_source/pass is not sufficient");
+  if (review.semantic_verdict !== "pass" || review.needs_human !== false) {
+    errors.push("review must be a published pass with needs_human:false");
   }
 }
 
