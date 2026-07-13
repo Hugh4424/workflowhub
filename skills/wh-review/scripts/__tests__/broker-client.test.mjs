@@ -6,6 +6,37 @@ import { join } from "node:path";
 import { BrokerClient } from "../broker-client.mjs";
 
 describe("BrokerClient", () => {
+  it("discovers, normalizes, freezes, and caches broker-owned capabilities from doctor stdout", async () => {
+    let calls = 0;
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl() {
+      calls += 1; const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, capabilities: { attachments: true, cancel_source: true }, verification: "executable_only", providers: [
+        { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
+        { provider: "kimi", status: "disabled", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      ] })); child.emit("close", 0); }); return child;
+    } });
+    const first = await client.discoverCapabilities();
+    expect(first).toEqual({ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+      { provider: "kimi", status: "disabled", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
+    ] });
+    expect(Object.isFrozen(first)).toBe(true); expect(Object.isFrozen(first.providers[0].capabilities.attachment_delivery)).toBe(true);
+    await expect(client.discoverCapabilities()).resolves.toBe(first); expect(calls).toBe(1);
+  });
+
+  it.each([
+    [{ version: 3, capabilities: { attachments: true, cancel_source: true }, providers: [] }, /version/],
+    [{ version: 4, capabilities: { attachments: true }, providers: [] }, /capabilities/],
+    [{ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }, { provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }, /duplicate/],
+    [{ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "kimi", status: "online", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }, /status/],
+    [{ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "kimi", status: "ready", capabilities: { continuation: "yes", attachment_delivery: ["file_only"] } }] }, /continuation/],
+    [{ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["auto"] } }] }, /attachment_delivery/],
+  ])("rejects malformed doctor capability snapshots", async (stdout, error) => {
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl() {
+      const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); queueMicrotask(() => { child.stdout.emit("data", JSON.stringify(stdout)); child.emit("close", 0); }); return child;
+    } });
+    await expect(client.discoverCapabilities()).rejects.toThrow(error);
+  });
   it("uses only the v4 run/config/request CLI boundary and leaves timeout ownership to broker", async () => {
     const calls = [];
     const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl(command, args) {

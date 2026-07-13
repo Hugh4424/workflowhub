@@ -18,5 +18,6 @@ describe("wh-review v4 CLI", () => {
     for (const forbidden of ["invoke-review-engine", "prepareRoundState", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
     expect(source).toContain("BrokerClient");
     expect(source).toContain('command !== "run" && command !== "reset"');
+    expect(source).not.toMatch(/provider_capabilities|providerCapabilities/);
   });
 });

@@ -46,6 +46,7 @@ function output(input, verdict = "pass", severity = "blocking") {
     ...(verdict === "revise_required" ? { rootCause: "cause", fixApproach: "fix" } : {}) });
 }
 function fakeBroker(callback) { return { run: callback }; }
+function capabilityBroker(callback, snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }) { return { run: callback, async discoverCapabilities() { return snapshot; } }; }
 function git(root, args) { return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim(); }
 function trustedPacket(root) {
   git(root, ["init", "-q"]); git(root, ["config", "user.email", "review@example.test"]); git(root, ["config", "user.name", "Review Test"]);
@@ -64,6 +65,21 @@ function trustedPacket(root) {
 }
 
 describe("ReviewRoundFacade", () => {
+  it("rejects caller capabilities and derives candidates from doctor after acquiring the task lock", async () => {
+    const tracking = root(); const lock = join(tracking, "doctor-owned", "reviews", "private", "flows", "doctor-owned.lock");
+    const broker = capabilityBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }), {
+      version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+        { provider: "codex", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "kimi", status: "disabled", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      ],
+    });
+    const originalDiscover = broker.discoverCapabilities; broker.discoverCapabilities = async () => { expect(existsSync(lock)).toBe(true); return originalDiscover(); };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const value = packet({ root: tracking });
+    expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "rejected", host_provider: "codex", packet: value, changed_file_root: tracking, provider_capabilities: {} })).toThrow(/provider_capabilities.*caller/i);
+    const result = await facade.run(await facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
+    expect(result.intent.candidate_providers).toEqual(["opencode"]); expect(result.intent.continuable_providers).toEqual(["opencode"]);
+  });
   it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const trusted = trustedPacket(tracking);
