@@ -74,7 +74,7 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const lock = join(tracking, "doctor-owned", "reviews", "private", "flows", "doctor-owned.lock");
     const broker = capabilityBroker(async (request) => ({ providers: [
       { provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) },
-      { provider: "kimi", status: "completed", session_id: "disabled", output: output(request.packet) },
+      { provider: "/private/secret", status: "completed", session_id: "disabled", output: output(request.packet) },
     ] }), {
       version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
         { provider: "codex", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
@@ -87,7 +87,9 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "rejected", host_provider: "codex", packet: value, changed_file_root: tracking, provider_capabilities: {} })).toThrow(/provider_capabilities.*caller/i);
     const result = await facade.run(await facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
     expect(result.intent.candidate_providers).toEqual(["opencode"]); expect(result.intent.continuable_providers).toEqual(["opencode"]);
-    expect(result.provider_outcomes.find((item) => item.provider === "kimi")).toMatchObject({ business_valid: false, diagnostic: "PROVIDER_NOT_CANDIDATE" });
+    const unknown = result.provider_outcomes.find((item) => item.diagnostic === "UNKNOWN_PROVIDER");
+    expect(unknown).toMatchObject({ provider: null, business_valid: false });
+    expect(JSON.stringify(result)).not.toContain("/private/secret");
   });
   it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
