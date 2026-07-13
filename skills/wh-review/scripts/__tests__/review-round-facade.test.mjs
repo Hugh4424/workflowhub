@@ -75,11 +75,11 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.run(prepared)).rejects.toThrow(/sealed review packet was modified/);
   });
 
-  it("rechecks every frozen contract and skill bundle hash before attachments", async () => {
+  it("reads attachments only from the private prepare snapshot", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const contract = contractPathAndHash("build-code").contractPath; const original = readFileSync(contract, "utf8");
     const prepared = facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
-    try { writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`); await expect(facade.run(prepared)).rejects.toThrow(/attachment bundle or contract changed/); }
+    try { writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`); await expect(facade.run(prepared)).resolves.toMatchObject({ provider_outcomes: [] }); }
     finally { writeFileSync(contract, original); }
   });
 

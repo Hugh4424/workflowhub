@@ -72,6 +72,10 @@ function sealPacket(packet, changedFileRoot, hostDiffBuilder) {
   packet.packet_hash = packetHash(packet);
   return packet;
 }
+function verifySourceEvidence(packet, sourceSnapshot, required) {
+  if (!sourceSnapshot) { if (required) throw new Error("source evidence provider is required (base/head git evidence or explicit source_snapshot)"); return; }
+  if (sourceSnapshot.unified_diff !== packet.unified_diff || canonical(sourceSnapshot.changed_files) !== canonical(packet.changed_files)) throw new Error("source evidence provider does not match review packet");
+}
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
 function classifyTransport(item) {
@@ -111,7 +115,7 @@ export class ReviewRoundFacade {
     const actualBundleHash = bundleHash(resolution);
     if (packet.skill_bundle_hash !== actualBundleHash) return this.#materialIncomplete(input, "skill bundle hash mismatch");
     packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
-    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot, input.host_diff_builder); }
+    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot, input.host_diff_builder); verifySourceEvidence(packet, input.source_snapshot, input.require_source_evidence === true); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
@@ -124,7 +128,11 @@ export class ReviewRoundFacade {
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
       const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
-      return { intent, packet, input, lock, dir, resolution, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_attachment_hashes: { contract: sha(readFileSync(contractPath)), protocol: sha(readFileSync(protocolPath)) } };
+      const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
+      const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
+      freeze("review-packet.v1.json", safeJson(packet)); freeze("contracts/provider-protocol.md", readFileSync(protocolPath)); freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
+      for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
+      return { intent, packet, input, lock, dir, resolution, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments };
     } catch (error) { this.#releaseLock(lock); throw error; }
   }
 
@@ -165,7 +173,7 @@ export class ReviewRoundFacade {
       const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       this.#writeFlow(intent, { ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (this.#readFlow(intent)?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
       return result;
-    } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagedPacket) rmSync(attachmentPlan.stagedPacket, { force: true }); }
+    } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
 
   #prompt(intent, packet) {
@@ -225,18 +233,15 @@ export class ReviewRoundFacade {
       if (!value || value === ".." || value.startsWith("../")) throw new Error("MATERIAL_INCOMPLETE: attachment root must contain packet, contracts, and repository skills");
       return value;
     };
-    // The broker only copies files below one configured attachment root. Stage
-    // the packet under that root, then delete it after broker.run has returned.
-    const stagedPacket = join(root, ".wh-review-packets", `${prepared.intent.idempotency_key}.json`);
-    atomic(stagedPacket, safeJson(prepared.packet));
-    const add = (sourcePath, destination, embed = true) => { const bytes = readFileSync(sourcePath); return { source: rel(sourcePath), destination, size: bytes.length, sha256: sha(bytes), embed }; };
-    const { contractPath } = contractPathAndHash(prepared.intent.stage);
-    const protocol = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
-    const resolution = resolveRequiredSkills({ stage: prepared.intent.stage, reviewTrack: prepared.intent.review_track, ui: Boolean(prepared.input.ui) });
-    if (bundleHash(resolution) !== prepared.intent.skill_bundle_hash || bundleHash(resolution) !== prepared.frozen_bundle_hash || sha(readFileSync(contractPath)) !== prepared.frozen_attachment_hashes.contract || sha(readFileSync(protocol)) !== prepared.frozen_attachment_hashes.protocol) throw new Error("MATERIAL_INCOMPLETE: attachment bundle or contract changed after prepare");
-    const entries = [add(stagedPacket, "review-packet.v1.json"), add(protocol, "contracts/provider-protocol.md"), add(contractPath, `contracts/${prepared.intent.stage}.md`)];
-    for (const definition of resolution.definitions) for (const file of definition.bundle.files) entries.push(add(join(repositoryRoot, "skills", definition.name, file.path), `skills/${definition.name}/${file.path}`));
-    return { stagedPacket, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
+    // Attachments are copied exclusively from prepare's private immutable
+    // snapshot; source skills/contracts are never read again during run.
+    const stagingDir = join(root, ".wh-review-packets", prepared.intent.idempotency_key); const entries = [];
+    for (const frozen of prepared.frozen_attachments) {
+      const target = join(stagingDir, ...frozen.destination.split("/")); const bytes = readFileSync(frozen.path);
+      if (bytes.length !== frozen.size || sha(bytes) !== frozen.sha256) throw new Error("MATERIAL_INCOMPLETE: private frozen attachment changed");
+      atomic(target, bytes); entries.push({ source: rel(target), destination: frozen.destination, size: frozen.size, sha256: frozen.sha256, embed: true });
+    }
+    return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
   #outcome(item, packet, intent, input, directory) {
     const transport_status = classifyTransport(item); const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null };
