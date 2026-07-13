@@ -46,6 +46,8 @@ describe("reviewer-output validator", () => {
     for (const key of ["findings", "checklist", "pass_items", "skillResults"]) expect(schema.properties[key].items.additionalProperties).toBe(false);
     expect(schema.properties.findings.items.properties.late_finding).toEqual({ type: "boolean" });
     expect(schema.properties.findings.items.properties.rule_id.pattern).toBe("^(?:(?:DIR|DET)-)?[CH][1-9][0-9]*$");
+    expect(schema.properties.checklist.items.properties.id.pattern).toBe(schema.properties.findings.items.properties.rule_id.pattern);
+    expect(schema.properties.pass_items.items.properties.rule_id.pattern).toBe(schema.properties.findings.items.properties.rule_id.pattern);
 
     for (const mutate of [
       (item) => { item.output.extra = true; },

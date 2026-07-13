@@ -89,6 +89,33 @@ function advancePacket(root, previous) {
 }
 
 describe("ReviewRoundFacade", () => {
+  it("schema-validates packets and provider JSON at their boundaries", async () => {
+    const tracking = root(); const value = packet({ root: tracking }); value.fenced = "secret-value";
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    await expect(facade.prepare({ task_id: "packet-schema", stage: "build-code", review_flow_id: "flow", packet: value, repository_root: tracking })).rejects.toMatchObject({ message: expect.stringContaining("SCHEMA_VALIDATION_FAILED review-packet /fenced") });
+
+    const clean = packet({ root: tracking });
+    const providerFacade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const value = JSON.parse(output(request.packet)); value.fenced = "secret-value";
+      return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(value) }] };
+    }) });
+    const result = await providerFacade.run(providerFacade.prepare({ task_id: "provider-schema", stage: "build-code", review_flow_id: "flow", packet: clean, repository_root: tracking }));
+    expect(result.provider_outcomes.find((item) => item.provider === "opencode")).toMatchObject({ business_valid: false, diagnostic: "SCHEMA_VALIDATION_FAILED:/fenced" });
+  });
+
+  it("schema-validates dispositions before reading caller result fields", () => {
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: root(), broker: fakeBroker(async () => ({ providers: [] })) });
+    expect(() => facade.publish({ fenced: "secret-value" }, { items: [{ finding_id: "x", action: "ignore", evidence: "x" }] })).toThrow(/SCHEMA_VALIDATION_FAILED dispositions \/items\/0\/action/);
+  });
+
+  it("publishes only from the private receipt instead of caller-mutated result fields", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "revise_required") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "trusted-publish", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    result.provider_outcomes = [{ business_valid: true, semantic_verdict: "pass" }]; result.merged_findings = []; result.hard_gates = []; result.human_gates = [];
+    expect(() => facade.publish(result, { items: [] })).toThrow(/every finding requires exactly one disposition/);
+  });
+
   it("rejects caller capabilities and derives candidates from doctor after acquiring the task lock", async () => {
     const tracking = root(); const lock = join(tracking, "doctor-owned", "reviews", "private", "flows", "doctor-owned.lock");
     const broker = capabilityBroker(async (request) => ({ providers: [
@@ -105,6 +132,7 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const value = packet({ root: tracking });
     expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "rejected", host_provider: "codex", packet: value, changed_file_root: tracking, provider_capabilities: {} })).toThrow(/provider_capabilities.*caller/i);
     expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "delivery-rejected", host_provider: "codex", packet: value, changed_file_root: tracking, attachment_delivery: "always_embed" })).toThrow(/stage-skill-plan/i);
+    expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "hash-override", host_provider: "codex", packet: value, changed_file_root: tracking, allow_contract_hash_override: true })).toThrow(/contract hash override.*rejected/i);
     const result = await facade.run(await facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
     expect(result.intent.candidate_providers).toEqual(["opencode"]); expect(result.intent.continuable_providers).toEqual(["opencode"]);
     const unknown = result.provider_outcomes.find((item) => item.diagnostic === "UNKNOWN_PROVIDER");
@@ -463,13 +491,13 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("reads attachments only from the private prepare snapshot", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
     const contract = contractPathAndHash("build-code").contractPath; const original = readFileSync(contract, "utf8");
     const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking });
     try {
-      writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`);
+      writeFileSync(contract, original.replace("- H3:", "- H99:"));
       const result = await facade.run(prepared);
-      expect(result.provider_outcomes.every((item) => item.diagnostic === "PROVIDER_OUTCOME_MISSING")).toBe(true);
+      expect(result.provider_outcomes).toMatchObject([{ business_valid: true, packet_status: "complete", semantic_verdict: "pass" }]);
     }
     finally { writeFileSync(contract, original); }
   });

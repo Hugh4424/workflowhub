@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(here, "../route-decision-writer.mjs");
@@ -168,6 +169,17 @@ describe("AC2-2/AC2-3: route-decision two-phase write", () => {
       readFileSync(join(reviewsDir, files[0]), "utf8")
     );
     expect(record.total_round).toBe(2);
+  });
+
+  it("records the selected make-decision contract projection and hash", () => {
+    const taskId = "t-direction"; const stage = "make-decision"; const reviewFlowId = "flow-direction";
+    const prep = runCli(["prepare", `--task-id=${taskId}`, `--stage=${stage}`, "--review-track=direction", `--review-flow-id=${reviewFlowId}`, "--total-round=1"], { WORKFLOWHUB_TASK_DIR: taskDir });
+    expect(prep.exitCode).toBe(0);
+    const record = JSON.parse(readFileSync(join(taskDir, taskId, "reviews", `route-decision-${stage}-${reviewFlowId}.json`), "utf8"));
+    const source = readFileSync(join(contractsDir, "make-decision.md"), "utf8"); const first = source.indexOf("## review_track:"); const start = source.indexOf("## review_track: direction"); const next = source.indexOf("## review_track:", start + 1);
+    const projected = `${source.slice(0, first)}${source.slice(start, next)}`;
+    expect(record.review_track).toBe("direction");
+    expect(record.contract_hash).toBe(createHash("sha256").update(projected).digest("hex"));
   });
 
   it("unknown stage fails loud with non-zero exit", () => {
