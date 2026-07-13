@@ -9,7 +9,7 @@ import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
 import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
-import { reconcileFindingState, aggregateMakeDecisionTracks, validateClosureBundle } from "./finding-state.mjs";
+import { reconcileFindingState, aggregateMakeDecisionTracks, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -275,7 +275,13 @@ export class ReviewRoundFacade {
       const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource, stageContract.hardIds);
       const closureEvidence = closureCheck.items;
       closureBundleGates = closureCheck.unverifiedBlockingIds;
-      const crossStageCarryovers = checkedCarryovers(input.cross_stage_carryovers, previousFindings);
+      // Carryover state is host-owned and cumulative. Callers may only add or
+      // supersede an id; omitting an open item must never erase it from the
+      // next provider packet.
+      const crossStageCarryovers = mergeCrossStageCarryovers(
+        priorReceipt.delta?.cross_stage_carryovers ?? [],
+        checkedCarryovers(input.cross_stage_carryovers, previousFindings),
+      );
       delta = buildContinuationDelta({ previousPacket: priorPacket, currentPacket: packet, deltaSource, previousFindings, closureEvidence, crossStageCarryovers, requiredSkills: resolution.definitions });
       const prompt = continuationPrompt(delta, { stage: input.stage, reviewTrack }); const promptBytes = Buffer.byteLength(prompt, "utf8");
       if (promptBytes > this.continuationPromptMaxBytes) throw new Error(`CONTINUATION_PROMPT_TOO_LARGE: ${promptBytes} bytes exceeds host limit ${this.continuationPromptMaxBytes}`);

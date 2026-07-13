@@ -79,8 +79,8 @@ function trustedPacket(root) {
   };
   return refreshPacketHashes(value);
 }
-function advancePacket(root, previous) {
-  writeFileSync(join(root, "a"), "new\nline\nextra\nfixed\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "delta"]);
+function advancePacket(root, previous, content = "new\nline\nextra\nfixed\n") {
+  writeFileSync(join(root, "a"), content); git(root, ["add", "a"]); git(root, ["commit", "-qm", "delta"]);
   const base = previous.source_revision.base, head = git(root, ["rev-parse", "HEAD"]);
   const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
   const oldBytes = execFileSync("git", ["show", `${base}:a`], { cwd: root }); const bytes = execFileSync("git", ["show", `${head}:a`], { cwd: root });
@@ -133,6 +133,22 @@ describe("ReviewRoundFacade", () => {
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"));
     expect(receipt).toMatchObject({ disposition_attempts: 2, blocked_by_human_confirmation: true });
     expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: "fixed" }] })).toThrow(/human confirmation/i);
+  });
+
+  it("inherits cross-stage carryovers into later continuation packets unless the caller supersedes them", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "90909090-9090-4090-8090-909090909090", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
+    const initial = trustedPacket(tracking);
+    const first = await facade.run(facade.prepare({ task_id: "carryover-inherit", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    const receipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
+    receipt.delta = { cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "requires staging verification" }] };
+    writeFileSync(first.receipt_draft_ref, JSON.stringify(receipt));
+    const flowPath = join(tracking, "carryover-inherit", "reviews", "private", "flows", "build-code-flow.json");
+    const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(first.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
+    const secondPacket = advancePacket(tracking, initial);
+    const prepared = await facade.prepare({ task_id: "carryover-inherit", stage: "build-code", review_flow_id: "flow", packet: secondPacket, repository_root: tracking, continuation: true, closure_evidence: [] });
+    expect(prepared.delta.cross_stage_carryovers).toEqual([{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "requires staging verification" }]);
+    rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it("isolates make-decision tracks and publishes their aggregate stage result", async () => {
