@@ -16,17 +16,13 @@ import { fileURLToPath } from "node:url";
 import { contractPathAndHash } from "../skills/wh-review/scripts/lib/safe-id.mjs";
 import { loadTrustedThirdReviewConfig } from "../skills/wh-review/scripts/third-review-host-config.mjs";
 import { initialPrompt, continuationPrompt, buildContinuationDelta } from "../skills/wh-review/scripts/review-prompt.mjs";
+import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, "..");
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
-}
 function git(root, args, encoding = "utf8") { return execFileSync("git", args, { cwd: root, encoding }).trim(); }
 function bytes(root, revision, path) { return execFileSync("git", ["show", `${revision}:${path}`], { cwd: root }); }
 function run(command, args, { cwd, input } = {}) {
@@ -41,18 +37,6 @@ function run(command, args, { cwd, input } = {}) {
 }
 function commandParts(command) { return Array.isArray(command) ? command : [command]; }
 function write(path, value) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); writeFileSync(path, typeof value === "string" ? value : safeJson(value), { mode: 0o600 }); }
-function manifest(packet) {
-  return sha(canonical({
-    diff_sha256: packet.diff_sha256,
-    changed_files: packet.changed_files.map(({ path, old_path, status, sha256: fileHash, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: fileHash ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })),
-    raw_requirement: packet.raw_requirement,
-    decision_log_excerpt: packet.decision_log_excerpt ?? null,
-    acceptance_design_excerpt: packet.acceptance_design_excerpt ?? null,
-    planning_artifacts: packet.planning_artifacts ?? [], verification_closure: packet.verification_closure ?? [], test_evidence: packet.test_evidence ?? [], host_verified_facts: packet.host_verified_facts,
-    contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, source_revision: packet.source_revision,
-  }));
-}
-function packetHash(packet) { const value = { ...packet }; delete value.packet_hash; return sha(canonical(value)); }
 function reviewPacket(root, base, head, { roundKind = "initial", baselinePacketHash = null } = {}) {
   const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
   const current = bytes(root, head, "smoke.txt"); const previous = bytes(root, base, "smoke.txt");
@@ -64,7 +48,7 @@ function reviewPacket(root, base, head, { roundKind = "initial", baselinePacketH
     test_evidence: [{ name: "smoke-fixture", status: "passed", evidence: "git fixture commits were created locally" }], host_verified_facts: [{ fact: "The packet is generated from a disposable local git repository." }],
     contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])), source_revision: { base, head },
   };
-  packet.diff_sha256 = sha(unified_diff); packet.manifest_hash = manifest(packet); packet.packet_hash = packetHash(packet);
+  packet.diff_sha256 = sha(unified_diff); packet.manifest_hash = reviewManifestHash(packet); packet.packet_hash = reviewPacketHash(packet);
   return packet;
 }
 function setupRepository(root) {
@@ -87,14 +71,19 @@ function outputText(outcome) {
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
 function provider(outcomes, id) { return outcomes.find((item) => item?.provider === id); }
 
-export function assertProviderRound({ providerId, round, response, expectedMarker, expectedRuntimeId = null, requirePacketValidation = false } = {}) {
+export function assertProviderRound({ providerId, round, response, expectedMarker, expectedPacketHash, expectedDiffSha256, expectedRuntimeId = null, requirePacketValidation = false } = {}) {
   const outcome = provider(response?.providers ?? [], providerId);
   requireValue(outcome, `SMOKE_${providerId.toUpperCase()}_R${round}_MISSING_OUTCOME`);
   const status = outcome.status ?? outcome.transport_status;
   requireValue(status === "completed", `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: provider status=${status ?? "missing"}; ${outcome?.error?.code ?? outcome?.diagnostic ?? "no diagnostic"}`);
   requireValue(typeof outcome.session_id === "string" && outcome.session_id.length > 0, `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: session_id is missing`);
   requireValue(typeof outcome.raw_stdout_sha256 === "string" && /^[a-f0-9]{64}$/i.test(outcome.raw_stdout_sha256), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: raw_stdout_sha256 is missing`);
-  requireValue(outputText(outcome).includes(expectedMarker), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: provider output did not attest ${expectedMarker}`);
+  const raw = outputText(outcome);
+  requireValue(raw.includes(expectedMarker), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: provider output did not attest ${expectedMarker}`);
+  requireValue(typeof expectedPacketHash === "string" && /^[a-f0-9]{64}$/.test(expectedPacketHash), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: test packet_hash is invalid`);
+  requireValue(typeof expectedDiffSha256 === "string" && /^[a-f0-9]{64}$/.test(expectedDiffSha256), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: test diff_sha256 is invalid`);
+  requireValue(raw.includes(expectedPacketHash), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: provider raw output did not attest packet_hash`);
+  requireValue(raw.includes(expectedDiffSha256), `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: provider raw output did not attest diff_sha256`);
   if (expectedRuntimeId !== null) requireValue(response.runtime_id === expectedRuntimeId, `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: runtime_id changed instead of continuing`);
   if (requirePacketValidation) {
     requireValue(outcome.packet_status === "complete" && outcome.business_valid === true, `SMOKE_${providerId.toUpperCase()}_R${round}_FAIL: packet/business validation failed (${outcome.packet_status ?? "missing"}/${outcome.business_valid})`);
@@ -106,8 +95,8 @@ function privateReceipt(taskRoot, taskId, round) {
   requireValue(existsSync(path), `SMOKE_KIMI_R${round}_FAIL: wh-review private receipt is missing`);
   return { path, value: JSON.parse(readFileSync(path, "utf8")) };
 }
-function assertWhAggregate(receipt, expectedMarker, expectedRuntimeId = null) {
-  const result = receipt.value; const outcome = assertProviderRound({ providerId: "kimi", round: result.intent.business_round, response: { runtime_id: result.runtime_id, providers: result.provider_outcomes }, expectedMarker, expectedRuntimeId, requirePacketValidation: true });
+function assertWhAggregate(receipt, expectedPacket, expectedMarker, expectedRuntimeId = null) {
+  const result = receipt.value; const outcome = assertProviderRound({ providerId: "kimi", round: result.intent.business_round, response: { runtime_id: result.runtime_id, providers: result.provider_outcomes }, expectedMarker, expectedPacketHash: expectedPacket.packet_hash, expectedDiffSha256: expectedPacket.diff_sha256, expectedRuntimeId, requirePacketValidation: true });
   const eligible = result.provider_outcomes.filter((item) => item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid === true);
   requireValue(eligible.length === 1 && eligible[0].provider === "kimi", `SMOKE_KIMI_R${result.intent.business_round}_FAIL: aggregate included an incomplete provider outcome`);
   requireValue(result.merged_findings.every((finding) => Array.isArray(finding.providers) && finding.providers.every((id) => id === "kimi")), `SMOKE_KIMI_R${result.intent.business_round}_FAIL: aggregate finding provenance is invalid`);
@@ -131,9 +120,9 @@ function attachmentsFor(packet, attachmentRoot, bundleId) {
 function directPrompt(packet, round) {
   const contract = readFileSync(join(repository, "skills/wh-review/contracts/build-code.md"), "utf8");
   const intent = { contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash };
-  if (round === 1) return initialPrompt({ packet, intent, stageContract: contract, deliveryMode: "always_embed", requiredSkills: [] }) + "\nSmoke acceptance requirement: your JSON summary and evidence must quote R1_DIFF_MARKER exactly.";
+  if (round === 1) return initialPrompt({ packet, intent, stageContract: contract, deliveryMode: "always_embed", requiredSkills: [] }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, and quote R1_DIFF_MARKER exactly in evidence.";
   const delta = buildContinuationDelta({ previousPacket: packet.previous_packet, currentPacket: packet, deltaSource: { unified_diff: packet.delta_diff, changed_files: packet.delta_changed_files }, previousFindings: [], closureEvidence: [], crossStageCarryovers: [], requiredSkills: [] });
-  return continuationPrompt(delta, { stage: "build-code" }) + "\nSmoke acceptance requirement: your JSON summary and evidence must quote R2_DELTA_ONLY_MARKER exactly, and must not reopen R1_DIFF_MARKER.";
+  return continuationPrompt(delta, { stage: "build-code" }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, quote R2_DELTA_ONLY_MARKER exactly in evidence, and must not reopen R1_DIFF_MARKER.";
 }
 async function runThirdReview({ thirdReview, requestPath, responsePath, attachments = null, delivery = null }) {
   const [command, ...prefix] = commandParts(thirdReview.command);
@@ -183,21 +172,21 @@ async function main() {
     const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: r1Packet, task_tracking_root: taskRoot, repository_root: source };
     const kimiFirstInputPath = join(outputRoot, "kimi-r1-input.json"); write(kimiFirstInputPath, kimiFirstInput);
     await runWhReview({ inputPath: kimiFirstInputPath, responsePath: join(outputRoot, "kimi-r1-cli.json") });
-    const kimiR1 = privateReceipt(taskRoot, taskId, 1); const kimiOutcome1 = assertWhAggregate(kimiR1, "R1_DIFF_MARKER");
+    const kimiR1 = privateReceipt(taskRoot, taskId, 1); const kimiOutcome1 = assertWhAggregate(kimiR1, r1Packet, "R1_DIFF_MARKER");
     requireValue(kimiOutcome1.raw_output_ref && existsSync(kimiOutcome1.raw_output_ref), "SMOKE_KIMI_R1_FAIL: raw output evidence is missing");
 
     const r2 = advanceRepository(source); const r2Packet = reviewPacket(source, base, r2, { roundKind: "continuation", baselinePacketHash: r1Packet.packet_hash });
     const kimiSecondInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: r2Packet, task_tracking_root: taskRoot, repository_root: source, continuation: true, closure_evidence: closureEvidence(kimiR1) };
     const kimiSecondInputPath = join(outputRoot, "kimi-r2-input.json"); write(kimiSecondInputPath, kimiSecondInput);
     await runWhReview({ inputPath: kimiSecondInputPath, responsePath: join(outputRoot, "kimi-r2-cli.json") });
-    const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
+    const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, r2Packet, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
     requireValue(kimiOutcome2.session_id === kimiOutcome1.session_id, "SMOKE_KIMI_R2_FAIL: provider session_id changed instead of continuing");
 
     const opencodeR1Prompt = directPrompt(r1Packet, 1); const opencodeBundle = attachmentsFor(r1Packet, thirdReview.attachmentRoot, `smoke-${randomUUID()}`); attachmentStaging = opencodeBundle.staging;
     const opencodeR1Request = { version: 4, host_provider: "codex", prompt: opencodeR1Prompt, continuation: null, provider_allowlist: ["opencode"] };
     const opencodeR1RequestPath = join(outputRoot, "opencode-r1-request.json"); const opencodeR1ManifestPath = join(outputRoot, "opencode-r1-attachments.json"); write(opencodeR1RequestPath, opencodeR1Request); write(opencodeR1ManifestPath, opencodeBundle.manifest);
     const opencodeR1 = await runThirdReview({ thirdReview, requestPath: opencodeR1RequestPath, responsePath: join(outputRoot, "opencode-r1-response.json"), attachments: opencodeR1ManifestPath, delivery: "always_embed" });
-    const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER" });
+    const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: r1Packet.packet_hash, expectedDiffSha256: r1Packet.diff_sha256 });
     requireValue(opencodeOutcome1.delivery_used === "always_embed", "SMOKE_OPENCODE_R1_FAIL: expected always_embed delivery");
 
     const deltaDiff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", r1, r2], { cwd: source, encoding: "utf8" });
@@ -206,7 +195,7 @@ async function main() {
     const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id }, provider_allowlist: ["opencode"] };
     const opencodeR2RequestPath = join(outputRoot, "opencode-r2-request.json"); write(opencodeR2RequestPath, opencodeR2Request);
     const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: join(outputRoot, "opencode-r2-response.json") });
-    const opencodeOutcome2 = assertProviderRound({ providerId: "opencode", round: 2, response: opencodeR2, expectedMarker: "R2_DELTA_ONLY_MARKER", expectedRuntimeId: opencodeR1.runtime_id });
+    const opencodeOutcome2 = assertProviderRound({ providerId: "opencode", round: 2, response: opencodeR2, expectedMarker: "R2_DELTA_ONLY_MARKER", expectedPacketHash: r2Packet.packet_hash, expectedDiffSha256: r2Packet.diff_sha256, expectedRuntimeId: opencodeR1.runtime_id });
     requireValue(opencodeOutcome2.session_id === opencodeOutcome1.session_id, "SMOKE_OPENCODE_R2_FAIL: provider session_id changed instead of continuing");
 
     evidence.status = "PASS"; evidence.runtimes = { kimi: { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path] }, opencode: { runtime_id: opencodeR1.runtime_id, session_id: opencodeOutcome1.session_id, raw_stdout_sha256: [opencodeOutcome1.raw_stdout_sha256, opencodeOutcome2.raw_stdout_sha256], requests: [opencodeR1RequestPath, opencodeR2RequestPath] } };

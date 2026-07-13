@@ -10,13 +10,9 @@ import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./rev
 import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
+import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "./review-packet-integrity.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
-function canonical(value) {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
-}
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
@@ -39,7 +35,7 @@ function parseOutput(value) {
   if (fence) text = fence[1].trim();
   try { return { ok: true, value: JSON.parse(text) }; } catch { return { ok: false }; }
 }
-function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
+function packetHash(packet) { return reviewPacketHash(packet); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function addedDeltaLineKeys(unifiedDiff) {
   const keys = new Set();
@@ -61,10 +57,6 @@ function addedDeltaLineKeys(unifiedDiff) {
   }
   return keys;
 }
-function manifestValue(packet) {
-  const { packet_hash, manifest_hash, ...materials } = packet;
-  return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash, source_revision: materials.source_revision };
-}
 function sealPacket(packet) {
   validateSchema("review-packet", packet);
   const diff = sha(packet.unified_diff);
@@ -80,7 +72,7 @@ function sealPacket(packet) {
     if (["modified", "deleted", "renamed"].includes(entry.status) && (!/^[a-f0-9]{64}$/.test(entry.old_sha256 ?? "") || !Number.isSafeInteger(entry.old_size) || entry.old_size < 0)) throw new Error("invalid changed_files base snapshot");
     if (entry.status === "renamed" && !safeRelativePath(entry.old_path)) throw new Error("renamed changed_files entry requires old_path");
   }
-  const manifest = sha(canonical(manifestValue(packet)));
+  const manifest = reviewManifestHash(packet);
   if (packet.manifest_hash && packet.manifest_hash !== manifest) throw new Error("manifest_hash mismatch");
   packet.manifest_hash = manifest;
   packet.packet_hash = packetHash(packet);

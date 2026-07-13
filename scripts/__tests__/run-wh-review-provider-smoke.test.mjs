@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { assertProviderRound } from "../run-wh-review-provider-smoke.mjs";
+import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const script = fileURLToPath(new URL("../run-wh-review-provider-smoke.mjs", import.meta.url));
 
@@ -25,5 +26,20 @@ describe("run-wh-review-provider-smoke", () => {
       providerId: "kimi", round: 1, expectedMarker: "R1_DIFF_MARKER",
       response: { runtime_id: "runtime", providers: [{ provider: "kimi", status: "failed", error: { code: "PROVIDER_OUTPUT_INVALID" } }] },
     })).toThrow("SMOKE_KIMI_R1_FAIL: provider status=failed; PROVIDER_OUTPUT_INVALID");
+  });
+
+  it("requires raw provider evidence to echo the frozen packet and diff hashes", () => {
+    const packetHash = "a".repeat(64); const diffHash = "b".repeat(64);
+    expect(() => assertProviderRound({
+      providerId: "kimi", round: 1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: packetHash, expectedDiffSha256: diffHash,
+      response: { providers: [{ provider: "kimi", status: "completed", session_id: "native", raw_stdout_sha256: "c".repeat(64), output: `R1_DIFF_MARKER ${packetHash}` }] },
+    })).toThrow("SMOKE_KIMI_R1_FAIL: provider raw output did not attest diff_sha256");
+  });
+
+  it("defines packet_hash over canonical packet content without self-reference", () => {
+    const packet = { version: "review-packet.v1", manifest_hash: "m".repeat(64), diff_sha256: "d".repeat(64), nested: { b: 2, a: 1 } };
+    const hash = reviewPacketHash(packet);
+    expect(reviewPacketHash({ ...packet, packet_hash: "0".repeat(64) })).toBe(hash);
+    expect(reviewPacketHash({ ...packet, manifest_hash: "e".repeat(64) })).not.toBe(hash);
   });
 });
