@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateCoverage,
+  computeLedgerHash,
   computeRequirementContentHash,
   propagateStale,
   validateRequirementLedger,
@@ -27,13 +28,21 @@ function requirement(requirement_id, status = "accepted") {
 }
 
 function ledger() {
-  return {
-    schema_version: "1.0.0",
+  const value = {
+    schema_version: "v1",
+    source_manifest_hash: "a".repeat(64),
     requirements: [
       ...Array.from({ length: 9 }, (_, index) => requirement(`R${index + 1}`)),
       requirement("R10", "withdrawn"),
     ],
   };
+  value.ledger_hash = computeLedgerHash(value);
+  return value;
+}
+
+function refreshLedger(value) {
+  value.ledger_hash = computeLedgerHash(value);
+  return value;
 }
 
 describe("immutable requirement ledger", () => {
@@ -54,6 +63,7 @@ describe("immutable requirement ledger", () => {
     const input = ledger();
     input.requirements[0].acceptance_criteria_refs = [];
     input.requirements[0].content_hash = computeRequirementContentHash(input.requirements[0]);
+    refreshLedger(input);
 
     const result = validateRequirementLedger(input);
 
@@ -66,6 +76,7 @@ describe("immutable requirement ledger", () => {
     const withdrawn = input.requirements.find((item) => item.requirement_id === "R10");
     delete withdrawn.source_ref;
     withdrawn.content_hash = computeRequirementContentHash(withdrawn);
+    refreshLedger(input);
 
     const result = validateRequirementLedger(input);
 
@@ -78,6 +89,7 @@ describe("immutable requirement ledger", () => {
     const withdrawn = input.requirements.find((item) => item.requirement_id === "R10");
     delete withdrawn.artifact_refs;
     withdrawn.content_hash = computeRequirementContentHash(withdrawn);
+    refreshLedger(input);
 
     const result = validateRequirementLedger(input);
 
@@ -91,6 +103,7 @@ describe("immutable requirement ledger", () => {
     withdrawn.artifact_refs = [];
     withdrawn.acceptance_criteria_refs = [];
     withdrawn.content_hash = computeRequirementContentHash(withdrawn);
+    refreshLedger(input);
 
     expect(validateRequirementLedger(input)).toEqual({ ok: true, errors: [] });
   });
@@ -98,6 +111,7 @@ describe("immutable requirement ledger", () => {
   it("rejects a tampered requirement content hash", () => {
     const input = ledger();
     input.requirements[0].content_hash = "tampered";
+    refreshLedger(input);
 
     const result = verifyRequirementHashes(input);
 

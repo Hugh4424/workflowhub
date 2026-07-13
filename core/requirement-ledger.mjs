@@ -1,4 +1,4 @@
-import { contentHash } from "./canonical-source.mjs";
+import { contentHash, verifySourceManifest } from "./canonical-source.mjs";
 
 const STATUSES = new Set(["accepted", "withdrawn", "rejected", "unknown"]);
 
@@ -23,6 +23,11 @@ export function computeRequirementContentHash(record) {
   return contentHash(hashMaterial(record));
 }
 
+export function computeLedgerHash(ledger) {
+  const { ledger_hash: _ledgerHash, ...material } = ledger ?? {};
+  return contentHash(material);
+}
+
 export function verifyRequirementHashes(ledger) {
   const errors = [];
   for (const record of ledger?.requirements ?? []) {
@@ -31,6 +36,7 @@ export function verifyRequirementHashes(ledger) {
       errors.push(`requirement ${record.requirement_id} content hash mismatch`);
     }
   }
+  if (ledger?.ledger_hash !== computeLedgerHash(ledger)) errors.push("LEDGER_HASH_MISMATCH");
   return { ok: errors.length === 0, errors };
 }
 
@@ -48,7 +54,9 @@ function hasValidLineageReferences(record) {
 
 export function validateRequirementLedger(ledger) {
   const errors = [];
-  if (!ledger || typeof ledger !== "object" || !nonEmptyString(ledger.schema_version)) errors.push("schema_version is required");
+  if (!ledger || typeof ledger !== "object" || ledger.schema_version !== "v1") errors.push("schema_version must be v1");
+  if (!nonEmptyString(ledger?.source_manifest_hash)) errors.push("source_manifest_hash is required");
+  if (!nonEmptyString(ledger?.ledger_hash)) errors.push("ledger_hash is required");
   if (!Array.isArray(ledger?.requirements) || ledger.requirements.length === 0) {
     errors.push("requirements must be a non-empty array");
     return { ok: false, errors };
@@ -81,6 +89,52 @@ export function calculateCoverage(ledger) {
     withdrawn: requirements.filter((record) => record.status === "withdrawn").length,
     missing_ids: accepted.filter((record) => !hasCompleteLineage(record)).map((record) => record.requirement_id),
   };
+}
+
+export function createRequirementsCoverage(ledger) {
+  const coverage = calculateCoverage(ledger);
+  const unsigned = {
+    schema_version: "v1",
+    ledger_hash: ledger?.ledger_hash ?? "",
+    ...coverage,
+    missing_ids: [...coverage.missing_ids].sort(),
+  };
+  return { ...unsigned, coverage_hash: contentHash(unsigned) };
+}
+
+function asRef(value, fallbackKind, requirementId) {
+  if (validRef(value)) return { ...value };
+  return { kind: fallbackKind, uri_or_path: `source-manifest://${requirementId}`, content_hash: "" };
+}
+
+/**
+ * Creates an immutable ledger from a verified source manifest plus caller
+ * supplied decision/artifact/AC mappings.  Missing mappings are preserved as
+ * empty lineage and cause validation/aggregation to fail; no coverage is made
+ * up from observed step receipts.
+ */
+export function createRequirementLedger({ source_manifest, mappings = {} }) {
+  const sourceResult = verifySourceManifest(source_manifest);
+  if (!sourceResult.ok) return { ok: false, code: sourceResult.errors[0] ?? "SOURCE_MANIFEST_INVALID", errors: sourceResult.errors };
+  const requirements = source_manifest.atoms.map((atom) => {
+    const mapping = mappings[atom.requirement_id] ?? {};
+    const record = {
+      requirement_id: atom.requirement_id,
+      status: atom.status,
+      source_ref: { kind: "source_atom", uri_or_path: `source-manifest://${source_manifest.manifest_hash}/${atom.requirement_id}`, content_hash: atom.content_hash },
+      decision_ref: asRef(mapping.decision_ref, "decision", atom.requirement_id),
+      artifact_refs: Array.isArray(mapping.artifact_refs) ? mapping.artifact_refs.map((ref) => ({ ...ref })) : [],
+      acceptance_criteria_refs: Array.isArray(mapping.acceptance_criteria_refs) ? mapping.acceptance_criteria_refs.map((ref) => ({ ...ref })) : [],
+      upstream_hashes: [source_manifest.manifest_hash, atom.content_hash, ...(mapping.upstream_hashes ?? [])].filter(nonEmptyString).sort(),
+      stale: atom.stale === true || mapping.stale === true,
+    };
+    record.content_hash = computeRequirementContentHash(record);
+    return record;
+  }).sort((left, right) => left.requirement_id.localeCompare(right.requirement_id));
+  const unsigned = { schema_version: "v1", source_manifest_hash: source_manifest.manifest_hash, requirements };
+  const ledger = { ...unsigned, ledger_hash: contentHash(unsigned) };
+  const result = validateRequirementLedger(ledger);
+  return result.ok ? { ok: true, ledger } : { ok: false, code: "REQUIREMENT_LEDGER_INVALID", errors: result.errors, ledger };
 }
 
 export function propagateStale(ledger, changedHashes = []) {

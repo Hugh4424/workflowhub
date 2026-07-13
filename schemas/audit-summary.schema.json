@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "WorkflowHub canonical audit summary",
   "type": "object",
-  "required": ["schema_version", "workflow_run_id", "expected_steps", "observed_steps", "requirement_coverage", "facts", "verdict", "evidence_refs", "summary_hash"],
+  "required": ["schema_version", "workflow_run_id", "expected_steps", "observed_steps", "requirement_coverage", "facts", "verdict", "evidence_refs", "ledger_hash", "manifest_hash", "summary_hash"],
   "properties": {
     "schema_version": {"const": "v1"},
     "workflow_run_id": {"type": "string", "minLength": 1},
@@ -12,6 +12,8 @@
     "facts": {"type": "object"},
     "verdict": {"enum": ["pass", "fail"]},
     "evidence_refs": {"type": "array"},
+    "ledger_hash": {"type": ["string", "null"]},
+    "manifest_hash": {"type": ["string", "null"]},
     "summary_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
   },
   "additionalProperties": false

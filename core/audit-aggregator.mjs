@@ -1,180 +1,149 @@
-/**
- * Canonical observed-fact reconciler. Expected topology is supplied by the
- * manifest at the caller boundary; this narrow core never manufactures it.
- */
+/** Canonical expected-topology / observed-receipt reconciler. */
 import { createHash } from "node:crypto";
+import { calculateCoverage, validateRequirementLedger } from "./requirement-ledger.mjs";
 
-const STAGE_SLUGS = new Set(["bs", "bp", "bc", "vc", "md"]);
-const TERMINAL_STATUSES = new Set(["success", "failure", "skipped", "needs_human"]);
+const STAGE_SLUGS = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const TERMINAL_STATUSES = new Set(["success", "failure", "blocked", "skipped", "needs_human"]);
 
-function assertNonEmptyString(value, name) {
-  if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${name} must be a non-empty string`);
-}
-
-function stable(value) {
-  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(",")}}`;
-  }
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
 }
-
-function hashSummary(summary) {
-  return createHash("sha256").update(stable(summary)).digest("hex");
+function hashSummary(summary) { return createHash("sha256").update(canonicalJson(summary), "utf8").digest("hex"); }
+function nonEmptyString(value) { return typeof value === "string" && value.trim() !== ""; }
+function evidenceRef(value) {
+  if (!value || typeof value !== "object" || !nonEmptyString(value.kind) || !nonEmptyString(value.uri_or_path)) return null;
+  return { kind: value.kind, uri_or_path: value.uri_or_path, ...(nonEmptyString(value.content_hash) ? { content_hash: value.content_hash } : {}) };
+}
+function eventKey(event) { return `${event.stage_slug}\u0000${event.step_id}\u0000${event.attempt_id}`; }
+function expectedKey(stageSlug, step) { return `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`; }
+function validIdentity(event, stageSlug, workflowRunId) {
+  return event?.workflow_run_id === workflowRunId && event?.stage_slug === stageSlug
+    && Number.isInteger(event?.step_id) && event.step_id > 0 && nonEmptyString(event?.attempt_id)
+    && nonEmptyString(event?.timestamp) && !Number.isNaN(Date.parse(event.timestamp));
 }
 
-function evidenceRef(evidence) {
-  if (!evidence || typeof evidence !== "object" || typeof evidence.kind !== "string" || typeof evidence.uri_or_path !== "string") return null;
-  return { kind: evidence.kind, uri_or_path: evidence.uri_or_path, ...(typeof evidence.content_hash === "string" ? { content_hash: evidence.content_hash } : {}) };
+function requiredExpectedSteps(manifest, stageSlug, facts) {
+  if (!manifest || typeof manifest !== "object") { facts.unknown.push({ type: "MANIFEST_REQUIRED" }); return []; }
+  const declaredStage = manifest.stage_slug ?? stageSlug;
+  if (declaredStage !== stageSlug || !Array.isArray(manifest.steps) || manifest.steps.length === 0) {
+    facts.unknown.push({ type: "MANIFEST_INVALID" }); return [];
+  }
+  const seen = new Set();
+  const steps = manifest.steps.map((step) => ({
+    step_id: step?.step_id,
+    attempt_id: step?.attempt_id ?? "attempt-1",
+    order: step?.order,
+    depends_on: step?.depends_on ?? [],
+  }));
+  for (const step of steps) {
+    if (!Number.isInteger(step.step_id) || step.step_id < 1 || !nonEmptyString(step.attempt_id) || !Number.isInteger(step.order) || step.order < 1) {
+      facts.unknown.push({ type: "MANIFEST_INVALID_STEP", step_id: step.step_id ?? null }); continue;
+    }
+    const key = expectedKey(stageSlug, step);
+    if (seen.has(key)) facts.duplicate.push({ type: "duplicate_manifest_attempt", step_id: step.step_id, attempt_id: step.attempt_id });
+    seen.add(key);
+  }
+  return steps.sort((a, b) => a.order - b.order || a.step_id - b.step_id);
 }
 
-function canonicalEntry(event, stageSlug, workflowRunId) {
-  return event?.event_type === "step_entry" && event.workflow_run_id === workflowRunId && event.stage_slug === stageSlug &&
-    typeof event.step_id === "string" && typeof event.attempt_id === "string" && typeof event.timestamp === "string" && evidenceRef(event.entry_evidence);
-}
-
-function canonicalExit(event, stageSlug, workflowRunId) {
-  return event?.event_type === "step_exit" && event.workflow_run_id === workflowRunId && event.stage_slug === stageSlug &&
-    typeof event.step_id === "string" && typeof event.attempt_id === "string" && typeof event.timestamp === "string" &&
-    TERMINAL_STATUSES.has(event.terminal_status) && evidenceRef(event.completion_evidence);
-}
-
-function attemptKey(event) {
-  return `${event.stage_slug}\u0000${event.step_id}\u0000${event.attempt_id}`;
-}
-
-export function latestByStepId(events) {
-  const map = new Map();
-  for (const event of events) map.set(event.step_id, event);
-  return map;
-}
-
-export function latestByStepAndEntry(events) {
-  const map = new Map();
-  for (const event of events) map.set(`${event.step_id}::${event.exit_journal_entry_id ?? null}`, event);
-  return map;
+function uniqueEvidenceRefs(refs) {
+  return [...new Map(refs.map((ref) => [`${ref.kind}\u0000${ref.uri_or_path}\u0000${ref.content_hash ?? ""}`, ref])).values()];
 }
 
 /**
- * Builds the sole canonical verdict. It deliberately reports bad observed
- * records as facts rather than selecting a convenient retry or exit record.
+ * Manifest and ledger are required authority inputs.  This function never
+ * promotes observed entries into expected work and never calculates coverage
+ * from step counts.
  */
 export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRunId, auditContext = {}) {
   if (!Array.isArray(events)) throw new TypeError("events must be an array");
-  if (!STAGE_SLUGS.has(stageSlug)) throw new TypeError("stageSlug must be one of: bs, bp, bc, vc, md");
-  assertNonEmptyString(workflowRunId, "workflowRunId");
+  if (!STAGE_SLUGS.has(stageSlug)) throw new TypeError("stageSlug must be a long canonical stage slug");
+  if (!nonEmptyString(workflowRunId)) throw new TypeError("workflowRunId must be a non-empty string");
 
-  const facts = { missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [] };
-  const entries = [];
-  const exits = [];
-  const evidenceRefs = [];
+  const facts = {
+    missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [],
+    terminal_non_success: [], retry: [], cross_attempt: [], dependency: [],
+  };
+  const expectedSteps = requiredExpectedSteps(auditContext.manifest, stageSlug, facts);
+  const ledgerResult = validateRequirementLedger(auditContext.ledger);
+  const requirement_coverage = ledgerResult.ok ? calculateCoverage(auditContext.ledger) : { covered: 0, total: 0, withdrawn: 0, missing_ids: [] };
+  if (!ledgerResult.ok) facts.unknown.push({ type: "LEDGER_REQUIRED_OR_INVALID", errors: ledgerResult.errors });
 
+  const entries = []; const exits = []; const evidenceRefs = [];
   events.forEach((event, index) => {
-    if (event?.workflow_run_id !== workflowRunId) return;
-    const mentionsStage = event?.stage_slug === stageSlug || (typeof event?.step_id === "string" && event.step_id.startsWith(`${stageSlug}.`));
-    if (!mentionsStage) return;
-    if (event?.event_type === "step_entry") {
-      if (!canonicalEntry(event, stageSlug, workflowRunId)) facts.unknown.push({ index, type: "invalid_entry", step_id: event?.step_id ?? null });
+    if (event?.workflow_run_id !== workflowRunId || event?.stage_slug !== stageSlug) return;
+    if (!validIdentity(event, stageSlug, workflowRunId)) { facts.unknown.push({ index, type: "invalid_receipt", step_id: event?.step_id ?? null }); return; }
+    if (event.event_type === "step_entry") {
+      if (!evidenceRef(event.entry_evidence) || !nonEmptyString(event.journal_entry_id)) facts.unknown.push({ index, type: "invalid_entry", step_id: event.step_id });
+      else { entries.push({ event, index }); evidenceRefs.push(evidenceRef(event.entry_evidence)); }
+      if (event.retry_of_attempt_id) facts.retry.push({ step_id: event.step_id, attempt_id: event.attempt_id, retry_of_attempt_id: event.retry_of_attempt_id });
+    } else if (event.event_type === "step_exit") {
+      if (!TERMINAL_STATUSES.has(event.terminal_status) || !evidenceRef(event.completion_evidence) || !nonEmptyString(event.entry_journal_entry_id)) facts.unknown.push({ index, type: "invalid_exit", step_id: event.step_id });
       else {
-        entries.push({ event, index });
-        const ref = evidenceRef(event.entry_evidence); if (ref) evidenceRefs.push(ref);
+        exits.push({ event, index }); evidenceRefs.push(evidenceRef(event.completion_evidence));
+        if (event.terminal_status !== "success") facts.terminal_non_success.push({ step_id: event.step_id, attempt_id: event.attempt_id, terminal_status: event.terminal_status });
       }
-    } else if (event?.event_type === "step_exit") {
-      if (!canonicalExit(event, stageSlug, workflowRunId)) facts.unknown.push({ index, type: "invalid_exit", step_id: event?.step_id ?? null });
-      else {
-        exits.push({ event, index });
-        const ref = evidenceRef(event.completion_evidence); if (ref) evidenceRefs.push(ref);
-      }
-    } else {
-      facts.unknown.push({ index, type: "unknown_event", event_type: event?.event_type ?? null });
-    }
+    } else if (event.event_type === "step_auto_rollback") {
+      facts.unknown.push({ index, type: "rollback_observed", step_id: event.affected_step_id ?? null });
+    } else facts.unknown.push({ index, type: "unknown_event", event_type: event.event_type ?? null });
   });
 
-  const entriesByAttempt = new Map();
-  for (const item of entries) {
-    const key = attemptKey(item.event);
-    const list = entriesByAttempt.get(key) ?? [];
-    list.push(item); entriesByAttempt.set(key, list);
-  }
-  const exitsByAttempt = new Map();
-  for (const item of exits) {
-    const key = attemptKey(item.event);
-    const list = exitsByAttempt.get(key) ?? [];
-    list.push(item); exitsByAttempt.set(key, list);
-  }
-
-  for (const [key, list] of entriesByAttempt) {
-    if (list.length > 1) facts.duplicate.push({ type: "duplicate_entry", attempt: key, count: list.length });
-  }
-  for (const [key, list] of exitsByAttempt) {
-    if (list.length > 1) facts.duplicate.push({ type: "duplicate_terminal_exit", attempt: key, count: list.length });
-    const entry = entriesByAttempt.get(key)?.[0];
+  const entriesByKey = new Map(); const exitsByKey = new Map();
+  for (const item of entries) { const list = entriesByKey.get(eventKey(item.event)) ?? []; list.push(item); entriesByKey.set(eventKey(item.event), list); }
+  for (const item of exits) { const list = exitsByKey.get(eventKey(item.event)) ?? []; list.push(item); exitsByKey.set(eventKey(item.event), list); }
+  for (const [key, list] of entriesByKey) if (list.length !== 1) facts.duplicate.push({ type: "duplicate_entry", attempt: key, count: list.length });
+  for (const [key, list] of exitsByKey) {
+    if (list.length !== 1) facts.duplicate.push({ type: "duplicate_terminal_exit", attempt: key, count: list.length });
+    const entry = entriesByKey.get(key)?.[0];
     if (!entry) facts.unexpected.push({ type: "exit_without_entry", attempt: key });
-    else if (list[0].index < entry.index || Date.parse(list[0].event.timestamp) < Date.parse(entry.event.timestamp)) {
-      facts.out_of_order.push({ type: "exit_before_entry", attempt: key });
+    else if (list[0].index < entry.index || Date.parse(list[0].event.timestamp) < Date.parse(entry.event.timestamp)) facts.out_of_order.push({ type: "exit_before_entry", attempt: key });
+    else if (entry.event.journal_entry_id !== list[0].event.entry_journal_entry_id) facts.cross_attempt.push({ type: "entry_exit_binding_mismatch", attempt: key });
+  }
+  for (const [key, list] of entriesByKey) if (!exitsByKey.has(key)) facts.missing.push({ type: "terminal_exit_missing", attempt: key, step_id: list[0].event.step_id });
+
+  const expectedKeys = new Set(expectedSteps.map((step) => expectedKey(stageSlug, step)));
+  for (const [key, list] of entriesByKey) if (!expectedKeys.has(key)) facts.unexpected.push({ type: "unexpected_observed_step", step_id: list[0].event.step_id, attempt_id: list[0].event.attempt_id });
+  for (const step of expectedSteps) {
+    const key = expectedKey(stageSlug, step);
+    const entry = entriesByKey.get(key)?.[0]; const exit = exitsByKey.get(key)?.[0];
+    if (!entry) facts.missing.push({ type: "expected_step_missing", step_id: step.step_id, attempt_id: step.attempt_id });
+    if (entry && exit && step.depends_on.length) {
+      for (const dependencyId of step.depends_on) {
+        const dependency = expectedSteps.find((candidate) => candidate.step_id === dependencyId);
+        const dependencyExit = dependency && exitsByKey.get(expectedKey(stageSlug, dependency))?.[0];
+        if (!dependencyExit || dependencyExit.event.terminal_status !== "success" || dependencyExit.index > entry.index) {
+          facts.dependency.push({ type: "dependency_not_completed_before_entry", step_id: step.step_id, dependency_id: dependencyId });
+        }
+      }
     }
   }
-  for (const [key, list] of entriesByAttempt) {
-    if (!exitsByAttempt.has(key)) facts.missing.push({ type: "terminal_exit_missing", attempt: key, step_id: list[0].event.step_id });
+  const observedExpected = entries.filter(({ event }) => expectedKeys.has(eventKey(event))).sort((a, b) => a.index - b.index);
+  for (let index = 0; index < observedExpected.length; index += 1) {
+    const expected = expectedSteps[index]; const observed = observedExpected[index]?.event;
+    if (expected && (expected.step_id !== observed.step_id || expected.attempt_id !== observed.attempt_id)) facts.out_of_order.push({ type: "manifest_order_violation", step_id: observed.step_id, attempt_id: observed.attempt_id });
   }
 
-  const manifestSteps = auditContext?.manifest?.expected_steps;
-  const expected_steps = Array.isArray(manifestSteps)
-    ? manifestSteps.map((step) => ({ ...step }))
-    : [...entriesByAttempt.values()].map(([item]) => ({ step_id: item.event.step_id, attempt_id: item.event.attempt_id }));
-  const expectedKeys = new Set(expected_steps.map((step) => `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`));
-
-  if (Array.isArray(manifestSteps)) {
-    for (const [key, list] of entriesByAttempt) {
-      if (expectedKeys.has(key)) continue;
-      const { step_id, attempt_id } = list[0].event;
-      facts.unexpected.push({ type: "unexpected_observed_step", step_id, attempt_id });
-      facts.unknown.push({ type: "unmanifested_step", step_id, attempt_id });
-    }
-
-    const observedExpectedEntries = [...entries]
-      .filter(({ event }) => expectedKeys.has(attemptKey(event)))
-      .sort((left, right) => left.index - right.index);
-    for (let index = 0; index < observedExpectedEntries.length; index += 1) {
-      const expected = expected_steps[index];
-      const observed = observedExpectedEntries[index]?.event;
-      if (!expected || (expected.step_id === observed.step_id && expected.attempt_id === observed.attempt_id)) continue;
-      facts.out_of_order.push({ type: "manifest_order_violation", step_id: expected.step_id, attempt_id: expected.attempt_id });
-    }
-  }
-
-  for (const step of expected_steps) {
-    const key = `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`;
-    if (!entriesByAttempt.has(key)) facts.missing.push({ type: "expected_step_missing", step_id: step.step_id, attempt_id: step.attempt_id });
-  }
-
-  const staleRefs = Array.isArray(auditContext?.stale_refs) ? auditContext.stale_refs : [];
-  const expectedEvidence = Array.isArray(auditContext?.ledger?.expected_evidence) ? auditContext.ledger.expected_evidence : [];
-  for (const ref of uniqueByEvidence(evidenceRefs)) {
-    if (staleRefs.some((stale) => stale?.kind === ref.kind && stale?.uri_or_path === ref.uri_or_path)) {
-      facts.stale.push({ type: "stale_evidence", kind: ref.kind, uri_or_path: ref.uri_or_path });
-    }
+  const staleRefs = Array.isArray(auditContext.stale_refs) ? auditContext.stale_refs : [];
+  const expectedEvidence = Array.isArray(auditContext.expected_evidence) ? auditContext.expected_evidence : [];
+  for (const ref of uniqueEvidenceRefs(evidenceRefs)) {
+    if (staleRefs.some((item) => item?.kind === ref.kind && item?.uri_or_path === ref.uri_or_path)) facts.stale.push({ type: "stale_evidence", kind: ref.kind, uri_or_path: ref.uri_or_path });
     const declared = expectedEvidence.find((item) => item?.kind === ref.kind && item?.uri_or_path === ref.uri_or_path);
-    if (declared?.content_hash && declared.content_hash !== ref.content_hash) {
-      facts.tampered_hash.push({ type: "evidence_hash_mismatch", kind: ref.kind, uri_or_path: ref.uri_or_path, expected_hash: declared.content_hash, observed_hash: ref.content_hash ?? null });
-    }
+    if (declared?.content_hash && declared.content_hash !== ref.content_hash) facts.tampered_hash.push({ type: "evidence_hash_mismatch", kind: ref.kind, uri_or_path: ref.uri_or_path });
   }
 
-  const observed_steps = expected_steps.map((step) => {
-    const key = `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`;
-    return { ...step, entry: entriesByAttempt.has(key), terminal_exit: exitsByAttempt.has(key) };
+  const observed_steps = expectedSteps.map((step) => {
+    const key = expectedKey(stageSlug, step);
+    return { ...step, entry: entriesByKey.has(key), terminal_exit: exitsByKey.has(key), terminal_status: exitsByKey.get(key)?.[0]?.event.terminal_status ?? null };
   });
-  const missing_ids = observed_steps.filter((step) => !step.entry || !step.terminal_exit).map((step) => step.step_id);
-  const requirement_coverage = { covered: expected_steps.length - missing_ids.length, total: expected_steps.length, withdrawn: 0, missing_ids };
-  const hasFindings = Object.values(facts).some((findings) => findings.length > 0);
-  const verdict = !hasFindings && expected_steps.length > 0 ? "pass" : "fail";
-  const uniqueEvidenceRefs = uniqueByEvidence(evidenceRefs);
-
-  const unsigned = { schema_version: "v1", workflow_run_id: workflowRunId, expected_steps, observed_steps, requirement_coverage, facts, verdict, evidence_refs: uniqueEvidenceRefs };
-  const audit_summary = { ...unsigned, summary_hash: hashSummary(unsigned) };
-  return { audit_summary, warnings: [] };
+  const hasFindings = Object.values(facts).some((items) => items.length > 0);
+  const verdict = !hasFindings && requirement_coverage.total > 0 && requirement_coverage.covered === requirement_coverage.total ? "pass" : "fail";
+  const unsigned = { schema_version: "v1", workflow_run_id: workflowRunId, expected_steps: expectedSteps, observed_steps, requirement_coverage, facts, verdict, evidence_refs: uniqueEvidenceRefs(evidenceRefs), ledger_hash: auditContext.ledger?.ledger_hash ?? null, manifest_hash: auditContext.manifest?.manifest_hash ?? null };
+  return { audit_summary: { ...unsigned, summary_hash: hashSummary(unsigned) }, warnings: [] };
 }
 
-function uniqueByEvidence(evidenceRefs) {
-  return [...new Map(evidenceRefs.map((ref) => [`${ref.kind}\u0000${ref.uri_or_path}`, ref])).values()];
-}
+// Legacy helpers remain exported for P1 consumer imports. They intentionally
+// do not choose a verdict and therefore are not an alternate audit path.
+export function latestByStepId(events) { return new Map(events.map((event) => [event.step_id, event])); }
+export function latestByStepAndEntry(events) { return new Map(events.map((event) => [`${event.step_id}::${event.exit_journal_entry_id ?? null}`, event])); }

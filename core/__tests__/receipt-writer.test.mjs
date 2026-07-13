@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { computeLedgerHash, computeRequirementContentHash } from "../requirement-ledger.mjs";
 
 const TASK_ID = "receipt-writer-test";
 const RUN_ID = "run-123";
@@ -22,8 +23,9 @@ async function importWriter(taskDir, fsMock) {
 function entryPayload(overrides = {}) {
   return {
     workflow_run_id: RUN_ID,
-    stage_slug: "bc",
-    step_id: "bc.work.ph1",
+    stage_slug: "build-code",
+    step_id: 1,
+    manifest_schema_version: "2.0.0",
     attempt_id: "attempt-1",
     event_type: "step_entry",
     timestamp: ENTRY_TIMESTAMP,
@@ -35,8 +37,9 @@ function entryPayload(overrides = {}) {
 function exitPayload(overrides = {}) {
   return {
     workflow_run_id: RUN_ID,
-    stage_slug: "bc",
-    step_id: "bc.work.ph1",
+    stage_slug: "build-code",
+    step_id: 1,
+    manifest_schema_version: "2.0.0",
     attempt_id: "attempt-1",
     event_type: "step_exit",
     timestamp: EXIT_TIMESTAMP,
@@ -51,6 +54,21 @@ function readJournal(taskDir) {
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
+}
+
+function auditContext() {
+  const record = {
+    requirement_id: "R1", status: "accepted",
+    source_ref: { kind: "source", uri_or_path: "source://R1", content_hash: "a".repeat(64) },
+    decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+    artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+    acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+    upstream_hashes: ["a".repeat(64)], stale: false,
+  };
+  record.content_hash = computeRequirementContentHash(record);
+  const ledger = { schema_version: "v1", source_manifest_hash: "e".repeat(64), requirements: [record] };
+  ledger.ledger_hash = computeLedgerHash(ledger);
+  return { manifest: { schema_version: "2.0.0", stage_slug: "build-code", manifest_hash: "f".repeat(64), steps: [{ step_id: 1, order: 1, attempt_id: "attempt-1", depends_on: [] }] }, ledger };
 }
 
 afterEach(() => {
@@ -70,7 +88,7 @@ describe("journal schema", () => {
     expect(RECEIPT_IDENTITY_FIELDS).toEqual([
       "workflow_run_id", "stage_slug", "step_id", "attempt_id", "event_type", "timestamp",
     ]);
-    expect(TERMINAL_STATUSES).toEqual(["success", "failure", "skipped", "needs_human"]);
+    expect(TERMINAL_STATUSES).toEqual(["success", "failure", "blocked", "skipped", "needs_human"]);
   });
 });
 
@@ -86,8 +104,8 @@ describe("canonical receipt writer", () => {
         schema_version: "v1",
         event_type: "step_entry",
         workflow_run_id: RUN_ID,
-        stage_slug: "bc",
-        step_id: "bc.work.ph1",
+        stage_slug: "build-code",
+        step_id: 1,
         attempt_id: "attempt-1",
         timestamp: ENTRY_TIMESTAMP,
         entry_evidence: { kind: "command", uri_or_path: "evidence/entry.log" },
@@ -104,18 +122,19 @@ describe("canonical receipt writer", () => {
   });
 
   it("is warn-only when a STEP_EXIT append fails and preserves the canonical original payload", async () => {
-    const appendFile = vi.fn().mockRejectedValueOnce(new Error("exit append failed")).mockResolvedValueOnce(undefined);
-    const { writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir: vi.fn(async () => {}) });
-    const payload = exitPayload({ step_id: "bc.check.ph1", terminal_status: "failure" });
+    const appendFile = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("exit append failed")).mockResolvedValueOnce(undefined);
+    const { writeEntryReceipt, writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir: vi.fn(async () => {}) });
+    const entry = await writeEntryReceipt(TASK_ID, entryPayload());
+    const payload = exitPayload({ terminal_status: "failure", entry_journal_entry_id: entry.journal_entry_id });
 
     await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
-    expect(appendFile).toHaveBeenCalledTimes(2);
-    const warn = JSON.parse(appendFile.mock.calls[1][1]);
+    expect(appendFile).toHaveBeenCalledTimes(3);
+    const warn = JSON.parse(appendFile.mock.calls[2][1]);
     expect(warn).toMatchObject({
       event: "receipt_write_warn",
       original_exit_payload: {
         event_type: "step_exit",
-        step_id: "bc.check.ph1",
+        step_id: 1,
         terminal_status: "failure",
         completion_evidence: { kind: "command", uri_or_path: "evidence/exit.log" },
       },
@@ -149,9 +168,9 @@ describe("canonical receipt writer", () => {
 
     await writeStepAutoRollback(TASK_ID, {
       workflow_run_id: RUN_ID,
-      affected_step_id: "bc.check.ph1",
-      rollback_from_step_id: "bc.check.ph1",
-      rollback_to_step_id: "bc.work.ph1",
+      affected_step_id: 1,
+      rollback_from_step_id: 1,
+      rollback_to_step_id: 1,
       attempt_seq: 1,
       ineffective: true,
       reason: "check blocked",
@@ -165,17 +184,17 @@ describe("canonical audit aggregation", () => {
   it("reports a complete paired entry and exit as a passing observed-fact audit", async () => {
     const taskDir = makeTaskDir();
     const { buildAuditSummaryFromJournalEvents, writeEntryReceipt, writeExitReceipt } = await importWriter(taskDir);
-    await writeEntryReceipt(TASK_ID, entryPayload());
-    await writeExitReceipt(TASK_ID, exitPayload());
+    const entry = await writeEntryReceipt(TASK_ID, entryPayload());
+    await writeExitReceipt(TASK_ID, exitPayload({ entry_journal_entry_id: entry.journal_entry_id }));
 
-    const result = buildAuditSummaryFromJournalEvents(readJournal(taskDir), { stageSlug: "bc", workflowRunId: RUN_ID });
+    const result = buildAuditSummaryFromJournalEvents(readJournal(taskDir), { stageSlug: "build-code", workflowRunId: RUN_ID, ...auditContext() });
     expect(result.warnings).toEqual([]);
     expect(result.audit_summary).toMatchObject({
       schema_version: "v1",
       workflow_run_id: RUN_ID,
       verdict: "pass",
       requirement_coverage: { covered: 1, total: 1, withdrawn: 0, missing_ids: [] },
-      facts: { missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [] },
+      facts: { missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [], terminal_non_success: [], retry: [], cross_attempt: [], dependency: [] },
       evidence_refs: [
         { kind: "command", uri_or_path: "evidence/entry.log" },
         { kind: "command", uri_or_path: "evidence/exit.log" },
@@ -186,21 +205,21 @@ describe("canonical audit aggregation", () => {
 
   it("records a missing terminal exit as a failed audit fact", async () => {
     const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const result = buildAuditSummaryFromJournalEvents([entryPayload()], { stageSlug: "bc", workflowRunId: RUN_ID });
+    const result = buildAuditSummaryFromJournalEvents([{ ...entryPayload(), journal_entry_id: "entry" }], { stageSlug: "build-code", workflowRunId: RUN_ID, ...auditContext() });
 
     expect(result.audit_summary).toMatchObject({
       verdict: "fail",
-      requirement_coverage: { covered: 0, total: 1, missing_ids: ["bc.work.ph1"] },
-      facts: { missing: [{ type: "terminal_exit_missing", step_id: "bc.work.ph1" }] },
+      requirement_coverage: { covered: 1, total: 1, missing_ids: [] },
+      facts: { missing: [{ type: "terminal_exit_missing", step_id: 1 }] },
     });
   });
 
   it("records invalid legacy-shaped receipts as unknown rather than reviving legacy count semantics", async () => {
     const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
     const legacyEntry = {
-      event_type: "step_entry", workflow_run_id: RUN_ID, step_id: "bc.work.ph1", check_status: "ok",
+      event_type: "step_entry", workflow_run_id: RUN_ID, stage_slug: "build-code", step_id: 1, check_status: "ok",
     };
-    const result = buildAuditSummaryFromJournalEvents([legacyEntry], { stageSlug: "bc", workflowRunId: RUN_ID });
+    const result = buildAuditSummaryFromJournalEvents([legacyEntry], { stageSlug: "build-code", workflowRunId: RUN_ID, ...auditContext() });
 
     expect(result.audit_summary).toMatchObject({
       verdict: "fail",
@@ -212,17 +231,16 @@ describe("canonical audit aggregation", () => {
     const { buildAuditSummaryFromJournalEvents } = await import("../audit-aggregator.mjs");
     const result = buildAuditSummaryFromJournalEvents(
       [entryPayload(), exitPayload()],
-      "bc",
+      "build-code",
       RUN_ID,
-      { manifest: { expected_steps: [{ step_id: "bc.work.ph2", attempt_id: "attempt-2" }] } },
+      { manifest: { stage_slug: "build-code", steps: [{ step_id: 2, order: 1, attempt_id: "attempt-2", depends_on: [] }] }, ledger: auditContext().ledger },
     );
 
     expect(result.audit_summary).toMatchObject({
       verdict: "fail",
       facts: {
-        unexpected: expect.arrayContaining([{ type: "unexpected_observed_step", step_id: "bc.work.ph1", attempt_id: "attempt-1" }]),
-        unknown: expect.arrayContaining([{ type: "unmanifested_step", step_id: "bc.work.ph1", attempt_id: "attempt-1" }]),
-        missing: expect.arrayContaining([{ type: "expected_step_missing", step_id: "bc.work.ph2", attempt_id: "attempt-2" }]),
+        unexpected: expect.arrayContaining([{ type: "unexpected_observed_step", step_id: 1, attempt_id: "attempt-1" }]),
+        missing: expect.arrayContaining([{ type: "expected_step_missing", step_id: 2, attempt_id: "attempt-2" }]),
       },
     });
   });

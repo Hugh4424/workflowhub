@@ -35,8 +35,8 @@ export { journalPathForTaskDir } from "./journal-appender.mjs";
  * @param {{ stageSlug: string, workflowRunId: string }} options
  * @returns {{ audit_summary: object, warnings: string[] }}
  */
-export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId } = {}) {
-  return _buildAuditSummary(events, stageSlug, workflowRunId);
+export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId, manifest, ledger, stale_refs, expected_evidence } = {}) {
+  return _buildAuditSummary(events, stageSlug, workflowRunId, { manifest, ledger, stale_refs, expected_evidence });
 }
 
 // ---- write API ----
