@@ -309,7 +309,7 @@ await runReviewRound({
 `packet` carries only supplemental context such as requirement, acceptance/design
 excerpts and test evidence. The host captures the canonical source diff, changed-file
 manifest and hashes from the trusted task worktree; callers must not supply source
-fields. Providers review only the sealed packet. Do not run git, read the real
+fields. Providers review only the sealed `review-packet.v1`. Do not run git, read the real
 repository, request absolute paths, or write reports. The facade
 stores raw/provider evidence in `<task>/reviews/private/round-.../`; `cancel_source`
 is a transport fact and cannot become a verdict. Later rounds continue the initial

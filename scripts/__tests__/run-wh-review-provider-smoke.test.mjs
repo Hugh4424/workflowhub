@@ -58,4 +58,13 @@ describe("run-wh-review-provider-smoke", () => {
     expect(source).toContain('"worktree.json"');
     expect(source).not.toContain("repository_root: source");
   });
+
+  it("captures R1 and R2 from uncommitted worktrees without creating review commits", () => {
+    const source = readFileSync(script, "utf8");
+    expect(source).toContain("captureWorktreeTree");
+    expect(source).toContain("SMOKE_SOURCE_FAIL: R1/R2 capture created a commit");
+    expect(source).toContain("SMOKE_KIMI_FAIL: R1/R2 review created a commit");
+    expect(source).not.toContain('commit", "-qm", "round 1"');
+    expect(source).not.toContain('commit", "-qm", "round 2 delta"');
+  });
 });

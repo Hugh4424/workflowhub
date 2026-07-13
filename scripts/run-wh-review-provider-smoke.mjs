@@ -17,6 +17,7 @@ import { contractPathAndHash } from "../skills/wh-review/scripts/lib/safe-id.mjs
 import { loadTrustedThirdReviewConfig } from "../skills/wh-review/scripts/third-review-host-config.mjs";
 import { initialPrompt, continuationPrompt, buildContinuationDelta } from "../skills/wh-review/scripts/review-prompt.mjs";
 import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "../skills/wh-review/scripts/review-packet-integrity.mjs";
+import { buildTreeMaterial, captureWorktreeTree, capturedHead, headTree } from "../skills/wh-review/scripts/source-tree.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, "..");
@@ -25,7 +26,6 @@ const safeJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const stripHunkSectionHeaders = (unifiedDiff) => unifiedDiff.replace(/^(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1");
 
 function git(root, args, encoding = "utf8") { return execFileSync("git", args, { cwd: root, encoding }).trim(); }
-function bytes(root, revision, path) { return execFileSync("git", ["show", `${revision}:${path}`], { cwd: root }); }
 function run(command, args, { cwd, input } = {}) {
   return new Promise((resolveRun, reject) => {
     const child = spawn(command, args, { cwd, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
@@ -38,34 +38,28 @@ function run(command, args, { cwd, input } = {}) {
 }
 function commandParts(command) { return Array.isArray(command) ? command : [command]; }
 function write(path, value) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); writeFileSync(path, typeof value === "string" ? value : safeJson(value), { mode: 0o600 }); }
-function reviewPacket(root, base, head, { roundKind = "initial", baselinePacketHash = null } = {}) {
-  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
-  const current = bytes(root, head, "smoke.txt"); const previous = bytes(root, base, "smoke.txt");
+function reviewPacket(root, baseTree, snapshotTree, { roundKind = "initial", baselinePacketHash = null } = {}) {
+  const source = buildTreeMaterial(root, { baseTree, snapshotTree });
   const packet = {
     version: "review-packet.v1", stage: "build-code", review_track: null, round_kind: roundKind, baseline_packet_hash: baselinePacketHash,
-    unified_diff, changed_files: [{ path: "smoke.txt", status: "modified", sha256: sha(current), size: current.length, old_sha256: sha(previous), old_size: previous.length }],
+    ...source, source_revision: { ...source.source_revision, captured_head: capturedHead(root) },
     raw_requirement: "Preserve the smoke marker while adding a deterministic, reviewable change.",
     acceptance_design_excerpt: roundKind === "initial"
       ? "AC: R1_DIFF_MARKER is present in round 1."
       : "AC: R2_DELTA_ONLY_MARKER is introduced in this continuation delta.",
-    test_evidence: [{ name: "smoke-fixture", status: "passed", evidence: "git fixture commits were created locally" }], host_verified_facts: [{ fact: "The packet is generated from a disposable local git repository." }],
-    contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])), source_revision: { base, head },
+    test_evidence: [{ name: "smoke-fixture", status: "passed", evidence: "temporary-index capture preserved the fixture HEAD" }], host_verified_facts: [{ fact: "The host generated packet material from a disposable local worktree tree." }],
+    contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])),
   };
-  packet.diff_sha256 = sha(unified_diff); packet.manifest_hash = reviewManifestHash(packet); packet.packet_hash = reviewPacketHash(packet);
+  packet.diff_sha256 = sha(packet.unified_diff); packet.manifest_hash = reviewManifestHash(packet); packet.packet_hash = reviewPacketHash(packet);
   return packet;
 }
 function setupRepository(root) {
   git(root, ["init", "-q"]); git(root, ["config", "user.email", "wh-review-smoke@example.invalid"]); git(root, ["config", "user.name", "wh-review smoke"]);
   writeFileSync(join(root, "smoke.txt"), "base\n"); git(root, ["add", "smoke.txt"]); git(root, ["commit", "-qm", "base"]);
-  const base = git(root, ["rev-parse", "HEAD"]);
-  writeFileSync(join(root, "smoke.txt"), "base\nR1_DIFF_MARKER\n"); git(root, ["add", "smoke.txt"]); git(root, ["commit", "-qm", "round 1"]);
-  const r1 = git(root, ["rev-parse", "HEAD"]);
-  return { base, r1 };
+  return { baseTree: headTree(root), head: git(root, ["rev-parse", "HEAD"]) };
 }
-function advanceRepository(root) {
-  writeFileSync(join(root, "smoke.txt"), "base\nR1_DIFF_MARKER\nR2_DELTA_ONLY_MARKER\n"); git(root, ["add", "smoke.txt"]); git(root, ["commit", "-qm", "round 2 delta"]);
-  return git(root, ["rev-parse", "HEAD"]);
-}
+function writeRoundOne(root) { writeFileSync(join(root, "smoke.txt"), "base\nR1_DIFF_MARKER\n"); }
+function writeRoundTwo(root) { writeFileSync(join(root, "smoke.txt"), "base\nR1_DIFF_MARKER\nR2_DELTA_ONLY_MARKER\n"); }
 function outputText(outcome) {
   if (typeof outcome?.output === "string") return outcome.output;
   if (typeof outcome?.raw_output_ref === "string" && existsSync(outcome.raw_output_ref)) return readFileSync(outcome.raw_output_ref, "utf8");
@@ -179,27 +173,29 @@ async function main() {
   const evidencePath = join(outputRoot, "evidence.json"); write(evidencePath, evidence);
   let attachmentStaging = null;
   try {
-    const source = join(outputRoot, "source-repository"); mkdirSync(source, { mode: 0o700 }); const { base, r1 } = setupRepository(source);
-    const r1Packet = reviewPacket(source, base, r1);
-    const r2 = advanceRepository(source); const r2Packet = reviewPacket(source, base, r2, { roundKind: "continuation", baselinePacketHash: r1Packet.packet_hash });
+    const source = join(outputRoot, "source-repository"); mkdirSync(source, { mode: 0o700 }); const { baseTree, head: sourceHead } = setupRepository(source);
+    writeRoundOne(source); const r1Tree = captureWorktreeTree(source, { baseTree }); const r1Packet = reviewPacket(source, baseTree, r1Tree);
+    writeRoundTwo(source); const r2Tree = captureWorktreeTree(source, { baseTree: r1Tree }); const r2Packet = reviewPacket(source, r1Tree, r2Tree, { roundKind: "continuation", baselinePacketHash: r1Packet.packet_hash });
+    requireValue(git(source, ["rev-parse", "HEAD"]) === sourceHead, "SMOKE_SOURCE_FAIL: R1/R2 capture created a commit");
     const taskRoot = join(outputRoot, "wh-review-state"); const taskId = "provider-smoke";
     let kimiEvidence = null;
     if (!skipKimi) {
-      const kimiTarget = join(outputRoot, "kimi-target-repository"); mkdirSync(kimiTarget, { mode: 0o700 }); const kimiBase = setupRepository(kimiTarget).base;
+      const kimiTarget = join(outputRoot, "kimi-target-repository"); mkdirSync(kimiTarget, { mode: 0o700 }); const { head: kimiHead } = setupRepository(kimiTarget);
       const kimiSource = join(outputRoot, "kimi-worktree"); git(kimiTarget, ["worktree", "add", "-q", "-b", "workflowhub/provider-smoke", kimiSource]);
-      git(kimiSource, ["reset", "--hard", "-q", kimiBase]); writeFileSync(join(kimiSource, "smoke.txt"), "base\nR1_DIFF_MARKER\n");
+      writeRoundOne(kimiSource);
       write(join(taskRoot, taskId, "worktree.json"), { target_repo_root: kimiTarget, worktree_root: kimiSource, branch: git(kimiSource, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" });
       const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r1Packet), task_tracking_root: taskRoot };
       const kimiFirstInputPath = join(outputRoot, "kimi-r1-input.json"); write(kimiFirstInputPath, kimiFirstInput);
       await runWhReview({ inputPath: kimiFirstInputPath, responsePath: join(outputRoot, "kimi-r1-cli.json") });
       const kimiR1 = privateReceipt(taskRoot, taskId, 1); const kimiR1Packet = privatePacket(taskRoot, taskId, 1); const kimiOutcome1 = assertWhAggregate(kimiR1, kimiR1Packet, "R1_DIFF_MARKER");
       requireValue(kimiOutcome1.raw_output_ref && existsSync(kimiOutcome1.raw_output_ref), "SMOKE_KIMI_R1_FAIL: raw output evidence is missing");
-      writeFileSync(join(kimiSource, "smoke.txt"), "base\nR1_DIFF_MARKER\nR2_DELTA_ONLY_MARKER\n");
+      writeRoundTwo(kimiSource);
       const kimiSecondInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r2Packet), task_tracking_root: taskRoot, continuation: true, closure_evidence: closureEvidence(kimiR1) };
       const kimiSecondInputPath = join(outputRoot, "kimi-r2-input.json"); write(kimiSecondInputPath, kimiSecondInput);
       await runWhReview({ inputPath: kimiSecondInputPath, responsePath: join(outputRoot, "kimi-r2-cli.json") });
       const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiR2Packet = privatePacket(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, kimiR2Packet, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
       requireValue(kimiOutcome2.session_id === kimiOutcome1.session_id, "SMOKE_KIMI_R2_FAIL: provider session_id changed instead of continuing");
+      requireValue(git(kimiSource, ["rev-parse", "HEAD"]) === kimiHead, "SMOKE_KIMI_FAIL: R1/R2 review created a commit");
       kimiEvidence = { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path] };
     }
 
@@ -210,8 +206,8 @@ async function main() {
     const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: r1Packet.packet_hash, expectedDiffSha256: r1Packet.diff_sha256 });
     requireValue(opencodeOutcome1.delivery_used === "always_embed", "SMOKE_OPENCODE_R1_FAIL: expected always_embed delivery");
 
-    const deltaDiff = stripHunkSectionHeaders(execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", "-U0", r1, r2], { cwd: source, encoding: "utf8" }));
-    r2Packet.previous_packet = r1Packet; r2Packet.delta_diff = deltaDiff; r2Packet.delta_changed_files = [{ path: "smoke.txt", status: "modified", sha256: sha(bytes(source, r2, "smoke.txt")), size: bytes(source, r2, "smoke.txt").length, old_sha256: sha(bytes(source, r1, "smoke.txt")), old_size: bytes(source, r1, "smoke.txt").length }];
+    const deltaDiff = stripHunkSectionHeaders(execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", "-U0", r1Tree, r2Tree], { cwd: source, encoding: "utf8" }));
+    r2Packet.previous_packet = r1Packet; r2Packet.delta_diff = deltaDiff; r2Packet.delta_changed_files = r2Packet.changed_files;
     const opencodeR2Prompt = directPrompt(r2Packet, 2); write(join(outputRoot, "opencode-r2-prompt.txt"), opencodeR2Prompt); requireValue(opencodeR2Prompt.includes("R2_DELTA_ONLY_MARKER") && !opencodeR2Prompt.includes("R1_DIFF_MARKER"), "SMOKE_OPENCODE_R2_FAIL: continuation prompt is not delta-only");
     const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id }, provider_allowlist: ["opencode"] };
     const opencodeR2RequestPath = join(outputRoot, "opencode-r2-request.json"); write(opencodeR2RequestPath, opencodeR2Request);

@@ -37,6 +37,6 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 
 - Kimi：`wh-review-cli.mjs run`，验证 V4 aggregate 只含有效 outcome；
 - OpenCode：`3rd-review.mjs run`，验证 `always_embed` 的实际 stdin/附件路径；
-- 两者均执行 R1 与同 runtime/session 的 R2，并要求 R1 `R1_DIFF_MARKER`、R2 `R2_DELTA_ONLY_MARKER`，保存 runtime、session、raw hash 与证据路径。
+- 两者均从 temporary-index 捕获的未提交 R1/R2 tree 执行，并断言 HEAD 未变；R2 复用同一 runtime/session。要求 R1 `R1_DIFF_MARKER`、R2 `R2_DELTA_ONLY_MARKER`，保存 packet/hash、runtime、session、raw hash 与证据路径。
 
 未设置 `WH_REVIEW_PROVIDER_SMOKE=1` 或原生登录态未由 `WH_REVIEW_SMOKE_ASSUME_NATIVE_AUTH=1` 显式确认时返回 `SKIP`，绝不写 `PASS`。provider 认证、解析、非 JSON、超时等真实失败返回 `FAIL` 并写 `evidence.json`，不能被跳过掩盖。
