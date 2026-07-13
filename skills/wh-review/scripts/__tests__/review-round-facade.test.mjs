@@ -155,6 +155,20 @@ describe("ReviewRoundFacade", () => {
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
+  it("accepts the real Kimi lower-case pass output when changes.diff is the complete frozen anchor", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const kimi = JSON.parse(output(request.packet));
+      kimi.summary = "本次变更仅向 smoke.txt 追加 R1_DIFF_MARKER 一行，满足 packet 中 AC 要求，且不涉及状态流转、依赖或边界越界。所有 C/H 检查项通过。";
+      kimi.checklist = kimi.checklist.map((item) => ({ ...item, evidence: `changes.diff:line 7 与 review-packet.v1.json:acceptance_design_excerpt 共同证明 ${item.id}。` }));
+      kimi.pass_items = kimi.pass_items.map((item) => ({ ...item, artifact_anchor: item.rule_id === "H2" ? "changes.diff" : item.artifact_anchor, evidence: `${item.rule_id} 的当前冻结材料证据具体且可复核。` }));
+      return { runtime_id: "12345678-1234-4234-8234-123456789abc", providers: [{ provider: "kimi", status: "completed", session_id: "kimi-real-shape", output: JSON.stringify(kimi) }] };
+    }) });
+
+    const result = await facade.run(facade.prepare({ task_id: "kimi-real-pass", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "kimi", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }));
+  });
+
   it("excludes only a task's host review ledger when source and tracking roots are shared", async () => {
     const tracking = root();
     mkdirSync(join(tracking, "shared-task", "reviews"), { recursive: true });

@@ -8,7 +8,9 @@ Output must be a single bare JSON object, or exactly one full Markdown JSON fenc
 
 每个 finding 至少包含 `file`、`line`、`rule_id`、`severity`、`issue`、`evidence` 与 `suggested_fix`。合同内 finding 的 `rule_id` 必须精确属于当前冻结的选中合同。合同外 finding 使用 `external:<stable-id>` 或未选中的 C/H ID，且 `severity` 只能为 `minor`；它不得出现在 checklist 或 `pass_items`，也不得形成 hard gate。
 
-`pass_items` 必须逐项对应通过的 checklist id，并包含 `rule_id`、可定位的 `artifact_anchor` 与具体 `evidence`；仅写“已检查”或“通过”无效。`artifact_anchor` 不能只写字段名：使用 `changes.diff:line <n>`、`review-packet.v1.json:<json-path>`、`contracts/<stage>.md:line <n>` 或 `skills/<name>/<file>:line <n>` 这类带 `:` 或 `#` 的锚点。
+`pass_items` 必须逐项对应通过的 checklist id，并包含 `rule_id`、可定位的 `artifact_anchor` 与具体 `evidence`；仅写“已检查”或“通过”无效。`artifact_anchor` 不能只写字段名：通常使用 `changes.diff:line <n>`、`review-packet.v1.json:<json-path>`、`contracts/<stage>.md:line <n>` 或 `skills/<name>/<file>:line <n>` 这类带 `:` 或 `#` 的锚点；仅当证据覆盖整个冻结 diff 时，精确的 `changes.diff` 也是合法锚点。
+
+`verdict` 的唯一规范枚举是小写 `pass`、`revise_required`、`escalate_to_human`。`revise`、`REVISE` 和其他未知值都不是合法 verdict，必须拒绝。
 
 `skillResults` 中每个 required skill 必须有技能名、bundle hash、`lens-only` mode、检查对象、证据和结论。仅写“已检查”或“通过”视为无效证据。
 
