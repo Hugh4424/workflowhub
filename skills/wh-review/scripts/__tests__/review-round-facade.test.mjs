@@ -132,6 +132,16 @@ function makeDecisionOutput(input, reviewTrack, verdict = "pass") {
 }
 
 describe("ReviewRoundFacade", () => {
+  it("filters initial candidate providers through a valid provider allowlist", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+
+    const prepared = await facade.prepare({ task_id: "provider-allowlist", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), repository_root: tracking, provider_allowlist: ["opencode"] });
+
+    expect(prepared.intent.candidate_providers).toEqual(["opencode"]);
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
   it("blocks a flow after the configured number of invalid disposition submissions", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({

@@ -16,6 +16,7 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
+const providerId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const EMBED_DIFF_CHUNK_BYTES = 192 * 1024;
 export function aggregateMakeDecisionReviewTracks(input) { return aggregateMakeDecisionTracks(input); }
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
