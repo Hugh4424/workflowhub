@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { contractPathAndHash, assertKnownStage, assertSafeReviewFlowId, assertSafeTaskId, taskRoot } from "./lib/safe-id.mjs";
+import { projectStageContract, assertKnownStage, assertSafeReviewFlowId, assertSafeTaskId, taskRoot } from "./lib/safe-id.mjs";
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
@@ -33,6 +33,7 @@ function writeImmutable(path, value) {
 function parseOutput(value) { try { return { ok: true, value: JSON.parse(String(value ?? "").trim()) }; } catch { return { ok: false }; } }
 function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
+function isHardRuleId(value) { return /^(?:(?:DIR|DET)-)?H[1-9][0-9]*$/.test(value ?? ""); }
 function manifestValue(packet) {
   const { packet_hash, manifest_hash, ...materials } = packet;
   return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash, source_revision: materials.source_revision };
@@ -214,7 +215,8 @@ export class ReviewRoundFacade {
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const packet = structuredClone(input.packet);
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
-    const { contractHash } = contractPathAndHash(input.stage);
+    const stageContract = projectStageContract(input.stage, reviewTrack);
+    const { contractHash } = stageContract;
     if (packet.contract_hash !== contractHash && !input.allow_contract_hash_override) {
       if (continuation) throw new Error("blocked_by_human_confirmation: frozen contract changed; use reset with human approval");
       return this.#materialIncomplete(input, "contract hash mismatch");
@@ -275,13 +277,13 @@ export class ReviewRoundFacade {
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
-      const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
+      const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
       if (!continuation) {
         freeze("contracts/provider-protocol.md", readFileSync(protocolPath));
-        freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
+        freeze(`contracts/${input.stage}.md`, stageContract.content);
         freeze("schemas/reviewer-output.schema.json", readFileSync(outputSchemaPath));
         freeze("review-packet.v1.json", safeJson(packet));
         freeze("changes.diff", packet.unified_diff);
@@ -334,7 +336,7 @@ export class ReviewRoundFacade {
           if (severityRank[finding.severity] > severityRank[existing.severity]) existing.severity = finding.severity;
         }
       }
-      const merged_findings = [...unique.values()]; const hard_gates = merged_findings.filter((finding) => finding.severity === "blocking" || finding.rule_id.startsWith("hard"));
+      const merged_findings = [...unique.values()]; const hard_gates = merged_findings.filter((finding) => finding.severity === "blocking" || isHardRuleId(finding.rule_id));
       // An escalation is a business-valid result, not an empty pass. Keep its
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
@@ -556,7 +558,7 @@ export class ReviewRoundFacade {
     const human_gates = verifiedHumanGates(result.provider_outcomes, result.human_gates);
     if (human_gates.length) throw new Error("human gate requires explicit human confirmation before publication");
     const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const seen = new Set();
-    for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || finding.rule_id.startsWith("hard")) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
+    for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || isHardRuleId(finding.rule_id)) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
     const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
     const needs_human = semantic_verdict !== "pass";

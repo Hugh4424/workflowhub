@@ -61,10 +61,9 @@ describe("reviewer-output validator", () => {
     revise.output.checklist.find(({ id }) => id === "H1").passed = false;
     revise.output.pass_items = revise.output.pass_items.filter(({ rule_id }) => rule_id !== "H1");
     revise.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "H1", severity: "blocking", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后", late_finding: true }];
-    revise.output.pass_items = [];
     expect(validate(revise).errors).toEqual(expect.arrayContaining([expect.stringMatching(/rootCause/), expect.stringMatching(/fixApproach/)]));
     revise.output.rootCause = "状态发布和持久化没有共享提交边界"; revise.output.fixApproach = "先完成原子持久化，再发布成功状态";
-    expect(validate(revise).valid).toBe(true);
+    expect(validate(revise).errors).toEqual([]);
 
     const passBlocking = fixture(); passBlocking.output.findings = revise.output.findings;
     expect(validate(passBlocking).errors).toContain("pass verdict cannot contain a blocking finding");
@@ -120,7 +119,10 @@ describe("reviewer-output validator", () => {
     failedHard.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "H1", severity: "important", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后" }];
     expect(validate(failedHard).errors).toContain("failed hard invariant requires blocking finding: H1");
     failedHard.output.findings[0].severity = "blocking";
-    expect(validate(failedHard).valid).toBe(true);
+    failedHard.output.verdict = "revise_required";
+    failedHard.output.rootCause = "状态发布和持久化没有共享提交边界";
+    failedHard.output.fixApproach = "先完成原子持久化，再发布成功状态";
+    expect(validate(failedHard).errors).toEqual([]);
   });
 
   it("rejects finding, checklist, and pass-item rule ids outside the selected contract", () => {

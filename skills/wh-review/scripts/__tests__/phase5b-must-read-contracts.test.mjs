@@ -24,7 +24,7 @@ describe("Phase 5B Must Read contracts", () => {
       expect(section).toMatch(/### Hard invariants/);
       expect(section).toMatch(/### Pass items/);
       expect(section).toMatch(/### Continuation closure/);
-      expect(section).toMatch(/- C1:/);
+      expect(section).toMatch(new RegExp(`- ${track === "direction" ? "DIR" : "DET"}-C1:`));
     }
   });
 

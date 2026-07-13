@@ -99,3 +99,23 @@ export function contractPathAndHash(stage) {
   const contractHash = createHash("sha256").update(content).digest("hex");
   return { contractPath, contractHash };
 }
+
+/** Resolve the exact stage contract bytes visible to a reviewer. */
+export function projectStageContract(stage, reviewTrack = null) {
+  assertKnownStage(stage);
+  const { contractPath } = contractPathAndHash(stage);
+  const source = readFileSync(contractPath, "utf8");
+  let content = source;
+  if (stage === "make-decision") {
+    if (!new Set(["direction", "detail"]).has(reviewTrack)) throw new FailLoudError("make-decision contract projection requires review_track direction or detail");
+    const firstTrack = source.indexOf("## review_track:");
+    const marker = `## review_track: ${reviewTrack}`;
+    const start = source.indexOf(marker);
+    const next = source.indexOf("## review_track:", start + marker.length);
+    if (firstTrack < 0 || start < 0) throw new FailLoudError(`make-decision contract is missing selected track: ${reviewTrack}`);
+    content = `${source.slice(0, firstTrack)}${source.slice(start, next < 0 ? undefined : next)}`;
+  } else if (reviewTrack !== null && reviewTrack !== undefined) {
+    throw new FailLoudError(`${stage} contract does not accept review_track`);
+  }
+  return { contractPath, content, contractHash: createHash("sha256").update(content).digest("hex") };
+}

@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { contractPathAndHash } from "./lib/safe-id.mjs";
+import { projectStageContract } from "./lib/safe-id.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 
 const VALID_SEVERITIES = new Set(["blocking", "important", "minor"]);
@@ -31,17 +30,13 @@ function concrete(value, minimum = 8) { return nonEmpty(value) && value.trim().l
 function concreteAnchor(value) { return concrete(value, 6) && /(?:[:#]|\bline\s*\d+\b|\bL\d+\b)/i.test(value); }
 function safeRelativePath(value) { return nonEmpty(value) && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function unknownKeys(value, allowed) { return object(value) ? Object.keys(value).filter((key) => !allowed.has(key)) : []; }
-function contractCheckIds(stage, reviewTrack) {
-  let body = readFileSync(contractPathAndHash(stage).contractPath, "utf8");
-  if (stage === "make-decision") {
-    const start = body.indexOf(`## review_track: ${reviewTrack}`);
-    const next = body.indexOf("## review_track:", start + 1);
-    body = start < 0 ? "" : body.slice(start, next < 0 ? undefined : next);
-  }
-  const ids = [...body.matchAll(/^- (C\d+):\s+\S.*$/gm)].map((match) => match[1]);
-  if (ids.length === 0) throw new Error(`stage contract has no explicit required check ids: ${stage}/${reviewTrack ?? "default"}`);
-  if (new Set(ids).size !== ids.length) throw new Error(`stage contract has duplicate required check ids: ${stage}/${reviewTrack ?? "default"}`);
-  return ids;
+function contractRuleIds(stage, reviewTrack) {
+  const body = projectStageContract(stage, reviewTrack).content;
+  const ids = [...body.matchAll(/^- ((?:(?:DIR|DET)-)?([CH])\d+):\s+\S.*$/gm)].map((match) => ({ id: match[1], kind: match[2] }));
+  const allIds = ids.map(({ id }) => id); const checkIds = ids.filter(({ kind }) => kind === "C").map(({ id }) => id); const hardIds = ids.filter(({ kind }) => kind === "H").map(({ id }) => id);
+  if (checkIds.length === 0 || hardIds.length === 0) throw new Error(`stage contract requires non-empty C/H rule ids: ${stage}/${reviewTrack ?? "default"}`);
+  if (new Set(allIds).size !== allIds.length) throw new Error(`stage contract has duplicate rule ids: ${stage}/${reviewTrack ?? "default"}`);
+  return { allIds, allIdSet: new Set(allIds), hardIds };
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function addUnknownErrors(errors, value, allowed, label) {
@@ -51,6 +46,7 @@ function addUnknownErrors(errors, value, allowed, label) {
 export function validateReviewerOutput({ stage, reviewTrack, ui = false, output, packet, intent } = {}) {
   const errors = [];
   const resolution = resolveRequiredSkills({ stage, reviewTrack, ui });
+  const contractRules = contractRuleIds(stage, reviewTrack);
   if (!object(output)) return { valid: false, errors: ["output must be an object"], resolution };
   addUnknownErrors(errors, output, TOP_LEVEL, "output");
   for (const field of ["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"]) if (!HEX_HASH.test(output[field] ?? "")) errors.push(`invalid ${field}`);
@@ -64,6 +60,7 @@ export function validateReviewerOutput({ stage, reviewTrack, ui = false, output,
     addUnknownErrors(errors, finding, FINDING_FIELDS, `finding ${index}`);
     if (!safeRelativePath(finding.file) || !Number.isInteger(finding.line) || finding.line < 1 || !nonEmpty(finding.rule_id) || !VALID_SEVERITIES.has(finding.severity)
       || !concrete(finding.issue) || !concrete(finding.evidence) || !concrete(finding.suggested_fix) || (finding.late_finding !== undefined && typeof finding.late_finding !== "boolean")) errors.push(`invalid finding: ${index}`);
+    if (!contractRules.allIdSet.has(finding.rule_id)) errors.push(`finding rule id is not in selected contract: ${finding.rule_id}`);
   });
   if (output.verdict === "pass" && (output.findings ?? []).some((finding) => finding?.severity === "blocking")) errors.push("pass verdict cannot contain a blocking finding");
   if (output.verdict === "revise_required") {
@@ -78,9 +75,10 @@ export function validateReviewerOutput({ stage, reviewTrack, ui = false, output,
     addUnknownErrors(errors, item, CHECK_FIELDS, `checklist item ${index}`);
     if (!nonEmpty(item.id) || typeof item.passed !== "boolean" || !concrete(item.evidence)) errors.push(`invalid checklist item: ${index}`);
     if (checklistIds.has(item.id)) errors.push(`duplicate checklist id: ${item.id}`); else checklistIds.add(item.id);
+    if (!contractRules.allIdSet.has(item.id)) errors.push(`checklist id is not in selected contract: ${item.id}`);
     if (item.passed === true) passedChecklistIds.add(item.id);
   });
-  for (const id of contractCheckIds(stage, reviewTrack)) if (!checklistIds.has(id)) errors.push(`checklist missing contract check id: ${id}`);
+  for (const id of contractRules.allIds) if (!checklistIds.has(id)) errors.push(`checklist missing contract rule id: ${id}`);
 
   const passRuleIds = new Set(); const passBindings = new Set();
   if (!Array.isArray(output.pass_items)) errors.push("pass_items must be an array");
@@ -91,9 +89,11 @@ export function validateReviewerOutput({ stage, reviewTrack, ui = false, output,
     const binding = `${item.rule_id}\0${item.artifact_anchor}`;
     if (passBindings.has(binding)) errors.push(`duplicate pass item: ${item.rule_id}`); else passBindings.add(binding);
     passRuleIds.add(item.rule_id);
+    if (!contractRules.allIdSet.has(item.rule_id)) errors.push(`pass item rule id is not in selected contract: ${item.rule_id}`);
     if (!passedChecklistIds.has(item.rule_id)) errors.push(`pass item does not match a passed checklist id: ${item.rule_id}`);
   });
   for (const id of passedChecklistIds) if (!passRuleIds.has(id)) errors.push(`missing pass item for passed checklist id: ${id}`);
+  for (const id of contractRules.hardIds) if (checklistIds.has(id) && !passedChecklistIds.has(id) && !(output.findings ?? []).some((finding) => finding?.rule_id === id && finding.severity === "blocking")) errors.push(`failed hard invariant requires blocking finding: ${id}`);
 
   const requiredNames = new Set(resolution.definitions.map(({ name }) => name)); const seenSkills = new Set();
   if (!Array.isArray(output.skillResults)) errors.push("skillResults must be an array");

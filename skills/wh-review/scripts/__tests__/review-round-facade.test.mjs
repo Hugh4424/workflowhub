@@ -38,14 +38,14 @@ function refreshPacketHashes(value) {
   value.manifest_hash = hash(canonical({ diff_sha256: value.diff_sha256, changed_files: value.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: value.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: value.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: value.test_evidence, host_verified_facts: value.host_verified_facts, contract_hash: value.contract_hash, skill_bundle_hash: value.skill_bundle_hash, source_revision: value.source_revision }));
   return value;
 }
-function output(input, verdict = "pass", severity = "blocking") {
+function output(input, verdict = "pass", severity = "blocking", ruleId = "H1") {
   const checkIds = ["C1", "C2", "C3", "H1", "H2", "H3"];
   const revised = verdict === "revise_required";
   return JSON.stringify({ packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
     contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
-    summary: "review complete with packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: "H1", severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }] : [],
-    checklist: checkIds.map((id) => ({ id, passed: !(revised && id === "H1"), evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
-    pass_items: checkIds.filter((id) => !(revised && id === "H1")).map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
+    summary: "review complete with packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: ruleId, severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }] : [],
+    checklist: checkIds.map((id) => ({ id, passed: !(revised && id === ruleId), evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
+    pass_items: checkIds.filter((id) => !(revised && id === ruleId)).map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "publication and persistence have separate boundaries", fixApproach: "move publication after the atomic persistence step" } : {}) });
 }
 function fakeBroker(callback) { return capabilityBroker(callback); }
@@ -526,10 +526,10 @@ describe("ReviewRoundFacade", () => {
   it("allowlists and redacts every public reviewer free-string field", async () => {
     const tracking = root(); const secretId = "123e4567-e89b-12d3-a456-426614174000"; const secretPath = "/Users/reviewer/private/raw.txt";
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
-      const raw = JSON.parse(output(request.packet, "revise_required", "important"));
+      const raw = JSON.parse(output(request.packet, "revise_required", "important", "C1"));
       raw.summary = `src/a.mjs:12 checked session ${secretId}`;
-      raw.checklist[0] = { id: "C1", passed: true, evidence: "src/a.mjs:12 used Bearer top-secret-token" };
-      raw.pass_items = [{ rule_id: "C1", artifact_anchor: "src/a.mjs:12", evidence: `src/a.mjs:12 raw ref ${secretPath}` }];
+      raw.checklist[1] = { id: "C2", passed: true, evidence: "src/a.mjs:12 used Bearer top-secret-token" };
+      raw.pass_items[0] = { rule_id: "C2", artifact_anchor: "src/a.mjs:12", evidence: `src/a.mjs:12 raw ref ${secretPath}` };
       raw.findings[0].evidence = `src/a.mjs:12 session ${secretId} and runtime runtime-secret-42 expose token=must-not-publish`;
       return { runtime_id: "runtime-secret-42", providers: [{ provider: "opencode", status: "completed", session_id: secretId, output: JSON.stringify(raw) }] };
     }) });
@@ -580,8 +580,8 @@ describe("ReviewRoundFacade", () => {
 
   it("merges equivalent findings without dropping provider evidence or weakening severity", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "55555555-5555-4555-8555-555555555555", providers: [
-      { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet, "revise_required", "minor") },
-      { provider: "kimi", status: "completed", session_id: "k", output: output(request.packet, "revise_required", "blocking") },
+      { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet, "revise_required", "minor", "C1") },
+      { provider: "kimi", status: "completed", session_id: "k", output: output(request.packet, "revise_required", "blocking", "C1") },
     ] })) });
     const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
     expect(result.merged_findings).toHaveLength(1); expect(result.merged_findings[0]).toMatchObject({ severity: "blocking", providers: ["kimi", "opencode"] }); expect(result.merged_findings[0].evidence_by_provider).toHaveLength(2);
