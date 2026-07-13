@@ -135,6 +135,21 @@ describe("ReviewRoundFacade", () => {
     expect(existsSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"))).toBe(false);
     expect(() => facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
   });
+
+  it("keeps an approved reset marker valid after the successor runs, publishes, and continues", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking); let calls = 0;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      calls += 1; return { runtime_id: "77777777-7777-4777-8777-777777777777", providers: [{ provider: "opencode", status: "completed", session_id: `s-${calls}`, output: output(request.packet, calls === 1 ? "escalate_to_human" : "pass") }] };
+    }) });
+    await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    facade.reset({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "approved-flow", reason: "human approved", human_approval_ref: "approval-77" });
+    const first = await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "approved-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    facade.publish(first, { items: [] });
+    const flowPath = join(tracking, "reset-survives-run", "reviews", "private", "flows", "build-code-approved-flow.json");
+    expect(JSON.parse(readFileSync(flowPath, "utf8"))).toMatchObject({ parent_review_flow_id: "old-flow", human_approval_ref: "approval-77" });
+    const continuation = facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "approved-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } }, continuation: true });
+    await facade.run(continuation);
+  });
   it("builds one complete packet, accepts only completed/complete/business-valid output, and stores secrets privately", async () => {
     const tracking = root();
     let dispatched;

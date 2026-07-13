@@ -136,6 +136,7 @@ export class ReviewRoundFacade {
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${intent.stage}-${intent.review_flow_id}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.stage}-${intent.review_flow_id}.json`); }
+  #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.stage}-${intent.review_flow_id}.reset-approval.json`); }
   #lock(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.task_id}.lock`); }
   #readFlow(intent) { const path = this.#flow(intent); return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null; }
   #writeFlow(intent, value) { atomic(this.#flow(intent), safeJson(value)); }
@@ -217,7 +218,8 @@ export class ReviewRoundFacade {
       const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
-      this.#writeFlow(intent, { ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (this.#readFlow(intent)?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
+      const priorFlow = this.#readFlow(intent);
+      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
       return result;
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
@@ -296,13 +298,17 @@ export class ReviewRoundFacade {
     const marker = JSON.parse(readFileSync(markerPath, "utf8"));
     if (!(marker?.version === 1 && marker.status === "superseded" && marker.task_id === saved.intent?.task_id && marker.stage === saved.intent?.stage && marker.old_review_flow_id === saved.intent?.review_flow_id && typeof marker.new_review_flow_id === "string" && marker.new_review_flow_id.length > 0 && typeof marker.human_approval_ref === "string" && marker.human_approval_ref.length > 0 && marker.receipt_sha256 === sha(readFileSync(receiptPath)) && canonical(marker.human_gates) === canonical(human_gates))) return false;
     const privateRoot = join(taskRoot(this.taskTrackingRoot, saved.intent.task_id), "reviews", "private");
+    const approvalPath = this.#resetApproval({ task_id: saved.intent.task_id, stage: saved.intent.stage, review_flow_id: marker.new_review_flow_id });
+    if (marker.reset_approval_ref !== relative(privateRoot, approvalPath) || !existsSync(approvalPath)) return false;
+    const approvalBytes = readFileSync(approvalPath); if (marker.reset_approval_sha256 !== sha(approvalBytes)) return false;
+    const approval = JSON.parse(approvalBytes);
+    if (!(approval?.version === 1 && approval.task_id === saved.intent.task_id && approval.stage === saved.intent.stage && approval.review_flow_id === marker.new_review_flow_id && approval.parent_review_flow_id === saved.intent.review_flow_id && approval.human_approval_ref === marker.human_approval_ref)) return false;
     const newFlowPath = this.#flow({ task_id: saved.intent.task_id, stage: saved.intent.stage, review_flow_id: marker.new_review_flow_id });
-    if (marker.new_flow_ref !== relative(privateRoot, newFlowPath) || !existsSync(newFlowPath)) return false;
-    const newFlowBytes = readFileSync(newFlowPath); if (marker.new_flow_sha256 !== sha(newFlowBytes)) return false;
-    const newFlow = JSON.parse(newFlowBytes);
+    if (!existsSync(newFlowPath)) return false;
+    const newFlow = JSON.parse(readFileSync(newFlowPath));
     return newFlow?.task_id === saved.intent.task_id && newFlow.stage === saved.intent.stage && newFlow.review_flow_id === marker.new_review_flow_id && newFlow.parent_review_flow_id === saved.intent.review_flow_id && newFlow.human_approval_ref === marker.human_approval_ref;
   }
-  #markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id, new_flow_ref, new_flow_sha256, reason, human_approval_ref }) {
+  #markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, reason, human_approval_ref }) {
     const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); if (!existsSync(privateRoot)) return [];
     const markers = [];
     for (const name of readdirSync(privateRoot)) {
@@ -311,7 +317,7 @@ export class ReviewRoundFacade {
       const receiptBytes = readFileSync(receiptPath); const receipt = JSON.parse(receiptBytes);
       if (receipt?.intent?.stage !== stage || receipt.intent.review_flow_id !== review_flow_id) continue;
       const human_gates = deriveHumanGates(receipt.provider_outcomes); if (!human_gates.length) continue;
-      const marker = { version: 1, status: "superseded", task_id, stage, old_review_flow_id: review_flow_id, new_review_flow_id, new_flow_ref, new_flow_sha256, human_approval_ref, reason, receipt_sha256: sha(receiptBytes), human_gates };
+      const marker = { version: 1, status: "superseded", task_id, stage, old_review_flow_id: review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, human_approval_ref, reason, receipt_sha256: sha(receiptBytes), human_gates };
       const markerPath = join(dir, "resolved-by-reset.json"); writeImmutable(markerPath, marker); markers.push(markerPath);
     }
     return markers;
@@ -382,12 +388,18 @@ export class ReviewRoundFacade {
     assertSafeTaskId(task_id); assertKnownStage(stage); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
     const nextId = new_review_flow_id ?? `${review_flow_id}-reset-${this.now()}`; assertSafeReviewFlowId(nextId);
     const flow = { task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
-    const flowPath = this.#flow(flow); if (existsSync(flowPath)) throw new Error("reset target review flow already exists");
-    // Publish the approval-bearing successor before any gate can be marked
-    // superseded. A failed flow write therefore leaves every old gate active.
-    this.#writeFlow(flow, flow);
-    const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); const flowBytes = readFileSync(flowPath);
-    const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id: nextId, new_flow_ref: relative(privateRoot, flowPath), new_flow_sha256: sha(flowBytes), reason, human_approval_ref });
-    return { ...flow, superseded_receipt_refs };
+    const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
+    try {
+      const flowPath = this.#flow(flow), approvalPath = this.#resetApproval(flow);
+      if (existsSync(flowPath) || existsSync(approvalPath)) throw new Error("reset target review flow already exists");
+      const approval = { version: 1, task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, human_approval_ref, reason, approved_at_ms: this.now() };
+      writeImmutable(approvalPath, approval);
+      // Both records are create-exclusive. Until they exist, no old gate has a
+      // supersession marker, so a partial reset remains blocked.
+      writeImmutable(flowPath, flow);
+      const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); const approvalBytes = readFileSync(approvalPath);
+      const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id: nextId, reset_approval_ref: relative(privateRoot, approvalPath), reset_approval_sha256: sha(approvalBytes), reason, human_approval_ref });
+      return { ...flow, reset_approval_ref: relative(privateRoot, approvalPath), superseded_receipt_refs };
+    } finally { this.#releaseLock(lock); }
   }
 }
