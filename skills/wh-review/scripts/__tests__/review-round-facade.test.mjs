@@ -374,6 +374,48 @@ describe("ReviewRoundFacade", () => {
     expect(JSON.parse(readFileSync(contextPath, "utf8")).last_approved_tree).toBe(directionFlow.approved_tree);
   });
 
+  it("does not expose either make-decision pass when aggregate source context persistence fails, then publishes both on retry", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    let failAggregateContext = true;
+    const facade = new ReviewRoundFacade({
+      taskTrackingRoot: tracking,
+      sourceRoot: source,
+      broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: `${request.packet.review_track}-session`, output: makeDecisionOutput(request.packet, request.packet.review_track) }] })),
+      faultInjector(point, value) {
+        if (failAggregateContext && point === "before-source-context-write" && value?.last_approved_tree) throw new Error("aggregate source context persistence failed");
+      },
+    });
+    writeFileSync(join(source, "decision.txt"), "AGGREGATE_ATOMICITY_MARKER\n");
+    const flow = "aggregate-context-failure";
+    const direction = await facade.run(facade.prepare({ task_id: "aggregate-context", stage: "make-decision", review_track: "direction", review_flow_id: flow, packet: makeDecisionPacket(source, "direction") }));
+    expect(facade.publish(direction, { items: [] }).aggregate).toBeNull();
+    const reviews = join(tracking, "aggregate-context", "reviews");
+    expect(existsSync(join(reviews, "stage-result-make-decision-direction.json"))).toBe(false);
+    const detail = await facade.run(facade.prepare({ task_id: "aggregate-context", stage: "make-decision", review_track: "detail", review_flow_id: flow, packet: makeDecisionPacket(source, "detail") }));
+    const detailFlowPath = join(reviews, "private", "flows", `make-decision-detail-${flow}.json`);
+    const detailFlowBefore = JSON.parse(readFileSync(detailFlowPath, "utf8"));
+
+    expect(() => facade.publish(detail, { items: [] })).toThrow("aggregate source context persistence failed");
+    expect(JSON.parse(readFileSync(detailFlowPath, "utf8"))).toEqual(detailFlowBefore);
+    expect(readReviewTreeRef(source, detailFlowBefore.review_tree_ref)).toBe(detailFlowBefore.last_reviewed_tree);
+    expect(JSON.parse(readFileSync(join(reviews, "private", "source-context.json"), "utf8")).last_approved_tree).toBeNull();
+    for (const track of ["direction", "detail"]) {
+      expect(existsSync(join(reviews, "stage-result-make-decision-" + track + ".json"))).toBe(false);
+      expect(existsSync(join(reviews, `report-index-make-decision-${track}.json`))).toBe(false);
+    }
+    expect(existsSync(join(reviews, `stage-result-make-decision-${flow}.json`))).toBe(false);
+    expect(existsSync(join(reviews, "core-receipts"))).toBe(false);
+
+    failAggregateContext = false;
+    const published = facade.publish(detail, { items: [] });
+    expect(published).toMatchObject({ semantic_verdict: "pass", aggregate: { semantic_verdict: "pass" } });
+    expect(JSON.parse(readFileSync(join(reviews, "private", "source-context.json"), "utf8")).last_approved_tree).toMatch(/^[a-f0-9]{40}$/);
+    for (const track of ["direction", "detail"]) {
+      expect(JSON.parse(readFileSync(join(reviews, `stage-result-make-decision-${track}.json`), "utf8"))).toMatchObject({ semantic_verdict: "pass" });
+    }
+    expect(JSON.parse(readFileSync(join(reviews, `stage-result-make-decision-${flow}.json`), "utf8"))).toMatchObject({ semantic_verdict: "pass" });
+  });
+
   it("blocks a make-decision aggregate when direction and detail pin different source trees", async () => {
     const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: `${request.packet.review_track}-session`, output: makeDecisionOutput(request.packet, request.packet.review_track) }] })) });
     writeFileSync(join(source, "decision.txt"), "DIRECTION_MARKER\n"); const flow = "mismatched-tree";

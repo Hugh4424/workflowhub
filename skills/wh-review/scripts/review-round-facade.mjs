@@ -757,7 +757,7 @@ export class ReviewRoundFacade {
       continuation_eligible: receipt.continuation_eligible, receipt_draft_ref: receiptPath };
     return validateSchema("round-run-result", trusted);
   }
-  #latestPublishedMakeDecisionTrack(taskId, reviewFlowId, reviewTrack) {
+  #latestAuthorizedMakeDecisionTrack(taskId, reviewFlowId, reviewTrack) {
     const flowsRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private", "flows");
     if (!existsSync(flowsRoot)) return null;
     const candidates = readdirSync(flowsRoot).filter((name) => name.endsWith(".json") && !name.endsWith(".reset-approval.json")).map((name) => {
@@ -771,10 +771,14 @@ export class ReviewRoundFacade {
     if (core?.intent?.stage !== "make-decision" || core.intent.review_track !== reviewTrack || core.semantic_verdict === null) throw new Error("make-decision aggregate track receipt is invalid");
     return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id, approved_tree: flow.approved_tree ?? null };
   }
-  #publishMakeDecisionAggregate(taskId, reviewFlowId) {
+  // This is deliberately a private authority step.  A make-decision pass is
+  // not a stage pass until both isolated tracks bind the same tree and the
+  // task source context accepts that tree.  Keep it before every public
+  // projection so a failed context write cannot leak a track-level PASS.
+  #prepareMakeDecisionAggregateAuthority(taskId, reviewFlowId) {
     assertSafeReviewFlowId(reviewFlowId);
-    const direction = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "direction");
-    const detail = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "detail");
+    const direction = this.#latestAuthorizedMakeDecisionTrack(taskId, reviewFlowId, "direction");
+    const detail = this.#latestAuthorizedMakeDecisionTrack(taskId, reviewFlowId, "detail");
     if (!direction || !detail) return null;
     const aggregate = aggregateMakeDecisionTracks({ direction, detail });
     if (!aggregate.semantic_verdict) throw new Error("make-decision aggregate requires semantic verdicts from both tracks");
@@ -784,19 +788,48 @@ export class ReviewRoundFacade {
       }
       this.#recordLastApprovedTree(taskId, direction.approved_tree);
     }
-    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
     const aggregateCore = {
       version: 1, stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"],
       track_core_receipt_hashes: { direction: direction.core_receipt_hash, detail: detail.core_receipt_hash },
       track_review_flow_ids: { direction: direction.review_flow_id, detail: detail.review_flow_id },
       semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, merged_findings: aggregate.findings,
     };
+    return { direction, detail, aggregate, aggregateCore, coreHash: sha(safeJson(aggregateCore)) };
+  }
+  #writeMakeDecisionTrackProjection(track) {
+    const intent = track.intent;
+    const receiptPath = resolve(this.#readFlow(intent)?.previous_receipt_ref ?? "");
+    const dir = dirname(receiptPath);
+    const corePath = join(dir, "core-receipt.json");
+    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== track.core_receipt_hash) throw new Error("make-decision track core receipt is unavailable");
+    const publicCorePath = this.#publicCorePath(intent, track.core_receipt_hash);
+    atomic(publicCorePath, readFileSync(corePath), 0o644);
+    const report = `# 审查报告\n\n结论：${track.semantic_verdict === "revise_required" ? "需要修改" : track.semantic_verdict === "pass" ? "通过" : "需要人工确认"}\n\n- 有效审查：${(track.provider_outcomes ?? []).filter((item) => item.business_valid).length}\n- Findings：${(track.merged_findings ?? []).length}\n`;
+    const { reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
+    atomic(reportPath, report, 0o644);
+    atomic(indexPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, needs_human: track.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    atomic(stageResultPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, verdict: track.semantic_verdict, needs_human: track.needs_human }), 0o644);
+    const projectionPath = join(dir, "projection-manifest.json");
+    const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
+    projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, public_core_receipt: true, report: true, report_index: true, stage_result: true };
+    atomic(projectionPath, safeJson(projection));
+    return { core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+  }
+  #publishMakeDecisionAggregate(taskId, reviewFlowId, authority = null) {
+    authority ??= this.#prepareMakeDecisionAggregateAuthority(taskId, reviewFlowId);
+    if (!authority) return null;
+    const { direction, detail, aggregate, aggregateCore, coreHash } = authority;
+    const track_projections = {
+      direction: this.#writeMakeDecisionTrackProjection(direction),
+      detail: this.#writeMakeDecisionTrackProjection(detail),
+    };
+    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
     const group = `make-decision-${reviewFlowId}`;
-    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); atomic(corePath, safeJson(aggregateCore), 0o644); const coreHash = sha(readFileSync(corePath));
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); atomic(corePath, safeJson(aggregateCore), 0o644);
     const reportPath = join(reviews, `${group}-aggregate.md`); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
     const indexPath = join(reviews, `report-index-${group}.json`); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
     const stageResultPath = join(reviews, `stage-result-${group}.json`); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
-    return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+    return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, track_projections };
   }
   #publishUnderLock(result, dispositions) {
     if (result.blocked_by_human_confirmation) throw new Error("human confirmation is required before publication");
@@ -818,6 +851,9 @@ export class ReviewRoundFacade {
     const privateReceipt = JSON.parse(receiptBefore); privateReceipt.dispositions = dispositions.items;
     const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
     const coreBytes = safeJson(core); const coreHash = sha(coreBytes);
+    const privateCorePath = join(dir, "core-receipt.json");
+    const privateCoreBefore = existsSync(privateCorePath) ? readFileSync(privateCorePath) : null;
+    let aggregateAuthority = null;
     // Persist all authority-bearing private state before writing any artifact
     // that a CI consumer can treat as a pass. The receipt journal makes the
     // receipt/flow transition recoverable; this small compensation block is
@@ -829,9 +865,17 @@ export class ReviewRoundFacade {
     try {
       const flow = this.#readFlow(result.intent);
       if (!flow) throw new Error("publication flow is missing");
+      // A crash may leave an orphan private core, but never a flow authority
+      // that points at a core receipt which has not been persisted yet.
+      if (result.intent.stage === "make-decision") atomic(privateCorePath, coreBytes);
       const publishedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
       this.#writeFlow(result.intent, publishedFlow);
-      if (semantic_verdict === "pass" && result.intent.stage !== "make-decision") this.#recordLastApprovedTree(result.intent.task_id, publishedFlow.approved_tree);
+      if (result.intent.stage === "make-decision") {
+        // The private core is aggregate authority, not a public projection.
+        // It must exist before the sibling track can be verified, while the
+        // task source context must succeed before either track becomes public.
+        aggregateAuthority = this.#prepareMakeDecisionAggregateAuthority(result.intent.task_id, result.intent.review_flow_id);
+      } else if (semantic_verdict === "pass") this.#recordLastApprovedTree(result.intent.task_id, publishedFlow.approved_tree);
     } catch (error) {
       // No public artifact has been written yet. Restore the three private
       // records as one unit, including the receipt-update journal, so retry
@@ -841,8 +885,15 @@ export class ReviewRoundFacade {
       else rmSync(this.#flow(result.intent), { force: true });
       if (sourceContextBefore) atomic(sourceContextPath, sourceContextBefore);
       else rmSync(sourceContextPath, { force: true });
+      if (privateCoreBefore) atomic(privateCorePath, privateCoreBefore);
+      else rmSync(privateCorePath, { force: true });
       rmSync(join(dirname(result.receipt_draft_ref), "receipt-update-journal.json"), { force: true });
       throw error;
+    }
+    if (result.intent.stage === "make-decision") {
+      const aggregate = aggregateAuthority ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id, aggregateAuthority) : null;
+      const projection = aggregate?.track_projections?.[result.intent.review_track] ?? null;
+      return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: projection?.core_receipt_ref ?? null, report_ref: projection?.report_ref ?? null, report_index_ref: projection?.report_index_ref ?? null, stage_result_ref: projection?.stage_result_ref ?? null, aggregate };
     }
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, coreBytes); done.done_flags.core_receipt = true; atomic(projection, safeJson(done));
