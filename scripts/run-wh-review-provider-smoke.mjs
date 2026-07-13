@@ -119,12 +119,12 @@ function attachmentsFor(packet, attachmentRoot, bundleId) {
   });
   return { staging, manifest: { version: 1, bundle_id: bundleId, entries: manifestEntries } };
 }
-function directPrompt(packet, round) {
+export function directPrompt(packet, round) {
   const contract = readFileSync(join(repository, "skills/wh-review/contracts/build-code.md"), "utf8");
   const intent = { contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash };
   if (round === 1) return initialPrompt({ packet, intent, stageContract: contract, deliveryMode: "always_embed", requiredSkills: [] }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, and quote R1_DIFF_MARKER exactly in evidence.";
   const delta = buildContinuationDelta({ previousPacket: packet.previous_packet, currentPacket: packet, deltaSource: { unified_diff: packet.delta_diff, changed_files: packet.delta_changed_files }, previousFindings: [], closureEvidence: [], crossStageCarryovers: [], requiredSkills: [] });
-  return continuationPrompt(delta, { stage: "build-code" }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, quote R2_DELTA_ONLY_MARKER exactly in evidence, and must not reopen R1_DIFF_MARKER.";
+  return continuationPrompt(delta, { stage: "build-code" }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, quote R2_DELTA_ONLY_MARKER exactly in evidence, and must not reopen prior-round findings.";
 }
 async function runThirdReview({ thirdReview, requestPath, responsePath, attachments = null, delivery = null }) {
   const [command, ...prefix] = commandParts(thirdReview.command);

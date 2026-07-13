@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { assertProviderRound } from "../run-wh-review-provider-smoke.mjs";
+import { assertProviderRound, directPrompt } from "../run-wh-review-provider-smoke.mjs";
 import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const script = fileURLToPath(new URL("../run-wh-review-provider-smoke.mjs", import.meta.url));
@@ -41,5 +41,14 @@ describe("run-wh-review-provider-smoke", () => {
     const hash = reviewPacketHash(packet);
     expect(reviewPacketHash({ ...packet, packet_hash: "0".repeat(64) })).toBe(hash);
     expect(reviewPacketHash({ ...packet, manifest_hash: "e".repeat(64) })).not.toBe(hash);
+  });
+
+  it("keeps the R2 smoke prompt limited to the delta marker", () => {
+    const hash = (character) => character.repeat(64);
+    const previous = { version: "review-packet.v1", stage: "build-code", review_track: null, round_kind: "initial", baseline_packet_hash: null, packet_hash: hash("a"), manifest_hash: hash("b"), diff_sha256: hash("c"), unified_diff: "R1_DIFF_MARKER", changed_files: [], raw_requirement: "x", acceptance_design_excerpt: "R1_DIFF_MARKER", test_evidence: [], host_verified_facts: [], contract_hash: hash("d"), skill_bundle_hash: hash("e"), source_revision: { base: "f".repeat(40), head: "g".repeat(40) } };
+    const current = { ...previous, round_kind: "continuation", baseline_packet_hash: previous.packet_hash, packet_hash: hash("h"), manifest_hash: hash("i"), diff_sha256: hash("j"), acceptance_design_excerpt: "R2_DELTA_ONLY_MARKER", source_revision: { base: previous.source_revision.base, head: "k".repeat(40) }, previous_packet: previous, delta_diff: "+R2_DELTA_ONLY_MARKER", delta_changed_files: [] };
+    const prompt = directPrompt(current, 2);
+    expect(prompt).toContain("R2_DELTA_ONLY_MARKER");
+    expect(prompt).not.toContain("R1_DIFF_MARKER");
   });
 });
