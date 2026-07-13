@@ -1648,7 +1648,10 @@ describe("ReviewRoundFacade", () => {
     const broken = join(tracking, "broken", "reviews", "private", "round-crash");
     mkdirSync(broken, { recursive: true }); writeFileSync(join(broken, "projection-manifest.json"), "not-json", { flag: "w" }); writeFileSync(join(broken, "round-receipt.json"), "{}", { flag: "w" });
     const brokenInput = { ...input, task_id: "broken", review_flow_id: "next", packet: packet({ root: tracking }) };
-    await expect(facade.prepare(brokenInput)).rejects.toThrow(/Unexpected token/);
+    // Recovery now rejects the unbound receipt before attempting to parse an
+    // unrelated projection file; the important invariant here is that the
+    // failed recovery releases its prepare lock.
+    await expect(facade.prepare(brokenInput)).rejects.toThrow(/PROJECTION_RECOVERY_RECEIPT_TASK_MISMATCH/);
     expect(() => readFileSync(join(tracking, "broken", "reviews", "private", "flows", "broken.lock", "owner.json"))).toThrow();
   });
 

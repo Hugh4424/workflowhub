@@ -622,11 +622,11 @@ export class ReviewRoundFacade {
       // its redacted gate projection in this same run, instead of waiting for
       // a later prepare() recovery pass to revoke a stale public pass.
       if (human_gates.length) {
-        let humanTaskLock = null;
-        try {
-          if (intent.stage !== "make-decision") humanTaskLock = this.#taskProjectionLock(intent.task_id, `human-gate-${intent.review_flow_id}`);
-          this.#writeHumanGateBlock(receipt, receiptPath, join(prepared.dir, "projection-manifest.json"), human_gates);
-        } finally { if (humanTaskLock) this.#releaseLock(humanTaskLock); }
+        // run() already holds the task-wide projection lock: ordinary stages
+        // use their flow lock, and make-decision uses taskLock above. Taking
+        // it again is non-reentrant and turns every human gate into a false
+        // "review-already-running" failure.
+        this.#writeHumanGateBlock(receipt, receiptPath, join(prepared.dir, "projection-manifest.json"), human_gates);
       }
       return validateSchema("round-run-result", result);
     } finally { if (taskLock) this.#releaseLock(taskLock); this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
@@ -741,7 +741,12 @@ export class ReviewRoundFacade {
       catch { throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt intent is invalid"); }
       if (resolve(dir) !== resolve(this.#root(saved.intent))) throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt directory does not bind its intent");
       const guardPath = this.#projectionGuardPath(saved.intent);
-      const flow = this.#readFlow(saved.intent);
+      // A receipt-write crash leaves the new receipt bytes and the old flow
+      // hash behind. Heal (or reject a tampered journal) before any attempt
+      // to replay the projection; otherwise replay tries a second receipt
+      // update and reports an unrelated old-hash mismatch.
+      let flow = this.#readFlow(saved.intent);
+      if (flow?.pending_receipt_update) flow = this.#recoverPendingReceiptBinding(saved.intent, flow);
       if (existsSync(guardPath)) { boundGuards.add(guardPath); this.#readVerifiedProjectionGuard(saved.intent); }
       if (saved.projection_pending !== undefined || flow?.projection_pending !== undefined) {
         if (!existsSync(guardPath)) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: private projection state has no public guard");
