@@ -355,3 +355,20 @@ if (!receiptResult.ok) {
 七要素摘要 + 请确认块的完整定义已并入 Step 9（人审检查点）——那是人工拍板前看到的唯一界面，本节不重复内容，避免两份摘要打架。摘要落盘位置：写入 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md`（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）。
 
 摘要展示本身以及等待人工确认，是 Step 9 的硬门，无条件阻断，不接受任何旁路。
+
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only:
+
+```js
+await runReviewRound({ stage: "build-plan", review_flow_id: "build-plan-flow", packet });
+```
+
+The complete `review-packet.v1` contains plan/task diffs, changed files, requirements,
+design excerpts and test evidence. Providers review only that packet. Do not run git,
+read the real repository, request absolute paths, or write reports. Private raw evidence
+is under `<task>/reviews/private/round-.../`; cancellation is recorded with
+`cancel_source`, never converted into a semantic verdict. Continue the initial flow or
+reset it only with human approval.
+
+## End V4 Review Round

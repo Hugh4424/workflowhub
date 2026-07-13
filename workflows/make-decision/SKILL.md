@@ -663,3 +663,24 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 | `s8_context_no_change` | S8 | — | CONTEXT 无变化 |
 | `s9_user_approved` | S9 | `s9_user_approved: true` | 用户明确批准 |
 | `s10_decision_log_complete` | S10 | — | decision-log 落盘完成 |
+
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only. The provider receives one
+`review-packet.v1`; it must review only that packet. Do not run git, read the real
+repository, request absolute paths, or write review reports in the provider workspace.
+The facade owns `<task>/reviews/private/round-.../` evidence, provider status and
+`cancel_source`; public stage results contain only the core receipt hash.
+
+Run two isolated flows in order. They never share a runtime:
+
+```js
+await runReviewRound({ stage: "make-decision", review_track: "direction", review_flow_id: "direction-flow", packet });
+await runReviewRound({ stage: "make-decision", review_track: "detail", review_flow_id: "detail-flow", packet });
+```
+
+The direction packet contains only the original requirement. The detail packet may add
+the decision log. Later rounds use `continuation: true` with the same flow id; reset
+requires an explicit human approval reference.
+
+## End V4 Review Round

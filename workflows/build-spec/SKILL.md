@@ -79,6 +79,23 @@ build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，
 }
 ```
 
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only:
+
+```js
+await runReviewRound({ stage: "build-spec", review_flow_id: "build-spec-flow", packet });
+```
+
+Create one complete `review-packet.v1` with the spec diff, changed-file manifest,
+requirements/design excerpt and test evidence. Providers review only this packet. Do not
+run git, read the real repository, request absolute paths, or write reports. The facade
+stores raw evidence under `<task>/reviews/private/round-.../`, keeps cancellation as a
+transport diagnostic with `cancel_source`, and exposes only a core receipt hash.
+Use `continuation: true` for later rounds of this flow; reset needs human approval.
+
+## End V4 Review Round
+
 - 三字段（`ac_count`、`fr_count`、`counted_at`）不可为 null
 - `counted_at` 为产出时刻 ISO8601 时间戳
 - 计数方法：grep spec.md 统计 AC- 和 FR- 条目数

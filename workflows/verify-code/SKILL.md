@@ -77,6 +77,23 @@ At stage start, call `metrics/collector.mjs` `recordSkeleton`, passing a seed wi
 }
 ```
 
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only:
+
+```js
+await runReviewRound({ stage: "verify-code", review_flow_id: "verify-code-flow", packet });
+```
+
+The `review-packet.v1` contains the canonical total diff, changed-file manifest,
+acceptance/design excerpt and host test evidence. Providers review only this packet. Do
+not run git, read the real repository, request absolute paths, or write reports. Keep raw
+provider evidence below `<task>/reviews/private/round-.../`; record cancellation with
+`cancel_source` separately from semantic verdicts. Continuations retain the initial
+runtime; a new flow requires human-approved reset.
+
+## End V4 Review Round
+
 These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `stage`, `skill_version`, `executed`, `tokens`, `duration_ms`, `rework_rounds`, `human_intervention`, `friction_ref`). Use `metrics/collector.mjs` — do not hand-write a raw jsonl line with only `skill/stage/event/ts`.
 
 ### 4. fresh 测试执行
