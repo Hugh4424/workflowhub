@@ -24,7 +24,9 @@
 | talk-with-zhipeng | 外部改造适配 | skills/talk-with-zhipeng/ | merged from config/reuse-registry.md |
 | grill-with-docs | 外部改造适配 | skills/grill-with-docs/ | merged from config/reuse-registry.md |
 | intake-decision-review | 外部改造适配 | skills/intake-decision-review/ | merged from config/reuse-registry.md |
-| checkpoint-protocol | 自研 | 本项目自研 | M13d build-code deepening |
-| review-trigger | 自研 | 本项目自研 | M13d build-code deepening |
-| verdict-handler | 自研 | 本项目自研 | M13d build-code deepening |
+| stage-step-receipts | 自研 | skills/stage-step-receipts/SKILL.md | P0 canonical receipt contract; replaces unshipped checkpoint-protocol label |
+| wh-review | 自研 | skills/wh-review/SKILL.md | local review contract; replaces unshipped review-trigger label |
+| verify-change | 自研 | skills/verify-change/SKILL.md | local verification contract; replaces unshipped verdict-handler label |
+| audit-summary-carrier | 自研 | skills/audit-summary-carrier/SKILL.md | P0 bounded audit-summary contract |
+| requirement-lineage | 自研 | skills/requirement-lineage/SKILL.md | P0 requirement evidence contract |
 | test-routing-advisor | 外部改造适配 | packages/core/agenthub/skills/test-routing-advisor/SKILL.md（AgentHub: https://github.com/Hugh4424/AgentHub.git） | M13d build-code deepening |

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Requirement Lineage"
+  short_description: "Map requirements to evidence and verification"
+  default_prompt: "Build requirement-to-evidence lineage for a workflow task."

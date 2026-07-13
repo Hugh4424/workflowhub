@@ -115,3 +115,15 @@
 - **Evidence:** `schemas/audit-summary.schema.json` and facts subschema tests.
 - **Semantic contract:** Reference and preserve, never recompute, the canonical audit verdict.
 - **Mechanism:** audit-summary-reference-carrier
+
+## P0 discoverable contract skills
+
+These entries are callable contracts for P1–P3, not evidence that their runtime wiring is complete.
+
+| skill | typed purpose | consumer | local file |
+|---|---|---|---|
+| stage-step-receipts | canonical step outcome and evidence receipt | P1 workflow wiring, P2 summaries, P3 lineage | `skills/stage-step-receipts/SKILL.md` |
+| audit-summary-carrier | bounded summary reference/hash/freshness carrier | P2 stage result and validator, P3 lineage | `skills/audit-summary-carrier/SKILL.md` |
+| requirement-lineage | requirement → decision → artifact → verification record | P3 audit and verify-code | `skills/requirement-lineage/SKILL.md` |
+
+Audit note: `checkpoint-protocol` and `review-trigger` were historical registry labels without local skill files. The live registry instead names the discoverable local contracts `stage-step-receipts` and `wh-review`; this document does not treat historical archive references as runtime dependencies.
