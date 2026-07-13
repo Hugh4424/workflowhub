@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import {
+  reconcileFindingState,
+  mergeCrossStageCarryovers,
+  aggregateMakeDecisionTracks,
+} from "../finding-state.mjs";
+
+const finding = (id, severity = "blocking", extra = {}) => ({
+  finding_id: id, file: "src/a.mjs", line: 1, rule_id: "H1", severity,
+  issue: `issue ${id}`, evidence: "packet evidence", suggested_fix: "fix", ...extra,
+});
+
+describe("finding continuation state", () => {
+  it("preserves an unclosed blocking finding and increments its streak", () => {
+    const result = reconcileFindingState({
+      previousFindings: [finding("a")], currentFindings: [], closureEvidence: [], businessRound: 2,
+    });
+    expect(result.findings[0]).toMatchObject({ finding_id: "a", severity: "blocking", status: "open", blocking_streak: 2 });
+    expect(result.requires_closure_bundle).toBe(true);
+    expect(result.escalate_to_human).toBe(false);
+  });
+
+  it("escalates an unchanged blocking finding on the third round", () => {
+    const result = reconcileFindingState({
+      previousFindings: [{ ...finding("a"), blocking_streak: 2 }], currentFindings: [], closureEvidence: [], businessRound: 3,
+    });
+    expect(result.escalate_to_human).toBe(true);
+    expect(result.findings[0].blocking_streak).toBe(3);
+  });
+
+  it("marks closure evidence closed and downgrades late blocking findings", () => {
+    const result = reconcileFindingState({
+      previousFindings: [finding("a")], currentFindings: [finding("b", "blocking")],
+      closureEvidence: [{ finding_id: "a", evidence: "fixed in delta" }], businessRound: 2,
+      introducedBlockingIds: new Set(),
+    });
+    expect(result.findings.find((item) => item.finding_id === "a")).toMatchObject({ status: "closed", blocking_streak: 0 });
+    expect(result.findings.find((item) => item.finding_id === "b")).toMatchObject({ severity: "minor", late_finding: true, status: "open" });
+    expect(result.open_blocking).toHaveLength(0);
+  });
+});
+
+describe("cross-stage carryover", () => {
+  it("keeps open carryovers, applies current closure, and preserves provenance", () => {
+    const result = mergeCrossStageCarryovers(
+      [{ carryover_id: "x", source_stage: "build-spec", status: "open", evidence: "old" }],
+      [{ carryover_id: "x", source_stage: "build-spec", status: "closed", evidence: "verified" }, { carryover_id: "y", source_stage: "build-plan", status: "open", evidence: "new" }],
+    );
+    expect(result).toEqual([
+      { carryover_id: "x", source_stage: "build-spec", status: "closed", evidence: "verified" },
+      { carryover_id: "y", source_stage: "build-plan", status: "open", evidence: "new" },
+    ]);
+  });
+});
+
+describe("make-decision track aggregation", () => {
+  it("does not let detail pass override direction hard gate", () => {
+    const result = aggregateMakeDecisionTracks({
+      direction: { semantic_verdict: "revise_required", hard_gates: [finding("d", "blocking")], merged_findings: [finding("d")] },
+      detail: { semantic_verdict: "pass", hard_gates: [], merged_findings: [] },
+    });
+    expect(result.semantic_verdict).toBe("revise_required");
+    expect(result.needs_human).toBe(false);
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it("escalates conflicting direction/detail verdicts and preserves both evidence sets", () => {
+    const result = aggregateMakeDecisionTracks({
+      direction: { semantic_verdict: "pass", hard_gates: [], merged_findings: [{ ...finding("d", "important"), evidence: "direction" }] },
+      detail: { semantic_verdict: "revise_required", hard_gates: [], merged_findings: [{ ...finding("d", "important"), evidence: "detail" }] },
+    });
+    expect(result.semantic_verdict).toBe("escalate_to_human");
+    expect(result.needs_human).toBe(true);
+    expect(result.findings[0].evidence_by_track).toEqual(expect.arrayContaining([
+      { track: "direction", evidence: "direction" }, { track: "detail", evidence: "detail" },
+    ]));
+  });
+});
