@@ -105,7 +105,10 @@ describe("ReviewRoundFacade", () => {
     const lock = join(tracking, "t", "reviews", "private", "flows", "t.lock");
     mkdirSync(join(tracking, "t", "reviews", "private", "flows", "t.lock"), { recursive: true }); writeFileSync(join(tracking, "t", "reviews", "private", "flows", "t.lock", "owner.json"), JSON.stringify({ pid: 999999, created_at_ms: 1, idempotency_key: "crashed" }), { flag: "w" });
     const prepared = facade.prepare(input); const owner = JSON.parse(readFileSync(join(lock, "owner.json"), "utf8"));
-    expect(owner).toMatchObject({ pid: process.pid, idempotency_key: prepared.intent.idempotency_key }); rmSync(prepared.lock, { recursive: true, force: true });
+    expect(owner).toMatchObject({ pid: process.pid, idempotency_key: prepared.intent.idempotency_key });
+    const contender = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    expect(() => contender.prepare({ ...input, review_flow_id: "contender", packet: packet({ root: tracking }) })).toThrow(/review-already-running/);
+    rmSync(prepared.lock, { recursive: true, force: true });
     const broken = join(tracking, "broken", "reviews", "private", "round-crash");
     mkdirSync(broken, { recursive: true }); writeFileSync(join(broken, "projection-manifest.json"), "not-json", { flag: "w" }); writeFileSync(join(broken, "round-receipt.json"), "{}", { flag: "w" });
     const brokenInput = { ...input, task_id: "broken", review_flow_id: "next", packet: packet({ root: tracking }) };

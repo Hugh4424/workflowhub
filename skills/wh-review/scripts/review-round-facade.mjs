@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -133,19 +133,26 @@ export class ReviewRoundFacade {
   }
   #acquireLock(intent) {
     const lock = this.#lock(intent); mkdirSync(dirname(lock), { recursive: true, mode: 0o700 });
-    try { mkdirSync(lock, { mode: 0o700 }); }
-    catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      const ownerPath = join(lock, "owner.json"); let owner;
-      try { owner = JSON.parse(readFileSync(ownerPath, "utf8")); }
-      catch { throw new Error("review-already-running: lock metadata is unreadable"); }
-      if (!Number.isInteger(owner?.pid) || owner.pid <= 0 || !Number.isFinite(owner?.created_at_ms) || typeof owner?.idempotency_key !== "string") throw new Error("review-already-running: lock metadata is invalid");
-      let active = true; try { process.kill(owner.pid, 0); } catch (cause) { active = cause?.code !== "ESRCH"; }
-      if (active) throw new Error("review-already-running");
-      // PID is proven absent, so this is a stale crashed owner. Delete only its
-      // lock directory, then create fresh metadata before projection recovery.
-      rmSync(lock, { recursive: true, force: true }); mkdirSync(lock, { mode: 0o700 });
+    let acquired = false;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try { mkdirSync(lock, { mode: 0o700 }); acquired = true; break; }
+      catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        const ownerPath = join(lock, "owner.json"); let owner;
+        try { owner = JSON.parse(readFileSync(ownerPath, "utf8")); }
+        catch (cause) { if (cause?.code === "ENOENT") continue; throw new Error("review-already-running: lock metadata is unreadable"); }
+        if (!Number.isInteger(owner?.pid) || owner.pid <= 0 || !Number.isFinite(owner?.created_at_ms) || typeof owner?.idempotency_key !== "string") throw new Error("review-already-running: lock metadata is invalid");
+        let active = true; try { process.kill(owner.pid, 0); } catch (cause) { active = cause?.code !== "ESRCH"; }
+        if (active) throw new Error("review-already-running");
+        // Never rm the shared lock path. Atomically rename it into a private
+        // claim; only the winner may remove that claimed stale directory.
+        const claim = `${lock}.stale.${process.pid}.${randomUUID()}`;
+        try { renameSync(lock, claim); }
+        catch (cause) { if (cause?.code === "ENOENT" || cause?.code === "EEXIST") continue; throw cause; }
+        rmSync(claim, { recursive: true, force: true });
+      }
     }
+    if (!acquired) throw new Error("review-already-running: lock recovery raced repeatedly");
     atomic(join(lock, "owner.json"), safeJson({ pid: process.pid, created_at_ms: this.now(), idempotency_key: intent.idempotency_key }));
     return lock;
   }
