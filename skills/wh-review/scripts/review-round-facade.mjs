@@ -262,11 +262,11 @@ export class ReviewRoundFacade {
       const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
       const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head });
       delta = buildContinuationDelta({ previousPacket: priorPacket, currentPacket: packet, deltaSource, previousFindings, closureEvidence, crossStageCarryovers, requiredSkills: resolution.definitions });
-      const prompt = continuationPrompt(delta); const promptBytes = Buffer.byteLength(prompt, "utf8");
+      const prompt = continuationPrompt(delta, { stage: input.stage, reviewTrack }); const promptBytes = Buffer.byteLength(prompt, "utf8");
       if (promptBytes > this.continuationPromptMaxBytes) throw new Error(`CONTINUATION_PROMPT_TOO_LARGE: ${promptBytes} bytes exceeds host limit ${this.continuationPromptMaxBytes}`);
       Object.defineProperty(delta, "prompt", { value: prompt, enumerable: false });
     }
-    const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
+      const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       round_kind: continuation ? "continuation" : "initial", baseline_packet_hash: baselinePacketHash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
@@ -275,15 +275,19 @@ export class ReviewRoundFacade {
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
-      const changesDiff = continuation ? delta.delta_manifest : { changes_diff_sha256: packet.diff_sha256, changes_diff_size: Buffer.byteLength(packet.unified_diff) };
-      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: continuation ? [] : [{ destination: "changes.diff", sha256: changesDiff.changes_diff_sha256, size: changesDiff.changes_diff_size }], delta_manifest: continuation ? delta.delta_manifest : null }));
       const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
+      const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
-      freeze("review-packet.v1.json", safeJson(packet));
-      if (!continuation) freeze("changes.diff", packet.unified_diff);
-      freeze("contracts/provider-protocol.md", readFileSync(protocolPath)); freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
-      for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
+      if (!continuation) {
+        freeze("contracts/provider-protocol.md", readFileSync(protocolPath));
+        freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
+        freeze("schemas/reviewer-output.schema.json", readFileSync(outputSchemaPath));
+        freeze("review-packet.v1.json", safeJson(packet));
+        freeze("changes.diff", packet.unified_diff);
+        for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
+      }
+      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, delta };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
@@ -300,7 +304,7 @@ export class ReviewRoundFacade {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
-      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : initialPrompt({ intent, packet }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
+      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : initialPrompt({ intent, packet, requiredSkills: prepared.resolution.definitions }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0

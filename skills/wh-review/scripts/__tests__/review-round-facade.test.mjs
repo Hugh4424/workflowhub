@@ -268,7 +268,7 @@ describe("ReviewRoundFacade", () => {
     const diffEntry = dispatched.attachments.entries.find((entry) => entry.destination === "changes.diff");
     const outputSchemaEntry = dispatched.attachments.entries.find((entry) => entry.destination === "schemas/reviewer-output.schema.json");
     expect(outputSchemaEntry).toBeTruthy();
-    const outputSchemaBytes = readFileSync(join(tracking, outputSchemaEntry.source));
+    const outputSchemaBytes = readFileSync(new URL("../../schemas/reviewer-output.schema.json", import.meta.url));
     expect(diffEntry).toMatchObject({ sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
     expect(outputSchemaEntry).toMatchObject({ sha256: hash(outputSchemaBytes), size: outputSchemaBytes.length });
     expect(dispatchedDiff).toBe(prepared.packet.unified_diff);

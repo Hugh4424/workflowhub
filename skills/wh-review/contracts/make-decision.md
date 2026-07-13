@@ -4,13 +4,14 @@
 
 ## 共享规则
 
+- `review_track` must select exactly one of `direction` or `detail`; the two tracks are mutually exclusive and their checklist results must never be combined.
 - 第一轮检查完整 packet；后续轮只检查 `previous_findings`、`closure_evidence`、`delta_manifest` 与受影响 artifact。
 - 上轮 blocking 未关闭仍为 blocking。新 blocking 必须来自本轮新材料或上轮不可能发现的问题；否则标 `late_finding:true` 且最高 `minor`。
 - 同一 blocking 连续两轮未关闭时，要求根因、影响范围、反例矩阵和 closure checklist；第三轮 `escalate_to_human`。
 
 ## review_track: direction
 
-### Direction 必检项
+### Checklist IDs: Direction
 
 - C1: 原始需求对位。
 - C2: 真实痛点。
@@ -27,9 +28,25 @@
 
 blocking：需求方向偏离原始诉求、解决虚构问题、关键前提被证伪、明显更优替代被忽略。已批准 scope 的风险提醒不得 blocking。
 
+### Hard invariants: Direction
+
+- H1: 只能审原始用户需求；出现决策日志、拟定方向或方案摘要必须 `escalate_to_human`。
+- H2: 方向必须回应真实痛点，关键前提不得被 packet 证伪。
+- H3: 不得忽略 packet 已证明明显更小、更稳的替代路径。
+
+违反任一 hard invariant 必须用对应 H ID 作为 `rule_id`。
+
+### Pass items: Direction
+
+每个通过的 C ID 和 H ID 必须各有一条 `pass_items`，包含同 ID 的 `rule_id`、packet 内 `artifact_anchor` 与具体 `evidence`。
+
+### Continuation closure: Direction
+
+后续轮只审固定 delta sections。每个上轮 finding 必须由同 ID 的 `closure_evidence` 关闭或保持原严重度；未变材料不得重审。
+
 ## review_track: detail
 
-### Detail 必检项
+### Checklist IDs: Detail
 
 - C1: 来源诚实。
 - C2: 决策一致。
@@ -43,3 +60,19 @@ blocking：需求方向偏离原始诉求、解决虚构问题、关键前提被
 检查：来源诚实性、决策一致性、脆弱假设、验收可判定性、开放问题及时性、范围漂移。
 
 blocking：来源伪造、不可实施的决策矛盾、关键假设遗漏、不可判定验收、未经确认扩大 scope。仅实现层争议必须降为非阻断。
+
+### Hard invariants: Detail
+
+- H1: 来源、批准决策与规格陈述必须一致，不得伪造来源。
+- H2: 决策不得自相矛盾，关键假设、开放问题与验收必须完整可判定。
+- H3: 不得未经确认扩大 scope；实现层争议不得升级为 blocking。
+
+违反任一 hard invariant 必须用对应 H ID 作为 `rule_id`。
+
+### Pass items: Detail
+
+每个通过的 C ID 和 H ID 必须各有一条 `pass_items`，包含同 ID 的 `rule_id`、packet 内 `artifact_anchor` 与具体 `evidence`。
+
+### Continuation closure: Detail
+
+后续轮只审固定 delta sections。每个上轮 finding 必须由同 ID 的 `closure_evidence` 关闭或保持原严重度；未变材料不得重审。

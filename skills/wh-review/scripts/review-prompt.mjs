@@ -54,11 +54,33 @@ function renderAffected(materials) {
   const entries = Object.entries(materials);
   return entries.length ? entries.map(([key, value]) => `${key}: ${renderMaterial(value)}`).join("\n") : "{}";
 }
-export function initialPrompt({ packet, intent }) {
-  return `You are an independent read-only reviewer. Review only the frozen files in your private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.\nMust Read: changes.diff (real multiline unified diff) and review-packet.v1.json.\nchanges_diff_sha256=${packet.diff_sha256}\nchanges_diff_size=${Buffer.byteLength(packet.unified_diff)}\npacket_hash=${packet.packet_hash}\ncontract_hash=${intent.contract_hash}\nskill_bundle_hash=${intent.skill_bundle_hash}\nReturn only reviewer-output JSON.`;
+export function initialPrompt({ packet, intent, requiredSkills = [] }) {
+  const track = intent.stage === "make-decision" ? ` (review_track: ${intent.review_track})` : "";
+  const bundle = requiredSkills.length
+    ? requiredSkills.flatMap(({ name, bundle: definition }) => definition.files.map((file) => `   - skills/${name}/${file.path}`)).join("\n")
+    : "   - (no required skill files for this StageSkillPlan profile)";
+  return `You are an independent read-only reviewer. Review only the frozen files in your private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.
+Must Read in this exact order:
+1. contracts/provider-protocol.md
+2. contracts/${intent.stage}.md${track}
+3. schemas/reviewer-output.schema.json
+4. review-packet.v1.json
+5. changes.diff
+6. StageSkillPlan skill bundle:
+${bundle}
+The attachment delivery policy controls file delivery. This prompt names the frozen bundle but never repeats its body.
+changes_diff_sha256=${packet.diff_sha256}
+changes_diff_size=${Buffer.byteLength(packet.unified_diff)}
+packet_hash=${packet.packet_hash}
+manifest_hash=${packet.manifest_hash}
+contract_hash=${intent.contract_hash}
+skill_bundle_hash=${intent.skill_bundle_hash}
+Return only reviewer-output JSON.`;
 }
-export function continuationPrompt(delta) {
+export function continuationPrompt(delta, { stage, reviewTrack = null } = {}) {
+  const track = stage === "make-decision" ? ` (review_track: ${reviewTrack})` : "";
   return [
+    `Continue using the frozen first-round contracts/provider-protocol.md, contracts/${stage}.md${track}, schemas/reviewer-output.schema.json, and StageSkillPlan skill bundle. No attachments are retransmitted. Review only the fixed delta sections below; do not reopen unchanged first-round material.\ncurrent_packet_hash=${delta.delta_manifest.current_packet_hash}\ncurrent_manifest_hash=${delta.delta_manifest.current_packet_manifest_hash}\ncurrent_diff_sha256=${delta.delta_manifest.current_packet_diff_sha256}`,
     "PreviousFindings\n" + JSON.stringify(delta.previous_findings, null, 2),
     "ClosureEvidence\n" + JSON.stringify(delta.closure_evidence, null, 2),
     "DeltaManifest\n" + JSON.stringify(delta.delta_manifest, null, 2),
