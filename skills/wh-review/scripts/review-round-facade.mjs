@@ -98,8 +98,8 @@ function processStartIdentity(pid) {
     return value || null;
   } catch { return null; }
 }
-function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], undefined); }
-function buildHostGitSource(repositoryRoot, requestedRevision, { contextLines = null } = {}) {
+function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], "buffer"); }
+export function buildHostGitSource(repositoryRoot, requestedRevision, { contextLines = null } = {}) {
   if (!requestedRevision || typeof requestedRevision.base !== "string" || typeof requestedRevision.head !== "string") throw new Error("source_revision.base and source_revision.head are required");
   const root = realpathSync(resolve(repositoryRoot));
   const gitRoot = realpathSync(resolve(String(hostGit(root, ["rev-parse", "--show-toplevel"])).trim()));
@@ -134,6 +134,23 @@ function verifyHostGitSource(packet, repositoryRoot) {
     return normalized;
   });
   if (packet.unified_diff !== built.unified_diff || canonical(normalizeChangedFiles(packet.changed_files)) !== canonical(normalizeChangedFiles(built.changed_files))) throw new Error("review packet source evidence does not match host git base/head revisions");
+}
+export function buildHostReviewPacket({ repository_root, source_revision, stage, review_track = null, round_kind = "initial", baseline_packet_hash = null, raw_requirement, decision_log_excerpt, acceptance_design_excerpt, planning_artifacts = [], verification_closure = [], test_evidence = [], host_verified_facts = [] } = {}) {
+  assertKnownStage(stage); assertReviewTrack(stage, review_track);
+  const source = buildHostGitSource(repository_root, source_revision);
+  const contract = projectStageContract(stage, review_track);
+  const skills = resolveRequiredSkills({ stage, reviewTrack: review_track });
+  const packet = {
+    version: "review-packet.v1", stage, review_track, round_kind, baseline_packet_hash,
+    ...source,
+    raw_requirement, decision_log_excerpt, acceptance_design_excerpt, planning_artifacts,
+    verification_closure, test_evidence, host_verified_facts,
+    contract_hash: contract.contractHash, skill_bundle_hash: skills.skillBundleHash,
+  };
+  packet.diff_sha256 = sha(packet.unified_diff);
+  packet.manifest_hash = reviewManifestHash(packet);
+  packet.packet_hash = packetHash(packet);
+  return sealPacket(packet);
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }

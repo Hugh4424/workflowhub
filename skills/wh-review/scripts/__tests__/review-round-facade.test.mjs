@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ReviewRoundFacade } from "../review-round-facade.mjs";
+import { ReviewRoundFacade, buildHostGitSource, buildHostReviewPacket } from "../review-round-facade.mjs";
 import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 import { reviewPacketHash } from "../review-packet-integrity.mjs";
@@ -352,6 +352,42 @@ describe("ReviewRoundFacade", () => {
     const trusted = trustedPacket(tracking);
     const prepared = await facade.prepare({ task_id: "git", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking }); rmSync(prepared.lock, { recursive: true, force: true });
     expect(() => facade.prepare({ task_id: "tampered", stage: "build-code", review_flow_id: "flow", packet: trustedPacket(root()), repository_root: tracking, source_snapshot: { base_files: {} } })).toThrow(/source_snapshot is not accepted/);
+  });
+
+  it("builds one canonical source packet for ordinary, renamed, and NUL-byte files", async () => {
+    const tracking = root();
+    writeFileSync(join(tracking, "ordinary.txt"), "before\n");
+    writeFileSync(join(tracking, "rename-before.txt"), "rename ".repeat(80));
+    writeFileSync(join(tracking, "nul.bin"), Buffer.from([0, 1, 2, 255, 0]));
+    git(tracking, ["add", "."]); git(tracking, ["commit", "-qm", "source baseline"]);
+    const base = git(tracking, ["rev-parse", "HEAD"]);
+
+    writeFileSync(join(tracking, "ordinary.txt"), "after\n");
+    git(tracking, ["mv", "rename-before.txt", "rename-after.txt"]);
+    const nulBytes = Buffer.from([0, 9, 2, 255, 0, 17]);
+    writeFileSync(join(tracking, "nul.bin"), nulBytes);
+    git(tracking, ["add", "."]); git(tracking, ["commit", "-qm", "source head"]);
+    const head = git(tracking, ["rev-parse", "HEAD"]);
+
+    const source = buildHostGitSource(tracking, { base, head });
+    const nul = source.changed_files.find((entry) => entry.path === "nul.bin");
+    const renamed = source.changed_files.find((entry) => entry.path === "rename-after.txt");
+    expect(nul).toMatchObject({ status: "modified", sha256: hash(nulBytes), size: nulBytes.length });
+    expect(renamed).toMatchObject({ status: "renamed", old_path: "rename-before.txt" });
+
+    const value = buildHostReviewPacket({
+      repository_root: tracking,
+      source_revision: { base, head },
+      stage: "build-code",
+      raw_requirement: "build one canonical host packet",
+      acceptance_design_excerpt: "AC: ordinary, rename, and binary source evidence remain hash-bound",
+      test_evidence: [{ name: "host-source", status: "passed" }],
+      host_verified_facts: [],
+    });
+    expect(value).toMatchObject({ source_revision: source.source_revision, unified_diff: source.unified_diff, changed_files: source.changed_files });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const prepared = await facade.prepare({ task_id: "canonical-host-source", stage: "build-code", review_flow_id: "flow", packet: value, repository_root: tracking });
+    rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it("makes a finding-free escalation a provider-sourced human publication gate", async () => {
