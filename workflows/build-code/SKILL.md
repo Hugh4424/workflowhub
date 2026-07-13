@@ -9,6 +9,29 @@ description: Implement each task phase by phase using TDD, collecting RED and GR
 
 Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. After the durable stage-result is written, call `writeExitReceipt` with the same IDs. Never emit the exit receipt before the durable result.
 
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "build-code"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — read-plan
+Load the approved plan.
+### Step 2 — write-red-tests
+Write a failing test.
+### Step 3 — implement-change
+Implement the minimal scoped change.
+### Step 4 — run-green-tests
+Run and capture passing tests.
+### Step 5 — scan-diff
+Scan the implementation diff.
+### Step 6 — review-change
+Obtain independent code review evidence.
+### Step 7 — commit-implementation
+Record the implementation commit.
+### Step 8 — publish-code-result
+Persist the build-code handoff.
+
+## Legacy reference
+
 ## Goal
 
 Implement the change described by the upstream stage-result. The upstream may be `build-plan` (full path) or `make-decision` directly (slim path — small tasks that skip design and planning). Read the upstream `stage-result` first and consume its `facts` keys to understand scope and constraints.

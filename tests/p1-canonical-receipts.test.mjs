@@ -58,4 +58,24 @@ describe("P1 canonical manifest and receipt boundary", () => {
       .map((stage) => JSON.parse(readFileSync(new URL(`../workflows/${stage}/steps.json`, import.meta.url), "utf8")).steps.length);
     expect(counts.reduce((total, count) => total + count, 0)).toBe(34);
   });
+
+  it("makes every workflow execute the v2 manifest sequence before legacy reference material", () => {
+    const expected = {
+      "make-decision": ["load-context", "triage-scope", "research-inputs", "clarify-direction", "review-decision", "approve-decision", "write-decision-log"],
+      "build-spec": ["read-decision-log", "create-spec-draft", "clarify-spec", "check-constitution", "review-spec", "publish-spec-result"],
+      "build-plan": ["read-spec", "research-plan", "define-contracts", "write-plan", "review-plan", "approve-plan", "publish-plan-result"],
+      "build-code": ["read-plan", "write-red-tests", "implement-change", "run-green-tests", "scan-diff", "review-change", "commit-implementation", "publish-code-result"],
+      "verify-code": ["read-build-result", "verify-receipts", "run-verification-tests", "assemble-facts", "review-verification", "publish-verification-result"],
+    };
+    for (const [stage, slugs] of Object.entries(expected)) {
+      const content = readFileSync(new URL(`../workflows/${stage}/SKILL.md`, import.meta.url), "utf8");
+      const start = content.indexOf("## Executable canonical sequence (v2)");
+      const legacy = content.indexOf("## Legacy reference", start);
+      expect(start, `${stage} canonical section`).toBeGreaterThanOrEqual(0);
+      expect(legacy, `${stage} legacy boundary`).toBeGreaterThan(start);
+      slugs.forEach((slug, index) => {
+        expect(content.indexOf(`### Step ${index + 1} — ${slug}`, start)).toBeGreaterThan(start);
+      });
+    }
+  });
 });

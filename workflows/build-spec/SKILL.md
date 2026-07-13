@@ -10,6 +10,25 @@ description: Turn the agreed direction into a structured spec that is the single
 
 Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. After the durable stage-result is written, call `writeExitReceipt` with the same IDs. Never emit the exit receipt before the durable result.
 
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "build-spec"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — read-decision-log
+Load the approved decision log.
+### Step 2 — create-spec-draft
+Create the specification draft.
+### Step 3 — clarify-spec
+Resolve or record specification ambiguity.
+### Step 4 — check-constitution
+Record constitution compliance evidence.
+### Step 5 — review-spec
+Obtain independent specification review evidence.
+### Step 6 — publish-spec-result
+Persist the specification handoff.
+
+## Legacy reference
+
 ## Goal
 
 Translate the decision log from `make-decision` into a full spec via an orchestrated pipeline. The spec becomes the sole authority that later stages (plan, code, verify) refer to.

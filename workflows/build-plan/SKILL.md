@@ -9,6 +9,27 @@ description: Break the spec into an ordered implementation plan and a task list 
 
 Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. After the durable stage-result is written, call `writeExitReceipt` with the same IDs. Never emit the exit receipt before the durable result.
 
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "build-plan"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — read-spec
+Load the approved specification.
+### Step 2 — research-plan
+Collect planning research.
+### Step 3 — define-contracts
+Define data contracts.
+### Step 4 — write-plan
+Write the implementation plan.
+### Step 5 — review-plan
+Obtain independent plan review evidence.
+### Step 6 — approve-plan
+Obtain explicit human approval.
+### Step 7 — publish-plan-result
+Persist the plan handoff.
+
+## Legacy reference
+
 ## Goal
 
 Take the spec from `build-spec` and decompose it into a concrete plan (`plan.md`) and a sequenced task list (`tasks.md`). The plan is the bridge between requirements and code.

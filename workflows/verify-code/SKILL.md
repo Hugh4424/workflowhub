@@ -9,6 +9,25 @@ description: Run a full verification pass against the spec acceptance criteria, 
 
 Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. After the durable stage-result is written, call `writeExitReceipt` with the same IDs. Never emit the exit receipt before the durable result.
 
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "verify-code"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — read-build-result
+Load the build result.
+### Step 2 — verify-receipts
+Verify execution receipts.
+### Step 3 — run-verification-tests
+Run fresh verification tests.
+### Step 4 — assemble-facts
+Assemble verification facts.
+### Step 5 — review-verification
+Obtain independent verification review evidence.
+### Step 6 — publish-verification-result
+Persist the verification handoff.
+
+## Legacy reference
+
 ## Goal
 
 Confirm that the implementation satisfies every acceptance criterion in the spec. Produce a final test report and an explicit pass/fail verdict before the change is considered deliverable.
