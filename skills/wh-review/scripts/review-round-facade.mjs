@@ -9,6 +9,7 @@ import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
 import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
+import { reconcileFindingState, aggregateMakeDecisionTracks } from "./finding-state.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -18,6 +19,7 @@ function canonical(value) {
 }
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+export function aggregateMakeDecisionReviewTracks(input) { return aggregateMakeDecisionTracks(input); }
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
 function writeImmutable(path, value) {
   const encoded = safeJson(value); mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -326,12 +328,23 @@ export class ReviewRoundFacade {
           if (severityRank[finding.severity] > severityRank[existing.severity]) existing.severity = finding.severity;
         }
       }
-      const merged_findings = [...unique.values()]; const hard_gates = merged_findings.filter((finding) => finding.severity === "blocking" || isHardRuleId(finding.rule_id));
+      const raw_merged_findings = [...unique.values()];
+      // Continuation rounds reconcile the previous receipt before exposing a
+      // merged result. A new blocking finding is retained only when its file
+      // is present in the host-verified delta; otherwise the state machine
+      // marks it late and caps it at minor.
+      const previousFindings = prepared.delta?.previous_findings ?? [];
+      const changedPaths = new Set((prepared.delta?.delta_manifest?.changed_files ?? []).flatMap((item) => [item.path, item.old_path].filter(Boolean)));
+      const introducedBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial" || (!previousFindings.some((old) => old.finding_id === item.finding_id) && changedPaths.has(item.file))).map((item) => item.finding_id));
+      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], businessRound: intent.business_round, introducedBlockingIds });
+      const merged_findings = findingState.findings;
+      const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && (finding.severity === "blocking" || isHardRuleId(finding.rule_id)));
       // An escalation is a business-valid result, not an empty pass. Keep its
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
-      const human_gates = deriveHumanGates(outcomes);
-      const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true);
+      const human_gates = [...deriveHumanGates(outcomes)];
+      if (findingState.escalate_to_human) human_gates.push({ provider: null, verdict: "escalate_to_human", summary: "blocking finding remained open for three rounds" });
+      const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true) || findingState.escalate_to_human;
       const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery_used ?? null]));
       const receipt = { version: 1, intent, delta: prepared.delta, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
