@@ -115,11 +115,12 @@ describe("wh-review v4 workflow wiring", () => {
     const calls = [];
     try {
       const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: {
+        async discoverCapabilities() { return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }; },
         async run(input) { calls.push(input); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", output: reviewerOutput(input.packet) }] }; },
         async status() { return { expires_at_ms: Date.now() + 60_000 }; },
       } });
       const firstPacket = packet(repository, stage, reviewTrack);
-      const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: firstPacket, repository_root: repository, provider_capabilities: { opencode: { continuation: true } } };
+      const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: firstPacket, repository_root: repository };
       const first = await facade.run(facade.prepare(input));
       expect(first.provider_outcomes).toMatchObject([{ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }]);
       expect(first).not.toHaveProperty("semantic_verdict");

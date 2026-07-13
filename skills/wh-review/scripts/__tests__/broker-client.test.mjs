@@ -53,7 +53,7 @@ describe("BrokerClient", () => {
   it("fails loud before passing Phase2-only attachment or cancel-source flags to the base CLI", async () => {
     const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl(command, args) {
       const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-      queueMicrotask(() => { child.stdout.emit("data", '{"version":4,"capabilities":{}}'); child.emit("close", 0); }); return child;
+      queueMicrotask(() => { child.stdout.emit("data", '{"version":4,"capabilities":{"attachments":false,"cancel_source":false},"providers":[]}'); child.emit("close", 0); }); return child;
     } });
     await expect(client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, entries: [] }, attachmentDelivery: "file_only" }))
       .rejects.toThrow(/ATTACHMENT_UNSUPPORTED/);
@@ -64,7 +64,7 @@ describe("BrokerClient", () => {
     const calls = [];
     const client = new BrokerClient({ command: ["node", "/phase2/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/repo", spawnImpl(command, args) {
       calls.push(args); const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true}}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
+      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true},"providers":[]}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
     } });
     await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: "file_only" });
     expect(calls[1].some((arg) => arg.startsWith("--attachments="))).toBe(true);
@@ -78,7 +78,7 @@ describe("BrokerClient", () => {
       const config = join(root, "config.json");
       writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: join(root, "runtime") }, tiers: [["opencode"]], providers: { opencode: { enabled: false, command: process.execPath, auth: { type: "native" }, env: [] } } }));
       const script = join(root, "3rd-review.mjs");
-      writeFileSync(script, 'process.stdout.write(JSON.stringify({version:4,capabilities:{}}));\n');
+      writeFileSync(script, 'process.stdout.write(JSON.stringify({version:4,capabilities:{attachments:false,cancel_source:false},providers:[]}));\n');
       const client = new BrokerClient({ command: [process.execPath, script], config, attachmentRoot: root });
       await expect(client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: "file_only" })).rejects.toThrow(/ATTACHMENT_UNSUPPORTED/);
     } finally { rmSync(root, { recursive: true, force: true }); }

@@ -3,6 +3,36 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const providerId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const providerIds = new Set(["claude-code", "kimi", "codex", "opencode"]);
+const providerStatuses = new Set(["ready", "disabled", "unavailable"]);
+const deliveryModes = new Set(["file_only", "always_embed"]);
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+function normalizeCapabilities(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 4) throw new Error("third-review doctor capability version must be 4");
+  if (!value.capabilities || typeof value.capabilities !== "object" || Array.isArray(value.capabilities)
+    || Object.keys(value.capabilities).sort().join(",") !== "attachments,cancel_source"
+    || typeof value.capabilities.attachments !== "boolean" || typeof value.capabilities.cancel_source !== "boolean") throw new Error("third-review doctor capabilities must declare only boolean attachments and cancel_source");
+  if (!Array.isArray(value.providers)) throw new Error("third-review doctor providers must be an array");
+  const seen = new Set();
+  const providers = value.providers.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item) || typeof item.provider !== "string" || !providerId.test(item.provider) || !providerIds.has(item.provider)) throw new Error("third-review doctor provider id is invalid");
+    if (seen.has(item.provider)) throw new Error(`third-review doctor duplicate provider: ${item.provider}`); seen.add(item.provider);
+    if (!providerStatuses.has(item.status)) throw new Error(`third-review doctor provider status is invalid: ${item.provider}`);
+    const capabilities = item.capabilities;
+    if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities) || Object.keys(capabilities).sort().join(",") !== "attachment_delivery,continuation" || typeof capabilities.continuation !== "boolean") throw new Error(`third-review doctor continuation capability is invalid: ${item.provider}`);
+    if (!Array.isArray(capabilities.attachment_delivery) || capabilities.attachment_delivery.some((mode) => !deliveryModes.has(mode)) || new Set(capabilities.attachment_delivery).size !== capabilities.attachment_delivery.length) throw new Error(`third-review doctor attachment_delivery capability is invalid: ${item.provider}`);
+    return { provider: item.provider, status: item.status, capabilities: { continuation: capabilities.continuation, attachment_delivery: [...capabilities.attachment_delivery].sort() } };
+  }).sort((left, right) => left.provider.localeCompare(right.provider));
+  return deepFreeze({ version: 4, capabilities: { attachments: value.capabilities.attachments, cancel_source: value.capabilities.cancel_source }, providers });
+}
+
 /**
  * Thin v4-only boundary. It deliberately has no wall-clock killer: broker owns
  * provider liveness and duration limits. A workflow shutdown must call cancel.
@@ -14,7 +44,8 @@ export class BrokerClient {
     this.command = Array.isArray(command) ? command : [command];
     this.config = config;
     this.attachmentRoot = attachmentRoot;
-    this.doctorResult = null;
+    this.capabilitySnapshot = null;
+    this.capabilityDiscovery = null;
     this.spawnImpl = spawnImpl;
   }
 
@@ -53,16 +84,20 @@ export class BrokerClient {
     return JSON.parse(result.stdout);
   }
 
-  async doctor() {
-    if (this.doctorResult) return this.doctorResult;
-    const result = await this.#execute(this.command[0], [...this.command.slice(1), "doctor", `--config=${this.config}`]);
-    if (result.code !== 0) throw new Error(`third-review doctor failed: ${result.stderr.slice(0, 4096)}`);
-    try { this.doctorResult = JSON.parse(result.stdout); return this.doctorResult; }
-    catch { throw new Error("third-review doctor returned non-JSON"); }
+  async discoverCapabilities() {
+    if (this.capabilitySnapshot) return this.capabilitySnapshot;
+    if (!this.capabilityDiscovery) this.capabilityDiscovery = (async () => {
+      const result = await this.#execute(this.command[0], [...this.command.slice(1), "doctor", `--config=${this.config}`]);
+      if (result.code !== 0) throw new Error(`third-review doctor failed: ${result.stderr.slice(0, 4096)}`);
+      let parsed; try { parsed = JSON.parse(result.stdout); } catch { throw new Error("third-review doctor returned non-JSON"); }
+      this.capabilitySnapshot = normalizeCapabilities(parsed); return this.capabilitySnapshot;
+    })();
+    try { return await this.capabilityDiscovery; }
+    catch (error) { this.capabilityDiscovery = null; throw error; }
   }
 
   async #requireCapability(name, code) {
-    const doctor = await this.doctor();
+    const doctor = await this.discoverCapabilities();
     // Capability declaration is broker-owned evidence. Caller configuration is
     // deliberately ignored: it cannot authorize an argv the selected CLI lacks.
     if (doctor?.capabilities?.[name] !== true) throw new Error(`${code}: selected third_review.command doctor does not declare ${name}`);

@@ -155,9 +155,21 @@ export class ReviewRoundFacade {
   prepare(input) {
     assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertSafeReviewFlowId(input.review_flow_id);
     if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
+    if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
+    if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery is broker-owned; caller delivery assertions are rejected");
+    const lock = this.#acquireLock({ task_id: input.task_id, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_flow_id}`) });
+    return this.#prepareUnderLock(input, lock);
+  }
+
+  async #prepareUnderLock(input, lock) {
+    try {
+    if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
+    const capabilitySnapshot = await this.broker.discoverCapabilities();
+    const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
+    const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.length > 0).map((item) => item.provider).sort();
+    const continuableProviders = capabilitySnapshot.providers.filter((item) => candidateProviders.includes(item.provider) && item.capabilities.continuation).map((item) => item.provider).sort();
     const prior = this.#readFlow(input); const continuation = input.continuation === true;
-    const continuableProviders = this.#continuableProviders(input);
-    if (continuation && JSON.stringify(continuableProviders) !== JSON.stringify(prior?.continuable_providers ?? [])) throw new Error("blocked_by_human_confirmation: provider continuation capability set changed; use reset with human approval");
+    if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const packet = structuredClone(input.packet);
@@ -175,9 +187,8 @@ export class ReviewRoundFacade {
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
+      capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
-    const lock = this.#acquireLock(intent);
-    try {
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
@@ -186,11 +197,12 @@ export class ReviewRoundFacade {
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
       freeze("review-packet.v1.json", safeJson(packet)); freeze("contracts/provider-protocol.md", readFileSync(protocolPath)); freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
       for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
-      return { intent, packet, input, lock, dir, resolution, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments };
+      return { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments };
     } catch (error) { this.#releaseLock(lock); throw error; }
   }
 
   async run(prepared) {
+    prepared = await prepared;
     const { intent, packet, input } = prepared;
     let attachmentPlan = null;
     try {
@@ -202,11 +214,14 @@ export class ReviewRoundFacade {
       const request = { version: 4, host_provider: input.host_provider, prompt: this.#prompt(intent, packet, input), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
-      const response = await this.broker.run({ request, packet, attachments, attachmentDelivery: input.attachment_delivery ?? "file_only" });
+      const response = await this.broker.run({ request, packet, attachments, attachmentDelivery: "file_only" });
       atomic(join(prepared.dir, "broker-run.json"), safeJson(response));
-      const outcomes = (response.providers ?? []).map((item) => this.#outcome(item, packet, intent, input, prepared.dir));
+      const candidateSet = new Set(intent.candidate_providers);
+      const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
+        ? this.#outcome(item, packet, intent, input, prepared.dir)
+        : { provider: item?.provider ?? null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "PROVIDER_NOT_CANDIDATE" });
       if (response.transport_error) outcomes.push({ provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: response.transport_error.code });
-      const continuable_providers = this.#continuableProviders(input);
+      const continuable_providers = intent.continuable_providers;
       const eligible = continuable_providers.length > 0 && continuable_providers.every((provider) => outcomes.some((item) => item.provider === provider && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.session_id));
       const aggregate = outcomes.filter((item) => item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.semantic_verdict);
       const severityRank = { minor: 1, important: 2, blocking: 3 };
@@ -226,22 +241,17 @@ export class ReviewRoundFacade {
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
       const human_gates = deriveHumanGates(outcomes);
-      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
+      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       const priorFlow = this.#readFlow(intent);
-      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
+      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
       return result;
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
 
   #prompt(intent, packet) {
     return `You are an independent read-only reviewer. Review only review-packet.v1.json in your private workspace. Do not access a repository, run git, request absolute paths, or infer missing material. Return only reviewer-output JSON.\npacket_hash=${packet.packet_hash}\ndiff_sha256=${packet.diff_sha256}\ncontract_hash=${intent.contract_hash}\nskill_bundle_hash=${intent.skill_bundle_hash}`;
-  }
-  #continuableProviders(input) {
-    const capabilities = input.provider_capabilities;
-    if (!capabilities || typeof capabilities !== "object") throw new Error("blocked_by_human_confirmation: provider_capabilities are required to establish continuation");
-    return Object.entries(capabilities).filter(([, value]) => value?.continuation === true).map(([provider]) => provider).sort();
   }
   #acquireLock(intent) {
     const lock = this.#lock(intent); mkdirSync(dirname(lock), { recursive: true, mode: 0o700 });

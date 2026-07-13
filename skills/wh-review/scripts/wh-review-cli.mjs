@@ -11,18 +11,19 @@ import { ReviewRoundFacade } from "./review-round-facade.mjs";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export async function runReviewRound(input) {
+  if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
+  if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery is broker-owned and cannot be supplied by callers");
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
   const command = input.third_review?.command, config = input.third_review?.config;
   if (!taskTrackingRoot || !command || !config) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config}");
   const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? repositoryRoot });
   const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
-  const prepared = facade.prepare({
+  const prepared = await facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
     review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
-    attachment_root: input.attachment_root ?? input.attachmentRoot, attachment_delivery: input.attachment_delivery ?? input.attachmentDelivery,
+    attachment_root: input.attachment_root ?? input.attachmentRoot,
     repository_root: input.repository_root ?? input.repositoryRoot,
-    provider_capabilities: input.provider_capabilities ?? input.providerCapabilities ?? input.third_review?.provider_capabilities,
   });
   const result = await facade.run(prepared);
   // `run()` owns private provider semantics so the host can disposition findings,

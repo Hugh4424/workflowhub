@@ -18,6 +18,11 @@ describe("wh-review v4 CLI", () => {
     for (const forbidden of ["invoke-review-engine", "prepareRoundState", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
     expect(source).toContain("BrokerClient");
     expect(source).toContain('command !== "run" && command !== "reset"');
-    expect(source).not.toMatch(/provider_capabilities|providerCapabilities/);
+    expect(source).not.toMatch(/provider_capabilities:\s*input|providerCapabilities:\s*input|attachment_delivery:\s*input|attachmentDelivery:\s*input/);
+  });
+
+  it.each(["provider_capabilities", "providerCapabilities", "attachment_delivery", "attachmentDelivery"])("rejects caller-owned %s instead of forwarding it", async (field) => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound({ [field]: {}, task_tracking_root: "/tmp", third_review: { command: "broker", config: "/cfg" } })).rejects.toThrow(/broker-owned/);
   });
 });

@@ -38,6 +38,8 @@ The only broker execution form is:
 
 Optional attachment and cancellation-source arguments require machine-readable `doctor` capability declarations from the selected broker command: `capabilities.attachments:true` and `capabilities.cancel_source:true`. Caller configuration cannot assert either capability. A base V4 CLI that lacks either declaration fails loud during dispatch; wh-review never sends unsupported flags or silently drops a cancellation source.
 
+Provider candidates, attachment delivery support, and continuation eligibility come only from the selected broker command's validated `doctor.providers[]` snapshot. Callers must not provide `provider_capabilities` or `attachment_delivery`; both are rejected instead of forwarded. The first round stores the normalized snapshot hash and the actual candidate/continuable provider sets. A changed snapshot blocks continuation until a human-approved reset.
+
 The packet is the provider's entire evidence boundary: unified diff, changed-file hashes, requirement/AC/design excerpts, host-verified test evidence, manifest/hash, contract hash, and skill bundle hash. Providers review `review-packet.v1.json` and frozen attachments only. They must not access the real repository, run `git`, or request absolute paths.
 
 First round stores one `initial_runtime_id` in the private receipt. Later rounds send only `continuation:{runtime_id:initial_runtime_id}` and delta/closure material. They never pass raw provider session ids or silently start a new runtime. Missing/expired/ineligible continuation requires `wh-review-cli.mjs reset` with `reason` and `human_approval_ref`.

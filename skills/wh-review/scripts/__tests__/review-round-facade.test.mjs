@@ -45,8 +45,13 @@ function output(input, verdict = "pass", severity = "blocking") {
     checklist: [{ id: "hard", passed: verdict === "pass", evidence: "packet" }], skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "cause", fixApproach: "fix" } : {}) });
 }
-function fakeBroker(callback) { return { run: callback }; }
-function capabilityBroker(callback, snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }) { return { run: callback, async discoverCapabilities() { return snapshot; } }; }
+function fakeBroker(callback) { return capabilityBroker(callback); }
+function capabilityBroker(callback, snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+  { provider: "claude-code", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
+  { provider: "codex", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
+  { provider: "kimi", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
+  { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+] }) { return { run: callback, async discoverCapabilities() { return snapshot; } }; }
 function git(root, args) { return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim(); }
 function trustedPacket(root) {
   git(root, ["init", "-q"]); git(root, ["config", "user.email", "review@example.test"]); git(root, ["config", "user.name", "Review Test"]);
@@ -67,7 +72,10 @@ function trustedPacket(root) {
 describe("ReviewRoundFacade", () => {
   it("rejects caller capabilities and derives candidates from doctor after acquiring the task lock", async () => {
     const tracking = root(); const lock = join(tracking, "doctor-owned", "reviews", "private", "flows", "doctor-owned.lock");
-    const broker = capabilityBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }), {
+    const broker = capabilityBroker(async (request) => ({ providers: [
+      { provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) },
+      { provider: "kimi", status: "completed", session_id: "disabled", output: output(request.packet) },
+    ] }), {
       version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
         { provider: "codex", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
         { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
@@ -79,18 +87,19 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "rejected", host_provider: "codex", packet: value, changed_file_root: tracking, provider_capabilities: {} })).toThrow(/provider_capabilities.*caller/i);
     const result = await facade.run(await facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
     expect(result.intent.candidate_providers).toEqual(["opencode"]); expect(result.intent.continuable_providers).toEqual(["opencode"]);
+    expect(result.provider_outcomes.find((item) => item.provider === "kimi")).toMatchObject({ business_valid: false, diagnostic: "PROVIDER_NOT_CANDIDATE" });
   });
-  it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", () => {
+  it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const trusted = trustedPacket(tracking);
-    expect(() => facade.prepare({ task_id: "git", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).not.toThrow();
-    expect(() => facade.prepare({ task_id: "tampered", stage: "build-code", review_flow_id: "flow", packet: trustedPacket(root()), repository_root: tracking, source_snapshot: { base_files: {} }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/source_snapshot is not accepted/);
+    const prepared = await facade.prepare({ task_id: "git", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking }); rmSync(prepared.lock, { recursive: true, force: true });
+    expect(() => facade.prepare({ task_id: "tampered", stage: "build-code", review_flow_id: "flow", packet: trustedPacket(root()), repository_root: tracking, source_snapshot: { base_files: {} } })).toThrow(/source_snapshot is not accepted/);
   });
 
   it("makes a finding-free escalation a provider-sourced human publication gate", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "human", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "human", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking }));
     expect(result.human_gates).toEqual([{ provider: "opencode", verdict: "escalate_to_human", summary: "review complete" }]);
     expect(() => facade.publish(result, { items: [] })).toThrow(/human gate/);
   });
@@ -98,24 +107,24 @@ describe("ReviewRoundFacade", () => {
   it("derives human gates during publication and recovery when a receipt omits them", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking }));
     expect(() => facade.publish({ ...result, human_gates: [] }, { items: [] })).toThrow(/human gate provenance/);
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.human_gates; receipt.dispositions = []; writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
-    expect(() => facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
+    await expect(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
     expect(JSON.parse(readFileSync(join(tracking, "recover", "reviews", "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "escalate_to_human", semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true });
   });
 
   it("revokes an old fully-projected pass when recovery finds a provider-sourced human gate", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "full-flags", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "full-flags", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking }));
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.human_gates; receipt.dispositions = []; writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
     const roundDir = join(tracking, "full-flags", "reviews", "private", "round-build-code-first-1");
     writeFileSync(join(roundDir, "projection-manifest.json"), JSON.stringify({ version: 1, done_flags: { core_receipt: true, report: true, report_index: true, stage_result: true } }));
     writeFileSync(join(tracking, "full-flags", "reviews", "build-code-first.md"), "# 审查报告\n\n结论：通过\n");
     writeFileSync(join(tracking, "full-flags", "reviews", "report-index.json"), JSON.stringify({ stage: "build-code", core_receipt_hash: "old", report: "build-code-first.md" }));
     const stageResult = join(tracking, "full-flags", "reviews", "stage-result-build-code.json"); writeFileSync(stageResult, JSON.stringify({ stage: "build-code", verdict: "pass" }));
-    expect(() => facade.prepare({ task_id: "full-flags", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
+    await expect(facade.prepare({ task_id: "full-flags", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
     expect(JSON.parse(readFileSync(stageResult, "utf8"))).toMatchObject({ verdict: "escalate_to_human", blocked_by_human_gate: true });
     expect(readFileSync(join(tracking, "full-flags", "reviews", "build-code-first.md"), "utf8")).toContain("人工确认");
     expect(JSON.parse(readFileSync(join(tracking, "full-flags", "reviews", "report-index.json"), "utf8"))).toMatchObject({ blocked_by_human_gate: true });
@@ -124,37 +133,37 @@ describe("ReviewRoundFacade", () => {
   it("supersedes an approved old human gate so a reset flow can prepare", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking }));
     const reset = facade.reset({ task_id: "reset-gate", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "approved-reset", reason: "human accepted risk", human_approval_ref: "human-approval-42" });
     expect(reset).toMatchObject({ review_flow_id: "approved-reset", parent_review_flow_id: "old-flow", human_approval_ref: "human-approval-42" });
     const marker = join(dirname(result.receipt_draft_ref), "resolved-by-reset.json");
     expect(JSON.parse(readFileSync(marker, "utf8"))).toMatchObject({ status: "superseded", old_review_flow_id: "old-flow", new_review_flow_id: "approved-reset", human_approval_ref: "human-approval-42" });
-    const prepared = facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "approved-reset", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const prepared = await facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "approved-reset", packet: trusted, repository_root: tracking });
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it("blocks orphan or forged reset markers that do not bind an approved new flow", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking }));
     const receiptBytes = readFileSync(result.receipt_draft_ref); const receipt = JSON.parse(receiptBytes);
     writeFileSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"), JSON.stringify({ version: 1, status: "superseded", task_id: "orphan-marker", stage: "build-code", old_review_flow_id: "old-flow", new_review_flow_id: "forged-flow", human_approval_ref: "forged-approval", reason: "forged", receipt_sha256: hash(receiptBytes), human_gates: receipt.human_gates, new_flow_ref: "flows/build-code-forged-flow.json", new_flow_sha256: "0".repeat(64) }));
-    expect(() => facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
+    await expect(facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
   });
 
   it("recovers an approval-only reset after writing its successor flow initially fails", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking }));
     const blockedFlowPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.json"); mkdirSync(blockedFlowPath, { recursive: true });
     expect(() => facade.reset({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "broken-flow", reason: "approved but disk failure", human_approval_ref: "human-approval-99" })).toThrow();
     expect(existsSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"))).toBe(false);
     const approvalPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.reset-approval.json");
     expect(existsSync(approvalPath)).toBe(true);
-    expect(() => facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
+    await expect(facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
     rmSync(blockedFlowPath, { recursive: true, force: true });
     expect(facade.reset({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "broken-flow", reason: "approved but disk failure", human_approval_ref: "human-approval-99" })).toMatchObject({ review_flow_id: "broken-flow" });
-    const prepared = facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "broken-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const prepared = await facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "broken-flow", packet: trusted, repository_root: tracking });
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
@@ -163,13 +172,13 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
       calls += 1; return { runtime_id: "77777777-7777-4777-8777-777777777777", providers: [{ provider: "opencode", status: "completed", session_id: `s-${calls}`, output: output(request.packet, calls === 1 ? "escalate_to_human" : "pass") }] };
     }) });
-    await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking }));
     facade.reset({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "approved-flow", reason: "human approved", human_approval_ref: "approval-77" });
-    const first = await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "approved-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const first = await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "approved-flow", packet: trusted, repository_root: tracking }));
     facade.publish(first, { items: [] });
     const flowPath = join(tracking, "reset-survives-run", "reviews", "private", "flows", "build-code-approved-flow.json");
     expect(JSON.parse(readFileSync(flowPath, "utf8"))).toMatchObject({ parent_review_flow_id: "old-flow", human_approval_ref: "approval-77" });
-    const continuation = facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "approved-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } }, continuation: true });
+    const continuation = await facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "approved-flow", packet: trusted, repository_root: tracking, continuation: true });
     await facade.run(continuation);
   });
   it("builds one complete packet, accepts only completed/complete/business-valid output, and stores secrets privately", async () => {
@@ -181,7 +190,7 @@ describe("ReviewRoundFacade", () => {
         { provider: "kimi", status: "failed", error: { code: "AUTH_ENV_MISSING" } },
       ],
     }); }) });
-    const prepared = facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking });
     expect(prepared.packet.packet_hash).toMatch(/^[a-f0-9]{64}$/);
     const result = await facade.run(prepared);
     expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "complete", semantic_verdict: "pass" }, { provider: "kimi", transport_status: "authentication_failed", packet_status: "material_incomplete", semantic_verdict: null }]);
@@ -204,8 +213,8 @@ describe("ReviewRoundFacade", () => {
 
   it("serializes publication with the task lock", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
-    const result = await facade.run(facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "first", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
-    const held = facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "held", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const result = await facade.run(facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "first", packet: packet({ root: tracking }), changed_file_root: tracking }));
+    const held = await facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "held", packet: packet({ root: tracking }), changed_file_root: tracking });
     expect(() => facade.publish(result, { items: [] }, { lockAlreadyHeld: true })).toThrow(/review-already-running/);
     rmSync(held.lock, { recursive: true, force: true });
     expect(() => facade.publish(result, { items: [] })).not.toThrow();
@@ -214,16 +223,24 @@ describe("ReviewRoundFacade", () => {
   it("uses the initial runtime only on continuation and refuses automatic fresh starts", async () => {
     const tracking = root(); const seen = [];
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => { seen.push(request); return { runtime_id: "22222222-2222-4222-8222-222222222222", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; }) });
-    const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
-    const second = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } }, continuation: true }));
+    const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking }));
+    const second = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking, continuation: true }));
     expect(first.intent.initial_runtime_id).toBeNull();
     expect(second.intent.initial_runtime_id).toBe("22222222-2222-4222-8222-222222222222");
     expect(seen[1].request.continuation).toEqual({ runtime_id: "22222222-2222-4222-8222-222222222222" });
   });
 
+  it("blocks continuation when the broker doctor snapshot changes", async () => {
+    const tracking = root(); let snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "99999999-9999-4999-8999-999999999999", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; } };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const input = { task_id: "cap-change", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking };
+    await facade.run(facade.prepare(input)); snapshot = { ...snapshot, providers: [{ ...snapshot.providers[0], status: "unavailable" }] };
+    await expect(facade.prepare({ ...input, continuation: true })).rejects.toThrow(/blocked_by_human_confirmation.*snapshot changed/);
+  });
+
   it("rejects a stage or track mutation after the packet is sealed", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    const prepared = facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking });
     prepared.packet.stage = "verify-code";
     await expect(facade.run(prepared)).rejects.toThrow(/sealed review packet was modified/);
   });
@@ -231,7 +248,7 @@ describe("ReviewRoundFacade", () => {
   it("reads attachments only from the private prepare snapshot", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const contract = contractPathAndHash("build-code").contractPath; const original = readFileSync(contract, "utf8");
-    const prepared = facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking });
     try { writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`); await expect(facade.run(prepared)).resolves.toMatchObject({ provider_outcomes: [] }); }
     finally { writeFileSync(contract, original); }
   });
@@ -243,7 +260,7 @@ describe("ReviewRoundFacade", () => {
       { provider: "kimi", status: "completed", output: "not-json" },
       { provider: "codex", status: "completed", session_id: "s", output: output(request.packet, "revise_required") },
     ] })) });
-    const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "claude-code", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { codex: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "claude-code", packet: packet({ root: tracking }), changed_file_root: tracking }));
     expect(result.provider_outcomes.map((item) => item.semantic_verdict)).toEqual([null, null, "revise_required"]);
     expect(result.merged_findings).toHaveLength(1);
     expect(result.hard_gates).toHaveLength(1);
@@ -260,40 +277,43 @@ describe("ReviewRoundFacade", () => {
       const tampered = JSON.parse(output(request.packet)); tampered[field] = "0".repeat(64);
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(tampered) }] };
     }) });
-    const result = await facade.run(facade.prepare({ task_id: "tampered-output", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "tampered-output", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
     expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "hash_mismatch", business_valid: false, semantic_verdict: null }]);
     expect(result.merged_findings).toEqual([]);
   });
 
-  it("seals real diff, manifest, and changed-file bytes before broker dispatch", () => {
+  it("seals real diff, manifest, and changed-file bytes before broker dispatch", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");
-    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: badDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*diff_sha256/);
+    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: badDiff, changed_file_root: tracking })).rejects.toThrow(/MATERIAL_INCOMPLETE.*diff_sha256/);
     const badFile = packet({ root: tracking }); badFile.changed_files[0].size = 2; refreshPacketHashes(badFile);
-    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow2", packet: badFile, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
+    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow2", packet: badFile, changed_file_root: tracking })).rejects.toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
     const fakeDiff = packet({ root: tracking }); fakeDiff.unified_diff = "diff --git a/other b/other\n"; refreshPacketHashes(fakeDiff);
-    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
+    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff, changed_file_root: tracking })).rejects.toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
   });
 
-  it("accepts a JSON packet that spells non-renamed old_path as null", () => {
+  it("accepts a JSON packet that spells non-renamed old_path as null", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const value = packet({ root: tracking }); value.changed_files[0].old_path = null; refreshPacketHashes(value);
-    const prepared = facade.prepare({ task_id: "null-old-path", stage: "build-code", review_flow_id: "flow", packet: value, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    const prepared = await facade.prepare({ task_id: "null-old-path", stage: "build-code", review_flow_id: "flow", packet: value, changed_file_root: tracking });
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it("rejects caller-provided snapshots instead of treating them as source evidence", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    expect(() => facade.prepare({ task_id: "snapshot", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, source_snapshot: { base_files: {} }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/source_snapshot is not accepted/);
+    expect(() => facade.prepare({ task_id: "snapshot", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, source_snapshot: { base_files: {} } })).toThrow(/source_snapshot is not accepted/);
   });
 
   it("requires every declared continuable provider and serializes all flows for one task", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "44444444-4444-4444-8444-444444444444", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
-    const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true }, kimi: { continuation: true } } }));
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: capabilityBroker(async (request) => ({ runtime_id: "44444444-4444-4444-8444-444444444444", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }), { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+      { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      { provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+    ] }) });
+    const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
     expect(first.continuation_eligible).toBe(false);
-    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true }, kimi: { continuation: true } }, continuation: true })).toThrow(/blocked_by_human_confirmation/);
-    const held = facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "one", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
-    expect(() => facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "two", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/review-already-running/);
+    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, continuation: true })).rejects.toThrow(/blocked_by_human_confirmation/);
+    const held = await facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "one", packet: packet({ root: tracking }), changed_file_root: tracking });
+    expect(() => facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "two", packet: packet({ root: tracking }), changed_file_root: tracking })).toThrow(/review-already-running/);
     rmSync(held.lock, { recursive: true, force: true });
   });
 
@@ -302,33 +322,33 @@ describe("ReviewRoundFacade", () => {
       { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet, "revise_required", "minor") },
       { provider: "kimi", status: "completed", session_id: "k", output: output(request.packet, "revise_required", "blocking") },
     ] })) });
-    const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true }, kimi: { continuation: true } } }));
+    const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
     expect(result.merged_findings).toHaveLength(1); expect(result.merged_findings[0]).toMatchObject({ severity: "blocking", providers: ["kimi", "opencode"] }); expect(result.merged_findings[0].evidence_by_provider).toHaveLength(2);
   });
 
-  it("records lock ownership, reclaims a proven-stale owner, and releases lock after prepare recovery errors", () => {
+  it("records lock ownership, reclaims a proven-stale owner, and releases lock after prepare recovery errors", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    const input = { task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } };
+    const input = { task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking };
     const lock = join(tracking, "t", "reviews", "private", "flows", "t.lock");
     mkdirSync(join(tracking, "t", "reviews", "private", "flows", "t.lock"), { recursive: true }); writeFileSync(join(tracking, "t", "reviews", "private", "flows", "t.lock", "owner.json"), JSON.stringify({ pid: 999999, created_at_ms: 1, idempotency_key: "crashed" }), { flag: "w" });
-    const prepared = facade.prepare(input); const owner = JSON.parse(readFileSync(join(lock, "owner.json"), "utf8"));
-    expect(owner).toMatchObject({ pid: process.pid, idempotency_key: prepared.intent.idempotency_key });
+    const prepared = await facade.prepare(input); const owner = JSON.parse(readFileSync(join(lock, "owner.json"), "utf8"));
+    expect(owner).toMatchObject({ pid: process.pid, idempotency_key: expect.stringMatching(/^[a-f0-9]{64}$/) });
     const contender = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     expect(() => contender.prepare({ ...input, review_flow_id: "contender", packet: packet({ root: tracking }) })).toThrow(/review-already-running/);
     rmSync(prepared.lock, { recursive: true, force: true });
     const broken = join(tracking, "broken", "reviews", "private", "round-crash");
     mkdirSync(broken, { recursive: true }); writeFileSync(join(broken, "projection-manifest.json"), "not-json", { flag: "w" }); writeFileSync(join(broken, "round-receipt.json"), "{}", { flag: "w" });
     const brokenInput = { ...input, task_id: "broken", review_flow_id: "next", packet: packet({ root: tracking }) };
-    expect(() => facade.prepare(brokenInput)).toThrow(/Unexpected token/);
+    await expect(facade.prepare(brokenInput)).rejects.toThrow(/Unexpected token/);
     expect(() => readFileSync(join(tracking, "broken", "reviews", "private", "flows", "broken.lock", "owner.json"))).toThrow();
   });
 
-  it("reclaims a lock whose PID is live but too new to own its recorded age", () => {
+  it("reclaims a lock whose PID is live but too new to own its recorded age", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    const input = { task_id: "pid-reused", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } };
+    const input = { task_id: "pid-reused", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking };
     const lock = join(tracking, "pid-reused", "reviews", "private", "flows", "pid-reused.lock");
     mkdirSync(lock, { recursive: true }); writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, process_start_identity: "a-reused-pid-cannot-own-this-lock", created_at_ms: 1, idempotency_key: "reused" }));
-    const prepared = facade.prepare(input);
+    const prepared = await facade.prepare(input);
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 });
