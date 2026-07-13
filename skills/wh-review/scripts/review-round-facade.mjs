@@ -250,23 +250,25 @@ export class ReviewRoundFacade {
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
-    let initialHostSource = null;
-    if (input.continuation !== true) {
-      const sourceLock = this.#taskProjectionLock(input.task_id, "source-snapshot");
-      try {
-        const sourceContext = this.#readSourceContext(input.task_id);
-        initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
-        this.#recordInitialTree(input.task_id, initialHostSource.source_revision.base_tree);
-      } finally { this.#releaseLock(sourceLock); }
-    }
     const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
-    return this.#prepareUnderLock(input, lock, initialHostSource);
+    return this.#prepareUnderLock(input, lock);
   }
 
-  async #prepareUnderLock(input, lock, initialHostSource) {
+  async #prepareUnderLock(input, lock) {
+    // Ordinary stages already hold the task-wide lock as their flow lock.
+    // make-decision has per-track flow locks, so it additionally takes this
+    // same task projection lock while it reads/captures source state.
+    let sourceLock = null;
     try {
+    sourceLock = input.stage === "make-decision" ? this.#taskProjectionLock(input.task_id, "prepare-source") : null;
     for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
     if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
+    let initialHostSource = null;
+    if (input.continuation !== true) {
+      const sourceContext = this.#readSourceContext(input.task_id);
+      initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
+      this.#recordInitialTree(input.task_id, initialHostSource.source_revision.base_tree);
+    }
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
@@ -354,7 +356,7 @@ export class ReviewRoundFacade {
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${reviewTrack ?? "default"}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       validateSchema("review-intent", intent);
-      this.#recoverProjections(input.task_id, input.stage === "make-decision");
+      this.#recoverProjections(input.task_id, input.stage === "make-decision" && !sourceLock);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
@@ -375,6 +377,7 @@ export class ReviewRoundFacade {
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
+    finally { if (sourceLock) this.#releaseLock(sourceLock); }
   }
 
   async run(prepared) {
@@ -808,31 +811,54 @@ export class ReviewRoundFacade {
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
     const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
     const needs_human = semantic_verdict !== "pass";
-    const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); privateReceipt.dispositions = dispositions.items; this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, privateReceipt);
+    const receiptBefore = readFileSync(result.receipt_draft_ref);
+    const flowBefore = this.#readFlow(result.intent);
+    const sourceContextPath = this.#sourceContext(result.intent.task_id);
+    const sourceContextBefore = existsSync(sourceContextPath) ? readFileSync(sourceContextPath) : null;
+    const privateReceipt = JSON.parse(receiptBefore); privateReceipt.dispositions = dispositions.items;
     const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
+    const coreBytes = safeJson(core); const coreHash = sha(coreBytes);
+    // Persist all authority-bearing private state before writing any artifact
+    // that a CI consumer can treat as a pass. The receipt journal makes the
+    // receipt/flow transition recoverable; this small compensation block is
+    // only for a failure before public projection begins.
+    // A failure inside the journalled receipt transition is deliberately left
+    // to #recoverPendingReceiptBinding on the next operation. Compensation
+    // starts only after that recovery unit has completed.
+    this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, privateReceipt);
+    try {
+      const flow = this.#readFlow(result.intent);
+      if (!flow) throw new Error("publication flow is missing");
+      const publishedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
+      this.#writeFlow(result.intent, publishedFlow);
+      if (semantic_verdict === "pass" && result.intent.stage !== "make-decision") this.#recordLastApprovedTree(result.intent.task_id, publishedFlow.approved_tree);
+    } catch (error) {
+      // No public artifact has been written yet. Restore the three private
+      // records as one unit, including the receipt-update journal, so retry
+      // starts from the exact pre-publication state.
+      atomic(result.receipt_draft_ref, receiptBefore);
+      if (flowBefore) this.#writeFlow(result.intent, flowBefore);
+      else rmSync(this.#flow(result.intent), { force: true });
+      if (sourceContextBefore) atomic(sourceContextPath, sourceContextBefore);
+      else rmSync(sourceContextPath, { force: true });
+      rmSync(join(dirname(result.receipt_draft_ref), "receipt-update-journal.json"), { force: true });
+      throw error;
+    }
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
-    const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); done.done_flags.core_receipt = true; atomic(projection, safeJson(done)); const coreHash = sha(readFileSync(corePath));
+    const corePath = join(dir, "core-receipt.json"); atomic(corePath, coreBytes); done.done_flags.core_receipt = true; atomic(projection, safeJson(done));
     const publicCorePath = this.#publicCorePath(result.intent, coreHash); atomic(publicCorePath, readFileSync(corePath), 0o644); done.done_flags.public_core_receipt = true; atomic(projection, safeJson(done));
     const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
     const { reportPath, indexPath, stageResultPath } = this.#publicPaths(result.intent);
     atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
     atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
     atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
-    const flow = this.#readFlow(result.intent); if (flow) {
-      const updatedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
-      this.#writeFlow(result.intent, updatedFlow);
-      if (semantic_verdict === "pass" && result.intent.stage !== "make-decision") {
-        try { this.#recordLastApprovedTree(result.intent.task_id, updatedFlow.approved_tree); }
-        catch (error) { this.#writeFlow(result.intent, flow); throw error; }
-      }
-    }
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }
   reset({ task_id, stage, review_track = null, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
     assertSafeTaskId(task_id); assertKnownStage(stage); assertReviewTrack(stage, review_track); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
     const nextId = new_review_flow_id ?? `${review_flow_id}-reset-${this.now()}`; assertSafeReviewFlowId(nextId);
-    const flow = { task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
+    let flow = { task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
     const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_track ?? "default"}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
     try {
       const previous = this.#readFlow({ task_id, stage, review_track, review_flow_id });
@@ -844,7 +870,15 @@ export class ReviewRoundFacade {
       } else writeImmutable(approvalPath, approval);
       // Both records are create-exclusive. Until they exist, no old gate has a
       // supersession marker, so a partial reset remains blocked.
-      writeImmutable(flowPath, flow);
+      if (existsSync(flowPath)) {
+        const savedFlow = JSON.parse(readFileSync(flowPath, "utf8"));
+        if (!(savedFlow?.task_id === task_id && savedFlow.stage === stage && (savedFlow.review_track ?? null) === review_track
+          && savedFlow.review_flow_id === nextId && savedFlow.parent_review_flow_id === review_flow_id
+          && savedFlow.reason === reason && savedFlow.human_approval_ref === human_approval_ref
+          && Number.isFinite(savedFlow.reset_at_ms) && savedFlow.initial_runtime_id === null
+          && savedFlow.continuation_eligible === false && savedFlow.business_round === 0)) throw new Error("reset flow does not match requested reset");
+        flow = savedFlow;
+      } else writeImmutable(flowPath, flow);
       const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); const approvalBytes = readFileSync(approvalPath);
       const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_track, review_flow_id, new_review_flow_id: nextId, reset_approval_ref: relative(privateRoot, approvalPath), reset_approval_sha256: sha(approvalBytes), reason, human_approval_ref });
       // Keep the old snapshot alive until the successor flow and every

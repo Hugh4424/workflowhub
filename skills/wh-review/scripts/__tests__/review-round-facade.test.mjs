@@ -298,6 +298,13 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish(result, { items: [] })).toThrow("source context persistence failed");
     expect(JSON.parse(readFileSync(flowPath, "utf8"))).toEqual(beforePublish);
     expect(JSON.parse(readFileSync(contextPath, "utf8")).last_approved_tree).toBeNull();
+    expect(readReviewTreeRef(tracking, beforePublish.review_tree_ref)).toBe(beforePublish.last_reviewed_tree);
+    const reviews = join(tracking, "source-context-recovery", "reviews");
+    expect(existsSync(join(dirname(result.receipt_draft_ref), "core-receipt.json"))).toBe(false);
+    expect(existsSync(join(reviews, "core-receipts"))).toBe(false);
+    expect(existsSync(join(reviews, "build-code-flow.md"))).toBe(false);
+    expect(existsSync(join(reviews, "report-index.json"))).toBe(false);
+    expect(existsSync(join(reviews, "stage-result-build-code.json"))).toBe(false);
 
     failSourceContextWrite = false;
     expect(facade.publish(result, { items: [] }).semantic_verdict).toBe("pass");
@@ -330,8 +337,9 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.reset(resetInput)).toThrow(/update-ref -d/);
     expect(JSON.parse(readFileSync(resetFlowPath, "utf8"))).toEqual(resetFlow);
     expect(readReviewTreeRef(tracking, resetFlow.review_tree_ref)).toBe(resetFlow.last_reviewed_tree);
+    const failedSuccessor = JSON.parse(readFileSync(join(tracking, "delete-ref-reset", "reviews", "private", "flows", "build-code-new.json"), "utf8"));
     rmSync(resetRefLock);
-    expect(facade.reset(resetInput)).toMatchObject({ review_flow_id: "new" });
+    expect(facade.reset(resetInput)).toMatchObject({ review_flow_id: "new", reset_at_ms: failedSuccessor.reset_at_ms });
     expect(readReviewTreeRef(tracking, resetFlow.review_tree_ref)).toBeNull();
   });
 
@@ -401,6 +409,30 @@ describe("ReviewRoundFacade", () => {
     const ordinary = await facade.prepare({ task_id: "source-lock-interleave", stage: "build-plan", review_flow_id: "ordinary", packet: uncommittedStagePacket("build-plan") });
     expect(ordinary.packet.source_revision.base_tree).toBe(context.last_approved_tree);
     rmSync(ordinary.lock, { recursive: true, force: true });
+  });
+
+  it("serializes a normal stage publish before another stage captures its source base", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    let facade; let interleavedError = null;
+    facade = new ReviewRoundFacade({
+      taskTrackingRoot: tracking,
+      sourceRoot: source,
+      broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "ordinary-session", output: stageOutput(request.packet, request.packet.stage) }] })),
+      faultInjector(point, value) {
+        if (point !== "before-source-context-write" || !value?.last_approved_tree) return;
+        void facade.prepare({ task_id: "ordinary-publish-lock", stage: "make-decision", review_track: "direction", review_flow_id: "decision", packet: makeDecisionPacket(source, "direction") }).catch((error) => { interleavedError = error; });
+      },
+    });
+    writeFileSync(join(source, "spec.txt"), "ORDINARY_PUBLISH_LOCK_MARKER\n");
+    const spec = await facade.run(facade.prepare({ task_id: "ordinary-publish-lock", stage: "build-spec", review_flow_id: "spec", packet: uncommittedStagePacket("build-spec") }));
+    facade.publish(spec, { items: [] });
+    await Promise.resolve();
+    expect(interleavedError?.message).toMatch(/review-already-running/);
+
+    const context = JSON.parse(readFileSync(join(tracking, "ordinary-publish-lock", "reviews", "private", "source-context.json"), "utf8"));
+    const decision = await facade.prepare({ task_id: "ordinary-publish-lock", stage: "make-decision", review_track: "direction", review_flow_id: "decision", packet: makeDecisionPacket(source, "direction") });
+    expect(decision.packet.source_revision.base_tree).toBe(context.last_approved_tree);
+    rmSync(decision.lock, { recursive: true, force: true });
   });
 
   it("deletes the old review-tree ref when a human reset starts a new flow", async () => {
