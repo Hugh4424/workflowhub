@@ -9,8 +9,9 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function readJson(path) {
@@ -108,7 +109,7 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
   }
 }
 
-function checkReview(phaseResult, _baseDir, errors, checked) {
+function checkReview(phaseResult, baseDir, errors, checked, options = {}) {
   checked.push("heterogeneous-review");
   const review = phaseResult.review;
   if (!review || typeof review !== "object") {
@@ -125,6 +126,24 @@ function checkReview(phaseResult, _baseDir, errors, checked) {
   }
   if (review.semantic_verdict !== "pass" || review.needs_human !== false) {
     errors.push("review must be a published pass with needs_human:false");
+    return;
+  }
+  const coreRoot = resolve(options.publicReviewRoot ?? join(baseDir, "reviews", "core-receipts"));
+  const corePath = join(coreRoot, `${review.core_receipt_hash}.json`);
+  if (!existsSync(corePath)) {
+    errors.push("public core receipt is missing for review.core_receipt_hash");
+    return;
+  }
+  const bytes = readFileSync(corePath);
+  if (createHash("sha256").update(bytes).digest("hex") !== review.core_receipt_hash) {
+    errors.push("public core receipt hash does not match review.core_receipt_hash");
+    return;
+  }
+  let core;
+  try { core = JSON.parse(bytes); }
+  catch { errors.push("public core receipt is invalid JSON"); return; }
+  if (core.semantic_verdict !== review.semantic_verdict || core.needs_human !== review.needs_human) {
+    errors.push("public core receipt semantic tuple does not match review");
   }
 }
 
@@ -244,7 +263,7 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   checkStatus(phaseResult, errors, checked);
   checkEvidence(phaseResult, baseDir, errors, checked);
   checkDiffScan(phaseResult, baseDir, errors, checked);
-  checkReview(phaseResult, baseDir, errors, checked);
+  checkReview(phaseResult, baseDir, errors, checked, options);
   checkCommitOrNoChange(phaseResult, worktreeRoot, errors, checked);
   checkWorktreeClean(worktreeRoot, errors, checked);
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -43,6 +44,11 @@ function fixture(overrides = {}, artifactOverrides = {}) {
   writeJson(redPath, { exit_code: artifactOverrides.redExitCode ?? 1 });
   writeJson(greenPath, { exit_code: 0 });
   writeJson(diffPath, { safe: true, violations: [], c2_violations: [], allowlist_violations: [] });
+  const coreBytes = Buffer.from(`${JSON.stringify({ semantic_verdict: "pass", needs_human: false }, null, 2)}\n`);
+  const coreHash = createHash("sha256").update(coreBytes).digest("hex");
+  const corePath = join(repo, "reviews", "core-receipts", `${coreHash}.json`);
+  mkdirSync(join(corePath, ".."), { recursive: true });
+  writeFileSync(corePath, coreBytes);
   const phaseResult = {
     task_id: "fixture",
     phase_id: "phase-1",
@@ -53,7 +59,7 @@ function fixture(overrides = {}, artifactOverrides = {}) {
       green: { path: greenPath, exit_code: 0 },
     },
     diff_scan: { path: diffPath, violations: [] },
-    review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false },
+    review: { core_receipt_hash: coreHash, semantic_verdict: "pass", needs_human: false },
     commit_intent: "file_changes",
     commit_records: [],
     ...overrides,
@@ -81,10 +87,18 @@ afterEach(() => {
 });
 
 describe("phase-gate", () => {
+  it("binds the review tuple to the hash-addressed public core receipt", () => {
+    const phaseResult = fixture();
+    const core = join(repo, "reviews", "core-receipts", `${phaseResult.review.core_receipt_hash}.json`);
+    mkdirSync(join(core, ".."), { recursive: true });
+    writeJson(core, { semantic_verdict: "revise_required", needs_human: false });
+    const result = validatePhaseGate(phaseResult, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/core receipt.*hash|core receipt.*semantic/i);
+  });
+
   it("consumes the published review decision tuple without opening raw review artifacts", () => {
-    const phaseResult = fixture({
-      review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false },
-    });
+    const phaseResult = fixture();
     const result = validatePhaseGate(phaseResult, repo);
     expect(result.ok, result.errors.join("; ")).toBe(true);
   });

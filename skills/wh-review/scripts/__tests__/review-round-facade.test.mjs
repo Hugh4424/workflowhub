@@ -325,6 +325,7 @@ describe("ReviewRoundFacade", () => {
     const result = await facade.run(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking }));
     expect(() => facade.publish({ ...result, human_gates: [] }, { items: [] })).toThrow(/human gate requires explicit human confirmation/);
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.human_gates; receipt.dispositions = []; writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
+    const flowPath = join(tracking, "recover", "reviews", "private", "flows", "build-code-first.json"); const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(result.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
     await expect(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
     expect(JSON.parse(readFileSync(join(tracking, "recover", "reviews", "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "escalate_to_human", semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true });
   });
@@ -334,6 +335,7 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
     const result = await facade.run(facade.prepare({ task_id: "full-flags", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking }));
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.human_gates; receipt.dispositions = []; writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
+    const flowPath = join(tracking, "full-flags", "reviews", "private", "flows", "build-code-first.json"); const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(result.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
     const roundDir = join(tracking, "full-flags", "reviews", "private", "round-build-code-first-1");
     writeFileSync(join(roundDir, "projection-manifest.json"), JSON.stringify({ version: 1, done_flags: { core_receipt: true, report: true, report_index: true, stage_result: true } }));
     writeFileSync(join(tracking, "full-flags", "reviews", "build-code-first.md"), "# 审查报告\n\n结论：通过\n");
@@ -424,6 +426,16 @@ describe("ReviewRoundFacade", () => {
     expect(JSON.parse(readFileSync(publication.stage_result_ref, "utf8"))).toMatchObject({ core_receipt_hash: publication.core_receipt_hash, verdict: "pass", needs_human: false });
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toContain("open-session");
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toContain("11111111-1111-4111-8111-111111111111");
+  });
+
+  it("publishes a hash-addressed public core receipt and binds the complete decision tuple into stage-result", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "private-session", output: output(request.packet) }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "public-core", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    const publication = facade.publish(result, { items: [] });
+    expect(publication.core_receipt_ref).toContain("/reviews/core-receipts/");
+    expect(hash(readFileSync(publication.core_receipt_ref))).toBe(publication.core_receipt_hash);
+    expect(JSON.parse(readFileSync(publication.stage_result_ref, "utf8"))).toMatchObject({ core_receipt_hash: publication.core_receipt_hash, semantic_verdict: "pass", needs_human: false });
   });
 
   it("serializes publication with the task lock", async () => {
