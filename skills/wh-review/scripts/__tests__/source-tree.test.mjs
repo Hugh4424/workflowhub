@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertCurrentTree, buildTreeMaterial, captureWorktreeTree, headTree } from "../source-tree.mjs";
@@ -93,6 +93,39 @@ describe("source-tree", () => {
     });
     expect(material.unified_diff).toContain("deleted file mode 100644");
     expect(material.unified_diff).toContain("new file mode 120000");
+  });
+
+  it("uses blob diff bytes without executing configured textconv drivers", () => {
+    const repository = root();
+    const marker = join(repository, "textconv-was-run"); const script = join(repository, "textconv.sh");
+    writeFileSync(join(repository, ".gitattributes"), "converted.txt diff=review-test\n");
+    writeFileSync(join(repository, "converted.txt"), "base blob bytes\n");
+    writeFileSync(script, `#!/bin/sh\necho invoked > '${marker}'\nprintf 'CONVERTED TEXT\\n'\n`); chmodSync(script, 0o755);
+    git(repository, ["add", ".gitattributes", "converted.txt", "textconv.sh"]); git(repository, ["commit", "-qm", "textconv base"]);
+    git(repository, ["config", "diff.review-test.textconv", script]);
+    writeFileSync(join(repository, "converted.txt"), "worktree blob bytes\n");
+
+    const material = buildTreeMaterial(repository, { baseTree: headTree(repository), snapshotTree: captureWorktreeTree(repository) });
+
+    expect(material.unified_diff).toContain("+worktree blob bytes");
+    expect(material.unified_diff).not.toContain("CONVERTED TEXT");
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("rejects a nested repository gitlink before it can be treated as a blob", () => {
+    const repository = root(); const nested = join(repository, "nested");
+    mkdirSync(nested);
+    git(nested, ["init", "-q"]); git(nested, ["config", "user.email", "review@example.test"]); git(nested, ["config", "user.name", "Review Test"]);
+    writeFileSync(join(nested, "nested.txt"), "one\n"); git(nested, ["add", "."]); git(nested, ["commit", "-qm", "nested base"]);
+    const nestedBase = git(nested, ["rev-parse", "HEAD"]);
+    git(repository, ["update-index", "--add", "--cacheinfo", `160000,${nestedBase},nested`]); git(repository, ["commit", "-qm", "add nested gitlink"]);
+    const baseTree = headTree(repository);
+    writeFileSync(join(nested, "nested.txt"), "two\n"); git(nested, ["add", "."]); git(nested, ["commit", "-qm", "nested update"]);
+    const snapshotTree = captureWorktreeTree(repository, { baseTree });
+
+    expect(() => buildTreeMaterial(repository, { baseTree, snapshotTree })).toThrow(/UNSUPPORTED_GITLINK_SOURCE/);
+    try { buildTreeMaterial(repository, { baseTree, snapshotTree }); }
+    catch (error) { expect(error.code).toBe("UNSUPPORTED_GITLINK_SOURCE"); }
   });
 
   it("rejects final commit when the worktree no longer equals the approved tree", () => {

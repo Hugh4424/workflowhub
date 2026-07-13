@@ -36,6 +36,15 @@ function blob(root, tree, path) {
   return git(root, ["show", `${tree}:${path}`], { encoding: "buffer" });
 }
 
+function assertNotGitlink(root, tree, path) {
+  const entry = String(git(root, ["ls-tree", "-z", tree, "--", path]));
+  const match = entry.match(/^(\d+)\s+(\w+)\s+[0-9a-f]+\t/);
+  if (match?.[1] !== "160000" && match?.[2] !== "commit") return;
+  const error = new Error(`UNSUPPORTED_GITLINK_SOURCE: ${path} is a nested repository gitlink`);
+  error.code = "UNSUPPORTED_GITLINK_SOURCE";
+  throw error;
+}
+
 function parseNameStatus(output) {
   const fields = String(output).split("\0");
   const entries = [];
@@ -76,8 +85,12 @@ export function buildTreeMaterial(root, { baseTree, snapshotTree } = {}) {
   const repository = repositoryRoot(root);
   const base = treeOid(repository, baseTree);
   const snapshot = treeOid(repository, snapshotTree);
-  const unified_diff = String(git(repository, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, snapshot]));
   const changes = parseNameStatus(git(repository, ["diff", "--name-status", "-z", "--find-renames", base, snapshot]));
+  for (const { kind, path, oldPath } of changes) {
+    if (kind !== "D") assertNotGitlink(repository, snapshot, path);
+    if (kind !== "A") assertNotGitlink(repository, base, oldPath ?? path);
+  }
+  const unified_diff = String(git(repository, ["diff", "--no-ext-diff", "--no-textconv", "--binary", "--find-renames", "--full-index", base, snapshot]));
   const changed_files = changes.map(({ kind, path, oldPath }) => {
     const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed", T: "modified" })[kind] };
     if (oldPath !== null) entry.old_path = oldPath;
