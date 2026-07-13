@@ -79,6 +79,20 @@ function trustedPacket(root) {
   };
   return refreshPacketHashes(value);
 }
+function stagePacket(root, stage) {
+  const value = trustedPacket(root); const resolution = resolveRequiredSkills({ stage, reviewTrack: null });
+  value.stage = stage; value.review_track = null;
+  value.contract_hash = projectStageContract(stage).contractHash;
+  value.skill_bundle_hash = resolution.skillBundleHash;
+  value.decision_log_excerpt = "decision-log.md: scope is approved";
+  value.planning_artifacts = [{ path: "plan.md", summary: "ordered implementation and verification" }];
+  return refreshPacketHashes(value);
+}
+function stageOutput(input, stage, verdict = "pass") {
+  const value = JSON.parse(output(input, verdict)); const resolution = resolveRequiredSkills({ stage, reviewTrack: null });
+  value.skillResults = resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" }));
+  return JSON.stringify(value);
+}
 function advancePacket(root, previous, content = "new\nline\nextra\nfixed\n") {
   writeFileSync(join(root, "a"), content); git(root, ["add", "a"]); git(root, ["commit", "-qm", "delta"]);
   const base = previous.source_revision.base, head = git(root, ["rev-parse", "HEAD"]);
@@ -149,16 +163,16 @@ describe("ReviewRoundFacade", () => {
     const initial = trustedPacket(tracking);
     const first = await facade.run(facade.prepare({ task_id: "carryover-inherit", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
     const receipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
-    const upstream = { intent: { stage: "verify-code" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging verification" }] };
+    const upstream = { intent: { stage: "build-plan" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging verification" }] };
     const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(upstreamBytes);
     const upstreamPath = join(tracking, "carryover-inherit", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(dirname(upstreamPath), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
-    receipt.delta = { cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging verification" }] };
+    receipt.delta = { cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "build-plan", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging verification" }] };
     writeFileSync(first.receipt_draft_ref, JSON.stringify(receipt));
     const flowPath = join(tracking, "carryover-inherit", "reviews", "private", "flows", "build-code-flow.json");
     const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(first.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
     const secondPacket = advancePacket(tracking, initial);
     const prepared = await facade.prepare({ task_id: "carryover-inherit", stage: "build-code", review_flow_id: "flow", packet: secondPacket, repository_root: tracking, continuation: true, closure_evidence: [] });
-    expect(prepared.delta.cross_stage_carryovers).toEqual([{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging verification" }]);
+    expect(prepared.delta.cross_stage_carryovers).toEqual([{ carryover_id: "verify-later", source_stage: "build-plan", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging verification" }]);
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
@@ -181,6 +195,26 @@ describe("ReviewRoundFacade", () => {
     expect(closed.delta.cross_stage_carryovers).toEqual([{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, closure_core_receipt_hash: closureHash, status: "closed", evidence: "defer until integration evidence exists" }]);
     rmSync(closed.lock, { recursive: true, force: true });
     await expect(facade.prepare({ ...base, cross_stage_carryovers: [{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, status: "closed", evidence: "defer until integration evidence exists" }] })).rejects.toThrow(/closure_core_receipt_hash/i);
+  });
+
+  it("accepts a real upstream deferred-and-closed carryover in a downstream initial run", async () => {
+    const tracking = root(); let sourcePacket; let sourceRound = 0;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const packet = request.packet ?? sourcePacket;
+      return { runtime_id: "94949494-9494-4494-8494-949494949494", providers: [{ provider: "opencode", status: "completed", session_id: "source-session", output: stageOutput(packet, packet.stage, sourceRound++ === 0 ? "revise_required" : "pass") }] };
+    }) });
+    sourcePacket = stagePacket(tracking, "build-spec");
+    const source = await facade.run(facade.prepare({ task_id: "initial-downstream-carryover", stage: "build-spec", review_flow_id: "source-flow", packet: sourcePacket, repository_root: tracking }));
+    const finding = source.merged_findings[0];
+    const deferred = facade.publish(source, { items: [{ finding_id: finding.finding_id, action: "defer", evidence: "defer until the downstream plan is ready" }] });
+    sourcePacket = advancePacket(tracking, sourcePacket);
+    const closurePrepared = await facade.prepare({ task_id: "initial-downstream-carryover", stage: "build-spec", review_flow_id: "source-flow", packet: sourcePacket, repository_root: tracking, continuation: true, closure_evidence: [{ finding_id: finding.finding_id, evidence: "fixed in the current spec delta" }] });
+    sourcePacket = closurePrepared.packet;
+    const closure = await facade.run(closurePrepared);
+    const closed = facade.publish(closure, { items: closure.merged_findings.map((item) => ({ finding_id: item.finding_id, action: "accept", evidence: "closed by the published spec receipt" })) });
+    const downstreamPacket = stagePacket(tracking, "build-plan");
+    const downstream = await facade.run(facade.prepare({ task_id: "initial-downstream-carryover", stage: "build-plan", review_flow_id: "plan-flow", packet: downstreamPacket, repository_root: tracking, cross_stage_carryovers: [{ carryover_id: finding.finding_id, source_stage: "build-spec", source_core_receipt_hash: deferred.core_receipt_hash, closure_core_receipt_hash: closed.core_receipt_hash, status: "closed", evidence: "defer until the downstream plan is ready" }] }));
+    expect(downstream).toMatchObject({ round_kind: "initial", cross_stage_carryovers: [{ carryover_id: finding.finding_id, source_stage: "build-spec", source_core_receipt_hash: deferred.core_receipt_hash, closure_core_receipt_hash: closed.core_receipt_hash, status: "closed" }] });
   });
 
   it("keeps a new blocking finding only when its exact line is host-proven new to this delta", async () => {
@@ -529,10 +563,10 @@ describe("ReviewRoundFacade", () => {
     const first = await facade.run(facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: initial, repository_root: tracking }));
     const findingId = first.merged_findings[0].finding_id;
     currentPacket = advancePacket(tracking, initial);
-    const upstream = { intent: { stage: "verify-code" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging" }] };
+    const upstream = { intent: { stage: "build-plan" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging" }] };
     const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(upstreamBytes); const upstreamPath = join(tracking, "real-delta", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
     const secondPrepared = await facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: currentPacket, repository_root: tracking, continuation: true,
-      closure_evidence: [{ finding_id: findingId, evidence: "fixed in the new commit and unit test passed" }], cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging" }] });
+      closure_evidence: [{ finding_id: findingId, evidence: "fixed in the new commit and unit test passed" }], cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "build-plan", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging" }] });
     expect(secondPrepared.packet.source_revision.head).not.toBe(first.intent.baseline_packet_hash);
     const second = await facade.run(secondPrepared);
     expect(second.intent).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash });

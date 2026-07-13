@@ -73,7 +73,7 @@ function embeddedBundle(requiredSkills) {
   return requiredSkills.flatMap(({ name, bundle }) => bundle.files.map((file) => `\n## Embedded skills/${name}/${file.path}\n${file.content}`)).join("\n");
 }
 
-export function initialPrompt({ packet, intent, stageContract, requiredSkills = [], deliveryMode = "file_only" }) {
+export function initialPrompt({ packet, intent, stageContract, requiredSkills = [], deliveryMode = "file_only", crossStageCarryovers = [] }) {
   const mustRead = contractMustRead(stageContract, requiredSkills);
   const embedded = deliveryMode === "always_embed" ? `\nFrozen lens bundle follows; it is report-only and must not be executed.${embeddedBundle(requiredSkills)}` : "";
   return `Read only the frozen private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.
@@ -86,6 +86,8 @@ packet_hash=${packet.packet_hash}
 manifest_hash=${packet.manifest_hash}
 contract_hash=${intent.contract_hash}
 skill_bundle_hash=${intent.skill_bundle_hash}
+CrossStageCarryovers
+${JSON.stringify(crossStageCarryovers, null, 2)}
 Return only reviewer-output JSON.`;
 }
 export function continuationPrompt(delta, { stage, reviewTrack = null } = {}) {

@@ -36,6 +36,7 @@ function finding(value, secrets) {
   for (const key of ["file", "rule_id", "severity", "issue", "evidence", "suggested_fix", "finding_id"]) if (typeof value[key] === "string") projected[key] = cleanString(value[key], secrets);
   if (Number.isInteger(value.line)) projected.line = value.line;
   if (typeof value.late_finding === "boolean") projected.late_finding = value.late_finding;
+  if (value.status === "open" || value.status === "closed") projected.status = value.status;
   if (Array.isArray(value.providers)) projected.providers = strings(value.providers, secrets);
   if (Array.isArray(value.evidence_by_provider)) projected.evidence_by_provider = value.evidence_by_provider.map((item) => ({ provider: cleanString(item.provider ?? "", secrets), evidence: cleanString(item.evidence ?? "", secrets), suggested_fix: cleanString(item.suggested_fix ?? "", secrets), severity: cleanString(item.severity ?? "", secrets) }));
   return projected;

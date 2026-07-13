@@ -35,6 +35,13 @@ export const STAGE_CONTRACT_MAP = {
   "verify-code": "verify-code.md",
 };
 
+/** Canonical workflow order used to validate cross-stage receipt handoffs. */
+export const REVIEW_STAGE_SEQUENCE = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+
+export function isDownstreamReviewStage(sourceStage, targetStage) {
+  return REVIEW_STAGE_SEQUENCE.indexOf(sourceStage) >= 0 && REVIEW_STAGE_SEQUENCE.indexOf(sourceStage) < REVIEW_STAGE_SEQUENCE.indexOf(targetStage);
+}
+
 const SAFE_ID_RE = /^[A-Za-z0-9._-]+$/;
 
 export class FailLoudError extends Error {}

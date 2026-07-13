@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
+import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, isDownstreamReviewStage, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
@@ -189,15 +189,16 @@ function checkedCarryovers(value, previousFindings, { taskTrackingRoot, taskId, 
     if (Object.keys(item).some((key) => !allowed.has(key)) || typeof item.carryover_id !== "string" || !item.carryover_id || seen.has(item.carryover_id)
       || !["open", "deferred", "closed"].includes(item.status) || typeof item.source_stage !== "string" || !item.source_stage || typeof item.evidence !== "string" || !item.evidence.trim()) throw new Error("cross_stage_carryovers requires explicit carryover_id, source_stage, source_core_receipt_hash, status, and evidence fields");
     const core = trustedPublicCore(taskTrackingRoot, taskId, item.source_core_receipt_hash);
-    const source = core?.intent?.stage === item.source_stage && core.intent.stage !== stage
+    const source = core?.intent?.stage === item.source_stage && isDownstreamReviewStage(item.source_stage, stage)
       ? (core.dispositions ?? []).find((disposition) => disposition?.finding_id === item.carryover_id && disposition?.action === "defer")
       : null;
     if (!source || source.evidence !== item.evidence) throw new Error("cross_stage_carryovers source stage, hash, or deferred closure binding is invalid");
     if (item.status === "closed") {
       const closure = trustedPublicCore(taskTrackingRoot, taskId, item.closure_core_receipt_hash, "closure");
-      const stillPresent = (closure.merged_findings ?? []).some((finding) => finding?.finding_id === item.carryover_id);
+      const closureFinding = (closure.merged_findings ?? []).find((finding) => finding?.finding_id === item.carryover_id);
+      const stillOpen = closureFinding !== undefined && closureFinding?.status !== "closed";
       if (closure?.intent?.stage !== item.source_stage || closure.intent?.previous_core_receipt_hash !== item.source_core_receipt_hash
-        || closure.semantic_verdict !== "pass" || closure.needs_human !== false || stillPresent) throw new Error("cross_stage_carryovers trusted closure receipt does not close the deferred carryover");
+        || closure.semantic_verdict !== "pass" || closure.needs_human !== false || stillOpen) throw new Error("cross_stage_carryovers trusted closure receipt does not close the deferred carryover");
     } else if (item.closure_core_receipt_hash !== undefined) throw new Error("cross_stage_carryovers closure_core_receipt_hash is only valid for closed carryovers");
     seen.add(item.carryover_id);
     return { carryover_id: item.carryover_id, source_stage: item.source_stage, source_core_receipt_hash: item.source_core_receipt_hash, ...(item.status === "closed" ? { closure_core_receipt_hash: item.closure_core_receipt_hash } : {}), status: item.status, evidence: source.evidence };
@@ -302,10 +303,11 @@ export class ReviewRoundFacade {
       if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== prior.baseline_packet_hash) throw new Error("blocked_by_human_confirmation: caller baseline_packet_hash conflicts with frozen baseline");
       packet.round_kind = "continuation"; packet.baseline_packet_hash = prior.baseline_packet_hash;
     } else {
-      if (input.closure_evidence !== undefined || input.cross_stage_carryovers !== undefined) return this.#materialIncomplete(input, "closure_evidence and cross_stage_carryovers are continuation-only");
+      if (input.closure_evidence !== undefined) return this.#materialIncomplete(input, "closure_evidence is continuation-only");
       if (packet.round_kind !== undefined && packet.round_kind !== "initial") return this.#materialIncomplete(input, "initial packet round_kind is invalid");
       if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== null) return this.#materialIncomplete(input, "initial packet baseline_packet_hash must be null");
       packet.round_kind = "initial"; packet.baseline_packet_hash = null;
+      delta = { cross_stage_carryovers: checkedCarryovers(input.cross_stage_carryovers, [], { taskTrackingRoot: this.taskTrackingRoot, taskId: input.task_id, stage: input.stage }) };
     }
     packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
     try { sealPacket(packet); verifyHostGitSource(packet, input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot); }
@@ -346,7 +348,7 @@ export class ReviewRoundFacade {
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
-      const initialPromptText = !continuation ? initialPrompt({ intent, packet, stageContract: stageContract.content, requiredSkills: resolution.definitions, deliveryMode: resolution.deliveryMode }) : null;
+      const initialPromptText = !continuation ? initialPrompt({ intent, packet, stageContract: stageContract.content, requiredSkills: resolution.definitions, deliveryMode: resolution.deliveryMode, crossStageCarryovers: delta?.cross_stage_carryovers ?? [] }) : null;
       if (initialPromptText && Buffer.byteLength(initialPromptText, "utf8") > this.initialPromptMaxBytes) throw new Error(`PROMPT_TOO_LARGE: ${Buffer.byteLength(initialPromptText, "utf8")} bytes exceeds host limit ${this.initialPromptMaxBytes}`);
       if (!continuation) {
         freeze("contracts/provider-protocol.md", readFileSync(protocolPath));
