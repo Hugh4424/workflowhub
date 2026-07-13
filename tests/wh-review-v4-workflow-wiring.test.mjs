@@ -52,8 +52,16 @@ function deltaPacket(repository, previous) {
   return refreshManifest(next);
 }
 function reviewerOutput(packet) {
-  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1"], evidence: "packet marker", conclusion: "checked" }));
-  return JSON.stringify({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, packet_status: "complete", verdict: "pass", summary: "packet marker reviewed", findings: [], checklist: [{ id: "contract", passed: true, evidence: "packet" }], skillResults });
+  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1#packet_hash"], evidence: "review-packet.v1#packet_hash binds the inspected packet", conclusion: "the lens found no contract violation in the packet" }));
+  let contract = readFileSync(contractPathAndHash(packet.stage).contractPath, "utf8");
+  if (packet.stage === "make-decision") {
+    const start = contract.indexOf(`## review_track: ${packet.review_track}`); const next = contract.indexOf("## review_track:", start + 1);
+    contract = contract.slice(start, next < 0 ? undefined : next);
+  }
+  const ids = [...new Set(contract.match(/\b(?:C|F|H)\d+\b/g) ?? ["contract"])];
+  const checklist = ids.map((id) => ({ id, passed: true, evidence: `review-packet.v1#${id} has specific packet evidence` }));
+  const pass_items = ids.map((id) => ({ rule_id: id, artifact_anchor: `review-packet.v1#${id}`, evidence: `${id} is supported by the frozen packet contents` }));
+  return JSON.stringify({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, packet_status: "complete", verdict: "pass", summary: "packet marker reviewed against concrete contract evidence", findings: [], checklist, pass_items, skillResults });
 }
 function v4(stage) {
   const content = skill(stage);

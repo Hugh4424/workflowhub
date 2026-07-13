@@ -16,8 +16,8 @@ function fixture({ stage = "build-code", reviewTrack = null, verdict = "pass" } 
   const hashes = { packet_hash: "1".repeat(64), manifest_hash: "2".repeat(64), diff_sha256: "3".repeat(64), contract_hash: "4".repeat(64), skill_bundle_hash: skillBundleHash };
   const output = {
     ...hashes, packet_status: "complete", verdict, summary: "审查结论基于冻结 packet 的逐项证据。", findings: [],
-    checklist: [{ id: "C1", passed: true, evidence: "unified_diff:a:1 显示目标行为已实现。" }],
-    pass_items: [{ rule_id: "C1", artifact_anchor: "unified_diff:a:1", evidence: "新增分支明确返回预期结果。" }],
+    checklist: [{ id: "C1", passed: verdict !== "revise_required", evidence: "unified_diff:a:1 显示目标行为已实现。" }],
+    pass_items: verdict === "revise_required" ? [] : [{ rule_id: "C1", artifact_anchor: "unified_diff:a:1", evidence: "新增分支明确返回预期结果。" }],
     skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["planning_artifacts:plan.md#L10"], evidence: "plan.md#L10 显示需求和验证步骤直接关联。", conclusion: "该 lens 未发现违反合同的证据。" })),
   };
   return { output, resolution, packet: { ...hashes }, intent: { contract_hash: hashes.contract_hash, material_manifest_hash: hashes.manifest_hash, skill_bundle_hash: hashes.skill_bundle_hash } };

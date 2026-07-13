@@ -29,8 +29,7 @@ function writeImmutable(path, value) {
     if (error?.code !== "EEXIST" || readFileSync(path, "utf8") !== encoded) throw error;
   }
 }
-function stripFence(value) { const text = String(value ?? "").trim(); const found = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i); return found ? found[1] : text; }
-function parseOutput(value) { try { return { ok: true, value: JSON.parse(stripFence(value)) }; } catch { return { ok: false }; } }
+function parseOutput(value) { try { return { ok: true, value: JSON.parse(String(value ?? "").trim()) }; } catch { return { ok: false }; } }
 function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function manifestValue(packet) {
@@ -534,8 +533,8 @@ export class ReviewRoundFacade {
     const output = parsed.value;
     if (output.packet_hash !== packet.packet_hash || output.manifest_hash !== packet.manifest_hash || output.diff_sha256 !== packet.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
     if (output.packet_status !== "complete") return { ...base, packet_status: output.packet_status ?? "material_incomplete", diagnostic: "PROVIDER_PACKET_INCOMPLETE" };
-    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output });
-    if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: checked.errors.join("; ") };
+    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet, intent });
+    if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "BUSINESS_INVALID" };
     let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
     catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }
     return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist };

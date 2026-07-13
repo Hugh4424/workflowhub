@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review reviewer output",
   "type": "object",
-  "required": ["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash", "packet_status", "verdict", "summary", "findings", "checklist", "skillResults"],
+  "required": ["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash", "packet_status", "verdict", "summary", "findings", "checklist", "pass_items", "skillResults"],
   "properties": {
     "packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -12,15 +12,13 @@
     "packet_status": { "enum": ["complete", "material_incomplete", "hash_mismatch"] },
     "verdict": { "enum": ["pass", "revise_required", "escalate_to_human"] },
     "summary": { "type": "string", "minLength": 1 },
-    "findings": { "type": "array", "items": { "type": "object", "required": ["file", "line", "rule_id", "severity", "issue", "evidence", "suggested_fix"], "properties": { "file": { "type": "string", "minLength": 1 }, "line": { "type": "integer", "minimum": 1 }, "rule_id": { "type": "string", "minLength": 1 }, "severity": { "enum": ["blocking", "important", "minor"] }, "issue": { "type": "string", "minLength": 1 }, "evidence": { "type": "string", "minLength": 1 }, "suggested_fix": { "type": "string", "minLength": 1 } } } },
-    "checklist": { "type": "array", "items": { "type": "object", "required": ["id", "passed", "evidence"], "properties": { "id": { "type": "string", "minLength": 1 }, "passed": { "type": "boolean" }, "evidence": { "type": "string", "minLength": 1 } } } },
-    "skillResults": { "type": "array", "items": { "type": "object", "required": ["skill", "bundle_hash", "mode", "checked_objects", "evidence", "conclusion"], "properties": { "skill": { "type": "string", "minLength": 1 }, "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "mode": { "const": "lens-only" }, "checked_objects": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "evidence": { "type": "string", "minLength": 1 }, "conclusion": { "type": "string", "minLength": 1 } } } },
-    "rootCause": { "type": "string" },
-    "fixApproach": { "type": "string" }
+    "findings": { "type": "array", "items": { "type": "object", "required": ["file", "line", "rule_id", "severity", "issue", "evidence", "suggested_fix"], "properties": { "file": { "type": "string", "minLength": 1 }, "line": { "type": "integer", "minimum": 1 }, "rule_id": { "type": "string", "minLength": 1 }, "severity": { "enum": ["blocking", "important", "minor"] }, "issue": { "type": "string", "minLength": 1 }, "evidence": { "type": "string", "minLength": 1 }, "suggested_fix": { "type": "string", "minLength": 1 }, "late_finding": { "type": "boolean" } }, "additionalProperties": false } },
+    "checklist": { "type": "array", "items": { "type": "object", "required": ["id", "passed", "evidence"], "properties": { "id": { "type": "string", "minLength": 1 }, "passed": { "type": "boolean" }, "evidence": { "type": "string", "minLength": 1 } }, "additionalProperties": false } },
+    "pass_items": { "type": "array", "items": { "type": "object", "required": ["rule_id", "artifact_anchor", "evidence"], "properties": { "rule_id": { "type": "string", "minLength": 1 }, "artifact_anchor": { "type": "string", "minLength": 1 }, "evidence": { "type": "string", "minLength": 1 } }, "additionalProperties": false } },
+    "skillResults": { "type": "array", "items": { "type": "object", "required": ["skill", "bundle_hash", "mode", "checked_objects", "evidence", "conclusion"], "properties": { "skill": { "type": "string", "minLength": 1 }, "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "mode": { "const": "lens-only" }, "checked_objects": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }, "evidence": { "type": "string", "minLength": 1 }, "conclusion": { "type": "string", "minLength": 1 } }, "additionalProperties": false } },
+    "rootCause": { "type": "string", "minLength": 1 },
+    "fixApproach": { "type": "string", "minLength": 1 }
   },
-  "allOf": [{
-    "if": { "properties": { "verdict": { "const": "revise_required" } } },
-    "then": { "required": ["rootCause", "fixApproach"] }
-  }],
-  "additionalProperties": true
+  "allOf": [{ "if": { "properties": { "verdict": { "const": "revise_required" } } }, "then": { "required": ["rootCause", "fixApproach"] } }],
+  "additionalProperties": false
 }
