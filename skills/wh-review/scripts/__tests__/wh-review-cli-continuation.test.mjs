@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { contractPathAndHash } from "../lib/safe-id.mjs";
@@ -52,7 +52,8 @@ vi.mock("../broker-client.mjs", () => ({
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
-afterEach(() => { broker.reset(); roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })); });
+const originalHome = process.env.HOME;
+afterEach(() => { broker.reset(); if (originalHome === undefined) delete process.env.HOME; else process.env.HOME = originalHome; roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })); });
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -81,13 +82,22 @@ function repository() {
   writeFileSync(join(root, "a"), "first change\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "first"]);
   return { root, base };
 }
+function hostConfig(root) {
+  const home = join(root, "home"); const packetRoot = join(root, "packets"); const brokerConfig = join(root, "3rd-review.json");
+  mkdirSync(join(home, ".workflowhub"), { recursive: true }); mkdirSync(packetRoot);
+  writeFileSync(brokerConfig, JSON.stringify({ version: 4, attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }] }));
+  writeFileSync(join(home, ".workflowhub", "config.json"), JSON.stringify({ task_dir: root, third_review: { command: "broker", config: brokerConfig, attachment_root: packetRoot } }));
+  process.env.HOME = home;
+  return realpathSync(packetRoot);
+}
 
 describe("wh-review CLI continuation", () => {
   it("forwards closure evidence and cross-stage carryovers into a real second review round", async () => {
     const { runReviewRound } = await import(cli.href);
     const { root, base } = repository();
+    const packetRoot = hostConfig(root);
     const firstPacket = reviewPacket(root, base);
-    await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: root, repository_root: root, third_review: { command: "broker", config: "/config.json", attachment_root: root } });
+    await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: root, repository_root: root });
     const firstReceipt = JSON.parse(readFileSync(join(root, "cli-continuation", "reviews", "private", "round-build-code-flow-1", "round-receipt.json"), "utf8"));
     const findingId = firstReceipt.merged_findings[0].finding_id;
 
@@ -95,10 +105,10 @@ describe("wh-review CLI continuation", () => {
     const secondPacket = reviewPacket(root, base); broker.currentPacket = secondPacket;
     const closure_evidence = [{ finding_id: findingId, evidence: "changes.diff:a:2 records the persistence fix" }];
     const cross_stage_carryovers = [{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "verification is scheduled after the build" }];
-    const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, repository_root: root, third_review: { command: "broker", config: "/config.json", attachment_root: root }, continuation: true, closure_evidence, cross_stage_carryovers });
+    const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, repository_root: root, continuation: true, closure_evidence, cross_stage_carryovers });
 
     expect(result.transport.continuation_eligible).toBe(true);
-    expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([root, root]);
+    expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([packetRoot, packetRoot]);
     expect(broker.calls).toHaveLength(2);
     expect(broker.calls[1]).toEqual({ request: expect.objectContaining({ continuation: { runtime_id: "11111111-1111-4111-8111-111111111111" } }) });
     expect(broker.calls[1].request.prompt).toContain(JSON.stringify(closure_evidence, null, 2));

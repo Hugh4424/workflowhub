@@ -5,22 +5,23 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { BrokerClient } from "./broker-client.mjs";
 import { ReviewRoundFacade } from "./review-round-facade.mjs";
+import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
 
 export async function runReviewRound(input) {
   if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
   if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution and cannot be supplied by callers");
+  if (input.third_review !== undefined || input.attachment_root !== undefined || input.attachmentRoot !== undefined) throw new Error("third_review and attachment_root are host-configured and cannot be supplied by callers");
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  const command = input.third_review?.command, config = input.third_review?.config, attachmentRoot = input.third_review?.attachment_root;
-  if (!taskTrackingRoot || !command || !config || !attachmentRoot) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config,attachment_root}");
-  if (input.attachment_root !== undefined || input.attachmentRoot !== undefined) throw new Error("attachment_root is fixed by third_review.attachment_root and cannot be supplied by callers");
-  const client = new BrokerClient({ command, config, attachmentRoot });
+  if (!taskTrackingRoot) throw new TypeError("V4 review requires task_tracking_root");
+  const thirdReview = loadTrustedThirdReviewConfig();
+  const client = new BrokerClient({ command: thirdReview.command, config: thirdReview.config, attachmentRoot: thirdReview.attachmentRoot });
   const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
   const prepared = await facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
     review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
     closure_evidence: input.closure_evidence, cross_stage_carryovers: input.cross_stage_carryovers,
-    attachment_root: attachmentRoot,
+    attachment_root: thirdReview.attachmentRoot,
     repository_root: input.repository_root ?? input.repositoryRoot,
   });
   const result = await facade.run(prepared);

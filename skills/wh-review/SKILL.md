@@ -38,6 +38,14 @@ The only broker execution form is:
 
 Optional attachment and cancellation-source arguments require machine-readable `doctor` capability declarations from the selected broker command: `capabilities.attachments:true` and `capabilities.cancel_source:true`. Caller configuration cannot assert either capability. A base V4 CLI that lacks either declaration fails loud during dispatch; wh-review never sends unsupported flags or silently drops a cancellation source.
 
+Broker command, broker config, and packet root come only from the host-owned
+`~/.workflowhub/config.json` `third_review` object. They are never accepted in a
+workflow/CLI request. `third_review.attachment_root` must be a real directory, and
+the selected 3rd-review config must allowlist that exact realpath with source prefix
+`.wh-review-packets`; otherwise dispatch fails before a provider starts. The broker
+doctor is always called with that same root and must return
+`attachment_root.status:"ready"`.
+
 Provider candidates, attachment delivery support, and continuation eligibility come only from the selected broker command's validated `doctor.providers[]` snapshot. Callers must not provide `provider_capabilities` or `attachment_delivery`; both are rejected instead of forwarded. The first round stores the normalized snapshot hash and the actual candidate/continuable provider sets. A changed snapshot blocks continuation until a human-approved reset.
 
 The packet is the provider's entire evidence boundary: unified diff, changed-file hashes, requirement/AC/design excerpts, host-verified test evidence, manifest/hash, contract hash, and skill bundle hash. Providers review `review-packet.v1.json` and frozen attachments only. They must not access the real repository, run `git`, or request absolute paths.

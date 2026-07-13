@@ -25,4 +25,10 @@ describe("wh-review v4 CLI", () => {
     const { runReviewRound } = await import(cli.href);
     await expect(runReviewRound({ [field]: {}, task_tracking_root: "/tmp", third_review: { command: "broker", config: "/cfg" } })).rejects.toThrow(field.toLowerCase().includes("delivery") ? /stage-skill-plan/ : /broker-owned/);
   });
+
+  it("rejects broker command, config, and packet root supplied through CLI input", async () => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound({ task_tracking_root: "/tmp", third_review: { command: "broker", config: "/config.json", attachment_root: "/packets" } })).rejects.toThrow(/host-configured/);
+    await expect(runReviewRound({ task_tracking_root: "/tmp", attachment_root: "/packets" })).rejects.toThrow(/host-configured/);
+  });
 });
