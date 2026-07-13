@@ -83,6 +83,13 @@ describe("reviewer-output validator", () => {
     expect(validate(specific).valid).toBe(true);
   });
 
+  it("rejects repeated English pass boilerplate without treating pass inside real words as boilerplate", () => {
+    const hollow = fixture(); hollow.output.summary = "pass pass pass";
+    expect(validate(hollow).valid).toBe(false);
+    const specific = fixture(); specific.output.summary = "src/auth.mjs:19 preserves compassion mode behavior";
+    expect(validate(specific).valid).toBe(true);
+  });
+
   it("requires a duplicate-free checklist covering every stage contract check id", () => {
     const direction = fixture({ stage: "make-decision", reviewTrack: "direction" });
     direction.output.checklist = ["C1", "C2", "C3", "C4", "C5"].map((id) => ({ id, passed: true, evidence: `raw_requirement:${id} 有对应审查证据。` }));
