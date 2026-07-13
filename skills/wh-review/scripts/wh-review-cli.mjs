@@ -2,12 +2,14 @@
 
 /** Stable adapter-facing facade for wh-review's two-phase protocol. */
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
-import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, join, resolve } from "node:path";
 import { prepareRoundState } from "./round-state.mjs";
 import { assembleAndInvokeReviewEngine } from "./invoke-review-engine.mjs";
 import { BrokerClient } from "./broker-client.mjs";
 import { ReviewRoundFacade } from "./review-round-facade.mjs";
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function providerEnv(input) {
   const env = { ...process.env, ...(input.env ?? {}) };
@@ -60,7 +62,7 @@ export async function runReviewRound(input) {
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
   const command = input.third_review?.command, config = input.third_review?.config;
   if (!taskTrackingRoot || !command || !config) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config}");
-  const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? taskTrackingRoot });
+  const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? repositoryRoot, capabilities: input.third_review?.capabilities });
   const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
   const prepared = facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
@@ -68,6 +70,8 @@ export async function runReviewRound(input) {
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
     attachment_root: input.attachment_root ?? input.attachmentRoot, attachments: input.attachments,
     attachment_delivery: input.attachment_delivery ?? input.attachmentDelivery,
+    changed_file_root: input.changed_file_root ?? input.changedFileRoot,
+    provider_capabilities: input.provider_capabilities ?? input.providerCapabilities ?? input.third_review?.provider_capabilities,
   });
   const result = await facade.run(prepared);
   return input.dispositions ? { ...result, publication: facade.publish(result, input.dispositions) } : result;

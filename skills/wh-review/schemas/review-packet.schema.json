@@ -11,7 +11,19 @@
     "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "unified_diff": { "type": "string" },
-    "changed_files": { "type": "array" },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "size"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.?(/|$)).+$" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
     "raw_requirement": { "type": "string" },
     "decision_log_excerpt": { "type": "string" },
     "acceptance_design_excerpt": { "type": "string" },

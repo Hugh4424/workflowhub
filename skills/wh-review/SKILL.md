@@ -36,6 +36,8 @@ The only broker execution form is:
 <third_review.command> run --config=<config> --request=<request> [--attachments=<manifest>]
 ```
 
+`third_review.capabilities.attachments:true` is required before the optional attachment arguments are used. `third_review.capabilities.cancel_source:true` is required before a workflow requests cancellation. A base V4 CLI that lacks either interface fails loud during dispatch; wh-review never sends unsupported flags or silently drops a cancellation source.
+
 The packet is the provider's entire evidence boundary: unified diff, changed-file hashes, requirement/AC/design excerpts, host-verified test evidence, manifest/hash, contract hash, and skill bundle hash. Providers review `review-packet.v1.json` and frozen attachments only. They must not access the real repository, run `git`, or request absolute paths.
 
 First round stores one `initial_runtime_id` in the private receipt. Later rounds send only `continuation:{runtime_id:initial_runtime_id}` and delta/closure material. They never pass raw provider session ids or silently start a new runtime. Missing/expired/ineligible continuation requires `wh-review-cli.mjs reset` with `reason` and `human_approval_ref`.

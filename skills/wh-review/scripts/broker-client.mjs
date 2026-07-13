@@ -8,12 +8,13 @@ import { join } from "node:path";
  * provider liveness and duration limits. A workflow shutdown must call cancel.
  */
 export class BrokerClient {
-  constructor({ command, config, attachmentRoot, spawnImpl = spawn } = {}) {
+  constructor({ command, config, attachmentRoot, capabilities = {}, spawnImpl = spawn } = {}) {
     if (!command) throw new TypeError("third_review.command is required");
     if (!config) throw new TypeError("third_review.config is required");
     this.command = Array.isArray(command) ? command : [command];
     this.config = config;
     this.attachmentRoot = attachmentRoot;
+    this.capabilities = { attachments: capabilities.attachments === true, cancel_source: capabilities.cancel_source === true };
     this.spawnImpl = spawnImpl;
   }
 
@@ -24,6 +25,7 @@ export class BrokerClient {
       writeFileSync(requestFile, `${JSON.stringify(request)}\n`, { mode: 0o600 });
       const args = [...this.command.slice(1), "run", `--config=${this.config}`, `--request=${requestFile}`];
       if (attachments) {
+        if (!this.capabilities.attachments) throw new Error("THIRD_REVIEW_ATTACHMENT_UNSUPPORTED: selected third_review.command does not declare the Phase2 attachment interface");
         if (!this.attachmentRoot || !attachmentDelivery) throw new TypeError("attachments require attachmentRoot and attachmentDelivery");
         const manifestFile = join(temp, "attachments.json");
         writeFileSync(manifestFile, `${JSON.stringify(attachments)}\n`, { mode: 0o600 });
@@ -38,6 +40,7 @@ export class BrokerClient {
 
   async cancel({ runtime_id, provider, source = "workflow_shutdown" }) {
     if (!runtime_id || !provider) throw new TypeError("runtime_id and provider are required");
+    if (!this.capabilities.cancel_source) throw new Error("THIRD_REVIEW_CANCEL_SOURCE_UNSUPPORTED: selected third_review.command cannot record cancellation source");
     const result = await this.#execute(this.command[0], [...this.command.slice(1), "cancel", `--config=${this.config}`, `--runtime-id=${runtime_id}`, `--provider=${provider}`, `--source=${source}`]);
     if (result.code !== 0) throw new Error(`3rd-review cancel failed: ${result.stderr.slice(0, 4096)}`);
     return JSON.parse(result.stdout);
