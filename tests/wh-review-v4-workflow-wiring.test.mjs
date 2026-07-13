@@ -79,10 +79,13 @@ describe("wh-review v4 workflow wiring", () => {
   it("documents packet-only provider isolation and private receipt evidence", () => {
     for (const stage of stages) {
       const content = v4(stage);
-      expect(content).toContain("review-packet.v1");
-      expect(content).toMatch(/Do\s+not\s+run git/);
-      expect(content).toContain("reviews/private/round-");
-      expect(content).toContain("cancel_source");
+    expect(content).toContain("review-packet.v1");
+    expect(content).toMatch(/Do\s+not\s+run git/);
+    expect(content).toContain("reviews/private/round-");
+    expect(content).toContain("cancel_source");
+    expect(content).toContain("semantic_verdict");
+    expect(content).toContain("core_receipt_hash");
+    expect(content).toContain("needs_human");
     }
   });
 
@@ -91,6 +94,8 @@ describe("wh-review v4 workflow wiring", () => {
     expect(content).toContain("core_receipt_hash");
     expect(content).toContain("semantic_verdict");
     expect(content).toContain("needs_human: true");
+    expect(content).toContain("const published = await runReviewRound");
+    expect(content).toContain("published.semantic_verdict");
     for (const token of ["facts-schema", "buildReviewFact", "verify-code.md", "artifactPath"]) expect(content).not.toContain(token);
   });
 
@@ -117,7 +122,10 @@ describe("wh-review v4 workflow wiring", () => {
       const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: firstPacket, repository_root: repository, provider_capabilities: { opencode: { continuation: true } } };
       const first = await facade.run(facade.prepare(input));
       expect(first.provider_outcomes).toMatchObject([{ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }]);
+      expect(first).not.toHaveProperty("semantic_verdict");
       expect(readFileSync(first.receipt_draft_ref, "utf8")).toContain("provider-session");
+      const publication = facade.publish(first, { items: [] });
+      expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
       const second = await facade.run(facade.prepare({ ...input, packet: firstPacket, continuation: true }));
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
       expect(calls[1].request.continuation).toEqual({ runtime_id: "11111111-1111-4111-8111-111111111111" });

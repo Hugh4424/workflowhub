@@ -649,7 +649,9 @@ Use `ReviewRoundFacade` through `runReviewRound()` only. The provider receives o
 `review-packet.v1`; it must review only that packet. Do not run git, read the real
 repository, request absolute paths, or write review reports in the provider workspace.
 The facade owns `<task>/reviews/private/round-.../` evidence, provider status and
-`cancel_source`; public stage results contain only the core receipt hash.
+`cancel_source`. An unpublished call returns transport/packet evidence only, never a
+semantic verdict. After host dispositions, the published return is `{ semantic_verdict,
+core_receipt_hash, needs_human }`; only it may control public stage decisions.
 
 Run two isolated flows in order. They never share a runtime:
 

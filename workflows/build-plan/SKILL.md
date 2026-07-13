@@ -361,6 +361,8 @@ design excerpts and test evidence. Providers review only that packet. Do not run
 read the real repository, request absolute paths, or write reports. Private raw evidence
 is under `<task>/reviews/private/round-.../`; cancellation is recorded with
 `cancel_source`, never converted into a semantic verdict. Continue the initial flow or
-reset it only with human approval.
+reset it only with human approval. An unpublished call returns transport/packet evidence
+only, never a semantic verdict. After host dispositions, the published return is
+`{ semantic_verdict, core_receipt_hash, needs_human }`; only it may advance this stage.
 
 ## End V4 Review Round

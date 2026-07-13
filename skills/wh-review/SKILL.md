@@ -28,7 +28,7 @@ Unknown stages and unsafe identifiers fail loud. They are not sanitized or route
 
 ## V4 round protocol
 
-All production callers use `ReviewRoundFacade` through `wh-review-cli.mjs run`. It has three operations: `prepare()` seals `review-packet.v1`, `run()` calls the broker and validates provider output, and `publish()` writes disposition-bound projections. No workflow may call a provider runner directly.
+All production callers use `ReviewRoundFacade` through `wh-review-cli.mjs run`. It has three operations: `prepare()` seals `review-packet.v1`, `run()` calls the broker and validates provider output, and `publish()` writes disposition-bound projections. No workflow may call a provider runner directly. An unpublished CLI `run` result is transport/packet evidence only and has no public semantic verdict. After dispositions, `publish()` is the sole public decision boundary and returns `{ semantic_verdict, core_receipt_hash, needs_human }`.
 
 The only broker execution form is:
 
@@ -52,7 +52,7 @@ Required skills resolve only from this repository's `skills/` directory and must
 
 Each provider has independent `transport_status`, `packet_status`, and `semantic_verdict`. Only `completed + complete + business_valid + semantic_verdict` participates in aggregate findings. `CANCELLED`, authentication failure, timeout, malformed JSON, material incompleteness, and hash mismatch are diagnostics, never semantic verdicts. A cancellation must record its source; broker liveness/duration limits remain broker-owned and no wh-review outer timeout kills a provider.
 
-Private receipts retain `runtime_id`, provider `session_id`, raw output, and diagnostics below `reviews/private/round-*`. Core receipt, report, report index, and stage result are ordered, atomic redacted projections. Runtime/session/raw paths must never appear in public artifacts.
+Private receipts retain `runtime_id`, provider `session_id`, raw output, and diagnostics below `reviews/private/round-*`. Core receipt, report, report index, and stage result are ordered, atomic redacted projections. Runtime/session/raw paths must never appear in public artifacts. A published `semantic_verdict` is cryptographically bound into the core receipt and is accompanied by its `core_receipt_hash` and `needs_human` flag.
 
 ## Durable artifacts
 

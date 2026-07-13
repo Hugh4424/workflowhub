@@ -91,8 +91,11 @@ Create one complete `review-packet.v1` with the spec diff, changed-file manifest
 requirements/design excerpt and test evidence. Providers review only this packet. Do not
 run git, read the real repository, request absolute paths, or write reports. The facade
 stores raw evidence under `<task>/reviews/private/round-.../`, keeps cancellation as a
-transport diagnostic with `cancel_source`, and exposes only a core receipt hash.
-Use `continuation: true` for later rounds of this flow; reset needs human approval.
+transport diagnostic with `cancel_source`.
+Use `continuation: true` for later rounds of this flow; reset needs human approval. An
+unpublished call returns transport/packet evidence only, never a semantic verdict.
+After host dispositions, the published return is `{ semantic_verdict,
+core_receipt_hash, needs_human }`; only it may advance this stage.
 
 ## End V4 Review Round
 

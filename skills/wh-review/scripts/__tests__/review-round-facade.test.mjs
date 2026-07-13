@@ -86,7 +86,7 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish({ ...result, human_gates: [] }, { items: [] })).toThrow(/human gate provenance/);
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.human_gates; receipt.dispositions = []; writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
     expect(() => facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
-    expect(JSON.parse(readFileSync(join(tracking, "recover", "reviews", "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "escalate_to_human", blocked_by_human_gate: true });
+    expect(JSON.parse(readFileSync(join(tracking, "recover", "reviews", "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "escalate_to_human", semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true });
   });
 
   it("revokes an old fully-projected pass when recovery finds a provider-sourced human gate", async () => {
@@ -169,6 +169,8 @@ describe("ReviewRoundFacade", () => {
     expect(prepared.packet.packet_hash).toMatch(/^[a-f0-9]{64}$/);
     const result = await facade.run(prepared);
     expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "complete", semantic_verdict: "pass" }, { provider: "kimi", transport_status: "authentication_failed", packet_status: "material_incomplete", semantic_verdict: null }]);
+    expect(result).not.toHaveProperty("semantic_verdict");
+    expect(result).not.toHaveProperty("core_receipt_hash");
     expect(result.merged_findings).toEqual([]);
     expect(result.continuation_eligible).toBe(true);
     expect(dispatched.attachments.entries.map((entry) => entry.destination)).toContain("review-packet.v1.json");
@@ -177,6 +179,9 @@ describe("ReviewRoundFacade", () => {
     expect(privateText).toContain("open-session");
     expect(privateText).toContain("11111111-1111-4111-8111-111111111111");
     const publication = facade.publish(result, { items: [] });
+    expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
+    expect(JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"))).toMatchObject({ semantic_verdict: "pass", needs_human: false });
+    expect(JSON.parse(readFileSync(publication.stage_result_ref, "utf8"))).toMatchObject({ core_receipt_hash: publication.core_receipt_hash, verdict: "pass", needs_human: false });
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toContain("open-session");
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toContain("11111111-1111-4111-8111-111111111111");
   });
@@ -227,6 +232,10 @@ describe("ReviewRoundFacade", () => {
     expect(result.merged_findings).toHaveLength(1);
     expect(result.hard_gates).toHaveLength(1);
     expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "accept", evidence: "no" }] })).toThrow(/hard invariant/);
+    const publication = facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: "fix before merge" }] });
+    expect(publication).toMatchObject({ semantic_verdict: "revise_required", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: true });
+    expect(JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"))).toMatchObject({ semantic_verdict: "revise_required", needs_human: true });
+    expect(JSON.parse(readFileSync(publication.stage_result_ref, "utf8"))).toMatchObject({ core_receipt_hash: publication.core_receipt_hash, verdict: "revise_required", needs_human: true });
   });
 
   it.each(["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"])("rejects a completed provider response whose %s attestation is tampered", async (field) => {

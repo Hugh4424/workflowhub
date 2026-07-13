@@ -338,6 +338,9 @@ acceptance/design excerpts and test evidence. Providers review only the packet. 
 run git, read the real repository, request absolute paths, or write reports. The facade
 stores raw/provider evidence in `<task>/reviews/private/round-.../`; `cancel_source`
 is a transport fact and cannot become a verdict. Later rounds continue the initial
-runtime; reset is explicit human-approved recovery.
+runtime; reset is explicit human-approved recovery. An unpublished call returns
+transport/packet evidence only, never a semantic verdict. After host dispositions, the
+published return is `{ semantic_verdict, core_receipt_hash, needs_human }`; only it may
+advance this stage.
 
 ## End V4 Review Round

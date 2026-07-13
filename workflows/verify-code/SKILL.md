@@ -90,7 +90,10 @@ acceptance/design excerpt and host test evidence. Providers review only this pac
 not run git, read the real repository, request absolute paths, or write reports. Keep raw
 provider evidence below `<task>/reviews/private/round-.../`; record cancellation with
 `cancel_source` separately from semantic verdicts. Continuations retain the initial
-runtime; a new flow requires human-approved reset.
+runtime; a new flow requires human-approved reset. An unpublished `runReviewRound()`
+return is transport/packet evidence only: it has no semantic verdict. After host
+dispositions, its published return is `{ semantic_verdict, core_receipt_hash,
+needs_human }`; only that published object can control this stage.
 
 ## End V4 Review Round
 
@@ -274,17 +277,22 @@ before any irreversible action.
 
 Provider unavailable, cancellation, timeout and material failure remain transport or packet diagnostics. They do not grant merge permission and do not produce a semantic review fact.
 
-Map the facade result directly into `stage-result.facts.review`:
+After the host has dispositioned the private findings, map the published CLI return
+directly into `stage-result.facts.review`:
 
 ```js
-const review = result.semantic_verdict
-  ? { core_receipt_hash: result.core_receipt_hash, semantic_verdict: result.semantic_verdict }
-  : { core_receipt_hash: result.core_receipt_hash ?? null, diagnostic: result.diagnostic, needs_human: true };
+const published = await runReviewRound({
+  stage: "verify-code", review_flow_id: "verify-code-flow", packet, dispositions,
+});
+const review = published.semantic_verdict
+  ? { core_receipt_hash: published.core_receipt_hash, semantic_verdict: published.semantic_verdict, needs_human: published.needs_human }
+  : { diagnostic: published.transport, needs_human: true };
 stageResult.facts.review = review;
 ```
 
-Only a semantic result may drive merge handling. A transport or packet failure writes a
-diagnostic and `needs_human:true`; it never becomes a pass-like review fact.
+Only the published semantic result may drive merge handling. An unpublished transport
+or packet result writes a diagnostic and `needs_human:true`; it never becomes a
+pass-like review fact.
 
 ### 11. 人工确认 merge gate
 

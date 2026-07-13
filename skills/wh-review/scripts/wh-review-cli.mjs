@@ -25,7 +25,17 @@ export async function runReviewRound(input) {
     provider_capabilities: input.provider_capabilities ?? input.providerCapabilities ?? input.third_review?.provider_capabilities,
   });
   const result = await facade.run(prepared);
-  return input.dispositions ? { ...result, publication: facade.publish(result, input.dispositions) } : result;
+  // `run()` owns private provider semantics so the host can disposition findings,
+  // but the CLI's unpublished result is deliberately transport-only. A semantic
+  // conclusion becomes public only after `publish()` has written its core receipt.
+  const transport = {
+    review_flow_id: result.intent.review_flow_id,
+    continuation_eligible: result.continuation_eligible,
+    provider_outcomes: result.provider_outcomes.map(({ provider, transport_status, packet_status, business_valid, cancel_source, diagnostic }) => ({
+      provider, transport_status, packet_status, business_valid, cancel_source: cancel_source ?? null, diagnostic: diagnostic ?? null,
+    })),
+  };
+  return input.dispositions ? { transport, ...facade.publish(result, input.dispositions) } : { transport };
 }
 
 export function resetReviewFlow(input) {

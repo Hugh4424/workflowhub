@@ -304,14 +304,15 @@ export class ReviewRoundFacade {
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
     const receipt = { ...saved, human_gates }; atomic(receiptPath, safeJson(receipt));
     const dir = dirname(receiptPath); const taskReviews = join(taskRoot(this.taskTrackingRoot, saved.intent.task_id), "reviews");
-    const core = redact({ version: 1, intent: saved.intent, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] });
+    const semantic_verdict = "escalate_to_human", needs_human = true;
+    const core = redact({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] });
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); const coreHash = sha(readFileSync(corePath));
     const reportPath = join(taskReviews, `${saved.intent.stage}-${saved.intent.review_flow_id}.md`);
     atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
     const indexPath = join(taskReviews, "report-index.json");
-    atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, report: relative(dirname(indexPath), reportPath), verdict: "escalate_to_human", blocked_by_human_gate: true }), 0o644);
+    atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
     const stageResultPath = join(taskReviews, `stage-result-${saved.intent.stage}.json`);
-    atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, verdict: "escalate_to_human", blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
+    atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
     atomic(projectionPath, safeJson(projection));
@@ -401,16 +402,18 @@ export class ReviewRoundFacade {
     const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const seen = new Set();
     for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || finding.rule_id.startsWith("hard")) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
+    const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
+    const needs_human = semantic_verdict !== "pass";
     const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); privateReceipt.dispositions = dispositions.items; atomic(result.receipt_draft_ref, safeJson(privateReceipt));
-    const dir = dirname(result.receipt_draft_ref); const core = redact({ version: 1, intent: result.intent, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes });
+    const dir = dirname(result.receipt_draft_ref); const core = redact({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes });
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); done.done_flags.core_receipt = true; atomic(projection, safeJson(done)); const coreHash = sha(readFileSync(corePath));
-    const report = `# 审查报告\n\n结论：${result.hard_gates.length ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
+    const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
     const reportPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `${result.intent.stage}-${result.intent.review_flow_id}.md`); atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
-    const indexPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", "report-index.json"); atomic(indexPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
-    const stageResultPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `stage-result-${result.intent.stage}.json`); atomic(stageResultPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, verdict: result.hard_gates.length ? "revise_required" : "pass" }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
+    const indexPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", "report-index.json"); atomic(indexPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
+    const stageResultPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `stage-result-${result.intent.stage}.json`); atomic(stageResultPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
     const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash });
-    return { core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+    return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
   }
   reset({ task_id, stage, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
     assertSafeTaskId(task_id); assertKnownStage(stage); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
