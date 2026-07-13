@@ -319,7 +319,7 @@ export class ReviewRoundFacade {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
-      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : initialPrompt({ intent, packet, requiredSkills: prepared.resolution.definitions }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
+      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : initialPrompt({ intent, packet, requiredSkills: prepared.resolution.definitions }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null, provider_allowlist: intent.candidate_providers };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0

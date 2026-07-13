@@ -364,6 +364,8 @@ describe("ReviewRoundFacade", () => {
     expect(first.intent.initial_runtime_id).toBeNull();
     expect(second.intent.initial_runtime_id).toBe("22222222-2222-4222-8222-222222222222");
     expect(seen[1].request.continuation).toEqual({ runtime_id: "22222222-2222-4222-8222-222222222222" });
+    expect(seen[0].request.provider_allowlist).toEqual(["claude-code", "kimi", "opencode"]);
+    expect(seen[1].request.provider_allowlist).toEqual(["opencode"]);
     expect(seen[0].attachments).toBeTruthy();
     expect(seen[0].attachmentDelivery).toBe("file_only");
     expect(seen[1].attachments).toBeUndefined();
