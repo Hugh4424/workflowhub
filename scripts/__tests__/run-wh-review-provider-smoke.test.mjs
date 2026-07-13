@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertProviderRound, directPrompt, writePassEvidence } from "../run-wh-review-provider-smoke.mjs";
+import { assertProviderRound, buildThirdReviewRunArgs, createPersistentAttachmentBundle, directPrompt, writePassEvidence } from "../run-wh-review-provider-smoke.mjs";
+import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/third-review-host-config.mjs";
 import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const script = fileURLToPath(new URL("../run-wh-review-provider-smoke.mjs", import.meta.url));
@@ -80,6 +81,25 @@ describe("run-wh-review-provider-smoke", () => {
     const source = readFileSync(script, "utf8");
     expect(source).toContain("kimiR2Packet.source_revision.base_tree === kimiR1Packet.source_revision.snapshot_tree");
     expect(source).toContain("SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
+  });
+
+  it("persists the OpenCode bundle under the attachment root allowlisted by trusted config", () => {
+    const root = mkdtempSync(join(tmpdir(), "wh-review-smoke-attachments-"));
+    try {
+      const packetRoot = join(root, "packet-root"); mkdirSync(packetRoot);
+      const brokerConfig = join(root, "3rd-review.json"); writeFileSync(brokerConfig, JSON.stringify({ attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }] }));
+      const hostConfig = join(root, "workflowhub.json"); writeFileSync(hostConfig, JSON.stringify({ third_review: { command: [process.execPath, "/broker/3rd-review.mjs"], config: brokerConfig, attachment_root: packetRoot } }));
+      const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
+      const bundle = createPersistentAttachmentBundle(trusted, { unified_diff: "diff --git a/a b/a\n" }, "bundle");
+      const allowedRoot = trusted.attachmentRoot;
+
+      expect(bundle.attachmentRoot).toBe(allowedRoot);
+      expect(bundle.staging.startsWith(`${allowedRoot}/`)).toBe(true);
+      for (const entry of bundle.manifest.entries) expect(existsSync(join(bundle.attachmentRoot, entry.source))).toBe(true);
+      expect(buildThirdReviewRunArgs(trusted, { requestPath: "/tmp/request.json", attachments: "/tmp/attachments.json", delivery: "always_embed" }).args).toContain(`--attachments-root=${allowedRoot}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("writes and reopens complete provider evidence with a persistent attachment bundle", () => {
