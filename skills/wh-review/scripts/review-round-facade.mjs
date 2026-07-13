@@ -107,6 +107,9 @@ function classifyTransport(item) {
   if (/TIMEOUT/i.test(code)) return "timeout";
   return item?.status === "completed" ? "completed" : "failed";
 }
+function deriveHumanGates(providerOutcomes) {
+  return (providerOutcomes ?? []).filter((item) => item?.transport_status === "completed" && item.packet_status === "complete" && item.business_valid === true && item.semantic_verdict === "escalate_to_human").map((item) => ({ provider: item.provider, verdict: item.semantic_verdict, summary: item.summary }));
+}
 function findingId(finding) { return sha(`${finding.file}\0${finding.line}\0${finding.rule_id}\0${finding.issue.trim().toLowerCase()}`); }
 function redact(value) { return JSON.parse(JSON.stringify(value, (key, field) => /runtime_id|session_id|raw_output|diagnostic|workspace|absolute_path/i.test(key) ? undefined : field)); }
 
@@ -194,7 +197,7 @@ export class ReviewRoundFacade {
       // An escalation is a business-valid result, not an empty pass. Keep its
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
-      const human_gates = aggregate.filter((item) => item.semantic_verdict === "escalate_to_human").map((item) => ({ provider: item.provider, verdict: item.semantic_verdict, summary: item.summary }));
+      const human_gates = deriveHumanGates(outcomes);
       const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
@@ -241,10 +244,11 @@ export class ReviewRoundFacade {
     const privateRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private"); if (!existsSync(privateRoot)) return;
     for (const name of readdirSync(privateRoot)) {
       if (!name.startsWith("round-")) continue; const dir = join(privateRoot, name), projection = join(dir, "projection-manifest.json"), receipt = join(dir, "round-receipt.json");
-      if (!existsSync(projection) || !existsSync(receipt)) continue;
-      const flags = JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}; if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) continue;
+      if (!existsSync(receipt)) continue;
+      const flags = existsSync(projection) ? (JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}) : {};
+      if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) continue;
       const saved = JSON.parse(readFileSync(receipt, "utf8")); if (!Array.isArray(saved.dispositions)) continue;
-      this.publish({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, receipt_draft_ref: receipt }, { items: saved.dispositions });
+      this.publish({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, receipt_draft_ref: receipt }, { items: saved.dispositions });
     }
   }
   #materialIncomplete(input, message) {
@@ -293,7 +297,9 @@ export class ReviewRoundFacade {
   publish(result, dispositions) {
     if (!Array.isArray(dispositions?.items)) throw new TypeError("dispositions.items is required");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
-    if (result.human_gates?.length) throw new Error("human gate requires explicit human confirmation before publication");
+    const human_gates = deriveHumanGates(result.provider_outcomes);
+    if (result.human_gates !== undefined && canonical(result.human_gates) !== canonical(human_gates)) throw new Error("human gate provenance does not match provider outcomes");
+    if (human_gates.length) throw new Error("human gate requires explicit human confirmation before publication");
     const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const seen = new Set();
     for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || finding.rule_id.startsWith("hard")) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
