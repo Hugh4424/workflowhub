@@ -1,0 +1,79 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
+import { validateReviewerOutput } from "../reviewer-output-validator.mjs";
+
+const sha = (value) => createHash("sha256").update(value).digest("hex");
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function fixture({ stage = "build-code", reviewTrack = null, verdict = "pass" } = {}) {
+  const resolution = resolveRequiredSkills({ stage, reviewTrack });
+  const skillBundleHash = sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 }))));
+  const hashes = { packet_hash: "1".repeat(64), manifest_hash: "2".repeat(64), diff_sha256: "3".repeat(64), contract_hash: "4".repeat(64), skill_bundle_hash: skillBundleHash };
+  const output = {
+    ...hashes, packet_status: "complete", verdict, summary: "审查结论基于冻结 packet 的逐项证据。", findings: [],
+    checklist: [{ id: "C1", passed: true, evidence: "unified_diff:a:1 显示目标行为已实现。" }],
+    pass_items: [{ rule_id: "C1", artifact_anchor: "unified_diff:a:1", evidence: "新增分支明确返回预期结果。" }],
+    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["planning_artifacts:plan.md#L10"], evidence: "plan.md#L10 显示需求和验证步骤直接关联。", conclusion: "该 lens 未发现违反合同的证据。" })),
+  };
+  return { output, resolution, packet: { ...hashes }, intent: { contract_hash: hashes.contract_hash, material_manifest_hash: hashes.manifest_hash, skill_bundle_hash: hashes.skill_bundle_hash } };
+}
+function validate(value) { return validateReviewerOutput({ stage: "build-code", output: value.output, packet: value.packet, intent: value.intent }); }
+
+describe("reviewer-output validator", () => {
+  it("requires strict pass_items and forbids unknown properties at every level", () => {
+    const schema = JSON.parse(readFileSync(new URL("../../schemas/reviewer-output.schema.json", import.meta.url), "utf8"));
+    expect(schema.required).toContain("pass_items");
+    expect(schema.additionalProperties).toBe(false);
+    for (const key of ["findings", "checklist", "pass_items", "skillResults"]) expect(schema.properties[key].items.additionalProperties).toBe(false);
+    expect(schema.properties.findings.items.properties.late_finding).toEqual({ type: "boolean" });
+
+    for (const mutate of [
+      (item) => { item.output.extra = true; },
+      (item) => { item.output.pass_items[0].extra = true; },
+      (item) => { item.output.checklist[0].extra = true; },
+    ]) {
+      const item = fixture(); mutate(item); expect(validate(item).valid).toBe(false);
+    }
+  });
+
+  it("enforces verdict/finding rules and rejects hollow evidence", () => {
+    const revise = fixture({ verdict: "revise_required" });
+    revise.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "H1", severity: "blocking", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后", late_finding: true }];
+    revise.output.pass_items = [];
+    expect(validate(revise).errors).toEqual(expect.arrayContaining([expect.stringMatching(/rootCause/), expect.stringMatching(/fixApproach/)]));
+    revise.output.rootCause = "状态发布和持久化没有共享提交边界"; revise.output.fixApproach = "先完成原子持久化，再发布成功状态";
+    expect(validate(revise).valid).toBe(true);
+
+    const passBlocking = fixture(); passBlocking.output.findings = revise.output.findings;
+    expect(validate(passBlocking).errors).toContain("pass verdict cannot contain a blocking finding");
+    for (const field of ["artifact_anchor", "evidence"]) {
+      const hollow = fixture(); hollow.output.pass_items[0][field] = "已检查通过"; expect(validate(hollow).valid).toBe(false);
+    }
+  });
+
+  it("requires a duplicate-free checklist covering every stage contract check id", () => {
+    const direction = fixture({ stage: "make-decision", reviewTrack: "direction" });
+    direction.output.checklist = ["C1", "C2", "C3", "C4", "C5"].map((id) => ({ id, passed: true, evidence: `raw_requirement:${id} 有对应审查证据。` }));
+    direction.output.pass_items = direction.output.checklist.map(({ id }) => ({ rule_id: id, artifact_anchor: `raw_requirement:${id}`, evidence: `${id} 的需求证据具体且可定位。` }));
+    expect(validateReviewerOutput({ stage: "make-decision", reviewTrack: "direction", output: direction.output, packet: direction.packet, intent: direction.intent }).errors).toContain("checklist missing contract check id: C6");
+    direction.output.checklist.push({ ...direction.output.checklist[0] });
+    expect(validateReviewerOutput({ stage: "make-decision", reviewTrack: "direction", output: direction.output, packet: direction.packet, intent: direction.intent }).errors).toContain("duplicate checklist id: C1");
+  });
+
+  it("matches required skillResults exactly and binds every attestation hash", () => {
+    const item = fixture({ stage: "build-plan" });
+    const call = () => validateReviewerOutput({ stage: "build-plan", output: item.output, packet: item.packet, intent: item.intent });
+    expect(call().valid).toBe(true);
+    item.output.skillResults.push(structuredClone(item.output.skillResults[0]));
+    expect(call().errors).toContain(`duplicate skill result: ${item.output.skillResults[0].skill}`);
+    item.output.skillResults.pop(); item.output.skillResults.push({ ...item.output.skillResults[0], skill: "unrequested-skill" });
+    expect(call().errors).toContain("unexpected skill result: unrequested-skill");
+    item.output.skillResults.pop(); item.output.packet_hash = "9".repeat(64);
+    expect(call().errors).toContain("packet_hash does not match packet");
+  });
+});
