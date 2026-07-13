@@ -46,6 +46,7 @@ describe("Phase 5B Must Read contracts", () => {
     expect(protocol).toMatch(/no text before or after/i);
     expect(protocol).toContain("checklist");
     expect(protocol).toContain("pass_items");
+    expect(protocol).toContain("changes.diff:line <n>");
     expect(protocol).toContain("skillResults");
     for (const field of schema.required) expect(protocol).toContain(`\`${field}\``);
   });
