@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, isDownstreamReviewStage, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
@@ -11,6 +11,7 @@ import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "./review-packet-integrity.mjs";
+import { buildTreeMaterial, captureWorktreeTree, capturedHead, headTree } from "./source-tree.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
@@ -46,7 +47,6 @@ function privateFileHash(directory, ref, expectedHash) {
 }
 function packetHash(packet) { return reviewPacketHash(packet); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
-function stripHunkSectionHeaders(unifiedDiff) { return unifiedDiff.replace(/^(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1"); }
 function addedDeltaLineKeys(unifiedDiff) {
   const keys = new Set();
   let file = null; let nextLine = null;
@@ -68,13 +68,15 @@ function addedDeltaLineKeys(unifiedDiff) {
   return keys;
 }
 function sealPacket(packet) {
+  packet.diff_sha256 ??= sha(packet.unified_diff);
+  packet.manifest_hash ??= reviewManifestHash(packet);
+  packet.packet_hash ??= "0".repeat(64);
   validateSchema("review-packet", packet);
   const diff = sha(packet.unified_diff);
   if (packet.diff_sha256 && packet.diff_sha256 !== diff) throw new Error("diff_sha256 mismatch");
   packet.diff_sha256 = diff;
   // Git owns diff syntax (multiple hunks, mode/index records, binary patches,
-  // and quoted paths). Exact comparison with buildHostGitSource below is the
-  // source-evidence check; do not impose a hand-written diff grammar here.
+  // and quoted paths); this facade receives it only from source-tree.mjs.
   for (const entry of packet.changed_files) {
     if (!entry || !safeRelativePath(entry.path) || !["added", "modified", "deleted", "renamed"].includes(entry.status)) throw new Error("invalid changed_files entry");
     const needsCurrent = entry.status !== "deleted";
@@ -88,52 +90,22 @@ function sealPacket(packet) {
   packet.packet_hash = packetHash(packet);
   return packet;
 }
-function hostGit(root, args, encoding = "utf8") {
-  try { return execFileSync("git", args, { cwd: root, encoding, maxBuffer: 32 * 1024 * 1024 }); }
-  catch (error) { throw new Error(`host git source builder failed: ${String(error.stderr ?? error.message).trim()}`); }
+const sourceOwnedFields = new Set(["source_revision", "unified_diff", "changed_files", "diff_sha256", "packet_hash", "manifest_hash", "repository_root", "repositoryRoot", "changed_file_root", "changedFileRoot"]);
+function rejectCallerSourceFields(value, scope = "caller input") {
+  const fields = Object.keys(value ?? {}).filter((field) => sourceOwnedFields.has(field));
+  if (fields.length) throw new Error(`SOURCE_FIELDS_FORBIDDEN: ${scope} cannot provide ${fields.join(", ")}`);
+}
+function buildHostWorktreeSource(root, { baseTree } = {}) {
+  const base_tree = baseTree ?? headTree(root);
+  const snapshot_tree = captureWorktreeTree(root, { baseTree: base_tree });
+  const material = buildTreeMaterial(root, { baseTree: base_tree, snapshotTree: snapshot_tree });
+  return { ...material, source_revision: { ...material.source_revision, captured_head: capturedHead(root) } };
 }
 function processStartIdentity(pid) {
   try {
     const value = String(execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" })).trim();
     return value || null;
   } catch { return null; }
-}
-function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], undefined); }
-function buildHostGitSource(repositoryRoot, requestedRevision, { contextLines = null } = {}) {
-  if (!requestedRevision || typeof requestedRevision.base !== "string" || typeof requestedRevision.head !== "string") throw new Error("source_revision.base and source_revision.head are required");
-  const root = realpathSync(resolve(repositoryRoot));
-  const gitRoot = realpathSync(resolve(String(hostGit(root, ["rev-parse", "--show-toplevel"])).trim()));
-  if (gitRoot !== root) throw new Error("repository_root must be the host git repository root");
-  const base = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.base}^{commit}`])).trim();
-  const head = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.head}^{commit}`])).trim();
-  if (requestedRevision.base !== base || requestedRevision.head !== head) throw new Error("source_revision must use immutable resolved commit ids");
-  const context = contextLines === null ? [] : [`-U${contextLines}`];
-  const rawDiff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", ...context, base, head]));
-  const unified_diff = contextLines === 0 ? stripHunkSectionHeaders(rawDiff) : rawDiff;
-  const fields = String(hostGit(root, ["diff", "--name-status", "-z", "--find-renames", base, head])).split("\0");
-  const changed_files = [];
-  for (let index = 0; index < fields.length - 1;) {
-    const statusToken = fields[index++]; if (!statusToken) continue;
-    const kind = statusToken[0];
-    if (!["A", "M", "D", "R"].includes(kind)) throw new Error(`unsupported host git change status: ${statusToken}`);
-    const old_path = kind === "R" ? fields[index++] : null; const path = fields[index++];
-    if (!safeRelativePath(path) || (old_path !== null && !safeRelativePath(old_path))) throw new Error("host git source contains unsafe path");
-    const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed" })[kind] };
-    if (old_path !== null) entry.old_path = old_path;
-    if (kind !== "D") { const bytes = gitBlob(root, head, path); entry.sha256 = sha(bytes); entry.size = bytes.length; }
-    if (kind !== "A") { const bytes = gitBlob(root, base, old_path ?? path); entry.old_sha256 = sha(bytes); entry.old_size = bytes.length; }
-    changed_files.push(entry);
-  }
-  return { source_revision: { base, head }, unified_diff, changed_files };
-}
-function verifyHostGitSource(packet, repositoryRoot) {
-  const built = buildHostGitSource(repositoryRoot, packet.source_revision);
-  const normalizeChangedFiles = (entries) => entries.map((entry) => {
-    const normalized = { ...entry };
-    if (normalized.status !== "renamed" && normalized.old_path === null) delete normalized.old_path;
-    return normalized;
-  });
-  if (packet.unified_diff !== built.unified_diff || canonical(normalizeChangedFiles(packet.changed_files)) !== canonical(normalizeChangedFiles(built.changed_files))) throw new Error("review packet source evidence does not match host git base/head revisions");
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
@@ -210,14 +182,14 @@ function checkedCarryovers(value, previousFindings, { taskTrackingRoot, taskId, 
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
+  constructor({ taskTrackingRoot, sourceRoot = taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
     if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(initialPromptMaxBytes) || initialPromptMaxBytes < 1) throw new TypeError("initialPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(maxDispositionAttempts) || maxDispositionAttempts < 1) throw new TypeError("maxDispositionAttempts must be a positive integer");
     if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
-    this.taskTrackingRoot = resolve(taskTrackingRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
+    this.taskTrackingRoot = resolve(taskTrackingRoot); this.sourceRoot = resolve(sourceRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
     this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.maxDispositionAttempts = maxDispositionAttempts; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
@@ -247,15 +219,18 @@ export class ReviewRoundFacade {
 
   prepare(input) {
     assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertReviewTrack(input.stage, input.review_track ?? null); assertSafeReviewFlowId(input.review_flow_id);
+    rejectCallerSourceFields(input);
+    rejectCallerSourceFields(input.packet, "caller packet");
     if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
+    const initialHostSource = input.continuation === true ? null : buildHostWorktreeSource(this.sourceRoot);
     const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
-    return this.#prepareUnderLock(input, lock);
+    return this.#prepareUnderLock(input, lock, initialHostSource);
   }
 
-  async #prepareUnderLock(input, lock) {
+  async #prepareUnderLock(input, lock, initialHostSource) {
     try {
     for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
     if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
@@ -310,11 +285,11 @@ export class ReviewRoundFacade {
       if (input.closure_evidence !== undefined) return this.#materialIncomplete(input, "closure_evidence is continuation-only");
       if (packet.round_kind !== undefined && packet.round_kind !== "initial") return this.#materialIncomplete(input, "initial packet round_kind is invalid");
       if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== null) return this.#materialIncomplete(input, "initial packet baseline_packet_hash must be null");
+      Object.assign(packet, initialHostSource);
       packet.round_kind = "initial"; packet.baseline_packet_hash = null;
       delta = { cross_stage_carryovers: checkedCarryovers(input.cross_stage_carryovers, [], { taskTrackingRoot: this.taskTrackingRoot, taskId: input.task_id, stage: input.stage }) };
     }
-    packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
-    try { sealPacket(packet); verifyHostGitSource(packet, input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot); }
+    try { sealPacket(packet); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
     const baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;

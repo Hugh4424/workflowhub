@@ -82,6 +82,9 @@ ${mustRead}
 The attachment delivery policy controls file delivery.${embedded}
 changes_diff_sha256=${packet.diff_sha256}
 changes_diff_size=${Buffer.byteLength(packet.unified_diff)}
+source_base_tree=${packet.source_revision.base_tree}
+source_snapshot_tree=${packet.source_revision.snapshot_tree}
+captured_head=${packet.source_revision.captured_head}
 packet_hash=${packet.packet_hash}
 manifest_hash=${packet.manifest_hash}
 contract_hash=${intent.contract_hash}

@@ -48,10 +48,11 @@
     ,"source_revision": {
       "type": "object",
       "properties": {
-        "base": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
+        "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "captured_head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
       },
-      "required": ["base", "head"],
+      "required": ["base_tree", "snapshot_tree", "captured_head"],
       "additionalProperties": false
     }
   },

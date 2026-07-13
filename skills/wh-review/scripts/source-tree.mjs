@@ -66,6 +66,11 @@ export function headTree(root) {
   return treeOid(repository, "HEAD");
 }
 
+export function capturedHead(root) {
+  const repository = repositoryRoot(root);
+  return String(git(repository, ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
+}
+
 export function captureWorktreeTree(root, { baseTree } = {}) {
   const repository = repositoryRoot(root);
   const base = treeOid(repository, baseTree ?? "HEAD");
