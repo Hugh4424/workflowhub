@@ -308,6 +308,17 @@ describe("ReviewRoundFacade", () => {
     expect(core).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true });
   });
 
+  it("recovers an interrupted immediate human-gate projection through the receipt WAL", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const broker = fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] }));
+    const crashing = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, faultInjector(point) { if (point === "after-publish-receipt-write") throw new Error("human gate receipt crash"); } });
+    await expect(crashing.run(crashing.prepare({ task_id: "human-wal", stage: "build-code", review_flow_id: "old", packet: trusted, repository_root: tracking }))).rejects.toThrow(/human gate receipt crash/);
+    const recovered = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    await expect(recovered.prepare({ task_id: "human-wal", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
+    const stage = JSON.parse(readFileSync(join(tracking, "human-wal", "reviews", "stage-result-build-code.json"), "utf8"));
+    expect(stage).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true });
+  });
+
   it("derives human gates during publication and recovery when a receipt omits them", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });

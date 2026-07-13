@@ -531,7 +531,13 @@ export class ReviewRoundFacade {
     }
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
-    const receipt = { ...saved, human_gates }; atomic(receiptPath, safeJson(receipt));
+    // Receipt and flow are a single recovery unit. Never overwrite the
+    // receipt directly here: a crash between receipt bytes and flow hash used
+    // to leave an unrecoverable human gate.
+    const flow = this.#readFlow(saved.intent);
+    if (flow?.pending_receipt_update) this.#recoverPendingReceiptBinding(saved.intent, flow);
+    const receipt = { ...saved, human_gates };
+    this.#updateReceiptAndFlow(saved.intent, receiptPath, receipt);
     const dir = dirname(receiptPath); const { reportPath, indexPath, stageResultPath } = this.#publicPaths(saved.intent);
     const semantic_verdict = "escalate_to_human", needs_human = true;
     const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
@@ -539,8 +545,8 @@ export class ReviewRoundFacade {
     atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
     atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
     atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
-    const flow = this.#readFlow(saved.intent);
-    if (flow) this.#writeFlow(saved.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
+    const publishedFlow = this.#readFlow(saved.intent);
+    if (publishedFlow) this.#writeFlow(saved.intent, { ...publishedFlow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
     if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
