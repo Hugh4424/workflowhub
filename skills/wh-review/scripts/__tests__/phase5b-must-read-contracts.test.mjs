@@ -52,4 +52,15 @@ describe("Phase 5B Must Read contracts", () => {
     expect(ids.length).toBeGreaterThanOrEqual(70);
     for (const family of ["BASE", "INTAKE", "DESIGN", "PLAN", "CODE", "ACCEPT"]) expect(ids.some((id) => id.includes(`AGH-${family}-`))).toBe(true);
   });
+
+  it("keeps only traceable mappings and does not claim unsupported base protocol semantics", () => {
+    const ledger = read("legacy-rule-ledger.md");
+    const rows = [...ledger.matchAll(/^\| `(?<id>AGH-[A-Z]+-\d{2})` \| (?<source>.*?) \| (?<decision>keep|host|lens|removed \(evidence\)) \| (?<mapping>.*?) \|$/gm)];
+    expect(rows.find((row) => row.groups.id === "AGH-BASE-10").groups.decision).toBe("removed (evidence)");
+    expect(rows.find((row) => row.groups.id === "AGH-BASE-14").groups.decision).toBe("removed (evidence)");
+    for (const row of rows.filter((row) => ["keep", "host", "lens"].includes(row.groups.decision))) {
+      expect(row.groups.mapping).toMatch(/skills\/wh-review\/(?:contracts|scripts|schemas|stage-skill-plan\.json)/);
+      expect(row.groups.mapping).toMatch(/[§#]/);
+    }
+  });
 });
