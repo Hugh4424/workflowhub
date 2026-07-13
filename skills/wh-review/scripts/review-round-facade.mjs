@@ -266,19 +266,72 @@ export class ReviewRoundFacade {
     if (canonical(saved) !== canonical(this.#projectionPending(saved))) throw new Error("PROJECTION_RECOVERY_GUARD_MISMATCH: orphan projection guard does not bind its flow");
     return saved;
   }
+  #publicCoreMatchesIntent(intent, coreHash) {
+    if (typeof coreHash !== "string" || !/^[a-f0-9]{64}$/i.test(coreHash)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public stage-result has an invalid core hash");
+    const path = this.#publicCorePath(intent, coreHash);
+    if (!existsSync(path)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public stage-result core receipt is missing");
+    const bytes = readFileSync(path);
+    if (sha(bytes) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt hash mismatch");
+    let core;
+    try { core = JSON.parse(bytes); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt is invalid JSON"); }
+    const coreIntent = core?.intent;
+    const sameFlow = coreIntent?.task_id === intent.task_id && coreIntent.stage === intent.stage && (coreIntent.review_track ?? null) === (intent.review_track ?? null) && coreIntent.review_flow_id === intent.review_flow_id;
+    if (!sameFlow) return false;
+    if (!Number.isSafeInteger(coreIntent.business_round) || coreIntent.business_round <= 0) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt round is invalid");
+    return true;
+  }
+  #aggregateProjectionMatchesIntent(intent) {
+    const { reviews } = this.#publicPaths(intent);
+    const group = `make-decision-${intent.review_flow_id}`;
+    const stagePath = join(reviews, `stage-result-${group}.json`);
+    if (!existsSync(stagePath)) return false;
+    let stageResult;
+    try { stageResult = JSON.parse(readFileSync(stagePath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result is invalid JSON"); }
+    if (stageResult?.stage !== "make-decision" || stageResult.review_flow_id !== intent.review_flow_id || canonical(stageResult.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result does not bind this flow");
+    const coreHash = stageResult.core_receipt_hash;
+    if (typeof coreHash !== "string" || !/^[a-f0-9]{64}$/i.test(coreHash)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result has an invalid core hash");
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`);
+    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt hash mismatch");
+    let core;
+    try { core = JSON.parse(readFileSync(corePath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt is invalid JSON"); }
+    if (core?.stage !== "make-decision" || core.review_flow_id !== intent.review_flow_id || canonical(core.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt does not bind this flow");
+    return true;
+  }
   #hasPublicProjection(intent) {
-    const { reviews, reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
-    if ([reportPath, indexPath, stageResultPath].some(existsSync)) return true;
+    const { reviews, reportPath, stageResultPath } = this.#publicPaths(intent);
+    // A per-flow report path itself encodes the complete flow identity. The
+    // shared stage-result and report-index paths do not, so only a core hash
+    // binding can make them evidence of this pending guard.
+    if (existsSync(reportPath)) return true;
+    if (existsSync(stageResultPath)) {
+      let stageResult;
+      try { stageResult = JSON.parse(readFileSync(stageResultPath, "utf8")); }
+      catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: stage-result is invalid JSON"); }
+      if (stageResult?.stage !== intent.stage || (stageResult.review_track ?? null) !== (intent.review_track ?? null)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: stage-result does not bind this stage track");
+      if (this.#publicCoreMatchesIntent(intent, stageResult.core_receipt_hash)) return true;
+    }
     if (intent.stage === "make-decision") {
       const group = `make-decision-${intent.review_flow_id}`;
-      if ([join(reviews, `${group}-aggregate-core-receipt.json`), join(reviews, `${group}-aggregate.md`), join(reviews, `report-index-${group}.json`), join(reviews, `stage-result-${group}.json`)].some(existsSync)) return true;
+      if (existsSync(join(reviews, `${group}-aggregate.md`))) return true;
+      if (this.#aggregateProjectionMatchesIntent(intent)) return true;
     }
     const cores = join(reviews, "core-receipts");
     if (!existsSync(cores)) return false;
     return readdirSync(cores).some((name) => {
       if (!name.endsWith(".json")) return false;
-      try { return canonical(JSON.parse(readFileSync(join(cores, name), "utf8"))?.intent) === canonical(intent); }
+      const path = join(cores, name); let core;
+      try { core = JSON.parse(readFileSync(path, "utf8")); }
       catch { return false; }
+      const coreIntent = core?.intent;
+      const sameFlow = coreIntent?.task_id === intent.task_id && coreIntent.stage === intent.stage && (coreIntent.review_track ?? null) === (intent.review_track ?? null) && coreIntent.review_flow_id === intent.review_flow_id;
+      if (!sameFlow) return false;
+      const coreHash = name.slice(0, -5);
+      if (!/^[a-f0-9]{64}$/i.test(coreHash) || sha(readFileSync(path)) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt hash mismatch");
+      if (!Number.isSafeInteger(coreIntent.business_round) || coreIntent.business_round <= 0) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt round is invalid");
+      return true;
     });
   }
   #ensureProjectionGuard(intent) {
