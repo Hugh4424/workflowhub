@@ -126,14 +126,20 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
   });
 
-  it("does not supersede a gate when writing the approved reset flow fails", async () => {
+  it("recovers an approval-only reset after writing its successor flow initially fails", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
     const result = await facade.run(facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
     const blockedFlowPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.json"); mkdirSync(blockedFlowPath, { recursive: true });
     expect(() => facade.reset({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "broken-flow", reason: "approved but disk failure", human_approval_ref: "human-approval-99" })).toThrow();
     expect(existsSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"))).toBe(false);
+    const approvalPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.reset-approval.json");
+    expect(existsSync(approvalPath)).toBe(true);
     expect(() => facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
+    rmSync(blockedFlowPath, { recursive: true, force: true });
+    expect(facade.reset({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "broken-flow", reason: "approved but disk failure", human_approval_ref: "human-approval-99" })).toMatchObject({ review_flow_id: "broken-flow" });
+    const prepared = facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "broken-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it("keeps an approved reset marker valid after the successor runs, publishes, and continues", async () => {
@@ -173,6 +179,15 @@ describe("ReviewRoundFacade", () => {
     const publication = facade.publish(result, { items: [] });
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toContain("open-session");
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toContain("11111111-1111-4111-8111-111111111111");
+  });
+
+  it("serializes publication with the task lock", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "first", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const held = facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "held", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    expect(() => facade.publish(result, { items: [] })).toThrow(/review-already-running/);
+    rmSync(held.lock, { recursive: true, force: true });
+    expect(() => facade.publish(result, { items: [] })).not.toThrow();
   });
 
   it("uses the initial runtime only on continuation and refuses automatic fresh starts", async () => {

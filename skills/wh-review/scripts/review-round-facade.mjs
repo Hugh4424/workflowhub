@@ -275,7 +275,7 @@ export class ReviewRoundFacade {
       const flags = existsSync(projection) ? (JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}) : {};
       if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) continue;
       if (!Array.isArray(saved.dispositions)) continue;
-      this.publish({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, receipt_draft_ref: receipt }, { items: saved.dispositions });
+      this.publish({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, receipt_draft_ref: receipt }, { items: saved.dispositions }, { lockAlreadyHeld: true });
     }
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
@@ -365,7 +365,9 @@ export class ReviewRoundFacade {
     return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist };
   }
 
-  publish(result, dispositions) {
+  publish(result, dispositions, { lockAlreadyHeld = false } = {}) {
+    const lock = lockAlreadyHeld ? null : this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
+    try {
     if (!Array.isArray(dispositions?.items)) throw new TypeError("dispositions.items is required");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
     const human_gates = verifiedHumanGates(result.provider_outcomes, result.human_gates);
@@ -383,6 +385,7 @@ export class ReviewRoundFacade {
     const stageResultPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `stage-result-${result.intent.stage}.json`); atomic(stageResultPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, verdict: result.hard_gates.length ? "revise_required" : "pass" }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
     const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash });
     return { core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+    } finally { if (lock) this.#releaseLock(lock); }
   }
   reset({ task_id, stage, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
     assertSafeTaskId(task_id); assertKnownStage(stage); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
@@ -391,9 +394,11 @@ export class ReviewRoundFacade {
     const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
     try {
       const flowPath = this.#flow(flow), approvalPath = this.#resetApproval(flow);
-      if (existsSync(flowPath) || existsSync(approvalPath)) throw new Error("reset target review flow already exists");
       const approval = { version: 1, task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, human_approval_ref, reason, approved_at_ms: this.now() };
-      writeImmutable(approvalPath, approval);
+      if (existsSync(approvalPath)) {
+        const savedApproval = JSON.parse(readFileSync(approvalPath, "utf8"));
+        if (!(savedApproval?.version === 1 && savedApproval.task_id === task_id && savedApproval.stage === stage && savedApproval.review_flow_id === nextId && savedApproval.parent_review_flow_id === review_flow_id && savedApproval.human_approval_ref === human_approval_ref && savedApproval.reason === reason)) throw new Error("reset approval does not match requested reset");
+      } else writeImmutable(approvalPath, approval);
       // Both records are create-exclusive. Until they exist, no old gate has a
       // supersession marker, so a partial reset remains blocked.
       writeImmutable(flowPath, flow);
