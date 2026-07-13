@@ -75,6 +75,15 @@ function trustedPacket(root) {
   };
   return refreshPacketHashes(value);
 }
+function advancePacket(root, previous) {
+  writeFileSync(join(root, "a"), "new\nline\nextra\nfixed\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "delta"]);
+  const base = previous.source_revision.base, head = git(root, ["rev-parse", "HEAD"]);
+  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
+  const oldBytes = execFileSync("git", ["show", `${base}:a`], { cwd: root }); const bytes = execFileSync("git", ["show", `${head}:a`], { cwd: root });
+  return refreshPacketHashes({ ...previous, packet_hash: undefined, manifest_hash: undefined, unified_diff,
+    changed_files: [{ path: "a", status: "modified", sha256: hash(bytes), size: bytes.length, old_sha256: hash(oldBytes), old_size: oldBytes.length }],
+    source_revision: { base, head }, test_evidence: [{ name: "unit", status: "passed", note: "delta verified" }] });
+}
 
 describe("ReviewRoundFacade", () => {
   it("rejects caller capabilities and derives candidates from doctor after acquiring the task lock", async () => {
@@ -243,6 +252,64 @@ describe("ReviewRoundFacade", () => {
     expect(seen[0].attachments).toBeTruthy();
     expect(seen[0].attachmentDelivery).toBe("file_only");
     expect(seen[1].attachments).toBeUndefined();
+  });
+
+  it("sends a full initial packet with a real multiline changes.diff attachment", async () => {
+    const tracking = root(); let dispatched;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => { dispatched = request; return { runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; }) });
+    const firstPacket = packet({ root: tracking });
+    const prepared = await facade.prepare({ task_id: "initial-diff", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, changed_file_root: tracking });
+    expect(prepared.intent).toMatchObject({ round_kind: "initial", baseline_packet_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(prepared.packet).toMatchObject({ round_kind: "initial", baseline_packet_hash: null });
+    const result = await facade.run(prepared);
+    const diffEntry = dispatched.attachments.entries.find((entry) => entry.destination === "changes.diff");
+    expect(diffEntry).toMatchObject({ sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
+    expect(readFileSync(join(dispatched.attachmentsRoot ?? tracking, diffEntry.source), "utf8")).toBe(prepared.packet.unified_diff);
+    expect(dispatched.request.prompt).toContain("Must Read: changes.diff");
+    expect(dispatched.request.prompt).toContain(`changes_diff_sha256=${prepared.packet.diff_sha256}`);
+    const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
+    expect(manifest.attachments).toContainEqual({ destination: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
+  });
+
+  it("derives a strict continuation delta from the previous private receipt and current verified packet", async () => {
+    const tracking = root(); const calls = []; let currentPacket;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      calls.push(request); return { runtime_id: "34343434-3434-4434-8434-343434343434", providers: [{ provider: "opencode", status: "completed", session_id: "private-session", output: output(request.packet ?? currentPacket, calls.length === 1 ? "revise_required" : "pass") }] };
+    }) });
+    const initial = trustedPacket(tracking); currentPacket = initial;
+    const first = await facade.run(facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: initial, repository_root: tracking }));
+    const findingId = first.merged_findings[0].finding_id;
+    currentPacket = advancePacket(tracking, initial);
+    const secondPrepared = await facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: currentPacket, repository_root: tracking, continuation: true,
+      closure_evidence: [{ finding_id: findingId, evidence: "fixed in the new commit and unit test passed" }], cross_stage_carryovers: [{ carryover_id: "verify-later", status: "open", evidence: "requires staging" }] });
+    expect(secondPrepared.packet.source_revision.head).not.toBe(first.intent.baseline_packet_hash);
+    const second = await facade.run(secondPrepared);
+    expect(second.intent).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash });
+    expect(Object.keys(calls[1]).sort()).toEqual(["request"]);
+    expect(calls[1].request).toMatchObject({ continuation: { runtime_id: "34343434-3434-4434-8434-343434343434" } });
+    expect(calls[1].request).not.toHaveProperty("attachments");
+    expect(calls[1].request.prompt).not.toContain(initial.unified_diff);
+    expect(calls[1].request.prompt).toContain("fixed\n");
+    const headings = ["PreviousFindings", "ClosureEvidence", "DeltaManifest", "AffectedMaterials", "CurrentMaterialManifest", "CrossStageCarryovers", "RequiredSkillLensHashes", "OutputRequirements"];
+    expect(headings.map((heading) => calls[1].request.prompt.indexOf(heading))).toEqual([...headings.map((heading) => calls[1].request.prompt.indexOf(heading))].sort((a, b) => a - b));
+    expect(second).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash, previous_findings: [{ finding_id: findingId }] });
+  });
+
+  it("rejects caller-authored delta provenance and requires exact closure bindings", async () => {
+    const tracking = root(); let currentPacket;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "56565656-5656-4656-8656-565656565656", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? currentPacket, "revise_required") }] })) });
+    const initial = trustedPacket(tracking); currentPacket = initial;
+    const first = await facade.run(facade.prepare({ task_id: "strict-delta", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    currentPacket = advancePacket(tracking, initial); const findingId = first.merged_findings[0].finding_id;
+    const base = { task_id: "strict-delta", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true };
+    await expect(facade.prepare({ ...base, previous_findings: [] })).rejects.toThrow(/previous_findings.*caller/i);
+    await expect(facade.prepare({ ...base, delta_manifest: {} })).rejects.toThrow(/delta_manifest.*caller/i);
+    await expect(facade.prepare({ ...base, affected_materials: [] })).rejects.toThrow(/affected_materials.*caller/i);
+    await expect(facade.prepare({ ...base, current_material_manifest: {} })).rejects.toThrow(/current_material_manifest.*caller/i);
+    await expect(facade.prepare({ ...base, closure_evidence: [] })).rejects.toThrow(/closure_evidence.*missing/i);
+    await expect(facade.prepare({ ...base, closure_evidence: [{ finding_id: findingId, evidence: "x" }, { finding_id: findingId, evidence: "y" }] })).rejects.toThrow(/closure_evidence.*duplicate/i);
+    await expect(facade.prepare({ ...base, closure_evidence: [{ finding_id: "unknown", evidence: "x" }] })).rejects.toThrow(/closure_evidence.*unknown/i);
+    await expect(facade.prepare({ ...base, closure_evidence: [{ finding_id: findingId, evidence: "x" }], cross_stage_carryovers: [{ finding_id: findingId, status: "open" }] })).rejects.toThrow(/cross_stage_carryovers.*finding/i);
   });
 
   it.each([
