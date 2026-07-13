@@ -229,6 +229,17 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "accept", evidence: "no" }] })).toThrow(/hard invariant/);
   });
 
+  it("rejects a completed provider response whose packet attestation hash is tampered", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const tampered = JSON.parse(output(request.packet)); tampered.packet_hash = "0".repeat(64);
+      return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(tampered) }] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "tampered-output", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "hash_mismatch", business_valid: false, semantic_verdict: null }]);
+    expect(result.merged_findings).toEqual([]);
+  });
+
   it("seals real diff, manifest, and changed-file bytes before broker dispatch", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");
@@ -283,7 +294,7 @@ describe("ReviewRoundFacade", () => {
     const broken = join(tracking, "broken", "reviews", "private", "round-crash");
     mkdirSync(broken, { recursive: true }); writeFileSync(join(broken, "projection-manifest.json"), "not-json", { flag: "w" }); writeFileSync(join(broken, "round-receipt.json"), "{}", { flag: "w" });
     const brokenInput = { ...input, task_id: "broken", review_flow_id: "next", packet: packet({ root: tracking }) };
-    expect(() => facade.prepare(brokenInput)).toThrow();
+    expect(() => facade.prepare(brokenInput)).toThrow(/Unexpected token/);
     expect(() => readFileSync(join(tracking, "broken", "reviews", "private", "flows", "broken.lock", "owner.json"))).toThrow();
   });
 
