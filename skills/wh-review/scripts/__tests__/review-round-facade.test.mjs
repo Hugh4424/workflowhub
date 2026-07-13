@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { ReviewRoundFacade } from "../review-round-facade.mjs";
 import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
+import { reviewPacketHash } from "../review-packet-integrity.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -475,6 +476,9 @@ describe("ReviewRoundFacade", () => {
     }); }) });
     const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking });
     expect(prepared.packet.packet_hash).toMatch(/^[a-f0-9]{64}$/);
+    const frozenPacket = JSON.parse(readFileSync(join(prepared.frozen_snapshot_dir, "review-packet.v1.json"), "utf8"));
+    expect(frozenPacket.packet_hash).toBe(prepared.packet.packet_hash);
+    expect(reviewPacketHash(frozenPacket)).toBe(frozenPacket.packet_hash);
     const result = await facade.run(prepared);
     expect(result.provider_outcomes.filter((item) => ["opencode", "kimi"].includes(item.provider))).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "complete", semantic_verdict: "pass" }, { provider: "kimi", transport_status: "authentication_failed", packet_status: "material_incomplete", semantic_verdict: null }]);
     expect(result).not.toHaveProperty("semantic_verdict");
