@@ -45,4 +45,11 @@ describe("Phase 5B Must Read contracts", () => {
     expect(ledger).toContain("closure bundle");
     expect(ledger).toContain("AgentHub-only path/runtime assumption");
   });
+
+  it("uses individually addressable legacy rule ids instead of contract-level summaries", () => {
+    const ledger = read("legacy-rule-ledger.md");
+    const ids = [...ledger.matchAll(/^\| `AGH-[A-Z]+-\d{2}` \|/gm)].map((match) => match[0]);
+    expect(ids.length).toBeGreaterThanOrEqual(70);
+    for (const family of ["BASE", "INTAKE", "DESIGN", "PLAN", "CODE", "ACCEPT"]) expect(ids.some((id) => id.includes(`AGH-${family}-`))).toBe(true);
+  });
 });
