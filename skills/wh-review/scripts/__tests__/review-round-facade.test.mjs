@@ -523,10 +523,10 @@ describe("ReviewRoundFacade", () => {
   it.each([
     [undefined, "DELIVERY_USED_MISSING"],
     ["auto", "DELIVERY_USED_INVALID"],
-    ["file_only", "DELIVERY_USED_CAPABILITY_MISMATCH"],
+    ["always_embed", "DELIVERY_USED_POLICY_MISMATCH"],
   ])("makes a completed provider business-invalid when delivery_used=%s", async (delivery_used, diagnostic) => {
     const tracking = root();
-    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } }] };
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } }] };
     const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", providers: [{ provider: "opencode", status: "completed", session_id: "s", ...(delivery_used === undefined ? {} : { delivery_used }), output: output(request.packet, "revise_required") }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const result = await facade.run(facade.prepare({ task_id: `delivery-${diagnostic.toLowerCase()}`, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking }));
@@ -535,16 +535,40 @@ describe("ReviewRoundFacade", () => {
     expect(result.continuation_eligible).toBe(false);
   });
 
+  it("uses the stage file_only policy as an exact provider filter and never falls back to embedding", async () => {
+    const tracking = root(); let calls = 0;
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+      { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
+    ] };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run() { calls += 1; return { providers: [] }; } };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "file-only-exact", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(calls).toBe(0);
+    expect(result.intent.candidate_providers).toEqual([]);
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: null, diagnostic: "NO_CAPABLE_PROVIDER", business_valid: false }));
+  });
+
+  it("rejects a provider delivery different from the stage-resolved policy", async () => {
+    const tracking = root();
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+      { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } },
+    ] };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: "always_embed", output: output(request.packet) }] }; } };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "delivery-policy", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", business_valid: false, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" }));
+  });
+
   it("stores actual delivery only in private state and rejects a changed continuation echo", async () => {
     const tracking = root(); let call = 0; let continuationPacket;
     const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } }] };
-    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "always_embed" : "file_only", output: output(request.packet ?? continuationPacket, call === 1 ? "pass" : "revise_required") }] }; } };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "file_only" : "always_embed", output: output(request.packet ?? continuationPacket, call === 1 ? "pass" : "revise_required") }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const input = { task_id: "delivery-freeze", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking };
     const first = await facade.run(facade.prepare(input)); const publication = facade.publish(first, { items: [] });
     const privateReceipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
-    expect(privateReceipt.initial_delivery_by_provider).toEqual({ opencode: "always_embed" });
-    expect(privateReceipt.provider_outcomes[0].delivery_used).toBe("always_embed");
-    expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toMatch(/delivery_used|always_embed/);
+    expect(privateReceipt.initial_delivery_by_provider).toEqual({ opencode: "file_only" });
+    expect(privateReceipt.provider_outcomes[0].delivery_used).toBe("file_only");
+    expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toMatch(/delivery_used|file_only/);
     continuationPacket = input.packet; const second = await facade.run(facade.prepare({ ...input, continuation: true }));
     expect(second.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH" }]);
     expect(second.merged_findings).toEqual([]);
@@ -563,7 +587,6 @@ describe("ReviewRoundFacade", () => {
     const missing = await facade.run(facade.prepare({ task_id: "missing-candidates", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
     expect(missing.provider_outcomes).toMatchObject([
       { provider: "kimi", business_valid: false, semantic_verdict: null, diagnostic: "PROVIDER_OUTCOME_MISSING" },
-      { provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "PROVIDER_OUTCOME_MISSING" },
     ]);
     const unavailable = { ...ready, providers: ready.providers.map((provider) => ({ ...provider, status: "unavailable" })) };
     const none = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { async discoverCapabilities() { return unavailable; }, async run() { calls += 1; throw new Error("must not run"); } } });

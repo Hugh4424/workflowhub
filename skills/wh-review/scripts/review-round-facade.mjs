@@ -212,7 +212,7 @@ export class ReviewRoundFacade {
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
     const reviewTrack = input.review_track ?? null;
     const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
-    const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.some((mode) => mode === "file_only" || mode === "always_embed")).map((item) => item.provider).sort();
+    const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider).sort();
     const continuableProviders = capabilitySnapshot.providers.filter((item) => candidateProviders.includes(item.provider) && item.capabilities.continuation).map((item) => item.provider).sort();
     let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
@@ -327,7 +327,7 @@ export class ReviewRoundFacade {
       const candidateSet = new Set(intent.candidate_providers);
       const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
       const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
-        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.stage_contract_rules)
+        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.delivery_policy, prepared.stage_contract_rules)
         : { provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "UNKNOWN_PROVIDER" });
       const returnedCandidates = new Set((response.providers ?? []).map((item) => item?.provider).filter((provider) => candidateSet.has(provider)));
       for (const provider of intent.candidate_providers) if (!returnedCandidates.has(provider)) outcomes.push({ provider, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used: null, diagnostic: "PROVIDER_OUTCOME_MISSING" });
@@ -553,7 +553,7 @@ export class ReviewRoundFacade {
     }
     return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
-  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, contractRules) {
+  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, deliveryPolicy, contractRules) {
     const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null; const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null };
     if (typeof item?.output === "string" && item.provider) {
       const raw = join(directory, "providers", `${item.provider}.raw.txt`); atomic(raw, item.output); base.raw_output_ref = raw;
@@ -566,6 +566,7 @@ export class ReviewRoundFacade {
     if (item.delivery_used !== "file_only" && item.delivery_used !== "always_embed") return { ...base, diagnostic: "DELIVERY_USED_INVALID" };
     if (!capabilities?.attachment_delivery?.includes(item.delivery_used)) return { ...base, diagnostic: "DELIVERY_USED_CAPABILITY_MISMATCH" };
     if (intent.initial_runtime_id && item.delivery_used !== initialDelivery) return { ...base, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH", requires_human_confirmation: true };
+    if (item.delivery_used !== deliveryPolicy) return { ...base, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" };
     if (transport_status !== "completed") return { ...base, diagnostic: publicError(item) };
     const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "NON_JSON_OUTPUT" };
     const output = parsed.value;
