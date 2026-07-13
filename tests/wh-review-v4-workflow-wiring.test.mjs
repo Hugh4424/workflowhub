@@ -105,6 +105,18 @@ describe("wh-review v4 workflow wiring", () => {
     expect(content).not.toContain("code-quality");
   });
 
+  it("binds build-code and verify-code review calls to the trusted task worktree", () => {
+    for (const stage of ["build-code", "verify-code"]) {
+      const content = skill(stage);
+      expect(content).toContain("task_id:");
+      expect(content).toContain("task_tracking_root: taskRecords.task_tracking_root");
+      expect(content).toContain(`stage: "${stage}"`);
+      expect(content).toContain("review_flow_id:");
+      expect(content).toContain("packet");
+      expect(content).toMatch(/host.*(?:capture|generat).*source diff/i);
+    }
+  });
+
   it("documents packet-only provider isolation and private receipt evidence", () => {
     for (const stage of stages) {
       const content = v4(stage);

@@ -82,13 +82,21 @@ At stage start, call `metrics/collector.mjs` `recordSkeleton`, passing a seed wi
 Use `ReviewRoundFacade` through `runReviewRound()` only:
 
 ```js
-await runReviewRound({ stage: "verify-code", review_flow_id: "verify-code-flow", packet });
+await runReviewRound({
+  task_id: taskId,
+  task_tracking_root: taskRecords.task_tracking_root,
+  stage: "verify-code",
+  review_flow_id: "verify-code-flow",
+  packet,
+});
 ```
 
-The `review-packet.v1` contains the canonical total diff, changed-file manifest,
-acceptance/design excerpt and host test evidence. Providers review only this packet. Do
-not run git, read the real repository, request absolute paths, or write reports. Keep raw
-provider evidence below `<task>/reviews/private/round-.../`; record cancellation with
+`packet` carries only supplemental context such as acceptance/design excerpt and host
+test evidence. The host captures the canonical source diff, changed-file manifest and
+hashes from the trusted task worktree; callers must not supply source fields. Providers
+review only the sealed packet. Do not run git, read the real repository, request absolute
+paths, or write reports. Keep raw provider evidence below
+`<task>/reviews/private/round-.../`; record cancellation with
 `cancel_source` separately from semantic verdicts. Continuations retain the initial
 runtime; a new flow requires human-approved reset. An unpublished `runReviewRound()`
 return is transport/packet evidence only: it has no semantic verdict. After host
@@ -300,7 +308,12 @@ directly into `stage-result.facts.review`:
 
 ```js
 const published = await runReviewRound({
-  stage: "verify-code", review_flow_id: "verify-code-flow", packet, dispositions,
+  task_id: taskId,
+  task_tracking_root: taskRecords.task_tracking_root,
+  stage: "verify-code",
+  review_flow_id: "verify-code-flow",
+  packet,
+  dispositions,
 });
 const review = published.semantic_verdict
   ? { core_receipt_hash: published.core_receipt_hash, semantic_verdict: published.semantic_verdict, needs_human: published.needs_human }
