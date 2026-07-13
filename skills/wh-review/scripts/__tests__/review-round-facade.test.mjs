@@ -239,6 +239,13 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
   });
 
+  it("accepts a JSON packet that spells non-renamed old_path as null", () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const value = packet({ root: tracking }); value.changed_files[0].old_path = null; refreshPacketHashes(value);
+    const prepared = facade.prepare({ task_id: "null-old-path", stage: "build-code", review_flow_id: "flow", packet: value, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
   it("rejects caller-provided snapshots instead of treating them as source evidence", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     expect(() => facade.prepare({ task_id: "snapshot", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, source_snapshot: { base_files: {} }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/source_snapshot is not accepted/);
@@ -278,5 +285,14 @@ describe("ReviewRoundFacade", () => {
     const brokenInput = { ...input, task_id: "broken", review_flow_id: "next", packet: packet({ root: tracking }) };
     expect(() => facade.prepare(brokenInput)).toThrow();
     expect(() => readFileSync(join(tracking, "broken", "reviews", "private", "flows", "broken.lock", "owner.json"))).toThrow();
+  });
+
+  it("reclaims a lock whose PID is live but too new to own its recorded age", () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const input = { task_id: "pid-reused", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } };
+    const lock = join(tracking, "pid-reused", "reviews", "private", "flows", "pid-reused.lock");
+    mkdirSync(lock, { recursive: true }); writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, process_start_identity: "a-reused-pid-cannot-own-this-lock", created_at_ms: 1, idempotency_key: "reused" }));
+    const prepared = facade.prepare(input);
+    rmSync(prepared.lock, { recursive: true, force: true });
   });
 });

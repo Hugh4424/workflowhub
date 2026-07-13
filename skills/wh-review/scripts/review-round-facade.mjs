@@ -79,6 +79,12 @@ function hostGit(root, args, encoding = "utf8") {
   try { return execFileSync("git", args, { cwd: root, encoding, maxBuffer: 32 * 1024 * 1024 }); }
   catch (error) { throw new Error(`host git source builder failed: ${String(error.stderr ?? error.message).trim()}`); }
 }
+function processStartIdentity(pid) {
+  try {
+    const value = String(execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" })).trim();
+    return value || null;
+  } catch { return null; }
+}
 function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], undefined); }
 function buildHostGitSource(repositoryRoot, requestedRevision) {
   if (!requestedRevision || typeof requestedRevision.base !== "string" || typeof requestedRevision.head !== "string") throw new Error("source_revision.base and source_revision.head are required");
@@ -107,7 +113,12 @@ function buildHostGitSource(repositoryRoot, requestedRevision) {
 }
 function verifyHostGitSource(packet, repositoryRoot) {
   const built = buildHostGitSource(repositoryRoot, packet.source_revision);
-  if (packet.unified_diff !== built.unified_diff || canonical(packet.changed_files) !== canonical(built.changed_files)) throw new Error("review packet source evidence does not match host git base/head revisions");
+  const normalizeChangedFiles = (entries) => entries.map((entry) => {
+    const normalized = { ...entry };
+    if (normalized.status !== "renamed" && normalized.old_path === null) delete normalized.old_path;
+    return normalized;
+  });
+  if (packet.unified_diff !== built.unified_diff || canonical(normalizeChangedFiles(packet.changed_files)) !== canonical(normalizeChangedFiles(built.changed_files))) throw new Error("review packet source evidence does not match host git base/head revisions");
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
@@ -243,7 +254,19 @@ export class ReviewRoundFacade {
         try { owner = JSON.parse(readFileSync(ownerPath, "utf8")); }
         catch (cause) { if (cause?.code === "ENOENT") continue; throw new Error("review-already-running: lock metadata is unreadable"); }
         if (!Number.isInteger(owner?.pid) || owner.pid <= 0 || !Number.isFinite(owner?.created_at_ms) || typeof owner?.idempotency_key !== "string") throw new Error("review-already-running: lock metadata is invalid");
-        let active = true; try { process.kill(owner.pid, 0); } catch (cause) { active = cause?.code !== "ESRCH"; }
+        let active = true;
+        try {
+          process.kill(owner.pid, 0);
+          // A live PID alone is not sufficient: it can have been reused after
+          // the original owner died. New locks persist the process start
+          // identity; historical locks use the conservative elapsed fallback.
+          const currentStart = processStartIdentity(owner.pid);
+          if (typeof owner.process_start_identity === "string" && owner.process_start_identity) active = currentStart === owner.process_start_identity;
+          else {
+            const elapsedSeconds = Number(String(execFileSync("ps", ["-o", "etimes=", "-p", String(owner.pid)], { encoding: "utf8" })).trim());
+            if (Number.isFinite(elapsedSeconds) && elapsedSeconds * 1000 + 2000 < this.now() - owner.created_at_ms) active = false;
+          }
+        } catch (cause) { active = cause?.code !== "ESRCH"; }
         if (active) throw new Error("review-already-running");
         // Never rm the shared lock path. Atomically rename it into a private
         // claim; only the winner may remove that claimed stale directory.
@@ -254,7 +277,7 @@ export class ReviewRoundFacade {
       }
     }
     if (!acquired) throw new Error("review-already-running: lock recovery raced repeatedly");
-    atomic(join(lock, "owner.json"), safeJson({ pid: process.pid, created_at_ms: this.now(), idempotency_key: intent.idempotency_key }));
+    atomic(join(lock, "owner.json"), safeJson({ pid: process.pid, process_start_identity: processStartIdentity(process.pid), created_at_ms: this.now(), idempotency_key: intent.idempotency_key }));
     return lock;
   }
   #releaseLock(lock) { rmSync(lock, { recursive: true, force: true }); }
