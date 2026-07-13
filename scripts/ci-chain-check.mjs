@@ -1,22 +1,32 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { makeDecisionStageResultFilename } from '../core/task-record-paths.mjs';
 
 const args = process.argv.slice(2);
 const taskIdArg = args.find(a => a.startsWith('--task-id='));
+const reviewFlowIdArg = args.find(a => a.startsWith('--review-flow-id='));
 const taskId = taskIdArg ? taskIdArg.split('=')[1] : null;
+const reviewFlowId = reviewFlowIdArg ? reviewFlowIdArg.split('=')[1] : null;
 
-if (!taskId) {
-  console.error('Usage: node scripts/ci-chain-check.mjs --task-id=<id>');
+if (!taskId || !reviewFlowId) {
+  console.error('Usage: node scripts/ci-chain-check.mjs --task-id=<id> --review-flow-id=<id>');
   process.exit(2);
 }
 
 const specsDir = resolve(`specs/${taskId}`);
+let makeDecisionResult;
+try {
+  makeDecisionResult = makeDecisionStageResultFilename(reviewFlowId);
+} catch (error) {
+  console.error(`[FAIL] make-decision: ${error.message}`);
+  process.exit(2);
+}
 let errors = 0, warnings = 0;
 
 // 1. make-decision
 try {
-  JSON.parse(readFileSync(`${specsDir}/stage-result-make-decision.json`, 'utf-8'));
+  JSON.parse(readFileSync(join(specsDir, makeDecisionResult), 'utf-8'));
   console.log('[OK] make-decision stage-result exists and is valid JSON');
 } catch (e) {
   console.error(`[FAIL] make-decision: ${e.message}`);
