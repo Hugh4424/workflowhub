@@ -173,4 +173,13 @@ describe("reviewer-output validator", () => {
     item.output.skillResults.pop(); item.output.packet_hash = "9".repeat(64);
     expect(call().errors).toContain("packet_hash does not match packet");
   });
+
+  it("requires an exact empty skillResults array when build-code declares no lenses", () => {
+    const item = fixture({ stage: "build-code" });
+    const call = () => validateReviewerOutput({ stage: "build-code", output: item.output, packet: item.packet, intent: item.intent });
+    expect(item.resolution.definitions).toEqual([]);
+    expect(call().valid).toBe(true);
+    item.output.skillResults = [{ skill: "build-code-no-extra-lens", bundle_hash: item.output.skill_bundle_hash, mode: "lens-only", checked_objects: ["review-packet.v1.json", "changes.diff"], evidence: "changes.diff covers the whole frozen diff", conclusion: "no extra lens was declared" }];
+    expect(call().errors).toEqual(expect.arrayContaining(["unexpected skill result: build-code-no-extra-lens", "missing checked objects: build-code-no-extra-lens"]));
+  });
 });

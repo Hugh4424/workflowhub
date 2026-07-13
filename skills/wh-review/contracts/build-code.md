@@ -21,11 +21,11 @@
 
 ## Required skills
 
-无额外 lens；所有规则由本合同和 `provider-protocol.md` 给出。
+无额外 lens；所有规则由本合同和 `provider-protocol.md` 给出。`skillResults` 必须精确为 `[]`，不得声明 `no-extra-lens` 或其他虚拟 skill result。
 
 ## Stage output
 
-输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding 和五个 hash 回显。
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding、五个 hash 回显和空数组 `skillResults: []`。
 
 ## Checklist IDs
 

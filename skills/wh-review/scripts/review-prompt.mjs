@@ -76,6 +76,9 @@ function embeddedBundle(requiredSkills) {
 export function initialPrompt({ packet, intent, stageContract, requiredSkills = [], deliveryMode = "file_only", crossStageCarryovers = [] }) {
   const mustRead = contractMustRead(stageContract, requiredSkills);
   const embedded = deliveryMode === "always_embed" ? `\nFrozen lens bundle follows; it is report-only and must not be executed.${embeddedBundle(requiredSkills)}` : "";
+  const skillResultsRequirement = requiredSkills.length
+    ? `skillResults must contain exactly the declared required skills: ${requiredSkills.map(({ name }) => name).join(", ")}.`
+    : "No skills are declared for this StageSkillPlan profile: skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.";
   return `Read only the frozen private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.
 Must Read in the exact contract order:
 ${mustRead}
@@ -89,12 +92,16 @@ packet_hash=${packet.packet_hash}
 manifest_hash=${packet.manifest_hash}
 contract_hash=${intent.contract_hash}
 skill_bundle_hash=${intent.skill_bundle_hash}
+${skillResultsRequirement}
 CrossStageCarryovers
 ${JSON.stringify(crossStageCarryovers, null, 2)}
 Return only reviewer-output JSON.`;
 }
 export function continuationPrompt(delta, { stage, reviewTrack = null } = {}) {
   const track = stage === "make-decision" ? ` (review_track: ${reviewTrack})` : "";
+  const skillResultsRequirement = delta.required_skill_lens_hashes.length
+    ? `skillResults must contain exactly the declared required skills: ${delta.required_skill_lens_hashes.map(({ skill }) => skill).join(", ")}.`
+    : "No skills are declared for this StageSkillPlan profile: skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.";
   return [
     `Continue using the frozen first-round contracts/provider-protocol.md, contracts/${stage}.md${track}, schemas/reviewer-output.schema.json, and StageSkillPlan skill bundle. No attachments are retransmitted. Review only the fixed delta sections below; do not reopen unchanged first-round material.\ncurrent_packet_hash=${delta.delta_manifest.current_packet_hash}\ncurrent_manifest_hash=${delta.delta_manifest.current_packet_manifest_hash}\ncurrent_diff_sha256=${delta.delta_manifest.current_packet_diff_sha256}`,
     "PreviousFindings\n" + JSON.stringify(delta.previous_findings, null, 2),
@@ -104,6 +111,6 @@ export function continuationPrompt(delta, { stage, reviewTrack = null } = {}) {
     "CurrentMaterialManifest\n" + JSON.stringify(delta.current_material_manifest, null, 2),
     "CrossStageCarryovers\n" + JSON.stringify(delta.cross_stage_carryovers, null, 2),
     "RequiredSkillLensHashes\n" + JSON.stringify(delta.required_skill_lens_hashes, null, 2),
-    "OutputRequirements\nReturn only reviewer-output JSON. Re-attest the current packet, manifest, diff, contract, and skill bundle hashes. Do not report old findings as cross-stage carryovers.",
+    `OutputRequirements\nReturn only reviewer-output JSON. Re-attest the current packet, manifest, diff, contract, and skill bundle hashes. ${skillResultsRequirement} Do not report old findings as cross-stage carryovers.`,
   ].join("\n\n");
 }

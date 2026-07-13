@@ -12,6 +12,6 @@ Output must be a single bare JSON object, or exactly one full Markdown JSON fenc
 
 `verdict` 的唯一规范枚举是小写 `pass`、`revise_required`、`escalate_to_human`。`revise`、`REVISE` 和其他未知值都不是合法 verdict，必须拒绝。
 
-`skillResults` 中每个 required skill 必须有技能名、bundle hash、`lens-only` mode、检查对象、证据和结论。仅写“已检查”或“通过”视为无效证据。
+`skillResults` 必须与冻结 StageSkillPlan 的 required skills 精确一一对应：每个 declared skill 必须有技能名、bundle hash、`lens-only` mode、检查对象、证据和结论；不得添加未声明的条目。若冻结 StageSkillPlan 没有 required skills，`skillResults` 必须精确为 `[]`，不得输出 `no-extra-lens` 或其他虚拟 skill result。仅写“已检查”或“通过”视为无效证据。
 
 `checklist` 必须无重复地完整覆盖当前合同全部 C/H ID。每个 passed C/H 必须有同 ID 的 `pass_items`；每个 failed H 必须有同 ID 且 severity 为 `blocking` 的 finding。每个 provider 必须回显全部五个 hash。hash 不一致、材料缺失、非 JSON 或空洞技能证据均不是语义 verdict。

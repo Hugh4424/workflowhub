@@ -1226,6 +1226,7 @@ describe("ReviewRoundFacade", () => {
     expect(mustRead.map((item) => dispatched.request.prompt.indexOf(item))).toEqual(mustRead.map((item) => dispatched.request.prompt.indexOf(item)).sort((a, b) => a - b));
     expect(dispatched.request.prompt).not.toContain(readFileSync(join(import.meta.dirname, "../../../review/SKILL.md"), "utf8"));
     expect(dispatched.request.prompt).toContain(`changes_diff_sha256=${prepared.packet.diff_sha256}`);
+    expect(dispatched.request.prompt).toContain("skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.");
     const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
     expect(manifest.attachments).toContainEqual({ destination: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
   });
@@ -1254,6 +1255,7 @@ describe("ReviewRoundFacade", () => {
     expect(calls[1].request.prompt).toContain(`current_packet_hash=${secondPrepared.packet.packet_hash}`);
     expect(calls[1].request.prompt).toContain(`current_manifest_hash=${secondPrepared.packet.manifest_hash}`);
     expect(calls[1].request.prompt).toContain(`current_diff_sha256=${secondPrepared.packet.diff_sha256}`);
+    expect(calls[1].request.prompt).toContain("skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.");
     expect(calls[1].request.prompt).toContain("fixed\n");
     expect(calls[1].request.prompt).not.toContain("\n x\n");
     expect(calls[1].request.prompt).not.toMatch(/^@@ .* @@ .+$/m);
