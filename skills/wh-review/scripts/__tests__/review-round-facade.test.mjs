@@ -266,9 +266,15 @@ describe("ReviewRoundFacade", () => {
     expect(prepared.packet).toMatchObject({ round_kind: "initial", baseline_packet_hash: null });
     const result = await facade.run(prepared);
     const diffEntry = dispatched.attachments.entries.find((entry) => entry.destination === "changes.diff");
+    const outputSchemaEntry = dispatched.attachments.entries.find((entry) => entry.destination === "schemas/reviewer-output.schema.json");
+    expect(outputSchemaEntry).toBeTruthy();
+    const outputSchemaBytes = readFileSync(join(tracking, outputSchemaEntry.source));
     expect(diffEntry).toMatchObject({ sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
+    expect(outputSchemaEntry).toMatchObject({ sha256: hash(outputSchemaBytes), size: outputSchemaBytes.length });
     expect(dispatchedDiff).toBe(prepared.packet.unified_diff);
-    expect(dispatched.request.prompt).toContain("Must Read: changes.diff");
+    const mustRead = ["contracts/provider-protocol.md", "contracts/build-code.md", "schemas/reviewer-output.schema.json", "review-packet.v1.json", "changes.diff", "StageSkillPlan skill bundle"];
+    expect(mustRead.map((item) => dispatched.request.prompt.indexOf(item))).toEqual(mustRead.map((item) => dispatched.request.prompt.indexOf(item)).sort((a, b) => a - b));
+    expect(dispatched.request.prompt).not.toContain(readFileSync(join(import.meta.dirname, "../../../review/SKILL.md"), "utf8"));
     expect(dispatched.request.prompt).toContain(`changes_diff_sha256=${prepared.packet.diff_sha256}`);
     const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
     expect(manifest.attachments).toContainEqual({ destination: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
@@ -292,6 +298,10 @@ describe("ReviewRoundFacade", () => {
     expect(calls[1].request).toMatchObject({ continuation: { runtime_id: "34343434-3434-4434-8434-343434343434" } });
     expect(calls[1].request).not.toHaveProperty("attachments");
     expect(calls[1].request.prompt).not.toContain(initial.unified_diff);
+    expect(calls[1].request.prompt).toContain("Continue using the frozen first-round contracts/provider-protocol.md, contracts/build-code.md, schemas/reviewer-output.schema.json, and StageSkillPlan skill bundle");
+    expect(calls[1].request.prompt).toContain(`current_packet_hash=${secondPrepared.packet.packet_hash}`);
+    expect(calls[1].request.prompt).toContain(`current_manifest_hash=${secondPrepared.packet.manifest_hash}`);
+    expect(calls[1].request.prompt).toContain(`current_diff_sha256=${secondPrepared.packet.diff_sha256}`);
     expect(calls[1].request.prompt).toContain("fixed\n");
     const headings = ["PreviousFindings", "ClosureEvidence", "DeltaManifest", "AffectedMaterials", "CurrentMaterialManifest", "CrossStageCarryovers", "RequiredSkillLensHashes", "OutputRequirements"];
     expect(headings.map((heading) => calls[1].request.prompt.indexOf(heading))).toEqual([...headings.map((heading) => calls[1].request.prompt.indexOf(heading))].sort((a, b) => a - b));
