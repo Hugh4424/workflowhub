@@ -83,24 +83,48 @@ function candidateAt(rootInput, name) {
 
 function versionOf(content) { return content.match(/^---\s*\n[^]*?^version:\s*["']?([^\n"']+)/m)?.[1]?.trim() || "unspecified"; }
 
-function readStageSkillPlan() {
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function readStageSkillPlan(stageSkillPlan) {
+  if (stageSkillPlan !== undefined) return stageSkillPlan;
   try { return JSON.parse(readFileSync(STAGE_SKILL_PLAN_PATH, "utf8")); }
   catch (error) { throw new RequiredSkillResolutionError("required-skill-unavailable", `invalid stage skill plan: ${error.message}`); }
 }
 
-function profileFor({ stage, reviewTrack, ui }) {
-  const profile = readStageSkillPlan().stages?.[stage];
+function assertCompleteProfile(profile, stage) {
+  const required = ["logical_skill_id", "material_profile", "output_schema", "checkpoints", "expected_evidence", "bundle_hash", "bundle_closure_files", "review_mode", "delivery_mode", "continuation_policy", "pass_finding_policy"];
+  for (const field of required) if (profile?.[field] === undefined) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: missing ${field}`);
+  if (typeof profile.logical_skill_id !== "string" || !profile.logical_skill_id.startsWith("wh-review/")) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid logical_skill_id`);
+  if (profile.output_schema !== "schemas/reviewer-output.schema.json") throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid output_schema`);
+  if (!Array.isArray(profile.checkpoints) || !profile.checkpoints.length || profile.checkpoints.some((item) => typeof item !== "string" || !item)) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid checkpoints`);
+  if (!Array.isArray(profile.expected_evidence) || !profile.expected_evidence.length || profile.expected_evidence.some((item) => typeof item !== "string" || !item)) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid expected_evidence`);
+  if (profile.bundle_hash !== "resolved-at-prepare" || profile.bundle_closure_files !== "resolved-at-prepare") throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: bundle metadata must resolve at prepare`);
+  if (profile.review_mode !== "lens-only") throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid review_mode`);
+}
+
+function profileFor({ stage, reviewTrack, ui, stageSkillPlan }) {
+  const plan = readStageSkillPlan(stageSkillPlan);
+  if (plan?.version !== 1 || !plan?.stages || typeof plan.stages !== "object") throw new RequiredSkillResolutionError("required-skill-unavailable", "invalid stage skill plan root");
+  const profile = plan.stages?.[stage];
   if (!profile) throw new RequiredSkillResolutionError("required-skill-unavailable", `unknown stage profile: ${String(stage)}`);
   if (profile.tracks) {
     if (typeof reviewTrack !== "string" || !profile.tracks[reviewTrack]) {
       throw new RequiredSkillResolutionError("required-skill-unavailable", `stage ${stage} requires a known review_track`);
     }
-    return { ...profile.tracks[reviewTrack], stage, reviewTrack };
+    const selected = { ...profile.tracks[reviewTrack], stage, reviewTrack };
+    assertCompleteProfile(selected, `${stage}/${reviewTrack}`);
+    return selected;
   }
   if (reviewTrack !== undefined && reviewTrack !== null) {
     throw new RequiredSkillResolutionError("required-skill-unavailable", `stage ${stage} does not accept review_track`);
   }
-  return { ...profile, stage, reviewTrack: null, ui: Boolean(ui) };
+  const selected = { ...profile, stage, reviewTrack: null, ui: Boolean(ui) };
+  assertCompleteProfile(selected, stage);
+  return selected;
 }
 
 function profileSkillNames(profile, ui) {
@@ -109,8 +133,8 @@ function profileSkillNames(profile, ui) {
   return [...new Set([...required, ...optional])].sort();
 }
 
-export function resolveRequiredSkills({ stage, reviewTrack, ui = false, roots } = {}) {
-  const profile = profileFor({ stage, reviewTrack, ui });
+export function resolveRequiredSkills({ stage, reviewTrack, ui = false, roots, stageSkillPlan } = {}) {
+  const profile = profileFor({ stage, reviewTrack, ui, stageSkillPlan });
   const deliveryMode = profile.delivery_mode ?? "file_only";
   if (deliveryMode !== "file_only" && deliveryMode !== "always_embed") {
     throw new RequiredSkillResolutionError("required-skill-unavailable", `invalid delivery mode for ${stage}`);
@@ -129,7 +153,21 @@ export function resolveRequiredSkills({ stage, reviewTrack, ui = false, roots } 
     const bytes = readFileSync(chosen.real);
     definitions.push({ name, source: chosen.source, version: versionOf(bytes.toString("utf8")), sha256: createHash("sha256").update(bytes).digest("hex"), content: chosen.bundle.content, bundle: chosen.bundle });
   }
-  return { stage, reviewTrack: profile.reviewTrack, deliveryMode, definitions };
+  const bundleClosureFiles = definitions.flatMap(({ name, bundle }) => bundle.files.map(({ path, sha256 }) => ({ skill: name, path, sha256 })));
+  const skillBundleHash = createHash("sha256").update(canonical(definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))).digest("hex");
+  return {
+    stage,
+    reviewTrack: profile.reviewTrack,
+    logicalSkillId: profile.logical_skill_id,
+    outputSchema: profile.output_schema,
+    checkpoints: [...profile.checkpoints],
+    expectedEvidence: [...profile.expected_evidence],
+    reviewMode: profile.review_mode,
+    deliveryMode,
+    skillBundleHash,
+    bundleClosureFiles,
+    definitions,
+  };
 }
 
 export function appendRequiredSkillDefinitions({ contract, materials, resolution }) {

@@ -2,7 +2,7 @@
 
 所有 provider 只读 `review-packet.v1` 与冻结的 skill bundle。不得修改材料、生成报告、访问真实仓库、请求绝对路径或要求执行版本控制命令。
 
-Output must be a single bare JSON object。禁止 Markdown JSON 围栏和对象外文字。原始输出不是业务结论；只有通过 `reviewer-output.schema.json`、合同 hash、材料 hash 与 skill bundle hash 校验的输出才可进入合并。
+Output must be a single bare JSON object, or exactly one full Markdown JSON fence containing that object. There must be no text before or after the object/fence. 原始输出不是业务结论；只有通过 `reviewer-output.schema.json`、合同 hash、材料 hash 与 skill bundle hash 校验的输出才可进入合并。
 
 顶层必须包含 `packet_hash`、`manifest_hash`、`diff_sha256`、`contract_hash`、`skill_bundle_hash`、`packet_status`、`verdict`、`summary`、`findings`、`checklist`、`pass_items` 与 `skillResults`。`revise_required` 还必须包含 `rootCause` 与 `fixApproach`。
 

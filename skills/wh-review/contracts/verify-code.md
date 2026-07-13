@@ -2,7 +2,30 @@
 
 本合同只检查 `review-packet.v1`。finding 必须引用 packet 内 artifact anchor 或 host-verified fact；合同外 finding 最高为 `minor`。
 
-必需 packet 字段：`acceptance_design_excerpt`、`test_evidence`、`verification_closure`、`changed_files`、`host_verified_facts`。
+## Reviewer role
+
+审查验收证据、用户问题闭环与交付范围；结论只能建立在冻结的客观证据上。
+
+## Must Read
+
+1. `contracts/provider-protocol.md`
+2. `contracts/verify-code.md`
+3. `schemas/reviewer-output.schema.json`
+4. `review-packet.v1.json`
+5. `changes.diff`
+6. {{StageSkillPlan skill bundle}}
+
+## Required materials
+
+`acceptance_design_excerpt`、`test_evidence`、`verification_closure`、`changed_files`、`host_verified_facts`。
+
+## Required skills
+
+`qa-only`、`verify-change`（light profile）。
+
+## Stage output
+
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding、五个 hash 回显和所需 lens 的 skillResults。
 
 ## Checklist IDs
 

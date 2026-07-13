@@ -46,4 +46,33 @@ describe("required skill bundles", () => {
     expect(augmented.materials).toBe("M");
     expect(augmented.contract).toBe("CONTRACT");
   });
+
+  it.each([
+    ["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null],
+    ["build-plan", null], ["build-code", null], ["verify-code", null],
+  ])("exposes a complete frozen StageSkillPlan for %s/%s", (stage, reviewTrack) => {
+    const plan = resolveRequiredSkills({ stage, reviewTrack });
+    expect(plan).toMatchObject({
+      stage,
+      reviewTrack,
+      logicalSkillId: expect.stringMatching(/^wh-review\//),
+      outputSchema: "schemas/reviewer-output.schema.json",
+      checkpoints: expect.any(Array),
+      expectedEvidence: expect.any(Array),
+      reviewMode: "lens-only",
+      deliveryMode: expect.stringMatching(/^(file_only|always_embed)$/),
+      skillBundleHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      bundleClosureFiles: expect.any(Array),
+    });
+    expect(plan.checkpoints.length).toBeGreaterThan(0);
+    expect(plan.expectedEvidence.length).toBeGreaterThan(0);
+    expect(plan.bundleClosureFiles).toEqual(plan.definitions.flatMap(({ name, bundle }) => bundle.files.map(({ path, sha256 }) => ({ skill: name, path, sha256 }))));
+  });
+
+  it("rejects an incomplete StageSkillPlan profile instead of applying defaults", () => {
+    expect(() => resolveRequiredSkills({
+      stage: "build-code",
+      stageSkillPlan: { version: 1, stages: { "build-code": { logical_skill_id: "wh-review/build-code", required_skills: [], material_profile: "diff-and-evidence", checkpoints: ["packet-attestation"], expected_evidence: ["unified_diff"], bundle_hash: "resolved-at-prepare", bundle_closure_files: "resolved-at-prepare", review_mode: "lens-only", delivery_mode: "file_only", continuation_policy: "initial-runtime-only", pass_finding_policy: "contract-only" } } },
+    })).toThrow(/incomplete stage skill plan.*output_schema/i);
+  });
 });

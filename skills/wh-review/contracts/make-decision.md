@@ -2,6 +2,19 @@
 
 本合同只检查 `review-packet.v1`。finding 必须引用 packet 内 artifact anchor 或 host-verified fact；合同外 finding 最高为 `minor`。
 
+## Reviewer role
+
+审查决策方向或细节是否符合所选 track 的冻结材料；两个 track 独立运行、独立结论，绝不互相覆盖。
+
+## Must Read
+
+1. `contracts/provider-protocol.md`
+2. selected `contracts/make-decision.md` review track
+3. `schemas/reviewer-output.schema.json`
+4. `review-packet.v1.json`
+5. `changes.diff`
+6. {{StageSkillPlan skill bundle}}
+
 ## 共享规则
 
 - `review_track` must select exactly one of `direction` or `detail`; the two tracks are mutually exclusive and their checklist results must never be combined.
@@ -10,6 +23,18 @@
 - 同一 blocking 连续两轮未关闭时，必须以 `closure_bundle` 给出根因、扫描范围、反例矩阵、checklist、repo-relative anchors 与其当前文件 hash、精确当前 delta hash；自由文本无效，不足或不匹配保持 open 并 `escalate_to_human`，不得发布 pass。第三轮同样 `escalate_to_human`。
 
 ## review_track: direction
+
+### Required materials: Direction
+
+`raw_requirement`、`host_verified_facts`。出现 `decision_log_excerpt`、拟定方向或方案摘要时必须 `escalate_to_human`。
+
+### Required skills: Direction
+
+`plan-ceo-review`、`review`。
+
+### Stage output: Direction
+
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出 DIR 全量 checklist、pass_items、finding、五个 hash 回显和所需 lens 的 skillResults。
 
 ### Checklist IDs: Direction
 
@@ -45,6 +70,18 @@ blocking：需求方向偏离原始诉求、解决虚构问题、关键前提被
 后续轮只审固定 delta sections。每个上轮 finding 必须由同 ID 的 `closure_evidence` 关闭或保持原严重度；未变材料不得重审。
 
 ## review_track: detail
+
+### Required materials: Detail
+
+`raw_requirement`、`decision_log_excerpt`、`acceptance_design_excerpt`、`host_verified_facts`。
+
+### Required skills: Detail
+
+`plan-ceo-review`、`review`。
+
+### Stage output: Detail
+
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出 DET 全量 checklist、pass_items、finding、五个 hash 回显和所需 lens 的 skillResults。
 
 ### Checklist IDs: Detail
 

@@ -9,7 +9,7 @@ description: Break the spec into an ordered implementation plan and a task list 
 
 Take the spec from `build-spec` and decompose it into a concrete plan (`plan.md`) and a sequenced task list (`tasks.md`). The plan is the bridge between requirements and code.
 
-v1 upgrade: orchestrates three sub-skills (spec-plan, spec-tasks, spec-analyze) adapted from speckit-plan/speckit-tasks/speckit-analyze, adds constitution compliance check against `constitution-checklist.md` (21 clauses), M10 baseline comparison (5 metrics), and a human review checkpoint before producing stage-result.
+v1 upgrade: orchestrates three repository sub-skills (spec-plan, spec-tasks, spec-analyze), adds constitution compliance check against `constitution-checklist.md` (21 clauses), M10 baseline comparison (5 metrics), and a human review checkpoint before producing stage-result.
 
 ## What to do
 

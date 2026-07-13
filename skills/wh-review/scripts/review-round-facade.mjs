@@ -165,12 +165,14 @@ function checkedCarryovers(value, previousFindings) {
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, faultInjector = () => {} } = {}) {
+  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
     if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
+    if (!Number.isSafeInteger(initialPromptMaxBytes) || initialPromptMaxBytes < 1) throw new TypeError("initialPromptMaxBytes must be a positive integer");
+    if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
-    this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.faultInjector = faultInjector;
+    this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.json`); }
@@ -212,7 +214,7 @@ export class ReviewRoundFacade {
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
     const reviewTrack = input.review_track ?? null;
-    const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
+    const resolution = this.requiredSkillResolver({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
     const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider).sort();
     let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
@@ -230,7 +232,7 @@ export class ReviewRoundFacade {
       if (continuation) throw new Error("blocked_by_human_confirmation: frozen contract changed; use reset with human approval");
       return this.#materialIncomplete(input, "contract hash mismatch");
     }
-    const actualBundleHash = bundleHash(resolution);
+    const actualBundleHash = resolution.skillBundleHash ?? bundleHash(resolution);
     if (packet.skill_bundle_hash !== actualBundleHash) {
       if (continuation) throw new Error("blocked_by_human_confirmation: frozen skill bundle changed; use reset with human approval");
       return this.#materialIncomplete(input, "skill bundle hash mismatch");
@@ -280,7 +282,7 @@ export class ReviewRoundFacade {
       Object.defineProperty(delta, "prompt", { value: prompt, enumerable: false });
     }
       const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
-      host_provider: input.host_provider ?? null, limits: { continuation_prompt_max_bytes: this.continuationPromptMaxBytes },
+      host_provider: input.host_provider ?? null, limits: { continuation_prompt_max_bytes: this.continuationPromptMaxBytes, initial_prompt_max_bytes: this.initialPromptMaxBytes },
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       round_kind: continuation ? "continuation" : "initial", baseline_packet_hash: baselinePacketHash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
@@ -294,6 +296,8 @@ export class ReviewRoundFacade {
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
+      const initialPromptText = !continuation ? initialPrompt({ intent, packet, stageContract: stageContract.content, requiredSkills: resolution.definitions, deliveryMode: resolution.deliveryMode }) : null;
+      if (initialPromptText && Buffer.byteLength(initialPromptText, "utf8") > this.initialPromptMaxBytes) throw new Error(`PROMPT_TOO_LARGE: ${Buffer.byteLength(initialPromptText, "utf8")} bytes exceeds host limit ${this.initialPromptMaxBytes}`);
       if (!continuation) {
         freeze("contracts/provider-protocol.md", readFileSync(protocolPath));
         freeze(`contracts/${input.stage}.md`, stageContract.content);
@@ -303,7 +307,7 @@ export class ReviewRoundFacade {
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
-      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta };
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: initialPromptText };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
@@ -319,7 +323,7 @@ export class ReviewRoundFacade {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
-      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : initialPrompt({ intent, packet, requiredSkills: prepared.resolution.definitions }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null, provider_allowlist: intent.candidate_providers };
+      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : prepared.initial_prompt, continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null, provider_allowlist: intent.candidate_providers };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0

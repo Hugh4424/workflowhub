@@ -2,7 +2,30 @@
 
 本合同只检查 `review-packet.v1`。finding 必须引用 packet 内 artifact anchor 或 host-verified fact；合同外 finding 最高为 `minor`。
 
-必需 packet 字段：`unified_diff`、`changed_files`、`acceptance_design_excerpt`、`test_evidence`、`host_verified_facts`。
+## Reviewer role
+
+审查冻结 diff 的行为、边界和验证证据；不访问真实仓库，也不把无关风格偏好升级为阻断。
+
+## Must Read
+
+1. `contracts/provider-protocol.md`
+2. `contracts/build-code.md`
+3. `schemas/reviewer-output.schema.json`
+4. `review-packet.v1.json`
+5. `changes.diff`
+6. {{StageSkillPlan skill bundle}}
+
+## Required materials
+
+`unified_diff`、`changed_files`、`acceptance_design_excerpt`、`test_evidence`、`host_verified_facts`。
+
+## Required skills
+
+无额外 lens；所有规则由本合同和 `provider-protocol.md` 给出。
+
+## Stage output
+
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding 和五个 hash 回显。
 
 ## Checklist IDs
 

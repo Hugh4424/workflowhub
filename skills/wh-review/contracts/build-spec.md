@@ -2,7 +2,30 @@
 
 本合同只检查 `review-packet.v1`。finding 必须引用 packet 内 artifact anchor 或 host-verified fact；合同外 finding 最高为 `minor`。
 
-必需 packet 字段：`raw_requirement`、`decision_log_excerpt`、`acceptance_design_excerpt`、`planning_artifacts`、`host_verified_facts`。
+## Reviewer role
+
+审查规格是否完整、可追溯且不越出已批准范围；只基于冻结 packet 和 lens 证据下结论。
+
+## Must Read
+
+1. `contracts/provider-protocol.md`
+2. `contracts/build-spec.md`
+3. `schemas/reviewer-output.schema.json`
+4. `review-packet.v1.json`
+5. `changes.diff`
+6. {{StageSkillPlan skill bundle}}
+
+## Required materials
+
+`raw_requirement`、`decision_log_excerpt`、`acceptance_design_excerpt`、`planning_artifacts`、`host_verified_facts`。
+
+## Required skills
+
+`plan-ceo-review`、`review`；UI scope 时加 `plan-design-review`。
+
+## Stage output
+
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding、五个 hash 回显和所需 lens 的 skillResults。
 
 ## Checklist IDs
 
@@ -10,7 +33,7 @@
 - C2: Spec Quality：需求、场景、验收、非目标与边界是否完整且可判定。
 - C3: Boundary Safety：概念、状态、接口与 UI 范围是否有明确归属。
 
-UI scope 时增加 `plan-design-review`，检查信息架构、状态、响应式与无障碍；非 UI scope 不得伪造该技能结果。
+UI scope 时 `plan-design-review` 检查信息架构、状态、响应式与无障碍；非 UI scope 不得伪造该技能结果。
 
 ## Hard invariants
 

@@ -8,6 +8,11 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 describe("Phase 5B Must Read contracts", () => {
   it.each(["build-spec", "build-plan", "build-code", "verify-code"])("makes %s checklist and closure obligations explicit", (stage) => {
     const contract = read(`contracts/${stage}.md`);
+    expect(contract).toMatch(/## Reviewer role/);
+    expect(contract).toMatch(/## Must Read/);
+    expect(contract).toMatch(/## Required materials/);
+    expect(contract).toMatch(/## Required skills/);
+    expect(contract).toMatch(/## Stage output/);
     expect(contract).toMatch(/## Hard invariants/);
     expect(contract).toMatch(/## Pass items/);
     expect(contract).toMatch(/## Continuation closure/);
@@ -19,8 +24,13 @@ describe("Phase 5B Must Read contracts", () => {
   it("makes make-decision direction and detail mutually exclusive complete contracts", () => {
     const contract = read("contracts/make-decision.md");
     expect(contract).toMatch(/exactly one.*direction.*detail/i);
+    expect(contract).toMatch(/## Reviewer role/);
+    expect(contract).toMatch(/## Must Read/);
     for (const track of ["direction", "detail"]) {
       const section = contract.split(`## review_track: ${track}`)[1].split(/\n## review_track: /)[0];
+      expect(section).toMatch(/### Required materials/);
+      expect(section).toMatch(/### Required skills/);
+      expect(section).toMatch(/### Stage output/);
       expect(section).toMatch(/### Hard invariants/);
       expect(section).toMatch(/### Pass items/);
       expect(section).toMatch(/### Continuation closure/);
@@ -28,10 +38,12 @@ describe("Phase 5B Must Read contracts", () => {
     }
   });
 
-  it("keeps provider protocol aligned with the bare JSON output schema", () => {
+  it("keeps provider protocol aligned with the JSON output parser and schema", () => {
     const protocol = read("contracts/provider-protocol.md");
     const schema = JSON.parse(read("schemas/reviewer-output.schema.json"));
     expect(protocol).toContain("single bare JSON object");
+    expect(protocol).toMatch(/exactly one.*Markdown JSON fence/i);
+    expect(protocol).toMatch(/no text before or after/i);
     expect(protocol).toContain("checklist");
     expect(protocol).toContain("pass_items");
     expect(protocol).toContain("skillResults");

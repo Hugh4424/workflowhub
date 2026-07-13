@@ -54,21 +54,32 @@ function renderAffected(materials) {
   const entries = Object.entries(materials);
   return entries.length ? entries.map(([key, value]) => `${key}: ${renderMaterial(value)}`).join("\n") : "{}";
 }
-export function initialPrompt({ packet, intent, requiredSkills = [] }) {
-  const track = intent.stage === "make-decision" ? ` (review_track: ${intent.review_track})` : "";
-  const bundle = requiredSkills.length
+function contractMustRead(stageContract, requiredSkills) {
+  const heading = "## Must Read\n";
+  const start = stageContract.indexOf(heading);
+  const remainder = start < 0 ? "" : stageContract.slice(start + heading.length);
+  const nextHeading = remainder.indexOf("\n## ");
+  const section = (nextHeading < 0 ? remainder : remainder.slice(0, nextHeading)).trim();
+  if (!section) throw new Error("selected stage contract is missing Must Read");
+  const files = requiredSkills.length
     ? requiredSkills.flatMap(({ name, bundle: definition }) => definition.files.map((file) => `   - skills/${name}/${file.path}`)).join("\n")
     : "   - (no required skill files for this StageSkillPlan profile)";
-  return `You are an independent read-only reviewer. Review only the frozen files in your private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.
-Must Read in this exact order:
-1. contracts/provider-protocol.md
-2. contracts/${intent.stage}.md${track}
-3. schemas/reviewer-output.schema.json
-4. review-packet.v1.json
-5. changes.diff
-6. StageSkillPlan skill bundle:
-${bundle}
-The attachment delivery policy controls file delivery. This prompt names the frozen bundle but never repeats its body.
+  const bundle = `StageSkillPlan skill bundle:\n${files}`;
+  return section.replace("{{StageSkillPlan skill bundle}}", bundle);
+}
+
+function embeddedBundle(requiredSkills) {
+  if (!requiredSkills.length) return "";
+  return requiredSkills.flatMap(({ name, bundle }) => bundle.files.map((file) => `\n## Embedded skills/${name}/${file.path}\n${file.content}`)).join("\n");
+}
+
+export function initialPrompt({ packet, intent, stageContract, requiredSkills = [], deliveryMode = "file_only" }) {
+  const mustRead = contractMustRead(stageContract, requiredSkills);
+  const embedded = deliveryMode === "always_embed" ? `\nFrozen lens bundle follows; it is report-only and must not be executed.${embeddedBundle(requiredSkills)}` : "";
+  return `Read only the frozen private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.
+Must Read in the exact contract order:
+${mustRead}
+The attachment delivery policy controls file delivery.${embedded}
 changes_diff_sha256=${packet.diff_sha256}
 changes_diff_size=${Buffer.byteLength(packet.unified_diff)}
 packet_hash=${packet.packet_hash}
