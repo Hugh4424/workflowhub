@@ -24,6 +24,13 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function git(cwd, args, encoding = "utf8") { return execFileSync("git", args, { cwd, encoding }).trim(); }
 function bundleHash(stage, reviewTrack) { return sha(canonical(resolveRequiredSkills({ stage, reviewTrack }).definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
+function projectedContract(stage, reviewTrack) {
+  const source = readFileSync(contractPathAndHash(stage).contractPath, "utf8");
+  if (stage !== "make-decision") return source;
+  const selected = `## review_track: ${reviewTrack}`;
+  const start = source.indexOf(selected); const next = source.indexOf("## review_track:", start + selected.length);
+  return `${source.slice(0, source.indexOf("## review_track:"))}${source.slice(start, next < 0 ? undefined : next)}`;
+}
 function refreshManifest(result) {
   result.diff_sha256 = sha(result.unified_diff);
   result.manifest_hash = sha(canonical({ diff_sha256: result.diff_sha256, changed_files: result.changed_files.map(({ path, old_path, status, sha256: fileHash, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: fileHash ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: result.raw_requirement, decision_log_excerpt: result.decision_log_excerpt ?? null, acceptance_design_excerpt: result.acceptance_design_excerpt ?? null, planning_artifacts: result.planning_artifacts ?? [], verification_closure: result.verification_closure ?? [], test_evidence: result.test_evidence ?? [], host_verified_facts: result.host_verified_facts, contract_hash: result.contract_hash, skill_bundle_hash: result.skill_bundle_hash, source_revision: result.source_revision }));
@@ -36,7 +43,7 @@ function packet(repository, stage, reviewTrack = null) {
   const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: repository, encoding: "utf8" });
   const oldBytes = Buffer.from("before\n"), bytes = Buffer.from("WH_REVIEW_PACKET_MARKER\nafter\n");
   const changed_files = [{ path: "a.txt", status: "modified", sha256: sha(bytes), size: bytes.length, old_sha256: sha(oldBytes), old_size: oldBytes.length }];
-  const result = { version: "review-packet.v1", stage, review_track: reviewTrack, packet_hash: "0".repeat(64), unified_diff, diff_sha256: sha(unified_diff), changed_files, raw_requirement: "review this change", acceptance_design_excerpt: "AC: marker is visible", decision_log_excerpt: "decision", planning_artifacts: [], verification_closure: [], test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: contractPathAndHash(stage).contractHash, skill_bundle_hash: bundleHash(stage, reviewTrack), source_revision: { base, head } };
+  const result = { version: "review-packet.v1", stage, review_track: reviewTrack, packet_hash: "0".repeat(64), unified_diff, diff_sha256: sha(unified_diff), changed_files, raw_requirement: "review this change", acceptance_design_excerpt: "AC: marker is visible", decision_log_excerpt: "decision", planning_artifacts: [], verification_closure: [], test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: sha(projectedContract(stage, reviewTrack)), skill_bundle_hash: bundleHash(stage, reviewTrack), source_revision: { base, head } };
   if (stage === "make-decision" && reviewTrack === "direction") {
     delete result.decision_log_excerpt; delete result.acceptance_design_excerpt; delete result.planning_artifacts; delete result.verification_closure; delete result.test_evidence;
   }
@@ -53,12 +60,8 @@ function deltaPacket(repository, previous) {
 }
 function reviewerOutput(packet) {
   const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [packet.stage === "build-plan" ? "/Users/reviewer/private/skill.md#L10" : "review-packet.v1#packet_hash"], evidence: packet.stage === "build-plan" ? "plan.md#L10 was checked with Bearer skill-secret-token" : "review-packet.v1#packet_hash binds the inspected packet", conclusion: packet.stage === "build-plan" ? "behavior evidence 123e4567-e89b-12d3-a456-426614174000 is complete" : "the lens found no contract violation in the packet" }));
-  let contract = readFileSync(contractPathAndHash(packet.stage).contractPath, "utf8");
-  if (packet.stage === "make-decision") {
-    const start = contract.indexOf(`## review_track: ${packet.review_track}`); const next = contract.indexOf("## review_track:", start + 1);
-    contract = contract.slice(start, next < 0 ? undefined : next);
-  }
-  const ids = [...new Set(contract.match(/\b(?:C|F|H)\d+\b/g) ?? ["contract"])];
+  const contract = projectedContract(packet.stage, packet.review_track);
+  const ids = [...new Set(contract.match(/\b(?:(?:DIR|DET)-)?[CH]\d+\b/g) ?? ["contract"])];
   const checklist = ids.map((id) => ({ id, passed: true, evidence: `review-packet.v1#${id} has specific packet evidence` }));
   const pass_items = ids.map((id) => ({ rule_id: id, artifact_anchor: `review-packet.v1#${id}`, evidence: `${id} is supported by the frozen packet contents` }));
   return JSON.stringify({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, packet_status: "complete", verdict: "pass", summary: "packet marker reviewed against concrete contract evidence", findings: [], checklist, pass_items, skillResults });
@@ -133,16 +136,21 @@ describe("wh-review v4 workflow wiring", () => {
   ])("runs %s/%s with a complete private packet and continues its first runtime", async (stage, reviewTrack) => {
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-wiring-tracking-"));
     const repository = mkdtempSync(join(tmpdir(), "wh-review-wiring-repo-"));
-    const calls = []; let currentPacket;
+    const calls = []; let currentPacket; let frozenStageContract;
     try {
       const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: {
         async discoverCapabilities() { return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }; },
-        async run(input) { calls.push(input); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet ?? currentPacket) }] }; },
+        async run(input) { calls.push(input); const contractEntry = input.attachments?.entries.find(({ destination }) => destination === `contracts/${stage}.md`); if (contractEntry) frozenStageContract = readFileSync(join(root, contractEntry.source), "utf8"); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet ?? currentPacket) }] }; },
         async status() { return { expires_at_ms: Date.now() + 60_000 }; },
       } });
       const firstPacket = packet(repository, stage, reviewTrack); currentPacket = firstPacket;
       const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: firstPacket, repository_root: repository };
       const first = await facade.run(facade.prepare(input));
+      if (stage === "make-decision") {
+        expect(frozenStageContract).toContain(`## review_track: ${reviewTrack}`);
+        expect(frozenStageContract).not.toContain(`## review_track: ${reviewTrack === "direction" ? "detail" : "direction"}`);
+        expect(sha(frozenStageContract)).toBe(firstPacket.contract_hash);
+      }
       expect(first.provider_outcomes).toMatchObject([{ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }]);
       expect(first).not.toHaveProperty("semantic_verdict");
       expect(readFileSync(first.receipt_draft_ref, "utf8")).toContain("provider-session");

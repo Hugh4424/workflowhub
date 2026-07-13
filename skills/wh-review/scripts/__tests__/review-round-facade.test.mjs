@@ -39,12 +39,13 @@ function refreshPacketHashes(value) {
   return value;
 }
 function output(input, verdict = "pass", severity = "blocking") {
-  const checkIds = ["C1", "C2", "C3"];
+  const checkIds = ["C1", "C2", "C3", "H1", "H2", "H3"];
+  const revised = verdict === "revise_required";
   return JSON.stringify({ packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
     contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
-    summary: "review complete with packet evidence", findings: ["pass", "escalate_to_human"].includes(verdict) ? [] : [{ file: "a", line: 1, rule_id: "hard", severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }],
-    checklist: checkIds.map((id) => ({ id, passed: verdict !== "revise_required", evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
-    pass_items: ["pass", "escalate_to_human"].includes(verdict) ? checkIds.map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })) : [], skillResults: [],
+    summary: "review complete with packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: "H1", severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }] : [],
+    checklist: checkIds.map((id) => ({ id, passed: !(revised && id === "H1"), evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
+    pass_items: checkIds.filter((id) => !(revised && id === "H1")).map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "publication and persistence have separate boundaries", fixApproach: "move publication after the atomic persistence step" } : {}) });
 }
 function fakeBroker(callback) { return capabilityBroker(callback); }
