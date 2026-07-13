@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ReviewRoundFacade, buildHostGitSource, buildHostReviewPacket } from "../review-round-facade.mjs";
+import { ReviewRoundFacade, buildHostGitSource, buildHostReviewPacket, buildProviderPacketAttachments } from "../review-round-facade.mjs";
 import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 import { reviewPacketHash } from "../review-packet-integrity.mjs";
@@ -388,6 +388,19 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const prepared = await facade.prepare({ task_id: "canonical-host-source", stage: "build-code", review_flow_id: "flow", packet: value, repository_root: tracking });
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("splits an oversized provider packet into ordered hash-bound diff chunks without dropping bytes", () => {
+    const value = { ...packet({ root: root() }), unified_diff: `diff --git a/a b/a\n${"+x\n".repeat(150000)}` };
+    refreshPacketHashes(value); value.packet_hash = reviewPacketHash(value);
+    const attachments = buildProviderPacketAttachments(value);
+    const packetAttachment = JSON.parse(attachments.find((item) => item.destination === "review-packet.v1.json").bytes);
+    const manifest = JSON.parse(attachments.find((item) => item.destination === "changes.diff.manifest.json").bytes);
+    const chunks = manifest.chunks.map((item) => attachments.find((attachment) => attachment.destination === item.destination));
+    expect(packetAttachment).not.toHaveProperty("unified_diff");
+    expect(manifest).toMatchObject({ packet_hash: value.packet_hash, diff_sha256: value.diff_sha256, diff_size: Buffer.byteLength(value.unified_diff) });
+    expect(chunks).toHaveLength(manifest.chunks.length); expect(chunks.every((item) => item.bytes.length <= 192 * 1024)).toBe(true);
+    expect(hash(Buffer.concat(chunks.map((item) => item.bytes)))).toBe(value.diff_sha256);
   });
 
   it("makes a finding-free escalation a provider-sourced human publication gate", async () => {

@@ -16,6 +16,7 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
+const EMBED_DIFF_CHUNK_BYTES = 192 * 1024;
 export function aggregateMakeDecisionReviewTracks(input) { return aggregateMakeDecisionTracks(input); }
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
 function writeImmutable(path, value) {
@@ -134,6 +135,36 @@ function verifyHostGitSource(packet, repositoryRoot) {
     return normalized;
   });
   if (packet.unified_diff !== built.unified_diff || canonical(normalizeChangedFiles(packet.changed_files)) !== canonical(normalizeChangedFiles(built.changed_files))) throw new Error("review packet source evidence does not match host git base/head revisions");
+}
+export function buildProviderPacketAttachments(packet) {
+  const packetBytes = Buffer.from(safeJson(packet));
+  if (packetBytes.length <= EMBED_DIFF_CHUNK_BYTES) return [{ destination: "review-packet.v1.json", bytes: packetBytes }, { destination: "changes.diff", bytes: Buffer.from(packet.unified_diff, "utf8") }];
+  const diff = Buffer.from(packet.unified_diff, "utf8"); const chunks = [];
+  for (let offset = 0; offset < diff.length; offset += EMBED_DIFF_CHUNK_BYTES) {
+    const bytes = diff.subarray(offset, Math.min(offset + EMBED_DIFF_CHUNK_BYTES, diff.length));
+    chunks.push({ destination: `changes.diff.parts/${String(chunks.length + 1).padStart(4, "0")}`, bytes, sha256: sha(bytes), size: bytes.length });
+  }
+  const manifest = { version: 1, packet_hash: packet.packet_hash, diff_sha256: packet.diff_sha256, diff_size: diff.length, chunks: chunks.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
+  const { unified_diff, ...metadata } = packet;
+  const providerPacket = { ...metadata, diff_attachment_manifest: "changes.diff.manifest.json" };
+  return [
+    { destination: "review-packet.v1.json", bytes: Buffer.from(safeJson(providerPacket)) },
+    { destination: "changes.diff.manifest.json", bytes: Buffer.from(safeJson(manifest)) },
+    ...chunks,
+  ];
+}
+function verifyProviderPacketAttachments(packet, frozenAttachments) {
+  const manifestAttachment = frozenAttachments.find((item) => item.destination === "changes.diff.manifest.json");
+  if (!manifestAttachment) return;
+  let manifest; try { manifest = JSON.parse(readFileSync(manifestAttachment.path, "utf8")); } catch { throw new Error("MATERIAL_INCOMPLETE: chunked diff manifest is invalid"); }
+  if (manifest?.version !== 1 || manifest.packet_hash !== packet.packet_hash || manifest.diff_sha256 !== packet.diff_sha256 || !Array.isArray(manifest.chunks)) throw new Error("MATERIAL_INCOMPLETE: chunked diff manifest is not bound to the sealed packet");
+  const byDestination = new Map(frozenAttachments.map((item) => [item.destination, item])); const bytes = [];
+  for (const chunk of manifest.chunks) {
+    const frozen = byDestination.get(chunk?.destination); if (!frozen || frozen.sha256 !== chunk.sha256 || frozen.size !== chunk.size) throw new Error("MATERIAL_INCOMPLETE: chunked diff coverage is incomplete");
+    const value = readFileSync(frozen.path); if (sha(value) !== chunk.sha256 || value.length !== chunk.size) throw new Error("MATERIAL_INCOMPLETE: chunked diff hash mismatch"); bytes.push(value);
+  }
+  const rebuilt = Buffer.concat(bytes);
+  if (rebuilt.length !== manifest.diff_size || sha(rebuilt) !== packet.diff_sha256 || rebuilt.toString("utf8") !== packet.unified_diff) throw new Error("MATERIAL_INCOMPLETE: chunked diff reconstruction does not match the sealed packet");
 }
 export function buildHostReviewPacket({ repository_root, source_revision, stage, review_track = null, round_kind = "initial", baseline_packet_hash = null, raw_requirement, decision_log_excerpt, acceptance_design_excerpt, planning_artifacts = [], verification_closure = [], test_evidence = [], host_verified_facts = [] } = {}) {
   assertKnownStage(stage); assertReviewTrack(stage, review_track);
@@ -378,11 +409,11 @@ export class ReviewRoundFacade {
         freeze("contracts/provider-protocol.md", readFileSync(protocolPath));
         freeze(`contracts/${input.stage}.md`, stageContract.content);
         freeze("schemas/reviewer-output.schema.json", readFileSync(outputSchemaPath));
-        freeze("review-packet.v1.json", safeJson(packet));
-        freeze("changes.diff", packet.unified_diff);
+        for (const attachment of buildProviderPacketAttachments(packet)) freeze(attachment.destination, attachment.bytes);
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
+      verifyProviderPacketAttachments(packet, frozenAttachments);
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: initialPromptText };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
