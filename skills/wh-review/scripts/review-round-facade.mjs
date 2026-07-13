@@ -164,14 +164,15 @@ function checkedCarryovers(value, previousFindings) {
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
+  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
     if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(initialPromptMaxBytes) || initialPromptMaxBytes < 1) throw new TypeError("initialPromptMaxBytes must be a positive integer");
+    if (!Number.isSafeInteger(maxDispositionAttempts) || maxDispositionAttempts < 1) throw new TypeError("maxDispositionAttempts must be a positive integer");
     if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
-    this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
+    this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.maxDispositionAttempts = maxDispositionAttempts; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.json`); }
@@ -281,7 +282,7 @@ export class ReviewRoundFacade {
       Object.defineProperty(delta, "prompt", { value: prompt, enumerable: false });
     }
       const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
-      host_provider: input.host_provider ?? null, limits: { continuation_prompt_max_bytes: this.continuationPromptMaxBytes, initial_prompt_max_bytes: this.initialPromptMaxBytes },
+      host_provider: input.host_provider ?? null, limits: { continuation_prompt_max_bytes: this.continuationPromptMaxBytes, initial_prompt_max_bytes: this.initialPromptMaxBytes, max_disposition_attempts: this.maxDispositionAttempts },
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       round_kind: continuation ? "continuation" : "initial", baseline_packet_hash: baselinePacketHash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
@@ -596,14 +597,35 @@ export class ReviewRoundFacade {
   }
 
   publish(result, dispositions) {
+    // Keep this boundary before reading result.intent: malformed public input
+    // must fail as a schema error and must not touch any private receipt.
     validateSchema("dispositions", dispositions);
     validateSchema("round-run-result", result);
     const lock = this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_track ?? "default"}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
     let taskLock = null;
     try {
       if (result.intent.stage === "make-decision") taskLock = this.#taskProjectionLock(result.intent.task_id, `publish-${result.intent.review_flow_id}`);
-      return this.#publishUnderLock(this.#trustedResult(result), dispositions);
+      const trusted = this.#trustedResult(result);
+      try {
+        return this.#publishUnderLock(trusted, dispositions);
+      } catch (error) {
+        const dispositionFailure = /^(invalid disposition|hard invariant finding cannot be accepted|every finding requires exactly one disposition)$/.test(String(error?.message ?? ""));
+        if (dispositionFailure && !trusted.blocked_by_human_confirmation) {
+          const attempts = this.#recordDispositionFailure(trusted, error);
+          if (attempts >= trusted.intent.limits.max_disposition_attempts) throw new Error(`DISPOSITION_ATTEMPTS_EXCEEDED: ${attempts}/${trusted.intent.limits.max_disposition_attempts}; human confirmation is required`);
+        }
+        throw error;
+      }
     } finally { if (taskLock) this.#releaseLock(taskLock); this.#releaseLock(lock); }
+  }
+  #recordDispositionFailure(result, error) {
+    const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"));
+    const attempts = Number.isSafeInteger(receipt.disposition_attempts) ? receipt.disposition_attempts + 1 : 1;
+    receipt.disposition_attempts = attempts;
+    receipt.disposition_last_error = String(error?.message ?? error).slice(0, 512);
+    if (attempts >= result.intent.limits.max_disposition_attempts) receipt.blocked_by_human_confirmation = true;
+    this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, receipt);
+    return attempts;
   }
   #trustedResult(locator) {
     const receiptPath = resolve(locator.receipt_draft_ref);

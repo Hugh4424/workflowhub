@@ -117,6 +117,24 @@ function makeDecisionOutput(input, reviewTrack, verdict = "pass") {
 }
 
 describe("ReviewRoundFacade", () => {
+  it("blocks a flow after the configured number of invalid disposition submissions", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({
+      taskTrackingRoot: tracking,
+      maxDispositionAttempts: 2,
+      broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "revise_required") }] })),
+    });
+    const result = await facade.run(facade.prepare({ task_id: "disposition-limit", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    const invalid = { items: [{ finding_id: result.merged_findings[0].finding_id, action: "accept", evidence: "ignore the hard invariant" }] };
+
+    expect(() => facade.publish(result, invalid)).toThrow(/hard invariant finding cannot be accepted/);
+    expect(() => facade.publish(result, invalid)).toThrow(/DISPOSITION_ATTEMPTS_EXCEEDED/);
+
+    const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"));
+    expect(receipt).toMatchObject({ disposition_attempts: 2, blocked_by_human_confirmation: true });
+    expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: "fixed" }] })).toThrow(/human confirmation/i);
+  });
+
   it("isolates make-decision tracks and publishes their aggregate stage result", async () => {
     const tracking = root(); const sharedFlow = "shared-flow";
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {

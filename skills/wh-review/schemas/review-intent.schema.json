@@ -14,8 +14,8 @@
     "host_provider": { "type": ["string", "null"], "minLength": 1 },
     "limits": {
       "type": "object",
-      "required": ["continuation_prompt_max_bytes", "initial_prompt_max_bytes"],
-      "properties": { "continuation_prompt_max_bytes": { "type": "integer", "minimum": 1 }, "initial_prompt_max_bytes": { "type": "integer", "minimum": 1 } },
+      "required": ["continuation_prompt_max_bytes", "initial_prompt_max_bytes", "max_disposition_attempts"],
+      "properties": { "continuation_prompt_max_bytes": { "type": "integer", "minimum": 1 }, "initial_prompt_max_bytes": { "type": "integer", "minimum": 1 }, "max_disposition_attempts": { "type": "integer", "minimum": 1 } },
       "additionalProperties": false
     },
     "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
