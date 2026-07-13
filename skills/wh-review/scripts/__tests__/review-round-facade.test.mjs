@@ -11,15 +11,16 @@ afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true
 function root() { const value = mkdtempSync(join(tmpdir(), "wh-review-v4-")); roots.push(value); return value; }
 function hash(value) { return createHash("sha256").update(value).digest("hex"); }
 function canonical(value) { if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`; if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`; return JSON.stringify(value); }
-function packet({ root, marker = "WH_REVIEW_SMOKE_DIFF_MARKER" } = {}) {
-  writeFileSync(join(root, "a"), "x"); const unified_diff = `diff --git a/a b/a\n+${marker}\n`; const changed_files = [{ path: "a", sha256: hash("x"), size: 1 }];
+function packet({ root, marker = "WH_REVIEW_SMOKE_DIFF_MARKER", builder = false } = {}) {
+  writeFileSync(join(root, "a"), "x"); const unified_diff = `diff --git a/a b/a\n+${marker}\n`; const changed_files = [{ path: "a", status: "modified", sha256: hash("x"), size: 1 }];
   const output = {
     version: "review-packet.v1", stage: "build-code", review_track: null,
     diff_sha256: hash(unified_diff), unified_diff, changed_files, raw_requirement: "do the thing",
     acceptance_design_excerpt: "AC: works", test_evidence: [{ name: "unit", status: "passed" }],
     host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
+    source_revision: builder ? { host_diff_builder: "trusted-test-builder" } : { base: "base", head: "head" },
   };
-  output.manifest_hash = hash(canonical({ diff_sha256: output.diff_sha256, changed_files, raw_requirement: output.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: output.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: output.test_evidence, host_verified_facts: [], contract_hash: output.contract_hash, skill_bundle_hash: output.skill_bundle_hash }));
+  output.manifest_hash = hash(canonical({ diff_sha256: output.diff_sha256, changed_files: changed_files.map(({ path, status, sha256, size }) => ({ path, old_path: null, status, sha256, size, old_sha256: null, old_size: null })), raw_requirement: output.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: output.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: output.test_evidence, host_verified_facts: [], contract_hash: output.contract_hash, skill_bundle_hash: output.skill_bundle_hash, source_revision: output.source_revision }));
   return output;
 }
 function output(input, verdict = "pass", severity = "blocking") {
@@ -74,6 +75,14 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.run(prepared)).rejects.toThrow(/sealed review packet was modified/);
   });
 
+  it("rechecks every frozen contract and skill bundle hash before attachments", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const contract = contractPathAndHash("build-code").contractPath; const original = readFileSync(contract, "utf8");
+    const prepared = facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    try { writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`); await expect(facade.run(prepared)).rejects.toThrow(/attachment bundle or contract changed/); }
+    finally { writeFileSync(contract, original); }
+  });
+
   it("does not aggregate cancelled, incomplete, or malformed results and requires a cancel source", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "33333333-3333-4333-8333-333333333333", providers: [
@@ -94,6 +103,8 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: badDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*diff_sha256/);
     const badFile = packet({ root: tracking }); badFile.changed_files[0].size = 2;
     expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow2", packet: badFile, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*changed file/);
+    const fakeDiff = packet({ root: tracking, builder: true });
+    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true }, }, host_diff_builder: () => ({ unified_diff: "diff --git a/other b/other\n", changed_files: fakeDiff.changed_files }) })).toThrow(/MATERIAL_INCOMPLETE.*host diff builder/);
   });
 
   it("requires every declared continuable provider and serializes all flows for one task", async () => {

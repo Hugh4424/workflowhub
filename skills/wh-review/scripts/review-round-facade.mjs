@@ -22,7 +22,7 @@ function packetHash(packet) { const input = { ...packet }; delete input.packet_h
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function manifestValue(packet) {
   const { packet_hash, manifest_hash, ...materials } = packet;
-  return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, sha256, size }) => ({ path, sha256, size })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash };
+  return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash, source_revision: materials.source_revision };
 }
 function packetComplete(packet) {
   if (!packet || typeof packet !== "object" || Array.isArray(packet)) return false;
@@ -33,6 +33,7 @@ function packetComplete(packet) {
   if (packet.stage === "make-decision" ? !["direction", "detail"].includes(packet.review_track) : packet.review_track !== null) return false;
   if (typeof packet.unified_diff !== "string" || !Array.isArray(packet.changed_files) || typeof packet.raw_requirement !== "string" || !Array.isArray(packet.host_verified_facts)) return false;
   if (!["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"].every((key) => typeof packet[key] === "string" && /^[a-f0-9]{64}$/.test(packet[key]))) return false;
+  if (!packet.source_revision || typeof packet.source_revision !== "object" || Array.isArray(packet.source_revision) || !((typeof packet.source_revision.base === "string" && packet.source_revision.base && typeof packet.source_revision.head === "string" && packet.source_revision.head) || (typeof packet.source_revision.host_diff_builder === "string" && packet.source_revision.host_diff_builder))) return false;
   if (packet.stage === "make-decision" && packet.review_track === "direction" && ["decision_log_excerpt", "acceptance_design_excerpt", "planning_artifacts", "verification_closure", "test_evidence"].some((key) => Object.hasOwn(packet, key))) return false;
   if (packet.stage === "make-decision" && packet.review_track === "detail" && (typeof packet.decision_log_excerpt !== "string" || typeof packet.acceptance_design_excerpt !== "string")) return false;
   if (packet.stage === "build-spec" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.planning_artifacts))) return false;
@@ -41,14 +42,24 @@ function packetComplete(packet) {
   if (packet.stage === "verify-code" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.verification_closure) || !Array.isArray(packet.test_evidence))) return false;
   return true;
 }
-function sealPacket(packet, changedFileRoot) {
+function sealPacket(packet, changedFileRoot, hostDiffBuilder) {
   if (!packetComplete(packet)) throw new Error("review-packet.v1 is incomplete");
   const diff = sha(packet.unified_diff);
   if (packet.diff_sha256 && packet.diff_sha256 !== diff) throw new Error("diff_sha256 mismatch");
   packet.diff_sha256 = diff;
+  const diffPaths = [...packet.unified_diff.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].map((match) => match[2]);
+  if (new Set(diffPaths).size !== diffPaths.length || [...new Set(diffPaths)].sort().join("\0") !== packet.changed_files.map(({ path }) => path).sort().join("\0")) throw new Error("unified diff and changed_files do not describe the same source files");
+  if (packet.source_revision.host_diff_builder && typeof hostDiffBuilder === "function") {
+    const built = hostDiffBuilder({ source_revision: structuredClone(packet.source_revision) });
+    if (!built || built.unified_diff !== packet.unified_diff || canonical(built.changed_files) !== canonical(packet.changed_files)) throw new Error("host diff builder output does not match review packet");
+  }
   for (const entry of packet.changed_files) {
-    if (!entry || !safeRelativePath(entry.path) || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || !Number.isSafeInteger(entry.size) || entry.size < 0) throw new Error("invalid changed_files entry");
-    if (changedFileRoot) {
+    if (!entry || !safeRelativePath(entry.path) || !["added", "modified", "deleted", "renamed"].includes(entry.status)) throw new Error("invalid changed_files entry");
+    const needsCurrent = entry.status !== "deleted";
+    if (needsCurrent && (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || !Number.isSafeInteger(entry.size) || entry.size < 0)) throw new Error("invalid changed_files current snapshot");
+    if (entry.status === "deleted" && (!/^[a-f0-9]{64}$/.test(entry.old_sha256 ?? "") || !Number.isSafeInteger(entry.old_size) || entry.old_size < 0)) throw new Error("invalid deleted changed_files snapshot");
+    if (entry.status === "renamed" && !safeRelativePath(entry.old_path)) throw new Error("renamed changed_files entry requires old_path");
+    if (changedFileRoot && needsCurrent) {
       const target = resolve(changedFileRoot, entry.path); const root = resolve(changedFileRoot);
       if (target !== root && !target.startsWith(`${root}/`)) throw new Error("changed file escapes root");
       const stat = lstatSync(target); if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("changed file is not a regular file");
@@ -100,7 +111,7 @@ export class ReviewRoundFacade {
     const actualBundleHash = bundleHash(resolution);
     if (packet.skill_bundle_hash !== actualBundleHash) return this.#materialIncomplete(input, "skill bundle hash mismatch");
     packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
-    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot); }
+    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot, input.host_diff_builder); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
@@ -112,7 +123,8 @@ export class ReviewRoundFacade {
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
-      return { intent, packet, input, lock, dir, resolution, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash };
+      const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
+      return { intent, packet, input, lock, dir, resolution, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_attachment_hashes: { contract: sha(readFileSync(contractPath)), protocol: sha(readFileSync(protocolPath)) } };
     } catch (error) { this.#releaseLock(lock); throw error; }
   }
 
@@ -220,8 +232,8 @@ export class ReviewRoundFacade {
     const add = (sourcePath, destination, embed = true) => { const bytes = readFileSync(sourcePath); return { source: rel(sourcePath), destination, size: bytes.length, sha256: sha(bytes), embed }; };
     const { contractPath } = contractPathAndHash(prepared.intent.stage);
     const protocol = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
-    const resolution = prepared.resolution;
-    if (bundleHash(resolution) !== prepared.intent.skill_bundle_hash || bundleHash(resolution) !== prepared.frozen_bundle_hash) throw new Error("MATERIAL_INCOMPLETE: attachment bundle hash changed after prepare");
+    const resolution = resolveRequiredSkills({ stage: prepared.intent.stage, reviewTrack: prepared.intent.review_track, ui: Boolean(prepared.input.ui) });
+    if (bundleHash(resolution) !== prepared.intent.skill_bundle_hash || bundleHash(resolution) !== prepared.frozen_bundle_hash || sha(readFileSync(contractPath)) !== prepared.frozen_attachment_hashes.contract || sha(readFileSync(protocol)) !== prepared.frozen_attachment_hashes.protocol) throw new Error("MATERIAL_INCOMPLETE: attachment bundle or contract changed after prepare");
     const entries = [add(stagedPacket, "review-packet.v1.json"), add(protocol, "contracts/provider-protocol.md"), add(contractPath, `contracts/${prepared.intent.stage}.md`)];
     for (const definition of resolution.definitions) for (const file of definition.bundle.files) entries.push(add(join(repositoryRoot, "skills", definition.name, file.path), `skills/${definition.name}/${file.path}`));
     return { stagedPacket, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
