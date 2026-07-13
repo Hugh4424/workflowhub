@@ -437,6 +437,21 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.prepare({ ...base, closure_evidence: [{ finding_id: findingId, evidence: "x" }], cross_stage_carryovers: [{ finding_id: findingId, status: "open" }] })).rejects.toThrow(/cross_stage_carryovers.*finding/i);
   });
 
+  it("keeps a two-round blocking finding open and human-gated when its closure is only text", async () => {
+    const tracking = root(); let currentPacket;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "60606060-6060-4060-8060-606060606060", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? currentPacket, request.packet ? "revise_required" : "pass") }] })) });
+    const initial = trustedPacket(tracking); currentPacket = initial;
+    const first = await facade.run(facade.prepare({ task_id: "closure-hard-gate", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    const receipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8")); receipt.merged_findings[0].blocking_streak = 2; writeFileSync(first.receipt_draft_ref, JSON.stringify(receipt));
+    const flowPath = join(tracking, "closure-hard-gate", "reviews", "private", "flows", "build-code-flow.json"); const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(first.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
+    currentPacket = advancePacket(tracking, initial);
+    const second = await facade.run(facade.prepare({ task_id: "closure-hard-gate", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true, closure_evidence: [{ finding_id: first.merged_findings[0].finding_id, evidence: "fixed" }] }));
+    expect(second).toMatchObject({ blocked_by_human_confirmation: true });
+    expect(second.human_gates).toEqual(expect.arrayContaining([expect.objectContaining({ provider: null, finding_id: first.merged_findings[0].finding_id, summary: expect.stringContaining("CLOSURE_BUNDLE_REQUIRED") })]));
+    expect(second.merged_findings).toEqual(expect.arrayContaining([expect.objectContaining({ finding_id: first.merged_findings[0].finding_id, status: "open", severity: "blocking" })]));
+    expect(() => facade.publish(second, { items: second.merged_findings.map((finding) => ({ finding_id: finding.finding_id, action: "reject", evidence: "not published" })) })).toThrow(/human confirmation/i);
+  });
+
   it("rejects provider findings with secret-bearing unknown fields before aggregation", async () => {
     const tracking = root(); const calls = [];
     const secret = "/private/workspace/session-raw-secret";

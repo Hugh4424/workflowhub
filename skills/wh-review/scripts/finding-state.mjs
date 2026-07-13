@@ -1,6 +1,11 @@
+import { createHash } from "node:crypto";
+
 const SEVERITY_RANK = { minor: 1, important: 2, blocking: 3 };
+const sha = (value) => createHash("sha256").update(value).digest("hex");
 
 function clone(value) { return structuredClone(value); }
+function nonEmpty(value) { return typeof value === "string" && value.trim().length > 0; }
+function safeRelativePath(value) { return nonEmpty(value) && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function isBlocking(finding) {
   // A late finding is explicitly capped at minor. Its original hard-rule id
   // remains useful provenance, but must not recreate a blocking gate.
@@ -9,17 +14,49 @@ function isBlocking(finding) {
 }
 
 /**
+ * After a blocking finding has survived two rounds, a free-form assertion is
+ * not closure evidence. The bundle is intentionally tied to host-derived
+ * delta bytes and current file hashes; it contains no provider paths or ids.
+ */
+export function validateClosureBundle({ finding, closure, delta } = {}) {
+  if (!isBlocking(finding) || Number(finding?.blocking_streak ?? 0) < 2) return { valid: true, reason: null };
+  const bundle = closure?.closure_bundle;
+  if (!bundle || typeof bundle !== "object" || Array.isArray(bundle)) return { valid: false, reason: "CLOSURE_BUNDLE_REQUIRED" };
+  const allowed = new Set(["version", "root_cause", "scanned_scope", "counterexample_matrix", "closure_checklist", "anchors", "current_delta"]);
+  if (Object.keys(bundle).some((key) => !allowed.has(key)) || bundle.version !== 1 || !nonEmpty(bundle.root_cause)
+    || !Array.isArray(bundle.scanned_scope) || bundle.scanned_scope.length === 0 || !bundle.scanned_scope.every(safeRelativePath)
+    || !Array.isArray(bundle.counterexample_matrix) || bundle.counterexample_matrix.length === 0
+    || !bundle.counterexample_matrix.every((item) => item && typeof item === "object" && Object.keys(item).length === 3 && nonEmpty(item.case_id) && nonEmpty(item.expected) && nonEmpty(item.observed))
+    || !Array.isArray(bundle.closure_checklist) || bundle.closure_checklist.length === 0
+    || !bundle.closure_checklist.every((item) => item && typeof item === "object" && Object.keys(item).length === 2 && nonEmpty(item.item) && nonEmpty(item.evidence))
+    || !Array.isArray(bundle.anchors) || bundle.anchors.length === 0
+    || !bundle.current_delta || typeof bundle.current_delta !== "object" || Array.isArray(bundle.current_delta)) return { valid: false, reason: "CLOSURE_BUNDLE_INVALID" };
+  const currentFiles = (delta?.changed_files ?? []).filter((item) => safeRelativePath(item?.path) && /^[a-f0-9]{64}$/.test(item?.sha256 ?? "")).map(({ path, sha256 }) => ({ path, sha256 })).sort((left, right) => left.path.localeCompare(right.path));
+  const expectedDiffHash = typeof delta?.unified_diff === "string" ? sha(delta.unified_diff) : null;
+  const declaredFiles = Array.isArray(bundle.current_delta.changed_files) ? bundle.current_delta.changed_files.map((item) => ({ path: item?.path, sha256: item?.sha256 })).sort((left, right) => String(left.path).localeCompare(String(right.path))) : null;
+  if (Object.keys(bundle.current_delta).some((key) => key !== "diff_sha256" && key !== "changed_files") || bundle.current_delta.diff_sha256 !== expectedDiffHash
+    || JSON.stringify(declaredFiles) !== JSON.stringify(currentFiles)) return { valid: false, reason: "CLOSURE_BUNDLE_DELTA_MISMATCH" };
+  const filesByPath = new Map(currentFiles.map((item) => [item.path, item.sha256])); const seen = new Set();
+  for (const anchor of bundle.anchors) {
+    if (!anchor || typeof anchor !== "object" || Object.keys(anchor).length !== 3 || !safeRelativePath(anchor.file) || !Number.isSafeInteger(anchor.line) || anchor.line < 1 || !/^[a-f0-9]{64}$/.test(anchor.sha256 ?? "")
+      || filesByPath.get(anchor.file) !== anchor.sha256 || !bundle.scanned_scope.includes(anchor.file) || seen.has(`${anchor.file}:${anchor.line}:${anchor.sha256}`)) return { valid: false, reason: "CLOSURE_BUNDLE_ANCHOR_MISMATCH" };
+    seen.add(`${anchor.file}:${anchor.line}:${anchor.sha256}`);
+  }
+  return { valid: true, reason: null };
+}
+
+/**
  * Reconcile provider findings with the previous round's closure state.
  * The function is deliberately pure: callers persist its result in the
  * private round receipt and may decide how to expose the projection.
  */
-export function reconcileFindingState({ previousFindings = [], currentFindings = [], closureEvidence = [], businessRound = 1, introducedBlockingIds = new Set(), previouslyImpossibleIds = new Set() } = {}) {
+export function reconcileFindingState({ previousFindings = [], currentFindings = [], closureEvidence = [], unverifiedClosureFindingIds = new Set(), businessRound = 1, introducedBlockingIds = new Set(), previouslyImpossibleIds = new Set() } = {}) {
   const previous = new Map(previousFindings.map((item) => [item.finding_id, item]));
   const closure = new Map(closureEvidence.map((item) => [item.finding_id, item]));
   const output = [];
   for (const old of previous.values()) {
     const evidence = closure.get(old.finding_id);
-    if (evidence) {
+    if (evidence && !unverifiedClosureFindingIds.has(old.finding_id)) {
       output.push({ ...clone(old), status: "closed", blocking_streak: 0, closure_evidence: evidence.evidence });
       continue;
     }

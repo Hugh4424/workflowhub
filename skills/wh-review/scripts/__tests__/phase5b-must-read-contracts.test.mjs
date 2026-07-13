@@ -37,4 +37,12 @@ describe("Phase 5B Must Read contracts", () => {
     expect(protocol).toContain("skillResults");
     for (const field of schema.required) expect(protocol).toContain(`\`${field}\``);
   });
+
+  it("records every AgentHub verifier contract as a keep, host, lens, or evidenced removal", () => {
+    const ledger = read("legacy-rule-ledger.md");
+    for (const source of ["base-verifier.md", "intake-reviewer-contract.md", "design-reviewer-contract.md", "plan-reviewer-contract.md", "code-reviewer-contract.md", "test-acceptance-reviewer-contract.md"]) expect(ledger).toContain(source);
+    for (const decision of ["keep", "host", "lens", "removed (evidence)"]) expect(ledger).toContain(`| ${decision} |`);
+    expect(ledger).toContain("closure bundle");
+    expect(ledger).toContain("AgentHub-only path/runtime assumption");
+  });
 });

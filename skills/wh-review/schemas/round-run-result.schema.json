@@ -8,7 +8,7 @@
     "round_kind": { "enum": ["initial", "continuation"] },
     "baseline_packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "previous_findings": { "type": "array" },
-    "closure_evidence": { "type": "array", "items": { "type": "object", "required": ["finding_id", "evidence"], "properties": { "finding_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" } }, "additionalProperties": false } },
+    "closure_evidence": { "type": "array", "items": { "type": "object", "required": ["finding_id", "evidence"], "properties": { "finding_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" }, "closure_bundle": { "type": "object" } }, "additionalProperties": false } },
     "delta_manifest": { "type": ["object", "null"] },
     "affected_materials": { "type": "object" },
     "current_material_manifest": { "type": "object" },

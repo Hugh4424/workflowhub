@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import {
   reconcileFindingState,
   mergeCrossStageCarryovers,
   aggregateMakeDecisionTracks,
+  validateClosureBundle,
 } from "../finding-state.mjs";
+
+const hash = (value) => createHash("sha256").update(value).digest("hex");
 
 const finding = (id, severity = "blocking", extra = {}) => ({
   finding_id: id, file: "src/a.mjs", line: 1, rule_id: "H1", severity,
@@ -37,6 +41,30 @@ describe("finding continuation state", () => {
     expect(result.findings.find((item) => item.finding_id === "a")).toMatchObject({ status: "closed", blocking_streak: 0 });
     expect(result.findings.find((item) => item.finding_id === "b")).toMatchObject({ severity: "minor", late_finding: true, status: "open" });
     expect(result.open_blocking).toHaveLength(0);
+  });
+
+  it("requires an anchored current-delta closure bundle after two open blocking rounds", () => {
+    const old = { ...finding("a"), blocking_streak: 2 };
+    const delta = {
+      unified_diff: "diff --git a/src/a.mjs b/src/a.mjs\n+@@ -1 +1 @@\n-old\n+fixed\n",
+      changed_files: [{ path: "src/a.mjs", status: "modified", sha256: "a".repeat(64), size: 6 }],
+    };
+    const plainText = validateClosureBundle({ finding: old, closure: { finding_id: "a", evidence: "fixed" }, delta });
+    expect(plainText).toMatchObject({ valid: false, reason: "CLOSURE_BUNDLE_REQUIRED" });
+
+    const valid = validateClosureBundle({ finding: old, closure: {
+      finding_id: "a", evidence: "src/a.mjs:1 now persists before publication",
+      closure_bundle: {
+        version: 1,
+        root_cause: "publication occurred before durable persistence",
+        scanned_scope: ["src/a.mjs"],
+        counterexample_matrix: [{ case_id: "write-failure", expected: "no publication", observed: "no publication" }],
+        closure_checklist: [{ item: "persistence precedes publication", evidence: "src/a.mjs:1" }],
+        anchors: [{ file: "src/a.mjs", line: 1, sha256: "a".repeat(64) }],
+        current_delta: { diff_sha256: hash(delta.unified_diff), changed_files: [{ path: "src/a.mjs", sha256: "a".repeat(64) }] },
+      },
+    }, delta });
+    expect(valid).toEqual({ valid: true, reason: null });
   });
 });
 

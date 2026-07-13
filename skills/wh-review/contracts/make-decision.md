@@ -7,7 +7,7 @@
 - `review_track` must select exactly one of `direction` or `detail`; the two tracks are mutually exclusive and their checklist results must never be combined.
 - 第一轮检查完整 packet；后续轮只检查 `previous_findings`、`closure_evidence`、`delta_manifest` 与受影响 artifact。
 - 上轮 blocking 未关闭仍为 blocking。新 blocking 必须来自本轮新材料或上轮不可能发现的问题；否则标 `late_finding:true` 且最高 `minor`。
-- 同一 blocking 连续两轮未关闭时，要求根因、影响范围、反例矩阵和 closure checklist；第三轮 `escalate_to_human`。
+- 同一 blocking 连续两轮未关闭时，必须以 `closure_bundle` 给出根因、扫描范围、反例矩阵、checklist、repo-relative anchors 与其当前文件 hash、精确当前 delta hash；自由文本无效，不足或不匹配保持 open 并 `escalate_to_human`，不得发布 pass。第三轮同样 `escalate_to_human`。
 
 ## review_track: direction
 
