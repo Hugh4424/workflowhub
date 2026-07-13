@@ -104,7 +104,9 @@ describe("wh-review CLI continuation", () => {
     writeFileSync(join(root, "a"), "first change\nfixed\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "fix"]);
     const secondPacket = reviewPacket(root, base); broker.currentPacket = secondPacket;
     const closure_evidence = [{ finding_id: findingId, evidence: "changes.diff:a:2 records the persistence fix" }];
-    const cross_stage_carryovers = [{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "verification is scheduled after the build" }];
+    const upstream = { intent: { stage: "verify-code" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "verification is scheduled after the build" }] };
+    const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = sha(upstreamBytes); const upstreamPath = join(root, "cli-continuation", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
+    const cross_stage_carryovers = [{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "verification is scheduled after the build" }];
     const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, repository_root: root, continuation: true, closure_evidence, cross_stage_carryovers });
 
     expect(result.transport.continuation_eligible).toBe(true);

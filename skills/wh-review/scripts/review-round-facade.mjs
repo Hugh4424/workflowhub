@@ -170,16 +170,37 @@ function exactClosureEvidence(findings, supplied, deltaSource, contractHardIds) 
   if (missing.length) throw new Error(`closure_evidence is missing finding ids: ${missing.join(",")}`);
   return { items: supplied.map((item) => structuredClone(item)), unverifiedBlockingIds };
 }
-function checkedCarryovers(value, previousFindings) {
+function trustedPublicCore(taskTrackingRoot, taskId, coreHash, role = "source") {
+  if (!/^[a-f0-9]{64}$/.test(coreHash ?? "")) throw new Error(`cross_stage_carryovers requires ${role}_core_receipt_hash`);
+  const path = join(taskRoot(taskTrackingRoot, taskId), "reviews", "core-receipts", `${coreHash}.json`);
+  if (!existsSync(path)) throw new Error(`cross_stage_carryovers ${role} core receipt is unavailable`);
+  const bytes = readFileSync(path);
+  if (sha(bytes) !== coreHash) throw new Error(`cross_stage_carryovers ${role} core receipt hash mismatch`);
+  try { return JSON.parse(bytes); }
+  catch { throw new Error(`cross_stage_carryovers ${role} core receipt is invalid JSON`); }
+}
+function checkedCarryovers(value, previousFindings, { taskTrackingRoot, taskId, stage } = {}) {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new Error("cross_stage_carryovers must be an array");
   const oldIds = new Set(previousFindings.map((finding) => finding.finding_id)); const seen = new Set();
   return value.map((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item) || Object.hasOwn(item, "finding_id") || oldIds.has(item.carryover_id)) throw new Error("cross_stage_carryovers cannot contain a previous finding");
-    const allowed = new Set(["carryover_id", "source_stage", "status", "evidence"]);
+    const allowed = new Set(["carryover_id", "source_stage", "source_core_receipt_hash", "closure_core_receipt_hash", "status", "evidence"]);
     if (Object.keys(item).some((key) => !allowed.has(key)) || typeof item.carryover_id !== "string" || !item.carryover_id || seen.has(item.carryover_id)
-      || !["open", "closed", "deferred"].includes(item.status) || typeof item.evidence !== "string" || !item.evidence.trim()) throw new Error("cross_stage_carryovers requires explicit carryover_id, status, and evidence fields");
-    seen.add(item.carryover_id); return structuredClone(item);
+      || !["open", "deferred", "closed"].includes(item.status) || typeof item.source_stage !== "string" || !item.source_stage || typeof item.evidence !== "string" || !item.evidence.trim()) throw new Error("cross_stage_carryovers requires explicit carryover_id, source_stage, source_core_receipt_hash, status, and evidence fields");
+    const core = trustedPublicCore(taskTrackingRoot, taskId, item.source_core_receipt_hash);
+    const source = core?.intent?.stage === item.source_stage && core.intent.stage !== stage
+      ? (core.dispositions ?? []).find((disposition) => disposition?.finding_id === item.carryover_id && disposition?.action === "defer")
+      : null;
+    if (!source || source.evidence !== item.evidence) throw new Error("cross_stage_carryovers source stage, hash, or deferred closure binding is invalid");
+    if (item.status === "closed") {
+      const closure = trustedPublicCore(taskTrackingRoot, taskId, item.closure_core_receipt_hash, "closure");
+      const stillPresent = (closure.merged_findings ?? []).some((finding) => finding?.finding_id === item.carryover_id);
+      if (closure?.intent?.stage !== item.source_stage || closure.intent?.previous_core_receipt_hash !== item.source_core_receipt_hash
+        || closure.semantic_verdict !== "pass" || closure.needs_human !== false || stillPresent) throw new Error("cross_stage_carryovers trusted closure receipt does not close the deferred carryover");
+    } else if (item.closure_core_receipt_hash !== undefined) throw new Error("cross_stage_carryovers closure_core_receipt_hash is only valid for closed carryovers");
+    seen.add(item.carryover_id);
+    return { carryover_id: item.carryover_id, source_stage: item.source_stage, source_core_receipt_hash: item.source_core_receipt_hash, ...(item.status === "closed" ? { closure_core_receipt_hash: item.closure_core_receipt_hash } : {}), status: item.status, evidence: source.evidence };
   });
 }
 
@@ -303,7 +324,7 @@ export class ReviewRoundFacade {
       // next provider packet.
       const crossStageCarryovers = mergeCrossStageCarryovers(
         priorReceipt.delta?.cross_stage_carryovers ?? [],
-        checkedCarryovers(input.cross_stage_carryovers, previousFindings),
+        checkedCarryovers(input.cross_stage_carryovers, previousFindings, { taskTrackingRoot: this.taskTrackingRoot, taskId: input.task_id, stage: input.stage }),
       );
       delta = buildContinuationDelta({ previousPacket: priorPacket, currentPacket: packet, deltaSource, previousFindings, closureEvidence, crossStageCarryovers, requiredSkills: resolution.definitions });
       const prompt = continuationPrompt(delta, { stage: input.stage, reviewTrack }); const promptBytes = Buffer.byteLength(prompt, "utf8");

@@ -149,14 +149,38 @@ describe("ReviewRoundFacade", () => {
     const initial = trustedPacket(tracking);
     const first = await facade.run(facade.prepare({ task_id: "carryover-inherit", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
     const receipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
-    receipt.delta = { cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "requires staging verification" }] };
+    const upstream = { intent: { stage: "verify-code" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging verification" }] };
+    const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(upstreamBytes);
+    const upstreamPath = join(tracking, "carryover-inherit", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(dirname(upstreamPath), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
+    receipt.delta = { cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging verification" }] };
     writeFileSync(first.receipt_draft_ref, JSON.stringify(receipt));
     const flowPath = join(tracking, "carryover-inherit", "reviews", "private", "flows", "build-code-flow.json");
     const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(first.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
     const secondPacket = advancePacket(tracking, initial);
     const prepared = await facade.prepare({ task_id: "carryover-inherit", stage: "build-code", review_flow_id: "flow", packet: secondPacket, repository_root: tracking, continuation: true, closure_evidence: [] });
-    expect(prepared.delta.cross_stage_carryovers).toEqual([{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "requires staging verification" }]);
+    expect(prepared.delta.cross_stage_carryovers).toEqual([{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging verification" }]);
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("accepts carryovers only from a hash-bound deferred upstream core and a hash-bound closure core", async () => {
+    const tracking = root(); const initial = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "93939393-9393-4393-8393-939393939393", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
+    await facade.run(facade.prepare({ task_id: "trusted-carryover", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    const upstream = { intent: { stage: "build-spec" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "deferred-finding" }], dispositions: [{ finding_id: "deferred-finding", action: "defer", evidence: "defer until integration evidence exists" }] };
+    const bytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(bytes);
+    const upstreamPath = join(tracking, "trusted-carryover", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, bytes);
+    const next = advancePacket(tracking, initial);
+    const base = { task_id: "trusted-carryover", stage: "build-code", review_flow_id: "flow", packet: next, repository_root: tracking, continuation: true, closure_evidence: [] };
+    const prepared = await facade.prepare({ ...base, cross_stage_carryovers: [{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, status: "open", evidence: "defer until integration evidence exists" }] });
+    expect(prepared.delta.cross_stage_carryovers).toEqual([{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, status: "open", evidence: "defer until integration evidence exists" }]);
+    rmSync(prepared.lock, { recursive: true, force: true });
+    const closure = { intent: { stage: "build-spec", previous_core_receipt_hash: upstreamHash }, semantic_verdict: "pass", needs_human: false, merged_findings: [], dispositions: [] };
+    const closureBytes = Buffer.from(JSON.stringify(closure)); const closureHash = hash(closureBytes);
+    const closurePath = join(tracking, "trusted-carryover", "reviews", "core-receipts", `${closureHash}.json`); writeFileSync(closurePath, closureBytes);
+    const closed = await facade.prepare({ ...base, cross_stage_carryovers: [{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, closure_core_receipt_hash: closureHash, status: "closed", evidence: "defer until integration evidence exists" }] });
+    expect(closed.delta.cross_stage_carryovers).toEqual([{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, closure_core_receipt_hash: closureHash, status: "closed", evidence: "defer until integration evidence exists" }]);
+    rmSync(closed.lock, { recursive: true, force: true });
+    await expect(facade.prepare({ ...base, cross_stage_carryovers: [{ carryover_id: "deferred-finding", source_stage: "build-spec", source_core_receipt_hash: upstreamHash, status: "closed", evidence: "defer until integration evidence exists" }] })).rejects.toThrow(/closure_core_receipt_hash/i);
   });
 
   it("keeps a new blocking finding only when its exact line is host-proven new to this delta", async () => {
@@ -505,8 +529,10 @@ describe("ReviewRoundFacade", () => {
     const first = await facade.run(facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: initial, repository_root: tracking }));
     const findingId = first.merged_findings[0].finding_id;
     currentPacket = advancePacket(tracking, initial);
+    const upstream = { intent: { stage: "verify-code" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging" }] };
+    const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(upstreamBytes); const upstreamPath = join(tracking, "real-delta", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
     const secondPrepared = await facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: currentPacket, repository_root: tracking, continuation: true,
-      closure_evidence: [{ finding_id: findingId, evidence: "fixed in the new commit and unit test passed" }], cross_stage_carryovers: [{ carryover_id: "verify-later", status: "open", evidence: "requires staging" }] });
+      closure_evidence: [{ finding_id: findingId, evidence: "fixed in the new commit and unit test passed" }], cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "verify-code", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging" }] });
     expect(secondPrepared.packet.source_revision.head).not.toBe(first.intent.baseline_packet_hash);
     const second = await facade.run(secondPrepared);
     expect(second.intent).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash });

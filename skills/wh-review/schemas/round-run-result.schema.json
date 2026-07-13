@@ -12,7 +12,7 @@
     "delta_manifest": { "type": ["object", "null"] },
     "affected_materials": { "type": "object" },
     "current_material_manifest": { "type": "object" },
-    "cross_stage_carryovers": { "type": "array", "items": { "type": "object", "required": ["carryover_id", "status", "evidence"], "properties": { "carryover_id": { "type": "string", "minLength": 1 }, "source_stage": { "type": "string", "minLength": 1 }, "status": { "enum": ["open", "closed", "deferred"] }, "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" } }, "additionalProperties": false } },
+    "cross_stage_carryovers": { "type": "array", "items": { "type": "object", "required": ["carryover_id", "source_stage", "source_core_receipt_hash", "status", "evidence"], "properties": { "carryover_id": { "type": "string", "minLength": 1 }, "source_stage": { "type": "string", "minLength": 1 }, "source_core_receipt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "closure_core_receipt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "status": { "enum": ["open", "closed", "deferred"] }, "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" } }, "additionalProperties": false } },
     "required_skill_lens_hashes": { "type": "array", "items": { "type": "object", "required": ["skill", "bundle_hash"], "properties": { "skill": { "type": "string", "minLength": 1 }, "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } },
     "provider_outcomes": { "type": "array" },
     "merged_findings": { "type": "array" },
