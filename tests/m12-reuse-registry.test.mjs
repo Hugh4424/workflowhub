@@ -1,135 +1,87 @@
-// TDD Phase 7 (US5): reuse-registry.md registration for spec-plan, spec-tasks, spec-analyze.
-// Uses vitest + node:assert (compatible with vitest).
-import { test, describe } from "vitest";
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const REGISTRY_PATH = join(REPO_ROOT, "skills", "reuse-registry.md");
+const REGISTRY_PATH = join(REPO_ROOT, "docs", "reuse-registry.md");
+const CONSUMERS = [
+  "make-decision",
+  "build-spec",
+  "build-plan",
+  "build-code",
+  "verify-code",
+  "stage-result",
+  "validator",
+  "facts-assembly",
+];
 
-const VALID_CATEGORIES = ["外部改造适配", "自研", "外部依赖", "改造适配", "其他平台原生"];
-
-// Parse reuse-registry.md markdown table into [{skill, category, source}].
-function parseRegistry() {
+function registryBody() {
   const content = readFileSync(REGISTRY_PATH, "utf8");
-  const rows = [];
-  for (const line of content.split("\n")) {
-    const m = line.match(/^\|(.+?)\|(.+?)\|(.+?)\|$/);
-    if (!m) continue;
-    const cells = [m[1], m[2], m[3]].map((c) => c.trim().replace(/^`|`$/g, ""));
-    // Skip header / separator rows
-    if (cells[0] === "skill 名" || /^---+$/.test(cells[0])) continue;
-    rows.push({ skill: cells[0], category: cells[1], source: cells[2] });
+  const marker = "## 8-consumer typed I/O registry";
+  const start = content.indexOf(marker);
+  assert.notEqual(start, -1, `Missing registry section: ${marker}`);
+  return content.slice(start + marker.length);
+}
+
+function parseConsumers() {
+  const body = registryBody();
+  const blocks = new Map();
+  const matches = [...body.matchAll(/^### ([a-z][a-z-]*)\s*$/gm)];
+  for (const [index, match] of matches.entries()) {
+    const end = matches[index + 1]?.index ?? body.length;
+    blocks.set(match[1], body.slice(match.index + match[0].length, end));
   }
-  return rows;
+  return blocks;
 }
 
-function findRow(rows, skillName) {
-  return rows.find((r) => r.skill === skillName);
+function field(block, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return block.match(
+    new RegExp(`^-\\s+(?:\\*\\*)?${escaped}:(?:\\*\\*)?\\s*(.+)$`, "mi"),
+  )?.[1]?.trim() ?? "";
 }
 
-// --- Three new rows: existence + category + non-empty source ---
-describe("Phase 7 US5: reuse-registry.md contains spec-plan row with correct format", () => {
-  const rows = parseRegistry();
-  const row = findRow(rows, "spec-plan");
+function semanticAssertion(value, label, consumer) {
+  assert.ok(value, `${consumer} missing ${label} semantics`);
+  assert.match(
+    value,
+    /(?:when|if|on|unless|after|当|若|如果|遇到|失败|跳过|重试|人工|human|retry|skip|fail)/i,
+    `${consumer} ${label} must describe a condition or outcome, not a label-only placeholder`,
+  );
+}
 
-  test("spec-plan row exists in reuse-registry.md", () => {
-    assert.ok(row, "reuse-registry.md must contain a row for spec-plan");
+describe("M12 reuse registry semantics", () => {
+  test("records actionable failure, skip, retry, and human handling for all 8 consumers", () => {
+    const consumers = parseConsumers();
+    assert.equal(consumers.size, 8, "semantic checks require all 8 registry consumers");
+
+    for (const consumer of CONSUMERS) {
+      const block = consumers.get(consumer);
+      assert.ok(block, `Missing consumer block for ${consumer}`);
+      semanticAssertion(field(block, "Failure"), "Failure", consumer);
+      semanticAssertion(field(block, "Skip"), "Skip", consumer);
+      semanticAssertion(field(block, "Retry"), "Retry", consumer);
+      semanticAssertion(field(block, "Human"), "Human", consumer);
+      assert.ok(field(block, "Rationale"), `${consumer} missing decision rationale`);
+      assert.ok(field(block, "Evidence"), `${consumer} missing decision evidence`);
+    }
   });
 
-  test("spec-plan category is 外部改造适配", () => {
-    assert.equal(row?.category, "外部改造适配",
-      `spec-plan category must be "外部改造适配", got "${row?.category}"`);
-  });
-
-  test("spec-plan source path is non-empty", () => {
-    assert.ok(row?.source && row.source.length > 0,
-      `spec-plan source must be non-empty, got "${row?.source}"`);
-  });
-
-  test('spec-plan source path points at speckit-plan SKILL.md', () => {
-    assert.ok(
-      row?.source?.includes("speckit-plan") && row?.source?.includes("SKILL.md"),
-      `spec-plan source must reference speckit-plan/SKILL.md, got "${row?.source}"`
-    );
-  });
-});
-
-describe("Phase 7 US5: reuse-registry.md contains spec-tasks row with correct format", () => {
-  const rows = parseRegistry();
-  const row = findRow(rows, "spec-tasks");
-
-  test("spec-tasks row exists in reuse-registry.md", () => {
-    assert.ok(row, "reuse-registry.md must contain a row for spec-tasks");
-  });
-
-  test("spec-tasks category is 外部改造适配", () => {
-    assert.equal(row?.category, "外部改造适配",
-      `spec-tasks category must be "外部改造适配", got "${row?.category}"`);
-  });
-
-  test("spec-tasks source path is non-empty", () => {
-    assert.ok(row?.source && row.source.length > 0,
-      `spec-tasks source must be non-empty, got "${row?.source}"`);
-  });
-
-  test('spec-tasks source path points at speckit-tasks SKILL.md', () => {
-    assert.ok(
-      row?.source?.includes("speckit-tasks") && row?.source?.includes("SKILL.md"),
-      `spec-tasks source must reference speckit-tasks/SKILL.md, got "${row?.source}"`
-    );
-  });
-});
-
-describe("Phase 7 US5: reuse-registry.md contains spec-analyze row with correct format", () => {
-  const rows = parseRegistry();
-  const row = findRow(rows, "spec-analyze");
-
-  test("spec-analyze row exists in reuse-registry.md", () => {
-    assert.ok(row, "reuse-registry.md must contain a row for spec-analyze");
-  });
-
-  test("spec-analyze category is 外部改造适配", () => {
-    assert.equal(row?.category, "外部改造适配",
-      `spec-analyze category must be "外部改造适配", got "${row?.category}"`);
-  });
-
-  test("spec-analyze source path is non-empty", () => {
-    assert.ok(row?.source && row.source.length > 0,
-      `spec-analyze source must be non-empty, got "${row?.source}"`);
-  });
-
-  test('spec-analyze source path points at speckit-analyze SKILL.md', () => {
-    assert.ok(
-      row?.source?.includes("speckit-analyze") && row?.source?.includes("SKILL.md"),
-      `spec-analyze source must reference speckit-analyze/SKILL.md, got "${row?.source}"`
-    );
-  });
-});
-
-// --- Existing rows regression: spec-specify still present ---
-describe("Phase 7 US5: existing rows are preserved (no regression)", () => {
-  const rows = parseRegistry();
-
-  test("spec-specify row still present", () => {
-    const row = findRow(rows, "spec-specify");
-    assert.ok(row, "spec-specify row must still be present in reuse-registry.md");
-    assert.equal(row.category, "外部改造适配",
-      `spec-specify category should remain "外部改造适配", got "${row.category}"`);
-  });
-
-  test("spec-clarify row still present", () => {
-    const row = findRow(rows, "spec-clarify");
-    assert.ok(row, "spec-clarify row must still be present in reuse-registry.md");
-    assert.equal(row.category, "外部改造适配",
-      `spec-clarify category should remain "外部改造适配", got "${row.category}"`);
-  });
-
-  test("make-decision row still present", () => {
-    const row = findRow(rows, "make-decision");
-    assert.ok(row, "make-decision row must still be present in reuse-registry.md");
-    assert.equal(row.category, "自研",
-      `make-decision category should remain "自研", got "${row.category}"`);
+  test("rejects pseudo-reuse: one mechanism cannot serve different semantic contracts", () => {
+    const byMechanism = new Map();
+    for (const [consumer, block] of parseConsumers()) {
+      const mechanism = field(block, "Mechanism");
+      const semanticContract = field(block, "Semantic contract");
+      assert.ok(mechanism, `${consumer} must name its mechanism`);
+      assert.ok(semanticContract, `${consumer} must name its semantic contract`);
+      const key = mechanism.toLocaleLowerCase();
+      const prior = byMechanism.get(key);
+      assert.ok(
+        !prior || prior.semanticContract === semanticContract,
+        `${consumer} reuses mechanism ${JSON.stringify(mechanism)} but changes its semantic contract; choose local/extract or document a distinct mechanism`,
+      );
+      byMechanism.set(key, { consumer, semanticContract });
+    }
   });
 });
