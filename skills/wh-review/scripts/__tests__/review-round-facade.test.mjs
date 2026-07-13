@@ -116,11 +116,11 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const deleted = packet({ root: tracking }); rmSync(join(tracking, "a"));
     deleted.unified_diff = "diff --git a/gone b/gone\n"; deleted.changed_files = [{ path: "gone", status: "deleted", old_sha256: hash("old"), old_size: 3 }]; refreshPacketHashes(deleted);
-    const deletedSnapshot = { unified_diff: deleted.unified_diff, changed_files: deleted.changed_files, base_files: { gone: "old" }, head_files: {} };
+    const deletedSnapshot = { unified_diff: deleted.unified_diff, changed_files: deleted.changed_files, base_ref: "base", head_ref: "head", base_files: { gone: "old" }, head_files: {} };
     const prepared = facade.prepare({ task_id: "delete", stage: "build-code", review_flow_id: "flow", packet: deleted, changed_file_root: tracking, source_snapshot: deletedSnapshot, provider_capabilities: { opencode: { continuation: true } } }); rmSync(prepared.lock, { recursive: true, force: true });
     const renamed = packet({ root: tracking }); writeFileSync(join(tracking, "new"), "new"); rmSync(join(tracking, "a"));
     renamed.unified_diff = "diff --git a/old b/new\n"; renamed.changed_files = [{ path: "new", old_path: "old", status: "renamed", sha256: hash("new"), size: 3, old_sha256: hash("old"), old_size: 3 }]; refreshPacketHashes(renamed);
-    const renamedSnapshot = { unified_diff: renamed.unified_diff, changed_files: renamed.changed_files, base_files: { old: "old" }, head_files: { new: "new" } };
+    const renamedSnapshot = { unified_diff: renamed.unified_diff, changed_files: renamed.changed_files, base_ref: "base", head_ref: "head", base_files: { old: "old" }, head_files: { new: "new" } };
     const renamedPrepared = facade.prepare({ task_id: "rename", stage: "build-code", review_flow_id: "flow", packet: renamed, changed_file_root: tracking, source_snapshot: renamedSnapshot, provider_capabilities: { opencode: { continuation: true } } }); rmSync(renamedPrepared.lock, { recursive: true, force: true });
     const mismatch = structuredClone(deleted); mismatch.old_sha256 = hash("wrong");
     expect(() => facade.prepare({ task_id: "bad", stage: "build-code", review_flow_id: "flow", packet: deleted, changed_file_root: tracking, source_snapshot: { ...deletedSnapshot, base_files: { gone: "wrong" } }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/source snapshot base file hash mismatch/);

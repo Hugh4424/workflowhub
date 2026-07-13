@@ -76,6 +76,8 @@ function verifySourceEvidence(packet, sourceSnapshot, required) {
   if (!sourceSnapshot) { if (required) throw new Error("source evidence provider is required (base/head git evidence or explicit source_snapshot)"); return; }
   if (sourceSnapshot.unified_diff !== packet.unified_diff || canonical(sourceSnapshot.changed_files) !== canonical(packet.changed_files)) throw new Error("source evidence provider does not match review packet");
   const base = sourceSnapshot.base_files ?? {}, head = sourceSnapshot.head_files ?? {};
+  if (packet.source_revision.base && (sourceSnapshot.base_ref !== packet.source_revision.base || sourceSnapshot.head_ref !== packet.source_revision.head)) throw new Error("source snapshot revision does not match packet source_revision");
+  const headers = [...packet.unified_diff.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].map((match) => ({ old_path: match[1], path: match[2] }));
   for (const entry of packet.changed_files) {
     if (entry.status !== "deleted") {
       const bytes = head[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks current file bytes");
@@ -86,6 +88,13 @@ function verifySourceEvidence(packet, sourceSnapshot, required) {
       if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks base file bytes");
       if (sha(bytes) !== entry.old_sha256 || Buffer.byteLength(bytes) !== entry.old_size) throw new Error("source snapshot base file hash mismatch");
     }
+    if (entry.status === "modified") {
+      const bytes = base[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks modified base bytes");
+      if (sha(bytes) !== entry.old_sha256 || Buffer.byteLength(bytes) !== entry.old_size) throw new Error("source snapshot modified base hash mismatch");
+      if (!packet.unified_diff.includes(`-${bytes}`) || !packet.unified_diff.includes(`+${head[entry.path]}`)) throw new Error("unified diff does not contain source snapshot base/head bytes");
+    }
+    const header = headers.find((item) => item.path === entry.path); const expectedOld = entry.status === "renamed" ? entry.old_path : entry.path;
+    if (!header || header.old_path !== expectedOld) throw new Error("unified diff header does not match source snapshot path mapping");
   }
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
@@ -139,6 +148,7 @@ export class ReviewRoundFacade {
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
+      if (input.source_snapshot) atomic(join(dir, "source-snapshot.json"), safeJson(input.source_snapshot));
       const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
