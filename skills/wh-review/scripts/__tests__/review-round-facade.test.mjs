@@ -927,6 +927,16 @@ describe("ReviewRoundFacade", () => {
     expect(result.provider_outcomes[0]).toMatchObject({ packet_status: "material_incomplete", business_valid: false, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" }); expect(result.continuation_eligible).toBe(false);
   });
 
+  it("records a missing native provider response as material-insufficient, never a semantic review", async () => {
+    const tracking = root();
+    const broker = fakeBroker(async () => ({ runtime_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: "file_only", raw_audit_error: { code: "BROKER_RAW_AUDIT_UNAVAILABLE" } }] }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "missing-native-response", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(result.provider_outcomes[0]).toMatchObject({ provider: "opencode", transport_status: "completed", packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "BROKER_RAW_AUDIT_UNAVAILABLE" });
+    expect(result.merged_findings).toEqual([]); expect(result.continuation_eligible).toBe(false);
+    expect(() => facade.publish(result, { items: [] })).toThrow(/no business-valid provider outcome/i);
+  });
+
   it("seals real diff, manifest, and changed-file bytes before broker dispatch", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");

@@ -20,6 +20,7 @@ export async function runReviewRound(input) {
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
     review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
+    provider_allowlist: input.provider_allowlist,
     closure_evidence: input.closure_evidence, cross_stage_carryovers: input.cross_stage_carryovers,
     attachment_root: thirdReview.attachmentRoot,
     repository_root: input.repository_root ?? input.repositoryRoot,

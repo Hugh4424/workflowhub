@@ -264,7 +264,10 @@ export class ReviewRoundFacade {
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
     const reviewTrack = input.review_track ?? null;
     const resolution = this.requiredSkillResolver({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
-    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider).sort();
+    if (input.provider_allowlist !== undefined && (!Array.isArray(input.provider_allowlist) || input.provider_allowlist.some((provider) => typeof provider !== "string" || !providerId.test(provider)) || new Set(input.provider_allowlist ?? []).size !== (input.provider_allowlist ?? []).length)) throw new Error("provider_allowlist must be a unique array of provider ids");
+    if (input.continuation === true && input.provider_allowlist !== undefined) throw new Error("provider_allowlist is initial-round only; continuation providers are frozen");
+    const requestedProviders = input.provider_allowlist ? new Set(input.provider_allowlist) : null;
+    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode) && (!requestedProviders || requestedProviders.has(item.provider))).map((item) => item.provider).sort();
     let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
     if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
@@ -650,6 +653,7 @@ export class ReviewRoundFacade {
     if (typeof item?.output === "string" && item.provider) {
       const parsed = join(directory, "providers", `${item.provider}.parsed-output.txt`); atomic(parsed, item.output); base.parsed_output_ref = parsed; base.parsed_output_sha256 = sha(readFileSync(parsed));
     }
+    if (item?.raw_audit_error?.code) return { ...base, diagnostic: item.raw_audit_error.code };
     if (!rawAuditComplete) return { ...base, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" };
     if (transport_status === "cancelled") {
       const cancel_source = item?.error?.source;

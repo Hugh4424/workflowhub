@@ -75,7 +75,7 @@ export class BrokerClient {
       let parsed;
       try { parsed = JSON.parse(result.stdout); }
       catch { return { transport_error: { code: "BROKER_OUTPUT_INVALID", message: "3rd-review returned non-JSON" } }; }
-      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory) : parsed;
+      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory, result) : parsed;
     } finally { rmSync(temp, { recursive: true, force: true }); }
   }
 
@@ -125,7 +125,7 @@ export class BrokerClient {
     });
   }
 
-  #materializePrivateRaw(result, privateRawDirectory) {
+  #materializePrivateRaw(result, privateRawDirectory, brokerWire) {
     if (!result || typeof result !== "object" || !Array.isArray(result.providers) || typeof result.runtime_id !== "string") {
       throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker result has no runtime provider evidence");
     }
@@ -143,6 +143,20 @@ export class BrokerClient {
     if (state?.runtime_id !== result.runtime_id || !state.providers || typeof state.providers !== "object") throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker state does not bind the runtime");
     const destinationRoot = resolve(privateRawDirectory);
     mkdirSync(destinationRoot, { recursive: true, mode: 0o700 });
+    // Keep the broker wire response even when a provider omitted its native raw
+    // streams. That omission is material-insufficient, never a semantic pass,
+    // but the host still needs durable evidence for a later disposition.
+    const wire = (stream, value) => {
+      const bytes = Buffer.from(value ?? "", "utf8"); const digest = sha256(bytes);
+      const target = join(destinationRoot, `broker-wire.${stream}.${digest}.raw`);
+      try { writeFileSync(target, bytes, { mode: 0o400, flag: "wx" }); }
+      catch (error) {
+        if (error?.code !== "EEXIST" || sha256(readFileSync(target)) !== digest) throw error;
+      }
+      return { ref: target, sha256: digest };
+    };
+    const broker_raw_stdout = wire("stdout", brokerWire?.stdout);
+    const broker_raw_stderr = wire("stderr", brokerWire?.stderr);
     const copyStream = (provider, stream, stateProvider, publicProvider) => {
       const ref = stateProvider[`raw_${stream}_ref`]; const expected = stateProvider[`raw_${stream}_sha256`];
       const announced = publicProvider[`raw_${stream}_sha256`];
@@ -161,19 +175,29 @@ export class BrokerClient {
       }
       return target;
     };
+    const auditFailure = (item, error) => ({ ...item, raw_audit_error: {
+      code: String(error?.message ?? error).startsWith("BROKER_RAW_AUDIT_UNAVAILABLE") ? "BROKER_RAW_AUDIT_UNAVAILABLE" : "BROKER_RAW_AUDIT_FAILED",
+    } });
     const providers = result.providers.map((item) => {
       if (!item || typeof item !== "object" || !providerId.test(item.provider ?? "") || !providerIds.has(item.provider)) return item;
-      const privateState = state.providers[item.provider];
-      const expectsRaw = item.status === "completed" || item.raw_stdout_sha256 !== undefined || item.raw_stderr_sha256 !== undefined;
-      if (!privateState || typeof privateState !== "object") {
-        if (expectsRaw) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
-        return item;
-      }
-      const raw_stdout_ref = copyStream(item.provider, "stdout", privateState, item);
-      const raw_stderr_ref = copyStream(item.provider, "stderr", privateState, item);
-      if (expectsRaw && (!raw_stdout_ref || !raw_stderr_ref)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} lacks raw stream evidence`);
-      return { ...item, ...(raw_stdout_ref ? { raw_stdout_ref } : {}), ...(raw_stderr_ref ? { raw_stderr_ref } : {}) };
+      // The broker's terminal CANCELLED is a caller-side cancellation signal,
+      // not a model timeout or a review verdict. Older adapters omitted the
+      // source; retain the truthful caller boundary rather than misclassifying
+      // it as provider failure.
+      if (item.status === "cancelled" && item?.error?.code === "CANCELLED" && !item.error.source) item = { ...item, error: { ...item.error, source: "workflow_shutdown" } };
+      try {
+        const privateState = state.providers[item.provider];
+        const expectsRaw = item.status === "completed" || item.raw_stdout_sha256 !== undefined || item.raw_stderr_sha256 !== undefined;
+        if (!privateState || typeof privateState !== "object") {
+          if (expectsRaw) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
+          return item;
+        }
+        const raw_stdout_ref = copyStream(item.provider, "stdout", privateState, item);
+        const raw_stderr_ref = copyStream(item.provider, "stderr", privateState, item);
+        if (expectsRaw && (!raw_stdout_ref || !raw_stderr_ref)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} lacks raw stream evidence`);
+        return { ...item, ...(raw_stdout_ref ? { raw_stdout_ref } : {}), ...(raw_stderr_ref ? { raw_stderr_ref } : {}) };
+      } catch (error) { return auditFailure(item, error); }
     });
-    return { ...result, providers };
+    return { ...result, broker_raw_stdout_ref: broker_raw_stdout.ref, broker_raw_stdout_sha256: broker_raw_stdout.sha256, broker_raw_stderr_ref: broker_raw_stderr.ref, broker_raw_stderr_sha256: broker_raw_stderr.sha256, providers };
   }
 }
