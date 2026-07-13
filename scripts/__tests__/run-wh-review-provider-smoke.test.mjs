@@ -67,4 +67,10 @@ describe("run-wh-review-provider-smoke", () => {
     expect(source).not.toContain('commit", "-qm", "round 1"');
     expect(source).not.toContain('commit", "-qm", "round 2 delta"');
   });
+
+  it("requires both providers for a passing live acceptance result", () => {
+    const source = readFileSync(script, "utf8");
+    expect(source).not.toContain("WH_REVIEW_SMOKE_SKIP_KIMI");
+    expect(source).toContain("evidence.runtimes = { kimi: kimiEvidence, opencode:");
+  });
 });
