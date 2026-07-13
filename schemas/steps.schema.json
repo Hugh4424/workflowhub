@@ -4,16 +4,17 @@
   "type": "object",
   "required": ["schema_version", "stage_slug", "steps"],
   "properties": {
-    "schema_version": { "type": "string", "minLength": 1 },
+    "schema_version": { "const": "2.0.0" },
     "stage_slug": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "steps": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["step_id", "order", "entry_conditions", "completion_evidence", "observable_result", "depends_on"],
+        "required": ["step_id", "step_slug", "order", "entry_conditions", "completion_evidence", "observable_result", "depends_on"],
         "properties": {
-          "step_id": { "type": "string", "minLength": 1 },
+          "step_id": { "type": "integer", "minimum": 1 },
+          "step_slug": { "type": "string", "minLength": 1 },
           "order": { "type": "integer", "minimum": 1 },
           "entry_conditions": {
             "type": "array",
@@ -27,7 +28,7 @@
             "type": "array",
             "uniqueItems": true,
             "description": "Dependencies must precede this step and be represented in entry_conditions as step://<step_id> evidence.",
-            "items": { "type": "string", "minLength": 1 }
+            "items": { "type": "integer", "minimum": 1 }
           }
         },
         "additionalProperties": false

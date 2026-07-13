@@ -1,4 +1,5 @@
 export const JOURNAL_SCHEMA_VERSION = "v1";
+export const RECEIPT_MANIFEST_SCHEMA_VERSION = "2.0.0";
 
 export const JOURNAL_EVENT_TYPES = Object.freeze({
   STAGE_ENTER: "stage_enter",
@@ -44,6 +45,7 @@ export const RECEIPT_IDENTITY_FIELDS = Object.freeze([
 export const TERMINAL_STATUSES = Object.freeze([
   "success",
   "failure",
+  "blocked",
   "skipped",
   "needs_human",
 ]);

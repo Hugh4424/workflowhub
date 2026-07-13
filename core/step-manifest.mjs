@@ -8,9 +8,11 @@ export const CANONICAL_STAGE_SLUGS = Object.freeze([
   "build-code",
   "verify-code",
 ]);
+export const STEP_MANIFEST_SCHEMA_VERSION = "2.0.0";
 
 const REQUIRED_STEP_FIELDS = [
   "step_id",
+  "step_slug",
   "order",
   "entry_conditions",
   "completion_evidence",
@@ -41,8 +43,12 @@ export function validateStepManifest(manifest) {
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
     return { ok: false, errors: ["manifest must be an object"] };
   }
-  if (!isNonEmptyString(manifest.schema_version)) errors.push("schema_version is required");
-  if (!isNonEmptyString(manifest.stage_slug)) errors.push("stage_slug is required");
+  if (manifest.schema_version !== STEP_MANIFEST_SCHEMA_VERSION) {
+    errors.push(`LEGACY_FIELDS_MISSING: schema_version must be ${STEP_MANIFEST_SCHEMA_VERSION}; migration_hint=use long stage_slug and integer step_id`);
+  }
+  if (!CANONICAL_STAGE_SLUGS.includes(manifest.stage_slug)) {
+    errors.push("LEGACY_FIELDS_MISSING: stage_slug must be a long canonical stage; migration_hint=use workflows/<long-stage>/steps.json");
+  }
   if (!Array.isArray(manifest.steps) || manifest.steps.length === 0) {
     errors.push("steps must be a non-empty array");
     return { ok: false, errors };
@@ -58,7 +64,8 @@ export function validateStepManifest(manifest) {
     for (const field of REQUIRED_STEP_FIELDS) {
       if (!(field in step)) errors.push(`step ${index + 1} missing required field ${field}`);
     }
-    if (!isNonEmptyString(step.step_id)) errors.push(`step ${index + 1} step_id must be a non-empty string`);
+    if (!Number.isInteger(step.step_id) || step.step_id < 1) errors.push(`LEGACY_FIELDS_MISSING: step ${index + 1} step_id must be an integer >= 1; migration_hint=preserve old label as step_slug`);
+    if (!isNonEmptyString(step.step_slug)) errors.push(`step ${index + 1} step_slug must be a non-empty string`);
     if (!Number.isInteger(step.order) || step.order < 1) errors.push(`step ${step.step_id ?? index + 1} order must be a positive integer`);
     if (!Array.isArray(step.entry_conditions) || step.entry_conditions.length === 0) errors.push(`step ${step.step_id ?? index + 1} entry_conditions must be a non-empty array`);
     if (!Array.isArray(step.completion_evidence) || step.completion_evidence.length === 0) errors.push(`step ${step.step_id ?? index + 1} completion_evidence must be a non-empty array`);
@@ -67,7 +74,7 @@ export function validateStepManifest(manifest) {
     validateEvidenceRefs(step.step_id ?? index + 1, "entry_conditions", step.entry_conditions, errors);
     validateEvidenceRefs(step.step_id ?? index + 1, "completion_evidence", step.completion_evidence, errors);
 
-    if (isNonEmptyString(step.step_id)) {
+    if (Number.isInteger(step.step_id) && step.step_id > 0) {
       if (byId.has(step.step_id)) errors.push(`duplicate step_id: ${step.step_id}`);
       else byId.set(step.step_id, step);
     }
@@ -82,10 +89,10 @@ export function validateStepManifest(manifest) {
   }
 
   for (const step of manifest.steps) {
-    if (!step || !Array.isArray(step.depends_on) || !isNonEmptyString(step.step_id)) continue;
+    if (!step || !Array.isArray(step.depends_on) || !Number.isInteger(step.step_id)) continue;
     for (const dependencyId of step.depends_on) {
-      if (!isNonEmptyString(dependencyId)) {
-        errors.push(`step ${step.step_id} depends_on entries must be non-empty strings`);
+      if (!Number.isInteger(dependencyId) || dependencyId < 1) {
+        errors.push(`step ${step.step_id} depends_on entries must be positive integers`);
         continue;
       }
       const dependency = byId.get(dependencyId);
