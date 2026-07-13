@@ -45,9 +45,9 @@ describe("reviewer-output validator", () => {
     expect(schema.additionalProperties).toBe(false);
     for (const key of ["findings", "checklist", "pass_items", "skillResults"]) expect(schema.properties[key].items.additionalProperties).toBe(false);
     expect(schema.properties.findings.items.properties.late_finding).toEqual({ type: "boolean" });
-    expect(schema.properties.findings.items.properties.rule_id.pattern).toBe("^(?:(?:DIR|DET)-)?[CH][1-9][0-9]*$");
-    expect(schema.properties.checklist.items.properties.id.pattern).toBe(schema.properties.findings.items.properties.rule_id.pattern);
-    expect(schema.properties.pass_items.items.properties.rule_id.pattern).toBe(schema.properties.findings.items.properties.rule_id.pattern);
+    expect(schema.properties.findings.items.properties.rule_id.pattern).toContain("external:");
+    expect(schema.properties.checklist.items.properties.id.pattern).toBe("^(?:(?:DIR|DET)-)?[CH][1-9][0-9]*$");
+    expect(schema.properties.pass_items.items.properties.rule_id.pattern).toBe(schema.properties.checklist.items.properties.id.pattern);
 
     for (const mutate of [
       (item) => { item.output.extra = true; },
@@ -129,9 +129,11 @@ describe("reviewer-output validator", () => {
     expect(validate(failedHard).errors).toEqual([]);
   });
 
-  it("rejects finding, checklist, and pass-item rule ids outside the selected contract", () => {
-    const finding = fixture(); finding.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "X1", severity: "minor", issue: "存在合同之外的审查意见", evidence: "src/a.mjs:12 展示该合同外意见", suggested_fix: "删除合同外 finding 并按合同重审" }];
-    expect(validate(finding).errors).toEqual(["SCHEMA_VALIDATION_FAILED:/findings/0/rule_id"]);
+  it("allows an isolated minor external finding but rejects an external hard severity", () => {
+    const finding = fixture(); finding.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "external:scope-drift", severity: "minor", issue: "存在合同之外但可供主 Agent 参考的审查意见", evidence: "src/a.mjs:12 展示未纳入本阶段合同的范围漂移", suggested_fix: "将该意见记录为后续范围讨论，不改变本轮合同判定" }];
+    expect(validate(finding).errors).toEqual([]);
+    finding.output.findings[0].severity = "important";
+    expect(validate(finding).errors).toContain("external finding must be minor: external:scope-drift");
     const checklist = fixture(); checklist.output.checklist.push({ id: "H99", passed: false, evidence: "unified_diff:a:1 不属于选中合同。" });
     expect(validate(checklist).errors).toContain("checklist id is not in selected contract: H99");
     const passItem = fixture(); passItem.output.pass_items.push({ rule_id: "C99", artifact_anchor: "unified_diff:a:1#C99", evidence: "该条目不属于选中合同规则。" });

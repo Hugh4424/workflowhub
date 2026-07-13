@@ -6,7 +6,7 @@ Output must be a single bare JSON object, or exactly one full Markdown JSON fenc
 
 顶层必须包含 `packet_hash`、`manifest_hash`、`diff_sha256`、`contract_hash`、`skill_bundle_hash`、`packet_status`、`verdict`、`summary`、`findings`、`checklist`、`pass_items` 与 `skillResults`。`revise_required` 还必须包含 `rootCause` 与 `fixApproach`。
 
-每个 finding 至少包含 `file`、`line`、`rule_id`、`severity`、`issue`、`evidence` 与 `suggested_fix`。`rule_id` 必须精确属于当前冻结的选中合同；禁止合同外 finding。
+每个 finding 至少包含 `file`、`line`、`rule_id`、`severity`、`issue`、`evidence` 与 `suggested_fix`。合同内 finding 的 `rule_id` 必须精确属于当前冻结的选中合同。合同外 finding 使用 `external:<stable-id>` 或未选中的 C/H ID，且 `severity` 只能为 `minor`；它不得出现在 checklist 或 `pass_items`，也不得形成 hard gate。
 
 `pass_items` 必须逐项对应通过的 checklist id，并包含 `rule_id`、可定位的 `artifact_anchor` 与具体 `evidence`；仅写“已检查”或“通过”无效。
 

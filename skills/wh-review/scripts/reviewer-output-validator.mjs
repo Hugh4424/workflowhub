@@ -40,7 +40,7 @@ export function validateReviewerOutput({ stage, reviewTrack, ui = false, output,
 
   output.findings.forEach((finding, index) => {
     if (!safeRelativePath(finding.file) || !concrete(finding.issue) || !concrete(finding.evidence) || !concrete(finding.suggested_fix)) errors.push(`invalid finding: ${index}`);
-    if (!selectedRules.allIdSet.has(finding.rule_id)) errors.push(`finding rule id is not in selected contract: ${finding.rule_id}`);
+    if (!selectedRules.allIdSet.has(finding.rule_id) && finding.severity !== "minor") errors.push(`external finding must be minor: ${finding.rule_id}`);
   });
   if (output.verdict === "pass" && (output.findings ?? []).some((finding) => finding?.severity === "blocking")) errors.push("pass verdict cannot contain a blocking finding");
   if (output.verdict === "revise_required") {

@@ -647,6 +647,19 @@ describe("ReviewRoundFacade", () => {
     expect(calls).toBe(0);
   });
 
+  it("keeps a minor finding outside the selected contract out of hard gates", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const raw = JSON.parse(output(request.packet));
+      raw.findings = [{ file: "a", line: 1, rule_id: "H99", severity: "minor", issue: "冻结 diff 还暴露了不属于本阶段合同的后续关注项", evidence: "unified_diff:a:1 显示该后续关注项的具体上下文", suggested_fix: "记录为后续阶段的候选审查项，不改变当前合同裁决" }];
+      return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(raw) }] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "external-minor", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ business_valid: true, semantic_verdict: "pass" });
+    expect(result.merged_findings).toHaveLength(1);
+    expect(result.hard_gates).toEqual([]);
+  });
+
   it("does not aggregate cancelled, incomplete, or malformed results and requires a cancel source", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "33333333-3333-4333-8333-333333333333", providers: [

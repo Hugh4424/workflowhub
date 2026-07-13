@@ -41,7 +41,6 @@ function parseOutput(value) {
 }
 function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
-function isHardRuleId(value) { return /^(?:(?:DIR|DET)-)?H[1-9][0-9]*$/.test(value ?? ""); }
 function manifestValue(packet) {
   const { packet_hash, manifest_hash, ...materials } = packet;
   return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash, source_revision: materials.source_revision };
@@ -365,7 +364,8 @@ export class ReviewRoundFacade {
       const closureBundleGateIds = new Set((prepared.closure_bundle_gates ?? []).map((item) => item.finding_id));
       const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds });
       const merged_findings = findingState.findings;
-      const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && (finding.severity === "blocking" || isHardRuleId(finding.rule_id)));
+      const contractHardIds = new Set(prepared.stage_contract_rules.hardIds);
+      const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && (finding.severity === "blocking" || contractHardIds.has(finding.rule_id)));
       // An escalation is a business-valid result, not an empty pass. Keep its
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
@@ -667,8 +667,8 @@ export class ReviewRoundFacade {
     if (canonical(result.human_gates ?? []) !== canonical([...provider_human_gates, ...state_human_gates])) throw new Error("human gate provenance does not match provider outcomes or finding state");
     const human_gates = [...provider_human_gates, ...state_human_gates];
     if (human_gates.length) throw new Error("human gate requires explicit human confirmation before publication");
-    const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const seen = new Set();
-    for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || isHardRuleId(finding.rule_id)) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
+    const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const hardGateIds = new Set(result.hard_gates.map((item) => item.finding_id)); const seen = new Set();
+    for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if (hardGateIds.has(finding.finding_id) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
     const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
     const needs_human = semantic_verdict !== "pass";
