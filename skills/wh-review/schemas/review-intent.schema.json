@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wh-review review intent",
+  "type": "object",
+  "required": ["task_id", "stage", "review_flow_id", "business_round", "round_kind", "baseline_packet_hash", "host_provider", "limits", "contract_hash", "material_manifest_hash", "skill_bundle_hash", "idempotency_key"],
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._-]+$" },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "review_track": { "enum": ["direction", "detail", null] },
+    "review_flow_id": { "type": "string", "pattern": "^(?!.*\\.\\.)[A-Za-z0-9._-]+$" },
+    "business_round": { "type": "integer", "minimum": 1 },
+    "round_kind": { "enum": ["initial", "continuation"] },
+    "baseline_packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "host_provider": { "type": ["string", "null"], "minLength": 1 },
+    "limits": {
+      "type": "object",
+      "required": ["continuation_prompt_max_bytes", "initial_prompt_max_bytes", "max_disposition_attempts"],
+      "properties": { "continuation_prompt_max_bytes": { "type": "integer", "minimum": 1 }, "initial_prompt_max_bytes": { "type": "integer", "minimum": 1 }, "max_disposition_attempts": { "type": "integer", "minimum": 1 } },
+      "additionalProperties": false
+    },
+    "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "material_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "initial_runtime_id": { "type": ["string", "null"] },
+    "previous_core_receipt_hash": { "type": ["string", "null"] },
+    "previous_private_receipt_hash": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "capability_snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "candidate_providers": { "type": "array", "items": { "type": "string" } },
+    "continuable_providers": { "type": "array", "items": { "type": "string" } },
+    "idempotency_key": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [{
+    "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
+    "then": { "properties": { "review_track": { "enum": ["direction", "detail"] } } },
+    "else": { "properties": { "review_track": { "type": "null" } } }
+  }],
+  "additionalProperties": false
+}

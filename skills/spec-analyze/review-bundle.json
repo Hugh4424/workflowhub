@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "mode": "lens-only",
+  "delivery_mode": "file_only",
+  "entrypoint": "packet-lens.md",
+  "files": ["packet-lens.md"]
+}

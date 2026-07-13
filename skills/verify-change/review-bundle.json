@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "mode": "lens-only",
+  "delivery_mode": "file_only",
+  "files": ["SKILL.md"]
+}

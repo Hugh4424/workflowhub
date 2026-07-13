@@ -1,84 +1,34 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { prepareReview, executeReview } from "../wh-review-cli.mjs";
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-const roots = [];
-afterEach(() => {
-  const makeRemovable = (path) => {
-    let stat; try { stat = lstatSync(path); } catch { return; }
-    if (!stat.isDirectory() || stat.isSymbolicLink()) { try { chmodSync(path, 0o644); } catch {} return; }
-    try { chmodSync(path, 0o755); } catch {}
-    for (const name of readdirSync(path)) makeRemovable(join(path, name));
-  };
-  for (const root of roots.splice(0)) {
-    makeRemovable(root);
-    rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 10 });
-  }
-});
+const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 
-function temporaryRoot(prefix) {
-  const root = mkdtempSync(join(tmpdir(), prefix));
-  roots.push(root);
-  return root;
-}
-
-describe("stable wh-review facade", () => {
-  it.each(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"])(
-    "prepares the %s stage through the same adapter contract",
-    (stage) => {
-      const result = prepareReview({ task_id: `facade-${stage}`, stage, task_tracking_root: temporaryRoot("wh-facade-") });
-      expect(result).toMatchObject({ status: "ready", total_round: 1 });
-      expect(result.review_flow_id).toBeTruthy();
-      expect(result.contract_path).toBeTruthy();
-    }
-  );
-
-  it("propagates backend attestation fields without flattening them away", async () => {
-    const root = temporaryRoot("wh-facade-execute-");
-    const runnerDir = temporaryRoot("wh-facade-runner-");
-    const runner = join(runnerDir, "runner.mjs");
-    writeFileSync(runner, `
-      import { readFileSync, writeFileSync } from "node:fs";
-      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
-      const payload = JSON.parse(readFileSync(args.diff, "utf8"));
-      writeFileSync(args.output, JSON.stringify({ verdict:"pass", findings:[], actual_mode:payload.mode,
-        provider:"claude-code", backend_provider:"claude-code", reviewer_source:"Claude Code test",
-        trueCrossEngine:true, synthetic:false, execution_status:"completed", diagnostic_path:"/diagnostic.json",
-        artifactCoverage:payload.artifact_manifest.entries.map(({id,sha256}) => ({id,sha256,status:"read"})) }));
-    `);
-    const prep = prepareReview({ task_id: "facade-execute", stage: "build-code", task_tracking_root: root });
-    const prompt = join(root, "facade-execute", "reviews", `prompt-${prep.review_flow_id}-r${prep.total_round}.md`);
-    mkdirSync(dirname(prompt), { recursive: true });
-    writeFileSync(prompt, "review this");
-
-    const result = await executeReview({
-      task_id: "facade-execute", stage: "build-code", task_tracking_root: root,
-      review_flow_id: prep.review_flow_id, total_round: prep.total_round,
-      current_content: "candidate", git_sha: "abc", covered_paths: [],
-      provider: "claude-code", host_provider: "openai-codex",
-      env: { THIRD_REVIEW_RUNNER: runner },
-    });
-    expect(result).toMatchObject({
-      provider: "claude-code", backend_provider: "claude-code", reviewer_source: "Claude Code test",
-      trueCrossEngine: true, synthetic: false, execution_status: "completed", diagnostic_path: "/diagnostic.json",
-    });
+describe("wh-review v4 CLI", () => {
+  it("exports only the V4 run/reset workflow boundary", async () => {
+    const mod = await import(cli.href);
+    expect(typeof mod.runReviewRound).toBe("function");
+    expect(typeof mod.resetReviewFlow).toBe("function");
+    expect(mod.prepareReview).toBeUndefined();
+    expect(mod.executeReview).toBeUndefined();
   });
 
-  it.each([
-    ["claude-code", "same-source-provider"],
-    [undefined, "host-provider-unknown"],
-  ])("fails closed for host=%s", async (hostProvider, failureReason) => {
-    const root = temporaryRoot("wh-facade-closed-");
-    const prep = prepareReview({ task_id: "facade-closed", stage: "build-code", task_tracking_root: root });
-    const prompt = join(root, "facade-closed", "reviews", `prompt-${prep.review_flow_id}-r${prep.total_round}.md`);
-    mkdirSync(dirname(prompt), { recursive: true });
-    writeFileSync(prompt, "review this");
-    const result = await executeReview({ task_id: "facade-closed", stage: "build-code", task_tracking_root: root,
-      review_flow_id: prep.review_flow_id, total_round: prep.total_round, current_content: "candidate",
-      git_sha: "abc", covered_paths: [], provider: "claude-code", host_provider: hostProvider });
-    expect(result).toMatchObject({ verdict: "escalate_to_human", synthetic: true,
-      trueCrossEngine: false, failure_reason: failureReason });
+  it("does not import a legacy runner or expose its argv", () => {
+    const source = readFileSync(cli, "utf8");
+    for (const forbidden of ["invoke-review-engine", "prepareRoundState", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
+    expect(source).toContain("BrokerClient");
+    expect(source).toContain('command !== "run" && command !== "reset"');
+    expect(source).not.toMatch(/provider_capabilities:\s*input|providerCapabilities:\s*input|attachment_delivery:\s*input|attachmentDelivery:\s*input/);
+  });
+
+  it.each(["provider_capabilities", "providerCapabilities", "attachment_delivery", "attachmentDelivery"])("rejects caller-owned %s instead of forwarding it", async (field) => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound({ [field]: {}, task_tracking_root: "/tmp", third_review: { command: "broker", config: "/cfg" } })).rejects.toThrow(field.toLowerCase().includes("delivery") ? /stage-skill-plan/ : /broker-owned/);
+  });
+
+  it("rejects broker command, config, and packet root supplied through CLI input", async () => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound({ task_tracking_root: "/tmp", third_review: { command: "broker", config: "/config.json", attachment_root: "/packets" } })).rejects.toThrow(/host-configured/);
+    await expect(runReviewRound({ task_tracking_root: "/tmp", attachment_root: "/packets" })).rejects.toThrow(/host-configured/);
   });
 });

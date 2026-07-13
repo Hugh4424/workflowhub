@@ -9,8 +9,9 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function readJson(path) {
@@ -108,53 +109,41 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
   }
 }
 
-function reviewArtifacts(phaseResult, baseDir, errors) {
-  const paths = [
-    ...asArray(phaseResult.review?.artifact_paths),
-    phaseResult.review?.artifact_path,
-  ].filter(nonEmptyString);
-
-  const artifacts = [];
-  for (const path of paths) {
-    const artifact = readArtifact(baseDir, path, "review", errors);
-    if (artifact) artifacts.push(artifact.data);
-  }
-  return artifacts;
-}
-
-function isIndependentReviewArtifact(candidate) {
-  return (
-    candidate.source === "third_party" ||
-    candidate.source === "heterogeneous" ||
-    candidate.trueCrossEngine === true
-  );
-}
-
-function checkReview(phaseResult, baseDir, errors, checked) {
+function checkReview(phaseResult, baseDir, errors, checked, options = {}) {
   checked.push("heterogeneous-review");
   const review = phaseResult.review;
   if (!review || typeof review !== "object") {
     errors.push("review result missing");
     return;
   }
-
-  const artifacts = reviewArtifacts(phaseResult, baseDir, errors);
-  if (artifacts.length === 0) {
-    errors.push("review must include at least one readable artifact path");
+  const allowed = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
+  if (Array.isArray(review) || Object.keys(review).some((key) => !allowed.has(key))
+    || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
+    || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
+    || typeof review.needs_human !== "boolean") {
+    errors.push("review must contain only core_receipt_hash, semantic_verdict, and needs_human");
     return;
   }
-  if (review.verdict !== undefined && review.verdict !== "pass") {
-    errors.push(`inline review verdict must not contradict artifact pass (got ${JSON.stringify(review.verdict)})`);
+  if (review.semantic_verdict !== "pass" || review.needs_human !== false) {
+    errors.push("review must be a published pass with needs_human:false");
+    return;
   }
-  const nonPassArtifacts = artifacts.filter((artifact) => artifact?.verdict !== "pass");
-  if (nonPassArtifacts.length > 0) {
-    errors.push("all readable review artifact verdicts must be \"pass\"");
+  const coreRoot = resolve(options.publicReviewRoot ?? join(baseDir, "reviews", "core-receipts"));
+  const corePath = join(coreRoot, `${review.core_receipt_hash}.json`);
+  if (!existsSync(corePath)) {
+    errors.push("public core receipt is missing for review.core_receipt_hash");
+    return;
   }
-  const independentPass = artifacts.some(
-    (artifact) => artifact?.verdict === "pass" && isIndependentReviewArtifact(artifact)
-  );
-  if (!independentPass) {
-    errors.push("at least one passing review artifact must be third_party/heterogeneous or trueCrossEngine; same_source/pass is not sufficient");
+  const bytes = readFileSync(corePath);
+  if (createHash("sha256").update(bytes).digest("hex") !== review.core_receipt_hash) {
+    errors.push("public core receipt hash does not match review.core_receipt_hash");
+    return;
+  }
+  let core;
+  try { core = JSON.parse(bytes); }
+  catch { errors.push("public core receipt is invalid JSON"); return; }
+  if (core.semantic_verdict !== review.semantic_verdict || core.needs_human !== review.needs_human) {
+    errors.push("public core receipt semantic tuple does not match review");
   }
 }
 
@@ -274,7 +263,7 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   checkStatus(phaseResult, errors, checked);
   checkEvidence(phaseResult, baseDir, errors, checked);
   checkDiffScan(phaseResult, baseDir, errors, checked);
-  checkReview(phaseResult, baseDir, errors, checked);
+  checkReview(phaseResult, baseDir, errors, checked, options);
   checkCommitOrNoChange(phaseResult, worktreeRoot, errors, checked);
   checkWorktreeClean(worktreeRoot, errors, checked);
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -30,9 +31,7 @@ function initRepo() {
 
 function fixture(overrides = {}, artifactOverrides = {}) {
   const evidenceDir = join(repo, "evidence");
-  const reviewDir = join(repo, "reviews");
   mkdirSync(evidenceDir, { recursive: true });
-  mkdirSync(reviewDir, { recursive: true });
 
   if (!artifactOverrides.skipImplementation) {
     mkdirSync(join(repo, "src"), { recursive: true });
@@ -41,29 +40,15 @@ function fixture(overrides = {}, artifactOverrides = {}) {
   const redPath = join(evidenceDir, "RED.json");
   const greenPath = join(evidenceDir, "GREEN.json");
   const diffPath = join(evidenceDir, "diff.json");
-  const reviewPath = join(reviewDir, "review.json");
-  const reviewPaths = [reviewPath];
 
   writeJson(redPath, { exit_code: artifactOverrides.redExitCode ?? 1 });
   writeJson(greenPath, { exit_code: 0 });
   writeJson(diffPath, { safe: true, violations: [], c2_violations: [], allowlist_violations: [] });
-  if (typeof artifactOverrides.reviewRaw === "string") {
-    writeFileSync(reviewPath, artifactOverrides.reviewRaw, "utf8");
-  } else {
-    writeJson(reviewPath, {
-      verdict: "pass",
-      source: "third_party",
-      actual_mode: "full",
-      trueCrossEngine: true,
-      ...(artifactOverrides.review ?? {}),
-    });
-  }
-  for (const [index, extraReview] of (artifactOverrides.extraReviews ?? []).entries()) {
-    const extraPath = join(reviewDir, `review-${index + 2}.json`);
-    writeJson(extraPath, extraReview);
-    reviewPaths.push(extraPath);
-  }
-
+  const coreBytes = Buffer.from(`${JSON.stringify({ semantic_verdict: "pass", needs_human: false }, null, 2)}\n`);
+  const coreHash = createHash("sha256").update(coreBytes).digest("hex");
+  const corePath = join(repo, "reviews", "core-receipts", `${coreHash}.json`);
+  mkdirSync(join(corePath, ".."), { recursive: true });
+  writeFileSync(corePath, coreBytes);
   const phaseResult = {
     task_id: "fixture",
     phase_id: "phase-1",
@@ -74,11 +59,7 @@ function fixture(overrides = {}, artifactOverrides = {}) {
       green: { path: greenPath, exit_code: 0 },
     },
     diff_scan: { path: diffPath, violations: [] },
-    review: {
-      source: "third_party",
-      verdict: "pass",
-      artifact_paths: reviewPaths,
-    },
+    review: { core_receipt_hash: coreHash, semantic_verdict: "pass", needs_human: false },
     commit_intent: "file_changes",
     commit_records: [],
     ...overrides,
@@ -106,6 +87,22 @@ afterEach(() => {
 });
 
 describe("phase-gate", () => {
+  it("binds the review tuple to the hash-addressed public core receipt", () => {
+    const phaseResult = fixture();
+    const core = join(repo, "reviews", "core-receipts", `${phaseResult.review.core_receipt_hash}.json`);
+    mkdirSync(join(core, ".."), { recursive: true });
+    writeJson(core, { semantic_verdict: "revise_required", needs_human: false });
+    const result = validatePhaseGate(phaseResult, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/core receipt.*hash|core receipt.*semantic/i);
+  });
+
+  it("consumes the published review decision tuple without opening raw review artifacts", () => {
+    const phaseResult = fixture();
+    const result = validatePhaseGate(phaseResult, repo);
+    expect(result.ok, result.errors.join("; ")).toBe(true);
+  });
+
   it("passes a completed phase with RED/GREEN, diff scan, independent review, commit record, and clean worktree", () => {
     const phaseResult = fixture();
     const result = validatePhaseGate(phaseResult, repo);
@@ -142,71 +139,16 @@ describe("phase-gate", () => {
     expect(result.errors.join("\n")).toMatch(/allowlist_violations must be an array/);
   });
 
-  it("fails same_source/pass review because it is not independent evidence", () => {
-    const phaseResult = fixture({
-      review: { source: "same_source", verdict: "pass", artifact_paths: [] },
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/review.*artifact/i);
-  });
-
-  it("fails same_source/pass even when the review mode was full", () => {
-    const phaseResult = fixture({
-      review: { source: "same_source", verdict: "pass", actual_mode: "full", artifact_paths: [] },
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/review.*artifact/i);
-  });
-
-  it("fails inline third_party/pass when no review artifact exists", () => {
-    const phaseResult = fixture({
-      review: { source: "third_party", verdict: "pass", artifact_paths: [] },
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/review.*artifact/i);
-  });
-
-  it("fails same_source artifact even when the review mode was full", () => {
-    const phaseResult = fixture({}, {
-      review: { source: "same_source", actual_mode: "full", trueCrossEngine: false },
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/same_source|third_party|heterogeneous/);
-  });
-
-  it("fails contradictory artifacts instead of combining same_source pass with independent failure", () => {
-    const phaseResult = fixture(
-      {},
-      {
-        review: { source: "same_source", verdict: "pass", actual_mode: "full", trueCrossEngine: false },
-        extraReviews: [{ source: "third_party", verdict: "revise_required", actual_mode: "full" }],
-      }
-    );
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/all readable review artifact verdicts must be "pass"/);
-    expect(result.errors.join("\n")).toMatch(/at least one passing review artifact/);
-  });
-
-  it("fails Markdown-only review artifacts because phase-gate requires machine-readable JSON", () => {
-    const phaseResult = fixture({}, { reviewRaw: "# Review\n\nverdict: pass\n" });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/not valid JSON|readable artifact/);
-  });
-
-  it("fails when the review artifact is missing", () => {
-    const missingPath = join(repo, "reviews", "missing.json");
-    const phaseResult = fixture({
-      review: { source: "third_party", verdict: "pass", artifact_paths: [missingPath] },
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/review artifact not found/);
+  it("rejects non-passing, human-gated, and raw-artifact review data", () => {
+    for (const review of [
+      { core_receipt_hash: "a".repeat(64), semantic_verdict: "revise_required", needs_human: false },
+      { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: true },
+      { artifact_path: "reviews/private/raw.json", verdict: "pass" },
+    ]) {
+      const result = validatePhaseGate(fixture({ review }), repo);
+      expect(result.ok).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/published pass|core_receipt_hash/);
+    }
   });
 
   it("fails a file-changing phase that has no commit record", () => {

@@ -62,7 +62,10 @@ function readAll(path) {
   if (!path || !existsSync(path)) return [];
   const text = readFileSync(path, "utf8").trim();
   if (!text) return [];
-  return text.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  return text.split("\n").filter(Boolean).flatMap((line) => {
+    try { return [JSON.parse(line)]; }
+    catch { return []; }
+  });
 }
 
 // Rewrite a jsonl store atomically (used for in-place merge of the same execution_id).

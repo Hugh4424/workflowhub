@@ -1,6 +1,6 @@
 ---
 name: build-code
-description: Implement each task phase by phase using TDD, collecting RED and GREEN evidence for every phase, enforcing diff-only bounds, running 3rd-review on each GREEN, and writing structured facts into the stage-result.
+description: Implement each task phase by phase using TDD, collecting RED and GREEN evidence, then running one V4 packet review per phase.
 ---
 
 # build-code
@@ -13,7 +13,7 @@ Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, 
 
 Implement the change described by the upstream stage-result. The upstream may be `build-plan` (full path) or `make-decision` directly (slim path — small tasks that skip design and planning). Read the upstream `stage-result` first and consume its `facts` keys to understand scope and constraints.
 
-Each phase follows a strict RED → implement → GREEN cycle. No phase is done without both evidence files. After GREEN, a 3rd-review is run and its verdict is recorded in `facts.review`.
+Each phase follows a strict RED → implement → GREEN cycle. No phase is done without both evidence files. After GREEN, `ReviewRoundFacade` records the V4 result in `facts.review`.
 
 ## What to do
 
@@ -112,29 +112,11 @@ When dispatching implementation work, regardless of backend:
 - File-changing phases must produce a phase-scoped implementation commit before the phase can be considered complete. No-change phases must record a non-empty `no_change_reason` instead of creating an empty commit.
 - The implementer returns its PHASE_RESULT summary, artifact paths, commit/no-change record, and phase-gate result. The orchestrating skill (this SKILL.md) reads those outputs and verifies them before proceeding.
 
-### 7. 3rd-review standalone
+### 7. Review fact
 
-单次调用语义（3rd-review 作为纯引擎的调用方式、verdict 消费、降级处理）参见 §13。
-
-### 8. facts.review 产出
-
-After 3rd-review completes for each phase, construct the review fact using `facts-schema.mjs`:
-
-```js
-import { buildReviewFact } from "./facts-schema.mjs";
-// When review ran successfully:
-const artifact_path = "{taskDir}/{task-id}/reviews/verdict-build-code-phase-N-round-M.raw.json";
-const reviewFact = buildReviewFact({ status: "executed", source, verdict, artifactPath: artifact_path });
-// source must be "third_party" or "same_source"; verdict must be "pass" | "revise_required" | "escalate_to_human"
-// artifact_path is the durable machine-readable raw verdict JSON, resolved via parseTaskDir, e.g. "{taskDir}/{task-id}/reviews/verdict-build-code-phase-N-round-M.raw.json"
-// A Markdown combined report may also be written for humans, but it is not the artifact path consumed by phase-gate.
-// Note: buildReviewFact's parameter is named artifactPath (camelCase), but the value stored in the fact is artifact_path (snake_case).
-
-// When review was skipped or could not run:
-// const reviewFact = buildReviewFact({ status: "not_executed" });
-```
-
-Write the result into `stage-result` under the `facts.review` key. The `buildReviewFact` function enforces the schema; do not hand-construct the object.
+After GREEN, build a complete `review-packet.v1` and call the V4 `ReviewRoundFacade`
+once. Record the facade's public core-receipt hash and semantic result in `facts.review`.
+Transport failures, incomplete packets and cancellation are facts, not verdicts.
 
 ### 9. 事实包产出
 
@@ -142,7 +124,7 @@ When all phases are complete, assemble the stage-result content as a structured 
 
 - `facts.changed` — **array** of changed file paths (one entry per file, not a comma-joined string).
 - `facts.tests` — **struct** with at minimum `{ passed: <n>, total: <n>, files: [...], command: <string>, risk_level: <P0|P1|P2|P3|null> }`. The `command` field is required for verify-code downstream consumption (M9 C1). For multi-phase tasks, also include `phases: [{ phase_id, risk_level }, ...]` so each phase's risk level is traceable (FR-RISK-001).
-- `facts.review` — **struct** produced by `buildReviewFact` (see §8 above).
+- `facts.review` — 仅 `{ core_receipt_hash, semantic_verdict, needs_human }`；不得写入 raw artifact 或私有路径。
 - `facts.worktree_root` — **absolute path string** for the task implementation worktree that downstream stages must enter before reading or verifying implementation artifacts.
 - `facts.task_tracking_root` — **absolute path string** for the task execution-record root used to locate `{task-id}` stage artifacts. This must be explicit; downstream stages must not infer it from their current checkout.
 - `facts.phase_completion` — **struct** copied from accepted PHASE_RESULT records: `{ commit_records: [{ phase_id, commit_sha }], no_change_records: [{ phase_id, no_change_reason }] }`. At least one record must exist across the two arrays. File-changing phases use `commit_records`; no-change phases use `no_change_records`.
@@ -159,7 +141,7 @@ Example shape (the content to assemble now, to be written later at §16):
   "facts": {
     "changed": ["core/text-utils.mjs", "tests/text-utils.test.mjs"],
     "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"], "command": "pnpm exec vitest run tests/text-utils.test.mjs", "risk_level": "P1", "phases": [{ "phase_id": "phase-1", "risk_level": "P1" }] },
-    "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "{taskDir}/{task-id}/reviews/verdict-build-code-phase-1-round-1.raw.json" },
+    "review": { "core_receipt_hash": "<sha256>", "verdict": "pass" },
     "worktree_root": "/absolute/path/to/worktree",
     "task_tracking_root": "/absolute/path/to/task-records",
     "phase_completion": {
@@ -169,7 +151,7 @@ Example shape (the content to assemble now, to be written later at §16):
   },
   "missing_items": [],
   "user_decision": false,
-  "reason": "All phases implemented with RED→GREEN evidence and 3rd-review pass."
+  "reason": "All phases implemented with RED→GREEN evidence and V4 review result."
 }
 ```
 
@@ -228,65 +210,18 @@ After **all** implementation phases have GREEN evidence, trigger an L2 integrati
    - `ts`: ISO-8601 timestamp
 4. If the smoke run fails or the advisor cannot be reached, record the failure in `missing_items` and continue. L2 smoke is a fact-recording step, not a blocking gate.
 
-### 13. 两阶段独立审查拆分 (FR-REVIEW-001)
+### 13. Single code review flow (FR-REVIEW-001)
 
-Replace the single post-GREEN 3rd-review call with two independent subagent invocations. They must run in separate contexts so that a failure in one does not terminate the other.
+After GREEN, build one complete packet and call `ReviewRoundFacade` once for the
+`build-code` flow. It aggregates only completed, complete, business-valid provider
+results; it never synthesizes a pass or substitutes a local reviewer.
 
-**调用方式（wh-review 两段式协议，stage="build-code"）：** 与 §7 相同的调用语义（详见 §7 指针），落到本节的具体分工是：
-1. **准备阶段（orchestrator 单次调用）**：由 orchestrator（不是子代理）调用一次 `prepareRoundState({ taskId, stage: "build-code", taskTrackingRoot })`，得到本轮唯一的 `{review_flow_id, total_round, contract_path}`（build-code 是 auto-advance stage，正常不应返回 `blocked_by_human_confirmation`；意外返回时按 auto-advance 的 `unknown` 语义转人工确认，见 §7/T016 的改写）。两个子代理共用同一个 `review_flow_id`/`total_round`，不各自独立准备，避免同一 stage 的 `active-flow-build-code.json` 指针被并发覆盖。
-2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派发下面两个子代理之前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许并行派发。两个子代理各自只拿 `review_flow_id`/`total_round`（**不下发 `contract_path`**），各自写出角色专属的补充说明文件 `prompt-{review_flow_id}-r{total_round}-spec-compliance.md` / `prompt-{review_flow_id}-r{total_round}-code-quality.md`（文件名带角色后缀，避免并行写入互相覆盖）。
-3. **执行阶段（orchestrator 单次调用）**：等两个子代理都返回、按下方规则聚合出统一 verdict 后，orchestrator 再调用一次 `invoke-review-engine.mjs`（携带该 `review_flow_id`/`contract_path`/聚合后的结果），驱动实际审查引擎并写回 `round-state-build-code-{review_flow_id}.json`。
+### 14. Revision handling (FR-REVIEW-002)
 
-**Subagent 1 — spec compliance review:**
-
-- Input: the real `git diff` for the current phase and the relevant spec/plan excerpts.
-- Output: `{taskDir}/{task-id}/evidence/phase-N-spec-compliance-verdict.md` (include the phase number so multi-phase tasks do not overwrite earlier verdicts).
-- Verdict shape: `verdict` (`pass`, `revise_required`, or `escalate_to_human`), `findings` array.
-- Scope only: does the change satisfy the spec? No code-quality judgments.
-
-**Subagent 2 — code quality review:**
-
-- Input: the real `git diff` for the current phase.
-- Output: `{taskDir}/{task-id}/evidence/phase-N-code-quality-verdict.md` (include the phase number so multi-phase tasks do not overwrite earlier verdicts).
-- Verdict shape: `verdict` (`pass`, `revise_required`, or `escalate_to_human`), `findings` array.
-- Scope only: code quality, style, and maintainability. No spec-compliance judgments.
-
-**Orchestrator handling:**
-
-- Dispatch both subagents in parallel via the available backend.
-- Wait for both to finish, even if one errors or returns `revise_required`.
-- Read both verdict files.
-- Aggregate the two verdicts into a single `facts.review` struct using `buildReviewFact`:
-  - `pass` only if both subagents return `pass`.
-  - `revise_required` if at least one returns `revise_required` and neither returns `escalate_to_human`.
-  - `escalate_to_human` if either subagent returns `escalate_to_human`. A direct `escalate_to_human` from a subagent is treated as a C-class escalation: produce the escalation record, pause automatic progression, and wait for human confirmation (see §14).
-- The `artifact_path` should point to the durable machine-readable raw JSON verdict used by phase-gate (e.g. `{taskDir}/{task-id}/reviews/verdict-build-code-phase-N-round-M.raw.json`). A combined Markdown report may reference the two underlying verdict files for human reading, but the gate input must be JSON.
-
-If the 3rd-review skill is unavailable for either subagent, downgrade that side to `same_source` review and record the degraded source.
-
-### 14. verdict-handler A/B/C 升级分类 (FR-REVIEW-002)
-
-Track the per-subagent verdict history after each review round. Classify the response into three categories. If a subagent returns `escalate_to_human` directly in any round, treat it as C-class escalation immediately (skip A and B).
-
-| Class | Condition | Action |
-|---|---|---|
-| A | Subagent returns `pass`. | Proceed to the next phase. |
-| B | Subagent returns `revise_required` and the consecutive count for that same subagent on the same phase is **1 or 2**. | Return to implementation, address findings, re-run GREEN + two-stage review. |
-| C | The **same subagent** returns `revise_required` **3 times in a row** for the same phase. | Trigger `escalate_to_human`. |
-
-**Escalation behavior (C-class):**
-
-1. Produce a structured escalation record at `{taskDir}/{task-id}/evidence/escalation-record.json` containing:
-   - `phase_id`
-   - `subagent`: `spec-compliance` or `code-quality`
-   - `consecutive_revises`: 3
-   - `verdict_files`: paths to the three verdict files
-   - `summary`: brief human-readable summary of the repeated findings
-   - `ts`: ISO-8601 timestamp
-2. Set `facts.review.verdict` to `escalate_to_human`.
-3. **Pause automatic progression and wait for explicit human confirmation** before continuing. Do not silently loop back into another implementation/review round. This is enforced by AC-REVIEW-006.
-
-The escalation record is a durable artifact for downstream traceability.
+Use the facade's merged findings and human gates. A `revise_required` result returns
+to implementation with the same flow's continuation runtime; an escalation is published
+as a private receipt and requires explicit human confirmation. No local retry classifier
+or parallel review path exists.
 
 ### 15. phase 级提交留痕 (FR-COMMIT-001)
 
@@ -396,3 +331,24 @@ The `worktree_root` config key passed to this skill (see §5) must always match 
 ## Canonical v1 step sequence
 
 `steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-plan, 2 write-red-tests, 3 implement-change, 4 run-green-tests, 5 scan-diff, 6 review-change, 7 commit-implementation, 8 publish-code-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
+
+## V4 Review Round
+
+After each GREEN evidence capture, use one **single code review flow** through
+`ReviewRoundFacade` and `runReviewRound()`:
+
+```js
+await runReviewRound({ stage: "build-code", review_flow_id: "build-code-flow", packet });
+```
+
+Build one complete `review-packet.v1` from the canonical diff, changed-file manifest,
+acceptance/design excerpts and test evidence. Providers review only the packet. Do not
+run git, read the real repository, request absolute paths, or write reports. The facade
+stores raw/provider evidence in `<task>/reviews/private/round-.../`; `cancel_source`
+is a transport fact and cannot become a verdict. Later rounds continue the initial
+runtime; reset is explicit human-approved recovery. An unpublished call returns
+transport/packet evidence only, never a semantic verdict. After host dispositions, the
+published return is `{ semantic_verdict, core_receipt_hash, needs_human }`; only it may
+advance this stage.
+
+## End V4 Review Round

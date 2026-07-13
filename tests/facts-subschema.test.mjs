@@ -284,7 +284,7 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     return {
       changed: ["f.ts"],
       tests: "ok",
-      review: { status: "executed", source: "third_party", verdict: "pass", artifact_path: "reviews/verdict-build-code-phase-1-round-1.raw.json" },
+      review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false },
       worktree_root: "/repo/workflowhub-task",
       task_tracking_root: "/repo/tasks",
       phase_completion: {
@@ -464,11 +464,11 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/review/);
   });
 
-  it("negative: review without artifact path -> fails", () => {
+  it("negative: review without the published decision tuple -> fails", () => {
     const artifact = { ...base(), facts: buildCodeFacts({ review: { verdict: "pass" } }) };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/artifact_path|artifact_paths/);
+    expect(result.errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
   });
 
   it("negative: review scalar -> fails", () => {
@@ -492,14 +492,24 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/review.*object/);
   });
 
-  it("negative: review artifact path must be raw JSON -> fails", () => {
+  it("negative: raw review artifact references are rejected", () => {
     const artifact = {
       ...base(),
       facts: buildCodeFacts({ review: { verdict: "pass", artifact_path: "reviews/build-code-phase-1.md" } }),
     };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/raw JSON/);
+    expect(result.errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
+  });
+
+  it("accepts only the published core receipt decision tuple, not a raw review artifact path", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false } }),
+    };
+    expect(validateStageResult("build-code", artifact).ok).toBe(true);
+    const raw = { ...artifact, facts: { ...artifact.facts, review: { artifact_path: "reviews/private/raw.json", verdict: "pass" } } };
+    expect(validateStageResult("build-code", raw).errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
   });
 
   it("negative: phase_completion must include at least one commit or no-change record -> fails", () => {

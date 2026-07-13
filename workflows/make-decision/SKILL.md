@@ -12,9 +12,6 @@ description: Clarify requirements with the user via structured debate/review护�
 |---|---|---|---|
 | `MAKE_DECISION_DEBATE_PATH` | `/Users/Hugh/Hugh/Project/debate` | 外部 debate skill 路径；路径不可达时自动降级跳过 debate（skipped），记录 `debate_path_invalid: true` | `export MAKE_DECISION_DEBATE_PATH=/path/to/debate` |
 | `MAKE_DECISION_SKIP_DEBATE` | `0` | `=1` 时强制跳过所有 debate 轮次，直接记录 `debate_1: skipped` / `debate_2: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_DEBATE=1` |
-| `MAKE_DECISION_SKIP_BLIND_REVIEW` | `0` | `=1` 时跳过盲审（3rd-review）护城河，记录 `blind_review: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_BLIND_REVIEW=1` |
-| `THIRD_REVIEW_RUNNER` | `run-heterologous-review.mjs` | 自定义 reviewer runner 文件路径；文件不可达时记录 `runner_invalid`，用默认 runner，继续 | `export THIRD_REVIEW_RUNNER=/path/to/runner.mjs` |
-| `REVIEW_DISPATCH_CONFIG` | （空，走内置默认调度） | 允许值：有效 JSON/YAML **配置文件路径**；文件不可达或解析失败时记录 `dispatch_config_invalid`，用默认调度继续；缺省为空时 3rd-review 使用内部默认调度 | `export REVIEW_DISPATCH_CONFIG=/path/to/dispatch.json` |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
 | `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量（直接 task root）→ `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器会基于当前 git remote / `repo_root_map` 返回项目级 task root；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
 
@@ -309,38 +306,21 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **前提**：`tasks/{task-id}/artifacts/make-decision-original-context.md` 必须已存在（由 S4 台账渲染点①落盘）。S5 开始前检查，缺失则报错停止。
 
-**目标**：通过一次独立 3rd-review 对 S4 产物做盲审，产出 3 条审查建议，并根据结果决定是否触发第一次 debate。S5 不要求三条审查链。
-
-### 0. MAKE_DECISION_SKIP_BLIND_REVIEW 快速跳过分支
-
-**判定方式**：本分支是否生效，必须通过实际读取 `MAKE_DECISION_SKIP_BLIND_REVIEW` 环境变量的真实值来判断（例如 `echo $MAKE_DECISION_SKIP_BLIND_REVIEW` 或等价的真实环境探测），不得由 agent 凭记忆/推测手动模拟"当作已设置=1"来走跳过分支。agent 手动模拟环境变量值视为违规，必须以本次执行环境的真实检测结果为准。
-
-若 `MAKE_DECISION_SKIP_BLIND_REVIEW=1`（真实检测结果）：
-- 跳过以下单次盲审（### 1）和结果整理（### 2）全部步骤。
-- 写 journal 事件：`event: "s5_blind_review_skipped", reason: "MAKE_DECISION_SKIP_BLIND_REVIEW=1"`。
-- S5 产出以空审查集合视为"无 blocking 发现"：`direction_divergence: false`，`findings: []`。
-- 第一次 debate 门控（### 4）仍正常执行，但因无 blocking findings，通常记 `debate_1: skipped`。
-- 直接跳至 S6，S6/S7 以上述产出为输入。
+**目标**：以 `ReviewRoundFacade` 的 direction/detail V4 flows 审查 S4 产物。
 
 ### 1. 单次独立盲审
 
-**入口检测（THIRD_REVIEW_RUNNER）**：读取 `THIRD_REVIEW_RUNNER` 环境变量（默认 `run-heterologous-review.mjs`）。若设置了该变量，检查对应文件是否可达；文件不可达时写 journal 事件 `event: "runner_invalid", runner: "<值>"`，并回退使用默认 runner `run-heterologous-review.mjs`，继续执行，不阻断流程。
-
-**入口检测（REVIEW_DISPATCH_CONFIG）**：读取 `REVIEW_DISPATCH_CONFIG` 环境变量（默认为空，走内置默认调度）。若设置了该变量，检查对应配置文件是否可达且可解析；文件不可达或解析失败时写 journal 事件 `event: "dispatch_config_invalid", config: "<值>"`，并回退使用内置默认调度，继续执行，不阻断流程。若未设置（空），直接使用内置默认调度。
-
-通过 `wh-review` 两段式协议（非 `standalone.sh`）：①`prepareRoundState({taskId, stage:"make-decision", taskTrackingRoot})`→`ready{review_flow_id,total_round,contract_path}`或 `blocked_by_human_confirmation`（D2 门未过，不得绕过/伪造批准）；②派发前 `assertSafeTaskId` 校验 task_id，子代理只拿 `review_flow_id`/`total_round`，写 `prompt-{review_flow_id}-r{total_round}.md`，不下发 `contract_path`；③主 agent 调 `invoke-review-engine.mjs` 驱动引擎，写回 `round-state-make-decision-{review_flow_id}.json`，渲染 review 产物。
+Build two V4 packets and call `ReviewRoundFacade` for the isolated `direction` and
+`detail` flows. The first has only the raw requirement; the second adds the decision
+log. Provider material stays packet-only.
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性、技术可行性（D8 新增第四维 `feasibility`）。
 
 审查结果必须包含以下字段：
 
 ```
-reviewer_runtime_id: <唯一标识该 agent 运行实例>
-reviewer_source: <来源标识>
-fallback_used: <true|false>
-input_hash: <审查输入内容的哈希，用于隔离验证>
-findings: <四个角度 direction/framing/scope/feasibility，每角度 0-N 条，不设总数上限>
-verified_interface: <{tool, checked_at, method}，涉及外部工具调用时必填>
+packet_hash: <冻结 review-packet.v1 的哈希，用于隔离验证>
+findings: <V4 finding 数组，带 provider 证据>
 ```
 
 每条 `findings` 建议必须包含：
@@ -355,12 +335,11 @@ evidence: <对应 S4 内容或调研依据>
 
 ### 2. 结果整理与失败语义
 
-- 若 `fallback_used: true` → 视为本次审查失败，结果不采用，立即停下报告用户，**禁止静默降级**。
+- 若 provider 失败或材料不完整 → 记录 transport/packet diagnostic，不生成语义结论，也不降级为其他审查路径。
 - 若 `findings` 中出现四类角度（direction/framing/scope/feasibility）之外的标签，或某角度整体未被审查（而非"该角度确实无发现"），视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议，也不因怕超限而截断真实问题。
-- 若涉及外部工具调用但缺 `verified_interface` 字段，直接判该次审查不可执行，要求 reviewer 补齐后重跑。
-- 审查通过后写入 `tasks/{task-id}/artifacts/make-decision-review.md`：
+- 审查结果只由 private receipt 与公开 core receipt 表示：
   - `direction_divergence`: `true`/`false`（方向分歧标记）
-  - `findings`: 四个角度、每角度 0-N 条审查建议（不设总数上限）
+  - `findings`: V4 合并 finding 及 provider 证据
 
 写 journal 事件：`event: "s5_blind_review_done"`。
 
@@ -382,13 +361,13 @@ evidence: <对应 S4 内容或调研依据>
 
 make-decision **委托 debate 技能自己判断是否触发**（debate 技能内部执行 Step 1 触发判定 + 环境自动判定五方法庭/单人三档）。make-decision 在**主调用层**执行 debate，不下派子代理。
 
-**禁止行为（D4）**：debate 触发判定必须基于已存在 artifact 中的具体 finding ID 列表（争点来源），**严禁在审查完成前或审查外自行制造争点**。make-decision 只负责提取并传递 artifact 来源的 finding ID 列表（可为空）和相关上下文；是否触发、以及无有效争点时如何降级，均由 debate 技能 Step 1 自行裁决。
+**禁止行为（D4）**：debate 触发判定只基于 V4 core receipt 的 finding ID 列表，严禁在审查外自行制造争点。
 
 按以下优先顺序判定：
 
 1. `MAKE_DECISION_SKIP_DEBATE=1` → 记 `debate_1: skipped`，跳过 debate，继续 S6。
 2. `MAKE_DECISION_DEBATE_PATH` 不可达（路径无法访问）→ 写 journal 事件 `event: "debate_1_skipped", reason: "debate_path_invalid"` 和 `debate_path_invalid: true`，记录 `debate_1: skipped`，降级继续，不阻断流程。
-3. 其余情况：提取审查 artifact（`make-decision-review.md`）中具体的 finding ID 列表（争点来源，可为空），传入 debate 技能 + Claude 决策 + decision-log 版本，由 debate 技能的 Step 1 自行判断是否触发；读回 debate 技能产出的裁决书。
+3. 其余情况：提取 core receipt 中具体的 finding ID 列表，传入 debate 技能 + Claude 决策 + decision-log 版本。
    - debate 技能触发时：产出 `tasks/{task-id}/artifacts/make-decision-debate-1.md`（含裁决书），写 journal 事件 `event: "debate_1_triggered"`。
    - debate 技能不触发时：写 journal 事件 `event: "debate_1_skipped", reason: "<debate 技能返回的 skip reason>"`。
 
@@ -556,7 +535,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 
 落盘前检查审查产物完整性：
 
-- 若存在 `severity: blocking` 的审查意见，但对应审查产物（`make-decision-review.md` 及 debate 裁决书）中**缺少**三行留痕格式：
+- 若存在 `severity: blocking` 的审查意见，但 core receipt 及 debate 裁决书中**缺少**三行留痕格式：
   ```
   反对 X：<内容>
   决定 Y：<内容>
@@ -688,3 +667,29 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 ## Canonical v1 step sequence
 
 `steps.json` is the executable canonical topology. The detailed S0–S10 material above is legacy reference only; its identifiers map to this continuous, one-action sequence: 1 load-context, 2 triage-scope, 3 research-inputs, 4 clarify-direction, 5 review-decision, 6 approve-decision, 7 write-decision-log. Each canonical step has one primary action, explicit entry evidence, terminal evidence, and a declared dependency. Every declared dependency must be represented by entry evidence `step://<dependency-step-id>`; therefore `review-decision` enters from `step://clarify-direction`, not unproduced `task://decision-draft`. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
+
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only. The provider receives one
+`review-packet.v1`; it must review only that packet. Do not run git, read the real
+repository, request absolute paths, or write review reports in the provider workspace.
+The facade owns `<task>/reviews/private/round-.../` evidence, provider status and
+`cancel_source`. An unpublished call returns transport/packet evidence only, never a
+semantic verdict. After host dispositions, the published return is `{ semantic_verdict,
+core_receipt_hash, needs_human }`; only it may control public stage decisions.
+
+Run two isolated flows in order. They never share a runtime:
+
+```js
+await runReviewRound({ stage: "make-decision", review_track: "direction", review_flow_id: "make-decision-flow", packet });
+await runReviewRound({ stage: "make-decision", review_track: "detail", review_flow_id: "make-decision-flow", packet });
+```
+
+The direction packet contains only the original requirement. The detail packet may add
+the decision log. The shared flow id is the aggregation group; each track still has its
+own runtime, receipt, and continuation. Later rounds use `continuation: true` with the
+same flow id; reset requires an explicit human approval reference. Consume only the
+group-scoped aggregate `stage-result-make-decision-<review_flow_id>.json`; never read a
+fixed make-decision stage-result path.
+
+## End V4 Review Round

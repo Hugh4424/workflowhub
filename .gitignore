@@ -55,6 +55,7 @@ specs/**/task-metrics.jsonl
 # Task runtime artifacts (live in task_tracking_root, not repo)
 /m13d-build-code-deepening/
 /tasks/
+/.wh-review-packets/
 
 stage-result.json
 journal.jsonl

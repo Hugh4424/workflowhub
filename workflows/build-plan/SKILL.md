@@ -13,7 +13,7 @@ Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, 
 
 Take the spec from `build-spec` and decompose it into a concrete plan (`plan.md`) and a sequenced task list (`tasks.md`). The plan is the bridge between requirements and code.
 
-v1 upgrade: orchestrates three sub-skills (spec-plan, spec-tasks, spec-analyze) adapted from speckit-plan/speckit-tasks/speckit-analyze, adds constitution compliance check against `constitution-checklist.md` (21 clauses), M10 baseline comparison (5 metrics), and a human review checkpoint before producing stage-result.
+v1 upgrade: orchestrates three repository sub-skills (spec-plan, spec-tasks, spec-analyze), adds constitution compliance check against `constitution-checklist.md` (21 clauses), M10 baseline comparison (5 metrics), and a human review checkpoint before producing stage-result.
 
 ## What to do
 
@@ -187,20 +187,12 @@ This gate reflects constitution rule F10. Cautionary example: a predecessor syst
 
 **If F10 removes or materially alters plan/tasks entries**: re-execute Steps 2-4 (spec-plan, spec-tasks, spec-analyze) to keep cross-artifact consistency aligned with the final artifacts before proceeding to plan-reviewer and human review.
 
-### Step 8: Plan-reviewer step
+### Step 8: Plan review
 
-Invoke the independent plan engineering reviewer via the `3rd-review` infrastructure:
-- Before calling, verify that the cross-repository path `/Users/Hugh/Hugh/Project/3rd-review/verifiers/vibecoding/` is accessible (e.g., directory exists and is readable)
-- If the path is not accessible, **record `plan-eng-review.md` as unavailable and escalate to human** (non-blocking); do not block the stage
-- If accessible, call the plan-reviewer with: `specs/{task-id}/plan.md`, `specs/{task-id}/tasks.md`, and `tasks/{task-id}/artifacts/build-plan-cross-artifact-analysis.md`
-
-**调用方式（wh-review 两段式协议，取代直接 shell 出 `standalone.sh`）：**
-1. **准备阶段**：调用 `prepareRoundState({ taskId, stage: "build-plan", taskTrackingRoot })`。`{status:"ready", review_flow_id, total_round, contract_path}` 时，`contract_path` 必须命中 build-plan 专属合同；命中其它 stage 合同视为配置错误，停止并报告。`{status:"blocked_by_human_confirmation", review_flow_id}` 时，说明上一轮的 D2 人工确认门尚未过（见 Step 9），本步骤到此为止，不得自行生成/伪造 T011b 批准 artifact 来跳过。
-2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派生 plan-reviewer 子代理前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许派发。子代理只拿 `review_flow_id`/`total_round`，据此写出 `prompt-{review_flow_id}-r{total_round}.md`（仅补充说明，不含 materials 本体），**不下发 `contract_path`**。
-3. **执行阶段**：主 agent 调用 `invoke-review-engine.mjs`（携带 `review_flow_id`/`contract_path`/子代理补充说明文件路径），驱动实际审查引擎（`specs/{task-id}/plan.md`、`specs/{task-id}/tasks.md`、`tasks/{task-id}/artifacts/build-plan-cross-artifact-analysis.md` 作为审查材料），结果写回 `round-state-build-plan-{review_flow_id}.json` 并渲染 `tasks/{task-id}/artifacts/build-plan-review.md`。
-- The reviewer writes `tasks/{task-id}/artifacts/build-plan-plan-eng-review.md` with an independent engineering verdict
-- If the reviewer call fails or times out, **record the failure and escalate to human** (non-blocking); stage-result still succeeds
-- Reference the plan-eng-review path (or `unavailable`) in stage-result `facts.plan_review_ref`
+Build a complete V4 packet from the spec, plan, task list and cross-artifact analysis.
+Call `ReviewRoundFacade` and record its public core-receipt hash in
+`facts.plan_review_ref`. A missing or incomplete packet is recorded as material
+incomplete; it is never replaced with a local review.
 
 ### Step 9: 人审检查点 (Human review checkpoint)
 
@@ -363,3 +355,22 @@ if (!receiptResult.ok) {
 ## Canonical v1 step sequence
 
 `steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-spec, 2 research-plan, 3 define-contracts, 4 write-plan, 5 review-plan, 6 approve-plan, 7 publish-plan-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
+
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only:
+
+```js
+await runReviewRound({ stage: "build-plan", review_flow_id: "build-plan-flow", packet });
+```
+
+The complete `review-packet.v1` contains plan/task diffs, changed files, requirements,
+design excerpts and test evidence. Providers review only that packet. Do not run git,
+read the real repository, request absolute paths, or write reports. Private raw evidence
+is under `<task>/reviews/private/round-.../`; cancellation is recorded with
+`cancel_source`, never converted into a semantic verdict. Continue the initial flow or
+reset it only with human approval. An unpublished call returns transport/packet evidence
+only, never a semantic verdict. After host dispositions, the published return is
+`{ semantic_verdict, core_receipt_hash, needs_human }`; only it may advance this stage.
+
+## End V4 Review Round

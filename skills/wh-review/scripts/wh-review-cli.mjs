@@ -1,68 +1,59 @@
 #!/usr/bin/env node
 
-/** Stable adapter-facing facade for wh-review's two-phase protocol. */
+/** V4-only CLI boundary. Workflows call run/reset; legacy prepare/execute paths are retired. */
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { join } from "node:path";
-import { prepareRoundState } from "./round-state.mjs";
-import { assembleAndInvokeReviewEngine } from "./invoke-review-engine.mjs";
+import { BrokerClient } from "./broker-client.mjs";
+import { ReviewRoundFacade } from "./review-round-facade.mjs";
+import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
 
-function providerEnv(input) {
-  const env = { ...process.env, ...(input.env ?? {}) };
-  if (input.provider) env.WH_REVIEW_PROVIDER = input.provider;
-  if (input.host_provider) env.WH_REVIEW_HOST_PROVIDER = input.host_provider;
-  return env;
-}
-
-export function prepareReview(input) {
-  return prepareRoundState({
-    taskId: input.task_id ?? input.taskId,
-    stage: input.stage,
-    taskTrackingRoot: input.task_tracking_root ?? input.taskTrackingRoot,
-  });
-}
-
-export async function executeReview(input) {
-  const taskId = input.task_id ?? input.taskId;
-  const reviewFlowId = input.review_flow_id ?? input.reviewFlowId;
-  const totalRound = input.total_round ?? input.totalRound;
+export async function runReviewRound(input) {
+  if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
+  if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution and cannot be supplied by callers");
+  if (input.third_review !== undefined || input.attachment_root !== undefined || input.attachmentRoot !== undefined) throw new Error("third_review and attachment_root are host-configured and cannot be supplied by callers");
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  const result = await assembleAndInvokeReviewEngine({
-    taskId,
-    stage: input.stage,
-    reviewFlowId,
-    totalRound,
-    taskTrackingRoot,
-    currentContent: input.current_content ?? input.currentContent,
-    materialSources: input.material_sources ?? input.materialSources,
-    docType: input.doc_type ?? input.docType,
-    gitSha: input.git_sha ?? input.gitSha,
-    coveredPaths: input.covered_paths ?? input.coveredPaths,
-    timeoutMs: input.timeout_ms ?? input.timeoutMs,
-    env: providerEnv(input),
+  if (!taskTrackingRoot) throw new TypeError("V4 review requires task_tracking_root");
+  const thirdReview = loadTrustedThirdReviewConfig();
+  const client = new BrokerClient({ command: thirdReview.command, config: thirdReview.config, attachmentRoot: thirdReview.attachmentRoot });
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
+  const prepared = await facade.prepare({
+    task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
+    review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
+    packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
+    closure_evidence: input.closure_evidence, cross_stage_carryovers: input.cross_stage_carryovers,
+    attachment_root: thirdReview.attachmentRoot,
+    repository_root: input.repository_root ?? input.repositoryRoot,
   });
-  const artifactPath = join(taskTrackingRoot, taskId, "reviews", `verdict-${input.stage}-${reviewFlowId}-round-${totalRound}.raw.json`);
-  const raw = JSON.parse(readFileSync(artifactPath, "utf8"));
-  const attestation = {};
-  for (const field of ["provider", "backend_provider", "reviewer_source", "trueCrossEngine", "synthetic", "failure_reason", "diagnostic_path", "diagnostic_sha256", "diagnostic_bytes", "execution_status"]) {
-    if (raw[field] !== undefined) attestation[field] = raw[field];
-  }
-  return { ...result, ...attestation };
+  const result = await facade.run(prepared);
+  // `run()` owns private provider semantics so the host can disposition findings,
+  // but the CLI's unpublished result is deliberately transport-only. A semantic
+  // conclusion becomes public only after `publish()` has written its core receipt.
+  const transport = {
+    review_flow_id: result.intent.review_flow_id,
+    continuation_eligible: result.continuation_eligible,
+    blocked_by_human_confirmation: result.blocked_by_human_confirmation,
+    provider_outcomes: result.provider_outcomes.map(({ provider, transport_status, packet_status, business_valid, cancel_source, diagnostic }) => ({
+      provider, transport_status, packet_status, business_valid, cancel_source: cancel_source ?? null, diagnostic: diagnostic ?? null,
+    })),
+  };
+  return input.dispositions ? { transport, ...facade.publish(result, input.dispositions) } : { transport };
+}
+
+export function resetReviewFlow(input) {
+  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
+  if (!taskTrackingRoot) throw new TypeError("reset requires task_tracking_root");
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: { run() { throw new Error("reset does not run broker"); } } });
+  return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
 }
 
 async function main() {
   const command = process.argv[2];
-  if (command !== "prepare" && command !== "execute") {
-    throw new Error("usage: wh-review-cli.mjs <prepare|execute> [input.json]; JSON stdin is used when input.json is omitted");
-  }
+  if (command !== "run" && command !== "reset") throw new Error("usage: wh-review-cli.mjs <run|reset> [input.json]");
   const input = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
-  const result = command === "prepare" ? prepareReview(input) : await executeReview(input);
+  const result = command === "run" ? await runReviewRound(input) : resetReviewFlow(input);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => {
-    process.stderr.write(`${error?.stack ?? error}\n`);
-    process.exitCode = 1;
-  });
+  main().catch((error) => { process.stderr.write(`${error?.stack ?? error}\n`); process.exitCode = 1; });
 }
