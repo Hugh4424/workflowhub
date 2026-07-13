@@ -17,6 +17,17 @@ const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const reviewPacketSchema = JSON.parse(readFileSync(new URL("../schemas/review-packet.schema.json", import.meta.url), "utf8"));
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
+function writeImmutable(path, value) {
+  const encoded = safeJson(value); mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  if (existsSync(path)) {
+    if (readFileSync(path, "utf8") !== encoded) throw new Error(`immutable reset marker already exists: ${path}`);
+    return;
+  }
+  try { writeFileSync(path, encoded, { mode: 0o600, flag: "wx" }); }
+  catch (error) {
+    if (error?.code !== "EEXIST" || readFileSync(path, "utf8") !== encoded) throw error;
+  }
+}
 function stripFence(value) { const text = String(value ?? "").trim(); const found = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i); return found ? found[1] : text; }
 function parseOutput(value) { try { return { ok: true, value: JSON.parse(stripFence(value)) }; } catch { return { ok: false }; } }
 function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
@@ -253,6 +264,7 @@ export class ReviewRoundFacade {
       const saved = JSON.parse(readFileSync(receipt, "utf8"));
       const human_gates = deriveHumanGates(saved.provider_outcomes);
       if (human_gates.length) {
+        if (this.#isResolvedByReset(saved, receipt, human_gates)) continue;
         this.#writeHumanGateBlock(saved, receipt, projection, human_gates);
         if (saved.human_gates !== undefined && canonical(saved.human_gates) !== canonical(human_gates)) throw new Error("human gate provenance does not match provider outcomes");
         throw new Error("human gate requires explicit human confirmation before publication");
@@ -278,6 +290,25 @@ export class ReviewRoundFacade {
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
     atomic(projectionPath, safeJson(projection));
+  }
+  #isResolvedByReset(saved, receiptPath, human_gates) {
+    const markerPath = join(dirname(receiptPath), "resolved-by-reset.json"); if (!existsSync(markerPath)) return false;
+    const marker = JSON.parse(readFileSync(markerPath, "utf8"));
+    return marker?.version === 1 && marker.status === "superseded" && marker.task_id === saved.intent?.task_id && marker.stage === saved.intent?.stage && marker.old_review_flow_id === saved.intent?.review_flow_id && typeof marker.new_review_flow_id === "string" && marker.new_review_flow_id.length > 0 && typeof marker.human_approval_ref === "string" && marker.human_approval_ref.length > 0 && marker.receipt_sha256 === sha(readFileSync(receiptPath)) && canonical(marker.human_gates) === canonical(human_gates);
+  }
+  #markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
+    const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); if (!existsSync(privateRoot)) return [];
+    const markers = [];
+    for (const name of readdirSync(privateRoot)) {
+      if (!name.startsWith("round-")) continue;
+      const dir = join(privateRoot, name), receiptPath = join(dir, "round-receipt.json"); if (!existsSync(receiptPath)) continue;
+      const receiptBytes = readFileSync(receiptPath); const receipt = JSON.parse(receiptBytes);
+      if (receipt?.intent?.stage !== stage || receipt.intent.review_flow_id !== review_flow_id) continue;
+      const human_gates = deriveHumanGates(receipt.provider_outcomes); if (!human_gates.length) continue;
+      const marker = { version: 1, status: "superseded", task_id, stage, old_review_flow_id: review_flow_id, new_review_flow_id, human_approval_ref, reason, receipt_sha256: sha(receiptBytes), human_gates };
+      const markerPath = join(dir, "resolved-by-reset.json"); writeImmutable(markerPath, marker); markers.push(markerPath);
+    }
+    return markers;
   }
   #materialIncomplete(input, message) {
     const root = join(taskRoot(this.taskTrackingRoot, input.task_id), "reviews", "private", "diagnostics");
@@ -344,6 +375,7 @@ export class ReviewRoundFacade {
   reset({ task_id, stage, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
     assertSafeTaskId(task_id); assertKnownStage(stage); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
     const nextId = new_review_flow_id ?? `${review_flow_id}-reset-${this.now()}`; assertSafeReviewFlowId(nextId);
-    const flow = { task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 }; this.#writeFlow(flow, flow); return flow;
+    const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id: nextId, reason, human_approval_ref });
+    const flow = { task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, superseded_receipt_refs, initial_runtime_id: null, continuation_eligible: false, business_round: 0 }; this.#writeFlow(flow, flow); return flow;
   }
 }

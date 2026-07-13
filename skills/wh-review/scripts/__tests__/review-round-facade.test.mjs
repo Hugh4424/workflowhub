@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ReviewRoundFacade } from "../review-round-facade.mjs";
 import { contractPathAndHash } from "../lib/safe-id.mjs";
 
@@ -103,6 +103,18 @@ describe("ReviewRoundFacade", () => {
     expect(JSON.parse(readFileSync(stageResult, "utf8"))).toMatchObject({ verdict: "escalate_to_human", blocked_by_human_gate: true });
     expect(readFileSync(join(tracking, "full-flags", "reviews", "build-code-first.md"), "utf8")).toContain("人工确认");
     expect(JSON.parse(readFileSync(join(tracking, "full-flags", "reviews", "report-index.json"), "utf8"))).toMatchObject({ blocked_by_human_gate: true });
+  });
+
+  it("supersedes an approved old human gate so a reset flow can prepare", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const reset = facade.reset({ task_id: "reset-gate", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "approved-reset", reason: "human accepted risk", human_approval_ref: "human-approval-42" });
+    expect(reset).toMatchObject({ review_flow_id: "approved-reset", parent_review_flow_id: "old-flow", human_approval_ref: "human-approval-42" });
+    const marker = join(dirname(result.receipt_draft_ref), "resolved-by-reset.json");
+    expect(JSON.parse(readFileSync(marker, "utf8"))).toMatchObject({ status: "superseded", old_review_flow_id: "old-flow", new_review_flow_id: "approved-reset", human_approval_ref: "human-approval-42" });
+    const prepared = facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "approved-reset", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    rmSync(prepared.lock, { recursive: true, force: true });
   });
   it("builds one complete packet, accepts only completed/complete/business-valid output, and stores secrets privately", async () => {
     const tracking = root();
