@@ -313,6 +313,64 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.prepare({ ...base, closure_evidence: [{ finding_id: findingId, evidence: "x" }], cross_stage_carryovers: [{ finding_id: findingId, status: "open" }] })).rejects.toThrow(/cross_stage_carryovers.*finding/i);
   });
 
+  it("projects provider findings through a secret-free allowlist before private persistence and continuation", async () => {
+    const tracking = root(); const calls = []; let currentPacket;
+    const secret = "/private/workspace/session-raw-secret";
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      calls.push(request); const raw = JSON.parse(output(request.packet ?? currentPacket, calls.length === 1 ? "revise_required" : "pass"));
+      if (calls.length === 1) Object.assign(raw.findings[0], { session_id: "session-secret", runtime_id: "runtime-secret", raw_output_ref: secret, workspace: secret, absolute_path: secret });
+      return { runtime_id: "67676767-6767-4676-8676-676767676767", providers: [{ provider: "opencode", status: "completed", session_id: "transport-session", output: JSON.stringify(raw) }] };
+    }) });
+    const initial = trustedPacket(tracking); currentPacket = initial;
+    const first = await facade.run(facade.prepare({ task_id: "finding-allowlist", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    const findingId = first.merged_findings[0].finding_id; const receipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
+    expect(receipt.merged_findings[0]).toEqual(expect.objectContaining({ file: "a", finding_id: findingId }));
+    expect(JSON.stringify(receipt.merged_findings)).not.toMatch(/session-secret|runtime-secret|session_id|runtime_id|raw_output_ref|workspace|absolute_path/);
+    currentPacket = advancePacket(tracking, initial);
+    await facade.run(facade.prepare({ task_id: "finding-allowlist", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true, closure_evidence: [{ finding_id: findingId, evidence: "fixed" }] }));
+    expect(calls[1].request.prompt).not.toMatch(/session-secret|runtime-secret|session_id|runtime_id|raw_output_ref|workspace|absolute_path/);
+  });
+
+  it("rejects provider findings whose file is absolute or escapes the repository", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const raw = JSON.parse(output(request.packet, "revise_required")); raw.findings[0].file = "/private/workspace/a";
+      return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(raw) }] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "absolute-finding", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(result.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: expect.stringMatching(/finding file.*repo-relative/i) });
+    expect(result.merged_findings).toEqual([]);
+  });
+
+  it("recovers a publish receipt-to-flow binding after the receipt-write kill point", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const broker = fakeBroker(async (request) => ({ runtime_id: "78787878-7878-4787-8787-787878787878", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? trusted) }] }));
+    const crashing = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, faultInjector(point) { if (point === "after-publish-receipt-write") throw new Error("simulated publish crash"); } });
+    const first = await crashing.run(crashing.prepare({ task_id: "publish-recovery", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking }));
+    expect(() => crashing.publish(first, { items: [] })).toThrow(/simulated publish crash/);
+    const flowPath = join(tracking, "publish-recovery", "reviews", "private", "flows", "build-code-flow.json");
+    const staleFlow = JSON.parse(readFileSync(flowPath, "utf8"));
+    expect(staleFlow.previous_receipt_sha256).not.toBe(hash(readFileSync(first.receipt_draft_ref)));
+    const recovered = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const prepared = await recovered.prepare({ task_id: "publish-recovery", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, continuation: true });
+    const healedFlow = JSON.parse(readFileSync(flowPath, "utf8"));
+    expect(healedFlow.previous_receipt_sha256).toBe(hash(readFileSync(first.receipt_draft_ref)));
+    expect(healedFlow).not.toHaveProperty("pending_receipt_update");
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("enforces a host-owned UTF-8 continuation prompt byte limit before broker dispatch", async () => {
+    const tracking = root(); let calls = 0; let currentPacket;
+    const broker = fakeBroker(async (request) => { calls += 1; return { runtime_id: "89898989-8989-4898-8989-898989898989", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? currentPacket) }] }; });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, continuationPromptMaxBytes: 128 });
+    const initial = trustedPacket(tracking); currentPacket = initial;
+    await facade.run(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    currentPacket = advancePacket(tracking, initial); currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(200) }]; refreshPacketHashes(currentPacket);
+    await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true, continuation_prompt_max_bytes: 9999999 })).rejects.toThrow(/caller.*continuation.*limit|continuation.*caller/i);
+    await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true })).rejects.toThrow(/CONTINUATION_PROMPT_TOO_LARGE.*128/);
+    expect(calls).toBe(1);
+  });
+
   it.each([
     [undefined, "DELIVERY_USED_MISSING"],
     ["auto", "DELIVERY_USED_INVALID"],
