@@ -442,11 +442,13 @@ export class ReviewRoundFacade {
       if (!name.startsWith("round-")) continue; const dir = join(privateRoot, name), projection = join(dir, "projection-manifest.json"), receipt = join(dir, "round-receipt.json");
       if (!existsSync(receipt)) continue;
       const saved = JSON.parse(readFileSync(receipt, "utf8"));
-      const human_gates = deriveHumanGates(saved.provider_outcomes);
+      const provider_human_gates = deriveHumanGates(saved.provider_outcomes);
+      const state_human_gates = (saved.human_gates ?? []).filter((gate) => gate?.provider === null && gate?.verdict === "escalate_to_human");
+      const human_gates = [...provider_human_gates, ...state_human_gates];
       if (human_gates.length) {
         if (this.#isResolvedByReset(saved, receipt, human_gates)) continue;
         this.#writeHumanGateBlock(saved, receipt, projection, human_gates);
-        if (saved.human_gates !== undefined && canonical(saved.human_gates) !== canonical(human_gates)) throw new Error("human gate provenance does not match provider outcomes");
+        if (saved.human_gates !== undefined && canonical(saved.human_gates) !== canonical(human_gates)) throw new Error("human gate provenance does not match provider outcomes or finding state");
         throw new Error("human gate requires explicit human confirmation before publication");
       }
       verifiedHumanGates(saved.provider_outcomes, saved.human_gates);
