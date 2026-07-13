@@ -7,6 +7,7 @@ const providerId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const providerIds = new Set(["claude-code", "kimi", "codex", "opencode"]);
 const providerStatuses = new Set(["ready", "disabled", "unavailable"]);
 const deliveryModes = new Set(["file_only", "always_embed"]);
+const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
 function deepFreeze(value) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) deepFreeze(child);
@@ -76,6 +77,7 @@ export class BrokerClient {
 
   async cancel({ runtime_id, provider, source = "workflow_shutdown" }) {
     if (!runtime_id || !provider) throw new TypeError("runtime_id and provider are required");
+    if (!cancellationSources.has(source)) throw new TypeError("cancel source must be user, workflow_shutdown, broker_idle_timeout, or broker_max_duration");
     await this.#requireCapability("cancel_source", "THIRD_REVIEW_CANCEL_SOURCE_UNSUPPORTED");
     const result = await this.#execute(this.command[0], [...this.command.slice(1), "cancel", `--config=${this.config}`, `--runtime-id=${runtime_id}`, `--provider=${provider}`, `--source=${source}`]);
     if (result.code !== 0) throw new Error(`3rd-review cancel failed: ${result.stderr.slice(0, 4096)}`);

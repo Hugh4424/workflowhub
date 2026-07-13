@@ -19,6 +19,7 @@ function canonical(value) {
 }
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
 export function aggregateMakeDecisionReviewTracks(input) { return aggregateMakeDecisionTracks(input); }
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
 function writeImmutable(path, value) {
@@ -564,7 +565,9 @@ export class ReviewRoundFacade {
     }
     if (transport_status === "cancelled") {
       const cancel_source = item?.error?.source;
-      return { ...base, cancel_source: cancel_source ?? null, diagnostic: cancel_source ? publicError(item) : "CANCEL_SOURCE_MISSING" };
+      if (!cancel_source) return { ...base, cancel_source: null, diagnostic: "CANCEL_SOURCE_MISSING" };
+      if (!cancellationSources.has(cancel_source)) return { ...base, cancel_source: null, diagnostic: "CANCEL_SOURCE_INVALID" };
+      return { ...base, cancel_source, diagnostic: publicError(item) };
     }
     if (item?.delivery_used === undefined || item.delivery_used === null) return { ...base, diagnostic: "DELIVERY_USED_MISSING" };
     if (item.delivery_used !== "file_only" && item.delivery_used !== "always_embed") return { ...base, diagnostic: "DELIVERY_USED_INVALID" };

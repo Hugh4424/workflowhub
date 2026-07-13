@@ -94,6 +94,13 @@ describe("BrokerClient", () => {
     await expect(client.cancel({ runtime_id: "r", provider: "kimi", source: "workflow_shutdown" })).rejects.toThrow(/CANCEL_SOURCE_UNSUPPORTED/);
   });
 
+  it("rejects a cancel source outside the broker's documented enum before spawning", async () => {
+    let calls = 0;
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl() { calls += 1; throw new Error("must not spawn"); } });
+    await expect(client.cancel({ runtime_id: "r", provider: "kimi", source: "workflowhub" })).rejects.toThrow(/cancel source.*user.*workflow_shutdown.*broker_idle_timeout.*broker_max_duration/i);
+    expect(calls).toBe(0);
+  });
+
   it("uses Phase2 attachment and cancel-source flags only when doctor declares them", async () => {
     const calls = [];
     const client = new BrokerClient({ command: ["node", "/phase2/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/repo", spawnImpl(command, args) {

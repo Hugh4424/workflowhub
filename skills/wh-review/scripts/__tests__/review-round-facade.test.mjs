@@ -627,11 +627,13 @@ describe("ReviewRoundFacade", () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "33333333-3333-4333-8333-333333333333", providers: [
       { provider: "opencode", status: "cancelled", error: { code: "CANCELLED", source: "workflow_shutdown" } },
-      { provider: "kimi", status: "completed", output: "not-json" },
+      { provider: "kimi", status: "cancelled", error: { code: "CANCELLED", source: "workflowhub" } },
+      { provider: "claude-code", status: "completed", output: "not-json" },
       { provider: "codex", status: "completed", session_id: "s", output: output(request.packet, "revise_required") },
     ] })) });
     const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "claude-code", packet: packet({ root: tracking }), changed_file_root: tracking }));
-    expect(result.provider_outcomes.map((item) => item.semantic_verdict)).toEqual([null, null, "revise_required"]);
+    expect(result.provider_outcomes.map((item) => item.semantic_verdict)).toEqual([null, null, null, "revise_required"]);
+    expect(result.provider_outcomes.find((item) => item.provider === "kimi")).toMatchObject({ business_valid: false, diagnostic: "CANCEL_SOURCE_INVALID" });
     expect(result.merged_findings).toHaveLength(1);
     expect(result.hard_gates).toHaveLength(1);
     expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "accept", evidence: "no" }] })).toThrow(/hard invariant/);
