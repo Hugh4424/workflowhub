@@ -6,9 +6,9 @@
 
 ## 检查轴
 
-1. Problem Fit：规格是否回应原始需求与已批准决策。
-2. Spec Quality：需求、场景、验收、非目标与边界是否完整且可判定。
-3. Boundary Safety：概念、状态、接口与 UI 范围是否有明确归属。
+- C1: Problem Fit：规格是否回应原始需求与已批准决策。
+- C2: Spec Quality：需求、场景、验收、非目标与边界是否完整且可判定。
+- C3: Boundary Safety：概念、状态、接口与 UI 范围是否有明确归属。
 
 UI scope 时增加 `plan-design-review`，检查信息架构、状态、响应式与无障碍；非 UI scope 不得伪造该技能结果。
 

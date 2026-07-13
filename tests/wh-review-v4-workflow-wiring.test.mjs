@@ -52,7 +52,7 @@ function deltaPacket(repository, previous) {
   return refreshManifest(next);
 }
 function reviewerOutput(packet) {
-  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1#packet_hash"], evidence: "review-packet.v1#packet_hash binds the inspected packet", conclusion: "the lens found no contract violation in the packet" }));
+  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [packet.stage === "build-plan" ? "/Users/reviewer/private/skill.md#L10" : "review-packet.v1#packet_hash"], evidence: packet.stage === "build-plan" ? "plan.md#L10 was checked with Bearer skill-secret-token" : "review-packet.v1#packet_hash binds the inspected packet", conclusion: packet.stage === "build-plan" ? "behavior evidence 123e4567-e89b-12d3-a456-426614174000 is complete" : "the lens found no contract violation in the packet" }));
   let contract = readFileSync(contractPathAndHash(packet.stage).contractPath, "utf8");
   if (packet.stage === "make-decision") {
     const start = contract.indexOf(`## review_track: ${packet.review_track}`); const next = contract.indexOf("## review_track:", start + 1);
@@ -150,7 +150,9 @@ describe("wh-review v4 workflow wiring", () => {
       expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
       const core = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
       expect(Array.isArray(core.provider_outcomes[0].skillResults)).toBe(true);
-      expect(core.provider_outcomes[0].skillResults).toEqual(expect.arrayContaining(first.provider_outcomes[0].skillResults ?? []));
+      expect(core.provider_outcomes[0].skillResults).toHaveLength(first.provider_outcomes[0].skillResults?.length ?? 0);
+      if (stage !== "build-plan") expect(core.provider_outcomes[0].skillResults).toEqual(expect.arrayContaining(first.provider_outcomes[0].skillResults ?? []));
+      expect(JSON.stringify(core)).not.toMatch(/\/Users\/reviewer|Bearer|skill-secret-token|123e4567/i);
       currentPacket = deltaPacket(repository, firstPacket);
       const second = await facade.run(facade.prepare({ ...input, packet: currentPacket, continuation: true }));
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");

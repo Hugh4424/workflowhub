@@ -7,7 +7,6 @@ const VALID_SEVERITIES = new Set(["blocking", "important", "minor"]);
 const VALID_VERDICTS = new Set(["pass", "revise_required", "escalate_to_human"]);
 const VALID_PACKET_STATUSES = new Set(["complete", "material_incomplete", "hash_mismatch"]);
 const HEX_HASH = /^[a-f0-9]{64}$/;
-const HOLLOW = /^(?:已检查|检查完成|已通过|通过|pass(?:ed)?|ok|无问题|符合要求|见材料|如上|同上)[。.!！]?$/i;
 const TOP_LEVEL = new Set(["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash", "packet_status", "verdict", "summary", "findings", "checklist", "pass_items", "skillResults", "rootCause", "fixApproach"]);
 const FINDING_FIELDS = new Set(["file", "line", "rule_id", "severity", "issue", "evidence", "suggested_fix", "late_finding"]);
 const CHECK_FIELDS = new Set(["id", "passed", "evidence"]);
@@ -22,7 +21,13 @@ function canonical(value) {
 function sha(value) { return createHash("sha256").update(value).digest("hex"); }
 function object(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function nonEmpty(value) { return typeof value === "string" && value.trim().length > 0; }
-function concrete(value, minimum = 8) { return nonEmpty(value) && value.trim().length >= minimum && !HOLLOW.test(value.trim()); }
+function evidenceText(value) { return String(value ?? "").normalize("NFKC").toLowerCase().replace(/[\p{P}\p{S}\s]/gu, ""); }
+function hollowEvidence(value) {
+  const normalized = evidenceText(value);
+  if (!normalized) return true;
+  return normalized.replace(/已|全部|均|检查|核对|审查|完成|通过|符合|要求|无|问题|正常|见材料|如上|同上|passed?|ok/gi, "").length === 0;
+}
+function concrete(value, minimum = 8) { return nonEmpty(value) && value.trim().length >= minimum && !hollowEvidence(value); }
 function concreteAnchor(value) { return concrete(value, 6) && /(?:[:#]|\bline\s*\d+\b|\bL\d+\b)/i.test(value); }
 function safeRelativePath(value) { return nonEmpty(value) && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function unknownKeys(value, allowed) { return object(value) ? Object.keys(value).filter((key) => !allowed.has(key)) : []; }
@@ -33,7 +38,10 @@ function contractCheckIds(stage, reviewTrack) {
     const next = body.indexOf("## review_track:", start + 1);
     body = start < 0 ? "" : body.slice(start, next < 0 ? undefined : next);
   }
-  return [...new Set(body.match(/\b(?:C|F|H)\d+\b/g) ?? [])];
+  const ids = [...body.matchAll(/^- (C\d+):\s+\S.*$/gm)].map((match) => match[1]);
+  if (ids.length === 0) throw new Error(`stage contract has no explicit required check ids: ${stage}/${reviewTrack ?? "default"}`);
+  if (new Set(ids).size !== ids.length) throw new Error(`stage contract has duplicate required check ids: ${stage}/${reviewTrack ?? "default"}`);
+  return ids;
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function addUnknownErrors(errors, value, allowed, label) {

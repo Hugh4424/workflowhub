@@ -6,9 +6,9 @@
 
 ## 检查轴
 
-1. Traceability：每项需求都有计划项、范围说明与可判定验证证据。
-2. Executability：阶段粒度、依赖顺序、接口边界、失败模式与回退假设可执行。
-3. Verification：验证设计能证明行为，不依赖空洞或不可判定的声明。
+- C1: Traceability：每项需求都有计划项、范围说明与可判定验证证据。
+- C2: Executability：阶段粒度、依赖顺序、接口边界、失败模式与回退假设可执行。
+- C3: Verification：验证设计能证明行为，不依赖空洞或不可判定的声明。
 
 必需 lens：`spec-analyze` 检查 packet 内规划材料的一致性；`plan-eng-review` 检查工程顺序与风险；`review` 独立检查范围漂移和遗漏。
 

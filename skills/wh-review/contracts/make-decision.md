@@ -10,7 +10,14 @@
 
 ## review_track: direction
 
-C1 原始需求对位；C2 真实痛点；C3 最小切口；C4 替代路径；C5 脆弱前提；C6 时机与范围。
+### Direction 必检项
+
+- C1: 原始需求对位。
+- C2: 真实痛点。
+- C3: 最小切口。
+- C4: 替代路径。
+- C5: 脆弱前提。
+- C6: 时机与范围。
 
 必需 packet 字段：`raw_requirement`、`host_verified_facts`。
 
@@ -22,7 +29,14 @@ blocking：需求方向偏离原始诉求、解决虚构问题、关键前提被
 
 ## review_track: detail
 
-C1 来源诚实；C2 决策一致；C3 假设完整；C4 验收可判定；C5 开放问题；C6 范围漂移。
+### Detail 必检项
+
+- C1: 来源诚实。
+- C2: 决策一致。
+- C3: 假设完整。
+- C4: 验收可判定。
+- C5: 开放问题。
+- C6: 范围漂移。
 
 必需 packet 字段：`raw_requirement`、`decision_log_excerpt`、`acceptance_design_excerpt`、`host_verified_facts`。
 

@@ -74,8 +74,11 @@ describe("reviewer-output validator", () => {
       (item) => { item.output.checklist[0].evidence = hollow; },
       (item) => { item.output.pass_items[0].evidence = hollow; },
     ]) { const item = fixture(); mutate(item); expect(validate(item).valid).toBe(false); }
-    const skill = fixture({ stage: "build-plan" }); skill.output.skillResults[0].evidence = hollow;
-    expect(validateReviewerOutput({ stage: "build-plan", output: skill.output }).valid).toBe(false);
+    for (const mutate of [
+      (item) => { item.output.skillResults[0].evidence = hollow; },
+      (item) => { item.output.skillResults[0].conclusion = hollow; },
+      (item) => { item.output.skillResults[0].checked_objects = [`${hollow}:通过`]; },
+    ]) { const skill = fixture({ stage: "build-plan" }); mutate(skill); expect(validateReviewerOutput({ stage: "build-plan", output: skill.output }).valid).toBe(false); }
     const specific = fixture(); specific.output.summary = "src/reviewer.mjs:42 对 hash 9f86d081 的失败分支返回 BUSINESS_INVALID。";
     expect(validate(specific).valid).toBe(true);
   });

@@ -6,11 +6,12 @@
 
 ## 检查轴
 
-F1 验收覆盖；F2 用户问题闭环；F3 证据来源；F4 证据新鲜度；F5 闭环状态；F6 交付边界。
-
-1. Acceptance Coverage：每条验收标准和原始用户问题都有 packet 内客观证据。
-2. Evidence Authenticity：证据有来源、时间与结果，且未与 host-verified facts 冲突。
-3. Workflow Closure：当前阶段 finding、例外和交付边界在 `verification_closure` 中可追溯。
+- C1: 验收覆盖：每条验收标准都有 packet 内客观证据。
+- C2: 用户问题闭环：原始用户问题有可追溯结果。
+- C3: 证据来源：证据来源明确且未与 host-verified facts 冲突。
+- C4: 证据新鲜度：证据时间和被审变更一致。
+- C5: 闭环状态：finding 和例外在 `verification_closure` 中可追溯。
+- C6: 交付边界：交付内容与批准范围一致。
 
 必需 lens：`qa-only` 检查用户结果；`verify-change` 使用 `light` profile 检查 packet 内闭环与证据。
 

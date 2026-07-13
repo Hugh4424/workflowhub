@@ -7,6 +7,7 @@ import { contractPathAndHash, assertKnownStage, assertSafeReviewFlowId, assertSa
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
+import { projectPublicReviewCore } from "./public-review-projection.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -143,7 +144,6 @@ function projectFinding(finding, provider) {
   const projected = { file: finding.file, line: finding.line, rule_id: finding.rule_id, severity: finding.severity, issue: finding.issue, evidence: finding.evidence, suggested_fix: finding.suggested_fix };
   return { ...projected, finding_id: findingId(projected), providers: [provider] };
 }
-function redact(value) { return JSON.parse(JSON.stringify(value, (key, field) => /runtime_id|session_id|raw_output|diagnostic|workspace|absolute_path|delivery/i.test(key) ? undefined : field)); }
 function exactClosureEvidence(findings, supplied) {
   if (findings.length === 0 && supplied === undefined) return [];
   if (!Array.isArray(supplied)) throw new Error("closure_evidence is required for every previous finding");
@@ -451,10 +451,10 @@ export class ReviewRoundFacade {
     const receipt = { ...saved, human_gates }; atomic(receiptPath, safeJson(receipt));
     const dir = dirname(receiptPath); const taskReviews = join(taskRoot(this.taskTrackingRoot, saved.intent.task_id), "reviews");
     const semantic_verdict = "escalate_to_human", needs_human = true;
-    const core = redact({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] });
+    const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); const coreHash = sha(readFileSync(corePath));
     const reportPath = join(taskReviews, `${saved.intent.stage}-${saved.intent.review_flow_id}.md`);
-    atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
+    atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
     const indexPath = join(taskReviews, "report-index.json");
     atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
     const stageResultPath = join(taskReviews, `stage-result-${saved.intent.stage}.json`);
@@ -537,7 +537,7 @@ export class ReviewRoundFacade {
     if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "BUSINESS_INVALID" };
     let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
     catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }
-    return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist };
+    return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist, pass_items: output.pass_items, skillResults: output.skillResults };
   }
 
   publish(result, dispositions) {
@@ -557,7 +557,7 @@ export class ReviewRoundFacade {
     const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
     const needs_human = semantic_verdict !== "pass";
     const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); privateReceipt.dispositions = dispositions.items; this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, privateReceipt);
-    const dir = dirname(result.receipt_draft_ref); const core = redact({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes });
+    const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); done.done_flags.core_receipt = true; atomic(projection, safeJson(done)); const coreHash = sha(readFileSync(corePath));
     const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;

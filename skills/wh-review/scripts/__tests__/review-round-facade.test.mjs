@@ -39,11 +39,12 @@ function refreshPacketHashes(value) {
   return value;
 }
 function output(input, verdict = "pass", severity = "blocking") {
+  const checkIds = ["C1", "C2", "C3"];
   return JSON.stringify({ packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
     contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
     summary: "review complete with packet evidence", findings: ["pass", "escalate_to_human"].includes(verdict) ? [] : [{ file: "a", line: 1, rule_id: "hard", severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }],
-    checklist: [{ id: "hard", passed: verdict !== "revise_required", evidence: "unified_diff:a:1 contains the reviewed behavior" }],
-    pass_items: ["pass", "escalate_to_human"].includes(verdict) ? [{ rule_id: "hard", artifact_anchor: "unified_diff:a:1", evidence: "the reviewed branch returns the expected state" }] : [], skillResults: [],
+    checklist: checkIds.map((id) => ({ id, passed: verdict !== "revise_required", evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
+    pass_items: ["pass", "escalate_to_human"].includes(verdict) ? checkIds.map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })) : [], skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "publication and persistence have separate boundaries", fixApproach: "move publication after the atomic persistence step" } : {}) });
 }
 function fakeBroker(callback) { return capabilityBroker(callback); }
@@ -516,17 +517,18 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
       const raw = JSON.parse(output(request.packet, "revise_required", "important"));
       raw.summary = `src/a.mjs:12 checked session ${secretId}`;
-      raw.checklist[0] = { id: "hard", passed: true, evidence: "src/a.mjs:12 used Bearer top-secret-token" };
-      raw.pass_items = [{ rule_id: "hard", artifact_anchor: "src/a.mjs:12", evidence: `src/a.mjs:12 raw ref ${secretPath}` }];
-      raw.findings[0].evidence = `src/a.mjs:12 session ${secretId} exposes token=must-not-publish`;
-      return { runtime_id: secretId, providers: [{ provider: "opencode", status: "completed", session_id: secretId, output: JSON.stringify(raw) }] };
+      raw.checklist[0] = { id: "C1", passed: true, evidence: "src/a.mjs:12 used Bearer top-secret-token" };
+      raw.pass_items = [{ rule_id: "C1", artifact_anchor: "src/a.mjs:12", evidence: `src/a.mjs:12 raw ref ${secretPath}` }];
+      raw.findings[0].evidence = `src/a.mjs:12 session ${secretId} and runtime runtime-secret-42 expose token=must-not-publish`;
+      return { runtime_id: "runtime-secret-42", providers: [{ provider: "opencode", status: "completed", session_id: secretId, output: JSON.stringify(raw) }] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "public-redaction", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
     const publication = facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: `src/a.mjs:12 rejects ${secretPath}` }] }); const core = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
     expect(core.provider_outcomes[0]).toEqual(expect.objectContaining({ summary: expect.any(String), checklist: expect.any(Array), pass_items: expect.any(Array), skillResults: [] }));
+    for (const key of ["session_id", "runtime_id", "raw_output_ref", "delivery_used", "diagnostic"]) expect(core.provider_outcomes[0]).not.toHaveProperty(key);
     expect(core.merged_findings[0]).toEqual(expect.objectContaining({ evidence: expect.any(String), suggested_fix: expect.any(String) }));
     for (const path of [publication.core_receipt_ref, publication.report_ref, publication.report_index_ref, publication.stage_result_ref]) {
-      expect(readFileSync(path, "utf8")).not.toMatch(/123e4567|Bearer|top-secret-token|\/Users\/reviewer|raw\.txt|token=/i);
+      expect(readFileSync(path, "utf8")).not.toMatch(/123e4567|runtime-secret-42|Bearer|top-secret-token|\/Users\/reviewer|raw\.txt|token=/i);
     }
   });
 
