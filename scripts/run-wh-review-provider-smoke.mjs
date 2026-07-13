@@ -191,6 +191,7 @@ async function main() {
     const kimiSecondInputPath = join(outputRoot, "kimi-r2-input.json"); write(kimiSecondInputPath, kimiSecondInput);
     await runWhReview({ inputPath: kimiSecondInputPath, responsePath: join(outputRoot, "kimi-r2-cli.json") });
     const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiR2Packet = privatePacket(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, kimiR2Packet, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
+    requireValue(kimiR2Packet.source_revision.base_tree === kimiR1Packet.source_revision.snapshot_tree, "SMOKE_KIMI_R2_FAIL: packet base_tree does not continue from the R1 snapshot_tree");
     requireValue(kimiOutcome2.session_id === kimiOutcome1.session_id, "SMOKE_KIMI_R2_FAIL: provider session_id changed instead of continuing");
     requireValue(git(kimiSource, ["rev-parse", "HEAD"]) === kimiHead, "SMOKE_KIMI_FAIL: R1/R2 review created a commit");
     const kimiEvidence = { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path] };
@@ -208,6 +209,7 @@ async function main() {
     const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id }, provider_allowlist: ["opencode"] };
     const opencodeR2RequestPath = join(outputRoot, "opencode-r2-request.json"); write(opencodeR2RequestPath, opencodeR2Request);
     const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: join(outputRoot, "opencode-r2-response.json") });
+    requireValue(git(source, ["rev-parse", "HEAD"]) === sourceHead, "SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
     const opencodeOutcome2 = assertProviderRound({ providerId: "opencode", round: 2, response: opencodeR2, expectedMarker: "R2_DELTA_ONLY_MARKER", expectedPacketHash: r2Packet.packet_hash, expectedDiffSha256: r2Packet.diff_sha256, expectedRuntimeId: opencodeR1.runtime_id });
     requireValue(opencodeOutcome2.session_id === opencodeOutcome1.session_id, "SMOKE_OPENCODE_R2_FAIL: provider session_id changed instead of continuing");
 

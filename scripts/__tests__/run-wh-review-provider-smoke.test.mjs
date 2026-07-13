@@ -73,4 +73,10 @@ describe("run-wh-review-provider-smoke", () => {
     expect(source).not.toContain("WH_REVIEW_SMOKE_SKIP_KIMI");
     expect(source).toContain("evidence.runtimes = { kimi: kimiEvidence, opencode:");
   });
+
+  it("proves R2 continues from the R1 snapshot without changing either source HEAD", () => {
+    const source = readFileSync(script, "utf8");
+    expect(source).toContain("kimiR2Packet.source_revision.base_tree === kimiR1Packet.source_revision.snapshot_tree");
+    expect(source).toContain("SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
+  });
 });
