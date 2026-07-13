@@ -5,7 +5,8 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ReviewRoundFacade } from "../review-round-facade.mjs";
-import { contractPathAndHash } from "../lib/safe-id.mjs";
+import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
+import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -35,7 +36,7 @@ function packet({ root } = {}) {
 }
 function refreshPacketHashes(value) {
   value.diff_sha256 = hash(value.unified_diff);
-  value.manifest_hash = hash(canonical({ diff_sha256: value.diff_sha256, changed_files: value.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: value.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: value.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: value.test_evidence, host_verified_facts: value.host_verified_facts, contract_hash: value.contract_hash, skill_bundle_hash: value.skill_bundle_hash, source_revision: value.source_revision }));
+  value.manifest_hash = hash(canonical({ diff_sha256: value.diff_sha256, changed_files: value.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: value.raw_requirement, decision_log_excerpt: value.decision_log_excerpt ?? null, acceptance_design_excerpt: value.acceptance_design_excerpt ?? null, planning_artifacts: value.planning_artifacts ?? [], verification_closure: value.verification_closure ?? [], test_evidence: value.test_evidence ?? [], host_verified_facts: value.host_verified_facts ?? [], contract_hash: value.contract_hash, skill_bundle_hash: value.skill_bundle_hash, source_revision: value.source_revision }));
   return value;
 }
 function output(input, verdict = "pass", severity = "blocking", ruleId = "H1") {
@@ -87,8 +88,53 @@ function advancePacket(root, previous) {
     changed_files: [{ path: "a", status: "modified", sha256: hash(bytes), size: bytes.length, old_sha256: hash(oldBytes), old_size: oldBytes.length }],
     source_revision: { base, head }, test_evidence: [{ name: "unit", status: "passed", note: "delta verified" }] });
 }
+function makeDecisionPacket(root, reviewTrack) {
+  const value = packet({ root }); const resolution = resolveRequiredSkills({ stage: "make-decision", reviewTrack });
+  value.stage = "make-decision"; value.review_track = reviewTrack;
+  value.contract_hash = projectStageContract("make-decision", reviewTrack).contractHash;
+  value.skill_bundle_hash = hash(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 }))));
+  if (reviewTrack === "direction") {
+    delete value.decision_log_excerpt; delete value.acceptance_design_excerpt; delete value.planning_artifacts;
+    delete value.verification_closure; delete value.test_evidence;
+  } else value.decision_log_excerpt = "decision-log.md: approved scope remains narrow";
+  return refreshPacketHashes(value);
+}
+function makeDecisionOutput(input, reviewTrack, verdict = "pass") {
+  const prefix = reviewTrack === "direction" ? "DIR" : "DET";
+  const ids = [...Array.from({ length: 6 }, (_, index) => `${prefix}-C${index + 1}`), ...Array.from({ length: 3 }, (_, index) => `${prefix}-H${index + 1}`)];
+  const failed = verdict === "revise_required" ? `${prefix}-H1` : null;
+  const resolution = resolveRequiredSkills({ stage: "make-decision", reviewTrack });
+  return JSON.stringify({
+    packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
+    contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
+    summary: "unified_diff:a:1 and packet facts substantiate the selected decision review",
+    findings: failed ? [{ file: "a", line: 1, rule_id: failed, severity: "blocking", issue: "selected decision violates the tested hard invariant", evidence: "unified_diff:a:1 shows the invariant breach", suggested_fix: "revise the decision to satisfy the hard invariant" }] : [],
+    checklist: ids.map((id) => ({ id, passed: id !== failed, evidence: `unified_diff:a:1 provides concrete evidence for ${id}` })),
+    pass_items: ids.filter((id) => id !== failed).map((rule_id) => ({ rule_id, artifact_anchor: `unified_diff:a:1#${rule_id}`, evidence: `unified_diff:a:1 demonstrates the required ${rule_id} behavior` })),
+    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" })),
+    ...(failed ? { rootCause: "the selected decision conflicts with a hard invariant", fixApproach: "change the decision before the next review round" } : {}),
+  });
+}
 
 describe("ReviewRoundFacade", () => {
+  it("isolates make-decision tracks and publishes their aggregate stage result", async () => {
+    const tracking = root(); const sharedFlow = "shared-flow";
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const track = request.packet.review_track;
+      return { providers: [{ provider: "opencode", status: "completed", session_id: `${track}-session`, output: makeDecisionOutput(request.packet, track, track === "direction" ? "revise_required" : "pass") }] };
+    }) });
+    const direction = await facade.run(facade.prepare({ task_id: "track-isolation", stage: "make-decision", review_track: "direction", review_flow_id: sharedFlow, packet: makeDecisionPacket(tracking, "direction"), repository_root: tracking }));
+    facade.publish(direction, { items: direction.merged_findings.map(({ finding_id }) => ({ finding_id, action: "reject", evidence: "decision-log.md:1 records the required revision" })) });
+    const detail = await facade.run(facade.prepare({ task_id: "track-isolation", stage: "make-decision", review_track: "detail", review_flow_id: sharedFlow, packet: makeDecisionPacket(tracking, "detail"), repository_root: tracking }));
+    facade.publish(detail, { items: [] });
+    const reviews = join(tracking, "track-isolation", "reviews");
+    expect(existsSync(join(reviews, "private", "flows", "make-decision-direction-shared-flow.json"))).toBe(true);
+    expect(existsSync(join(reviews, "private", "flows", "make-decision-detail-shared-flow.json"))).toBe(true);
+    expect(JSON.parse(readFileSync(join(reviews, "stage-result-make-decision.json"), "utf8"))).toMatchObject({ stage: "make-decision", verdict: "revise_required", review_tracks: ["direction", "detail"] });
+    expect(existsSync(join(reviews, "stage-result-make-decision-direction.json"))).toBe(true);
+    expect(existsSync(join(reviews, "stage-result-make-decision-detail.json"))).toBe(true);
+  });
+
   it("schema-validates packets and provider JSON at their boundaries", async () => {
     const tracking = root(); const value = packet({ root: tracking }); value.fenced = "secret-value";
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });

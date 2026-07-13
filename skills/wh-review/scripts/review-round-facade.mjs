@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { projectStageContract, assertKnownStage, assertSafeReviewFlowId, assertSafeTaskId, taskRoot } from "./lib/safe-id.mjs";
+import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
@@ -169,20 +169,32 @@ export class ReviewRoundFacade {
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
     this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.faultInjector = faultInjector;
   }
-  #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${intent.stage}-${intent.review_flow_id}-${intent.business_round}`); }
-  #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.stage}-${intent.review_flow_id}.json`); }
-  #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.stage}-${intent.review_flow_id}.reset-approval.json`); }
-  #lock(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.task_id}.lock`); }
+  #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
+  #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.json`); }
+  #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.reset-approval.json`); }
+  #lock(intent) {
+    const name = intent.stage === "make-decision" ? `${intent.task_id}-${reviewStageStorageKey(intent.stage, intent.review_track)}.lock` : `${intent.task_id}.lock`;
+    return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", name);
+  }
+  #publicPaths(intent) {
+    const reviews = join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews");
+    const flow = reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id);
+    const stage = reviewStageStorageKey(intent.stage, intent.review_track);
+    if (intent.stage !== "make-decision") {
+      return { reviews, reportPath: join(reviews, `${flow}.md`), indexPath: join(reviews, "report-index.json"), stageResultPath: join(reviews, `stage-result-${stage}.json`) };
+    }
+    return { reviews, reportPath: join(reviews, `${flow}.md`), indexPath: join(reviews, `report-index-${stage}.json`), stageResultPath: join(reviews, `stage-result-${stage}.json`) };
+  }
   #readFlow(intent) { const path = this.#flow(intent); return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null; }
   #writeFlow(intent, value) { atomic(this.#flow(intent), safeJson(value)); }
 
   prepare(input) {
-    assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertSafeReviewFlowId(input.review_flow_id);
+    assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertReviewTrack(input.stage, input.review_track ?? null); assertSafeReviewFlowId(input.review_flow_id);
     if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
-    const lock = this.#acquireLock({ task_id: input.task_id, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_flow_id}`) });
+    const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
     return this.#prepareUnderLock(input, lock);
   }
 
@@ -265,7 +277,7 @@ export class ReviewRoundFacade {
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
       previous_private_receipt_hash: continuation ? prior.previous_receipt_sha256 : null,
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
-      idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
+      idempotency_key: sha(`${input.task_id}\0${input.stage}\0${reviewTrack ?? "default"}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       validateSchema("review-intent", intent);
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
@@ -460,16 +472,16 @@ export class ReviewRoundFacade {
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
     const receipt = { ...saved, human_gates }; atomic(receiptPath, safeJson(receipt));
-    const dir = dirname(receiptPath); const taskReviews = join(taskRoot(this.taskTrackingRoot, saved.intent.task_id), "reviews");
+    const dir = dirname(receiptPath); const { reportPath, indexPath, stageResultPath } = this.#publicPaths(saved.intent);
     const semantic_verdict = "escalate_to_human", needs_human = true;
     const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); const coreHash = sha(readFileSync(corePath));
-    const reportPath = join(taskReviews, `${saved.intent.stage}-${saved.intent.review_flow_id}.md`);
     atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
-    const indexPath = join(taskReviews, "report-index.json");
     atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
-    const stageResultPath = join(taskReviews, `stage-result-${saved.intent.stage}.json`);
     atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
+    const flow = this.#readFlow(saved.intent);
+    if (flow) this.#writeFlow(saved.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
+    if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id);
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
     atomic(projectionPath, safeJson(projection));
@@ -477,35 +489,35 @@ export class ReviewRoundFacade {
   #isResolvedByReset(saved, receiptPath, human_gates) {
     const markerPath = join(dirname(receiptPath), "resolved-by-reset.json"); if (!existsSync(markerPath)) return false;
     const marker = JSON.parse(readFileSync(markerPath, "utf8"));
-    if (!(marker?.version === 1 && marker.status === "superseded" && marker.task_id === saved.intent?.task_id && marker.stage === saved.intent?.stage && marker.old_review_flow_id === saved.intent?.review_flow_id && typeof marker.new_review_flow_id === "string" && marker.new_review_flow_id.length > 0 && typeof marker.human_approval_ref === "string" && marker.human_approval_ref.length > 0 && marker.receipt_sha256 === sha(readFileSync(receiptPath)) && canonical(marker.human_gates) === canonical(human_gates))) return false;
+    if (!(marker?.version === 1 && marker.status === "superseded" && marker.task_id === saved.intent?.task_id && marker.stage === saved.intent?.stage && (marker.review_track ?? null) === (saved.intent?.review_track ?? null) && marker.old_review_flow_id === saved.intent?.review_flow_id && typeof marker.new_review_flow_id === "string" && marker.new_review_flow_id.length > 0 && typeof marker.human_approval_ref === "string" && marker.human_approval_ref.length > 0 && marker.receipt_sha256 === sha(readFileSync(receiptPath)) && canonical(marker.human_gates) === canonical(human_gates))) return false;
     const privateRoot = join(taskRoot(this.taskTrackingRoot, saved.intent.task_id), "reviews", "private");
-    const approvalPath = this.#resetApproval({ task_id: saved.intent.task_id, stage: saved.intent.stage, review_flow_id: marker.new_review_flow_id });
+    const approvalPath = this.#resetApproval({ task_id: saved.intent.task_id, stage: saved.intent.stage, review_track: saved.intent.review_track ?? null, review_flow_id: marker.new_review_flow_id });
     if (marker.reset_approval_ref !== relative(privateRoot, approvalPath) || !existsSync(approvalPath)) return false;
     const approvalBytes = readFileSync(approvalPath); if (marker.reset_approval_sha256 !== sha(approvalBytes)) return false;
     const approval = JSON.parse(approvalBytes);
-    if (!(approval?.version === 1 && approval.task_id === saved.intent.task_id && approval.stage === saved.intent.stage && approval.review_flow_id === marker.new_review_flow_id && approval.parent_review_flow_id === saved.intent.review_flow_id && approval.human_approval_ref === marker.human_approval_ref)) return false;
-    const newFlowPath = this.#flow({ task_id: saved.intent.task_id, stage: saved.intent.stage, review_flow_id: marker.new_review_flow_id });
+    if (!(approval?.version === 1 && approval.task_id === saved.intent.task_id && approval.stage === saved.intent.stage && (approval.review_track ?? null) === (saved.intent.review_track ?? null) && approval.review_flow_id === marker.new_review_flow_id && approval.parent_review_flow_id === saved.intent.review_flow_id && approval.human_approval_ref === marker.human_approval_ref)) return false;
+    const newFlowPath = this.#flow({ task_id: saved.intent.task_id, stage: saved.intent.stage, review_track: saved.intent.review_track ?? null, review_flow_id: marker.new_review_flow_id });
     if (!existsSync(newFlowPath)) return false;
     const newFlow = JSON.parse(readFileSync(newFlowPath));
-    return newFlow?.task_id === saved.intent.task_id && newFlow.stage === saved.intent.stage && newFlow.review_flow_id === marker.new_review_flow_id && newFlow.parent_review_flow_id === saved.intent.review_flow_id && newFlow.human_approval_ref === marker.human_approval_ref;
+    return newFlow?.task_id === saved.intent.task_id && newFlow.stage === saved.intent.stage && (newFlow.review_track ?? null) === (saved.intent.review_track ?? null) && newFlow.review_flow_id === marker.new_review_flow_id && newFlow.parent_review_flow_id === saved.intent.review_flow_id && newFlow.human_approval_ref === marker.human_approval_ref;
   }
-  #markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, reason, human_approval_ref }) {
+  #markResetResolvedGates({ task_id, stage, review_track, review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, reason, human_approval_ref }) {
     const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); if (!existsSync(privateRoot)) return [];
     const markers = [];
     for (const name of readdirSync(privateRoot)) {
       if (!name.startsWith("round-")) continue;
       const dir = join(privateRoot, name), receiptPath = join(dir, "round-receipt.json"); if (!existsSync(receiptPath)) continue;
       const receiptBytes = readFileSync(receiptPath); const receipt = JSON.parse(receiptBytes);
-      if (receipt?.intent?.stage !== stage || receipt.intent.review_flow_id !== review_flow_id) continue;
+      if (receipt?.intent?.stage !== stage || (receipt.intent.review_track ?? null) !== review_track || receipt.intent.review_flow_id !== review_flow_id) continue;
       const human_gates = deriveHumanGates(receipt.provider_outcomes); if (!human_gates.length) continue;
-      const marker = { version: 1, status: "superseded", task_id, stage, old_review_flow_id: review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, human_approval_ref, reason, receipt_sha256: sha(receiptBytes), human_gates };
+      const marker = { version: 1, status: "superseded", task_id, stage, review_track, old_review_flow_id: review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, human_approval_ref, reason, receipt_sha256: sha(receiptBytes), human_gates };
       const markerPath = join(dir, "resolved-by-reset.json"); writeImmutable(markerPath, marker); markers.push(markerPath);
     }
     return markers;
   }
   #materialIncomplete(input, message) {
     const root = join(taskRoot(this.taskTrackingRoot, input.task_id), "reviews", "private", "diagnostics");
-    atomic(join(root, `material-incomplete-${this.now()}.json`), safeJson({ code: "MATERIAL_INCOMPLETE", message, stage: input.stage, review_flow_id: input.review_flow_id }));
+    atomic(join(root, `material-incomplete-${this.now()}.json`), safeJson({ code: "MATERIAL_INCOMPLETE", message, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id }));
     throw new Error(`MATERIAL_INCOMPLETE: ${message}`);
   }
   #attachments(prepared) {
@@ -582,6 +594,39 @@ export class ReviewRoundFacade {
       continuation_eligible: receipt.continuation_eligible, receipt_draft_ref: receiptPath };
     return validateSchema("round-run-result", trusted);
   }
+  #latestPublishedMakeDecisionTrack(taskId, reviewTrack) {
+    const flowsRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private", "flows");
+    if (!existsSync(flowsRoot)) return null;
+    const candidates = readdirSync(flowsRoot).filter((name) => name.endsWith(".json") && !name.endsWith(".reset-approval.json")).map((name) => {
+      try { return JSON.parse(readFileSync(join(flowsRoot, name), "utf8")); } catch { return null; }
+    }).filter((flow) => flow?.stage === "make-decision" && flow.review_track === reviewTrack && typeof flow.core_receipt_hash === "string" && typeof flow.previous_receipt_ref === "string");
+    candidates.sort((left, right) => (right.published_at_ms ?? 0) - (left.published_at_ms ?? 0));
+    const flow = candidates[0]; if (!flow) return null;
+    const corePath = join(dirname(resolve(flow.previous_receipt_ref)), "core-receipt.json");
+    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== flow.core_receipt_hash) throw new Error("make-decision aggregate core receipt binding is invalid");
+    const core = JSON.parse(readFileSync(corePath, "utf8"));
+    if (core?.intent?.stage !== "make-decision" || core.intent.review_track !== reviewTrack || core.semantic_verdict === null) throw new Error("make-decision aggregate track receipt is invalid");
+    return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id };
+  }
+  #publishMakeDecisionAggregate(taskId) {
+    const direction = this.#latestPublishedMakeDecisionTrack(taskId, "direction");
+    const detail = this.#latestPublishedMakeDecisionTrack(taskId, "detail");
+    if (!direction || !detail) return null;
+    const aggregate = aggregateMakeDecisionTracks({ direction, detail });
+    if (!aggregate.semantic_verdict) throw new Error("make-decision aggregate requires semantic verdicts from both tracks");
+    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
+    const aggregateCore = {
+      version: 1, stage: "make-decision", review_tracks: ["direction", "detail"],
+      track_core_receipt_hashes: { direction: direction.core_receipt_hash, detail: detail.core_receipt_hash },
+      track_review_flow_ids: { direction: direction.review_flow_id, detail: detail.review_flow_id },
+      semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, merged_findings: aggregate.findings,
+    };
+    const corePath = join(reviews, "make-decision-aggregate-core-receipt.json"); atomic(corePath, safeJson(aggregateCore), 0o644); const coreHash = sha(readFileSync(corePath));
+    const reportPath = join(reviews, "make-decision-aggregate.md"); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
+    const indexPath = join(reviews, "report-index-make-decision.json"); atomic(indexPath, safeJson({ stage: "make-decision", review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    const stageResultPath = join(reviews, "stage-result-make-decision.json"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
+    return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+  }
   #publishUnderLock(result, dispositions) {
     if (result.blocked_by_human_confirmation) throw new Error("human confirmation is required before publication");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
@@ -597,29 +642,31 @@ export class ReviewRoundFacade {
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); done.done_flags.core_receipt = true; atomic(projection, safeJson(done)); const coreHash = sha(readFileSync(corePath));
     const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
-    const reportPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `${result.intent.stage}-${result.intent.review_flow_id}.md`); atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
-    const indexPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", "report-index.json"); atomic(indexPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
-    const stageResultPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `stage-result-${result.intent.stage}.json`); atomic(stageResultPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
-    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)) });
-    return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+    const { reportPath, indexPath, stageResultPath } = this.#publicPaths(result.intent);
+    atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
+    atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
+    atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
+    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now() });
+    const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id) : null;
+    return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }
-  reset({ task_id, stage, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
-    assertSafeTaskId(task_id); assertKnownStage(stage); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
+  reset({ task_id, stage, review_track = null, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
+    assertSafeTaskId(task_id); assertKnownStage(stage); assertReviewTrack(stage, review_track); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
     const nextId = new_review_flow_id ?? `${review_flow_id}-reset-${this.now()}`; assertSafeReviewFlowId(nextId);
-    const flow = { task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
-    const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
+    const flow = { task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
+    const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_track ?? "default"}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
     try {
       const flowPath = this.#flow(flow), approvalPath = this.#resetApproval(flow);
-      const approval = { version: 1, task_id, stage, review_flow_id: nextId, parent_review_flow_id: review_flow_id, human_approval_ref, reason, approved_at_ms: this.now() };
+      const approval = { version: 1, task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, human_approval_ref, reason, approved_at_ms: this.now() };
       if (existsSync(approvalPath)) {
         const savedApproval = JSON.parse(readFileSync(approvalPath, "utf8"));
-        if (!(savedApproval?.version === 1 && savedApproval.task_id === task_id && savedApproval.stage === stage && savedApproval.review_flow_id === nextId && savedApproval.parent_review_flow_id === review_flow_id && savedApproval.human_approval_ref === human_approval_ref && savedApproval.reason === reason)) throw new Error("reset approval does not match requested reset");
+        if (!(savedApproval?.version === 1 && savedApproval.task_id === task_id && savedApproval.stage === stage && (savedApproval.review_track ?? null) === review_track && savedApproval.review_flow_id === nextId && savedApproval.parent_review_flow_id === review_flow_id && savedApproval.human_approval_ref === human_approval_ref && savedApproval.reason === reason)) throw new Error("reset approval does not match requested reset");
       } else writeImmutable(approvalPath, approval);
       // Both records are create-exclusive. Until they exist, no old gate has a
       // supersession marker, so a partial reset remains blocked.
       writeImmutable(flowPath, flow);
       const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); const approvalBytes = readFileSync(approvalPath);
-      const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_flow_id, new_review_flow_id: nextId, reset_approval_ref: relative(privateRoot, approvalPath), reset_approval_sha256: sha(approvalBytes), reason, human_approval_ref });
+      const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_track, review_flow_id, new_review_flow_id: nextId, reset_approval_ref: relative(privateRoot, approvalPath), reset_approval_sha256: sha(approvalBytes), reason, human_approval_ref });
       return { ...flow, reset_approval_ref: relative(privateRoot, approvalPath), superseded_receipt_refs };
     } finally { this.#releaseLock(lock); }
   }

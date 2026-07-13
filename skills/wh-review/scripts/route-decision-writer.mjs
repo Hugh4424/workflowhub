@@ -33,11 +33,12 @@ import {
   assertValidReviewInputHash,
   assertKnownStage,
   projectStageContract,
+  reviewFlowStorageKey,
   taskRoot,
 } from "./lib/safe-id.mjs";
 
-function recordPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId }) {
-  return join(taskRoot(taskTrackingRoot, taskId), "reviews", `route-decision-${stage}-${reviewFlowId}.json`);
+function recordPathFor({ taskTrackingRoot, taskId, stage, reviewTrack, reviewFlowId }) {
+  return join(taskRoot(taskTrackingRoot, taskId), "reviews", `route-decision-${reviewFlowStorageKey(stage, reviewTrack, reviewFlowId)}.json`);
 }
 
 /**
@@ -52,7 +53,7 @@ export function writeRoutePreparePhase({ taskId, stage, reviewTrack = null, revi
 
   const root = taskTrackingRoot ?? parseTaskDir();
   const { contractPath, contractHash } = projectStageContract(stage, reviewTrack);
-  const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId });
+  const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewTrack, reviewFlowId });
 
   const record = {
     stage,
@@ -76,14 +77,14 @@ export function writeRoutePreparePhase({ taskId, stage, reviewTrack = null, revi
  * backfills review_input_hash in place. Fails loud if no prior prepare record exists.
  * @returns {{ path: string, record: object }}
  */
-export function writeRouteExecutePhase({ taskId, stage, reviewFlowId, reviewInputHash, taskTrackingRoot }) {
+export function writeRouteExecutePhase({ taskId, stage, reviewTrack = null, reviewFlowId, reviewInputHash, taskTrackingRoot }) {
   assertSafeTaskId(taskId);
   assertKnownStage(stage);
   assertSafeReviewFlowId(reviewFlowId);
   assertValidReviewInputHash(reviewInputHash);
 
   const root = taskTrackingRoot ?? parseTaskDir();
-  const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId });
+  const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewTrack, reviewFlowId });
 
   if (!existsSync(path)) {
     throw new FailLoudError(
@@ -133,6 +134,7 @@ if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
       const { path, record } = writeRouteExecutePhase({
         taskId: flags["task-id"],
         stage: flags["stage"],
+        reviewTrack: flags["review-track"] ?? null,
         reviewFlowId: flags["review-flow-id"],
         reviewInputHash: flags["review-input-hash"],
       });

@@ -175,11 +175,36 @@ describe("AC2-2/AC2-3: route-decision two-phase write", () => {
     const taskId = "t-direction"; const stage = "make-decision"; const reviewFlowId = "flow-direction";
     const prep = runCli(["prepare", `--task-id=${taskId}`, `--stage=${stage}`, "--review-track=direction", `--review-flow-id=${reviewFlowId}`, "--total-round=1"], { WORKFLOWHUB_TASK_DIR: taskDir });
     expect(prep.exitCode).toBe(0);
-    const record = JSON.parse(readFileSync(join(taskDir, taskId, "reviews", `route-decision-${stage}-${reviewFlowId}.json`), "utf8"));
+    const record = JSON.parse(readFileSync(join(taskDir, taskId, "reviews", `route-decision-${stage}-direction-${reviewFlowId}.json`), "utf8"));
     const source = readFileSync(join(contractsDir, "make-decision.md"), "utf8"); const first = source.indexOf("## review_track:"); const start = source.indexOf("## review_track: direction"); const next = source.indexOf("## review_track:", start + 1);
     const projected = `${source.slice(0, first)}${source.slice(start, next)}`;
     expect(record.review_track).toBe("direction");
     expect(record.contract_hash).toBe(createHash("sha256").update(projected).digest("hex"));
+  });
+
+  it("isolates direction and detail route records even when their flow ids match", () => {
+    const taskId = "t-track-isolation"; const stage = "make-decision"; const reviewFlowId = "shared-flow";
+    for (const reviewTrack of ["direction", "detail"]) {
+      const result = runCli([
+        "prepare", `--task-id=${taskId}`, `--stage=${stage}`, `--review-track=${reviewTrack}`,
+        `--review-flow-id=${reviewFlowId}`, "--total-round=1",
+      ], { WORKFLOWHUB_TASK_DIR: taskDir });
+      expect(result.exitCode).toBe(0);
+    }
+    const reviews = join(taskDir, taskId, "reviews");
+    const direction = join(reviews, "route-decision-make-decision-direction-shared-flow.json");
+    const detail = join(reviews, "route-decision-make-decision-detail-shared-flow.json");
+    expect(existsSync(direction)).toBe(true);
+    expect(existsSync(detail)).toBe(true);
+    expect(JSON.parse(readFileSync(direction, "utf8")).review_track).toBe("direction");
+    expect(JSON.parse(readFileSync(detail, "utf8")).review_track).toBe("detail");
+    const execute = runCli([
+      "execute", `--task-id=${taskId}`, `--stage=${stage}`, "--review-track=detail",
+      `--review-flow-id=${reviewFlowId}`, "--review-input-hash=detail-hash",
+    ], { WORKFLOWHUB_TASK_DIR: taskDir });
+    expect(execute.exitCode).toBe(0);
+    expect(JSON.parse(readFileSync(detail, "utf8")).review_input_hash).toBe("detail-hash");
+    expect(JSON.parse(readFileSync(direction, "utf8")).review_input_hash).toBe("");
   });
 
   it("unknown stage fails loud with non-zero exit", () => {

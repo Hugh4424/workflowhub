@@ -42,7 +42,7 @@ export function resetReviewFlow(input) {
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
   if (!taskTrackingRoot) throw new TypeError("reset requires task_tracking_root");
   const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: { run() { throw new Error("reset does not run broker"); } } });
-  return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
+  return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
 }
 
 async function main() {
