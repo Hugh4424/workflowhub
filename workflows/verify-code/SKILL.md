@@ -211,13 +211,13 @@ verify-code 阶段的收尾（close）流程严格按以下 5 个步骤顺序执
 ② **质量事实记录**（对应 §8.5 + §9）（final-test-report, warn 不阻断, needs_human=true）：记录 `final-test-report.md`（含步骤 8.5 逐条覆盖清单）；§9 产出七要素明文停顿摘要。质量事实记录本身若出现非致命异常，只 warn 不阻断流程；若发现需要人工介入的问题，设置 `needs_human=true` 并继续往下记录，不因此中止。
 
 **当前轮 wh-review 前的候选闭环写法**：步骤②到步骤③之间，当前轮
-wh-review 的 pass artifact 尚不存在，禁止把 `final-test-report.md` 或
+wh-review 的 pass core receipt 尚不存在，禁止把 `final-test-report.md` 或
 `stage-result-verify-code.json` 写成已通过 wh-review。此时只能表达候选态：
 fresh acceptance 可写 `pass`，但 `review_status` 必须写
 `pending_current_wh_review`，`stage-result.status` 用 `unknown`，并明确
 `close_ready_for_merge_gate=false`、merge/cleanup blocked until current
 wh-review pass。不得让 `facts.review.verdict=pass` 指向上一轮
-`revise_required` artifact。当前轮 wh-review 返回 `pass` 后，才允许在步骤⑤
+`revise_required` core receipt。当前轮 wh-review 返回 semantic `pass` 后，才允许在步骤⑤
 最终落盘时把 `review_status=pass`、`status=success` 写入 stage-result。
 
 ③ **V4 review**：在人工确认 merge 前，由 host 从冻结 revision 构建 canonical packet 并调用 `ReviewRoundFacade`。provider 只读 packet，不能读取 worktree、运行 git 或接收输出路径。只有 public core receipt 的语义结论可供后续人工决策；transport、packet 或取消问题不会伪造 verdict。
@@ -312,7 +312,7 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
 
 **必须处理两条落盘路径：**
 
-**路径 A — merge 完成（3rd-review pass + user_decision=true）：**
+**路径 A — merge 完成（V4 semantic pass + user_decision=true）：**
 ```json
 {
   "status": "success",
@@ -339,12 +339,12 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
     "verdict": "revise_required",
     "review_status": "revise_required",
     "findings": ["<finding 1>", "<finding 2>", "..."],
-    "evidence_ref": "<relative path to 3rd-review artifact>"
+    "core_receipt_hash": "<sha256>"
   },
   "missing_items": ["<blocked items>"],
   "user_decision": false,
   "needs_human": true,
-  "reason": "3rd-review revise_required: merge blocked. Human must confirm fixes and re-run 3rd-review before merge."
+  "reason": "V4 semantic revise_required: merge blocked. Human must confirm fixes and continue the review flow before merge."
 }
 ```
 
@@ -369,7 +369,7 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
 }
 ```
 
-路径 C 的存在是为了解决 current wh-review artifact 的时序自引用问题；不得把它当作 merge 许可。
+路径 C 的存在是为了解决 current core receipt 的时序自引用问题；不得把它当作 merge 许可。
 
 D7 color semantics must stay compatible with the current stage-result contract:
 use `success|failed|unknown`, not new status enum values. Never write `green`, `yellow`, or `red` to `stage-result.status`.

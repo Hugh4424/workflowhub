@@ -298,7 +298,7 @@ log. Provider material stays packet-only.
 审查结果必须包含以下字段：
 
 ```
-input_hash: <审查输入内容的哈希，用于隔离验证>
+packet_hash: <冻结 review-packet.v1 的哈希，用于隔离验证>
 findings: <V4 finding 数组，带 provider 证据>
 ```
 
