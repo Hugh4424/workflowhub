@@ -185,7 +185,7 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
     const result = await facade.run(facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "first", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
     const held = facade.prepare({ task_id: "publish-lock", stage: "build-code", review_flow_id: "held", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
-    expect(() => facade.publish(result, { items: [] })).toThrow(/review-already-running/);
+    expect(() => facade.publish(result, { items: [] }, { lockAlreadyHeld: true })).toThrow(/review-already-running/);
     rmSync(held.lock, { recursive: true, force: true });
     expect(() => facade.publish(result, { items: [] })).not.toThrow();
   });
