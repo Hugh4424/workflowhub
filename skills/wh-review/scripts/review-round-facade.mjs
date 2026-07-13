@@ -57,7 +57,7 @@ function sealPacket(packet, changedFileRoot, hostDiffBuilder) {
     if (!entry || !safeRelativePath(entry.path) || !["added", "modified", "deleted", "renamed"].includes(entry.status)) throw new Error("invalid changed_files entry");
     const needsCurrent = entry.status !== "deleted";
     if (needsCurrent && (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || !Number.isSafeInteger(entry.size) || entry.size < 0)) throw new Error("invalid changed_files current snapshot");
-    if (entry.status === "deleted" && (!/^[a-f0-9]{64}$/.test(entry.old_sha256 ?? "") || !Number.isSafeInteger(entry.old_size) || entry.old_size < 0)) throw new Error("invalid deleted changed_files snapshot");
+    if (["modified", "deleted", "renamed"].includes(entry.status) && (!/^[a-f0-9]{64}$/.test(entry.old_sha256 ?? "") || !Number.isSafeInteger(entry.old_size) || entry.old_size < 0)) throw new Error("invalid changed_files base snapshot");
     if (entry.status === "renamed" && !safeRelativePath(entry.old_path)) throw new Error("renamed changed_files entry requires old_path");
     if (changedFileRoot && needsCurrent) {
       const target = resolve(changedFileRoot, entry.path); const root = resolve(changedFileRoot);
@@ -77,7 +77,10 @@ function verifySourceEvidence(packet, sourceSnapshot, required) {
   if (sourceSnapshot.unified_diff !== packet.unified_diff || canonical(sourceSnapshot.changed_files) !== canonical(packet.changed_files)) throw new Error("source evidence provider does not match review packet");
   const base = sourceSnapshot.base_files ?? {}, head = sourceSnapshot.head_files ?? {};
   if (packet.source_revision.base && (sourceSnapshot.base_ref !== packet.source_revision.base || sourceSnapshot.head_ref !== packet.source_revision.head)) throw new Error("source snapshot revision does not match packet source_revision");
-  const headers = [...packet.unified_diff.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].map((match) => ({ old_path: match[1], path: match[2] }));
+  const lines = (value) => value === "" ? [] : String(value).replace(/\n$/u, "").split("\n");
+  const block = (oldPath, newPath, oldValue, newValue) => `diff --git a/${oldPath} b/${newPath}\n--- ${oldValue === null ? "/dev/null" : `a/${oldPath}`}\n+++ ${newValue === null ? "/dev/null" : `b/${newPath}`}\n@@ -1,${oldValue === null ? 0 : lines(oldValue).length} +1,${newValue === null ? 0 : lines(newValue).length} @@\n${oldValue === null ? "" : lines(oldValue).map((line) => `-${line}\n`).join("")}${newValue === null ? "" : lines(newValue).map((line) => `+${line}\n`).join("")}`;
+  const expectedDiff = packet.changed_files.map((entry) => block(entry.status === "renamed" ? entry.old_path : entry.path, entry.path, entry.status === "added" ? null : base[entry.status === "renamed" ? entry.old_path : entry.path], entry.status === "deleted" ? null : head[entry.path])).join("");
+  if (packet.unified_diff !== expectedDiff) throw new Error("unified diff does not equal canonical host source diff");
   for (const entry of packet.changed_files) {
     if (entry.status !== "deleted") {
       const bytes = head[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks current file bytes");
@@ -91,10 +94,7 @@ function verifySourceEvidence(packet, sourceSnapshot, required) {
     if (entry.status === "modified") {
       const bytes = base[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks modified base bytes");
       if (sha(bytes) !== entry.old_sha256 || Buffer.byteLength(bytes) !== entry.old_size) throw new Error("source snapshot modified base hash mismatch");
-      if (!packet.unified_diff.includes(`-${bytes}`) || !packet.unified_diff.includes(`+${head[entry.path]}`)) throw new Error("unified diff does not contain source snapshot base/head bytes");
     }
-    const header = headers.find((item) => item.path === entry.path); const expectedOld = entry.status === "renamed" ? entry.old_path : entry.path;
-    if (!header || header.old_path !== expectedOld) throw new Error("unified diff header does not match source snapshot path mapping");
   }
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
