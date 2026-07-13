@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertProviderRound, directPrompt, finalizePassEvidence } from "../run-wh-review-provider-smoke.mjs";
+import { assertProviderRound, directPrompt, writePassEvidence } from "../run-wh-review-provider-smoke.mjs";
 import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const script = fileURLToPath(new URL("../run-wh-review-provider-smoke.mjs", import.meta.url));
@@ -80,27 +82,38 @@ describe("run-wh-review-provider-smoke", () => {
     expect(source).toContain("SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
   });
 
-  it("persists both providers' complete runtime evidence in the final JSON", () => {
-    const evidence = finalizePassEvidence({ status: "RUNNING", output_root: "/tmp/smoke" }, {
-      kimiEvidence: {
-        runtime_id: "kimi-runtime", session_id: "kimi-session", raw_stdout_sha256: ["a".repeat(64), "b".repeat(64)],
-        receipts: ["/tmp/kimi-r1-receipt.json", "/tmp/kimi-r2-receipt.json"], requests: ["/tmp/kimi-r1-input.json", "/tmp/kimi-r2-input.json"], executions: ["/tmp/kimi-r1-cli.json", "/tmp/kimi-r2-cli.json"],
-      },
-      opencodeEvidence: {
-        runtime_id: "opencode-runtime", session_id: "opencode-session", raw_stdout_sha256: ["c".repeat(64), "d".repeat(64)],
-        requests: ["/tmp/opencode-r1-request.json", "/tmp/opencode-r2-request.json"], executions: ["/tmp/opencode-r1-response.json", "/tmp/opencode-r2-response.json"], attachments: ["/tmp/opencode-r1-attachments.json"],
-      },
-    });
+  it("writes and reopens complete provider evidence with a persistent attachment bundle", () => {
+    const root = mkdtempSync(join(tmpdir(), "wh-review-smoke-evidence-"));
+    const file = (relative, content = "evidence") => {
+      const path = join(root, relative); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, content);
+      return path;
+    };
+    try {
+      const bundle = join(root, ".wh-review-packets", "bundle");
+      const attachment = file(".wh-review-packets/bundle/review-packet.v1.json", "frozen packet");
+      const manifest = file("opencode-r1-attachments.json", JSON.stringify({ entries: [{ source: ".wh-review-packets/bundle/review-packet.v1.json" }] }));
+      const kimiReceipts = [file("kimi-r1-receipt.json"), file("kimi-r2-receipt.json")];
+      const kimiRequests = [file("kimi-r1-input.json"), file("kimi-r2-input.json")];
+      const kimiExecutions = [file("kimi-r1-cli.json"), file("kimi-r2-cli.json")];
+      const opencodeRequests = [file("opencode-r1-request.json"), file("opencode-r2-request.json")];
+      const opencodeExecutions = [file("opencode-r1-response.json"), file("opencode-r2-response.json")];
+      const evidencePath = join(root, "evidence.json");
 
-    const frozen = JSON.parse(JSON.stringify(evidence));
-    expect(frozen).toMatchObject({
-      status: "PASS",
-      runtimes: {
-        kimi: { runtime_id: "kimi-runtime", session_id: "kimi-session", receipts: ["/tmp/kimi-r1-receipt.json", "/tmp/kimi-r2-receipt.json"], requests: ["/tmp/kimi-r1-input.json", "/tmp/kimi-r2-input.json"], executions: ["/tmp/kimi-r1-cli.json", "/tmp/kimi-r2-cli.json"] },
-        opencode: { runtime_id: "opencode-runtime", session_id: "opencode-session", requests: ["/tmp/opencode-r1-request.json", "/tmp/opencode-r2-request.json"], executions: ["/tmp/opencode-r1-response.json", "/tmp/opencode-r2-response.json"], attachments: ["/tmp/opencode-r1-attachments.json"] },
-      },
-    });
-    expect(frozen.runtimes.kimi.raw_stdout_sha256).toEqual(["a".repeat(64), "b".repeat(64)]);
-    expect(frozen.runtimes.opencode.raw_stdout_sha256).toEqual(["c".repeat(64), "d".repeat(64)]);
+      writePassEvidence(evidencePath, { status: "RUNNING", output_root: root }, {
+        kimiEvidence: { runtime_id: "kimi-runtime", session_id: "kimi-session", raw_stdout_sha256: ["a".repeat(64), "b".repeat(64)], receipts: kimiReceipts, requests: kimiRequests, executions: kimiExecutions },
+        opencodeEvidence: { runtime_id: "opencode-runtime", session_id: "opencode-session", raw_stdout_sha256: ["c".repeat(64), "d".repeat(64)], requests: opencodeRequests, executions: opencodeExecutions, attachments: { root, bundle, manifests: [manifest] } },
+      });
+
+      const frozen = JSON.parse(readFileSync(evidencePath, "utf8"));
+      expect(frozen).toMatchObject({ status: "PASS", runtimes: { kimi: { runtime_id: "kimi-runtime", session_id: "kimi-session", receipts: kimiReceipts, requests: kimiRequests, executions: kimiExecutions }, opencode: { runtime_id: "opencode-runtime", session_id: "opencode-session", requests: opencodeRequests, executions: opencodeExecutions, attachments: { root, bundle, manifests: [manifest] } } } });
+      expect(frozen.runtimes.kimi.raw_stdout_sha256).toEqual(["a".repeat(64), "b".repeat(64)]);
+      expect(frozen.runtimes.opencode.raw_stdout_sha256).toEqual(["c".repeat(64), "d".repeat(64)]);
+      for (const path of [...frozen.runtimes.kimi.receipts, ...frozen.runtimes.kimi.requests, ...frozen.runtimes.kimi.executions, ...frozen.runtimes.opencode.requests, ...frozen.runtimes.opencode.executions, ...frozen.runtimes.opencode.attachments.manifests]) expect(existsSync(path)).toBe(true);
+      const frozenManifest = JSON.parse(readFileSync(frozen.runtimes.opencode.attachments.manifests[0], "utf8"));
+      for (const entry of frozenManifest.entries) expect(existsSync(join(frozen.runtimes.opencode.attachments.root, entry.source))).toBe(true);
+      expect(existsSync(attachment)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
