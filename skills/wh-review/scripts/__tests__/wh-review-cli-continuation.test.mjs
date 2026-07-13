@@ -90,6 +90,12 @@ function hostConfig(root) {
   process.env.HOME = home;
   return realpathSync(packetRoot);
 }
+function expectPrivateRawDirectory(path, taskRoot) {
+  expect(path).toEqual(expect.any(String));
+  expect(path.startsWith(join(taskRoot, "reviews", "private", "round-"))).toBe(true);
+  expect(path.endsWith(join("provider-raw"))).toBe(true);
+  expect(path).not.toContain(join("reviews", "core-receipts"));
+}
 
 describe("wh-review CLI continuation", () => {
   it("forwards closure evidence and cross-stage carryovers into a real second review round", async () => {
@@ -112,7 +118,9 @@ describe("wh-review CLI continuation", () => {
     expect(result.transport.continuation_eligible).toBe(true);
     expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([packetRoot, packetRoot]);
     expect(broker.calls).toHaveLength(2);
-    expect(broker.calls[1]).toEqual({ request: expect.objectContaining({ continuation: { runtime_id: "11111111-1111-4111-8111-111111111111" } }) });
+    expect(broker.calls[1]).toMatchObject({ request: expect.objectContaining({ continuation: { runtime_id: "11111111-1111-4111-8111-111111111111" } }) });
+    expect(Object.keys(broker.calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
+    expectPrivateRawDirectory(broker.calls[1].privateRawDirectory, join(root, "cli-continuation"));
     expect(broker.calls[1].request.prompt).toContain(JSON.stringify(closure_evidence, null, 2));
     expect(broker.calls[1].request.prompt).toContain(JSON.stringify(cross_stage_carryovers, null, 2));
   });
