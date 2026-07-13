@@ -151,6 +151,30 @@ describe("ReviewRoundFacade", () => {
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
+  it("keeps a new blocking finding only when its exact line is host-proven new to this delta", async () => {
+    const tracking = root(); let calls = 0; let current; let continuationPacket;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      calls += 1;
+      const raw = JSON.parse(output(request.packet ?? continuationPacket ?? current, calls === 1 ? "pass" : "revise_required"));
+      if (calls > 1) {
+        raw.findings[0].line = 4;
+        raw.findings[0].evidence = "unified_diff:a:4 shows the newly introduced invariant breach";
+        raw.checklist.find((item) => item.id === "H1").evidence = "unified_diff:a:4 proves H1 failed in this delta";
+      }
+      return { runtime_id: "92929292-9292-4292-8292-929292929292", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(raw) }] };
+    }) });
+    const initial = trustedPacket(tracking); current = initial;
+    await facade.run(facade.prepare({ task_id: "new-line-proof", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
+    const next = advancePacket(tracking, initial); current = next;
+    const prepared = await facade.prepare({ task_id: "new-line-proof", stage: "build-code", review_flow_id: "flow", packet: next, repository_root: tracking, continuation: true, closure_evidence: [] });
+    continuationPacket = prepared.packet;
+    const result = await facade.run(prepared);
+    expect(result.provider_outcomes).toEqual([expect.objectContaining({ business_valid: true, semantic_verdict: "revise_required" })]);
+    expect(result.merged_findings).toEqual([expect.objectContaining({ severity: "blocking" })]);
+    expect(result.merged_findings[0]).not.toHaveProperty("late_finding");
+    expect(result.hard_gates).toHaveLength(1);
+  });
+
   it("isolates make-decision tracks and publishes their aggregate stage result", async () => {
     const tracking = root(); const sharedFlow = "shared-flow";
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {

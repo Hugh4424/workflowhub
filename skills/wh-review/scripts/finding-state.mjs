@@ -68,7 +68,7 @@ export function reconcileFindingState({ previousFindings = [], currentFindings =
   for (const candidate of currentFindings) {
     if (previous.has(candidate.finding_id)) continue;
     const item = clone(candidate); item.status = "open";
-    if (isBlocking(item, contractHardIds) && !introducedBlockingIds.has(item.finding_id) && !previouslyImpossibleIds.has(item.finding_id)) {
+    if (isBlocking(item, contractHardIds) && (!introducedBlockingIds.has(item.finding_id) || !previouslyImpossibleIds.has(item.finding_id))) {
       item.severity = "minor"; item.late_finding = true;
     }
     item.blocking_streak = isBlocking(item, contractHardIds) ? 1 : 0;

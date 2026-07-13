@@ -44,6 +44,21 @@ describe("finding continuation state", () => {
     expect(result.open_blocking).toHaveLength(0);
   });
 
+  it("requires both host proofs before a new blocking finding may remain blocking", () => {
+    const onlyIntroduced = reconcileFindingState({
+      currentFindings: [finding("new")], businessRound: 2,
+      introducedBlockingIds: new Set(["new"]), previouslyImpossibleIds: new Set(),
+    });
+    expect(onlyIntroduced.findings[0]).toMatchObject({ severity: "minor", late_finding: true });
+
+    const bothProven = reconcileFindingState({
+      currentFindings: [finding("proven")], businessRound: 2,
+      introducedBlockingIds: new Set(["proven"]), previouslyImpossibleIds: new Set(["proven"]),
+    });
+    expect(bothProven.findings[0]).toMatchObject({ severity: "blocking" });
+    expect(bothProven.findings[0]).not.toHaveProperty("late_finding");
+  });
+
   it("does not hard-gate a late finding even when its rule is a contract hard invariant", () => {
     expect(isBlocking({ ...finding("late", "minor"), late_finding: true }, new Set(["H1"]))).toBe(false);
   });

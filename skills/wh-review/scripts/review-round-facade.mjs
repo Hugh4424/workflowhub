@@ -41,6 +41,26 @@ function parseOutput(value) {
 }
 function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
+function addedDeltaLineKeys(unifiedDiff) {
+  const keys = new Set();
+  let file = null; let nextLine = null;
+  for (const line of String(unifiedDiff ?? "").split("\n")) {
+    if (line.startsWith("+++ ")) {
+      const candidate = line.slice(4).replace(/^b\//, "");
+      file = candidate === "/dev/null" || !safeRelativePath(candidate) ? null : candidate;
+      nextLine = null;
+      continue;
+    }
+    const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) { nextLine = Number(hunk[1]); continue; }
+    if (nextLine === null) continue;
+    if (line.startsWith("+")) { if (file) keys.add(`${file}\0${nextLine}`); nextLine += 1; continue; }
+    if (line.startsWith(" ")) { nextLine += 1; continue; }
+    if (line.startsWith("-")) continue;
+    if (line.startsWith("\\ No newline")) continue;
+  }
+  return keys;
+}
 function manifestValue(packet) {
   const { packet_hash, manifest_hash, ...materials } = packet;
   return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash, source_revision: materials.source_revision };
@@ -366,10 +386,11 @@ export class ReviewRoundFacade {
       // is present in the host-verified delta; otherwise the state machine
       // marks it late and caps it at minor.
       const previousFindings = prepared.delta?.previous_findings ?? [];
-      const changedPaths = new Set((prepared.delta?.delta_manifest?.changed_files ?? []).flatMap((item) => [item.path, item.old_path].filter(Boolean)));
-      const introducedBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial" || (!previousFindings.some((old) => old.finding_id === item.finding_id) && changedPaths.has(item.file))).map((item) => item.finding_id));
+      const addedLines = addedDeltaLineKeys(prepared.delta?.affected_materials?.changes_diff);
+      const provenNewBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial"
+        || (!previousFindings.some((old) => old.finding_id === item.finding_id) && addedLines.has(`${item.file}\0${item.line}`))).map((item) => item.finding_id));
       const closureBundleGateIds = new Set((prepared.closure_bundle_gates ?? []).map((item) => item.finding_id));
-      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds, contractHardIds: prepared.stage_contract_rules.hardIds });
+      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds: provenNewBlockingIds, previouslyImpossibleIds: provenNewBlockingIds, contractHardIds: prepared.stage_contract_rules.hardIds });
       const merged_findings = findingState.findings;
       const contractHardIds = new Set(prepared.stage_contract_rules.hardIds);
       const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && isBlocking(finding, contractHardIds));
