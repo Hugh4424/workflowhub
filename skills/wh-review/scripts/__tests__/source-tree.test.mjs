@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertCurrentTree, buildTreeMaterial, captureWorktreeTree, headTree } from "../source-tree.mjs";
+import { assertCurrentTree, buildTreeMaterial, captureWorktreeTree, deleteReviewTreeRef, headTree, readReviewTreeRef, updateReviewTreeRef } from "../source-tree.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -60,6 +60,18 @@ describe("source-tree", () => {
     expect(git(repository, ["ls-tree", "-r", "--name-only", snapshotTree])).not.toContain("ignored.txt");
     expect(git(repository, ["show", `${snapshotTree}:staged.txt`])).toBe("unstaged worktree wins");
     expect(git(repository, ["show", `${snapshotTree}:untracked.txt`])).toBe("untracked is reviewable");
+  });
+
+  it("excludes host-owned review ledgers without excluding nearby source changes", () => {
+    const repository = root(); const baseTree = headTree(repository);
+    mkdirSync(join(repository, "task", "reviews"), { recursive: true });
+    writeFileSync(join(repository, "task", "reviews", "round-receipt.json"), "host-private receipt\n");
+    writeFileSync(join(repository, "task", "implementation.txt"), "review this source file\n");
+
+    const snapshot = captureWorktreeTree(repository, { baseTree, excludePaths: ["task/reviews"] });
+    const names = git(repository, ["ls-tree", "-r", "--name-only", snapshot]).split("\n");
+    expect(names).toContain("task/implementation.txt");
+    expect(names).not.toContain("task/reviews/round-receipt.json");
   });
 
   it("builds binary-safe material and file hashes directly from the captured tree", () => {
@@ -133,5 +145,20 @@ describe("source-tree", () => {
     expect(() => assertCurrentTree(repository, approvedTree)).not.toThrow();
     writeFileSync(join(repository, "newly-untracked.txt"), "not reviewed\n");
     expect(() => assertCurrentTree(repository, approvedTree)).toThrow(/WORKTREE_DRIFT_AFTER_REVIEW/);
+  });
+
+  it("pins only the latest approved review tree and removes it when the flow ends", () => {
+    const repository = root(); const first = captureWorktreeTree(repository);
+    const ref = "refs/workflowhub/review/task-build-code-flow";
+
+    updateReviewTreeRef(repository, ref, first);
+    expect(readReviewTreeRef(repository, ref)).toBe(first);
+    writeFileSync(join(repository, "modified.txt"), "second review tree\n");
+    const second = captureWorktreeTree(repository, { baseTree: first });
+    updateReviewTreeRef(repository, ref, second);
+    expect(readReviewTreeRef(repository, ref)).toBe(second);
+
+    deleteReviewTreeRef(repository, ref);
+    expect(readReviewTreeRef(repository, ref)).toBeNull();
   });
 });

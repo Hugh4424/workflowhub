@@ -65,14 +65,8 @@ function git(root, args, encoding = "utf8") { return execFileSync("git", args, {
 function manifest(packet) {
   return sha(canonical({ diff_sha256: packet.diff_sha256, changed_files: packet.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: packet.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: packet.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: packet.test_evidence, host_verified_facts: packet.host_verified_facts, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, source_revision: packet.source_revision }));
 }
-function reviewPacket(root, base) {
-  const head = git(root, ["rev-parse", "HEAD"]);
-  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
-  const oldBytes = execFileSync("git", ["show", `${base}:a`], { cwd: root });
-  const bytes = execFileSync("git", ["show", `${head}:a`], { cwd: root });
-  const packet = { version: "review-packet.v1", stage: "build-code", review_track: null, unified_diff, changed_files: [{ path: "a", status: "modified", sha256: sha(bytes), size: bytes.length, old_sha256: sha(oldBytes), old_size: oldBytes.length }], raw_requirement: "make state publication durable", acceptance_design_excerpt: "AC: publication happens after persistence", test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])), source_revision: { base, head } };
-  packet.diff_sha256 = sha(unified_diff); packet.manifest_hash = manifest(packet);
-  return packet;
+function reviewPacket() {
+  return { version: "review-packet.v1", stage: "build-code", review_track: null, raw_requirement: "make state publication durable", acceptance_design_excerpt: "AC: publication happens after persistence", test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])) };
 }
 function repository() {
   const root = mkdtempSync(join(tmpdir(), "wh-review-cli-continuation-")); roots.push(root);
@@ -102,18 +96,18 @@ describe("wh-review CLI continuation", () => {
     const { runReviewRound } = await import(cli.href);
     const { root, base } = repository();
     const packetRoot = hostConfig(root);
-    const firstPacket = reviewPacket(root, base);
-    await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: root, repository_root: root });
+    const firstPacket = reviewPacket();
+    await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: root });
     const firstReceipt = JSON.parse(readFileSync(join(root, "cli-continuation", "reviews", "private", "round-build-code-flow-1", "round-receipt.json"), "utf8"));
     const findingId = firstReceipt.merged_findings[0].finding_id;
 
-    writeFileSync(join(root, "a"), "first change\nfixed\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "fix"]);
-    const secondPacket = reviewPacket(root, base); broker.currentPacket = secondPacket;
+    writeFileSync(join(root, "a"), "first change\nfixed\n");
+    const secondPacket = reviewPacket(); broker.currentPacket = secondPacket;
     const closure_evidence = [{ finding_id: findingId, evidence: "changes.diff:a:2 records the persistence fix" }];
     const upstream = { intent: { stage: "build-plan" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "verification is scheduled after the build" }] };
     const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = sha(upstreamBytes); const upstreamPath = join(root, "cli-continuation", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
     const cross_stage_carryovers = [{ carryover_id: "verify-later", source_stage: "build-plan", source_core_receipt_hash: upstreamHash, status: "open", evidence: "verification is scheduled after the build" }];
-    const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, repository_root: root, continuation: true, closure_evidence, cross_stage_carryovers });
+    const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, continuation: true, closure_evidence, cross_stage_carryovers });
 
     expect(result.transport.continuation_eligible).toBe(true);
     expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([packetRoot, packetRoot]);

@@ -8,6 +8,7 @@ import { ReviewRoundFacade } from "../review-round-facade.mjs";
 import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 import { reviewPacketHash } from "../review-packet-integrity.mjs";
+import { readReviewTreeRef } from "../source-tree.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -143,6 +144,84 @@ describe("ReviewRoundFacade", () => {
     expect(prepared.packet.packet_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(prepared.packet.manifest_hash).toMatch(/^[a-f0-9]{64}$/);
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("excludes only a task's host review ledger when source and tracking roots are shared", async () => {
+    const tracking = root();
+    mkdirSync(join(tracking, "shared-task", "reviews"), { recursive: true });
+    writeFileSync(join(tracking, "shared-task", "reviews", "round-receipt.json"), "host-owned receipt\n");
+    writeFileSync(join(tracking, "shared-task", "implementation.txt"), "user source must be reviewed\n");
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+
+    const prepared = await facade.prepare({ task_id: "shared-task", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+
+    expect(prepared.packet.unified_diff).toContain("user source must be reviewed");
+    expect(prepared.packet.unified_diff).not.toContain("host-owned receipt");
+    expect(prepared.packet.changed_files.map((entry) => entry.path)).toContain("shared-task/implementation.txt");
+    expect(prepared.packet.changed_files.map((entry) => entry.path)).not.toContain("shared-task/reviews/round-receipt.json");
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("continues from the last business-valid uncommitted tree and advances one protected ref", async () => {
+    const tracking = root(); const calls = [];
+    const facade = new ReviewRoundFacade({
+      taskTrackingRoot: tracking,
+      broker: fakeBroker(async (request) => {
+        calls.push(request);
+        const current = request.packet ?? {
+          packet_hash: request.request.prompt.match(/current_packet_hash=([a-f0-9]{64})/)?.[1], manifest_hash: request.request.prompt.match(/current_manifest_hash=([a-f0-9]{64})/)?.[1], diff_sha256: request.request.prompt.match(/current_diff_sha256=([a-f0-9]{64})/)?.[1],
+          contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
+        };
+        return { runtime_id: "80808080-8080-4080-8080-808080808080", providers: [{ provider: "opencode", status: "completed", session_id: "continued", output: output(current) }] };
+      }),
+    });
+
+    writeFileSync(join(tracking, "a"), "first uncommitted review\n");
+    const first = await facade.run(facade.prepare({ task_id: "tree-continuation", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+    const flowPath = join(tracking, "tree-continuation", "reviews", "private", "flows", "build-code-flow.json");
+    const firstFlow = JSON.parse(readFileSync(flowPath, "utf8"));
+    expect(firstFlow.last_reviewed_tree).toMatch(/^[a-f0-9]{40,64}$/);
+    expect(firstFlow.review_tree_ref).toMatch(/^refs\/workflowhub\/review\//);
+    const firstTree = firstFlow.last_reviewed_tree;
+
+    writeFileSync(join(tracking, "a"), "first uncommitted review\nfixed without commit\n");
+    const second = await facade.run(facade.prepare({ task_id: "tree-continuation", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true }));
+    const secondFlow = JSON.parse(readFileSync(flowPath, "utf8"));
+    expect(second.intent.round_kind).toBe("continuation");
+    expect(second.delta_manifest.changed_files.map((item) => item.path)).toContain("a");
+    expect(secondFlow.last_reviewed_tree).not.toBe(firstTree);
+    expect(secondFlow.review_tree_ref).toBe(firstFlow.review_tree_ref);
+    expect(calls[1].request.continuation).toEqual({ runtime_id: "80808080-8080-4080-8080-808080808080" });
+  });
+
+  it("records a passed tree as approved, rejects drift, and cleans the ref only after final verification", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "final", output: output(request.packet) }] })) });
+    writeFileSync(join(tracking, "a"), "approved without a commit\n");
+    const result = await facade.run(facade.prepare({ task_id: "final-tree", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+    facade.publish(result, { items: [] });
+    const flowPath = join(tracking, "final-tree", "reviews", "private", "flows", "build-code-flow.json");
+    const published = JSON.parse(readFileSync(flowPath, "utf8"));
+    expect(published.approved_tree).toBe(published.last_reviewed_tree);
+    expect(git(tracking, ["rev-parse", published.review_tree_ref])).toBe(published.approved_tree);
+
+    writeFileSync(join(tracking, "a"), "drift after approval\n");
+    expect(() => facade.verifyFinal({ task_id: "final-tree", stage: "build-code", review_flow_id: "flow" })).toThrow(/WORKTREE_DRIFT_AFTER_REVIEW/);
+    expect(git(tracking, ["rev-parse", published.review_tree_ref])).toBe(published.approved_tree);
+    writeFileSync(join(tracking, "a"), "approved without a commit\n");
+    expect(facade.verifyFinal({ task_id: "final-tree", stage: "build-code", review_flow_id: "flow" })).toMatchObject({ finalized: true, approved_tree: published.approved_tree });
+    expect(readReviewTreeRef(tracking, published.review_tree_ref)).toBeNull();
+  });
+
+  it("deletes the old review-tree ref when a human reset starts a new flow", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "reset", output: output(request.packet, "escalate_to_human") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "reset-tree", stage: "build-code", review_flow_id: "old", packet: hostPacket() }));
+    const oldFlowPath = join(tracking, "reset-tree", "reviews", "private", "flows", "build-code-old.json");
+    const oldFlow = JSON.parse(readFileSync(oldFlowPath, "utf8"));
+    expect(git(tracking, ["rev-parse", oldFlow.review_tree_ref])).toBe(oldFlow.last_reviewed_tree);
+
+    facade.reset({ task_id: "reset-tree", stage: "build-code", review_flow_id: "old", new_review_flow_id: "new", reason: "human reset", human_approval_ref: "approval-1" });
+    expect(readReviewTreeRef(tracking, oldFlow.review_tree_ref)).toBeNull();
+    expect(result.continuation_eligible).toBe(true);
   });
 
   it("blocks a flow after the configured number of invalid disposition submissions", async () => {
@@ -452,8 +531,10 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
     const result = await facade.run(facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", packet: trusted }));
+    const oldFlow = JSON.parse(readFileSync(join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-old-flow.json"), "utf8"));
     const blockedFlowPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.json"); mkdirSync(blockedFlowPath, { recursive: true });
     expect(() => facade.reset({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "broken-flow", reason: "approved but disk failure", human_approval_ref: "human-approval-99" })).toThrow();
+    expect(readReviewTreeRef(tracking, oldFlow.review_tree_ref)).toBe(oldFlow.last_reviewed_tree);
     expect(existsSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"))).toBe(false);
     const approvalPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.reset-approval.json");
     expect(existsSync(approvalPath)).toBe(true);
@@ -584,7 +665,7 @@ describe("ReviewRoundFacade", () => {
     const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(upstreamBytes); const upstreamPath = join(tracking, "real-delta", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
     const secondPrepared = await facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: currentPacket, continuation: true,
       closure_evidence: [{ finding_id: findingId, evidence: "fixed in the new commit and unit test passed" }], cross_stage_carryovers: [{ carryover_id: "verify-later", source_stage: "build-plan", source_core_receipt_hash: upstreamHash, status: "open", evidence: "requires staging" }] });
-    expect(secondPrepared.packet.source_revision.head).not.toBe(first.intent.baseline_packet_hash);
+    expect(secondPrepared.packet.source_revision.snapshot_tree).not.toBe(first.intent.baseline_packet_hash);
     const second = await facade.run(secondPrepared);
     expect(second.intent).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash });
     expect(Object.keys(calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
@@ -940,21 +1021,11 @@ describe("ReviewRoundFacade", () => {
     expect(result.provider_outcomes[0]).toMatchObject({ packet_status: "material_incomplete", business_valid: false, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" }); expect(result.continuation_eligible).toBe(false);
   });
 
-  it("seals real diff, manifest, and changed-file bytes before broker dispatch", async () => {
+  it("rejects every caller attempt to substitute host-owned source bytes", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");
-    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: badDiff })).rejects.toThrow(/MATERIAL_INCOMPLETE.*diff_sha256/);
-    const badFile = packet({ root: tracking }); badFile.changed_files[0].size = 2; refreshPacketHashes(badFile);
-    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow2", packet: badFile })).rejects.toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
-    const fakeDiff = packet({ root: tracking }); fakeDiff.unified_diff = "diff --git a/other b/other\n"; refreshPacketHashes(fakeDiff);
-    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff })).rejects.toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
-  });
-
-  it("accepts a JSON packet that spells non-renamed old_path as null", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    const value = packet({ root: tracking }); value.changed_files[0].old_path = null; refreshPacketHashes(value);
-    const prepared = await facade.prepare({ task_id: "null-old-path", stage: "build-code", review_flow_id: "flow", packet: value });
-    rmSync(prepared.lock, { recursive: true, force: true });
+    for (const source of [{ unified_diff: "forged" }, { changed_files: [] }, { diff_sha256: hash("forged") }, { source_revision: { base_tree: "0".repeat(40), snapshot_tree: "1".repeat(40), captured_head: "2".repeat(40) } }]) {
+      expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: `flow-${Object.keys(source)[0]}`, packet: { ...packet({ root: tracking }), ...source } })).toThrow(/SOURCE_FIELDS_FORBIDDEN/);
+    }
   });
 
   it("rejects caller-provided snapshots instead of treating them as source evidence", () => {

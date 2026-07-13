@@ -25,7 +25,7 @@ describe("schema-validator", () => {
       stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
       diff_sha256: hash, unified_diff: "", changed_files: [], raw_requirement: "x",
       acceptance_design_excerpt: "x", test_evidence: [], host_verified_facts: [],
-      contract_hash: hash, skill_bundle_hash: hash, source_revision: { base: "b".repeat(40), head: "c".repeat(40) },
+      contract_hash: hash, skill_bundle_hash: hash, source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
       fenced: "secret-value",
     }, "/fenced");
   });
@@ -36,12 +36,25 @@ describe("schema-validator", () => {
       stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
       diff_sha256: hash, unified_diff: "", raw_requirement: "x", acceptance_design_excerpt: "x",
       test_evidence: [], host_verified_facts: [], contract_hash: hash, skill_bundle_hash: hash,
-      source_revision: { base: "b".repeat(40), head: "c".repeat(40) },
+      source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
       changed_files: [{ path: "a", old_path: null, status: "modified", sha256: hash, size: 1, old_sha256: hash, old_size: 1 }],
     };
     expect(validateSchema("review-packet", packet)).toBe(packet);
     packet.changed_files[0].status = "renamed";
     expectSchemaError("review-packet", packet, "/changed_files/0/old_path");
+  });
+
+  it("accepts the complete host tree revision and rejects the retired commit pair", () => {
+    const packet = {
+      version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
+      stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
+      diff_sha256: hash, unified_diff: "", changed_files: [], raw_requirement: "x",
+      acceptance_design_excerpt: "x", test_evidence: [], host_verified_facts: [], contract_hash: hash, skill_bundle_hash: hash,
+      source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
+    };
+    expect(validateSchema("review-packet", packet)).toBe(packet);
+    packet.source_revision = { base: "b".repeat(40), head: "c".repeat(40) };
+    expectSchemaError("review-packet", packet, "/source_revision/base");
   });
 
   it("rejects an invalid review track and unknown intent controls", () => {

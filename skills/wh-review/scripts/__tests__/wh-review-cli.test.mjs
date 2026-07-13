@@ -5,10 +5,11 @@ import { join } from "node:path";
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 
 describe("wh-review v4 CLI", () => {
-  it("exports only the V4 run/reset workflow boundary", async () => {
+  it("exports only the V4 run/reset/verify-final workflow boundary", async () => {
     const mod = await import(cli.href);
     expect(typeof mod.runReviewRound).toBe("function");
     expect(typeof mod.resetReviewFlow).toBe("function");
+    expect(typeof mod.verifyFinalReview).toBe("function");
     expect(mod.prepareReview).toBeUndefined();
     expect(mod.executeReview).toBeUndefined();
   });
@@ -17,7 +18,7 @@ describe("wh-review v4 CLI", () => {
     const source = readFileSync(cli, "utf8");
     for (const forbidden of ["invoke-review-engine", "prepareRoundState", "run-heterologous", "--diff", "--output"]) expect(source).not.toContain(forbidden);
     expect(source).toContain("BrokerClient");
-    expect(source).toContain('command !== "run" && command !== "reset"');
+    expect(source).toContain('command !== "run" && command !== "reset" && command !== "verify-final"');
     expect(source).not.toMatch(/provider_capabilities:\s*input|providerCapabilities:\s*input|attachment_delivery:\s*input|attachmentDelivery:\s*input/);
   });
 

@@ -27,6 +27,11 @@ function treeOid(root, revision) {
   return String(git(root, ["rev-parse", "--verify", `${revision}^{tree}`])).trim();
 }
 
+function reviewRef(root, ref) {
+  if (typeof ref !== "string" || !/^refs\/workflowhub\/review\/[A-Za-z0-9._/-]+$/.test(ref) || ref.includes("..") || ref.endsWith("/")) throw new TypeError("invalid review tree ref");
+  return ref;
+}
+
 function safeRelativePath(path) {
   return typeof path === "string" && path.length > 0 && !path.includes("\\") && !path.startsWith("/")
     && !path.split("/").some((part) => !part || part === "." || part === "..");
@@ -71,15 +76,16 @@ export function capturedHead(root) {
   return String(git(repository, ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
 }
 
-export function captureWorktreeTree(root, { baseTree } = {}) {
+export function captureWorktreeTree(root, { baseTree, excludePaths = [] } = {}) {
   const repository = repositoryRoot(root);
   const base = treeOid(repository, baseTree ?? "HEAD");
+  if (!Array.isArray(excludePaths) || excludePaths.some((path) => !safeRelativePath(path))) throw new TypeError("source tree exclusions must be safe repository-relative paths");
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "wh-review-index-"));
   const temporaryIndex = join(temporaryDirectory, "index");
   try {
     const env = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
     git(repository, ["read-tree", base], { env });
-    git(repository, ["add", "-A", "--", "."], { env });
+    git(repository, ["add", "-A", "--", ".", ...excludePaths.map((path) => `:(exclude)${path}`)], { env });
     return String(git(repository, ["write-tree"], { env })).trim();
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
@@ -122,4 +128,26 @@ export function assertCurrentTree(root, expectedTree) {
     throw error;
   }
   return current;
+}
+
+export function updateReviewTreeRef(root, ref, tree) {
+  const repository = repositoryRoot(root);
+  const name = reviewRef(repository, ref);
+  const oid = treeOid(repository, tree);
+  git(repository, ["update-ref", name, oid]);
+  return oid;
+}
+
+export function readReviewTreeRef(root, ref) {
+  const repository = repositoryRoot(root);
+  const name = reviewRef(repository, ref);
+  try { return String(execFileSync("git", ["rev-parse", "--verify", `${name}^{tree}`], { cwd: repository, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
+  catch { return null; }
+}
+
+export function deleteReviewTreeRef(root, ref) {
+  const repository = repositoryRoot(root);
+  const name = reviewRef(repository, ref);
+  try { git(repository, ["update-ref", "-d", name]); }
+  catch { /* Deletion is idempotent so reset/finalize can be retried safely. */ }
 }

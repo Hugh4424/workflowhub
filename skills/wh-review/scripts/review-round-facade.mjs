@@ -11,7 +11,7 @@ import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "./review-packet-integrity.mjs";
-import { buildTreeMaterial, captureWorktreeTree, capturedHead, headTree } from "./source-tree.mjs";
+import { buildTreeMaterial, captureWorktreeTree, capturedHead, deleteReviewTreeRef, headTree, readReviewTreeRef, updateReviewTreeRef } from "./source-tree.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
@@ -95,11 +95,17 @@ function rejectCallerSourceFields(value, scope = "caller input") {
   const fields = Object.keys(value ?? {}).filter((field) => sourceOwnedFields.has(field));
   if (fields.length) throw new Error(`SOURCE_FIELDS_FORBIDDEN: ${scope} cannot provide ${fields.join(", ")}`);
 }
-function buildHostWorktreeSource(root, { baseTree } = {}) {
+function buildHostWorktreeSource(root, { baseTree, excludePaths } = {}) {
   const base_tree = baseTree ?? headTree(root);
-  const snapshot_tree = captureWorktreeTree(root, { baseTree: base_tree });
+  const snapshot_tree = captureWorktreeTree(root, { baseTree: base_tree, excludePaths });
   const material = buildTreeMaterial(root, { baseTree: base_tree, snapshotTree: snapshot_tree });
   return { ...material, source_revision: { ...material.source_revision, captured_head: capturedHead(root) } };
+}
+function internalLedgerExclusion(sourceRoot, taskTrackingRoot, taskId) {
+  const candidate = relative(resolve(sourceRoot), taskRoot(taskTrackingRoot, taskId));
+  // A task directory can also contain user-owned source. Exclude only the
+  // facade's ledger beneath it, never the whole task directory.
+  return safeRelativePath(candidate) ? [join(candidate, "reviews")] : [];
 }
 function processStartIdentity(pid) {
   try {
@@ -194,6 +200,7 @@ export class ReviewRoundFacade {
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.json`); }
+  #treeRef(intent) { return `refs/workflowhub/review/${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}`; }
   #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.reset-approval.json`); }
   #lock(intent) {
     const name = intent.stage === "make-decision" ? `${intent.task_id}-${reviewStageStorageKey(intent.stage, intent.review_track)}.lock` : `${intent.task_id}.lock`;
@@ -225,7 +232,7 @@ export class ReviewRoundFacade {
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
-    const initialHostSource = input.continuation === true ? null : buildHostWorktreeSource(this.sourceRoot);
+    const initialHostSource = input.continuation === true ? null : buildHostWorktreeSource(this.sourceRoot, { excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
     const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
     return this.#prepareUnderLock(input, lock, initialHostSource);
   }
@@ -244,6 +251,7 @@ export class ReviewRoundFacade {
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
     if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
+    if (continuation && (!/^[a-f0-9]{40,64}$/.test(prior?.last_reviewed_tree ?? "") || typeof prior?.review_tree_ref !== "string" || readReviewTreeRef(this.sourceRoot, prior.review_tree_ref) !== prior.last_reviewed_tree)) throw new Error("blocked_by_human_confirmation: last reviewed tree is unavailable; use reset with human approval");
     if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object")) throw new Error("blocked_by_human_confirmation: initial provider delivery snapshot is missing; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const candidateProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : doctorCandidates;
@@ -277,9 +285,9 @@ export class ReviewRoundFacade {
       priorReceipt = readFrozen(prior.previous_receipt_ref, prior.previous_receipt_sha256, "previous private receipt");
       const priorBaselineBinding = priorPacket.round_kind === "initial" ? priorPacket.packet_hash : priorPacket.baseline_packet_hash;
       if (baselinePacket.packet_hash !== prior.baseline_packet_hash || priorBaselineBinding !== prior.baseline_packet_hash || priorPacket.packet_hash !== prior.packet_hash) throw new Error("blocked_by_human_confirmation: baseline packet binding is inconsistent; use reset with human approval");
-      if (packet.source_revision?.base !== baselinePacket.source_revision?.base) throw new Error("blocked_by_human_confirmation: current packet is not based on the frozen baseline; use reset with human approval");
       if (packet.round_kind !== undefined && packet.round_kind !== "continuation") throw new Error("blocked_by_human_confirmation: caller round_kind conflicts with continuation flow");
       if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== prior.baseline_packet_hash) throw new Error("blocked_by_human_confirmation: caller baseline_packet_hash conflicts with frozen baseline");
+      Object.assign(packet, buildHostWorktreeSource(this.sourceRoot, { baseTree: prior.last_reviewed_tree, excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) }));
       packet.round_kind = "continuation"; packet.baseline_packet_hash = prior.baseline_packet_hash;
     } else {
       if (input.closure_evidence !== undefined) return this.#materialIncomplete(input, "closure_evidence is continuation-only");
@@ -295,8 +303,7 @@ export class ReviewRoundFacade {
     const baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
     if (continuation) {
       const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
-      const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
-      const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head }, { contextLines: 0 });
+      const deltaSource = buildTreeMaterial(this.sourceRoot, { baseTree: prior.last_reviewed_tree, snapshotTree: packet.source_revision.snapshot_tree });
       const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource, stageContract.hardIds);
       const closureEvidence = closureCheck.items;
       closureBundleGates = closureCheck.unverifiedBlockingIds;
@@ -418,9 +425,13 @@ export class ReviewRoundFacade {
         provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       const priorFlow = this.#readFlow(intent);
       const packetRef = join(prepared.dir, "review-packet.json"); const packetFileHash = sha(readFileSync(packetRef));
+      const reviewedTree = packet.source_revision.snapshot_tree;
+      const reviewTreeRef = priorFlow?.review_tree_ref ?? this.#treeRef(intent);
+      if (aggregate.length) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, reviewedTree);
       this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
-        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)) });
+        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)),
+        ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) });
       // A provider-originated escalation is already a semantic result. Publish
       // its redacted gate projection in this same run, instead of waiting for
       // a later prepare() recovery pass to revoke a stale public pass.
@@ -767,7 +778,7 @@ export class ReviewRoundFacade {
     atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
     atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
     atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
-    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now() });
+    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) });
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }
@@ -777,6 +788,7 @@ export class ReviewRoundFacade {
     const flow = { task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
     const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_track ?? "default"}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
     try {
+      const previous = this.#readFlow({ task_id, stage, review_track, review_flow_id });
       const flowPath = this.#flow(flow), approvalPath = this.#resetApproval(flow);
       const approval = { version: 1, task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, human_approval_ref, reason, approved_at_ms: this.now() };
       if (existsSync(approvalPath)) {
@@ -788,7 +800,27 @@ export class ReviewRoundFacade {
       writeImmutable(flowPath, flow);
       const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); const approvalBytes = readFileSync(approvalPath);
       const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_track, review_flow_id, new_review_flow_id: nextId, reset_approval_ref: relative(privateRoot, approvalPath), reset_approval_sha256: sha(approvalBytes), reason, human_approval_ref });
+      // Keep the old snapshot alive until the successor flow and every
+      // supersession marker are durably written; otherwise a failed reset
+      // would destroy the only reproducible review source.
+      if (typeof previous?.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, previous.review_tree_ref);
       return { ...flow, reset_approval_ref: relative(privateRoot, approvalPath), superseded_receipt_refs };
     } finally { this.#releaseLock(lock); }
+  }
+
+  verifyFinal({ task_id, stage, review_track = null, review_flow_id }) {
+    assertSafeTaskId(task_id); assertKnownStage(stage); assertReviewTrack(stage, review_track); assertSafeReviewFlowId(review_flow_id);
+    const intent = { task_id, stage, review_track, review_flow_id };
+    const flow = this.#readFlow(intent);
+    if (!/^[a-f0-9]{40,64}$/.test(flow?.approved_tree ?? "")) throw new Error("FINAL_REVIEW_TREE_MISSING: publish a semantic pass before final verification");
+    const current = captureWorktreeTree(this.sourceRoot, { baseTree: flow.approved_tree, excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, task_id) });
+    if (current !== flow.approved_tree) {
+      const error = new Error(`WORKTREE_DRIFT_AFTER_REVIEW: current tree ${current} differs from approved tree ${flow.approved_tree}`);
+      error.code = "WORKTREE_DRIFT_AFTER_REVIEW";
+      throw error;
+    }
+    if (typeof flow.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, flow.review_tree_ref);
+    this.#writeFlow(intent, { ...flow, review_tree_ref: null, finalized_at_ms: this.now() });
+    return { task_id, stage, review_track, review_flow_id, approved_tree: flow.approved_tree, finalized: true };
   }
 }

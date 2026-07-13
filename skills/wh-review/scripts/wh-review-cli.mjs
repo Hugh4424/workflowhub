@@ -22,7 +22,6 @@ export async function runReviewRound(input) {
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
     closure_evidence: input.closure_evidence, cross_stage_carryovers: input.cross_stage_carryovers,
     attachment_root: thirdReview.attachmentRoot,
-    repository_root: input.repository_root ?? input.repositoryRoot,
   });
   const result = await facade.run(prepared);
   // `run()` owns private provider semantics so the host can disposition findings,
@@ -39,6 +38,13 @@ export async function runReviewRound(input) {
   return input.dispositions ? { transport, ...facade.publish(result, input.dispositions) } : { transport };
 }
 
+export function verifyFinalReview(input) {
+  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
+  if (!taskTrackingRoot) throw new TypeError("verify-final requires task_tracking_root");
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: { run() { throw new Error("verify-final does not run broker"); } } });
+  return facade.verifyFinal({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId });
+}
+
 export function resetReviewFlow(input) {
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
   if (!taskTrackingRoot) throw new TypeError("reset requires task_tracking_root");
@@ -48,9 +54,9 @@ export function resetReviewFlow(input) {
 
 async function main() {
   const command = process.argv[2];
-  if (command !== "run" && command !== "reset") throw new Error("usage: wh-review-cli.mjs <run|reset> [input.json]");
+  if (command !== "run" && command !== "reset" && command !== "verify-final") throw new Error("usage: wh-review-cli.mjs <run|reset|verify-final> [input.json]");
   const input = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
-  const result = command === "run" ? await runReviewRound(input) : resetReviewFlow(input);
+  const result = command === "run" ? await runReviewRound(input) : command === "reset" ? resetReviewFlow(input) : verifyFinalReview(input);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
