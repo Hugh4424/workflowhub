@@ -4,6 +4,11 @@ import { resolve } from "node:path";
 
 const workflows = [
   {
+    stage: "make-decision",
+    path: "workflows/make-decision/SKILL.md",
+    stageResultMarker: "## Produce a stage-result",
+  },
+  {
     stage: "build-spec",
     path: "workflows/build-spec/SKILL.md",
     stageResultMarker: "## Produce a stage-result",
@@ -53,4 +58,17 @@ describe("build-code committed-diff receipt base", () => {
     expect(content).toContain("const baseRef = process.env.WORKFLOWHUB_DIFF_BASE");
     expect(content).toContain('verifyReceipts("build-code", "<stageResultPath>", "<worktreeRoot>", { baseRef })');
   });
+});
+
+describe("Phase 2 observed-fact receipt wiring", () => {
+  for (const workflow of workflows) {
+    it(`${workflow.stage} writes manifest-bound entry and exit receipts with one shared attempt identity`, () => {
+      const content = readFileSync(resolve(workflow.path), "utf8");
+      expect(content).toContain("writeEntryReceipt");
+      expect(content).toContain("writeExitReceipt");
+      expect(content).toContain("workflow_run_id");
+      expect(content).toContain("attempt_id");
+      expect(content).toContain("step_id");
+    });
+  }
 });

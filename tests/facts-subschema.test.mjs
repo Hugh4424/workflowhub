@@ -633,7 +633,13 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
   it("positive: verdict + evidence_ref non-empty → ok", () => {
     const artifact = {
       ...base(),
-      facts: { verdict: "pass", evidence_ref: "evidence/verify-code-2026-06-24.json" },
+      facts: {
+        verdict: "pass",
+        evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_summary_ref: "evidence/audit-summary.json",
+        audit_verdict: "pass",
+        audit_summary_hash: "a".repeat(64),
+      },
     };
     const result = validateStageResult("verify-code", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
@@ -680,6 +686,65 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     const result = validateStageResult("verify-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/evidence_ref/);
+  });
+
+  it("rejects a consumer verdict when its canonical summary reference, hash, and verdict are absent", () => {
+    const artifact = {
+      ...base(),
+      facts: { verdict: "pass", evidence_ref: "evidence/verify-code-2026-06-24.json" },
+    };
+    const result = validateStageResult("verify-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/audit_summary_ref|audit_verdict|audit_summary_hash/);
+  });
+
+  it("accepts a consumer that exposes the canonical aggregator verdict and hash unchanged", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        verdict: "pass",
+        evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_summary_ref: "evidence/audit-summary.json",
+        audit_verdict: "pass",
+        audit_summary_hash: "a".repeat(64),
+      },
+    };
+    const result = validateStageResult("verify-code", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
+  });
+
+  it.each(["revise_required", "escalate_to_human"])(
+    "rejects non-canonical audit_verdict %s",
+    (audit_verdict) => {
+      const artifact = {
+        ...base(),
+        facts: {
+          verdict: "pass",
+          evidence_ref: "evidence/verify-code-2026-06-24.json",
+          audit_summary_ref: "evidence/audit-summary.json",
+          audit_verdict,
+          audit_summary_hash: "a".repeat(64),
+        },
+      };
+      const result = validateStageResult("verify-code", artifact);
+      expect(result.ok).toBe(false);
+      expect(result.errors.join(" ")).toMatch(/audit_verdict/);
+    },
+  );
+
+  it.each(["pass", "fail"])("accepts canonical audit_verdict %s", (audit_verdict) => {
+    const artifact = {
+      ...base(),
+      facts: {
+        verdict: "pass",
+        evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_summary_ref: "evidence/audit-summary.json",
+        audit_verdict,
+        audit_summary_hash: "a".repeat(64),
+      },
+    };
+    const result = validateStageResult("verify-code", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
   });
 });
 

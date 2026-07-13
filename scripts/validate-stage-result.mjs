@@ -216,6 +216,30 @@ export function validateStageResult(stage, artifact) {
     }
   }
 
+  if (stage === "verify-code") {
+    if (!("audit_summary_ref" in facts)) {
+      errors.push(`facts missing required key for stage "verify-code": "audit_summary_ref"`);
+    } else if (
+      typeof facts.audit_summary_ref !== "string" ||
+      facts.audit_summary_ref.trim() === "" ||
+      !facts.audit_summary_ref.endsWith(".json")
+    ) {
+      errors.push(`facts["audit_summary_ref"] for stage "verify-code" must be a non-empty JSON artifact path`);
+    }
+    if (!("audit_verdict" in facts)) {
+      errors.push(`facts missing required key for stage "verify-code": "audit_verdict"`);
+    } else if (!new Set(["pass", "fail"]).has(facts.audit_verdict)) {
+      errors.push(`facts["audit_verdict"] for stage "verify-code" must be pass or fail`);
+    }
+    if (!("audit_summary_hash" in facts)) {
+      errors.push(`facts missing required key for stage "verify-code": "audit_summary_hash"`);
+    } else if (typeof facts.audit_summary_hash !== "string" || !/^[a-f0-9]{64}$/.test(facts.audit_summary_hash)) {
+      errors.push(`facts["audit_summary_hash"] for stage "verify-code" must be a lowercase 64-hex SHA-256`);
+    }
+    // Audit ownership remains upstream: validate the receipt fields only; never
+    // parse the summary or recompute/override its verdict here.
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

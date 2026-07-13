@@ -43,6 +43,10 @@ recordSkeleton({
 
 # make-decision
 
+## Receipt wiring
+
+Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. Never emit the exit receipt before the durable result.
+
 ## Goal
 
 Work with the user to surface the real problem, agree on the narrowest viable scope, and capture every significant choice in the decision log. The output is the single authoritative source for what the change is trying to do and why.
@@ -235,7 +239,7 @@ Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.m
 3. Record the path of this file as facts key `decision_log_path`.
 4. Record `flow_profile` in `decision-log.md` as a 字符串 field on the task's decision record, using `full_vibecoding` or `fast_make_decision_to_code` as the suggested values. This is an informational placeholder only.
 
-## Produce stage-result
+## Produce a stage-result
 
 When the stage is complete, write a `stage-result` record with:
 
@@ -253,6 +257,21 @@ When the stage is complete, write a `stage-result` record with:
   "missing_items": [],
   "user_decision": true,
   "reason": "User confirmed direction and scope."
+}
+```
+
+After the durable Stage Result is written, call `writeExitReceipt` with the same `workflow_run_id`, `run_id`, `attempt_id`, and `step_id`.
+
+### Receipt verification
+
+After writing the stage-result and exit receipt, call:
+
+```js
+const { verifyReceipts } = await import("../../scripts/validate-stage-result.mjs");
+const receiptResult = verifyReceipts("make-decision", "<stageResultPath>", "<worktreeRoot>");
+if (!receiptResult.ok) {
+  process.stderr.write(`[receipt] FAIL: ${receiptResult.errors.join("; ")}\n`);
+  process.exit(1);
 }
 ```
 

@@ -18,6 +18,7 @@ import { tmpdir } from "os";
 import { createHash } from "crypto";
 
 import { getRealChangedFiles, verifyReceipts } from "../scripts/validate-stage-result.mjs";
+import { validateEntryPayload, validateExitPayload } from "../core/receipt-schema.mjs";
 
 let workDir;
 let repoDir;
@@ -136,6 +137,45 @@ function writeStageResult(dir, content) {
   writeFileSync(path, JSON.stringify(content));
   return path;
 }
+
+// ── Phase 2: canonical observed-fact identity ───────────────────────────────
+
+describe("Phase 2 receipt identity contract", () => {
+  const identity = {
+    workflow_run_id: "run-phase2-001",
+    stage_slug: "bc",
+    step_id: "bc.work.1",
+    attempt_id: "attempt-1",
+    timestamp: "2026-07-13T00:00:00.000Z",
+  };
+
+  it("accepts one narrow canonical entry identity with observed entry evidence", () => {
+    expect(() => validateEntryPayload({
+      ...identity,
+      event_type: "step_entry",
+      entry_evidence: { kind: "manifest", uri_or_path: "workflows/build-code/steps.json" },
+    })).not.toThrow();
+  });
+
+  it("accepts one narrow canonical terminal exit identity with completion evidence", () => {
+    expect(() => validateExitPayload({
+      ...identity,
+      event_type: "step_exit",
+      terminal_status: "success",
+      completion_evidence: { kind: "test", uri_or_path: "evidence/phase-2-GREEN.json" },
+    })).not.toThrow();
+  });
+
+  it.each(["attempt_id", "timestamp"]) ("rejects entry receipts without %s", (field) => {
+    const entry = {
+      ...identity,
+      event_type: "step_entry",
+      entry_evidence: { kind: "manifest", uri_or_path: "workflows/build-code/steps.json" },
+    };
+    delete entry[field];
+    expect(() => validateEntryPayload(entry)).toThrow(new RegExp(field));
+  });
+});
 
 // ── T004: getRealChangedFiles ────────────────────────────────────────────────
 

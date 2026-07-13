@@ -1,199 +1,180 @@
 /**
- * core/audit-aggregator.mjs
- *
- * Audit counting — pure functions, no I/O.
- * Uses the LATEST-exit view for counting final step outcomes.
- * Consumes receipt_write_warn events that carry original_exit_payload so that
- * a write failure never silently drops a step from the count.
+ * Canonical observed-fact reconciler. Expected topology is supplied by the
+ * manifest at the caller boundary; this narrow core never manufactures it.
  */
-
-import { AUDIT_SUMMARY_FIELDS, JOURNAL_EVENT_TYPES } from "./journal-schema.mjs";
-import { discoverChainNodes, firstByStepAndEntry } from "./chain-topology.mjs";
+import { createHash } from "node:crypto";
 
 const STAGE_SLUGS = new Set(["bs", "bp", "bc", "vc", "md"]);
-
-function isStageStepId(stepId, stageSlug) {
-  return typeof stepId === "string" && stepId.startsWith(`${stageSlug}.`);
-}
-
-function assertEnum(value, allowed, name) {
-  if (!allowed.has(value)) {
-    throw new TypeError(`${name} must be one of: ${Array.from(allowed).join(", ")}`);
-  }
-}
+const TERMINAL_STATUSES = new Set(["success", "failure", "skipped", "needs_human"]);
 
 function assertNonEmptyString(value, name) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(`${name} must be a non-empty string`);
-  }
+  if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${name} must be a non-empty string`);
 }
 
-// ---- public exports ----
+function stable(value) {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
 
-/**
- * Build a Map keyed by step_id from the latest occurrence of each exit event.
- * Compat helper — used by tests and legacy callers that don't need attempt-level granularity.
- *
- * @param {object[]} events
- * @returns {Map<string, object>}
- */
+function hashSummary(summary) {
+  return createHash("sha256").update(stable(summary)).digest("hex");
+}
+
+function evidenceRef(evidence) {
+  if (!evidence || typeof evidence !== "object" || typeof evidence.kind !== "string" || typeof evidence.uri_or_path !== "string") return null;
+  return { kind: evidence.kind, uri_or_path: evidence.uri_or_path, ...(typeof evidence.content_hash === "string" ? { content_hash: evidence.content_hash } : {}) };
+}
+
+function canonicalEntry(event, stageSlug, workflowRunId) {
+  return event?.event_type === "step_entry" && event.workflow_run_id === workflowRunId && event.stage_slug === stageSlug &&
+    typeof event.step_id === "string" && typeof event.attempt_id === "string" && typeof event.timestamp === "string" && evidenceRef(event.entry_evidence);
+}
+
+function canonicalExit(event, stageSlug, workflowRunId) {
+  return event?.event_type === "step_exit" && event.workflow_run_id === workflowRunId && event.stage_slug === stageSlug &&
+    typeof event.step_id === "string" && typeof event.attempt_id === "string" && typeof event.timestamp === "string" &&
+    TERMINAL_STATUSES.has(event.terminal_status) && evidenceRef(event.completion_evidence);
+}
+
+function attemptKey(event) {
+  return `${event.stage_slug}\u0000${event.step_id}\u0000${event.attempt_id}`;
+}
+
 export function latestByStepId(events) {
   const map = new Map();
-  for (const event of events) {
-    map.set(event.step_id, event);
-  }
+  for (const event of events) map.set(event.step_id, event);
   return map;
 }
 
-/**
- * Build a Map keyed by `${step_id}::${exit_journal_entry_id}` from the latest
- * occurrence of each (step_id, exit_journal_entry_id) pair.
- * Used by the main counting path to limit counting to the chain-selected attempt.
- *
- * @param {object[]} exitEvents
- * @returns {Map<string, object>}
- */
-export function latestByStepAndEntry(exitEvents) {
+export function latestByStepAndEntry(events) {
   const map = new Map();
-  for (const event of exitEvents) {
-    const entryId = event.exit_journal_entry_id ?? null;
-    const key = `${event.step_id}::${entryId}`;
-    map.set(key, event);
-  }
+  for (const event of events) map.set(`${event.step_id}::${event.exit_journal_entry_id ?? null}`, event);
   return map;
 }
 
 /**
- * Build the full audit_summary from all journal events for a given run+stage.
- *
- * - Topology discovery uses firstByStepAndEntry + discoverChainNodes (chain-topology module).
- * - Counting uses latestByStepAndEntry keyed by (step_id, exit_journal_entry_id).
- * - receipt_write_warn events carrying original_exit_payload are treated as
- *   virtual STEP_EXIT events so write failures never silently drop a step count.
- *
- * @param {object[]} events - All parsed journal.jsonl events
- * @param {string} stageSlug
- * @param {string} workflowRunId
- * @returns {{ audit_summary: object, warnings: string[] }}
+ * Builds the sole canonical verdict. It deliberately reports bad observed
+ * records as facts rather than selecting a convenient retry or exit record.
  */
-export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRunId) {
-  if (!Array.isArray(events)) {
-    throw new TypeError("events must be an array");
-  }
-  assertEnum(stageSlug, STAGE_SLUGS, "stageSlug");
+export function buildAuditSummaryFromJournalEvents(events, stageSlug, workflowRunId, auditContext = {}) {
+  if (!Array.isArray(events)) throw new TypeError("events must be an array");
+  if (!STAGE_SLUGS.has(stageSlug)) throw new TypeError("stageSlug must be one of: bs, bp, bc, vc, md");
   assertNonEmptyString(workflowRunId, "workflowRunId");
 
-  const sameRun = (event) => event?.workflow_run_id === workflowRunId;
-  const sameStageStep = (stepId) => isStageStepId(stepId, stageSlug);
+  const facts = { missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [] };
+  const entries = [];
+  const exits = [];
+  const evidenceRefs = [];
 
-  const entryEvents = events.filter(
-    (event) =>
-      event?.event_type === JOURNAL_EVENT_TYPES.STEP_ENTRY && sameRun(event) && sameStageStep(event.step_id),
-  );
+  events.forEach((event, index) => {
+    if (event?.workflow_run_id !== workflowRunId) return;
+    const mentionsStage = event?.stage_slug === stageSlug || (typeof event?.step_id === "string" && event.step_id.startsWith(`${stageSlug}.`));
+    if (!mentionsStage) return;
+    if (event?.event_type === "step_entry") {
+      if (!canonicalEntry(event, stageSlug, workflowRunId)) facts.unknown.push({ index, type: "invalid_entry", step_id: event?.step_id ?? null });
+      else {
+        entries.push({ event, index });
+        const ref = evidenceRef(event.entry_evidence); if (ref) evidenceRefs.push(ref);
+      }
+    } else if (event?.event_type === "step_exit") {
+      if (!canonicalExit(event, stageSlug, workflowRunId)) facts.unknown.push({ index, type: "invalid_exit", step_id: event?.step_id ?? null });
+      else {
+        exits.push({ event, index });
+        const ref = evidenceRef(event.completion_evidence); if (ref) evidenceRefs.push(ref);
+      }
+    } else {
+      facts.unknown.push({ index, type: "unknown_event", event_type: event?.event_type ?? null });
+    }
+  });
 
-  const exitEvents = events.filter(
-    (event) =>
-      event?.event_type === JOURNAL_EVENT_TYPES.STEP_EXIT && sameRun(event) && sameStageStep(event.step_id),
-  );
+  const entriesByAttempt = new Map();
+  for (const item of entries) {
+    const key = attemptKey(item.event);
+    const list = entriesByAttempt.get(key) ?? [];
+    list.push(item); entriesByAttempt.set(key, list);
+  }
+  const exitsByAttempt = new Map();
+  for (const item of exits) {
+    const key = attemptKey(item.event);
+    const list = exitsByAttempt.get(key) ?? [];
+    list.push(item); exitsByAttempt.set(key, list);
+  }
 
-  // Recover virtual exit events from receipt_write_warn events that carry original_exit_payload.
-  // These fill in for STEP_EXIT events that failed to write (non-blocking write path).
-  // Filter by original_exit_payload.workflow_run_id (warn event top-level may differ).
-  // Normal write takes priority: only use warn payload if no real exit exists for this step+entry.
-  const warnExitEvents = [];
-  for (const event of events) {
-    if (event?.event !== "receipt_write_warn") continue;
-    const payload = event.original_exit_payload;
-    // Use original_exit_payload.workflow_run_id for run filtering (not event top-level).
-    if (!payload || payload.workflow_run_id !== workflowRunId) continue;
-    if (!sameStageStep(payload.step_id)) continue;
-    // Check if a real STEP_EXIT already exists for this step+entry pair — if so, prefer it.
-    // Must match on exit_journal_entry_id so a real exit for one attempt doesn't suppress
-    // warn recovery for a different attempt of the same step_id.
-    const pairKey = `${payload.step_id}::${payload.exit_journal_entry_id ?? null}`;
-    const alreadyHasRealExit = exitEvents.some(
-      (e) => `${e.step_id}::${e.exit_journal_entry_id ?? null}` === pairKey,
-    );
-    if (!alreadyHasRealExit) {
-      warnExitEvents.push(payload);
+  for (const [key, list] of entriesByAttempt) {
+    if (list.length > 1) facts.duplicate.push({ type: "duplicate_entry", attempt: key, count: list.length });
+  }
+  for (const [key, list] of exitsByAttempt) {
+    if (list.length > 1) facts.duplicate.push({ type: "duplicate_terminal_exit", attempt: key, count: list.length });
+    const entry = entriesByAttempt.get(key)?.[0];
+    if (!entry) facts.unexpected.push({ type: "exit_without_entry", attempt: key });
+    else if (list[0].index < entry.index || Date.parse(list[0].event.timestamp) < Date.parse(entry.event.timestamp)) {
+      facts.out_of_order.push({ type: "exit_before_entry", attempt: key });
+    }
+  }
+  for (const [key, list] of entriesByAttempt) {
+    if (!exitsByAttempt.has(key)) facts.missing.push({ type: "terminal_exit_missing", attempt: key, step_id: list[0].event.step_id });
+  }
+
+  const manifestSteps = auditContext?.manifest?.expected_steps;
+  const expected_steps = Array.isArray(manifestSteps)
+    ? manifestSteps.map((step) => ({ ...step }))
+    : [...entriesByAttempt.values()].map(([item]) => ({ step_id: item.event.step_id, attempt_id: item.event.attempt_id }));
+  const expectedKeys = new Set(expected_steps.map((step) => `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`));
+
+  if (Array.isArray(manifestSteps)) {
+    for (const [key, list] of entriesByAttempt) {
+      if (expectedKeys.has(key)) continue;
+      const { step_id, attempt_id } = list[0].event;
+      facts.unexpected.push({ type: "unexpected_observed_step", step_id, attempt_id });
+      facts.unknown.push({ type: "unmanifested_step", step_id, attempt_id });
+    }
+
+    const observedExpectedEntries = [...entries]
+      .filter(({ event }) => expectedKeys.has(attemptKey(event)))
+      .sort((left, right) => left.index - right.index);
+    for (let index = 0; index < observedExpectedEntries.length; index += 1) {
+      const expected = expected_steps[index];
+      const observed = observedExpectedEntries[index]?.event;
+      if (!expected || (expected.step_id === observed.step_id && expected.attempt_id === observed.attempt_id)) continue;
+      facts.out_of_order.push({ type: "manifest_order_violation", step_id: expected.step_id, attempt_id: expected.attempt_id });
     }
   }
 
-  const effectiveExitEvents = [...exitEvents, ...warnExitEvents];
-
-  // Topology uses FIRST exit keyed by (step_id, journal_entry_id) so retry attempts don't alter chain.
-  const firstExitMap = firstByStepAndEntry(effectiveExitEvents);
-  const { chainNodes, warnings } = discoverChainNodes(entryEvents, firstExitMap, stageSlug);
-
-  // Counting uses LATEST exit keyed by (step_id, exit_journal_entry_id) to reflect most-recent outcome
-  // for each chain-selected attempt, without cross-attempt overwrite.
-  const latestExitByStepAndEntry = latestByStepAndEntry(effectiveExitEvents);
-  // Entry lookup keyed by journal_entry_id so the exact chain-selected attempt is used,
-  // not the globally latest entry for that step_id.
-  const entryByJournalEntryId = new Map();
-  for (const e of entryEvents) {
-    if (e.journal_entry_id != null) entryByJournalEntryId.set(e.journal_entry_id, e);
+  for (const step of expected_steps) {
+    const key = `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`;
+    if (!entriesByAttempt.has(key)) facts.missing.push({ type: "expected_step_missing", step_id: step.step_id, attempt_id: step.attempt_id });
   }
 
-  let passed_step_count = 0;
-  let blocked_step_count = 0;
-  let skipped_step_count = 0;
-
-  // Legacy fallback: entry events without journal_entry_id, keyed by step_id.
-  const entryByStepId = latestByStepId(entryEvents);
-
-  for (const node of chainNodes) {
-    // Prefer exact journal_entry_id match; fall back to step_id for legacy events without it.
-    const entry = node.journal_entry_id != null
-      ? (entryByJournalEntryId.get(node.journal_entry_id) ?? null)
-      : (entryByStepId.get(node.step_id) ?? null);
-    // Look up exit keyed by (step_id, exit_journal_entry_id).
-    // node.exit_journal_entry_id comes from the first-exit discovered in topology,
-    // and matches the key stored in latestByStepAndEntry (exit_journal_entry_id ?? null).
-    const exitKey = `${node.step_id}::${node.exit_journal_entry_id}`;
-    const exit = latestExitByStepAndEntry.get(exitKey) ?? null;
-
-    if (entry?.check_status === "skipped") skipped_step_count += 1;
-    if (exit?.verdict === "passed") passed_step_count += 1;
-    if (entry?.check_status === "blocked" || entry?.judgement?.status === "blocked" || exit?.verdict === "blocked") {
-      blocked_step_count += 1;
+  const staleRefs = Array.isArray(auditContext?.stale_refs) ? auditContext.stale_refs : [];
+  const expectedEvidence = Array.isArray(auditContext?.ledger?.expected_evidence) ? auditContext.ledger.expected_evidence : [];
+  for (const ref of uniqueByEvidence(evidenceRefs)) {
+    if (staleRefs.some((stale) => stale?.kind === ref.kind && stale?.uri_or_path === ref.uri_or_path)) {
+      facts.stale.push({ type: "stale_evidence", kind: ref.kind, uri_or_path: ref.uri_or_path });
+    }
+    const declared = expectedEvidence.find((item) => item?.kind === ref.kind && item?.uri_or_path === ref.uri_or_path);
+    if (declared?.content_hash && declared.content_hash !== ref.content_hash) {
+      facts.tampered_hash.push({ type: "evidence_hash_mismatch", kind: ref.kind, uri_or_path: ref.uri_or_path, expected_hash: declared.content_hash, observed_hash: ref.content_hash ?? null });
     }
   }
 
-  const stepIds = chainNodes.map((n) => n.step_id);
-  const reachable = new Set(stepIds);
+  const observed_steps = expected_steps.map((step) => {
+    const key = `${stageSlug}\u0000${step.step_id}\u0000${step.attempt_id}`;
+    return { ...step, entry: entriesByAttempt.has(key), terminal_exit: exitsByAttempt.has(key) };
+  });
+  const missing_ids = observed_steps.filter((step) => !step.entry || !step.terminal_exit).map((step) => step.step_id);
+  const requirement_coverage = { covered: expected_steps.length - missing_ids.length, total: expected_steps.length, withdrawn: 0, missing_ids };
+  const hasFindings = Object.values(facts).some((findings) => findings.length > 0);
+  const verdict = !hasFindings && expected_steps.length > 0 ? "pass" : "fail";
+  const uniqueEvidenceRefs = uniqueByEvidence(evidenceRefs);
 
-  let rollback_count = 0;
-  for (const event of events) {
-    if (event?.event_type !== JOURNAL_EVENT_TYPES.STEP_AUTO_ROLLBACK || !sameRun(event)) continue;
-    if (!sameStageStep(event.affected_step_id) || !reachable.has(event.affected_step_id)) continue;
-    rollback_count += 1;
-    if (
-      !sameStageStep(event.rollback_from_step_id) ||
-      !sameStageStep(event.rollback_to_step_id) ||
-      !reachable.has(event.rollback_from_step_id) ||
-      !reachable.has(event.rollback_to_step_id)
-    ) {
-      warnings.push(`rollback_pointer_outside_chain:${event.affected_step_id}`);
-    }
-  }
+  const unsigned = { schema_version: "v1", workflow_run_id: workflowRunId, expected_steps, observed_steps, requirement_coverage, facts, verdict, evidence_refs: uniqueEvidenceRefs };
+  const audit_summary = { ...unsigned, summary_hash: hashSummary(unsigned) };
+  return { audit_summary, warnings: [] };
+}
 
-  const audit_summary = {
-    total_step_count: stepIds.length,
-    passed_step_count,
-    blocked_step_count,
-    skipped_step_count,
-    rollback_count,
-  };
-
-  for (const field of AUDIT_SUMMARY_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(audit_summary, field)) {
-      throw new TypeError(`audit_summary missing schema field: ${field}`);
-    }
-  }
-
-  return {
-    audit_summary,
-    warnings,
-  };
+function uniqueByEvidence(evidenceRefs) {
+  return [...new Map(evidenceRefs.map((ref) => [`${ref.kind}\u0000${ref.uri_or_path}`, ref])).values()];
 }

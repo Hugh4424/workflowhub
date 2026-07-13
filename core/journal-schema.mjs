@@ -29,3 +29,21 @@ export const AUDIT_SUMMARY_FIELDS = Object.freeze([
   "skipped_step_count",
   "rollback_count",
 ]);
+
+// Canonical v1 receipt identity.  Journal records may retain legacy fields for
+// migration, but canonical receipts must carry every field below verbatim.
+export const RECEIPT_IDENTITY_FIELDS = Object.freeze([
+  "workflow_run_id",
+  "stage_slug",
+  "step_id",
+  "attempt_id",
+  "event_type",
+  "timestamp",
+]);
+
+export const TERMINAL_STATUSES = Object.freeze([
+  "success",
+  "failure",
+  "skipped",
+  "needs_human",
+]);

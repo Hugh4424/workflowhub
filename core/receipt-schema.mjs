@@ -5,7 +5,7 @@
  * Assertion failures throw TypeError — caller decides how to handle.
  */
 
-import { STEP_AUTO_ROLLBACK_REQUIRED_FIELDS } from "./journal-schema.mjs";
+import { STEP_AUTO_ROLLBACK_REQUIRED_FIELDS, TERMINAL_STATUSES } from "./journal-schema.mjs";
 
 const STAGE_SLUGS = new Set(["bs", "bp", "bc", "vc", "md"]);
 const STEP_TYPES = new Set(["work", "review", "check"]);
@@ -14,6 +14,7 @@ const EXIT_VERDICTS = new Set(["passed", "blocked", "skipped", "unknown"]);
 const JUDGEMENT_STATUSES = new Set(["blocked"]);
 const REVIEW_VERDICTS = new Set(["passed", "revise_required", "escalate_to_human", "unknown"]);
 const FIX_STATUSES = new Set(["fixed", "not_required", "pending", "unknown"]);
+const TERMINAL_STATUS_SET = new Set(TERMINAL_STATUSES);
 const STEP_ID_PATTERN =
   /^(?:bc\.(?:work|review|check)\.(?:ph\d+(?:\.\d+)?|\d+)|(?:bs|bp|vc|md)\.(?:work|review|check)\.\d+)$/;
 
@@ -65,6 +66,39 @@ function assertBoolean(value, name) {
   if (typeof value !== "boolean") {
     throw new TypeError(`${name} must be a boolean`);
   }
+}
+
+function assertTimestamp(value, name = "timestamp") {
+  assertNonEmptyString(value, name);
+  if (Number.isNaN(Date.parse(value))) {
+    throw new TypeError(`${name} must be an RFC3339 timestamp`);
+  }
+}
+
+function assertEvidence(value, name) {
+  assertObject(value, name);
+  assertNonEmptyString(value.kind, `${name}.kind`);
+  assertNonEmptyString(value.uri_or_path, `${name}.uri_or_path`);
+}
+
+function isCanonicalReceipt(payload) {
+  return payload.event_type !== undefined || payload.attempt_id !== undefined ||
+    payload.timestamp !== undefined || payload.entry_evidence !== undefined ||
+    payload.completion_evidence !== undefined || payload.terminal_status !== undefined;
+}
+
+function validateCanonicalIdentity(payload, eventType) {
+  assertNonEmptyString(payload.workflow_run_id, "workflow_run_id");
+  assertEnum(payload.stage_slug, STAGE_SLUGS, "stage_slug");
+  assertStepId(payload.step_id);
+  if (parseStepId(payload.step_id).stageSlug !== payload.stage_slug) {
+    throw new TypeError("stage_slug must match step_id");
+  }
+  assertNonEmptyString(payload.attempt_id, "attempt_id");
+  if (payload.event_type !== eventType) {
+    throw new TypeError(`event_type must be ${eventType}`);
+  }
+  assertTimestamp(payload.timestamp);
 }
 
 // ---- internal sub-validators ----
@@ -149,6 +183,11 @@ export function validateReviewPayload(review) {
  */
 export function validateEntryPayload(payload) {
   assertObject(payload, "entryReceiptPayload");
+  if (isCanonicalReceipt(payload)) {
+    validateCanonicalIdentity(payload, "step_entry");
+    assertEvidence(payload.entry_evidence, "entry_evidence");
+    return;
+  }
   assertStepId(payload.step_id);
   assertEnum(payload.stage_slug, STAGE_SLUGS, "stage_slug");
   assertEnum(payload.step_type, STEP_TYPES, "step_type");
@@ -180,6 +219,15 @@ export function validateEntryPayload(payload) {
  */
 export function validateExitPayload(payload) {
   assertObject(payload, "exitReceiptPayload");
+  if (isCanonicalReceipt(payload)) {
+    validateCanonicalIdentity(payload, "step_exit");
+    assertEnum(payload.terminal_status, TERMINAL_STATUS_SET, "terminal_status");
+    assertEvidence(payload.completion_evidence, "completion_evidence");
+    if (payload.exit_journal_entry_id != null) {
+      assertNonEmptyString(payload.exit_journal_entry_id, "exit_journal_entry_id");
+    }
+    return;
+  }
   assertStepId(payload.step_id);
   assertNonEmptyString(payload.workflow_run_id, "workflow_run_id");
   // exit_journal_entry_id is optional; validate format only when present

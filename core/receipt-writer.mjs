@@ -41,7 +41,10 @@ export function buildAuditSummaryFromJournalEvents(events, { stageSlug, workflow
  */
 export async function writeEntryReceipt(taskId, payload) {
   validateEntryPayload(payload);
-  const { journal_entry_id } = await appendJournalLine(taskId, JOURNAL_EVENT_TYPES.STEP_ENTRY, payload);
+  const canonicalPayload = payload.event_type === JOURNAL_EVENT_TYPES.STEP_ENTRY
+    ? payload
+    : { ...payload, event_type: JOURNAL_EVENT_TYPES.STEP_ENTRY };
+  const { journal_entry_id } = await appendJournalLine(taskId, JOURNAL_EVENT_TYPES.STEP_ENTRY, canonicalPayload);
   return { journal_entry_id };
 }
 
@@ -58,7 +61,10 @@ export async function writeExitReceipt(taskId, payload) {
   // Validation throws on bad payload — intentionally propagates (caller bug).
   validateExitPayload(payload);
   try {
-    await appendJournalLine(taskId, JOURNAL_EVENT_TYPES.STEP_EXIT, payload);
+    const canonicalPayload = payload.event_type === JOURNAL_EVENT_TYPES.STEP_EXIT
+      ? payload
+      : { ...payload, event_type: JOURNAL_EVENT_TYPES.STEP_EXIT };
+    await appendJournalLine(taskId, JOURNAL_EVENT_TYPES.STEP_EXIT, canonicalPayload);
   } catch (err) {
     // Only I/O failures reach here. Append warn so audit-aggregator can recover the count.
     await appendReceiptWriteWarn(taskId, err, payload);
