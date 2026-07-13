@@ -187,7 +187,7 @@ async function main() {
     if (!skipKimi) {
       const kimiSource = join(outputRoot, "kimi-worktree"); mkdirSync(kimiSource, { mode: 0o700 }); const kimiBase = setupRepository(kimiSource).base;
       git(kimiSource, ["reset", "--hard", "-q", kimiBase]); writeFileSync(join(kimiSource, "smoke.txt"), "base\nR1_DIFF_MARKER\n");
-      write(join(taskRoot, taskId, "worktree.json"), { worktree_root: kimiSource });
+      write(join(taskRoot, taskId, "worktree.json"), { target_repo_root: kimiSource, worktree_root: kimiSource, branch: git(kimiSource, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" });
       const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r1Packet), task_tracking_root: taskRoot };
       const kimiFirstInputPath = join(outputRoot, "kimi-r1-input.json"); write(kimiFirstInputPath, kimiFirstInput);
       await runWhReview({ inputPath: kimiFirstInputPath, responsePath: join(outputRoot, "kimi-r1-cli.json") });

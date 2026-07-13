@@ -3,7 +3,7 @@
 /** V4-only CLI boundary. Workflows call run/reset; legacy prepare/execute paths are retired. */
 import { execFileSync } from "node:child_process";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { BrokerClient } from "./broker-client.mjs";
 import { ReviewRoundFacade } from "./review-round-facade.mjs";
@@ -33,12 +33,25 @@ function trustedTaskWorktree(input) {
   let state;
   try { state = JSON.parse(readFileSync(statePath, "utf8")); }
   catch (error) { throw new Error(`trusted task worktree.json is invalid JSON: ${error.message}`); }
-  if (!isAbsolute(state?.worktree_root ?? "")) throw new Error("trusted task worktree.json requires an absolute worktree_root");
+  if (!(isAbsolute(state?.target_repo_root ?? "") && isAbsolute(state?.worktree_root ?? "") && typeof state?.branch === "string" && state.branch.length > 0
+    && state.created_by_stage === "make-decision" && state.push_policy === "verify-code-only" && state.status === "active")) {
+    throw new Error("trusted task worktree.json requires active target_repo_root, worktree_root, branch, created_by_stage, and push_policy");
+  }
+  const targetRepoRoot = realpathSync(state.target_repo_root);
   const sourceRoot = realpathSync(state.worktree_root);
-  if (!lstatSync(sourceRoot).isDirectory()) throw new Error("trusted task worktree_root must be a directory");
+  if (!lstatSync(targetRepoRoot).isDirectory() || !lstatSync(sourceRoot).isDirectory()) throw new Error("trusted task worktree roots must be directories");
   try {
+    const targetGitRoot = realpathSync(String(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: targetRepoRoot, encoding: "utf8" })).trim());
     const gitRoot = realpathSync(String(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: sourceRoot, encoding: "utf8" })).trim());
-    if (gitRoot !== sourceRoot) throw new Error("worktree_root must be the git worktree root");
+    if (targetGitRoot !== targetRepoRoot || gitRoot !== sourceRoot) throw new Error("configured roots must be git worktree roots");
+    const commonDir = (root) => {
+      const value = String(execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: root, encoding: "utf8" })).trim();
+      return realpathSync(isAbsolute(value) ? value : resolve(root, value));
+    };
+    if (commonDir(targetRepoRoot) !== commonDir(sourceRoot)) throw new Error("target_repo_root and worktree_root must share a git common-dir");
+    const registered = String(execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: targetRepoRoot, encoding: "utf8" })).split("\n").some((line) => line === `worktree ${sourceRoot}`);
+    if (!registered) throw new Error("worktree_root is not registered by target_repo_root");
+    if (String(execFileSync("git", ["branch", "--show-current"], { cwd: sourceRoot, encoding: "utf8" })).trim() !== state.branch) throw new Error("worktree_root branch does not match trusted worktree.json");
   } catch (error) { throw new Error(`trusted task worktree_root is not a git worktree: ${error.message}`); }
   return { taskTrackingRoot: trackingRoot, sourceRoot };
 }

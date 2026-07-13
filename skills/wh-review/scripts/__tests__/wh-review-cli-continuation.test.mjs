@@ -92,13 +92,25 @@ function expectPrivateRawDirectory(path, taskRoot) {
 }
 
 describe("wh-review CLI continuation", () => {
+  it("rejects incomplete, inactive, and unrelated trusted worktree state", async () => {
+    const { runReviewRound } = await import(cli.href);
+    const { root: worktree } = repository(); const { root: unrelated } = repository();
+    const tracking = mkdtempSync(join(tmpdir(), "wh-review-cli-tracking-")); roots.push(tracking); const taskId = "trusted-state";
+    mkdirSync(join(tracking, taskId), { recursive: true });
+    const valid = { target_repo_root: worktree, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" };
+    for (const state of [{ ...valid, status: "closed" }, (() => { const { status, ...missing } = valid; return missing; })(), { ...valid, target_repo_root: unrelated }]) {
+      writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify(state));
+      await expect(runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: reviewPacket(), task_tracking_root: tracking })).rejects.toThrow(/trusted task worktree/);
+    }
+  });
+
   it("forwards closure evidence and cross-stage carryovers into a real second review round", async () => {
     const { runReviewRound } = await import(cli.href);
     const { root: worktree, base } = repository();
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-cli-tracking-")); roots.push(tracking);
     const taskId = "cli-continuation";
     mkdirSync(join(tracking, taskId), { recursive: true });
-    writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify({ worktree_root: worktree }));
+    writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify({ target_repo_root: worktree, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" }));
     const packetRoot = hostConfig(tracking);
     const firstPacket = reviewPacket();
     await runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: tracking });

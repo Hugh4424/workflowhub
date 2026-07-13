@@ -268,6 +268,29 @@ describe("ReviewRoundFacade", () => {
     expect(secondPacket.unified_diff).not.toContain("STAGE_ONE_MARKER");
   });
 
+  it("advances task source only after both make-decision tracks pass the same uncommitted tree", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: `${request.packet.review_track}-session`, output: makeDecisionOutput(request.packet, request.packet.review_track) }] })) });
+    writeFileSync(join(source, "decision.txt"), "COMPLETE_DECISION_MARKER\n"); const flow = "same-tree";
+    const direction = await facade.run(facade.prepare({ task_id: "decision-context", stage: "make-decision", review_track: "direction", review_flow_id: flow, packet: makeDecisionPacket(source, "direction") })); facade.publish(direction, { items: [] });
+    const contextPath = join(tracking, "decision-context", "reviews", "private", "source-context.json");
+    expect(JSON.parse(readFileSync(contextPath, "utf8")).last_approved_tree).toBeNull();
+    const detailPrepared = await facade.prepare({ task_id: "decision-context", stage: "make-decision", review_track: "detail", review_flow_id: flow, packet: makeDecisionPacket(source, "detail") });
+    expect(detailPrepared.packet.unified_diff).toContain("COMPLETE_DECISION_MARKER");
+    const detail = await facade.run(detailPrepared); facade.publish(detail, { items: [] });
+    const directionFlow = JSON.parse(readFileSync(join(tracking, "decision-context", "reviews", "private", "flows", `make-decision-direction-${flow}.json`), "utf8"));
+    expect(JSON.parse(readFileSync(contextPath, "utf8")).last_approved_tree).toBe(directionFlow.approved_tree);
+  });
+
+  it("blocks a make-decision aggregate when direction and detail pin different source trees", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: `${request.packet.review_track}-session`, output: makeDecisionOutput(request.packet, request.packet.review_track) }] })) });
+    writeFileSync(join(source, "decision.txt"), "DIRECTION_MARKER\n"); const flow = "mismatched-tree";
+    const direction = await facade.run(facade.prepare({ task_id: "decision-mismatch", stage: "make-decision", review_track: "direction", review_flow_id: flow, packet: makeDecisionPacket(source, "direction") })); facade.publish(direction, { items: [] });
+    writeFileSync(join(source, "decision.txt"), "DIRECTION_MARKER\nDETAIL_MARKER\n");
+    const detail = await facade.run(facade.prepare({ task_id: "decision-mismatch", stage: "make-decision", review_track: "detail", review_flow_id: flow, packet: makeDecisionPacket(source, "detail") }));
+    expect(() => facade.publish(detail, { items: [] })).toThrow(/MAKE_DECISION_TRACK_SNAPSHOT_MISMATCH/);
+    expect(JSON.parse(readFileSync(join(tracking, "decision-mismatch", "reviews", "private", "source-context.json"), "utf8")).last_approved_tree).toBeNull();
+  });
+
   it("deletes the old review-tree ref when a human reset starts a new flow", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "reset", output: output(request.packet, "escalate_to_human") }] })) });
     const result = await facade.run(facade.prepare({ task_id: "reset-tree", stage: "build-code", review_flow_id: "old", packet: hostPacket() }));

@@ -752,7 +752,7 @@ export class ReviewRoundFacade {
     if (!existsSync(corePath) || sha(readFileSync(corePath)) !== flow.core_receipt_hash) throw new Error("make-decision aggregate core receipt binding is invalid");
     const core = JSON.parse(readFileSync(corePath, "utf8"));
     if (core?.intent?.stage !== "make-decision" || core.intent.review_track !== reviewTrack || core.semantic_verdict === null) throw new Error("make-decision aggregate track receipt is invalid");
-    return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id };
+    return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id, approved_tree: flow.approved_tree ?? null };
   }
   #publishMakeDecisionAggregate(taskId, reviewFlowId) {
     assertSafeReviewFlowId(reviewFlowId);
@@ -761,6 +761,12 @@ export class ReviewRoundFacade {
     if (!direction || !detail) return null;
     const aggregate = aggregateMakeDecisionTracks({ direction, detail });
     if (!aggregate.semantic_verdict) throw new Error("make-decision aggregate requires semantic verdicts from both tracks");
+    if (aggregate.semantic_verdict === "pass") {
+      if (!/^[a-f0-9]{40,64}$/.test(direction.approved_tree ?? "") || direction.approved_tree !== detail.approved_tree) {
+        throw new Error("MAKE_DECISION_TRACK_SNAPSHOT_MISMATCH: direction and detail must pass the same source tree");
+      }
+      this.#recordLastApprovedTree(taskId, direction.approved_tree);
+    }
     const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
     const aggregateCore = {
       version: 1, stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"],
@@ -801,7 +807,7 @@ export class ReviewRoundFacade {
     const flow = this.#readFlow(result.intent); if (flow) {
       const updatedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
       this.#writeFlow(result.intent, updatedFlow);
-      if (semantic_verdict === "pass") this.#recordLastApprovedTree(result.intent.task_id, updatedFlow.approved_tree);
+      if (semantic_verdict === "pass" && result.intent.stage !== "make-decision") this.#recordLastApprovedTree(result.intent.task_id, updatedFlow.approved_tree);
     }
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
