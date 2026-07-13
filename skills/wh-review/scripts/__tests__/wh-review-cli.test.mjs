@@ -23,6 +23,6 @@ describe("wh-review v4 CLI", () => {
 
   it.each(["provider_capabilities", "providerCapabilities", "attachment_delivery", "attachmentDelivery"])("rejects caller-owned %s instead of forwarding it", async (field) => {
     const { runReviewRound } = await import(cli.href);
-    await expect(runReviewRound({ [field]: {}, task_tracking_root: "/tmp", third_review: { command: "broker", config: "/cfg" } })).rejects.toThrow(/broker-owned/);
+    await expect(runReviewRound({ [field]: {}, task_tracking_root: "/tmp", third_review: { command: "broker", config: "/cfg" } })).rejects.toThrow(field.toLowerCase().includes("delivery") ? /stage-skill-plan/ : /broker-owned/);
   });
 });

@@ -116,7 +116,7 @@ describe("wh-review v4 workflow wiring", () => {
     try {
       const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: {
         async discoverCapabilities() { return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }; },
-        async run(input) { calls.push(input); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", output: reviewerOutput(input.packet) }] }; },
+        async run(input) { calls.push(input); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet) }] }; },
         async status() { return { expires_at_ms: Date.now() + 60_000 }; },
       } });
       const firstPacket = packet(repository, stage, reviewTrack);

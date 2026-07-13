@@ -72,6 +72,16 @@ describe("BrokerClient", () => {
     expect(calls[2]).toContain("--source=workflow_shutdown");
   });
 
+  it.each(["file_only", "always_embed"])("passes the stage-resolved %s delivery policy to the broker", async (policy) => {
+    const calls = [];
+    const client = new BrokerClient({ command: ["node", "/phase2/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/repo", spawnImpl(command, args) {
+      calls.push(args); const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true},"providers":[]}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
+    } });
+    await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: policy });
+    expect(calls[1]).toContain(`--attachment-delivery=${policy}`);
+  });
+
   it("rejects an undeclared attachment interface through a real subprocess fixture", async () => {
     const root = mkdtempSync(join(tmpdir(), "wh-review-real-doctor-"));
     try {

@@ -51,7 +51,14 @@ function capabilityBroker(callback, snapshot = { version: 4, capabilities: { att
   { provider: "codex", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
   { provider: "kimi", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
   { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
-] }) { return { run: callback, async discoverCapabilities() { return snapshot; } }; }
+] }) { return { async run(input) {
+  const response = await callback(input);
+  return { ...response, providers: (response.providers ?? []).map((item) => {
+    if (item.delivery_used !== undefined || !item.provider) return item;
+    const mode = snapshot.providers.find((provider) => provider.provider === item.provider)?.capabilities?.attachment_delivery?.[0];
+    return mode ? { ...item, delivery_used: mode } : item;
+  }) };
+  }, async discoverCapabilities() { return snapshot; } }; }
 function git(root, args) { return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim(); }
 function trustedPacket(root) {
   git(root, ["init", "-q"]); git(root, ["config", "user.email", "review@example.test"]); git(root, ["config", "user.name", "Review Test"]);
@@ -85,6 +92,7 @@ describe("ReviewRoundFacade", () => {
     const originalDiscover = broker.discoverCapabilities; broker.discoverCapabilities = async () => { expect(existsSync(lock)).toBe(true); return originalDiscover(); };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const value = packet({ root: tracking });
     expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "rejected", host_provider: "codex", packet: value, changed_file_root: tracking, provider_capabilities: {} })).toThrow(/provider_capabilities.*caller/i);
+    expect(() => facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "delivery-rejected", host_provider: "codex", packet: value, changed_file_root: tracking, attachment_delivery: "always_embed" })).toThrow(/stage-skill-plan/i);
     const result = await facade.run(await facade.prepare({ task_id: "doctor-owned", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
     expect(result.intent.candidate_providers).toEqual(["opencode"]); expect(result.intent.continuable_providers).toEqual(["opencode"]);
     const unknown = result.provider_outcomes.find((item) => item.diagnostic === "UNKNOWN_PROVIDER");
@@ -230,6 +238,60 @@ describe("ReviewRoundFacade", () => {
     expect(first.intent.initial_runtime_id).toBeNull();
     expect(second.intent.initial_runtime_id).toBe("22222222-2222-4222-8222-222222222222");
     expect(seen[1].request.continuation).toEqual({ runtime_id: "22222222-2222-4222-8222-222222222222" });
+    expect(seen[0].attachments).toBeTruthy();
+    expect(seen[0].attachmentDelivery).toBe("file_only");
+    expect(seen[1].attachments).toBeUndefined();
+  });
+
+  it.each([
+    [undefined, "DELIVERY_USED_MISSING"],
+    ["auto", "DELIVERY_USED_INVALID"],
+    ["file_only", "DELIVERY_USED_CAPABILITY_MISMATCH"],
+  ])("makes a completed provider business-invalid when delivery_used=%s", async (delivery_used, diagnostic) => {
+    const tracking = root();
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } }] };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", providers: [{ provider: "opencode", status: "completed", session_id: "s", ...(delivery_used === undefined ? {} : { delivery_used }), output: output(request.packet, "revise_required") }] }; } };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: `delivery-${diagnostic.toLowerCase()}`, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking }));
+    expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic }]);
+    expect(result.merged_findings).toEqual([]);
+    expect(result.continuation_eligible).toBe(false);
+  });
+
+  it("stores actual delivery only in private state and rejects a changed continuation echo", async () => {
+    const tracking = root(); let call = 0;
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } }] };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "always_embed" : "file_only", output: output(request.packet, call === 1 ? "pass" : "revise_required") }] }; } };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const input = { task_id: "delivery-freeze", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking };
+    const first = await facade.run(facade.prepare(input)); const publication = facade.publish(first, { items: [] });
+    const privateReceipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
+    expect(privateReceipt.initial_delivery_by_provider).toEqual({ opencode: "always_embed" });
+    expect(privateReceipt.provider_outcomes[0].delivery_used).toBe("always_embed");
+    expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toMatch(/delivery_used|always_embed/);
+    const second = await facade.run(facade.prepare({ ...input, continuation: true }));
+    expect(second.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH" }]);
+    expect(second.merged_findings).toEqual([]);
+    expect(second.continuation_eligible).toBe(false);
+  });
+
+  it("reports every missing candidate and returns NO_CAPABLE_PROVIDER without broker semantics", async () => {
+    const tracking = root(); const value = packet({ root: tracking }); let calls = 0;
+    const ready = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+      { provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
+    ] };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { async discoverCapabilities() { return ready; }, async run() { calls += 1; return { providers: [] }; } } });
+    const missing = await facade.run(facade.prepare({ task_id: "missing-candidates", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
+    expect(missing.provider_outcomes).toMatchObject([
+      { provider: "kimi", business_valid: false, semantic_verdict: null, diagnostic: "PROVIDER_OUTCOME_MISSING" },
+      { provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "PROVIDER_OUTCOME_MISSING" },
+    ]);
+    const unavailable = { ...ready, providers: ready.providers.map((provider) => ({ ...provider, status: "unavailable" })) };
+    const none = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { async discoverCapabilities() { return unavailable; }, async run() { calls += 1; throw new Error("must not run"); } } });
+    const result = await none.run(none.prepare({ task_id: "no-capable", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking }));
+    expect(result.provider_outcomes).toEqual([{ provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "NO_CAPABLE_PROVIDER" }]);
+    expect(result.merged_findings).toEqual([]);
+    expect(calls).toBe(1);
   });
 
   it("blocks continuation when the broker doctor snapshot changes", async () => {
