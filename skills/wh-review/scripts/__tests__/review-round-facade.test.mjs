@@ -714,14 +714,16 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.prepare({ task_id: "snapshot", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, source_snapshot: { base_files: {} } })).toThrow(/source_snapshot is not accepted/);
   });
 
-  it("requires every declared continuable provider and serializes all flows for one task", async () => {
+  it("freezes continuable providers from completed business-valid sessions instead of doctor candidates", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: capabilityBroker(async (request) => ({ runtime_id: "44444444-4444-4444-8444-444444444444", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }), { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
       { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
       { provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
     ] }) });
     const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
-    expect(first.continuation_eligible).toBe(false);
-    await expect(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, continuation: true })).rejects.toThrow(/blocked_by_human_confirmation/);
+    expect(first.continuation_eligible).toBe(true);
+    const continuation = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, continuation: true });
+    expect(continuation.intent.candidate_providers).toEqual(["opencode"]);
+    rmSync(continuation.lock, { recursive: true, force: true });
     const held = await facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "one", packet: packet({ root: tracking }), changed_file_root: tracking });
     expect(() => facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "two", packet: packet({ root: tracking }), changed_file_root: tracking })).toThrow(/review-already-running/);
     rmSync(held.lock, { recursive: true, force: true });
