@@ -274,20 +274,17 @@ before any irreversible action.
 
 Provider unavailable, cancellation, timeout and material failure remain transport or packet diagnostics. They do not grant merge permission and do not produce a semantic review fact.
 
-Record the review outcome in `facts.review` using `buildReviewFact` from `facts-schema.mjs`:
+Map the facade result directly into `stage-result.facts.review`:
 
 ```js
-import { buildReviewFact } from "./facts-schema.mjs";
-// review ran:
-const reviewFact = buildReviewFact({
-  status: "executed",
-  verdict,         // "pass" | "revise_required" | "escalate_to_human"
-  artifactPath: `{taskDir}/{task-id}/reviews/verify-code.md`
-});
-// review unavailable:
+const review = result.semantic_verdict
+  ? { core_receipt_hash: result.core_receipt_hash, semantic_verdict: result.semantic_verdict }
+  : { core_receipt_hash: result.core_receipt_hash ?? null, diagnostic: result.diagnostic, needs_human: true };
+stageResult.facts.review = review;
 ```
 
-Write `reviewFact` into the stage-result under `facts.review` in step 12. Because `assembleStageResult` does not accept `review` as a parameter, explicitly merge it after assembly: `stageResult.facts.review = reviewFact` before calling `writeStageResult`.
+Only a semantic result may drive merge handling. A transport or packet failure writes a
+diagnostic and `needs_human:true`; it never becomes a pass-like review fact.
 
 ### 11. 人工确认 merge gate
 

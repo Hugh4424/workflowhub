@@ -86,6 +86,14 @@ describe("wh-review v4 workflow wiring", () => {
     }
   });
 
+  it("maps verify-code facade results through core receipts only", () => {
+    const content = skill("verify-code");
+    expect(content).toContain("core_receipt_hash");
+    expect(content).toContain("semantic_verdict");
+    expect(content).toContain("needs_human: true");
+    for (const token of ["facts-schema", "buildReviewFact", "verify-code.md", "artifactPath"]) expect(content).not.toContain(token);
+  });
+
   it("contains no legacy review production path", () => {
     const files = [...productionFiles(join(root, "workflows")), ...productionFiles(join(root, "skills", "wh-review"))];
     for (const file of files) {
