@@ -10,7 +10,7 @@ import { resolveRequiredSkills } from "../skills/wh-review/scripts/required-skil
 
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
-const legacy = ["prepareRoundState", "invoke-review-engine", "run-heterologous-review", "same-source", "--diff", "--output"];
+const legacy = ["prepareRoundState", "invoke-review-engine", "run-heterologous-review", "same-source", "--diff", "--output", "MAKE_DECISION_SKIP_BLIND_REVIEW", "reviewer_runtime_id", "reviewer_source", "verified_interface", "make-decision-review.md", "not_executed"];
 
 function skill(stage) { return readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8"); }
 function productionFiles(directory) {

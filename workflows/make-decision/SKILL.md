@@ -287,17 +287,6 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **目标**：以 `ReviewRoundFacade` 的 direction/detail V4 flows 审查 S4 产物。
 
-### 0. MAKE_DECISION_SKIP_BLIND_REVIEW 快速跳过分支
-
-**判定方式**：本分支是否生效，必须通过实际读取 `MAKE_DECISION_SKIP_BLIND_REVIEW` 环境变量的真实值来判断（例如 `echo $MAKE_DECISION_SKIP_BLIND_REVIEW` 或等价的真实环境探测），不得由 agent 凭记忆/推测手动模拟"当作已设置=1"来走跳过分支。agent 手动模拟环境变量值视为违规，必须以本次执行环境的真实检测结果为准。
-
-若 `MAKE_DECISION_SKIP_BLIND_REVIEW=1`（真实检测结果）：
-- 跳过以下单次盲审（### 1）和结果整理（### 2）全部步骤。
-- 写 journal 事件：`event: "s5_blind_review_skipped", reason: "MAKE_DECISION_SKIP_BLIND_REVIEW=1"`。
-- S5 产出以空审查集合视为"无 blocking 发现"：`direction_divergence: false`，`findings: []`。
-- 第一次 debate 门控（### 4）仍正常执行，但因无 blocking findings，通常记 `debate_1: skipped`。
-- 直接跳至 S6，S6/S7 以上述产出为输入。
-
 ### 1. 单次独立盲审
 
 Build two V4 packets and call `ReviewRoundFacade` for the isolated `direction` and
@@ -309,11 +298,8 @@ log. Provider material stays packet-only.
 审查结果必须包含以下字段：
 
 ```
-reviewer_runtime_id: <唯一标识该 agent 运行实例>
-reviewer_source: <来源标识>
 input_hash: <审查输入内容的哈希，用于隔离验证>
-findings: <四个角度 direction/framing/scope/feasibility，每角度 0-N 条，不设总数上限>
-verified_interface: <{tool, checked_at, method}，涉及外部工具调用时必填>
+findings: <V4 finding 数组，带 provider 证据>
 ```
 
 每条 `findings` 建议必须包含：
@@ -330,10 +316,9 @@ evidence: <对应 S4 内容或调研依据>
 
 - 若 provider 失败或材料不完整 → 记录 transport/packet diagnostic，不生成语义结论，也不降级为其他审查路径。
 - 若 `findings` 中出现四类角度（direction/framing/scope/feasibility）之外的标签，或某角度整体未被审查（而非"该角度确实无发现"），视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议，也不因怕超限而截断真实问题。
-- 若涉及外部工具调用但缺 `verified_interface` 字段，直接判该次审查不可执行，要求 reviewer 补齐后重跑。
-- 审查通过后写入 `tasks/{task-id}/artifacts/make-decision-review.md`：
+- 审查结果只由 private receipt 与公开 core receipt 表示：
   - `direction_divergence`: `true`/`false`（方向分歧标记）
-  - `findings`: 四个角度、每角度 0-N 条审查建议（不设总数上限）
+  - `findings`: V4 合并 finding 及 provider 证据
 
 写 journal 事件：`event: "s5_blind_review_done"`。
 
@@ -355,13 +340,13 @@ evidence: <对应 S4 内容或调研依据>
 
 make-decision **委托 debate 技能自己判断是否触发**（debate 技能内部执行 Step 1 触发判定 + 环境自动判定五方法庭/单人三档）。make-decision 在**主调用层**执行 debate，不下派子代理。
 
-**禁止行为（D4）**：debate 触发判定必须基于已存在 artifact 中的具体 finding ID 列表（争点来源），**严禁在审查完成前或审查外自行制造争点**。make-decision 只负责提取并传递 artifact 来源的 finding ID 列表（可为空）和相关上下文；是否触发、以及无有效争点时如何降级，均由 debate 技能 Step 1 自行裁决。
+**禁止行为（D4）**：debate 触发判定只基于 V4 core receipt 的 finding ID 列表，严禁在审查外自行制造争点。
 
 按以下优先顺序判定：
 
 1. `MAKE_DECISION_SKIP_DEBATE=1` → 记 `debate_1: skipped`，跳过 debate，继续 S6。
 2. `MAKE_DECISION_DEBATE_PATH` 不可达（路径无法访问）→ 写 journal 事件 `event: "debate_1_skipped", reason: "debate_path_invalid"` 和 `debate_path_invalid: true`，记录 `debate_1: skipped`，降级继续，不阻断流程。
-3. 其余情况：提取审查 artifact（`make-decision-review.md`）中具体的 finding ID 列表（争点来源，可为空），传入 debate 技能 + Claude 决策 + decision-log 版本，由 debate 技能的 Step 1 自行判断是否触发；读回 debate 技能产出的裁决书。
+3. 其余情况：提取 core receipt 中具体的 finding ID 列表，传入 debate 技能 + Claude 决策 + decision-log 版本。
    - debate 技能触发时：产出 `tasks/{task-id}/artifacts/make-decision-debate-1.md`（含裁决书），写 journal 事件 `event: "debate_1_triggered"`。
    - debate 技能不触发时：写 journal 事件 `event: "debate_1_skipped", reason: "<debate 技能返回的 skip reason>"`。
 
@@ -529,7 +514,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 
 落盘前检查审查产物完整性：
 
-- 若存在 `severity: blocking` 的审查意见，但对应审查产物（`make-decision-review.md` 及 debate 裁决书）中**缺少**三行留痕格式：
+- 若存在 `severity: blocking` 的审查意见，但 core receipt 及 debate 裁决书中**缺少**三行留痕格式：
   ```
   反对 X：<内容>
   决定 Y：<内容>
