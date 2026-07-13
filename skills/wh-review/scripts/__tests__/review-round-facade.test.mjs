@@ -229,10 +229,10 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "accept", evidence: "no" }] })).toThrow(/hard invariant/);
   });
 
-  it("rejects a completed provider response whose packet attestation hash is tampered", async () => {
+  it.each(["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"])("rejects a completed provider response whose %s attestation is tampered", async (field) => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
-      const tampered = JSON.parse(output(request.packet)); tampered.packet_hash = "0".repeat(64);
+      const tampered = JSON.parse(output(request.packet)); tampered[field] = "0".repeat(64);
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(tampered) }] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "tampered-output", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
