@@ -139,6 +139,11 @@ function verifiedHumanGates(providerOutcomes, declaredGates) {
   return derived;
 }
 function findingId(finding) { return sha(`${finding.file}\0${finding.line}\0${finding.rule_id}\0${finding.issue.trim().toLowerCase()}`); }
+function projectFinding(finding, provider) {
+  if (!safeRelativePath(finding.file)) throw new Error("finding file must be repo-relative");
+  const projected = { file: finding.file, line: finding.line, rule_id: finding.rule_id, severity: finding.severity, issue: finding.issue, evidence: finding.evidence, suggested_fix: finding.suggested_fix };
+  return { ...projected, finding_id: findingId(projected), providers: [provider] };
+}
 function redact(value) { return JSON.parse(JSON.stringify(value, (key, field) => /runtime_id|session_id|raw_output|diagnostic|workspace|absolute_path|delivery/i.test(key) ? undefined : field)); }
 function exactClosureEvidence(findings, supplied) {
   if (findings.length === 0 && supplied === undefined) return [];
@@ -168,9 +173,12 @@ function checkedCarryovers(value, previousFindings) {
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now() } = {}) {
+  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
+    if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
+    if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
+    this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${intent.stage}-${intent.review_flow_id}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${intent.stage}-${intent.review_flow_id}.json`); }
@@ -191,6 +199,7 @@ export class ReviewRoundFacade {
   async #prepareUnderLock(input, lock) {
     try {
     for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
+    if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
@@ -198,7 +207,8 @@ export class ReviewRoundFacade {
     const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
     const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.some((mode) => mode === "file_only" || mode === "always_embed")).map((item) => item.provider).sort();
     const continuableProviders = capabilitySnapshot.providers.filter((item) => candidateProviders.includes(item.provider) && item.capabilities.continuation).map((item) => item.provider).sort();
-    const prior = this.#readFlow(input); const continuation = input.continuation === true;
+    let prior = this.#readFlow(input); const continuation = input.continuation === true;
+    if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
     if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
     if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object")) throw new Error("blocked_by_human_confirmation: initial provider delivery snapshot is missing; use reset with human approval");
@@ -253,6 +263,9 @@ export class ReviewRoundFacade {
       const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
       const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head });
       delta = buildContinuationDelta({ previousPacket: priorPacket, currentPacket: packet, deltaSource, previousFindings, closureEvidence, crossStageCarryovers, requiredSkills: resolution.definitions });
+      const prompt = continuationPrompt(delta); const promptBytes = Buffer.byteLength(prompt, "utf8");
+      if (promptBytes > this.continuationPromptMaxBytes) throw new Error(`CONTINUATION_PROMPT_TOO_LARGE: ${promptBytes} bytes exceeds host limit ${this.continuationPromptMaxBytes}`);
+      Object.defineProperty(delta, "prompt", { value: prompt, enumerable: false });
     }
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
@@ -288,7 +301,7 @@ export class ReviewRoundFacade {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
-      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? continuationPrompt(prepared.delta) : initialPrompt({ intent, packet }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
+      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : initialPrompt({ intent, packet }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0
@@ -379,6 +392,42 @@ export class ReviewRoundFacade {
     return lock;
   }
   #releaseLock(lock) { rmSync(lock, { recursive: true, force: true }); }
+  #recoverPendingReceiptBinding(intent, flow) {
+    const pending = flow.pending_receipt_update; if (!pending) return flow;
+    const receiptPath = resolve(flow.previous_receipt_ref ?? "");
+    const expectedJournal = join(dirname(receiptPath), "receipt-update-journal.json");
+    const journalPath = resolve(pending.journal_ref ?? "");
+    const privateRoot = resolve(join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private"));
+    if (!receiptPath.startsWith(`${privateRoot}/`) || journalPath !== expectedJournal || !existsSync(journalPath)) throw new Error("blocked_by_human_confirmation: pending receipt journal binding is invalid");
+    const journalBytes = readFileSync(journalPath);
+    if (sha(journalBytes) !== pending.journal_sha256) throw new Error("blocked_by_human_confirmation: pending receipt journal hash mismatch");
+    let journal; try { journal = JSON.parse(journalBytes); } catch { throw new Error("blocked_by_human_confirmation: pending receipt journal is invalid"); }
+    const expected = journal?.version === 1 && journal.task_id === intent.task_id && journal.stage === intent.stage && journal.review_flow_id === intent.review_flow_id
+      && resolve(journal.receipt_ref ?? "") === receiptPath && journal.old_receipt_sha256 === flow.previous_receipt_sha256
+      && journal.old_receipt_sha256 === pending.old_receipt_sha256 && journal.new_receipt_sha256 === pending.new_receipt_sha256
+      && sha(safeJson(journal.receipt)) === journal.new_receipt_sha256;
+    if (!expected) throw new Error("blocked_by_human_confirmation: pending receipt journal provenance mismatch");
+    const currentHash = sha(readFileSync(receiptPath));
+    if (currentHash === journal.old_receipt_sha256) atomic(receiptPath, safeJson(journal.receipt));
+    else if (currentHash !== journal.new_receipt_sha256) throw new Error("blocked_by_human_confirmation: receipt changed outside pending journal");
+    if (sha(readFileSync(receiptPath)) !== journal.new_receipt_sha256) throw new Error("blocked_by_human_confirmation: recovered receipt hash mismatch");
+    const { pending_receipt_update, ...rest } = flow;
+    const healed = { ...rest, previous_receipt_sha256: journal.new_receipt_sha256 };
+    this.#writeFlow(intent, healed); rmSync(journalPath, { force: true }); return healed;
+  }
+  #updateReceiptAndFlow(intent, receiptPath, receipt) {
+    const flow = this.#readFlow(intent);
+    if (!flow || resolve(flow.previous_receipt_ref ?? "") !== resolve(receiptPath)) throw new Error("receipt update is not bound to the current flow");
+    const oldHash = sha(readFileSync(receiptPath));
+    if (flow.previous_receipt_sha256 !== oldHash) throw new Error("receipt update old hash does not match current flow");
+    const newHash = sha(safeJson(receipt)); const journalPath = join(dirname(receiptPath), "receipt-update-journal.json");
+    const journal = { version: 1, task_id: intent.task_id, stage: intent.stage, review_flow_id: intent.review_flow_id, receipt_ref: resolve(receiptPath), old_receipt_sha256: oldHash, new_receipt_sha256: newHash, receipt };
+    atomic(journalPath, safeJson(journal));
+    this.#writeFlow(intent, { ...flow, pending_receipt_update: { journal_ref: journalPath, journal_sha256: sha(readFileSync(journalPath)), old_receipt_sha256: oldHash, new_receipt_sha256: newHash } });
+    this.faultInjector("after-publish-journal-bind");
+    atomic(receiptPath, safeJson(receipt)); this.faultInjector("after-publish-receipt-write");
+    return this.#recoverPendingReceiptBinding(intent, this.#readFlow(intent));
+  }
   #recoverProjections(taskId) {
     const privateRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private"); if (!existsSync(privateRoot)) return;
     for (const name of readdirSync(privateRoot)) {
@@ -487,7 +536,8 @@ export class ReviewRoundFacade {
     if (output.packet_status !== "complete") return { ...base, packet_status: output.packet_status ?? "material_incomplete", diagnostic: "PROVIDER_PACKET_INCOMPLETE" };
     const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output });
     if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: checked.errors.join("; ") };
-    const findings = output.findings.map((finding) => ({ ...finding, finding_id: findingId(finding), providers: [item.provider] }));
+    let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
+    catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }
     return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist };
   }
 
@@ -507,7 +557,7 @@ export class ReviewRoundFacade {
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
     const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
     const needs_human = semantic_verdict !== "pass";
-    const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); privateReceipt.dispositions = dispositions.items; atomic(result.receipt_draft_ref, safeJson(privateReceipt));
+    const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); privateReceipt.dispositions = dispositions.items; this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, privateReceipt);
     const dir = dirname(result.receipt_draft_ref); const core = redact({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes });
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); done.done_flags.core_receipt = true; atomic(projection, safeJson(done)); const coreHash = sha(readFileSync(corePath));

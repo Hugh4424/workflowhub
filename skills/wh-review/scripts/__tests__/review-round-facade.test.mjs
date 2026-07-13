@@ -351,6 +351,11 @@ describe("ReviewRoundFacade", () => {
     const flowPath = join(tracking, "publish-recovery", "reviews", "private", "flows", "build-code-flow.json");
     const staleFlow = JSON.parse(readFileSync(flowPath, "utf8"));
     expect(staleFlow.previous_receipt_sha256).not.toBe(hash(readFileSync(first.receipt_draft_ref)));
+    const journalPath = staleFlow.pending_receipt_update.journal_ref; const journalBytes = readFileSync(journalPath);
+    writeFileSync(journalPath, Buffer.concat([journalBytes, Buffer.from("\n")]));
+    const tamperCheck = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    await expect(tamperCheck.prepare({ task_id: "publish-recovery", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, continuation: true })).rejects.toThrow(/journal hash mismatch/);
+    writeFileSync(journalPath, journalBytes);
     const recovered = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const prepared = await recovered.prepare({ task_id: "publish-recovery", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, continuation: true });
     const healedFlow = JSON.parse(readFileSync(flowPath, "utf8"));
@@ -362,12 +367,20 @@ describe("ReviewRoundFacade", () => {
   it("enforces a host-owned UTF-8 continuation prompt byte limit before broker dispatch", async () => {
     const tracking = root(); let calls = 0; let currentPacket;
     const broker = fakeBroker(async (request) => { calls += 1; return { runtime_id: "89898989-8989-4898-8989-898989898989", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? currentPacket) }] }; });
-    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, continuationPromptMaxBytes: 128 });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const initial = trustedPacket(tracking); currentPacket = initial;
     await facade.run(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
     currentPacket = advancePacket(tracking, initial); currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(200) }]; refreshPacketHashes(currentPacket);
     await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true, continuation_prompt_max_bytes: 9999999 })).rejects.toThrow(/caller.*continuation.*limit|continuation.*caller/i);
-    await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true })).rejects.toThrow(/CONTINUATION_PROMPT_TOO_LARGE.*128/);
+    const probe = await facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true });
+    const exactBytes = Buffer.byteLength(probe.delta.prompt, "utf8"); rmSync(probe.lock, { recursive: true, force: true });
+    const exactFacade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, continuationPromptMaxBytes: exactBytes });
+    const exact = await exactFacade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true });
+    rmSync(exact.lock, { recursive: true, force: true });
+    const belowFacade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, continuationPromptMaxBytes: exactBytes - 1 });
+    await expect(belowFacade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true })).rejects.toThrow(new RegExp(`CONTINUATION_PROMPT_TOO_LARGE.*${exactBytes - 1}`));
+    currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(180000) }]; refreshPacketHashes(currentPacket);
+    await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, repository_root: tracking, continuation: true })).rejects.toThrow(/CONTINUATION_PROMPT_TOO_LARGE.*524288/);
     expect(calls).toBe(1);
   });
 
