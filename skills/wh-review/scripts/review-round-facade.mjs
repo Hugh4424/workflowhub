@@ -176,6 +176,9 @@ export class ReviewRoundFacade {
     const name = intent.stage === "make-decision" ? `${intent.task_id}-${reviewStageStorageKey(intent.stage, intent.review_track)}.lock` : `${intent.task_id}.lock`;
     return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", name);
   }
+  #taskProjectionLock(taskId, purpose) {
+    return this.#acquireLock({ task_id: taskId, stage: "task-projection", review_track: null, idempotency_key: sha(`task-projection\0${taskId}\0${purpose}`) });
+  }
   #publicPaths(intent) {
     const reviews = join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews");
     const flow = reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id);
@@ -279,7 +282,7 @@ export class ReviewRoundFacade {
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${reviewTrack ?? "default"}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       validateSchema("review-intent", intent);
-      this.#recoverProjections(input.task_id);
+      this.#recoverProjections(input.task_id, input.stage === "make-decision");
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
@@ -448,7 +451,13 @@ export class ReviewRoundFacade {
     atomic(receiptPath, safeJson(receipt)); this.faultInjector("after-publish-receipt-write");
     return this.#recoverPendingReceiptBinding(intent, this.#readFlow(intent));
   }
-  #recoverProjections(taskId) {
+  #recoverProjections(taskId, acquireSharedTaskLock = false) {
+    if (!acquireSharedTaskLock) return this.#recoverProjectionsUnderTaskLock(taskId);
+    const lock = this.#taskProjectionLock(taskId, "recover-projections");
+    try { return this.#recoverProjectionsUnderTaskLock(taskId); }
+    finally { this.#releaseLock(lock); }
+  }
+  #recoverProjectionsUnderTaskLock(taskId) {
     const privateRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private"); if (!existsSync(privateRoot)) return;
     for (const name of readdirSync(privateRoot)) {
       if (!name.startsWith("round-")) continue; const dir = join(privateRoot, name), projection = join(dir, "projection-manifest.json"), receipt = join(dir, "round-receipt.json");
@@ -481,7 +490,7 @@ export class ReviewRoundFacade {
     atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
     const flow = this.#readFlow(saved.intent);
     if (flow) this.#writeFlow(saved.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
-    if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id);
+    if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
     atomic(projectionPath, safeJson(projection));
@@ -571,9 +580,12 @@ export class ReviewRoundFacade {
   publish(result, dispositions) {
     validateSchema("dispositions", dispositions);
     validateSchema("round-run-result", result);
-    const lock = this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
-    try { return this.#publishUnderLock(this.#trustedResult(result), dispositions); }
-    finally { this.#releaseLock(lock); }
+    const lock = this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_track ?? "default"}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
+    let taskLock = null;
+    try {
+      if (result.intent.stage === "make-decision") taskLock = this.#taskProjectionLock(result.intent.task_id, `publish-${result.intent.review_flow_id}`);
+      return this.#publishUnderLock(this.#trustedResult(result), dispositions);
+    } finally { if (taskLock) this.#releaseLock(taskLock); this.#releaseLock(lock); }
   }
   #trustedResult(locator) {
     const receiptPath = resolve(locator.receipt_draft_ref);
@@ -594,12 +606,12 @@ export class ReviewRoundFacade {
       continuation_eligible: receipt.continuation_eligible, receipt_draft_ref: receiptPath };
     return validateSchema("round-run-result", trusted);
   }
-  #latestPublishedMakeDecisionTrack(taskId, reviewTrack) {
+  #latestPublishedMakeDecisionTrack(taskId, reviewFlowId, reviewTrack) {
     const flowsRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private", "flows");
     if (!existsSync(flowsRoot)) return null;
     const candidates = readdirSync(flowsRoot).filter((name) => name.endsWith(".json") && !name.endsWith(".reset-approval.json")).map((name) => {
       try { return JSON.parse(readFileSync(join(flowsRoot, name), "utf8")); } catch { return null; }
-    }).filter((flow) => flow?.stage === "make-decision" && flow.review_track === reviewTrack && typeof flow.core_receipt_hash === "string" && typeof flow.previous_receipt_ref === "string");
+    }).filter((flow) => flow?.stage === "make-decision" && flow.review_flow_id === reviewFlowId && flow.review_track === reviewTrack && typeof flow.core_receipt_hash === "string" && typeof flow.previous_receipt_ref === "string");
     candidates.sort((left, right) => (right.published_at_ms ?? 0) - (left.published_at_ms ?? 0));
     const flow = candidates[0]; if (!flow) return null;
     const corePath = join(dirname(resolve(flow.previous_receipt_ref)), "core-receipt.json");
@@ -608,23 +620,23 @@ export class ReviewRoundFacade {
     if (core?.intent?.stage !== "make-decision" || core.intent.review_track !== reviewTrack || core.semantic_verdict === null) throw new Error("make-decision aggregate track receipt is invalid");
     return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id };
   }
-  #publishMakeDecisionAggregate(taskId) {
-    const direction = this.#latestPublishedMakeDecisionTrack(taskId, "direction");
-    const detail = this.#latestPublishedMakeDecisionTrack(taskId, "detail");
+  #publishMakeDecisionAggregate(taskId, reviewFlowId) {
+    const direction = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "direction");
+    const detail = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "detail");
     if (!direction || !detail) return null;
     const aggregate = aggregateMakeDecisionTracks({ direction, detail });
     if (!aggregate.semantic_verdict) throw new Error("make-decision aggregate requires semantic verdicts from both tracks");
     const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
     const aggregateCore = {
-      version: 1, stage: "make-decision", review_tracks: ["direction", "detail"],
+      version: 1, stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"],
       track_core_receipt_hashes: { direction: direction.core_receipt_hash, detail: detail.core_receipt_hash },
       track_review_flow_ids: { direction: direction.review_flow_id, detail: detail.review_flow_id },
       semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, merged_findings: aggregate.findings,
     };
     const corePath = join(reviews, "make-decision-aggregate-core-receipt.json"); atomic(corePath, safeJson(aggregateCore), 0o644); const coreHash = sha(readFileSync(corePath));
     const reportPath = join(reviews, "make-decision-aggregate.md"); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
-    const indexPath = join(reviews, "report-index-make-decision.json"); atomic(indexPath, safeJson({ stage: "make-decision", review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
-    const stageResultPath = join(reviews, "stage-result-make-decision.json"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
+    const indexPath = join(reviews, "report-index-make-decision.json"); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    const stageResultPath = join(reviews, "stage-result-make-decision.json"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
     return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
   }
   #publishUnderLock(result, dispositions) {
@@ -647,7 +659,7 @@ export class ReviewRoundFacade {
     atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
     atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
     const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now() });
-    const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id) : null;
+    const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }
   reset({ task_id, stage, review_track = null, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {

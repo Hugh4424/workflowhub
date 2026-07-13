@@ -135,6 +135,26 @@ describe("ReviewRoundFacade", () => {
     expect(existsSync(join(reviews, "stage-result-make-decision-detail.json"))).toBe(true);
   });
 
+  it("aggregates only direction and detail results from the same shared flow", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const track = request.packet.review_track;
+      return { providers: [{ provider: "opencode", status: "completed", session_id: `${track}-session`, output: makeDecisionOutput(request.packet, track) }] };
+    }) });
+    for (const [review_track, review_flow_id] of [["direction", "direction-flow"], ["detail", "detail-flow"]]) {
+      const result = await facade.run(facade.prepare({ task_id: "separate-groups", stage: "make-decision", review_track, review_flow_id, packet: makeDecisionPacket(tracking, review_track), repository_root: tracking }));
+      facade.publish(result, { items: [] });
+    }
+    expect(existsSync(join(tracking, "separate-groups", "reviews", "stage-result-make-decision.json"))).toBe(false);
+  });
+
+  it("takes the shared task lock before publishing a make-decision track", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "direction-session", output: makeDecisionOutput(request.packet, "direction") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "aggregate-lock", stage: "make-decision", review_track: "direction", review_flow_id: "shared-flow", packet: makeDecisionPacket(tracking, "direction"), repository_root: tracking }));
+    const sharedLock = join(tracking, "aggregate-lock", "reviews", "private", "flows", "aggregate-lock.lock"); mkdirSync(sharedLock, { recursive: true });
+    expect(() => facade.publish(result, { items: [] })).toThrow(/review-already-running/);
+    expect(existsSync(join(dirname(result.receipt_draft_ref), "core-receipt.json"))).toBe(false);
+  });
+
   it("schema-validates packets and provider JSON at their boundaries", async () => {
     const tracking = root(); const value = packet({ root: tracking }); value.fenced = "secret-value";
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });

@@ -656,12 +656,13 @@ core_receipt_hash, needs_human }`; only it may control public stage decisions.
 Run two isolated flows in order. They never share a runtime:
 
 ```js
-await runReviewRound({ stage: "make-decision", review_track: "direction", review_flow_id: "direction-flow", packet });
-await runReviewRound({ stage: "make-decision", review_track: "detail", review_flow_id: "detail-flow", packet });
+await runReviewRound({ stage: "make-decision", review_track: "direction", review_flow_id: "make-decision-flow", packet });
+await runReviewRound({ stage: "make-decision", review_track: "detail", review_flow_id: "make-decision-flow", packet });
 ```
 
 The direction packet contains only the original requirement. The detail packet may add
-the decision log. Later rounds use `continuation: true` with the same flow id; reset
-requires an explicit human approval reference.
+the decision log. The shared flow id is the aggregation group; each track still has its
+own runtime, receipt, and continuation. Later rounds use `continuation: true` with the
+same flow id; reset requires an explicit human approval reference.
 
 ## End V4 Review Round

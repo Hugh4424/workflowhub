@@ -89,8 +89,7 @@ describe("wh-review v4 workflow wiring", () => {
     const content = v4("make-decision");
     expect(content).toContain('review_track: "direction"');
     expect(content).toContain('review_track: "detail"');
-    expect(content).toContain("direction-flow");
-    expect(content).toContain("detail-flow");
+    expect(content).toContain("make-decision-flow");
   });
 
   it("uses one packet review flow for build-code instead of dual reviewer delegation", () => {
