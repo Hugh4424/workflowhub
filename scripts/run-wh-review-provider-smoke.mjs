@@ -22,6 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, "..");
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
+const stripHunkSectionHeaders = (unifiedDiff) => unifiedDiff.replace(/^(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1");
 
 function git(root, args, encoding = "utf8") { return execFileSync("git", args, { cwd: root, encoding }).trim(); }
 function bytes(root, revision, path) { return execFileSync("git", ["show", `${revision}:${path}`], { cwd: root }); }
@@ -195,9 +196,9 @@ async function main() {
     const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: r1Packet.packet_hash, expectedDiffSha256: r1Packet.diff_sha256 });
     requireValue(opencodeOutcome1.delivery_used === "always_embed", "SMOKE_OPENCODE_R1_FAIL: expected always_embed delivery");
 
-    const deltaDiff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", "-U0", r1, r2], { cwd: source, encoding: "utf8" });
+    const deltaDiff = stripHunkSectionHeaders(execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", "-U0", r1, r2], { cwd: source, encoding: "utf8" }));
     r2Packet.previous_packet = r1Packet; r2Packet.delta_diff = deltaDiff; r2Packet.delta_changed_files = [{ path: "smoke.txt", status: "modified", sha256: sha(bytes(source, r2, "smoke.txt")), size: bytes(source, r2, "smoke.txt").length, old_sha256: sha(bytes(source, r1, "smoke.txt")), old_size: bytes(source, r1, "smoke.txt").length }];
-    const opencodeR2Prompt = directPrompt(r2Packet, 2); requireValue(opencodeR2Prompt.includes("R2_DELTA_ONLY_MARKER") && !opencodeR2Prompt.includes("R1_DIFF_MARKER"), "SMOKE_OPENCODE_R2_FAIL: continuation prompt is not delta-only");
+    const opencodeR2Prompt = directPrompt(r2Packet, 2); write(join(outputRoot, "opencode-r2-prompt.txt"), opencodeR2Prompt); requireValue(opencodeR2Prompt.includes("R2_DELTA_ONLY_MARKER") && !opencodeR2Prompt.includes("R1_DIFF_MARKER"), "SMOKE_OPENCODE_R2_FAIL: continuation prompt is not delta-only");
     const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id }, provider_allowlist: ["opencode"] };
     const opencodeR2RequestPath = join(outputRoot, "opencode-r2-request.json"); write(opencodeR2RequestPath, opencodeR2Request);
     const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: join(outputRoot, "opencode-r2-response.json") });

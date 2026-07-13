@@ -37,6 +37,7 @@ function parseOutput(value) {
 }
 function packetHash(packet) { return reviewPacketHash(packet); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
+function stripHunkSectionHeaders(unifiedDiff) { return unifiedDiff.replace(/^(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1"); }
 function addedDeltaLineKeys(unifiedDiff) {
   const keys = new Set();
   let file = null; let nextLine = null;
@@ -98,7 +99,8 @@ function buildHostGitSource(repositoryRoot, requestedRevision, { contextLines = 
   const head = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.head}^{commit}`])).trim();
   if (requestedRevision.base !== base || requestedRevision.head !== head) throw new Error("source_revision must use immutable resolved commit ids");
   const context = contextLines === null ? [] : [`-U${contextLines}`];
-  const unified_diff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", ...context, base, head]));
+  const rawDiff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", ...context, base, head]));
+  const unified_diff = contextLines === 0 ? stripHunkSectionHeaders(rawDiff) : rawDiff;
   const fields = String(hostGit(root, ["diff", "--name-status", "-z", "--find-renames", base, head])).split("\0");
   const changed_files = [];
   for (let index = 0; index < fields.length - 1;) {

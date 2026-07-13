@@ -584,6 +584,7 @@ describe("ReviewRoundFacade", () => {
     expect(calls[1].request.prompt).toContain(`current_diff_sha256=${secondPrepared.packet.diff_sha256}`);
     expect(calls[1].request.prompt).toContain("fixed\n");
     expect(calls[1].request.prompt).not.toContain("\n x\n");
+    expect(calls[1].request.prompt).not.toMatch(/^@@ .* @@ .+$/m);
     const headings = ["PreviousFindings", "ClosureEvidence", "DeltaManifest", "AffectedMaterials", "CurrentMaterialManifest", "CrossStageCarryovers", "RequiredSkillLensHashes", "OutputRequirements"];
     expect(headings.map((heading) => calls[1].request.prompt.indexOf(heading))).toEqual([...headings.map((heading) => calls[1].request.prompt.indexOf(heading))].sort((a, b) => a - b));
     expect(second).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash, previous_findings: [{ finding_id: findingId }] });
