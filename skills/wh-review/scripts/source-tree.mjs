@@ -1,0 +1,107 @@
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function git(root, args, { encoding = "utf8", env } = {}) {
+  try {
+    return execFileSync("git", args, { cwd: root, encoding, env, maxBuffer: 64 * 1024 * 1024 });
+  } catch (error) {
+    const detail = String(error.stderr ?? error.message).trim();
+    throw new Error(`source tree git command failed: git ${args.join(" ")}: ${detail}`);
+  }
+}
+
+function repositoryRoot(root) {
+  const resolved = realpathSync(resolve(root));
+  const gitRoot = realpathSync(resolve(resolved, String(git(resolved, ["rev-parse", "--show-toplevel"])).trim()));
+  if (gitRoot !== resolved) throw new Error("repository root must be the host git repository root");
+  return resolved;
+}
+
+function treeOid(root, revision) {
+  if (typeof revision !== "string" || !revision) throw new TypeError("tree revision is required");
+  return String(git(root, ["rev-parse", "--verify", `${revision}^{tree}`])).trim();
+}
+
+function safeRelativePath(path) {
+  return typeof path === "string" && path.length > 0 && !path.includes("\\") && !path.startsWith("/")
+    && !path.split("/").some((part) => !part || part === "." || part === "..");
+}
+
+function blob(root, tree, path) {
+  return git(root, ["show", `${tree}:${path}`], { encoding: "buffer" });
+}
+
+function parseNameStatus(output) {
+  const fields = String(output).split("\0");
+  const entries = [];
+  for (let index = 0; index < fields.length - 1;) {
+    const token = fields[index++];
+    if (!token) continue;
+    const kind = token[0];
+    if (!["A", "M", "D", "R"].includes(kind)) throw new Error(`unsupported source tree change status: ${token}`);
+    const oldPath = kind === "R" ? fields[index++] : null;
+    const path = fields[index++];
+    if (!safeRelativePath(path) || (oldPath !== null && !safeRelativePath(oldPath))) throw new Error("source tree contains an unsafe path");
+    entries.push({ kind, path, oldPath });
+  }
+  return entries;
+}
+
+export function headTree(root) {
+  const repository = repositoryRoot(root);
+  return treeOid(repository, "HEAD");
+}
+
+export function captureWorktreeTree(root, { baseTree } = {}) {
+  const repository = repositoryRoot(root);
+  const base = treeOid(repository, baseTree ?? "HEAD");
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), "wh-review-index-"));
+  const temporaryIndex = join(temporaryDirectory, "index");
+  try {
+    const env = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
+    git(repository, ["read-tree", base], { env });
+    git(repository, ["add", "-A", "--", "."], { env });
+    return String(git(repository, ["write-tree"], { env })).trim();
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+export function buildTreeMaterial(root, { baseTree, snapshotTree } = {}) {
+  const repository = repositoryRoot(root);
+  const base = treeOid(repository, baseTree);
+  const snapshot = treeOid(repository, snapshotTree);
+  const unified_diff = String(git(repository, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, snapshot]));
+  const changes = parseNameStatus(git(repository, ["diff", "--name-status", "-z", "--find-renames", base, snapshot]));
+  const changed_files = changes.map(({ kind, path, oldPath }) => {
+    const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed" })[kind] };
+    if (oldPath !== null) entry.old_path = oldPath;
+    if (kind !== "D") {
+      const bytes = blob(repository, snapshot, path);
+      entry.sha256 = sha256(bytes); entry.size = bytes.length;
+    }
+    if (kind !== "A") {
+      const bytes = blob(repository, base, oldPath ?? path);
+      entry.old_sha256 = sha256(bytes); entry.old_size = bytes.length;
+    }
+    return entry;
+  });
+  return { source_revision: { base_tree: base, snapshot_tree: snapshot }, unified_diff, changed_files };
+}
+
+export function assertCurrentTree(root, expectedTree) {
+  const repository = repositoryRoot(root);
+  const expected = treeOid(repository, expectedTree);
+  const current = captureWorktreeTree(repository, { baseTree: expected });
+  if (current !== expected) {
+    const error = new Error(`WORKTREE_DRIFT_AFTER_REVIEW: current tree ${current} differs from approved tree ${expected}`);
+    error.code = "WORKTREE_DRIFT_AFTER_REVIEW";
+    throw error;
+  }
+  return current;
+}
