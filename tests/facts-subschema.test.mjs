@@ -517,6 +517,21 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/phase_records/);
   });
 
+  it("negative: phase_completion rejects private review references", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        phase_completion: {
+          phase_records: [{ phase_id: "phase-1", changed: true }],
+          review_flow_ref: "refs/workflowhub/review/private",
+        },
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/phase_completion/);
+  });
+
   it("positive: phase completion records are accepted without a commit SHA", () => {
     const artifact = {
       ...base(),

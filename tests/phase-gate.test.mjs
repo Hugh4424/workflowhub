@@ -108,8 +108,8 @@ describe("phase-gate", () => {
   });
 
   it("accepts dirty tracked and untracked implementation with a published passing core", () => {
-    const phaseResult = fixture({}, { leaveDirty: true });
-    writeFileSync(join(repo, "src", "implementation.txt"), "phase work updated\n", "utf8");
+    const phaseResult = fixture();
+    writeFileSync(join(repo, "README.md"), "# fixture\ntracked worktree change\n", "utf8");
     writeFileSync(join(repo, "untracked.txt"), "unreviewed commit boundary is not required\n", "utf8");
     const result = validatePhaseGate(phaseResult, repo);
     expect(result.ok, result.errors.join("; ")).toBe(true);

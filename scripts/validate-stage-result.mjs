@@ -103,8 +103,12 @@ export function validateStageResult(stage, artifact) {
       errors.push(`facts["review"] for stage "build-code" must be an object`);
     }
     if (facts.phase_completion && typeof facts.phase_completion === "object" && !Array.isArray(facts.phase_completion)) {
-      const phaseRecords = Array.isArray(facts.phase_completion.phase_records)
-        ? facts.phase_completion.phase_records
+      const phaseCompletion = facts.phase_completion;
+      if (Object.keys(phaseCompletion).some((key) => key !== "phase_records")) {
+        errors.push(`facts["phase_completion"] for stage "build-code" must contain only phase_records`);
+      }
+      const phaseRecords = Array.isArray(phaseCompletion.phase_records)
+        ? phaseCompletion.phase_records
         : null;
       if (!phaseRecords) {
         errors.push(`facts["phase_completion"].phase_records for stage "build-code" must be an array`);

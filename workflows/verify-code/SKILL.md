@@ -266,12 +266,14 @@ they do not access the worktree. A non-pass semantic result is surfaced to the h
 before any irreversible action.
 
 After the current flow returns semantic `pass`, run `verify-final` before any
-`git add` or commit. Its input identifies the trusted task worktree and the approved
-flow; it never accepts a caller diff or commits:
+`git add` or commit. Set `task_tracking_root` from the already parsed
+`taskRecords.task_tracking_root`; never infer it from the current checkout. Its input
+identifies the trusted task worktree and the approved flow; it never accepts a caller
+diff or commits:
 
 ```bash
 node <workflowhub_package_root>/skills/wh-review/scripts/wh-review-cli.mjs verify-final <<'JSON'
-{"task_id":"<task-id>","stage":"verify-code","review_flow_id":"verify-code-flow"}
+{"task_id":"<task-id>","task_tracking_root":"<taskRecords.task_tracking_root>","stage":"verify-code","review_flow_id":"verify-code-flow"}
 JSON
 git add -A
 git commit -m "workflowhub(verify-code): finalize <task-id>"

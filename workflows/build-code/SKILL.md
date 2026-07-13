@@ -137,7 +137,7 @@ Example shape (the content to assemble now, to be written later at §16):
   "facts": {
     "changed": ["core/text-utils.mjs", "tests/text-utils.test.mjs"],
     "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"], "command": "pnpm exec vitest run tests/text-utils.test.mjs", "risk_level": "P1", "phases": [{ "phase_id": "phase-1", "risk_level": "P1" }] },
-    "review": { "core_receipt_hash": "<sha256>", "verdict": "pass" },
+    "review": { "core_receipt_hash": "<sha256>", "semantic_verdict": "pass", "needs_human": false },
     "worktree_root": "/absolute/path/to/worktree",
     "task_tracking_root": "/absolute/path/to/task-records",
     "phase_completion": {
