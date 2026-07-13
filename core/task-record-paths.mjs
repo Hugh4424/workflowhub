@@ -85,12 +85,14 @@ export function resolveMakeDecisionStageResultPath(taskId, reviewFlowId, options
 }
 
 export function taskRecordPath(taskId, ...segments) {
-  if (segments.join("/") === "stage-result-make-decision.json" || segments.join("/") === "reviews/stage-result-make-decision.json") {
-    throw new Error("legacy fixed make-decision stage-result is forbidden; use resolveMakeDecisionStageResultPath(task_id, review_flow_id)");
-  }
   const paths = resolveTaskRecordPaths(taskId);
   const candidate = resolve(paths.task_root, ...segments);
   assertInside(paths.task_root, candidate);
+  const legacyRoot = resolve(paths.task_root, "stage-result-make-decision.json");
+  const legacyReviews = resolve(paths.reviews_dir, "stage-result-make-decision.json");
+  if (candidate === legacyRoot || candidate === legacyReviews) {
+    throw new Error("legacy fixed make-decision stage-result is forbidden; use resolveMakeDecisionStageResultPath(task_id, review_flow_id)");
+  }
   return candidate;
 }
 
