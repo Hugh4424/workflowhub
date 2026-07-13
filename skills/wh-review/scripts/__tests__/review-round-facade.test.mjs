@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -115,6 +115,25 @@ describe("ReviewRoundFacade", () => {
     expect(JSON.parse(readFileSync(marker, "utf8"))).toMatchObject({ status: "superseded", old_review_flow_id: "old-flow", new_review_flow_id: "approved-reset", human_approval_ref: "human-approval-42" });
     const prepared = facade.prepare({ task_id: "reset-gate", stage: "build-code", review_flow_id: "approved-reset", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("blocks orphan or forged reset markers that do not bind an approved new flow", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const receiptBytes = readFileSync(result.receipt_draft_ref); const receipt = JSON.parse(receiptBytes);
+    writeFileSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"), JSON.stringify({ version: 1, status: "superseded", task_id: "orphan-marker", stage: "build-code", old_review_flow_id: "old-flow", new_review_flow_id: "forged-flow", human_approval_ref: "forged-approval", reason: "forged", receipt_sha256: hash(receiptBytes), human_gates: receipt.human_gates, new_flow_ref: "flows/build-code-forged-flow.json", new_flow_sha256: "0".repeat(64) }));
+    expect(() => facade.prepare({ task_id: "orphan-marker", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
+  });
+
+  it("does not supersede a gate when writing the approved reset flow fails", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    const blockedFlowPath = join(tracking, "flow-write-fails", "reviews", "private", "flows", "build-code-broken-flow.json"); mkdirSync(blockedFlowPath, { recursive: true });
+    expect(() => facade.reset({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "broken-flow", reason: "approved but disk failure", human_approval_ref: "human-approval-99" })).toThrow();
+    expect(existsSync(join(dirname(result.receipt_draft_ref), "resolved-by-reset.json"))).toBe(false);
+    expect(() => facade.prepare({ task_id: "flow-write-fails", stage: "build-code", review_flow_id: "next", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/human gate/);
   });
   it("builds one complete packet, accepts only completed/complete/business-valid output, and stores secrets privately", async () => {
     const tracking = root();
