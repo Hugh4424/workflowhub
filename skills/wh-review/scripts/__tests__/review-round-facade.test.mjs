@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ReviewRoundFacade, buildHostGitSource, buildHostReviewPacket, buildProviderPacketAttachments } from "../review-round-facade.mjs";
+import { ReviewRoundFacade, buildHostGitSource, buildHostReviewPacket, buildProviderPacketAttachments, buildProviderReviewPacket, verifyProviderReviewPacket } from "../review-round-facade.mjs";
 import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 import { reviewPacketHash } from "../review-packet-integrity.mjs";
@@ -411,6 +411,52 @@ describe("ReviewRoundFacade", () => {
     expect(manifest).toMatchObject({ packet_hash: value.packet_hash, diff_sha256: value.diff_sha256, diff_size: Buffer.byteLength(value.unified_diff) });
     expect(chunks).toHaveLength(manifest.chunks.length); expect(chunks.every((item) => item.bytes.length <= 192 * 1024)).toBe(true);
     expect(hash(Buffer.concat(chunks.map((item) => item.bytes)))).toBe(value.diff_sha256);
+  });
+
+  it("redacts host absolute paths only in the provider diff and leaves no-redaction packets byte-compatible", () => {
+    const ordinary = packet({ root: root() });
+    const unchanged = buildProviderReviewPacket(ordinary);
+    expect(unchanged.packet).toBe(ordinary);
+    expect(buildProviderPacketAttachments(unchanged.packet).map(({ destination, bytes }) => [destination, bytes])).toEqual(buildProviderPacketAttachments(ordinary).map(({ destination, bytes }) => [destination, bytes]));
+
+    const raw = { ...ordinary, round_kind: "initial", baseline_packet_hash: null, unified_diff: `diff --git a/a b/a\n@@ -1 +1 @@\n-/Users/Hugh/Project/workflowhub/old\n+\u0000path=/Users/Hugh/Project/workflowhub/new\n` };
+    refreshPacketHashes(raw); raw.packet_hash = reviewPacketHash(raw);
+    const projected = buildProviderReviewPacket(raw);
+    expect(raw.unified_diff).toContain("/Users/Hugh/Project/workflowhub/new");
+    expect(projected.packet.unified_diff).not.toContain("/Users/Hugh");
+    expect(projected.packet.redactions_applied).toEqual({ version: 1, count: 2, categories: { absolute_path: 2 } });
+    expect(projected.receipt).toMatchObject({ raw_diff_sha256: raw.diff_sha256, sanitized_diff_sha256: projected.packet.diff_sha256, redaction_count: 2, categories: { absolute_path: 2 } });
+    expect(projected.receipt.redactions.every((entry) => Number.isInteger(entry.byte_offset) && entry.byte_length > 0 && /^[a-f0-9]{64}$/.test(entry.raw_sha256))).toBe(true);
+    expect(verifyProviderReviewPacket(raw, projected.packet, projected.receipt)).toBe(true);
+
+    const attachments = buildProviderPacketAttachments(projected.packet);
+    const bytes = Buffer.concat(attachments.map((item) => item.bytes));
+    expect(bytes.includes(Buffer.from("/Users/Hugh"))).toBe(false);
+    expect(bytes.includes(Buffer.from("\u0000path="))).toBe(true);
+  });
+
+  it("delivers a redacted provider packet while preserving the host raw diff and auditable receipt", async () => {
+    const tracking = root(); const base = git(tracking, ["rev-parse", "HEAD"]);
+    writeFileSync(join(tracking, "a"), "host path: /Users/Hugh/Project/workflowhub/private-file\n"); git(tracking, ["add", "a"]); git(tracking, ["commit", "-qm", "absolute path source"]);
+    const head = git(tracking, ["rev-parse", "HEAD"]);
+    const raw = buildHostReviewPacket({ repository_root: tracking, source_revision: { base, head }, stage: "build-code", raw_requirement: "review the sealed diff", acceptance_design_excerpt: "AC: redaction preserves all diff hunks", test_evidence: [{ name: "redaction", status: "passed" }], host_verified_facts: [] });
+    let dispatched; let attachmentBytes;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, skillsRoot: tracking, broker: fakeBroker(async (request) => {
+      dispatched = request;
+      attachmentBytes = Buffer.concat(request.attachments.entries.map((entry) => readFileSync(join(tracking, entry.source))));
+      return { providers: [{ provider: "opencode", status: "completed", session_id: "redacted", output: output(request.packet) }] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "redacted-provider", stage: "build-code", review_flow_id: "flow", packet: raw, repository_root: tracking, provider_allowlist: ["opencode"] }));
+    const directory = dirname(result.receipt_draft_ref);
+    const privateRaw = JSON.parse(readFileSync(join(directory, "review-packet.json"), "utf8"));
+    const receipt = JSON.parse(readFileSync(join(directory, "provider-packet-redaction-receipt.json"), "utf8"));
+    const manifest = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8"));
+    expect(privateRaw.unified_diff).toContain("/Users/Hugh/Project/workflowhub/private-file");
+    expect(dispatched.packet.unified_diff).not.toContain("/Users/Hugh");
+    expect(attachmentBytes.includes(Buffer.from("/Users/Hugh"))).toBe(false);
+    expect(receipt.redaction_count).toBeGreaterThan(0);
+    expect(manifest).toMatchObject({ packet_hash: raw.packet_hash, provider_packet_hash: dispatched.packet.packet_hash });
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", business_valid: true, packet_status: "complete" }));
   });
 
   it("makes a finding-free escalation a provider-sourced human publication gate", async () => {

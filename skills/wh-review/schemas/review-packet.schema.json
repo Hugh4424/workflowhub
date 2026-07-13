@@ -44,7 +44,22 @@
     "test_evidence": { "type": "array" },
     "host_verified_facts": { "type": "array" },
     "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "redactions_applied": {
+      "type": "object",
+      "required": ["version", "count", "categories"],
+      "properties": {
+        "version": { "const": 1 },
+        "count": { "type": "integer", "minimum": 1 },
+        "categories": {
+          "type": "object",
+          "required": ["absolute_path"],
+          "properties": { "absolute_path": { "type": "integer", "minimum": 1 } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
     ,"source_revision": {
       "type": "object",
       "properties": {
