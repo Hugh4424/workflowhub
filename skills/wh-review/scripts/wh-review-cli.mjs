@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { prepareRoundState } from "./round-state.mjs";
 import { assembleAndInvokeReviewEngine } from "./invoke-review-engine.mjs";
+import { BrokerClient } from "./broker-client.mjs";
+import { ReviewRoundFacade } from "./review-round-facade.mjs";
 
 function providerEnv(input) {
   const env = { ...process.env, ...(input.env ?? {}) };
@@ -52,7 +54,34 @@ export function prepareReview(input) {
   });
 }
 
+/** V4 production entry. The execute branch below is a temporary test-only
+ * compatibility seam until workflow callers are migrated in the next phase. */
+export async function runReviewRound(input) {
+  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
+  const command = input.third_review?.command, config = input.third_review?.config;
+  if (!taskTrackingRoot || !command || !config) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config}");
+  const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? taskTrackingRoot });
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
+  const prepared = facade.prepare({
+    task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
+    review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
+    packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
+    attachment_root: input.attachment_root ?? input.attachmentRoot, attachments: input.attachments,
+    attachment_delivery: input.attachment_delivery ?? input.attachmentDelivery,
+  });
+  const result = await facade.run(prepared);
+  return input.dispositions ? { ...result, publication: facade.publish(result, input.dispositions) } : result;
+}
+
+export function resetReviewFlow(input) {
+  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
+  if (!taskTrackingRoot) throw new TypeError("reset requires task_tracking_root");
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: { run() { throw new Error("reset does not run broker"); } } });
+  return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
+}
+
 export async function executeReview(input) {
+  if (input.packet) return runReviewRound(input);
   const taskId = input.task_id ?? input.taskId;
   const reviewFlowId = input.review_flow_id ?? input.reviewFlowId;
   const totalRound = input.total_round ?? input.totalRound;
@@ -84,11 +113,11 @@ export async function executeReview(input) {
 
 async function main() {
   const command = process.argv[2];
-  if (command !== "prepare" && command !== "execute") {
-    throw new Error("usage: wh-review-cli.mjs <prepare|execute> [input.json]; JSON stdin is used when input.json is omitted");
+  if (command !== "prepare" && command !== "execute" && command !== "run" && command !== "reset") {
+    throw new Error("usage: wh-review-cli.mjs <prepare|run|reset> [input.json]; JSON stdin is used when input.json is omitted");
   }
   const input = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
-  const result = command === "prepare" ? prepareReview(input) : await executeReview(input);
+  const result = command === "prepare" ? prepareReview(input) : command === "reset" ? resetReviewFlow(input) : command === "run" ? await runReviewRound(input) : await executeReview(input);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
