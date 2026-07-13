@@ -556,7 +556,9 @@ export class ReviewRoundFacade {
     return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
   #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, deliveryPolicy, contractRules) {
-    const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null; const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null };
+    const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null;
+    const rawHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value) ? value.toLowerCase() : null;
+    const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null, raw_stdout_sha256: rawHash(item?.raw_stdout_sha256), raw_stderr_sha256: rawHash(item?.raw_stderr_sha256) };
     if (typeof item?.output === "string" && item.provider) {
       const raw = join(directory, "providers", `${item.provider}.raw.txt`); atomic(raw, item.output); base.raw_output_ref = raw;
     }

@@ -692,6 +692,18 @@ describe("ReviewRoundFacade", () => {
     }
   });
 
+  it("persists broker raw stdout and stderr hashes only in the private round receipt", async () => {
+    const tracking = root(); const stdoutHash = "a".repeat(64); const stderrHash = "b".repeat(64);
+    const broker = fakeBroker(async (request) => ({ runtime_id: "abababab-abab-4bab-8bab-abababababab", providers: [{ provider: "opencode", status: "completed", session_id: "s", raw_stdout_sha256: stdoutHash, raw_stderr_sha256: stderrHash, output: output(request.packet) }] }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "raw-hashes", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"));
+    expect(privateReceipt.provider_outcomes[0]).toMatchObject({ raw_stdout_sha256: stdoutHash, raw_stderr_sha256: stderrHash });
+    const publication = facade.publish(result, { items: [] });
+    const core = readFileSync(publication.core_receipt_ref, "utf8");
+    expect(core).not.toContain(stdoutHash); expect(core).not.toContain(stderrHash);
+  });
+
   it("seals real diff, manifest, and changed-file bytes before broker dispatch", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");
