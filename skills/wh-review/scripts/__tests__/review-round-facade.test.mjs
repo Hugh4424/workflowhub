@@ -809,14 +809,40 @@ describe("ReviewRoundFacade", () => {
     expect(existsSync(guard)).toBe(false);
   });
 
-  it("does not let a shared report index alone claim an orphan guard", () => {
-    const tracking = root(); const reviews = join(tracking, "orphan-index", "reviews"); mkdirSync(reviews, { recursive: true });
+  it("clears an orphan guard when a shared report index binds an old core", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-index", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
     const guard = join(reviews, "projection-pending-build-code-new-flow.json");
     writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-index", stage: "build-code", review_track: null, review_flow_id: "new-flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-new-flow.json" }));
-    writeFileSync(join(reviews, "report-index.json"), JSON.stringify({ stage: "build-code", review_track: null, core_receipt_hash: "a".repeat(64), semantic_verdict: "pass" }));
+    const oldCore = { version: 1, intent: { task_id: "orphan-index", stage: "build-code", review_track: null, review_flow_id: "old-flow", business_round: 1 }, semantic_verdict: "pass" };
+    const oldCoreBytes = JSON.stringify(oldCore, null, 2) + "\n"; const oldCoreHash = hash(oldCoreBytes);
+    writeFileSync(join(reviews, "core-receipts", `${oldCoreHash}.json`), oldCoreBytes);
+    writeFileSync(join(reviews, "report-index.json"), JSON.stringify({ stage: "build-code", review_track: null, core_receipt_hash: oldCoreHash, semantic_verdict: "pass" }));
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
     expect(facade.recover({ task_id: "orphan-index" })).toEqual({ recovered: 1 });
     expect(existsSync(guard)).toBe(false);
+  });
+
+  it("fails loud when a shared report index binds the orphan guard's core", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-index-current", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
+    const guard = join(reviews, "projection-pending-build-code-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-index-current", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-flow.json" }));
+    const core = { version: 1, intent: { task_id: "orphan-index-current", stage: "build-code", review_track: null, review_flow_id: "flow", business_round: 1 }, semantic_verdict: "pass" };
+    const coreBytes = JSON.stringify(core, null, 2) + "\n"; const coreHash = hash(coreBytes);
+    writeFileSync(join(reviews, "core-receipts", `${coreHash}.json`), coreBytes);
+    writeFileSync(join(reviews, "report-index.json"), JSON.stringify({ stage: "build-code", review_track: null, core_receipt_hash: coreHash, semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "orphan-index-current" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
+    expect(existsSync(guard)).toBe(true);
+  });
+
+  it("fails loud when a shared report index has no valid public core", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-index-invalid", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-build-code-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-index-invalid", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-flow.json" }));
+    writeFileSync(join(reviews, "report-index.json"), JSON.stringify({ stage: "build-code", review_track: null, core_receipt_hash: "a".repeat(64), semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "orphan-index-invalid" })).toThrow(/PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID/);
+    expect(existsSync(guard)).toBe(true);
   });
 
   it("fails loud and retains an orphan guard when its own build-code core is public", () => {
@@ -845,6 +871,32 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
     expect(facade.recover({ task_id: "decision-orphan" })).toEqual({ recovered: 1 });
     expect(existsSync(guard)).toBe(false);
+  });
+
+  it.each(["direction", "detail"])("clears an orphan make-decision %s guard when its shared report index binds an old core", (review_track) => {
+    const tracking = root(); const reviews = join(tracking, "decision-index-old", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
+    const guard = join(reviews, `projection-pending-make-decision-${review_track}-new-flow.json`);
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "decision-index-old", stage: "make-decision", review_track, review_flow_id: "new-flow", needs_human: true, guard_ref: `reviews/projection-pending-make-decision-${review_track}-new-flow.json` }));
+    const oldCore = { version: 1, intent: { task_id: "decision-index-old", stage: "make-decision", review_track, review_flow_id: "old-flow", business_round: 1 }, semantic_verdict: "pass" };
+    const oldCoreBytes = JSON.stringify(oldCore, null, 2) + "\n"; const oldCoreHash = hash(oldCoreBytes);
+    writeFileSync(join(reviews, "core-receipts", `${oldCoreHash}.json`), oldCoreBytes);
+    writeFileSync(join(reviews, `report-index-make-decision-${review_track}.json`), JSON.stringify({ stage: "make-decision", review_track, core_receipt_hash: oldCoreHash, semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(facade.recover({ task_id: "decision-index-old" })).toEqual({ recovered: 1 });
+    expect(existsSync(guard)).toBe(false);
+  });
+
+  it("fails loud when a make-decision track report index binds the orphan guard's core", () => {
+    const tracking = root(); const reviews = join(tracking, "decision-index-current", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
+    const guard = join(reviews, "projection-pending-make-decision-direction-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "decision-index-current", stage: "make-decision", review_track: "direction", review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-make-decision-direction-flow.json" }));
+    const core = { version: 1, intent: { task_id: "decision-index-current", stage: "make-decision", review_track: "direction", review_flow_id: "flow", business_round: 1 }, semantic_verdict: "pass" };
+    const coreBytes = JSON.stringify(core, null, 2) + "\n"; const coreHash = hash(coreBytes);
+    writeFileSync(join(reviews, "core-receipts", `${coreHash}.json`), coreBytes);
+    writeFileSync(join(reviews, "report-index-make-decision-direction.json"), JSON.stringify({ stage: "make-decision", review_track: "direction", core_receipt_hash: coreHash, semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "decision-index-current" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
+    expect(existsSync(guard)).toBe(true);
   });
 
   it.each(["direction", "detail"])("fails loud when an orphan make-decision %s guard owns its track core", (review_track) => {
@@ -883,6 +935,42 @@ describe("ReviewRoundFacade", () => {
     writeFileSync(join(reviews, "stage-result-make-decision-flow.json"), JSON.stringify({ stage: "make-decision", review_flow_id: "flow", review_tracks: ["direction", "detail"], core_receipt_hash: aggregateHash, semantic_verdict: "pass", verdict: "pass", needs_human: false }));
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
     expect(() => facade.recover({ task_id: "decision-group-current" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
+    expect(existsSync(guard)).toBe(true);
+  });
+
+  it("fails loud when an orphan make-decision guard owns its aggregate report index", () => {
+    const tracking = root(); const reviews = join(tracking, "decision-group-index-current", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-make-decision-direction-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "decision-group-index-current", stage: "make-decision", review_track: "direction", review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-make-decision-direction-flow.json" }));
+    const aggregate = { version: 1, stage: "make-decision", review_flow_id: "flow", review_tracks: ["direction", "detail"], semantic_verdict: "pass", needs_human: false };
+    const aggregateBytes = JSON.stringify(aggregate, null, 2) + "\n"; const aggregateHash = hash(aggregateBytes);
+    writeFileSync(join(reviews, "make-decision-flow-aggregate-core-receipt.json"), aggregateBytes);
+    writeFileSync(join(reviews, "report-index-make-decision-flow.json"), JSON.stringify({ stage: "make-decision", review_flow_id: "flow", review_tracks: ["direction", "detail"], core_receipt_hash: aggregateHash, semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "decision-group-index-current" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
+    expect(existsSync(guard)).toBe(true);
+  });
+
+  it("clears an orphan make-decision guard when an old aggregate report index is public", () => {
+    const tracking = root(); const reviews = join(tracking, "decision-group-index-old", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-make-decision-direction-new-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "decision-group-index-old", stage: "make-decision", review_track: "direction", review_flow_id: "new-flow", needs_human: true, guard_ref: "reviews/projection-pending-make-decision-direction-new-flow.json" }));
+    const aggregate = { version: 1, stage: "make-decision", review_flow_id: "old-flow", review_tracks: ["direction", "detail"], semantic_verdict: "pass", needs_human: false };
+    const aggregateBytes = JSON.stringify(aggregate, null, 2) + "\n"; const aggregateHash = hash(aggregateBytes);
+    writeFileSync(join(reviews, "make-decision-old-flow-aggregate-core-receipt.json"), aggregateBytes);
+    writeFileSync(join(reviews, "report-index-make-decision-old-flow.json"), JSON.stringify({ stage: "make-decision", review_flow_id: "old-flow", review_tracks: ["direction", "detail"], core_receipt_hash: aggregateHash, semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(facade.recover({ task_id: "decision-group-index-old" })).toEqual({ recovered: 1 });
+    expect(existsSync(guard)).toBe(false);
+  });
+
+  it("fails loud when a make-decision aggregate report index lacks its core", () => {
+    const tracking = root(); const reviews = join(tracking, "decision-group-index-invalid", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-make-decision-direction-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "decision-group-index-invalid", stage: "make-decision", review_track: "direction", review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-make-decision-direction-flow.json" }));
+    writeFileSync(join(reviews, "report-index-make-decision-flow.json"), JSON.stringify({ stage: "make-decision", review_flow_id: "flow", review_tracks: ["direction", "detail"], core_receipt_hash: "b".repeat(64), semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "decision-group-index-invalid" })).toThrow(/PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID/);
     expect(existsSync(guard)).toBe(true);
   });
 

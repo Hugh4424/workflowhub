@@ -281,6 +281,25 @@ export class ReviewRoundFacade {
     if (!Number.isSafeInteger(coreIntent.business_round) || coreIntent.business_round <= 0) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt round is invalid");
     return true;
   }
+  #publicIndexMatchesIntent(intent, indexPath) {
+    if (!existsSync(indexPath)) return false;
+    let index;
+    try { index = JSON.parse(readFileSync(indexPath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: report index is invalid JSON"); }
+    if (index?.stage !== intent.stage || (index.review_track ?? null) !== (intent.review_track ?? null)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: report index does not bind this stage track");
+    return this.#publicCoreMatchesIntent(intent, index.core_receipt_hash);
+  }
+  #aggregateCoreMatchesIntent(intent, coreHash) {
+    if (typeof coreHash !== "string" || !/^[a-f0-9]{64}$/i.test(coreHash)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate artifact has an invalid core hash");
+    const { reviews } = this.#publicPaths(intent); const group = `make-decision-${intent.review_flow_id}`;
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`);
+    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt hash mismatch");
+    let core;
+    try { core = JSON.parse(readFileSync(corePath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt is invalid JSON"); }
+    if (core?.stage !== "make-decision" || core.review_flow_id !== intent.review_flow_id || canonical(core.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt does not bind this flow");
+    return true;
+  }
   #aggregateProjectionMatchesIntent(intent) {
     const { reviews } = this.#publicPaths(intent);
     const group = `make-decision-${intent.review_flow_id}`;
@@ -290,21 +309,24 @@ export class ReviewRoundFacade {
     try { stageResult = JSON.parse(readFileSync(stagePath, "utf8")); }
     catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result is invalid JSON"); }
     if (stageResult?.stage !== "make-decision" || stageResult.review_flow_id !== intent.review_flow_id || canonical(stageResult.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result does not bind this flow");
-    const coreHash = stageResult.core_receipt_hash;
-    if (typeof coreHash !== "string" || !/^[a-f0-9]{64}$/i.test(coreHash)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result has an invalid core hash");
-    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`);
-    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt hash mismatch");
-    let core;
-    try { core = JSON.parse(readFileSync(corePath, "utf8")); }
-    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt is invalid JSON"); }
-    if (core?.stage !== "make-decision" || core.review_flow_id !== intent.review_flow_id || canonical(core.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt does not bind this flow");
-    return true;
+    return this.#aggregateCoreMatchesIntent(intent, stageResult.core_receipt_hash);
+  }
+  #aggregateIndexMatchesIntent(intent) {
+    const { reviews } = this.#publicPaths(intent); const group = `make-decision-${intent.review_flow_id}`;
+    const indexPath = join(reviews, `report-index-${group}.json`);
+    if (!existsSync(indexPath)) return false;
+    let index;
+    try { index = JSON.parse(readFileSync(indexPath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate report index is invalid JSON"); }
+    if (index?.stage !== "make-decision" || index.review_flow_id !== intent.review_flow_id || canonical(index.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate report index does not bind this flow");
+    return this.#aggregateCoreMatchesIntent(intent, index.core_receipt_hash);
   }
   #hasPublicProjection(intent) {
-    const { reviews, reportPath, stageResultPath } = this.#publicPaths(intent);
+    const { reviews, reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
     // A per-flow report path itself encodes the complete flow identity. The
     // shared stage-result and report-index paths do not, so only a core hash
     // binding can make them evidence of this pending guard.
+    if (this.#publicIndexMatchesIntent(intent, indexPath)) return true;
     if (existsSync(reportPath)) return true;
     if (existsSync(stageResultPath)) {
       let stageResult;
@@ -315,6 +337,7 @@ export class ReviewRoundFacade {
     }
     if (intent.stage === "make-decision") {
       const group = `make-decision-${intent.review_flow_id}`;
+      if (this.#aggregateIndexMatchesIntent(intent)) return true;
       if (existsSync(join(reviews, `${group}-aggregate.md`))) return true;
       if (this.#aggregateProjectionMatchesIntent(intent)) return true;
     }
