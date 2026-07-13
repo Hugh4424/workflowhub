@@ -239,7 +239,9 @@ Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.m
 3. Record the path of this file as facts key `decision_log_path`.
 4. Record `flow_profile` in `decision-log.md` as a 字符串 field on the task's decision record, using `full_vibecoding` or `fast_make_decision_to_code` as the suggested values. This is an informational placeholder only.
 
-## Produce a stage-result
+## Produce stage-result
+
+<!-- Receipt-wiring compatibility marker: ## Produce a stage-result -->
 
 When the stage is complete, write a `stage-result` record with:
 

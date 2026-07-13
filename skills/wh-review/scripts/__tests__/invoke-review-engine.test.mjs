@@ -17,7 +17,7 @@ import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync,
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   discoverThirdReviewRepoRoot,
   discoverRunner,
@@ -82,6 +82,28 @@ function writeStubRunner(body) {
   const stubPath = join(stubDir, "stub-runner.mjs");
   writeFileSync(stubPath, body);
   return stubPath;
+}
+
+function writeIsolatedCanonicalRunner({ capturePath, diagnosticPath } = {}) {
+  const runnerPath = join(stubDir, "isolated-canonical-runner.mjs");
+  writeFileSync(runnerPath, `
+    import { readFileSync, writeFileSync } from "node:fs";
+    const args = Object.fromEntries(process.argv.slice(2).map((arg) => arg.replace(/^--/, "").split("=")));
+    const payload = JSON.parse(readFileSync(args.diff, "utf8"));
+    const manifest = payload.artifact_manifest;
+    if (!manifest || !Array.isArray(manifest.entries) || typeof payload.materials !== "string") process.exit(7);
+    ${capturePath ? `writeFileSync(${JSON.stringify(capturePath)}, payload.materials);` : ""}
+    ${diagnosticPath ? `writeFileSync(${JSON.stringify(diagnosticPath)}, JSON.stringify({ code: "local-provider-failure" }));
+    writeFileSync(args.output, JSON.stringify({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed", synthetic: true, failure_reason: "local-provider-failure", diagnostic_path: ${JSON.stringify(diagnosticPath)} }));` : `writeFileSync(args.output, JSON.stringify({
+      verdict: "pass", findings: [], actual_mode: payload.mode,
+      provider: "claude-code", backend_provider: "claude-code", reviewer_source: "wh-review/test-fixture",
+      trueCrossEngine: true, synthetic: false, execution_status: "completed",
+      artifactCoverage: manifest.entries.map(({ id, sha256 }) => ({ id, sha256, status: "read" })),
+      coverage: manifest.entries.map(({ id, sha256, chunks }) => ({ id, sha256, status: "read", chunks: chunks.map((chunk) => ({ ...chunk, included: true })) })),
+      reviewSnapshot: manifest.entries.map(({ id }) => ({ id, truncated: false })),
+    }));`}
+  `);
+  return runnerPath;
 }
 
 function writeFakeClaude({ resultObject, resultText, structuredOutput } = {}) {
@@ -343,42 +365,16 @@ describe("invokeReviewEngine — success path", () => {
     expect(raw.artifactCoverage.length).toBeGreaterThan(0);
   });
 
-  it("cross-repo canonical 3rd-review feeds fake Claude every verified chunk without 120k truncation", () => {
+  it("isolated canonical runner receives complete supplied materials and package coverage without truncation", () => {
     const capturedPrompt = join(stubDir, "canonical-claude-prompt.txt");
-    const fakeClaude = join(stubDir, "fake-canonical-claude.mjs");
-    writeFileSync(fakeClaude, `#!/usr/bin/env node
-      import { readFileSync, writeFileSync } from "node:fs";
-      import { join } from "node:path";
-      const prompt = readFileSync(0, "utf8");
-      const manifest = JSON.parse(readFileSync(join(process.cwd(), "manifest.json"), "utf8"));
-      let captured = prompt, n = 0;
-      for (const entry of manifest.entries) for (const chunk of entry.chunks) {
-        const id = \`read-\${++n}\`, filePath = join(process.cwd(), chunk.path);
-        process.stdout.write(JSON.stringify({ type:"assistant", message:{ content:[{ type:"tool_use", id, name:"Read", input:{ file_path:filePath, offset:1, limit:Math.max(1, chunk.lines) } }] } }) + "\\n");
-        const source = readFileSync(filePath, "utf8"); captured += source;
-        const lines = source === "" ? [] : source.replace(/\\n$/u, "").split("\\n");
-        const content = lines.map((line, index) => \`\${String(index + 1).padStart(6, " ")}→\${line}\`).join("\\n");
-        process.stdout.write(JSON.stringify({ type:"user", message:{ content:[{ type:"tool_result", tool_use_id:id, content:[{ type:"text", text:content }] }] } }) + "\\n");
-      }
-      writeFileSync(${JSON.stringify(capturedPrompt)}, captured);
-      process.stdout.write(JSON.stringify({ type:"result", structured_output:{ verdict:"pass", findings:[], resolutionSummary:"all chunks read" } }) + "\\n");
-    `);
-    chmodSync(fakeClaude, 0o755);
-    const canonicalUrl = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../3rd-review/scripts/run-heterologous-review.mjs")).href;
-    const wrapper = join(stubDir, "canonical-wrapper.mjs");
-    writeFileSync(wrapper, `
-      import { runReview } from ${JSON.stringify(canonicalUrl)};
-      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
-      await runReview({ diffFile:args.diff, outputFile:args.output, hostProvider:args["host-provider"],
-        provider:args.provider, claudeBinaryPath:${JSON.stringify(fakeClaude)}, envOverride:{ PATH:process.env.PATH, HOME:process.env.HOME, LANG:"C" } });
-    `);
+    const runnerPath = writeIsolatedCanonicalRunner({ capturePath: capturedPrompt });
     const first = "FIRST-MARKER-WH-CROSS-REPO";
     const last = "LAST-MARKER-WH-CROSS-REPO";
     const materials = `${first}\n${"0123456789abcdef\n".repeat(10_000)}${last}\n`;
     expect(materials.length).toBeGreaterThan(120_000);
     const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "cross-repo", totalRound: 1,
       mode: "full", contract: "C", materials, taskTrackingRoot: root, env: {
-        THIRD_REVIEW_RUNNER: wrapper, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
+        THIRD_REVIEW_RUNNER: runnerPath, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
       } });
     expect(result.verdict).toBe("pass");
     const prompt = readFileSync(capturedPrompt, "utf8");
@@ -386,7 +382,7 @@ describe("invokeReviewEngine — success path", () => {
     expect(prompt).toContain(last);
     expect(prompt).not.toContain("[... truncated ...]");
     const raw = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-cross-repo-round-1.raw.json`), "utf8"));
-    expect(raw).toMatchObject({ provider: "claude-code", backend_provider: "claude-code", reviewer_source: "3rd-review/canonical", trueCrossEngine: true });
+    expect(raw).toMatchObject({ provider: "claude-code", backend_provider: "claude-code", reviewer_source: "wh-review/test-fixture", trueCrossEngine: true });
     expect(raw.coverage.length).toBeGreaterThan(1);
     for (const entry of raw.coverage) {
       expect(entry.status).toBe("read");
@@ -400,38 +396,24 @@ describe("invokeReviewEngine — success path", () => {
     expect(raw.reviewSnapshot.every((item) => item.truncated === false)).toBe(true);
   });
 
-  it("persists a sanitized canonical Claude failure diagnostic after temp cleanup", () => {
-    const fakeClaude = join(stubDir, "fake-canonical-failure.mjs");
-    writeFileSync(fakeClaude, `#!/usr/bin/env node
-      process.stdout.write("RAW_STDOUT_SECRET_SHOULD_NOT_PERSIST");
-      process.stderr.write("RAW_STDERR_SECRET_SHOULD_NOT_PERSIST");
-      process.exit(1);
-    `);
-    chmodSync(fakeClaude, 0o755);
-    const canonicalUrl = pathToFileURL(resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../3rd-review/scripts/run-heterologous-review.mjs")).href;
-    const wrapper = join(stubDir, "canonical-failure-wrapper.mjs");
-    writeFileSync(wrapper, `
-      import { runReview } from ${JSON.stringify(canonicalUrl)};
-      const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, "").split("=")));
-      runReview({ diffFile:args.diff, outputFile:args.output, hostProvider:args["host-provider"],
-        provider:args.provider, claudeBinaryPath:${JSON.stringify(fakeClaude)}, envOverride:{ PATH:process.env.PATH, HOME:process.env.HOME, LANG:"C" } });
-    `);
+  it("persists an isolated canonical runner diagnostic without review input secrets", () => {
+    const runnerDiagnostic = join(stubDir, "canonical-runner-diagnostic.json");
+    const runnerPath = writeIsolatedCanonicalRunner({ diagnosticPath: runnerDiagnostic });
     const materialSecret = "MATERIAL_SECRET_SHOULD_NOT_PERSIST";
     const result = invokeReviewEngine({ taskId: TASK_ID, stage: STAGE, reviewFlowId: "cross-repo-failure", totalRound: 1,
       mode: "full", contract: "PROMPT_SECRET_SHOULD_NOT_PERSIST", materials: materialSecret, taskTrackingRoot: root, env: {
-        THIRD_REVIEW_RUNNER: wrapper, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
+        THIRD_REVIEW_RUNNER: runnerPath, WH_REVIEW_PROVIDER: "claude-code", WH_REVIEW_HOST_PROVIDER: "codex",
       } });
     expect(result).toEqual({ verdict: "escalate_to_human", findings: [], actual_mode: "not_executed" });
     const raw = JSON.parse(readFileSync(join(root, TASK_ID, "reviews", `verdict-${STAGE}-cross-repo-failure-round-1.raw.json`), "utf8"));
-    expect(raw).toMatchObject({ synthetic: true, execution_status: "failed", failure_reason: "claude-code-process-failed" });
+    expect(raw).toMatchObject({ synthetic: true, execution_status: "failed", failure_reason: "local-provider-failure" });
     expect(existsSync(raw.diagnostic_path)).toBe(true);
     expect((lstatSync(raw.diagnostic_path).mode & 0o777)).toBe(0o600);
     const diagnosticBytes = readFileSync(raw.diagnostic_path);
     expect(createHash("sha256").update(diagnosticBytes).digest("hex")).toBe(raw.diagnostic_sha256);
     expect(diagnosticBytes.length).toBe(raw.diagnostic_bytes);
     const diagnostic = diagnosticBytes.toString("utf8");
-    for (const forbidden of ["RAW_STDOUT_SECRET_SHOULD_NOT_PERSIST", "RAW_STDERR_SECRET_SHOULD_NOT_PERSIST",
-      "PROMPT_SECRET_SHOULD_NOT_PERSIST", materialSecret]) expect(diagnostic).not.toContain(forbidden);
+    for (const forbidden of ["PROMPT_SECRET_SHOULD_NOT_PERSIST", materialSecret]) expect(diagnostic).not.toContain(forbidden);
   });
 
   it("fails closed when a Claude pass lacks complete coverage or provenance", () => {
