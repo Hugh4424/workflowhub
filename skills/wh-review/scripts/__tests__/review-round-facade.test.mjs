@@ -271,6 +271,19 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish(result, { items: [] })).toThrow(/human gate/);
   });
 
+  it("immediately projects a provider escalation to private and public stage artifacts", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "instant-human", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking }));
+    const reviews = join(tracking, "instant-human", "reviews");
+    const stage = JSON.parse(readFileSync(join(reviews, "stage-result-build-code.json"), "utf8"));
+    const index = JSON.parse(readFileSync(join(reviews, "report-index.json"), "utf8"));
+    const core = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "core-receipt.json"), "utf8"));
+    expect(stage).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true, core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(index).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true, core_receipt_hash: stage.core_receipt_hash });
+    expect(core).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true });
+  });
+
   it("derives human gates during publication and recovery when a receipt omits them", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });

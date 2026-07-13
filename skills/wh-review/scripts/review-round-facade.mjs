@@ -393,6 +393,16 @@ export class ReviewRoundFacade {
       this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
         previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)) });
+      // A provider-originated escalation is already a semantic result. Publish
+      // its redacted gate projection in this same run, instead of waiting for
+      // a later prepare() recovery pass to revoke a stale public pass.
+      if (human_gates.length) {
+        let taskLock = null;
+        try {
+          if (intent.stage === "make-decision") taskLock = this.#taskProjectionLock(intent.task_id, `human-gate-${intent.review_flow_id}`);
+          this.#writeHumanGateBlock(receipt, receiptPath, join(prepared.dir, "projection-manifest.json"), human_gates);
+        } finally { if (taskLock) this.#releaseLock(taskLock); }
+      }
       return validateSchema("round-run-result", result);
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
