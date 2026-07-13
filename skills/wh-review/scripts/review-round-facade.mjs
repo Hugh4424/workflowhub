@@ -89,7 +89,7 @@ function processStartIdentity(pid) {
   } catch { return null; }
 }
 function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], undefined); }
-function buildHostGitSource(repositoryRoot, requestedRevision) {
+function buildHostGitSource(repositoryRoot, requestedRevision, { contextLines = null } = {}) {
   if (!requestedRevision || typeof requestedRevision.base !== "string" || typeof requestedRevision.head !== "string") throw new Error("source_revision.base and source_revision.head are required");
   const root = realpathSync(resolve(repositoryRoot));
   const gitRoot = realpathSync(resolve(String(hostGit(root, ["rev-parse", "--show-toplevel"])).trim()));
@@ -97,7 +97,8 @@ function buildHostGitSource(repositoryRoot, requestedRevision) {
   const base = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.base}^{commit}`])).trim();
   const head = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.head}^{commit}`])).trim();
   if (requestedRevision.base !== base || requestedRevision.head !== head) throw new Error("source_revision must use immutable resolved commit ids");
-  const unified_diff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head]));
+  const context = contextLines === null ? [] : [`-U${contextLines}`];
+  const unified_diff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", ...context, base, head]));
   const fields = String(hostGit(root, ["diff", "--name-status", "-z", "--find-renames", base, head])).split("\0");
   const changed_files = [];
   for (let index = 0; index < fields.length - 1;) {
@@ -309,7 +310,7 @@ export class ReviewRoundFacade {
     if (continuation) {
       const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
       const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
-      const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head });
+      const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head }, { contextLines: 0 });
       const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource, stageContract.hardIds);
       const closureEvidence = closureCheck.items;
       closureBundleGates = closureCheck.unverifiedBlockingIds;

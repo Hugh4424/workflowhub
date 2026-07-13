@@ -566,7 +566,7 @@ describe("ReviewRoundFacade", () => {
     const initial = trustedPacket(tracking); currentPacket = initial;
     const first = await facade.run(facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: initial, repository_root: tracking }));
     const findingId = first.merged_findings[0].finding_id;
-    currentPacket = advancePacket(tracking, initial);
+    currentPacket = advancePacket(tracking, initial, "x\nline\nextra\nfixed\n");
     const upstream = { intent: { stage: "build-plan" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "requires staging" }] };
     const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = hash(upstreamBytes); const upstreamPath = join(tracking, "real-delta", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
     const secondPrepared = await facade.prepare({ task_id: "real-delta", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: currentPacket, repository_root: tracking, continuation: true,
@@ -583,6 +583,7 @@ describe("ReviewRoundFacade", () => {
     expect(calls[1].request.prompt).toContain(`current_manifest_hash=${secondPrepared.packet.manifest_hash}`);
     expect(calls[1].request.prompt).toContain(`current_diff_sha256=${secondPrepared.packet.diff_sha256}`);
     expect(calls[1].request.prompt).toContain("fixed\n");
+    expect(calls[1].request.prompt).not.toContain("\n x\n");
     const headings = ["PreviousFindings", "ClosureEvidence", "DeltaManifest", "AffectedMaterials", "CurrentMaterialManifest", "CrossStageCarryovers", "RequiredSkillLensHashes", "OutputRequirements"];
     expect(headings.map((heading) => calls[1].request.prompt.indexOf(heading))).toEqual([...headings.map((heading) => calls[1].request.prompt.indexOf(heading))].sort((a, b) => a - b));
     expect(second).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash, previous_findings: [{ finding_id: findingId }] });
