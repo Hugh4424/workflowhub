@@ -44,7 +44,9 @@ function reviewPacket(root, base, head, { roundKind = "initial", baselinePacketH
     version: "review-packet.v1", stage: "build-code", review_track: null, round_kind: roundKind, baseline_packet_hash: baselinePacketHash,
     unified_diff, changed_files: [{ path: "smoke.txt", status: "modified", sha256: sha(current), size: current.length, old_sha256: sha(previous), old_size: previous.length }],
     raw_requirement: "Preserve the smoke marker while adding a deterministic, reviewable change.",
-    acceptance_design_excerpt: "AC: R1_DIFF_MARKER is present in round 1; R2_DELTA_ONLY_MARKER is introduced only in round 2.",
+    acceptance_design_excerpt: roundKind === "initial"
+      ? "AC: R1_DIFF_MARKER is present in round 1."
+      : "AC: R2_DELTA_ONLY_MARKER is introduced in this continuation delta.",
     test_evidence: [{ name: "smoke-fixture", status: "passed", evidence: "git fixture commits were created locally" }], host_verified_facts: [{ fact: "The packet is generated from a disposable local git repository." }],
     contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])), source_revision: { base, head },
   };
