@@ -134,7 +134,7 @@ function projectFinding(finding, provider) {
   const projected = { file: finding.file, line: finding.line, rule_id: finding.rule_id, severity: finding.severity, issue: finding.issue, evidence: finding.evidence, suggested_fix: finding.suggested_fix };
   return { ...projected, finding_id: findingId(projected), providers: [provider] };
 }
-function exactClosureEvidence(findings, supplied, deltaSource) {
+function exactClosureEvidence(findings, supplied, deltaSource, contractHardIds) {
   if (findings.length === 0 && supplied === undefined) return { items: [], unverifiedBlockingIds: [] };
   if (!Array.isArray(supplied)) throw new Error("closure_evidence is required for every previous finding");
   const byId = new Map(findings.map((finding) => [finding.finding_id, finding])); const required = new Set(byId.keys()); const seen = new Set(); const unverifiedBlockingIds = [];
@@ -143,7 +143,7 @@ function exactClosureEvidence(findings, supplied, deltaSource) {
     if (seen.has(item.finding_id)) throw new Error(`closure_evidence has duplicate finding id: ${item.finding_id}`);
     if (!required.has(item.finding_id)) throw new Error(`closure_evidence has unknown finding id: ${item.finding_id}`);
     seen.add(item.finding_id);
-    const checked = validateClosureBundle({ finding: byId.get(item.finding_id), closure: item, delta: deltaSource });
+    const checked = validateClosureBundle({ finding: byId.get(item.finding_id), closure: item, delta: deltaSource, contractHardIds });
     if (!checked.valid) unverifiedBlockingIds.push({ finding_id: item.finding_id, reason: checked.reason });
   }
   const missing = [...required].filter((id) => !seen.has(id));
@@ -271,7 +271,7 @@ export class ReviewRoundFacade {
       const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
       const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
       const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head });
-      const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource);
+      const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource, stageContract.hardIds);
       const closureEvidence = closureCheck.items;
       closureBundleGates = closureCheck.unverifiedBlockingIds;
       const crossStageCarryovers = checkedCarryovers(input.cross_stage_carryovers, previousFindings);
@@ -362,7 +362,7 @@ export class ReviewRoundFacade {
       const changedPaths = new Set((prepared.delta?.delta_manifest?.changed_files ?? []).flatMap((item) => [item.path, item.old_path].filter(Boolean)));
       const introducedBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial" || (!previousFindings.some((old) => old.finding_id === item.finding_id) && changedPaths.has(item.file))).map((item) => item.finding_id));
       const closureBundleGateIds = new Set((prepared.closure_bundle_gates ?? []).map((item) => item.finding_id));
-      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds });
+      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds, contractHardIds: prepared.stage_contract_rules.hardIds });
       const merged_findings = findingState.findings;
       const contractHardIds = new Set(prepared.stage_contract_rules.hardIds);
       const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && (finding.severity === "blocking" || contractHardIds.has(finding.rule_id)));

@@ -43,6 +43,20 @@ describe("finding continuation state", () => {
     expect(result.open_blocking).toHaveLength(0);
   });
 
+  it("never gives an external H99 minor finding a blocking streak, closure bundle, or third-round escalation", () => {
+    const contractHardIds = new Set(["H1", "H2", "H3"]);
+    let state = reconcileFindingState({
+      previousFindings: [], currentFindings: [finding("external", "minor", { rule_id: "H99" })], businessRound: 1,
+      introducedBlockingIds: new Set(["external"]), contractHardIds,
+    });
+    state = reconcileFindingState({ previousFindings: state.findings, currentFindings: [], businessRound: 2, contractHardIds });
+    state = reconcileFindingState({ previousFindings: state.findings, currentFindings: [], businessRound: 3, contractHardIds });
+    expect(state.findings).toEqual([expect.objectContaining({ finding_id: "external", rule_id: "H99", severity: "minor", blocking_streak: 0, status: "open" })]);
+    expect(state.open_blocking).toEqual([]);
+    expect(state.requires_closure_bundle).toBe(false);
+    expect(state.escalate_to_human).toBe(false);
+  });
+
   it("requires an anchored current-delta closure bundle after two open blocking rounds", () => {
     const old = { ...finding("a"), blocking_streak: 2 };
     const delta = {

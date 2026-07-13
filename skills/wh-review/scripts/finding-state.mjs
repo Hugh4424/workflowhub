@@ -6,11 +6,12 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 function clone(value) { return structuredClone(value); }
 function nonEmpty(value) { return typeof value === "string" && value.trim().length > 0; }
 function safeRelativePath(value) { return nonEmpty(value) && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
-function isBlocking(finding) {
+function isBlocking(finding, contractHardIds = []) {
   // A late finding is explicitly capped at minor. Its original hard-rule id
   // remains useful provenance, but must not recreate a blocking gate.
   if (finding?.late_finding === true) return false;
-  return finding?.severity === "blocking" || /^H[1-9][0-9]*$/.test(finding?.rule_id ?? "") || /^(?:DIR|DET)-H[1-9][0-9]*$/.test(finding?.rule_id ?? "");
+  const hardIds = contractHardIds instanceof Set ? contractHardIds : new Set(contractHardIds);
+  return finding?.severity === "blocking" || hardIds.has(finding?.rule_id);
 }
 
 /**
@@ -18,8 +19,8 @@ function isBlocking(finding) {
  * not closure evidence. The bundle is intentionally tied to host-derived
  * delta bytes and current file hashes; it contains no provider paths or ids.
  */
-export function validateClosureBundle({ finding, closure, delta } = {}) {
-  if (!isBlocking(finding) || Number(finding?.blocking_streak ?? 0) < 2) return { valid: true, reason: null };
+export function validateClosureBundle({ finding, closure, delta, contractHardIds = [] } = {}) {
+  if (!isBlocking(finding, contractHardIds) || Number(finding?.blocking_streak ?? 0) < 2) return { valid: true, reason: null };
   const bundle = closure?.closure_bundle;
   if (!bundle || typeof bundle !== "object" || Array.isArray(bundle)) return { valid: false, reason: "CLOSURE_BUNDLE_REQUIRED" };
   const allowed = new Set(["version", "root_cause", "scanned_scope", "counterexample_matrix", "closure_checklist", "anchors", "current_delta"]);
@@ -50,7 +51,7 @@ export function validateClosureBundle({ finding, closure, delta } = {}) {
  * The function is deliberately pure: callers persist its result in the
  * private round receipt and may decide how to expose the projection.
  */
-export function reconcileFindingState({ previousFindings = [], currentFindings = [], closureEvidence = [], unverifiedClosureFindingIds = new Set(), businessRound = 1, introducedBlockingIds = new Set(), previouslyImpossibleIds = new Set() } = {}) {
+export function reconcileFindingState({ previousFindings = [], currentFindings = [], closureEvidence = [], unverifiedClosureFindingIds = new Set(), businessRound = 1, introducedBlockingIds = new Set(), previouslyImpossibleIds = new Set(), contractHardIds = [] } = {}) {
   const previous = new Map(previousFindings.map((item) => [item.finding_id, item]));
   const closure = new Map(closureEvidence.map((item) => [item.finding_id, item]));
   const output = [];
@@ -60,20 +61,20 @@ export function reconcileFindingState({ previousFindings = [], currentFindings =
       output.push({ ...clone(old), status: "closed", blocking_streak: 0, closure_evidence: evidence.evidence });
       continue;
     }
-    const wasBlocking = isBlocking(old);
+    const wasBlocking = isBlocking(old, contractHardIds);
     const streak = wasBlocking ? Math.max(1, Number.isInteger(old.blocking_streak) ? old.blocking_streak + 1 : 2) : 0;
     output.push({ ...clone(old), status: "open", blocking_streak: streak });
   }
   for (const candidate of currentFindings) {
     if (previous.has(candidate.finding_id)) continue;
     const item = clone(candidate); item.status = "open";
-    if (isBlocking(item) && !introducedBlockingIds.has(item.finding_id) && !previouslyImpossibleIds.has(item.finding_id)) {
+    if (isBlocking(item, contractHardIds) && !introducedBlockingIds.has(item.finding_id) && !previouslyImpossibleIds.has(item.finding_id)) {
       item.severity = "minor"; item.late_finding = true;
     }
-    item.blocking_streak = isBlocking(item) ? 1 : 0;
+    item.blocking_streak = isBlocking(item, contractHardIds) ? 1 : 0;
     output.push(item);
   }
-  const openBlocking = output.filter((item) => item.status === "open" && isBlocking(item));
+  const openBlocking = output.filter((item) => item.status === "open" && isBlocking(item, contractHardIds));
   return {
     findings: output,
     open_blocking: openBlocking,
