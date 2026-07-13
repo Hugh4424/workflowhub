@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EventEmitter } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { BrokerClient } from "../broker-client.mjs";
 
 describe("BrokerClient", () => {
@@ -41,12 +41,13 @@ describe("BrokerClient", () => {
     expect(calls[2]).toContain("--source=workflow_shutdown");
   });
 
-  it("probes the real current 3rd-review CLI and rejects its undeclared attachment interface", async () => {
+  it("rejects an undeclared attachment interface through a real subprocess fixture", async () => {
     const root = mkdtempSync(join(tmpdir(), "wh-review-real-doctor-"));
     try {
       const config = join(root, "config.json");
       writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: join(root, "runtime") }, tiers: [["opencode"]], providers: { opencode: { enabled: false, command: process.execPath, auth: { type: "native" }, env: [] } } }));
-      const script = resolve(process.cwd(), "../3rd-review/scripts/3rd-review.mjs");
+      const script = join(root, "3rd-review.mjs");
+      writeFileSync(script, 'process.stdout.write(JSON.stringify({version:4,capabilities:{}}));\n');
       const client = new BrokerClient({ command: [process.execPath, script], config, attachmentRoot: root });
       await expect(client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: "file_only" })).rejects.toThrow(/ATTACHMENT_UNSUPPORTED/);
     } finally { rmSync(root, { recursive: true, force: true }); }
