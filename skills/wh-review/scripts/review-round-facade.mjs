@@ -644,19 +644,24 @@ export class ReviewRoundFacade {
   }
 
   publish(result, dispositions) {
-    // Keep this boundary before reading result.intent: malformed public input
-    // must fail as a schema error and must not touch any private receipt.
-    validateSchema("dispositions", dispositions);
-    validateSchema("round-run-result", result);
+    // Invalid result locators remain a pure schema failure. With a trusted
+    // locator, though, a malformed disposition is still a real resubmission
+    // and must consume the same bounded attempt budget as a semantic error.
+    let dispositionSchemaError = null;
+    try { validateSchema("dispositions", dispositions); }
+    catch (error) { dispositionSchemaError = error; }
+    try { validateSchema("round-run-result", result); }
+    catch (error) { if (dispositionSchemaError) throw dispositionSchemaError; throw error; }
     const lock = this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_track ?? "default"}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
     let taskLock = null;
     try {
       if (result.intent.stage === "make-decision") taskLock = this.#taskProjectionLock(result.intent.task_id, `publish-${result.intent.review_flow_id}`);
       const trusted = this.#trustedResult(result);
       try {
+        if (dispositionSchemaError) throw dispositionSchemaError;
         return this.#publishUnderLock(trusted, dispositions);
       } catch (error) {
-        const dispositionFailure = /^(invalid disposition|hard invariant finding cannot be accepted|every finding requires exactly one disposition)$/.test(String(error?.message ?? ""));
+        const dispositionFailure = (error instanceof SchemaValidationError && error.schema === "dispositions") || /^(invalid disposition|hard invariant finding cannot be accepted|every finding requires exactly one disposition)$/.test(String(error?.message ?? ""));
         if (dispositionFailure && !trusted.blocked_by_human_confirmation) {
           const attempts = this.#recordDispositionFailure(trusted, error);
           if (attempts >= trusted.intent.limits.max_disposition_attempts) throw new Error(`DISPOSITION_ATTEMPTS_EXCEEDED: ${attempts}/${trusted.intent.limits.max_disposition_attempts}; human confirmation is required`);

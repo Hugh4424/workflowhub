@@ -135,6 +135,14 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: "fixed" }] })).toThrow(/human confirmation/i);
   });
 
+  it("counts schema-invalid disposition submissions toward the configured human block", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, maxDispositionAttempts: 1, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "schema-disposition-limit", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(() => facade.publish(result, { items: [{ finding_id: "x", action: "ignore", evidence: "x" }] })).toThrow(/DISPOSITION_ATTEMPTS_EXCEEDED/);
+    expect(JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"))).toMatchObject({ disposition_attempts: 1, blocked_by_human_confirmation: true });
+  });
+
   it("inherits cross-stage carryovers into later continuation packets unless the caller supersedes them", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "90909090-9090-4090-8090-909090909090", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })) });
