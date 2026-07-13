@@ -8,6 +8,7 @@ import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
 import { projectPublicReviewCore } from "./public-review-projection.mjs";
+import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -17,7 +18,6 @@ function canonical(value) {
 }
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const reviewPacketSchema = JSON.parse(readFileSync(new URL("../schemas/review-packet.schema.json", import.meta.url), "utf8"));
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
 function writeImmutable(path, value) {
   const encoded = safeJson(value); mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -38,26 +38,8 @@ function manifestValue(packet) {
   const { packet_hash, manifest_hash, ...materials } = packet;
   return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash, source_revision: materials.source_revision };
 }
-function packetComplete(packet) {
-  if (!packet || typeof packet !== "object" || Array.isArray(packet)) return false;
-  if (reviewPacketSchema.required.some((key) => !Object.hasOwn(packet, key))) return false;
-  if (Object.keys(packet).some((key) => !Object.hasOwn(reviewPacketSchema.properties, key))) return false;
-  if (packet.version !== "review-packet.v1" || !reviewPacketSchema.properties.stage.enum.includes(packet.stage)) return false;
-  if (![null, "direction", "detail"].includes(packet.review_track)) return false;
-  if (packet.stage === "make-decision" ? !["direction", "detail"].includes(packet.review_track) : packet.review_track !== null) return false;
-  if (typeof packet.unified_diff !== "string" || !Array.isArray(packet.changed_files) || typeof packet.raw_requirement !== "string" || !Array.isArray(packet.host_verified_facts)) return false;
-  if (!["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"].every((key) => typeof packet[key] === "string" && /^[a-f0-9]{64}$/.test(packet[key]))) return false;
-  if (!packet.source_revision || typeof packet.source_revision !== "object" || Array.isArray(packet.source_revision) || typeof packet.source_revision.base !== "string" || !packet.source_revision.base || typeof packet.source_revision.head !== "string" || !packet.source_revision.head) return false;
-  if (packet.stage === "make-decision" && packet.review_track === "direction" && ["decision_log_excerpt", "acceptance_design_excerpt", "planning_artifacts", "verification_closure", "test_evidence"].some((key) => Object.hasOwn(packet, key))) return false;
-  if (packet.stage === "make-decision" && packet.review_track === "detail" && (typeof packet.decision_log_excerpt !== "string" || typeof packet.acceptance_design_excerpt !== "string")) return false;
-  if (packet.stage === "build-spec" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.planning_artifacts))) return false;
-  if (packet.stage === "build-plan" && !Array.isArray(packet.planning_artifacts)) return false;
-  if (packet.stage === "build-code" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.test_evidence))) return false;
-  if (packet.stage === "verify-code" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.verification_closure) || !Array.isArray(packet.test_evidence))) return false;
-  return true;
-}
 function sealPacket(packet) {
-  if (!packetComplete(packet)) throw new Error("review-packet.v1 is incomplete");
+  validateSchema("review-packet", packet);
   const diff = sha(packet.unified_diff);
   if (packet.diff_sha256 && packet.diff_sha256 !== diff) throw new Error("diff_sha256 mismatch");
   packet.diff_sha256 = diff;
@@ -192,6 +174,7 @@ export class ReviewRoundFacade {
     if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
+    if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
     const lock = this.#acquireLock({ task_id: input.task_id, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_flow_id}`) });
     return this.#prepareUnderLock(input, lock);
   }
@@ -217,7 +200,7 @@ export class ReviewRoundFacade {
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
     const stageContract = projectStageContract(input.stage, reviewTrack);
     const { contractHash } = stageContract;
-    if (packet.contract_hash !== contractHash && !input.allow_contract_hash_override) {
+    if (packet.contract_hash !== contractHash) {
       if (continuation) throw new Error("blocked_by_human_confirmation: frozen contract changed; use reset with human approval");
       return this.#materialIncomplete(input, "contract hash mismatch");
     }
@@ -275,6 +258,7 @@ export class ReviewRoundFacade {
       previous_private_receipt_hash: continuation ? prior.previous_receipt_sha256 : null,
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
+      validateSchema("review-intent", intent);
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
@@ -290,7 +274,7 @@ export class ReviewRoundFacade {
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
-      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, delta };
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, delta };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
@@ -316,7 +300,7 @@ export class ReviewRoundFacade {
       const candidateSet = new Set(intent.candidate_providers);
       const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
       const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
-        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider])
+        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.stage_contract_rules)
         : { provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "UNKNOWN_PROVIDER" });
       const returnedCandidates = new Set((response.providers ?? []).map((item) => item?.provider).filter((provider) => candidateSet.has(provider)));
       for (const provider of intent.candidate_providers) if (!returnedCandidates.has(provider)) outcomes.push({ provider, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used: null, diagnostic: "PROVIDER_OUTCOME_MISSING" });
@@ -355,7 +339,7 @@ export class ReviewRoundFacade {
       this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
         previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)) });
-      return result;
+      return validateSchema("round-run-result", result);
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
 
@@ -521,7 +505,7 @@ export class ReviewRoundFacade {
     }
     return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
-  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery) {
+  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, contractRules) {
     const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null; const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null };
     if (typeof item?.output === "string" && item.provider) {
       const raw = join(directory, "providers", `${item.provider}.raw.txt`); atomic(raw, item.output); base.raw_output_ref = raw;
@@ -537,9 +521,14 @@ export class ReviewRoundFacade {
     if (transport_status !== "completed") return { ...base, diagnostic: publicError(item) };
     const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "NON_JSON_OUTPUT" };
     const output = parsed.value;
+    try { validateSchema("reviewer-output", output); }
+    catch (error) {
+      if (error instanceof SchemaValidationError) return { ...base, packet_status: "material_incomplete", diagnostic: `${error.code}:${error.pointer || "/"}` };
+      throw error;
+    }
     if (output.packet_hash !== packet.packet_hash || output.manifest_hash !== packet.manifest_hash || output.diff_sha256 !== packet.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
     if (output.packet_status !== "complete") return { ...base, packet_status: output.packet_status ?? "material_incomplete", diagnostic: "PROVIDER_PACKET_INCOMPLETE" };
-    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet, intent });
+    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet, intent, contractRules });
     if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "BUSINESS_INVALID" };
     let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
     catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }
@@ -547,12 +536,32 @@ export class ReviewRoundFacade {
   }
 
   publish(result, dispositions) {
+    validateSchema("dispositions", dispositions);
+    validateSchema("round-run-result", result);
     const lock = this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
-    try { return this.#publishUnderLock(result, dispositions); }
+    try { return this.#publishUnderLock(this.#trustedResult(result), dispositions); }
     finally { this.#releaseLock(lock); }
   }
+  #trustedResult(locator) {
+    const receiptPath = resolve(locator.receipt_draft_ref);
+    const expectedPath = join(this.#root(locator.intent), "round-receipt.json");
+    if (receiptPath !== expectedPath || !existsSync(receiptPath)) throw new Error("private receipt binding is invalid");
+    const flow = this.#readFlow(locator.intent);
+    const receiptBytes = readFileSync(receiptPath);
+    if (!flow || resolve(flow.previous_receipt_ref ?? "") !== receiptPath || flow.previous_receipt_sha256 !== sha(receiptBytes)) throw new Error("private receipt is not bound to the current flow");
+    let receipt;
+    try { receipt = JSON.parse(receiptBytes); } catch { throw new Error("private receipt is invalid JSON"); }
+    if (canonical(receipt.intent) !== canonical(locator.intent)) throw new Error("private receipt intent binding is invalid");
+    const trusted = { intent: receipt.intent, round_kind: receipt.intent.round_kind, baseline_packet_hash: receipt.intent.baseline_packet_hash,
+      previous_findings: receipt.delta?.previous_findings ?? [], closure_evidence: receipt.delta?.closure_evidence ?? [], delta_manifest: receipt.delta?.delta_manifest ?? null,
+      affected_materials: receipt.delta?.affected_materials ?? {}, current_material_manifest: receipt.delta?.current_material_manifest ?? {},
+      cross_stage_carryovers: receipt.delta?.cross_stage_carryovers ?? [], required_skill_lens_hashes: receipt.delta?.required_skill_lens_hashes ?? [],
+      provider_outcomes: receipt.provider_outcomes, merged_findings: receipt.merged_findings, hard_gates: receipt.hard_gates,
+      human_gates: receipt.human_gates ?? deriveHumanGates(receipt.provider_outcomes), blocked_by_human_confirmation: receipt.blocked_by_human_confirmation === true,
+      continuation_eligible: receipt.continuation_eligible, receipt_draft_ref: receiptPath };
+    return validateSchema("round-run-result", trusted);
+  }
   #publishUnderLock(result, dispositions) {
-    if (!Array.isArray(dispositions?.items)) throw new TypeError("dispositions.items is required");
     if (result.blocked_by_human_confirmation) throw new Error("human confirmation is required before publication");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
     const human_gates = verifiedHumanGates(result.provider_outcomes, result.human_gates);

@@ -32,7 +32,7 @@ import {
   assertValidTotalRound,
   assertValidReviewInputHash,
   assertKnownStage,
-  contractPathAndHash,
+  projectStageContract,
   taskRoot,
 } from "./lib/safe-id.mjs";
 
@@ -44,18 +44,19 @@ function recordPathFor({ taskTrackingRoot, taskId, stage, reviewFlowId }) {
  * Phase 1 — prepare. Writes 7 fields, review_input_hash left empty ("").
  * @returns {{ path: string, record: object }}
  */
-export function writeRoutePreparePhase({ taskId, stage, reviewFlowId, totalRound, inputMode = "full", taskTrackingRoot }) {
+export function writeRoutePreparePhase({ taskId, stage, reviewTrack = null, reviewFlowId, totalRound, inputMode = "full", taskTrackingRoot }) {
   assertSafeTaskId(taskId);
   assertKnownStage(stage);
   assertSafeReviewFlowId(reviewFlowId);
   assertValidTotalRound(totalRound);
 
   const root = taskTrackingRoot ?? parseTaskDir();
-  const { contractPath, contractHash } = contractPathAndHash(stage);
+  const { contractPath, contractHash } = projectStageContract(stage, reviewTrack);
   const path = recordPathFor({ taskTrackingRoot: root, taskId, stage, reviewFlowId });
 
   const record = {
     stage,
+    review_track: reviewTrack,
     contract_path: contractPath,
     contract_hash: contractHash,
     timestamp: new Date().toISOString(),
@@ -121,6 +122,7 @@ if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
       const { path, record } = writeRoutePreparePhase({
         taskId: flags["task-id"],
         stage: flags["stage"],
+        reviewTrack: flags["review-track"] ?? null,
         reviewFlowId: flags["review-flow-id"],
         totalRound: flags["total-round"] !== undefined ? Number(flags["total-round"]) : undefined,
         inputMode: flags["input-mode"] ?? "full",

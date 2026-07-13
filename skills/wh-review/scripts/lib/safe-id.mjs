@@ -117,5 +117,8 @@ export function projectStageContract(stage, reviewTrack = null) {
   } else if (reviewTrack !== null && reviewTrack !== undefined) {
     throw new FailLoudError(`${stage} contract does not accept review_track`);
   }
-  return { contractPath, content, contractHash: createHash("sha256").update(content).digest("hex") };
+  const rules = [...content.matchAll(/^- ((?:(?:DIR|DET)-)?([CH])\d+):\s+\S.*$/gm)].map((match) => ({ id: match[1], kind: match[2] }));
+  const allIds = rules.map(({ id }) => id); const hardIds = rules.filter(({ kind }) => kind === "H").map(({ id }) => id);
+  if (rules.filter(({ kind }) => kind === "C").length === 0 || hardIds.length === 0 || new Set(allIds).size !== allIds.length) throw new FailLoudError(`projected contract requires unique non-empty C/H rules: ${stage}/${reviewTrack ?? "default"}`);
+  return { contractPath, content, contractHash: createHash("sha256").update(content).digest("hex"), allIds, hardIds };
 }
