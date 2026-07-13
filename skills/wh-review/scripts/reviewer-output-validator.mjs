@@ -21,11 +21,11 @@ function canonical(value) {
 function sha(value) { return createHash("sha256").update(value).digest("hex"); }
 function object(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
 function nonEmpty(value) { return typeof value === "string" && value.trim().length > 0; }
-function evidenceText(value) { return String(value ?? "").normalize("NFKC").toLowerCase().replace(/[\p{P}\p{S}\s]/gu, ""); }
+function evidenceText(value) { return String(value ?? "").normalize("NFKC").toLowerCase().replace(/[\p{P}\p{S}]+/gu, " ").replace(/\s+/g, " ").trim(); }
 function hollowEvidence(value) {
   const normalized = evidenceText(value);
   if (!normalized) return true;
-  return normalized.replace(/已|全部|均|检查|核对|审查|完成|通过|符合|要求|无|问题|正常|见材料|如上|同上|passed?|ok/gi, "").length === 0;
+  return normalized.replace(/已|全部|均|检查|核对|审查|完成|通过|符合|要求|无|问题|正常|见材料|如上|同上/g, "").replace(/\bpass(?:ed)?\b|\bok\b/gi, "").replace(/\s/g, "").length === 0;
 }
 function concrete(value, minimum = 8) { return nonEmpty(value) && value.trim().length >= minimum && !hollowEvidence(value); }
 function concreteAnchor(value) { return concrete(value, 6) && /(?:[:#]|\bline\s*\d+\b|\bL\d+\b)/i.test(value); }
