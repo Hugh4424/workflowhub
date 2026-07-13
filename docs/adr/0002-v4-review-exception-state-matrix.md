@@ -11,6 +11,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 | attachment copy/hash 失败 | 不重投材料 | manifest、hash、broker error | `MATERIAL_INCOMPLETE` |
 | 无可用 provider | 不调用 broker | doctor snapshot | `NO_CAPABLE_PROVIDER` |
 | provider 非 JSON | 不作为 verdict | raw output hash/ref | `NON_JSON_OUTPUT` |
+| raw stdout/stderr hash 或私有引用不一致 | 不作为 verdict | copied raw ref/hash、broker state | `BROKER_RAW_AUDIT_MISMATCH` |
 | business-invalid 输出 | 不作为 verdict | schema/合同诊断 | `BUSINESS_INVALID` |
 | flow/task lock 占用 | 不抢锁 | owner/pid identity | `review-already-running` |
 | disposition 超次数 | 只到配置上限 | attempts/last_error | `DISPOSITION_ATTEMPTS_EXCEEDED` |
@@ -22,6 +23,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 - attachment copy/hash：`skills/wh-review/scripts/review-round-facade.mjs` 的 `#attachments()` 只从 private prepare snapshot 复制；3rd-review 的 `lib/attachments.mjs` 对 source size/hash、冻结副本和 continuation 逐次验证。覆盖：`skills/wh-review/scripts/__tests__/review-round-facade.test.mjs` 的 “reads attachments only from the private prepare snapshot”；`/Users/Hugh/Hugh/Project/3rd-review/test/attachments-protocol.test.mjs`。
 - 无可用 provider：`ReviewRoundFacade.run()` 生成显式 `NO_CAPABLE_PROVIDER`，不会把调用者提供的 capability 当授权。覆盖：`review-round-facade.test.mjs` 的 “reports every missing candidate...”。
 - 非 JSON 与 business-invalid：`#outcome()` 分别投影 `NON_JSON_OUTPUT`、`BUSINESS_INVALID`，且 aggregate 过滤条件固定为 completed + complete + business-valid。覆盖：`review-round-facade.test.mjs` 的 “keeps fenced or business-invalid output out of semantics, aggregate, and continuation”。
+- raw audit chain：`BrokerClient` 只从 3rd-review runtime private state 读取相对 raw stdout/stderr ref，复制到当前 round 的 private directory 后复算 SHA-256；`#outcome()` 只接受该私有副本，并将 parsed provider text 写入独立的 `parsed_output_ref`。复制、state hash 或副本 hash 不一致时不能进入 aggregate。覆盖：`broker-client.test.mjs` 和 `review-round-facade.test.mjs` 的 raw audit cases。
 - lock：`#acquireLock()` 用 owner/pid/process-start identity；活进程不被抢占，已死或 PID reuse 才可回收。覆盖：`review-round-facade.test.mjs` 的 “records lock ownership...” 和 “takes the shared task lock...”。
 - disposition 上限：`#recordDispositionFailure()` 原子写入 attempt 与最后错误；到 `intent.limits.max_disposition_attempts` 后立刻写 human block。覆盖：`review-round-facade.test.mjs` 的 “blocks a flow...” 和 “counts schema-invalid...”。
 - TTL：continuation 先调用 broker `status(runtime_id)`，过期就拒绝，不得自动 first round。实现：`ReviewRoundFacade.run()`；覆盖：`review-round-facade.test.mjs` 的 continuation/flow recovery cases。

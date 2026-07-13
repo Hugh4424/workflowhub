@@ -35,6 +35,15 @@ function parseOutput(value) {
   if (fence) text = fence[1].trim();
   try { return { ok: true, value: JSON.parse(text) }; } catch { return { ok: false }; }
 }
+function privateFileHash(directory, ref, expectedHash) {
+  if (typeof ref !== "string" || !ref || typeof expectedHash !== "string" || !/^[a-f0-9]{64}$/i.test(expectedHash)) return null;
+  const root = resolve(directory); const target = resolve(ref);
+  if (!target.startsWith(`${root}/`)) return null;
+  try {
+    const bytes = readFileSync(target);
+    return sha(bytes) === expectedHash.toLowerCase() ? target : null;
+  } catch { return null; }
+}
 function packetHash(packet) { return reviewPacketHash(packet); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function stripHunkSectionHeaders(unifiedDiff) { return unifiedDiff.replace(/^(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1"); }
@@ -375,7 +384,9 @@ export class ReviewRoundFacade {
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0
         ? { providers: [], transport_error: { code: "NO_CAPABLE_PROVIDER", message: "doctor reported no ready heterologous provider with a supported attachment delivery" } }
-        : await this.broker.run(intent.round_kind === "continuation" ? { request } : { request, packet, attachments, attachmentDelivery: prepared.delivery_policy });
+        : await this.broker.run(intent.round_kind === "continuation"
+          ? { request, privateRawDirectory: join(prepared.dir, "provider-raw") }
+          : { request, packet, attachments, attachmentDelivery: prepared.delivery_policy, privateRawDirectory: join(prepared.dir, "provider-raw") });
       atomic(join(prepared.dir, "broker-run.json"), safeJson(response));
       const candidateSet = new Set(intent.candidate_providers);
       const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
@@ -629,10 +640,17 @@ export class ReviewRoundFacade {
   #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, deliveryPolicy, contractRules) {
     const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null;
     const rawHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value) ? value.toLowerCase() : null;
-    const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null, raw_stdout_sha256: rawHash(item?.raw_stdout_sha256), raw_stderr_sha256: rawHash(item?.raw_stderr_sha256) };
+    const raw_stdout_sha256 = rawHash(item?.raw_stdout_sha256); const raw_stderr_sha256 = rawHash(item?.raw_stderr_sha256);
+    const raw_stdout_ref = privateFileHash(directory, item?.raw_stdout_ref, raw_stdout_sha256);
+    const raw_stderr_ref = privateFileHash(directory, item?.raw_stderr_ref, raw_stderr_sha256);
+    const rawAuditDeclared = item?.raw_stdout_ref !== undefined || item?.raw_stderr_ref !== undefined || item?.raw_stdout_sha256 !== undefined || item?.raw_stderr_sha256 !== undefined;
+    const rawAuditComplete = !rawAuditDeclared || (raw_stdout_ref && raw_stderr_ref && raw_stdout_sha256 && raw_stderr_sha256);
+    const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null,
+      raw_output_ref: raw_stdout_ref, raw_stdout_ref, raw_stderr_ref, raw_stdout_sha256, raw_stderr_sha256 };
     if (typeof item?.output === "string" && item.provider) {
-      const raw = join(directory, "providers", `${item.provider}.raw.txt`); atomic(raw, item.output); base.raw_output_ref = raw;
+      const parsed = join(directory, "providers", `${item.provider}.parsed-output.txt`); atomic(parsed, item.output); base.parsed_output_ref = parsed; base.parsed_output_sha256 = sha(readFileSync(parsed));
     }
+    if (!rawAuditComplete) return { ...base, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" };
     if (transport_status === "cancelled") {
       const cancel_source = item?.error?.source;
       if (!cancel_source) return { ...base, cancel_source: null, diagnostic: "CANCEL_SOURCE_MISSING" };

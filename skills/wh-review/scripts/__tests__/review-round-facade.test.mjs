@@ -574,7 +574,7 @@ describe("ReviewRoundFacade", () => {
     expect(secondPrepared.packet.source_revision.head).not.toBe(first.intent.baseline_packet_hash);
     const second = await facade.run(secondPrepared);
     expect(second.intent).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash });
-    expect(Object.keys(calls[1]).sort()).toEqual(["request"]);
+    expect(Object.keys(calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
     expect(calls[1].request).toMatchObject({ continuation: { runtime_id: "34343434-3434-4434-8434-343434343434" } });
     expect(calls[1].request).not.toHaveProperty("attachments");
     expect(calls[1].request.prompt).not.toContain(initial.unified_diff);
@@ -899,16 +899,32 @@ describe("ReviewRoundFacade", () => {
     }
   });
 
-  it("persists broker raw stdout and stderr hashes only in the private round receipt", async () => {
-    const tracking = root(); const stdoutHash = "a".repeat(64); const stderrHash = "b".repeat(64);
-    const broker = fakeBroker(async (request) => ({ runtime_id: "abababab-abab-4bab-8bab-abababababab", providers: [{ provider: "opencode", status: "completed", session_id: "s", raw_stdout_sha256: stdoutHash, raw_stderr_sha256: stderrHash, output: output(request.packet) }] }));
+  it("keeps original raw stdout separate from parsed output and verifies the private audit chain", async () => {
+    const tracking = root(); let rawStdout; let parsedOutput;
+    const broker = fakeBroker(async (request) => {
+      rawStdout = `provider wire envelope\\n${output(request.packet)}\\n`; const rawStderr = "provider diagnostic stream\\n"; parsedOutput = output(request.packet);
+      mkdirSync(request.privateRawDirectory, { recursive: true }); const stdoutRef = join(request.privateRawDirectory, "opencode.stdout.raw"), stderrRef = join(request.privateRawDirectory, "opencode.stderr.raw");
+      writeFileSync(stdoutRef, rawStdout); writeFileSync(stderrRef, rawStderr);
+      return { runtime_id: "abababab-abab-4bab-8bab-abababababab", providers: [{ provider: "opencode", status: "completed", session_id: "s", raw_stdout_ref: stdoutRef, raw_stderr_ref: stderrRef, raw_stdout_sha256: hash(rawStdout), raw_stderr_sha256: hash(rawStderr), output: parsedOutput }] };
+    });
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const result = await facade.run(facade.prepare({ task_id: "raw-hashes", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
     const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"));
-    expect(privateReceipt.provider_outcomes[0]).toMatchObject({ raw_stdout_sha256: stdoutHash, raw_stderr_sha256: stderrHash });
+    const outcome = privateReceipt.provider_outcomes[0];
+    expect(readFileSync(outcome.raw_output_ref, "utf8")).toBe(rawStdout); expect(hash(readFileSync(outcome.raw_output_ref))).toBe(outcome.raw_stdout_sha256);
+    expect(readFileSync(outcome.raw_stderr_ref, "utf8")).toBe("provider diagnostic stream\\n"); expect(hash(readFileSync(outcome.raw_stderr_ref))).toBe(outcome.raw_stderr_sha256);
+    expect(readFileSync(outcome.parsed_output_ref, "utf8")).toBe(parsedOutput); expect(outcome.parsed_output_ref).not.toBe(outcome.raw_output_ref); expect(outcome.parsed_output_sha256).toBe(hash(parsedOutput));
     const publication = facade.publish(result, { items: [] });
     const core = readFileSync(publication.core_receipt_ref, "utf8");
-    expect(core).not.toContain(stdoutHash); expect(core).not.toContain(stderrHash);
+    for (const value of [outcome.raw_stdout_sha256, outcome.raw_stderr_sha256, outcome.raw_output_ref, outcome.raw_stderr_ref, outcome.parsed_output_ref, rawStdout]) expect(core).not.toContain(value);
+  });
+
+  it("keeps raw hash/ref mismatches out of aggregate and continuation eligibility", async () => {
+    const tracking = root();
+    const broker = fakeBroker(async (request) => ({ runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", raw_stdout_ref: join(request.privateRawDirectory, "outside.raw"), raw_stdout_sha256: "a".repeat(64), raw_stderr_sha256: "b".repeat(64), output: output(request.packet) }] }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "raw-hash-mismatch", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), repository_root: tracking }));
+    expect(result.provider_outcomes[0]).toMatchObject({ packet_status: "material_incomplete", business_valid: false, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" }); expect(result.continuation_eligible).toBe(false);
   });
 
   it("seals real diff, manifest, and changed-file bytes before broker dispatch", async () => {

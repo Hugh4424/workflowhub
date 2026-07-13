@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BrokerClient } from "../broker-client.mjs";
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 describe("BrokerClient", () => {
   it("discovers, normalizes, freezes, and caches broker-owned capabilities from doctor stdout", async () => {
@@ -82,6 +85,43 @@ describe("BrokerClient", () => {
     expect(calls[0].args).toContain("run"); expect(calls[0].args).toContain("--config=/cfg.json");
     expect(calls[0].args.some((arg) => arg.startsWith("--request="))).toBe(true);
     expect(calls[0].args.join(" ")).not.toMatch(/run-heterologous|--diff=|--output=|timeout/i);
+  });
+
+  it.each(["opencode", "kimi"])("copies %s original stdout/stderr from private broker state and preserves its hashes", async (provider) => {
+    const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-"));
+    try {
+      const runtimeRoot = join(root, "runtime"); const runtimeId = "11111111-1111-4111-8111-111111111111";
+      const runtime = join(runtimeRoot, runtimeId); const rawDir = join(runtime, "raw", provider); mkdirSync(rawDir, { recursive: true });
+      const stdout = `wire ${provider} stdout\\n{\"verdict\":\"pass\"}\\n`; const stderr = `${provider} stderr\\n`;
+      writeFileSync(join(rawDir, "stdout"), stdout); writeFileSync(join(rawDir, "stderr"), stderr);
+      writeFileSync(join(runtime, "state.json"), JSON.stringify({ runtime_id: runtimeId, providers: { [provider]: {
+        raw_stdout_ref: `raw/${provider}/stdout`, raw_stdout_sha256: sha256(stdout), raw_stderr_ref: `raw/${provider}/stderr`, raw_stderr_sha256: sha256(stderr),
+      } } }));
+      const config = join(root, "config.json"); writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: runtimeRoot } }));
+      const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config, spawnImpl() {
+        const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+        queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [{ provider, status: "completed", raw_stdout_sha256: sha256(stdout), raw_stderr_sha256: sha256(stderr), output: "parsed provider output" }] })); child.emit("close", 0); }); return child;
+      } });
+      const privateRawDirectory = join(root, "task", "reviews", "private", "round-1", "provider-raw");
+      const result = await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, privateRawDirectory });
+      const outcome = result.providers[0];
+      expect(readFileSync(outcome.raw_stdout_ref, "utf8")).toBe(stdout); expect(readFileSync(outcome.raw_stderr_ref, "utf8")).toBe(stderr);
+      expect(sha256(readFileSync(outcome.raw_stdout_ref))).toBe(outcome.raw_stdout_sha256);
+      expect(sha256(readFileSync(outcome.raw_stderr_ref))).toBe(outcome.raw_stderr_sha256);
+      expect(outcome.output).toBe("parsed provider output"); expect(existsSync(join(privateRawDirectory, `${provider}.stdout.raw`))).toBe(true);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("fails closed when private broker bytes do not match the advertised raw stdout hash", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-bad-"));
+    try {
+      const runtimeRoot = join(root, "runtime"); const runtimeId = "22222222-2222-4222-8222-222222222222"; const runtime = join(runtimeRoot, runtimeId); mkdirSync(join(runtime, "raw", "opencode"), { recursive: true });
+      writeFileSync(join(runtime, "raw", "opencode", "stdout"), "tampered"); writeFileSync(join(runtime, "raw", "opencode", "stderr"), "stderr");
+      writeFileSync(join(runtime, "state.json"), JSON.stringify({ runtime_id: runtimeId, providers: { opencode: { raw_stdout_ref: "raw/opencode/stdout", raw_stdout_sha256: sha256("expected"), raw_stderr_ref: "raw/opencode/stderr", raw_stderr_sha256: sha256("stderr") } } }));
+      const config = join(root, "config.json"); writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: runtimeRoot } }));
+      const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config, spawnImpl() { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [{ provider: "opencode", status: "completed", raw_stdout_sha256: sha256("expected"), raw_stderr_sha256: sha256("stderr") }] })); child.emit("close", 0); }); return child; } });
+      await expect(client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, privateRawDirectory: join(root, "task", "private") })).rejects.toThrow(/BROKER_RAW_AUDIT_UNAVAILABLE.*bytes/i);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   it("fails loud before passing Phase2-only attachment or cancel-source flags to the base CLI", async () => {

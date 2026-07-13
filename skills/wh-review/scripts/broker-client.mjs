@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 const providerId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const providerIds = new Set(["claude-code", "kimi", "codex", "opencode"]);
 const providerStatuses = new Set(["ready", "disabled", "unavailable"]);
 const deliveryModes = new Set(["file_only", "always_embed"]);
 const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 function deepFreeze(value) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) deepFreeze(child);
@@ -54,7 +56,7 @@ export class BrokerClient {
     this.spawnImpl = spawnImpl;
   }
 
-  async run({ request, attachments, attachmentDelivery } = {}) {
+  async run({ request, attachments, attachmentDelivery, privateRawDirectory } = {}) {
     const temp = mkdtempSync(join(tmpdir(), "wh-review-v4-broker-"));
     try {
       const requestFile = join(temp, "request.json");
@@ -70,8 +72,10 @@ export class BrokerClient {
       }
       const result = await this.#execute(this.command[0], args);
       if (result.code !== 0) return { transport_error: { code: "BROKER_FAILED", message: result.stderr.slice(0, 4096) } };
-      try { return JSON.parse(result.stdout); }
+      let parsed;
+      try { parsed = JSON.parse(result.stdout); }
       catch { return { transport_error: { code: "BROKER_OUTPUT_INVALID", message: "3rd-review returned non-JSON" } }; }
+      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory) : parsed;
     } finally { rmSync(temp, { recursive: true, force: true }); }
   }
 
@@ -119,5 +123,54 @@ export class BrokerClient {
       child.stdout?.on("data", (value) => { stdout += value; }); child.stderr?.on("data", (value) => { stderr += value; });
       child.once("error", reject); child.once("close", (code) => resolve({ code, stdout, stderr }));
     });
+  }
+
+  #materializePrivateRaw(result, privateRawDirectory) {
+    if (!result || typeof result !== "object" || !Array.isArray(result.providers) || typeof result.runtime_id !== "string") {
+      throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker result has no runtime provider evidence");
+    }
+    if (!isAbsolute(privateRawDirectory)) throw new TypeError("privateRawDirectory must be an absolute path");
+    let config;
+    try { config = JSON.parse(readFileSync(this.config, "utf8")); }
+    catch (error) { throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: cannot read broker config: ${error.message}`); }
+    if (!isAbsolute(config?.runtime?.root ?? "")) throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker runtime.root must be absolute");
+    const runtimeRoot = realpathSync(config.runtime.root);
+    const runtime = resolve(runtimeRoot, result.runtime_id);
+    if (relative(runtimeRoot, runtime).startsWith("..") || runtime === runtimeRoot) throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: unsafe broker runtime id");
+    let state;
+    try { state = JSON.parse(readFileSync(join(runtime, "state.json"), "utf8")); }
+    catch (error) { throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: cannot read broker private state: ${error.message}`); }
+    if (state?.runtime_id !== result.runtime_id || !state.providers || typeof state.providers !== "object") throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker state does not bind the runtime");
+    const destinationRoot = resolve(privateRawDirectory);
+    mkdirSync(destinationRoot, { recursive: true, mode: 0o700 });
+    const copyStream = (provider, stream, stateProvider, publicProvider) => {
+      const ref = stateProvider[`raw_${stream}_ref`]; const expected = stateProvider[`raw_${stream}_sha256`];
+      const announced = publicProvider[`raw_${stream}_sha256`];
+      const hasAny = ref !== undefined || expected !== undefined || announced !== undefined;
+      if (!hasAny) return null;
+      if (typeof ref !== "string" || !ref || isAbsolute(ref) || ref.split(/[\\/]/).some((part) => part === "..")) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} ref is unsafe`);
+      if (!/^[a-f0-9]{64}$/i.test(expected ?? "") || !/^[a-f0-9]{64}$/i.test(announced ?? "") || expected.toLowerCase() !== announced.toLowerCase()) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} hash is missing or mismatched`);
+      const source = realpathSync(resolve(runtime, ref));
+      if (relative(runtime, source).startsWith("..") || source === runtime) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} source escapes runtime`);
+      const bytes = readFileSync(source);
+      if (sha256(bytes) !== expected.toLowerCase()) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} bytes do not match broker hash`);
+      const target = join(destinationRoot, `${provider}.${stream}.raw`);
+      writeFileSync(target, bytes, { mode: 0o400, flag: "wx" });
+      return target;
+    };
+    const providers = result.providers.map((item) => {
+      if (!item || typeof item !== "object" || !providerId.test(item.provider ?? "") || !providerIds.has(item.provider)) return item;
+      const privateState = state.providers[item.provider];
+      const expectsRaw = item.status === "completed" || item.raw_stdout_sha256 !== undefined || item.raw_stderr_sha256 !== undefined;
+      if (!privateState || typeof privateState !== "object") {
+        if (expectsRaw) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
+        return item;
+      }
+      const raw_stdout_ref = copyStream(item.provider, "stdout", privateState, item);
+      const raw_stderr_ref = copyStream(item.provider, "stderr", privateState, item);
+      if (expectsRaw && (!raw_stdout_ref || !raw_stderr_ref)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} lacks raw stream evidence`);
+      return { ...item, ...(raw_stdout_ref ? { raw_stdout_ref } : {}), ...(raw_stderr_ref ? { raw_stderr_ref } : {}) };
+    });
+    return { ...result, providers };
   }
 }

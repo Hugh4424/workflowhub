@@ -62,7 +62,7 @@ Required skills resolve only from this repository's `skills/` directory and must
 
 Each provider has independent `transport_status`, `packet_status`, and `semantic_verdict`. Only `completed + complete + business_valid + semantic_verdict` participates in aggregate findings. `CANCELLED`, authentication failure, timeout, malformed JSON, material incompleteness, and hash mismatch are diagnostics, never semantic verdicts. A cancellation must record its source; broker liveness/duration limits remain broker-owned and no wh-review outer timeout kills a provider.
 
-Private receipts retain `runtime_id`, provider `session_id`, raw output, and diagnostics below `reviews/private/round-*`. Core receipt, report, report index, and stage result are ordered, atomic redacted projections. Runtime/session/raw paths must never appear in public artifacts. A published `semantic_verdict` is cryptographically bound into the core receipt and is accompanied by its `core_receipt_hash` and `needs_human` flag.
+Private receipts retain `runtime_id`, provider `session_id`, and a copied original stdout/stderr audit chain below `reviews/private/round-*`: `raw_output_ref`/`raw_stdout_ref` bytes must hash to `raw_stdout_sha256`, and `raw_stderr_ref` bytes must hash to `raw_stderr_sha256`. Parsed provider text is separate (`parsed_output_ref`/`parsed_output_sha256`) and is never represented as raw stdout. Core receipt, report, report index, and stage result are ordered, atomic redacted projections. Runtime/session/raw/parsed paths must never appear in public artifacts. A published `semantic_verdict` is cryptographically bound into the core receipt and is accompanied by its `core_receipt_hash` and `needs_human` flag.
 
 ## Durable artifacts
 

@@ -4,7 +4,7 @@ function collectKnownSecrets(value, found = new Set()) {
   if (Array.isArray(value)) { for (const item of value) collectKnownSecrets(item, found); return found; }
   if (!value || typeof value !== "object") return found;
   for (const [key, item] of Object.entries(value)) {
-    if (/runtime_id|session_id|raw_output|raw_ref|absolute_path|workspace/i.test(key) && typeof item === "string" && item.length >= 4) found.add(item);
+    if (/runtime_id|session_id|(?:raw|parsed)_.*(?:output_)?ref|absolute_path|workspace/i.test(key) && typeof item === "string" && item.length >= 4) found.add(item);
     collectKnownSecrets(item, found);
   }
   return found;
