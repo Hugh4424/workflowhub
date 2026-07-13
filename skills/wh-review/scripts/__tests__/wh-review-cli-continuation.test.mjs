@@ -1,0 +1,107 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { contractPathAndHash } from "../lib/safe-id.mjs";
+
+const broker = vi.hoisted(() => {
+  const canonical = (value) => Array.isArray(value)
+    ? `[${value.map(canonical).join(",")}]`
+    : value && typeof value === "object"
+      ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`
+      : JSON.stringify(value);
+  const output = (packet, verdict) => {
+    const ids = ["C1", "C2", "C3", "H1", "H2", "H3"];
+    const revised = verdict === "revise_required";
+    return JSON.stringify({
+      packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256,
+      contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, packet_status: "complete", verdict,
+      summary: "review completed against packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: "H1", severity: "blocking", issue: "publication must follow durable persistence", evidence: "changes.diff:a:1 shows publication before persistence", suggested_fix: "persist the state before publishing it" }] : [],
+      checklist: ids.map((id) => ({ id, passed: !(revised && id === "H1"), evidence: `changes.diff:a:1 verifies ${id}` })),
+      pass_items: ids.filter((id) => !(revised && id === "H1")).map((rule_id) => ({ rule_id, artifact_anchor: `changes.diff:a:1#${rule_id}`, evidence: `changes.diff:a:1 proves ${rule_id}` })),
+      skillResults: [],
+      ...(revised ? { rootCause: "publication happens before the durable write", fixApproach: "make persistence complete before publication" } : {}),
+    });
+  };
+  return { calls: [], clientOptions: [], currentPacket: null, output, reset() { this.calls.length = 0; this.clientOptions.length = 0; this.currentPacket = null; } };
+});
+
+vi.mock("../broker-client.mjs", () => ({
+  BrokerClient: class {
+    constructor(options) { broker.clientOptions.push(options); }
+    async discoverCapabilities() {
+      return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+        { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      ] };
+    }
+    async status() { return { expires_at_ms: Date.now() + 60_000 }; }
+    async run(input) {
+      broker.calls.push(input);
+      const packet = input.packet ?? {
+        ...broker.currentPacket,
+        packet_hash: input.request.prompt.match(/current_packet_hash=([a-f0-9]{64})/)?.[1],
+        manifest_hash: input.request.prompt.match(/current_manifest_hash=([a-f0-9]{64})/)?.[1],
+        diff_sha256: input.request.prompt.match(/current_diff_sha256=([a-f0-9]{64})/)?.[1],
+      };
+      return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: broker.output(packet, input.request.continuation ? "pass" : "revise_required") }] };
+    }
+  },
+}));
+
+const cli = new URL("../wh-review-cli.mjs", import.meta.url);
+const roots = [];
+afterEach(() => { broker.reset(); roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })); });
+
+const sha = (value) => createHash("sha256").update(value).digest("hex");
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function git(root, args, encoding = "utf8") { return execFileSync("git", args, { cwd: root, encoding }).trim(); }
+function manifest(packet) {
+  return sha(canonical({ diff_sha256: packet.diff_sha256, changed_files: packet.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: packet.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: packet.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: packet.test_evidence, host_verified_facts: packet.host_verified_facts, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, source_revision: packet.source_revision }));
+}
+function reviewPacket(root, base) {
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
+  const oldBytes = execFileSync("git", ["show", `${base}:a`], { cwd: root });
+  const bytes = execFileSync("git", ["show", `${head}:a`], { cwd: root });
+  const packet = { version: "review-packet.v1", stage: "build-code", review_track: null, unified_diff, changed_files: [{ path: "a", status: "modified", sha256: sha(bytes), size: bytes.length, old_sha256: sha(oldBytes), old_size: oldBytes.length }], raw_requirement: "make state publication durable", acceptance_design_excerpt: "AC: publication happens after persistence", test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])), source_revision: { base, head } };
+  packet.diff_sha256 = sha(unified_diff); packet.manifest_hash = manifest(packet);
+  return packet;
+}
+function repository() {
+  const root = mkdtempSync(join(tmpdir(), "wh-review-cli-continuation-")); roots.push(root);
+  git(root, ["init", "-q"]); git(root, ["config", "user.email", "review@example.test"]); git(root, ["config", "user.name", "Review Test"]);
+  writeFileSync(join(root, "a"), "old\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "base"]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeFileSync(join(root, "a"), "first change\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "first"]);
+  return { root, base };
+}
+
+describe("wh-review CLI continuation", () => {
+  it("forwards closure evidence and cross-stage carryovers into a real second review round", async () => {
+    const { runReviewRound } = await import(cli.href);
+    const { root, base } = repository();
+    const firstPacket = reviewPacket(root, base);
+    await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: root, repository_root: root, third_review: { command: "broker", config: "/config.json", attachment_root: root } });
+    const firstReceipt = JSON.parse(readFileSync(join(root, "cli-continuation", "reviews", "private", "round-build-code-flow-1", "round-receipt.json"), "utf8"));
+    const findingId = firstReceipt.merged_findings[0].finding_id;
+
+    writeFileSync(join(root, "a"), "first change\nfixed\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "fix"]);
+    const secondPacket = reviewPacket(root, base); broker.currentPacket = secondPacket;
+    const closure_evidence = [{ finding_id: findingId, evidence: "changes.diff:a:2 records the persistence fix" }];
+    const cross_stage_carryovers = [{ carryover_id: "verify-later", source_stage: "verify-code", status: "open", evidence: "verification is scheduled after the build" }];
+    const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, repository_root: root, third_review: { command: "broker", config: "/config.json", attachment_root: root }, continuation: true, closure_evidence, cross_stage_carryovers });
+
+    expect(result.transport.continuation_eligible).toBe(true);
+    expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([root, root]);
+    expect(broker.calls).toHaveLength(2);
+    expect(broker.calls[1]).toEqual({ request: expect.objectContaining({ continuation: { runtime_id: "11111111-1111-4111-8111-111111111111" } }) });
+    expect(broker.calls[1].request.prompt).toContain(JSON.stringify(closure_evidence, null, 2));
+    expect(broker.calls[1].request.prompt).toContain(JSON.stringify(cross_stage_carryovers, null, 2));
+  });
+});

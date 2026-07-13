@@ -3,26 +3,24 @@
 /** V4-only CLI boundary. Workflows call run/reset; legacy prepare/execute paths are retired. */
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { BrokerClient } from "./broker-client.mjs";
 import { ReviewRoundFacade } from "./review-round-facade.mjs";
-
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export async function runReviewRound(input) {
   if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
   if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution and cannot be supplied by callers");
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  const command = input.third_review?.command, config = input.third_review?.config;
-  if (!taskTrackingRoot || !command || !config) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config}");
-  const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? repositoryRoot });
+  const command = input.third_review?.command, config = input.third_review?.config, attachmentRoot = input.third_review?.attachment_root;
+  if (!taskTrackingRoot || !command || !config || !attachmentRoot) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config,attachment_root}");
+  if (input.attachment_root !== undefined || input.attachmentRoot !== undefined) throw new Error("attachment_root is fixed by third_review.attachment_root and cannot be supplied by callers");
+  const client = new BrokerClient({ command, config, attachmentRoot });
   const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
   const prepared = await facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
     review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
-    attachment_root: input.attachment_root ?? input.attachmentRoot,
+    closure_evidence: input.closure_evidence, cross_stage_carryovers: input.cross_stage_carryovers,
+    attachment_root: attachmentRoot,
     repository_root: input.repository_root ?? input.repositoryRoot,
   });
   const result = await facade.run(prepared);

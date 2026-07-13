@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 const providerId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const providerIds = new Set(["claude-code", "kimi", "codex", "opencode"]);
@@ -14,12 +14,13 @@ function deepFreeze(value) {
   }
   return value;
 }
-function normalizeCapabilities(value) {
+function normalizeCapabilities(value, { requireReadyAttachmentRoot = false } = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 4) throw new Error("third-review doctor capability version must be 4");
   if (!value.capabilities || typeof value.capabilities !== "object" || Array.isArray(value.capabilities)
     || Object.keys(value.capabilities).sort().join(",") !== "attachments,cancel_source"
     || typeof value.capabilities.attachments !== "boolean" || typeof value.capabilities.cancel_source !== "boolean") throw new Error("third-review doctor capabilities must declare only boolean attachments and cancel_source");
   if (!Array.isArray(value.providers)) throw new Error("third-review doctor providers must be an array");
+  if (requireReadyAttachmentRoot && value?.attachment_root?.status !== "ready") throw new Error("third-review doctor attachment root is not ready");
   const seen = new Set();
   const providers = value.providers.map((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item) || typeof item.provider !== "string" || !providerId.test(item.provider) || !providerIds.has(item.provider)) throw new Error("third-review doctor provider id is invalid");
@@ -43,7 +44,8 @@ export class BrokerClient {
     if (!config) throw new TypeError("third_review.config is required");
     this.command = Array.isArray(command) ? command : [command];
     this.config = config;
-    this.attachmentRoot = attachmentRoot;
+    if (attachmentRoot !== undefined && (!isAbsolute(attachmentRoot) || !attachmentRoot)) throw new TypeError("third_review.attachment_root must be an absolute path");
+    this.attachmentRoot = attachmentRoot ?? null;
     this.capabilitySnapshot = null;
     this.capabilityDiscovery = null;
     this.spawnImpl = spawnImpl;
@@ -88,10 +90,12 @@ export class BrokerClient {
   async discoverCapabilities() {
     if (this.capabilitySnapshot) return this.capabilitySnapshot;
     if (!this.capabilityDiscovery) this.capabilityDiscovery = (async () => {
-      const result = await this.#execute(this.command[0], [...this.command.slice(1), "doctor", `--config=${this.config}`]);
+      const args = [...this.command.slice(1), "doctor", `--config=${this.config}`];
+      if (this.attachmentRoot) args.push(`--attachments-root=${this.attachmentRoot}`);
+      const result = await this.#execute(this.command[0], args);
       if (result.code !== 0) throw new Error(`third-review doctor failed: ${result.stderr.slice(0, 4096)}`);
       let parsed; try { parsed = JSON.parse(result.stdout); } catch { throw new Error("third-review doctor returned non-JSON"); }
-      this.capabilitySnapshot = normalizeCapabilities(parsed); return this.capabilitySnapshot;
+      this.capabilitySnapshot = normalizeCapabilities(parsed, { requireReadyAttachmentRoot: this.attachmentRoot !== null }); return this.capabilitySnapshot;
     })();
     try { return await this.capabilityDiscovery; }
     catch (error) { this.capabilityDiscovery = null; throw error; }

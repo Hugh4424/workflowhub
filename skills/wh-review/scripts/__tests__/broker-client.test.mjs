@@ -24,6 +24,24 @@ describe("BrokerClient", () => {
     await expect(client.discoverCapabilities()).resolves.toBe(first); expect(calls).toBe(1);
   });
 
+  it("passes its fixed packet root to doctor before accepting attachment capability", async () => {
+    const calls = [];
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/approved/packet-root", spawnImpl(command, args) {
+      calls.push({ command, args }); const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, capabilities: { attachments: true, cancel_source: true }, attachment_root: { status: "ready" }, providers: [] })); child.emit("close", 0); }); return child;
+    } });
+    await expect(client.discoverCapabilities()).resolves.toMatchObject({ capabilities: { attachments: true } });
+    expect(calls[0].args).toContain("--attachments-root=/approved/packet-root");
+  });
+
+  it("fails closed when doctor cannot verify the fixed packet root", async () => {
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/approved/packet-root", spawnImpl() {
+      const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, capabilities: { attachments: true, cancel_source: true }, attachment_root: { status: "unavailable", error: { code: "ATTACHMENT_ROOT_FORBIDDEN" } }, providers: [] })); child.emit("close", 0); }); return child;
+    } });
+    await expect(client.discoverCapabilities()).rejects.toThrow(/attachment root.*ready/i);
+  });
+
   it.each([
     [{ version: 3, capabilities: { attachments: true, cancel_source: true }, providers: [] }, /version/],
     [{ version: 4, capabilities: { attachments: true }, providers: [] }, /capabilities/],
@@ -64,7 +82,7 @@ describe("BrokerClient", () => {
     const calls = [];
     const client = new BrokerClient({ command: ["node", "/phase2/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/repo", spawnImpl(command, args) {
       calls.push(args); const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true},"providers":[]}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
+      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true},"attachment_root":{"status":"ready"},"providers":[]}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
     } });
     await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: "file_only" });
     expect(calls[1].some((arg) => arg.startsWith("--attachments="))).toBe(true);
@@ -76,7 +94,7 @@ describe("BrokerClient", () => {
     const calls = [];
     const client = new BrokerClient({ command: ["node", "/phase2/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/repo", spawnImpl(command, args) {
       calls.push(args); const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true},"providers":[]}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
+      queueMicrotask(() => { child.stdout.emit("data", args.includes("doctor") ? '{"version":4,"capabilities":{"attachments":true,"cancel_source":true},"attachment_root":{"status":"ready"},"providers":[]}' : '{"version":4,"providers":[]}'); child.emit("close", 0); }); return child;
     } });
     await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: policy });
     expect(calls[1]).toContain(`--attachment-delivery=${policy}`);
@@ -88,7 +106,7 @@ describe("BrokerClient", () => {
       const config = join(root, "config.json");
       writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: join(root, "runtime") }, tiers: [["opencode"]], providers: { opencode: { enabled: false, command: process.execPath, auth: { type: "native" }, env: [] } } }));
       const script = join(root, "3rd-review.mjs");
-      writeFileSync(script, 'process.stdout.write(JSON.stringify({version:4,capabilities:{attachments:false,cancel_source:false},providers:[]}));\n');
+      writeFileSync(script, 'process.stdout.write(JSON.stringify({version:4,capabilities:{attachments:false,cancel_source:false},attachment_root:{status:"ready"},providers:[]}));\n');
       const client = new BrokerClient({ command: [process.execPath, script], config, attachmentRoot: root });
       await expect(client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, attachments: { version: 1, bundle_id: "b", entries: [] }, attachmentDelivery: "file_only" })).rejects.toThrow(/ATTACHMENT_UNSUPPORTED/);
     } finally { rmSync(root, { recursive: true, force: true }); }
