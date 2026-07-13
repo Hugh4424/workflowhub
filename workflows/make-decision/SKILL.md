@@ -13,8 +13,6 @@ description: Clarify requirements with the user via structured debate/review护�
 | `MAKE_DECISION_DEBATE_PATH` | `/Users/Hugh/Hugh/Project/debate` | 外部 debate skill 路径；路径不可达时自动降级跳过 debate（skipped），记录 `debate_path_invalid: true` | `export MAKE_DECISION_DEBATE_PATH=/path/to/debate` |
 | `MAKE_DECISION_SKIP_DEBATE` | `0` | `=1` 时强制跳过所有 debate 轮次，直接记录 `debate_1: skipped` / `debate_2: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_DEBATE=1` |
 | `MAKE_DECISION_SKIP_BLIND_REVIEW` | `0` | `=1` 时跳过盲审（3rd-review）护城河，记录 `blind_review: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_BLIND_REVIEW=1` |
-| `THIRD_REVIEW_RUNNER` | `run-heterologous-review.mjs` | 自定义 reviewer runner 文件路径；文件不可达时记录 `runner_invalid`，用默认 runner，继续 | `export THIRD_REVIEW_RUNNER=/path/to/runner.mjs` |
-| `REVIEW_DISPATCH_CONFIG` | （空，走内置默认调度） | 允许值：有效 JSON/YAML **配置文件路径**；文件不可达或解析失败时记录 `dispatch_config_invalid`，用默认调度继续；缺省为空时 3rd-review 使用内部默认调度 | `export REVIEW_DISPATCH_CONFIG=/path/to/dispatch.json` |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
 | `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量（直接 task root）→ `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器会基于当前 git remote / `repo_root_map` 返回项目级 task root；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
 
@@ -303,11 +301,9 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 ### 1. 单次独立盲审
 
-**入口检测（THIRD_REVIEW_RUNNER）**：读取 `THIRD_REVIEW_RUNNER` 环境变量（默认 `run-heterologous-review.mjs`）。若设置了该变量，检查对应文件是否可达；文件不可达时写 journal 事件 `event: "runner_invalid", runner: "<值>"`，并回退使用默认 runner `run-heterologous-review.mjs`，继续执行，不阻断流程。
-
-**入口检测（REVIEW_DISPATCH_CONFIG）**：读取 `REVIEW_DISPATCH_CONFIG` 环境变量（默认为空，走内置默认调度）。若设置了该变量，检查对应配置文件是否可达且可解析；文件不可达或解析失败时写 journal 事件 `event: "dispatch_config_invalid", config: "<值>"`，并回退使用内置默认调度，继续执行，不阻断流程。若未设置（空），直接使用内置默认调度。
-
-通过 `wh-review` 两段式协议（非 `standalone.sh`）：①`prepareRoundState({taskId, stage:"make-decision", taskTrackingRoot})`→`ready{review_flow_id,total_round,contract_path}`或 `blocked_by_human_confirmation`（D2 门未过，不得绕过/伪造批准）；②派发前 `assertSafeTaskId` 校验 task_id，子代理只拿 `review_flow_id`/`total_round`，写 `prompt-{review_flow_id}-r{total_round}.md`，不下发 `contract_path`；③主 agent 调 `invoke-review-engine.mjs` 驱动引擎，写回 `round-state-make-decision-{review_flow_id}.json`，渲染 review 产物。
+Build two V4 packets and call `ReviewRoundFacade` for the isolated `direction` and
+`detail` flows. The first has only the raw requirement; the second adds the decision
+log. Provider material stays packet-only.
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性、技术可行性（D8 新增第四维 `feasibility`）。
 

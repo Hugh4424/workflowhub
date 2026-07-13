@@ -257,13 +257,10 @@ Before asking for confirmation, produce a plain-language decision brief followin
 
 ### 10. 3rd-review 独立审查
 
-**在人工确认 merge 之前**，invoke the **3rd-review standalone entry** as an independent subagent. Feed it the full `git diff` of all files changed during this verify-code run. This ordering ensures revise_required findings block the irreversible merge, not just post-facto report them (FR-WORKTREE-CLOSE-006).
-
-**调用方式（wh-review 两段式协议，取代直接 shell 出 `standalone.sh`）：**
-
-1. **准备阶段**（在 `worktree_root` 目录下，先计算 `MERGE_BASE=$(git merge-base HEAD $(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's|origin/||'))`）：调用 `prepareRoundState({ taskId, stage: "verify-code", taskTrackingRoot })`。`{status:"ready", review_flow_id, total_round, contract_path}` 时，`contract_path` 必须命中 verify-code 专属合同，命中其它 stage 合同视为配置错误，停止并报告。`{status:"blocked_by_human_confirmation", review_flow_id}` 时，说明上一轮 D2 人工确认门尚未过，本步骤到此为止，不得自行生成/伪造 T011b 批准 artifact 来跳过；此情形下也不得进入步骤④不可逆动作序列。
-2. **子代理派发前的 task_id 校验（round27 修复）**：`ready` 后，派生审查子代理前必须先对 `task_id` 做 `^[A-Za-z0-9._-]+$` 校验；通过才允许派发。子代理只拿 `review_flow_id`/`total_round`，据此写出 `prompt-{review_flow_id}-r{total_round}.md`（仅补充说明，携带 `git diff ${MERGE_BASE}` 增量与 changed file list 等已落盘材料的引用，不含 materials 本体），**不下发 `contract_path`**。
-3. **执行阶段**：主 agent 调用 `invoke-review-engine.mjs`（携带 `review_flow_id`/`contract_path`/子代理补充说明文件路径），驱动实际审查引擎；结果写回 `round-state-verify-code-{review_flow_id}.json`，并渲染 `{taskDir}/{task-id}/reviews/verify-code.md`。
+**在人工确认 merge 之前**，build the canonical total diff packet and call
+`ReviewRoundFacade` for the `verify-code` flow. Providers receive only that packet;
+they do not access the worktree. A non-pass semantic result is surfaced to the human
+before any irreversible action.
 
 **Dispatch rules:**
 - Run in a separate subagent context (independent from the coordinator).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -13,6 +13,13 @@ const stages = ["make-decision", "build-spec", "build-plan", "build-code", "veri
 const legacy = ["prepareRoundState", "invoke-review-engine", "run-heterologous-review", "same-source", "--diff", "--output"];
 
 function skill(stage) { return readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8"); }
+function productionFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return entry.name === "__tests__" ? [] : productionFiles(path);
+    return /\.(?:mjs|md|json)$/.test(entry.name) && !entry.name.endsWith(".test.mjs") ? [path] : [];
+  });
+}
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function git(cwd, args, encoding = "utf8") { return execFileSync("git", args, { cwd, encoding }).trim(); }
@@ -76,6 +83,14 @@ describe("wh-review v4 workflow wiring", () => {
       expect(content).toMatch(/Do\s+not\s+run git/);
       expect(content).toContain("reviews/private/round-");
       expect(content).toContain("cancel_source");
+    }
+  });
+
+  it("contains no legacy review production path", () => {
+    const files = [...productionFiles(join(root, "workflows")), ...productionFiles(join(root, "skills", "wh-review"))];
+    for (const file of files) {
+      const content = readFileSync(file, "utf8").toLowerCase();
+      for (const token of legacy) expect(content, `${file} contains legacy review token ${token}`).not.toContain(token.toLowerCase());
     }
   });
 
