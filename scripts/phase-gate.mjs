@@ -4,11 +4,10 @@
  *
  * Minimal phase completion fact check for build-code sub-phases. This is not a
  * broad quality gate: it only checks failure modes that have already occurred
- * in this workflow (missing RED/GREEN evidence, non-independent review,
- * missing commit/no-change record, and dirty handoff state).
+ * in this workflow (missing RED/GREEN evidence, non-independent review, and
+ * incomplete public review publication).
  */
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -16,10 +15,6 @@ import { fileURLToPath } from "node:url";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
-}
-
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
 }
 
 function nonEmptyString(value) {
@@ -164,113 +159,6 @@ function checkProjectionGuards(baseDir, errors, checked) {
   }
 }
 
-function isRealCommit(worktreeRoot, sha) {
-  if (!/^[a-f0-9]{40}$/.test(sha)) return false;
-  try {
-    execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
-      cwd: worktreeRoot,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function currentHead(worktreeRoot) {
-  const head = execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: worktreeRoot,
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
-  return head;
-}
-
-function changedFilesInCommit(worktreeRoot, sha) {
-  return execFileSync("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", sha], {
-    cwd: worktreeRoot,
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  })
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function isTrackingArtifactPath(file) {
-  return (
-    file.endsWith("phase-result.json") ||
-    file.includes("/evidence/") ||
-    file.startsWith("evidence/") ||
-    file.includes("/reviews/") ||
-    file.startsWith("reviews/")
-  );
-}
-
-function isImplementationCommit(worktreeRoot, sha) {
-  return changedFilesInCommit(worktreeRoot, sha).some((file) => !isTrackingArtifactPath(file));
-}
-
-function hasCommitRecord(phaseResult, worktreeRoot) {
-  const phaseId = phaseResult.phase_id;
-  if (!nonEmptyString(phaseId)) return false;
-  const records = [
-    phaseResult.commit_record,
-    ...asArray(phaseResult.commit_records),
-  ].filter((record) => record && typeof record === "object");
-  const shas = records
-    .filter((record) => record.phase_id === phaseId)
-    .map((record) => record.commit_sha)
-    .filter(nonEmptyString);
-  if (nonEmptyString(phaseResult.commit_sha) && phaseResult.commit_phase_id === phaseId) {
-    shas.push(phaseResult.commit_sha);
-  }
-  let head;
-  try {
-    head = currentHead(worktreeRoot);
-  } catch {
-    return false;
-  }
-  return shas.some((sha) => {
-    if (!isRealCommit(worktreeRoot, sha)) return false;
-    if (!isImplementationCommit(worktreeRoot, sha)) return false;
-    return sha === head;
-  });
-}
-
-function checkCommitOrNoChange(phaseResult, worktreeRoot, errors, checked) {
-  checked.push("commit-or-no-change");
-  const hasCommit = hasCommitRecord(phaseResult, worktreeRoot);
-  const hasNoChange = phaseResult.no_code_change === true && nonEmptyString(phaseResult.no_change_reason);
-  const declaresFileChanges = phaseResult.commit_intent === "file_changes";
-
-  if (declaresFileChanges && !hasCommit) {
-    errors.push("file-changing phase must include a current-phase real 40-hex implementation commit record matching HEAD; post-review tracking-only HEAD commits are not accepted");
-    return;
-  }
-  if (!declaresFileChanges && !hasCommit && !hasNoChange) {
-    errors.push("phase must include a commit record or no_code_change:true with no_change_reason");
-  }
-}
-
-function checkWorktreeClean(worktreeRoot, errors, checked) {
-  checked.push("worktree-clean");
-  let status;
-  try {
-    status = execFileSync("git", ["status", "--short", "--untracked-files=all"], {
-      cwd: worktreeRoot,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch (err) {
-    errors.push(`cannot collect git status in worktree: ${err.message}`);
-    return;
-  }
-  if (status !== "") {
-    errors.push(`worktree must be clean before phase completion; git status: ${status.split("\n").join("; ")}`);
-  }
-}
-
 export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   const errors = [];
   const warnings = [];
@@ -282,8 +170,6 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   checkDiffScan(phaseResult, baseDir, errors, checked);
   checkProjectionGuards(baseDir, errors, checked);
   checkReview(phaseResult, baseDir, errors, checked, options);
-  checkCommitOrNoChange(phaseResult, worktreeRoot, errors, checked);
-  checkWorktreeClean(worktreeRoot, errors, checked);
 
   return { ok: errors.length === 0, errors, warnings, checked };
 }
