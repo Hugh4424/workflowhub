@@ -250,22 +250,23 @@ export class ReviewRoundFacade {
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
-    const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
-    return this.#prepareUnderLock(input, lock);
-  }
-
-  async #prepareUnderLock(input, lock) {
-    try {
-    for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
-    if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
     let initialHostSource = null;
     if (input.continuation !== true) {
-      const sourceLock = input.stage === "make-decision" ? this.#taskProjectionLock(input.task_id, "source-snapshot") : null;
+      const sourceLock = this.#taskProjectionLock(input.task_id, "source-snapshot");
       try {
         const sourceContext = this.#readSourceContext(input.task_id);
         initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
-      } finally { if (sourceLock) this.#releaseLock(sourceLock); }
+        this.#recordInitialTree(input.task_id, initialHostSource.source_revision.base_tree);
+      } finally { this.#releaseLock(sourceLock); }
     }
+    const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
+    return this.#prepareUnderLock(input, lock, initialHostSource);
+  }
+
+  async #prepareUnderLock(input, lock, initialHostSource) {
+    try {
+    for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
+    if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
@@ -370,7 +371,6 @@ export class ReviewRoundFacade {
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
-      if (!continuation) this.#recordInitialTree(input.task_id, packet.source_revision.base_tree);
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: initialPromptText };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;

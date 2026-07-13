@@ -103,7 +103,7 @@ describe("wh-review CLI continuation", () => {
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-cli-tracking-")); roots.push(tracking); const taskId = "trusted-state";
     mkdirSync(join(tracking, taskId), { recursive: true });
     const valid = { target_repo_root: target, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" };
-    for (const state of [{ ...valid, status: "closed" }, (() => { const { status, ...missing } = valid; return missing; })(), { ...valid, target_repo_root: unrelated }]) {
+    for (const state of [{ ...valid, status: "closed" }, (() => { const { status, ...missing } = valid; return missing; })(), { ...valid, target_repo_root: unrelated }, { ...valid, branch: "workflowhub/too-many-parts-here" }, { ...valid, branch: "workflowhub/UPPER" }]) {
       writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify(state));
       await expect(runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: reviewPacket(), task_tracking_root: tracking })).rejects.toThrow(/trusted task worktree/);
     }
