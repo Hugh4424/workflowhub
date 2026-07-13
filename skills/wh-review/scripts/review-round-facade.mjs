@@ -30,7 +30,12 @@ function writeImmutable(path, value) {
     if (error?.code !== "EEXIST" || readFileSync(path, "utf8") !== encoded) throw error;
   }
 }
-function parseOutput(value) { try { return { ok: true, value: JSON.parse(String(value ?? "").trim()) }; } catch { return { ok: false }; } }
+function parseOutput(value) {
+  let text = String(value ?? "").trim();
+  const fence = text.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);
+  if (fence) text = fence[1].trim();
+  try { return { ok: true, value: JSON.parse(text) }; } catch { return { ok: false }; }
+}
 function packetHash(packet) { const input = { ...packet }; delete input.packet_hash; return sha(canonical(input)); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
 function isHardRuleId(value) { return /^(?:(?:DIR|DET)-)?H[1-9][0-9]*$/.test(value ?? ""); }
@@ -252,6 +257,7 @@ export class ReviewRoundFacade {
       Object.defineProperty(delta, "prompt", { value: prompt, enumerable: false });
     }
       const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
+      host_provider: input.host_provider ?? null, limits: { continuation_prompt_max_bytes: this.continuationPromptMaxBytes },
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       round_kind: continuation ? "continuation" : "initial", baseline_packet_hash: baselinePacketHash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,

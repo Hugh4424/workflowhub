@@ -8,7 +8,7 @@
     "round_kind": { "enum": ["initial", "continuation"] },
     "baseline_packet_hash": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
-    "review_track": { "type": ["string", "null"] },
+    "review_track": { "enum": ["direction", "detail", null] },
     "packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -20,7 +20,7 @@
         "required": ["path", "status"],
         "properties": {
           "path": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.?(/|$)).+$" },
-          "old_path": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.?(/|$)).+$" },
+          "old_path": { "type": ["string", "null"], "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.?(/|$)).+$" },
           "status": { "enum": ["added", "modified", "deleted", "renamed"] },
           "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "size": { "type": "integer", "minimum": 0 },
@@ -31,7 +31,7 @@
           { "if": { "properties": { "status": { "const": "added" } }, "required": ["status"] }, "then": { "required": ["sha256", "size"] } },
           { "if": { "properties": { "status": { "const": "modified" } }, "required": ["status"] }, "then": { "required": ["sha256", "size", "old_sha256", "old_size"] } },
           { "if": { "properties": { "status": { "const": "deleted" } }, "required": ["status"] }, "then": { "required": ["old_sha256", "old_size"] } },
-          { "if": { "properties": { "status": { "const": "renamed" } }, "required": ["status"] }, "then": { "required": ["path", "old_path", "sha256", "size", "old_sha256", "old_size"] } }
+          { "if": { "properties": { "status": { "const": "renamed" } }, "required": ["status"] }, "then": { "required": ["path", "old_path", "sha256", "size", "old_sha256", "old_size"], "properties": { "old_path": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.?(/|$)).+$" } } } }
         ],
         "additionalProperties": false
       }
@@ -56,6 +56,11 @@
     }
   },
   "allOf": [
+    {
+      "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
+      "then": { "properties": { "review_track": { "enum": ["direction", "detail"] } } },
+      "else": { "properties": { "review_track": { "type": "null" } } }
+    },
     {
       "if": { "properties": { "round_kind": { "const": "initial" } }, "required": ["round_kind"] },
       "then": { "properties": { "baseline_packet_hash": { "type": "null" } } },

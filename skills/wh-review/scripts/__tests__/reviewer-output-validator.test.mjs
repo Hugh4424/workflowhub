@@ -63,8 +63,10 @@ describe("reviewer-output validator", () => {
     revise.output.checklist.find(({ id }) => id === "H1").passed = false;
     revise.output.pass_items = revise.output.pass_items.filter(({ rule_id }) => rule_id !== "H1");
     revise.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "H1", severity: "blocking", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后", late_finding: true }];
-    expect(validate(revise).errors).toEqual(expect.arrayContaining([expect.stringMatching(/rootCause/), expect.stringMatching(/fixApproach/)]));
-    revise.output.rootCause = "状态发布和持久化没有共享提交边界"; revise.output.fixApproach = "先完成原子持久化，再发布成功状态";
+    expect(validate(revise).errors).toEqual([expect.stringMatching(/rootCause/)]);
+    revise.output.rootCause = "状态发布和持久化没有共享提交边界";
+    expect(validate(revise).errors).toEqual([expect.stringMatching(/fixApproach/)]);
+    revise.output.fixApproach = "先完成原子持久化，再发布成功状态";
     expect(validate(revise).errors).toEqual([]);
 
     const passBlocking = fixture(); passBlocking.output.findings = revise.output.findings;
@@ -129,7 +131,7 @@ describe("reviewer-output validator", () => {
 
   it("rejects finding, checklist, and pass-item rule ids outside the selected contract", () => {
     const finding = fixture(); finding.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "X1", severity: "minor", issue: "存在合同之外的审查意见", evidence: "src/a.mjs:12 展示该合同外意见", suggested_fix: "删除合同外 finding 并按合同重审" }];
-    expect(validate(finding).errors).toContain("finding rule id is not in selected contract: X1");
+    expect(validate(finding).errors).toEqual(["SCHEMA_VALIDATION_FAILED:/findings/0/rule_id"]);
     const checklist = fixture(); checklist.output.checklist.push({ id: "H99", passed: false, evidence: "unified_diff:a:1 不属于选中合同。" });
     expect(validate(checklist).errors).toContain("checklist id is not in selected contract: H99");
     const passItem = fixture(); passItem.output.pass_items.push({ rule_id: "C99", artifact_anchor: "unified_diff:a:1#C99", evidence: "该条目不属于选中合同规则。" });

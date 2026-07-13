@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateSchema } from "../schema-validator.mjs";
+import { compiledSchemaNames, validateSchema } from "../schema-validator.mjs";
 
 const hash = "a".repeat(64);
 
@@ -15,9 +15,8 @@ function expectSchemaError(name, value, pointer) {
 
 describe("schema-validator", () => {
   it("compiles all schemas in strict Ajv 2020 mode", () => {
-    for (const name of ["review-packet", "review-intent", "reviewer-output", "dispositions", "round-run-result"]) {
-      expect(() => validateSchema(name, name === "dispositions" ? { items: [] } : {})).toThrowError();
-    }
+    expect(compiledSchemaNames).toEqual(["review-packet", "review-intent", "reviewer-output", "dispositions", "round-run-result"]);
+    expect(validateSchema("dispositions", { items: [] })).toEqual({ items: [] });
   });
 
   it("rejects unknown packet fields with a stable code and JSON pointer", () => {
@@ -49,10 +48,11 @@ describe("schema-validator", () => {
     const intent = {
       task_id: "t", stage: "build-code", review_track: "direction", review_flow_id: "f", business_round: 1,
       round_kind: "initial", baseline_packet_hash: hash, contract_hash: hash, material_manifest_hash: hash,
-      skill_bundle_hash: hash, idempotency_key: "i", host_provider: "secret-value",
+      skill_bundle_hash: hash, idempotency_key: "i", host_provider: null,
+      limits: { continuation_prompt_max_bytes: 1 }, caller_limit: "secret-value",
     };
-    expectSchemaError("review-intent", intent, "/host_provider");
-    delete intent.host_provider;
+    expectSchemaError("review-intent", intent, "/caller_limit");
+    delete intent.caller_limit;
     expectSchemaError("review-intent", intent, "/review_track");
   });
 

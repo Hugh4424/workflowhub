@@ -158,7 +158,7 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const trusted = trustedPacket(tracking);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
     const result = await facade.run(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "first", packet: trusted, repository_root: tracking }));
-    expect(() => facade.publish({ ...result, human_gates: [] }, { items: [] })).toThrow(/human gate provenance/);
+    expect(() => facade.publish({ ...result, human_gates: [] }, { items: [] })).toThrow(/human gate requires explicit human confirmation/);
     const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.human_gates; receipt.dispositions = []; writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
     await expect(facade.prepare({ task_id: "recover", stage: "build-code", review_flow_id: "second", packet: trusted, repository_root: tracking })).rejects.toThrow(/human gate/);
     expect(JSON.parse(readFileSync(join(tracking, "recover", "reviews", "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "escalate_to_human", semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true });
@@ -364,7 +364,7 @@ describe("ReviewRoundFacade", () => {
     }) });
     const initial = trustedPacket(tracking);
     const first = await facade.run(facade.prepare({ task_id: "finding-allowlist", stage: "build-code", review_flow_id: "flow", packet: initial, repository_root: tracking }));
-    expect(first.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "BUSINESS_INVALID" });
+    expect(first.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "SCHEMA_VALIDATION_FAILED:/findings/0/session_id" });
     expect(first.merged_findings).toEqual([]);
     expect(first.continuation_eligible).toBe(false);
   });
@@ -497,7 +497,7 @@ describe("ReviewRoundFacade", () => {
     try {
       writeFileSync(contract, original.replace("- H3:", "- H99:"));
       const result = await facade.run(prepared);
-      expect(result.provider_outcomes).toMatchObject([{ business_valid: true, packet_status: "complete", semantic_verdict: "pass" }]);
+      expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ business_valid: true, packet_status: "complete", semantic_verdict: "pass" });
     }
     finally { writeFileSync(contract, original); }
   });
@@ -543,9 +543,9 @@ describe("ReviewRoundFacade", () => {
       ] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "invalid-output", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking }));
-    expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ packet_status: "complete", business_valid: false, semantic_verdict: null, diagnostic: "BUSINESS_INVALID" });
+    expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "SCHEMA_VALIDATION_FAILED:/pass_items" });
     fenced = result.provider_outcomes.find(({ provider }) => provider === "kimi");
-    expect(fenced).toMatchObject({ packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "NON_JSON_OUTPUT" });
+    expect(fenced).toMatchObject({ packet_status: "complete", business_valid: true, semantic_verdict: "pass" });
     expect(result.provider_outcomes.find(({ provider }) => provider === "claude-code")).toMatchObject({ packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "PROVIDER_PACKET_INCOMPLETE" });
     expect(result.merged_findings).toEqual([]);
     expect(result.continuation_eligible).toBe(false);
