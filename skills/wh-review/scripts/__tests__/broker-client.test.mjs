@@ -34,6 +34,22 @@ describe("BrokerClient", () => {
     expect(calls[0].args).toContain("--attachments-root=/approved/packet-root");
   });
 
+  it("accepts additive doctor capabilities but projects only the v4 capabilities it owns", async () => {
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl() {
+      const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({
+        version: 4,
+        capabilities: { attachments: true, cancel_source: true, packet_integrity: { algorithm: "sha256" } },
+        providers: [{ provider: "opencode", status: "ready", capabilities: {
+          continuation: true, attachment_delivery: ["always_embed"], prompt_stdin: true,
+        } }],
+      })); child.emit("close", 0); }); return child;
+    } });
+    await expect(client.discoverCapabilities()).resolves.toEqual({ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+      { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
+    ] });
+  });
+
   it("fails closed when doctor cannot verify the fixed packet root", async () => {
     const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", attachmentRoot: "/approved/packet-root", spawnImpl() {
       const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();

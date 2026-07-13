@@ -17,8 +17,8 @@ function deepFreeze(value) {
 function normalizeCapabilities(value, { requireReadyAttachmentRoot = false } = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 4) throw new Error("third-review doctor capability version must be 4");
   if (!value.capabilities || typeof value.capabilities !== "object" || Array.isArray(value.capabilities)
-    || Object.keys(value.capabilities).sort().join(",") !== "attachments,cancel_source"
-    || typeof value.capabilities.attachments !== "boolean" || typeof value.capabilities.cancel_source !== "boolean") throw new Error("third-review doctor capabilities must declare only boolean attachments and cancel_source");
+    || !Object.hasOwn(value.capabilities, "attachments") || !Object.hasOwn(value.capabilities, "cancel_source")
+    || typeof value.capabilities.attachments !== "boolean" || typeof value.capabilities.cancel_source !== "boolean") throw new Error("third-review doctor capabilities must declare boolean attachments and cancel_source");
   if (!Array.isArray(value.providers)) throw new Error("third-review doctor providers must be an array");
   if (requireReadyAttachmentRoot && value?.attachment_root?.status !== "ready") throw new Error("third-review doctor attachment root is not ready");
   const seen = new Set();
@@ -27,7 +27,9 @@ function normalizeCapabilities(value, { requireReadyAttachmentRoot = false } = {
     if (seen.has(item.provider)) throw new Error(`third-review doctor duplicate provider: ${item.provider}`); seen.add(item.provider);
     if (!providerStatuses.has(item.status)) throw new Error(`third-review doctor provider status is invalid: ${item.provider}`);
     const capabilities = item.capabilities;
-    if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities) || Object.keys(capabilities).sort().join(",") !== "attachment_delivery,continuation" || typeof capabilities.continuation !== "boolean") throw new Error(`third-review doctor continuation capability is invalid: ${item.provider}`);
+    if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)
+      || !Object.hasOwn(capabilities, "continuation") || !Object.hasOwn(capabilities, "attachment_delivery")
+      || typeof capabilities.continuation !== "boolean") throw new Error(`third-review doctor continuation capability is invalid: ${item.provider}`);
     if (!Array.isArray(capabilities.attachment_delivery) || capabilities.attachment_delivery.some((mode) => !deliveryModes.has(mode)) || new Set(capabilities.attachment_delivery).size !== capabilities.attachment_delivery.length) throw new Error(`third-review doctor attachment_delivery capability is invalid: ${item.provider}`);
     return { provider: item.provider, status: item.status, capabilities: { continuation: capabilities.continuation, attachment_delivery: [...capabilities.attachment_delivery].sort() } };
   }).sort((left, right) => left.provider.localeCompare(right.provider));
