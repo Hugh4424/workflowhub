@@ -1,15 +1,18 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { appendRequiredSkillDefinitions, resolveRequiredSkills } from "../required-skill-resolver.mjs";
+
+const repositorySkillsRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..", "skills");
 
 describe("required skill bundles", () => {
   it("resolves the make-decision direction profile from the stage plan", () => {
     const result = resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction" });
     expect(result.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
     for (const definition of result.definitions) {
-      expect(definition.source).toContain("/workflowhub-wh-review-v4/skills/");
+      expect(relative(repositorySkillsRoot, definition.source)).toBe(`${definition.name}/SKILL.md`);
       expect(definition.bundle.files).toEqual(expect.arrayContaining([expect.objectContaining({ path: "SKILL.md" })]));
       expect(definition.bundle.sha256).toMatch(/^[a-f0-9]{64}$/);
     }
