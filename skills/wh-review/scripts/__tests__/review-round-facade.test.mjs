@@ -835,6 +835,16 @@ describe("ReviewRoundFacade", () => {
     expect(existsSync(guard)).toBe(false);
   });
 
+  it("fails loud when a build-code report index carries another track", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-index-wrong-track", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-build-code-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-index-wrong-track", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-flow.json" }));
+    writeFileSync(join(reviews, "report-index.json"), JSON.stringify({ stage: "build-code", review_track: "direction", core_receipt_hash: "a".repeat(64), semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "orphan-index-wrong-track" })).toThrow(/PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID/);
+    expect(existsSync(guard)).toBe(true);
+  });
+
   it("fails loud when a shared report index binds the orphan guard's core", () => {
     const tracking = root(); const reviews = join(tracking, "orphan-index-current", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
     const guard = join(reviews, "projection-pending-build-code-flow.json");
@@ -909,6 +919,16 @@ describe("ReviewRoundFacade", () => {
     writeFileSync(join(reviews, "report-index-make-decision-direction.json"), JSON.stringify({ stage: "make-decision", review_track: "direction", core_receipt_hash: coreHash, semantic_verdict: "pass" }));
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
     expect(() => facade.recover({ task_id: "decision-index-current" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
+    expect(existsSync(guard)).toBe(true);
+  });
+
+  it("fails loud when a make-decision direction index claims detail", () => {
+    const tracking = root(); const reviews = join(tracking, "decision-index-wrong-track", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-make-decision-direction-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "decision-index-wrong-track", stage: "make-decision", review_track: "direction", review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-make-decision-direction-flow.json" }));
+    writeFileSync(join(reviews, "report-index-make-decision-direction.json"), JSON.stringify({ stage: "make-decision", review_track: "detail", core_receipt_hash: "a".repeat(64), semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "decision-index-wrong-track" })).toThrow(/PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID/);
     expect(existsSync(guard)).toBe(true);
   });
 
