@@ -1,7 +1,7 @@
 ---
 name: build-spec
 version: 2.0.0
-description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → auto-advance on 3rd-review pass (auto-advance stage, no human pause).
+description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → V4 review.
 ---
 
 # build-spec
@@ -187,14 +187,14 @@ spec 产出后运行以下 7 条自检，结论（pass/warn/unknown）写入质�
 
 ---
 
-### 3.7. 异源 3rd-review 独立审查（FR-REVIEW-001/002）
+### 3.7. V4 独立审查（FR-REVIEW-001/002）
 
-spec 初稿完成后，调用异源 3rd-review 独立审查（复用现有 3rd-review 基础设施，单一异源引擎如 codex），在独立上下文产出 verdict + findings：
+spec 初稿完成后，构建完整 packet 并调用 `ReviewRoundFacade`，在独立上下文产出 verdict + findings：
 
 - 结论记入质量事实契约第 3 项（独立审查摘要路径）
 - 审查失败/不可用时降级记录 unknown + 原因——**这里的"不阻断"仅指记录该事实本身不阻断**（F3/Q1：物理事实机器采集浮现到边界，记录动作不卡死推进）。stage 是否继续推进是另一个独立决策，由第 7 节 auto-advance 判断点裁定：`unknown` 在那里必须停下，不产出 stage-result，转人工确认（needs_human=true）。见第 7 节。
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
-- 可 grep 到 `3rd-review` 或 `异源独立审查`
+- packet、raw output 和诊断仅保存在 private receipt。
 
 Use `ReviewRoundFacade` with the `build-spec` flow. The full packet contains the
 spec diff, changed files, requirement/design excerpt and test evidence. The facade owns

@@ -1,6 +1,6 @@
 ---
 name: verify-code
-description: Run a full verification pass against the spec acceptance criteria, produce a final test report and verdict, and run an independent 3rd-review audit before stage-result commit.
+description: Run a full verification pass against the spec acceptance criteria, produce a final test report and V4 packet review before stage-result commit.
 ---
 
 # verify-code
@@ -220,7 +220,7 @@ wh-review pass。不得让 `facts.review.verdict=pass` 指向上一轮
 `revise_required` artifact。当前轮 wh-review 返回 `pass` 后，才允许在步骤⑤
 最终落盘时把 `review_status=pass`、`status=success` 写入 stage-result。
 
-③ **3rd-review 独立审查**（merge 前，evidence/ 落盘，verdict=pass 继续）：详见步骤 10——在人工确认 merge 之前，作为独立子代理执行 3rd-review。审查输入范围须明确为：命令须在 `worktree_root`（任务自身的 linked worktree 工作目录，而非 `target_repo_root` 的主工作树）中执行，以便正确读到该 worktree 自身的 staged/unstaged 未提交改动。先解析该仓库的默认主线分支（`git symbolic-ref refs/remotes/origin/HEAD` 或等价方式取得实际配置的默认分支，不得硬编码为 `main`），以任务分支相对该主线的待合并总增量为准，取 `git diff <merge-base(默认主线, task-branch)>`（不指定终点 ref，天然对比到当前工作树，因此自动包含尚未 commit 的 staged/unstaged 改动，覆盖步骤①归档 commit 之前的全部待合并内容）（覆盖 make-decision/build-spec/build-plan/build-code/verify-code 全部阶段在该任务分支上产生的、尚未合并进主线的改动，不只是本次 verify-code 运行内新增的增量）；不得包含 merge-base 之前主线自身的历史改动，也不得包含 worktree 外或与本任务无关的文件。产物落盘至 `evidence/`。仅当 `verdict=pass` 才继续进入步骤④；`revise_required`、`escalate_to_human`、或 3rd-review 不可用/不可达，均按下方"pre-merge revise_required 契约"处理（`needs_human=true`，跳过步骤④，直接进入步骤⑤）。
+③ **V4 review**：在人工确认 merge 前，由 host 从冻结 revision 构建 canonical packet 并调用 `ReviewRoundFacade`。provider 只读 packet，不能读取 worktree、运行 git 或接收输出路径。只有 public core receipt 的语义结论可供后续人工决策；transport、packet 或取消问题不会伪造 verdict。
 
 ④ **不可逆动作 8 步线性序列**（严格顺序，仅在步骤三 verdict=pass 且用户确认后执行）：
   1. 归档 commit：先执行 repo 内规格归档移动 `git mv specs/{task-id} specs/archive/{task-id}`（若 `specs/{task-id}` 不存在则 fail-loud；若 `specs/archive/{task-id}` 已存在则 fail-loud，不得覆盖），再提交归档 commit。commit message 精确为 `workflowhub(close): archive {task-id}`；close 不是独立 stage，不得使用 `workflowhub(verify-code)` 前缀；提交产生的 commit_sha 须记入本阶段 stage-result 的 `facts.close_commit_sha` 字段，字段路径与 close 流程共用同一命名，不得使用其他别名。该 commit 的 diff 必须包含 `specs/{task-id}/` 到 `specs/archive/{task-id}/` 的 rename/move；只提交测试报告或任务执行记录不算完成归档。
@@ -255,17 +255,14 @@ Before asking for confirmation, produce a plain-language decision brief followin
 
 摘要内容若有字段缺失（如覆盖情况算不出来），只记录 `missing_items` 并在摘要里显眼标注缺失，不阻断本步继续推进；本步骤只展示测试结果摘要，不要求人确认 merge（merge 确认在 step 11，发生在 3rd-review 通过之后）。
 
-### 10. 3rd-review 独立审查
+### 10. V4 独立审查
 
 **在人工确认 merge 之前**，build the canonical total diff packet and call
 `ReviewRoundFacade` for the `verify-code` flow. Providers receive only that packet;
 they do not access the worktree. A non-pass semantic result is surfaced to the human
 before any irreversible action.
 
-**Dispatch rules:**
-- Run in a separate subagent context (independent from the coordinator).
-- Pass: changed file list, `worktree_root`, task context, and the path `{taskDir}/{task-id}/reviews/verify-code.md` as the output artifact path.
-- Explicitly forbid `git commit` in the subagent instruction.
+**执行规则：** provider 只见 `review-packet.v1` 与冻结 skill bundle；不能读取 worktree、执行 git、请求绝对路径或写报告。私有 raw/session/status 只在 round receipt 中保存。
 
 **Verdict handling:**
 
@@ -275,7 +272,7 @@ before any irreversible action.
 | `revise_required` | **Do not proceed to merge.** Surface all findings to user immediately. Write stage-result with `review_status=revise_required`, `needs_human=true`, and the full findings list. Set `user_decision=false`. Skip step 11 (no merge gate shown). Go directly to step 12 to write stage-result. After N=2 failed rerun rounds with no resolution, escalate to human. |
 | `escalate_to_human` | Surface findings immediately. Set `needs_human=true`. Write stage-result with findings. Skip step 11. Go to step 12. |
 
-If 3rd-review skill is unavailable or unreachable **outside the worktree-unification close flow**, downgrade gracefully: record `buildReviewFact({ status: "not_executed" })` with a visible warning in the stage-result, and proceed to step 11 (do not block on unavailability). **This graceful-downgrade behavior is superseded by Close ③ when running the worktree-unification close sequence**: inside Close ③, 3rd-review 不可用/不可达按 blocking 处理（`needs_human=true`，跳过步骤④，直接进入步骤⑤），不适用本段"proceed to step 11"的降级路径。
+Provider unavailable, cancellation, timeout and material failure remain transport or packet diagnostics. They do not grant merge permission and do not produce a semantic review fact.
 
 Record the review outcome in `facts.review` using `buildReviewFact` from `facts-schema.mjs`:
 
@@ -284,19 +281,17 @@ import { buildReviewFact } from "./facts-schema.mjs";
 // review ran:
 const reviewFact = buildReviewFact({
   status: "executed",
-  source,          // "third_party" | "same_source"
   verdict,         // "pass" | "revise_required" | "escalate_to_human"
   artifactPath: `{taskDir}/{task-id}/reviews/verify-code.md`
 });
 // review unavailable:
-// const reviewFact = buildReviewFact({ status: "not_executed" });
 ```
 
 Write `reviewFact` into the stage-result under `facts.review` in step 12. Because `assembleStageResult` does not accept `review` as a parameter, explicitly merge it after assembly: `stageResult.facts.review = reviewFact` before calling `writeStageResult`.
 
 ### 11. 人工确认 merge gate
 
-**Only reached when 3rd-review verdict=pass (or not_executed due to unavailability).** If verdict=revise_required or escalate_to_human, skip this step entirely and go to step 12.
+**Only reached when the V4 core receipt semantic verdict is `pass`.** If it is `revise_required`, `escalate_to_human`, or absent, skip this step entirely and go to step 12.
 
 Step 9 already showed the plain-language brief (七要素) without asking for confirmation, because at that point the review outcome (step 10) was not yet known — this is the correct order (never ask "confirm merge" before knowing whether review passed). Now that the verdict is known, this is the actual D2 human-confirmation gate: append `docs/human-brief-template.md`'s 决策 gate 阶段结尾（A 类）"请确认：" block to a short recap of the seven elements' 现在结果/下一步 (updated with the now-known review verdict), then:
 

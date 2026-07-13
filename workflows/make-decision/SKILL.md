@@ -12,7 +12,6 @@ description: Clarify requirements with the user via structured debate/review护�
 |---|---|---|---|
 | `MAKE_DECISION_DEBATE_PATH` | `/Users/Hugh/Hugh/Project/debate` | 外部 debate skill 路径；路径不可达时自动降级跳过 debate（skipped），记录 `debate_path_invalid: true` | `export MAKE_DECISION_DEBATE_PATH=/path/to/debate` |
 | `MAKE_DECISION_SKIP_DEBATE` | `0` | `=1` 时强制跳过所有 debate 轮次，直接记录 `debate_1: skipped` / `debate_2: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_DEBATE=1` |
-| `MAKE_DECISION_SKIP_BLIND_REVIEW` | `0` | `=1` 时跳过盲审（3rd-review）护城河，记录 `blind_review: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_BLIND_REVIEW=1` |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
 | `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量（直接 task root）→ `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器会基于当前 git remote / `repo_root_map` 返回项目级 task root；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
 
@@ -286,7 +285,7 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **前提**：`tasks/{task-id}/artifacts/make-decision-original-context.md` 必须已存在（由 S4 台账渲染点①落盘）。S5 开始前检查，缺失则报错停止。
 
-**目标**：通过一次独立 3rd-review 对 S4 产物做盲审，产出 3 条审查建议，并根据结果决定是否触发第一次 debate。S5 不要求三条审查链。
+**目标**：以 `ReviewRoundFacade` 的 direction/detail V4 flows 审查 S4 产物。
 
 ### 0. MAKE_DECISION_SKIP_BLIND_REVIEW 快速跳过分支
 
@@ -312,7 +311,6 @@ log. Provider material stays packet-only.
 ```
 reviewer_runtime_id: <唯一标识该 agent 运行实例>
 reviewer_source: <来源标识>
-fallback_used: <true|false>
 input_hash: <审查输入内容的哈希，用于隔离验证>
 findings: <四个角度 direction/framing/scope/feasibility，每角度 0-N 条，不设总数上限>
 verified_interface: <{tool, checked_at, method}，涉及外部工具调用时必填>
@@ -330,7 +328,7 @@ evidence: <对应 S4 内容或调研依据>
 
 ### 2. 结果整理与失败语义
 
-- 若 `fallback_used: true` → 视为本次审查失败，结果不采用，立即停下报告用户，**禁止静默降级**。
+- 若 provider 失败或材料不完整 → 记录 transport/packet diagnostic，不生成语义结论，也不降级为其他审查路径。
 - 若 `findings` 中出现四类角度（direction/framing/scope/feasibility）之外的标签，或某角度整体未被审查（而非"该角度确实无发现"），视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议，也不因怕超限而截断真实问题。
 - 若涉及外部工具调用但缺 `verified_interface` 字段，直接判该次审查不可执行，要求 reviewer 补齐后重跑。
 - 审查通过后写入 `tasks/{task-id}/artifacts/make-decision-review.md`：

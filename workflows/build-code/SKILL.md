@@ -1,6 +1,6 @@
 ---
 name: build-code
-description: Implement each task phase by phase using TDD, collecting RED and GREEN evidence for every phase, enforcing diff-only bounds, running 3rd-review on each GREEN, and writing structured facts into the stage-result.
+description: Implement each task phase by phase using TDD, collecting RED and GREEN evidence, then running one V4 packet review per phase.
 ---
 
 # build-code
@@ -9,7 +9,7 @@ description: Implement each task phase by phase using TDD, collecting RED and GR
 
 Implement the change described by the upstream stage-result. The upstream may be `build-plan` (full path) or `make-decision` directly (slim path — small tasks that skip design and planning). Read the upstream `stage-result` first and consume its `facts` keys to understand scope and constraints.
 
-Each phase follows a strict RED → implement → GREEN cycle. No phase is done without both evidence files. After GREEN, a 3rd-review is run and its verdict is recorded in `facts.review`.
+Each phase follows a strict RED → implement → GREEN cycle. No phase is done without both evidence files. After GREEN, `ReviewRoundFacade` records the V4 result in `facts.review`.
 
 ## What to do
 
@@ -137,7 +137,7 @@ Example shape (the content to assemble now, to be written later at §16):
   "facts": {
     "changed": ["core/text-utils.mjs", "tests/text-utils.test.mjs"],
     "tests": { "passed": 12, "total": 12, "files": ["tests/text-utils.test.mjs"], "command": "pnpm exec vitest run tests/text-utils.test.mjs", "risk_level": "P1", "phases": [{ "phase_id": "phase-1", "risk_level": "P1" }] },
-    "review": { "status": "executed", "source": "third_party", "verdict": "pass", "artifact_path": "{taskDir}/{task-id}/reviews/verdict-build-code-phase-1-round-1.raw.json" },
+    "review": { "core_receipt_hash": "<sha256>", "verdict": "pass" },
     "worktree_root": "/absolute/path/to/worktree",
     "task_tracking_root": "/absolute/path/to/task-records",
     "phase_completion": {
@@ -147,7 +147,7 @@ Example shape (the content to assemble now, to be written later at §16):
   },
   "missing_items": [],
   "user_decision": false,
-  "reason": "All phases implemented with RED→GREEN evidence and 3rd-review pass."
+  "reason": "All phases implemented with RED→GREEN evidence and V4 review result."
 }
 ```
 
@@ -212,29 +212,12 @@ After GREEN, build one complete packet and call `ReviewRoundFacade` once for the
 `build-code` flow. It aggregates only completed, complete, business-valid provider
 results; it never synthesizes a pass or substitutes a local reviewer.
 
-### 14. verdict-handler A/B/C 升级分类 (FR-REVIEW-002)
+### 14. Revision handling (FR-REVIEW-002)
 
-Track the per-subagent verdict history after each review round. Classify the response into three categories. If a subagent returns `escalate_to_human` directly in any round, treat it as C-class escalation immediately (skip A and B).
-
-| Class | Condition | Action |
-|---|---|---|
-| A | Subagent returns `pass`. | Proceed to the next phase. |
-| B | Subagent returns `revise_required` and the consecutive count for that same subagent on the same phase is **1 or 2**. | Return to implementation, address findings, re-run GREEN + two-stage review. |
-| C | The **same subagent** returns `revise_required` **3 times in a row** for the same phase. | Trigger `escalate_to_human`. |
-
-**Escalation behavior (C-class):**
-
-1. Produce a structured escalation record at `{taskDir}/{task-id}/evidence/escalation-record.json` containing:
-   - `phase_id`
-   - `provider`: provider identifier from the V4 receipt
-   - `consecutive_revises`: 3
-   - `verdict_files`: paths to the three verdict files
-   - `summary`: brief human-readable summary of the repeated findings
-   - `ts`: ISO-8601 timestamp
-2. Set `facts.review.verdict` to `escalate_to_human`.
-3. **Pause automatic progression and wait for explicit human confirmation** before continuing. Do not silently loop back into another implementation/review round. This is enforced by AC-REVIEW-006.
-
-The escalation record is a durable artifact for downstream traceability.
+Use the facade's merged findings and human gates. A `revise_required` result returns
+to implementation with the same flow's continuation runtime; an escalation is published
+as a private receipt and requires explicit human confirmation. No local retry classifier
+or parallel review path exists.
 
 ### 15. phase 级提交留痕 (FR-COMMIT-001)
 
