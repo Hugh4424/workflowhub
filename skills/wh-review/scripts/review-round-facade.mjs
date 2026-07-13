@@ -75,6 +75,18 @@ function sealPacket(packet, changedFileRoot, hostDiffBuilder) {
 function verifySourceEvidence(packet, sourceSnapshot, required) {
   if (!sourceSnapshot) { if (required) throw new Error("source evidence provider is required (base/head git evidence or explicit source_snapshot)"); return; }
   if (sourceSnapshot.unified_diff !== packet.unified_diff || canonical(sourceSnapshot.changed_files) !== canonical(packet.changed_files)) throw new Error("source evidence provider does not match review packet");
+  const base = sourceSnapshot.base_files ?? {}, head = sourceSnapshot.head_files ?? {};
+  for (const entry of packet.changed_files) {
+    if (entry.status !== "deleted") {
+      const bytes = head[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks current file bytes");
+      if (sha(bytes) !== entry.sha256 || Buffer.byteLength(bytes) !== entry.size) throw new Error("source snapshot current file hash mismatch");
+    }
+    if (entry.status === "deleted" || entry.status === "renamed") {
+      const oldPath = entry.old_path ?? entry.path; const bytes = base[oldPath];
+      if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks base file bytes");
+      if (sha(bytes) !== entry.old_sha256 || Buffer.byteLength(bytes) !== entry.old_size) throw new Error("source snapshot base file hash mismatch");
+    }
+  }
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
