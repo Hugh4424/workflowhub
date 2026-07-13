@@ -219,7 +219,7 @@ export class ReviewRoundFacade {
       const candidateSet = new Set(intent.candidate_providers);
       const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
         ? this.#outcome(item, packet, intent, input, prepared.dir)
-        : { provider: item?.provider ?? null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "PROVIDER_NOT_CANDIDATE" });
+        : { provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "UNKNOWN_PROVIDER" });
       if (response.transport_error) outcomes.push({ provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: response.transport_error.code });
       const continuable_providers = intent.continuable_providers;
       const eligible = continuable_providers.length > 0 && continuable_providers.every((provider) => outcomes.some((item) => item.provider === provider && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.session_id));
