@@ -1,60 +1,101 @@
-# ADR 0001 — 审查层两层架构：3rd-review 瘦身 + wh-review 新建
+# ADR 0001 — V4 审查层：workflowhub 编排与通用 broker 分层
 
-**状态**：已采纳（2026-07-05）
-**决策人**：用户（志鹏）明确确认，非 foreman 自行拍板
-
----
+**状态**：已采纳（2026-07-13）
 
 ## 背景
 
-workflowhub 的 5 个 stage（make-decision / build-spec / build-plan / build-code / verify-code）调用 3rd-review 做异源审查时，均未传 `--checkpoint=<stage>` 标识。3rd-review 靠该前缀匹配路由到 stage 专属合同，标识永远为空导致匹配失败，退回到通用合同。挂在 `verifiers/vibecoding/` 下的 11 份 stage 专属合同从未被路由使用。
+workflowhub 需要按 stage 进行异源审查，但 provider 不应读取真实仓库、执行
+`git`，或依赖宿主机绝对路径。审查输入必须是可校验、可复现的同一份 packet；
+续跑必须复用首轮 runtime 和各 provider 的原生 session，不能再把完整首轮材料
+重复投喂或静默创建新会话。
 
-同时，原版 agenthub 的 3rd-review 已实现的分轮全量/增量审查、成本降级、升级人工、报告渲染机制，迁移到 workflowhub 时全部丢失，退化为一次性通用审查——审查有没有审完不知道、审查报告基本没生成过、审查质量无法保证。
-
-真根因不是路由参数漏传（该 bug 已由 commit e96c257 独立修复），而是架构层面：3rd-review 承载了与 workflowhub 强耦合的 stage 专属知识，却被作为通用技能调用，导致路由机制、专属合同、报告渲染全部失效。本任务选择直接重设计，而非修旧 bug。
-
----
+这些要求分属两个边界：workflowhub 知道 stage、合同、技能和业务裁决；
+`3rd-review` 只知道跨 provider 的执行、受限附件传输、runtime 和 session。把两者
+混在一起会让通用 broker 绑定 workflowhub 业务，也会让 workflow 直接依赖 provider
+调用细节。
 
 ## 决策
 
-采用两层架构：
+### workflowhub：唯一业务编排层
 
-**第一层：3rd-review（瘦身，全局通用）**
+所有 workflow 和 CLI 通过
+`skills/wh-review/scripts/wh-review-cli.mjs` 调用
+`skills/wh-review/scripts/review-round-facade.mjs` 的 `ReviewRoundFacade`。Facade 的
+边界固定为：
 
-- 职责：纯异源审查引擎，不含任何 stage 或轮次知识
-- 接口输入：`{mode, contract, materials}`
-- 接口输出：`{verdict, findings, actual_mode}`
-- 做环境探测、派审查 agent、返回结果，可独立复用于任意项目
+1. `prepare()` 按 stage 选择 `skills/wh-review/contracts/` 中的合同和
+   `stage-skill-plan.json`，冻结 `review-packet.v1.json`、技能 bundle 与附件 manifest。
+2. `run()` 只经 `skills/wh-review/scripts/broker-client.mjs` 调用 broker，保存私有
+   round receipt，校验 provider 输出并合并有效结果。
+3. `publish()` 在 finding disposition 完成后，原子写入脱敏的 core receipt、报告和
+   stage projection；未发布的 `run()` 结果不是公开业务结论。
 
-**第二层：wh-review（新建，workflowhub 专属）**
+五个允许的 stage 是 `make-decision`、`build-spec`、`build-plan`、`build-code` 和
+`verify-code`。其中 `make-decision` 的 `direction` 与 `detail` track 是独立 flow。
+未知 stage、track 或不安全任务/flow id 必须失败，不能路由到通用合同。
 
-- 职责：承接原来挂在 3rd-review 下的全部 workflowhub 专属知识
-- 包含：stage→合同映射、5 套 stage 专属合同（make-decision←intake / build-spec←design / build-plan←plan / build-code←code / verify-code←test-acceptance）
-- 包含：轮次状态管理、降级/升级大脑（第1轮全量异源→第2轮起增量 Delta Package+降级→最多3轮后强制转同源→连续3轮大量 blocking 升级人工）
-- 包含：报告模板 + 渲染脚本（移植 render-review-report.mjs，6章结构，落盘任务目录）
-- 裁决枚举：pass / revise_required / escalate_to_human
+### packet 与附件：唯一 provider 证据边界
 
----
+`review-packet.v1.json` 由
+`skills/wh-review/schemas/review-packet.v1.json` 定义。它包含冻结的统一 diff、变更
+文件 hash、需求/AC/设计摘录、宿主验证过的测试证据、材料 manifest/hash、合同 hash
+和技能 bundle hash。任何必需材料或 hash 不完整时，Facade 写入
+`MATERIAL_INCOMPLETE` 诊断并禁止启动 provider。
 
-## 权衡
+首轮可通过受限附件把 packet、合同和 bundle 复制到 provider 私有 workspace。附件
+root、允许 source prefix 和 broker 命令只来自宿主配置
+`~/.workflowhub/config.json` 的 `third_review`；配置验证实现在
+`skills/wh-review/scripts/third-review-host-config.mjs`。provider 只能审查 packet 和
+冻结附件，不得要求访问真实仓库、执行 `git` 或读取绝对路径。
 
-选择两层架构而非继续在 3rd-review 内扩展的理由：
+### 3rd-review：通用执行 broker
 
-- 3rd-review 设计目标是全局通用、可跨项目复用；掺入 workflowhub 专属 stage 映射会破坏其复用性
-- workflowhub 的 stage 专属合同、降级逻辑、报告模板属于领域知识，不应混入通用审查引擎
-- 两层分离后，接口边界清晰（findings schema / verdict 枚举 / mode 取值由两层共同约定），各自可独立演化
+`3rd-review` 的唯一审查执行入口是其 V4 CLI `run --request`。workflowhub 只通过
+`BrokerClient` 以该入口调用它；broker 不选择 stage 合同、不解释业务技能、不校验
+业务 verdict，也不写 workflowhub 报告。通用 CLI 合同见
+`/Users/Hugh/Hugh/Project/3rd-review/docs/adr/0001-v4-cli-contract.md`，实现位于
+`/Users/Hugh/Hugh/Project/3rd-review/scripts/3rd-review.mjs`。
 
-选择直接重设计而非修复旧架构的理由：
+Facade 先以 `doctor` 取得并冻结 broker-owned provider capability snapshot；调用方不能
+自报 provider capability 或附件投递方式。首轮向 broker 发送 V4 request 和附件三元组；
+后续轮次只发送 `continuation.runtime_id`，不重传附件。broker 对每个 provider 自行使用
+其私有原生 session，并验证已冻结的附件和 hash。
 
-- 旧架构中 stage 专属知识零散分布（11份合同从未被路由），没有统一入口，修补成本等同重写
-- 报告渲染、降级升级机制在迁移时已全部丢失，没有可靠基准可修
+### runtime、session 与公开边界
 
----
+首轮 private receipt 保存唯一 `initial_runtime_id`、每个 provider 的 `session_id`、
+transport 状态、原始 stdout/stderr 引用与 hash。它们只存在
+`tasks/{task-id}/reviews/private/round-*/`，不得进入 core receipt、报告、stage result
+或后续 request。
+
+仅同时满足 `transport_status=completed`、`packet_status=complete`、
+`business_valid=true` 且有 `semantic_verdict` 的 provider 输出可参加 aggregate。
+`CANCELLED`、认证失败、超时、材料不足、hash 不匹配、进程失败和非 JSON 都是 transport
+或 packet diagnostic，`semantic_verdict=null`。取消必须记录
+`user`、`workflow_shutdown`、`broker_idle_timeout` 或 `broker_max_duration` 来源；外层
+workflow 不设置会误杀 provider 的 wall-clock timeout。
+
+无法继续（runtime TTL、session 不可用、能力快照或冻结基线变化）时，flow 进入
+`blocked_by_human_confirmation`。唯一的新 flow 入口是带 `reason` 与
+`human_approval_ref` 的 `wh-review-cli.mjs reset`；系统不得静默换 session 或 fresh run。
+异常的 retry、私有证据和阻断结果以
+`docs/adr/0002-v4-review-exception-state-matrix.md` 为准。
 
 ## 后果
 
-1. **后续 stage SKILL.md 需改造调用方式**：5 个 stage 从直接调用 3rd-review 改为调用 wh-review，wh-review 内部再调用 3rd-review。
-2. **5 套专属合同需迁移**：从 agenthub `verifiers/vibecoding/` 搬移到 wh-review，并按 D4/D5 补强判据（intake C1-C6 / verify-code F1-F6）。
-3. **3rd-review 需清理**：移除所有 workflowhub 专属逻辑，保留纯审查引擎接口。
-4. **接口 schema 需对齐**：findings schema / verdict 枚举 / mode 取值，两层实现阶段须显式约定并对齐。
-5. **自动推进范围限定**：只有 build-spec / build-code 两个 stage 的 pass 自动推进下一 stage；其余 3 个 stage 靠人工确认后推进（D2）。
+- workflowhub 拥有 stage/track、合同、技能、packet、finding disposition、跨 stage
+  carryover 和公开语义 verdict。
+- `3rd-review` 保持可复用的 V4 执行 broker，拥有 provider 路由、私有 workspace、
+  runtime、native session、原始输出和取消生命周期。
+- CI 与下游只消费已发布的 `{ semantic_verdict, core_receipt_hash, needs_human }`，不读取
+  raw artifact、runtime 或 session。
+- 旧的 workflow 直连 provider 路径和非 V4 broker 调用不再是支持接口。
+
+## 参考实现
+
+- `skills/wh-review/SKILL.md`
+- `skills/wh-review/scripts/wh-review-cli.mjs`
+- `skills/wh-review/scripts/review-round-facade.mjs`
+- `skills/wh-review/scripts/broker-client.mjs`
+- `skills/wh-review/scripts/public-review-projection.mjs`
+- `docs/adr/0002-v4-review-exception-state-matrix.md`
