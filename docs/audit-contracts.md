@@ -18,6 +18,10 @@
 
 Generic core accepts only `CanonicalSourceInput`; Multica-specific fields stop at `core/multica-source-adapter.mjs`.
 
+## P3 stage-result carrier
+
+New stage-result producers use `core/audit-summary-carrier.mjs`. They emit one unchanged tuple: `audit_contract_version: "v1"`, `audit_summary_ref`, `audit_summary_hash`, and `audit_verdict`. Validators and facts assembly verify this tuple and may load the task-local summary to compare its hash and verdict. They do not inspect journal topology, derive an alternate verdict, or turn diff/test facts into a second quality gate. Unversioned historical stage results are legacy input with a migration hint, never an implicit audit pass.
+
 ## Error, skip, retry, and human semantics
 
 | Condition | Required caller behavior |

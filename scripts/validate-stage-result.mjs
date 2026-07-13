@@ -19,6 +19,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateContract } from "../core/validate-contract.mjs";
+import { verifyAuditCarrier } from "../core/audit-summary-carrier.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -144,6 +145,11 @@ export function validateStageResult(stage, artifact) {
       );
     }
   }
+
+  // V1 results are explicit audit consumers. Older receipts remain readable
+  // during cutover, but never become an invented quality verdict.
+  const auditCarrier = verifyAuditCarrier(facts);
+  if (!auditCarrier.ok) errors.push(...auditCarrier.errors);
 
   if (stage === "build-code") {
     for (const key of ["worktree_root", "task_tracking_root"]) {

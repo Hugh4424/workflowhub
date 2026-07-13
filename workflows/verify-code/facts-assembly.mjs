@@ -1,5 +1,6 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { carryAuditSummary, verifyAuditCarrier } from '../../core/audit-summary-carrier.mjs';
 
 const METRIC_KEYS = [
   'execution_id', 'skill_or_stage', 'stage', 'skill_version',
@@ -27,7 +28,7 @@ export function readCommand(buildResult) {
   return cmd;
 }
 
-export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable, workflowRunId, auditSummaryRef, auditVerdict, auditSummaryHash }) {
+export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable, workflowRunId, auditSummaryRef, auditVerdict, auditSummaryHash, auditSummary }) {
   // FR-PATH-003: evidence_ref must be relative path WITHOUT specs/{task-id}/ prefix
   if (evidenceRef.startsWith('/')) {
     throw new Error(`evidence_ref must be a relative path, absolute paths are not allowed, got: ${evidenceRef}`);
@@ -38,15 +39,20 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
   if (evidenceRef.startsWith('specs/')) {
     throw new Error(`evidence_ref must be a relative path without 'specs/{task-id}/' prefix, got: ${evidenceRef}`);
   }
+  const auditFacts = auditSummary
+    ? carryAuditSummary(auditSummaryRef, auditSummary)
+    : auditSummaryRef != null || auditVerdict != null || auditSummaryHash != null
+      ? { audit_contract_version: 'v1', audit_summary_ref: auditSummaryRef, audit_verdict: auditVerdict, audit_summary_hash: auditSummaryHash }
+      : {};
+  const carrier = verifyAuditCarrier(auditFacts);
+  if (!carrier.ok) throw new Error(carrier.errors.join('; '));
   return {
     status: verdict,
     retryable: retryable ?? false,
     facts: {
       evidence_ref: evidenceRef,
       anomaly_flags: anomalyFlags,
-      ...(auditSummaryRef != null ? { audit_summary_ref: auditSummaryRef } : {}),
-      ...(auditVerdict != null ? { audit_verdict: auditVerdict } : {}),
-      ...(auditSummaryHash != null ? { audit_summary_hash: auditSummaryHash } : {}),
+      ...auditFacts,
     },
     missing_items: missingItems,
     user_decision: userDecision,

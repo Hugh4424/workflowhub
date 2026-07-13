@@ -223,14 +223,16 @@ describe("canonical audit aggregation", () => {
 
     expect(result.audit_summary).toMatchObject({
       verdict: "fail",
-      facts: { unknown: [{ type: "invalid_entry", step_id: "bc.work.ph1" }] },
+      facts: { unknown: [{ type: "invalid_receipt", step_id: 1 }] },
     });
   });
 
   it("uses manifest expectations to detect an unexpected observed attempt", async () => {
     const { buildAuditSummaryFromJournalEvents } = await import("../audit-aggregator.mjs");
+    const entry = { ...entryPayload(), journal_entry_id: "entry-attempt-1" };
+    const exit = { ...exitPayload(), entry_journal_entry_id: entry.journal_entry_id };
     const result = buildAuditSummaryFromJournalEvents(
-      [entryPayload(), exitPayload()],
+      [entry, exit],
       "build-code",
       RUN_ID,
       { manifest: { stage_slug: "build-code", steps: [{ step_id: 2, order: 1, attempt_id: "attempt-2", depends_on: [] }] }, ledger: auditContext().ledger },

@@ -4,6 +4,8 @@
 
 `workflows/{stage}/steps.json` 是唯一 expected-step authority。journal 与 entry/exit receipt 只写 observed facts；不得补写 manifest，也不得把 skip 当 success。`core/audit-aggregator.mjs` 是唯一 canonical verdict authority；stage-result、validator、facts assembly 只携带或验证其 `audit_summary_ref`、`audit_verdict`、`audit_summary_hash`。
 
+新 stage-result producer 使用 `core/audit-summary-carrier.mjs` 写 v1 tuple：`audit_contract_version`、`audit_summary_ref`、`audit_summary_hash`、`audit_verdict`。引用必须 task-relative；consumer 只能核对已发布 summary 的 hash/verdict，diff/test 仍是物理事实，不得成为第二个质量 verdict。旧 receipt 缺 tuple 时保留 legacy + migration hint/unknown，绝不推断 `pass`。
+
 旧 caller 先把来源规范化为 `CanonicalSourceInput`，再调用 generic core。offline caller 使用 fixture adapter；Multica caller 使用 `normalizeMulticaSource`。两者对等内容必须得到相同 ledger、summary、verdict；平台字段不得进入 generic core。
 
 ## 四分支判定（D8/D11）

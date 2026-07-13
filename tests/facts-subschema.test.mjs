@@ -646,6 +646,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
       facts: {
         verdict: "pass",
         evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_contract_version: "v1",
         audit_summary_ref: "evidence/audit-summary.json",
         audit_verdict: "pass",
         audit_summary_hash: "a".repeat(64),
@@ -714,6 +715,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
       facts: {
         verdict: "pass",
         evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_contract_version: "v1",
         audit_summary_ref: "evidence/audit-summary.json",
         audit_verdict: "pass",
         audit_summary_hash: "a".repeat(64),
@@ -731,6 +733,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
         facts: {
           verdict: "pass",
           evidence_ref: "evidence/verify-code-2026-06-24.json",
+          audit_contract_version: "v1",
           audit_summary_ref: "evidence/audit-summary.json",
           audit_verdict,
           audit_summary_hash: "a".repeat(64),
@@ -748,6 +751,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
       facts: {
         verdict: "pass",
         evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_contract_version: "v1",
         audit_summary_ref: "evidence/audit-summary.json",
         audit_verdict,
         audit_summary_hash: "a".repeat(64),
