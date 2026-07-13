@@ -6,7 +6,7 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 function clone(value) { return structuredClone(value); }
 function nonEmpty(value) { return typeof value === "string" && value.trim().length > 0; }
 function safeRelativePath(value) { return nonEmpty(value) && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
-function isBlocking(finding, contractHardIds = []) {
+export function isBlocking(finding, contractHardIds = []) {
   // A late finding is explicitly capped at minor. Its original hard-rule id
   // remains useful provenance, but must not recreate a blocking gate.
   if (finding?.late_finding === true) return false;

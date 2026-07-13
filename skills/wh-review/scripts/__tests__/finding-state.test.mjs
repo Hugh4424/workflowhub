@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import {
   reconcileFindingState,
+  isBlocking,
   mergeCrossStageCarryovers,
   aggregateMakeDecisionTracks,
   validateClosureBundle,
@@ -41,6 +42,10 @@ describe("finding continuation state", () => {
     expect(result.findings.find((item) => item.finding_id === "a")).toMatchObject({ status: "closed", blocking_streak: 0 });
     expect(result.findings.find((item) => item.finding_id === "b")).toMatchObject({ severity: "minor", late_finding: true, status: "open" });
     expect(result.open_blocking).toHaveLength(0);
+  });
+
+  it("does not hard-gate a late finding even when its rule is a contract hard invariant", () => {
+    expect(isBlocking({ ...finding("late", "minor"), late_finding: true }, new Set(["H1"]))).toBe(false);
   });
 
   it("never gives an external H99 minor finding a blocking streak, closure bundle, or third-round escalation", () => {

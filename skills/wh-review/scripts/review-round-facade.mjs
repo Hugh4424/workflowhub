@@ -9,7 +9,7 @@ import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
 import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
-import { reconcileFindingState, aggregateMakeDecisionTracks, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
+import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -372,7 +372,7 @@ export class ReviewRoundFacade {
       const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds, contractHardIds: prepared.stage_contract_rules.hardIds });
       const merged_findings = findingState.findings;
       const contractHardIds = new Set(prepared.stage_contract_rules.hardIds);
-      const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && (finding.severity === "blocking" || contractHardIds.has(finding.rule_id)));
+      const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && isBlocking(finding, contractHardIds));
       // An escalation is a business-valid result, not an empty pass. Keep its
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
