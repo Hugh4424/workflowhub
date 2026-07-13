@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { assertProviderRound, directPrompt } from "../run-wh-review-provider-smoke.mjs";
+import { assertProviderRound, directPrompt, finalizePassEvidence } from "../run-wh-review-provider-smoke.mjs";
 import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const script = fileURLToPath(new URL("../run-wh-review-provider-smoke.mjs", import.meta.url));
@@ -78,5 +78,29 @@ describe("run-wh-review-provider-smoke", () => {
     const source = readFileSync(script, "utf8");
     expect(source).toContain("kimiR2Packet.source_revision.base_tree === kimiR1Packet.source_revision.snapshot_tree");
     expect(source).toContain("SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
+  });
+
+  it("persists both providers' complete runtime evidence in the final JSON", () => {
+    const evidence = finalizePassEvidence({ status: "RUNNING", output_root: "/tmp/smoke" }, {
+      kimiEvidence: {
+        runtime_id: "kimi-runtime", session_id: "kimi-session", raw_stdout_sha256: ["a".repeat(64), "b".repeat(64)],
+        receipts: ["/tmp/kimi-r1-receipt.json", "/tmp/kimi-r2-receipt.json"], requests: ["/tmp/kimi-r1-input.json", "/tmp/kimi-r2-input.json"], executions: ["/tmp/kimi-r1-cli.json", "/tmp/kimi-r2-cli.json"],
+      },
+      opencodeEvidence: {
+        runtime_id: "opencode-runtime", session_id: "opencode-session", raw_stdout_sha256: ["c".repeat(64), "d".repeat(64)],
+        requests: ["/tmp/opencode-r1-request.json", "/tmp/opencode-r2-request.json"], executions: ["/tmp/opencode-r1-response.json", "/tmp/opencode-r2-response.json"], attachments: ["/tmp/opencode-r1-attachments.json"],
+      },
+    });
+
+    const frozen = JSON.parse(JSON.stringify(evidence));
+    expect(frozen).toMatchObject({
+      status: "PASS",
+      runtimes: {
+        kimi: { runtime_id: "kimi-runtime", session_id: "kimi-session", receipts: ["/tmp/kimi-r1-receipt.json", "/tmp/kimi-r2-receipt.json"], requests: ["/tmp/kimi-r1-input.json", "/tmp/kimi-r2-input.json"], executions: ["/tmp/kimi-r1-cli.json", "/tmp/kimi-r2-cli.json"] },
+        opencode: { runtime_id: "opencode-runtime", session_id: "opencode-session", requests: ["/tmp/opencode-r1-request.json", "/tmp/opencode-r2-request.json"], executions: ["/tmp/opencode-r1-response.json", "/tmp/opencode-r2-response.json"], attachments: ["/tmp/opencode-r1-attachments.json"] },
+      },
+    });
+    expect(frozen.runtimes.kimi.raw_stdout_sha256).toEqual(["a".repeat(64), "b".repeat(64)]);
+    expect(frozen.runtimes.opencode.raw_stdout_sha256).toEqual(["c".repeat(64), "d".repeat(64)]);
   });
 });

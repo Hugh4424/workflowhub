@@ -109,6 +109,11 @@ function assertWhAggregate(receipt, expectedPacket, expectedMarker, expectedRunt
   return outcome;
 }
 function closureEvidence(receipt) { return (receipt.value.merged_findings ?? []).map((finding) => ({ finding_id: finding.finding_id, evidence: "changes.diff:smoke.txt:3 records the round-2 delta closure evidence" })); }
+export function finalizePassEvidence(evidence, { kimiEvidence, opencodeEvidence }) {
+  evidence.status = "PASS";
+  evidence.runtimes = { kimi: kimiEvidence, opencode: opencodeEvidence };
+  return evidence;
+}
 function attachmentsFor(packet, attachmentRoot, bundleId) {
   const staging = join(attachmentRoot, ".wh-review-packets", bundleId);
   const entries = [
@@ -183,23 +188,23 @@ async function main() {
     write(join(taskRoot, taskId, "worktree.json"), { target_repo_root: kimiTarget, worktree_root: kimiSource, branch: git(kimiSource, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" });
     const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r1Packet), task_tracking_root: taskRoot };
     const kimiFirstInputPath = join(outputRoot, "kimi-r1-input.json"); write(kimiFirstInputPath, kimiFirstInput);
-    await runWhReview({ inputPath: kimiFirstInputPath, responsePath: join(outputRoot, "kimi-r1-cli.json") });
+    const kimiR1ResponsePath = join(outputRoot, "kimi-r1-cli.json"); await runWhReview({ inputPath: kimiFirstInputPath, responsePath: kimiR1ResponsePath });
     const kimiR1 = privateReceipt(taskRoot, taskId, 1); const kimiR1Packet = privatePacket(taskRoot, taskId, 1); const kimiOutcome1 = assertWhAggregate(kimiR1, kimiR1Packet, "R1_DIFF_MARKER");
     requireValue(kimiOutcome1.raw_output_ref && existsSync(kimiOutcome1.raw_output_ref), "SMOKE_KIMI_R1_FAIL: raw output evidence is missing");
     writeRoundTwo(kimiSource);
     const kimiSecondInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r2Packet), task_tracking_root: taskRoot, continuation: true, closure_evidence: closureEvidence(kimiR1) };
     const kimiSecondInputPath = join(outputRoot, "kimi-r2-input.json"); write(kimiSecondInputPath, kimiSecondInput);
-    await runWhReview({ inputPath: kimiSecondInputPath, responsePath: join(outputRoot, "kimi-r2-cli.json") });
+    const kimiR2ResponsePath = join(outputRoot, "kimi-r2-cli.json"); await runWhReview({ inputPath: kimiSecondInputPath, responsePath: kimiR2ResponsePath });
     const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiR2Packet = privatePacket(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, kimiR2Packet, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
     requireValue(kimiR2Packet.source_revision.base_tree === kimiR1Packet.source_revision.snapshot_tree, "SMOKE_KIMI_R2_FAIL: packet base_tree does not continue from the R1 snapshot_tree");
     requireValue(kimiOutcome2.session_id === kimiOutcome1.session_id, "SMOKE_KIMI_R2_FAIL: provider session_id changed instead of continuing");
     requireValue(git(kimiSource, ["rev-parse", "HEAD"]) === kimiHead, "SMOKE_KIMI_FAIL: R1/R2 review created a commit");
-    const kimiEvidence = { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path] };
+    const kimiEvidence = { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path], requests: [kimiFirstInputPath, kimiSecondInputPath], executions: [kimiR1ResponsePath, kimiR2ResponsePath] };
 
     const opencodeR1Prompt = directPrompt(r1Packet, 1); const opencodeBundle = attachmentsFor(r1Packet, thirdReview.attachmentRoot, `smoke-${randomUUID()}`); attachmentStaging = opencodeBundle.staging;
     const opencodeR1Request = { version: 4, host_provider: "codex", prompt: opencodeR1Prompt, continuation: null, provider_allowlist: ["opencode"] };
     const opencodeR1RequestPath = join(outputRoot, "opencode-r1-request.json"); const opencodeR1ManifestPath = join(outputRoot, "opencode-r1-attachments.json"); write(opencodeR1RequestPath, opencodeR1Request); write(opencodeR1ManifestPath, opencodeBundle.manifest);
-    const opencodeR1 = await runThirdReview({ thirdReview, requestPath: opencodeR1RequestPath, responsePath: join(outputRoot, "opencode-r1-response.json"), attachments: opencodeR1ManifestPath, delivery: "always_embed" });
+    const opencodeR1ResponsePath = join(outputRoot, "opencode-r1-response.json"); const opencodeR1 = await runThirdReview({ thirdReview, requestPath: opencodeR1RequestPath, responsePath: opencodeR1ResponsePath, attachments: opencodeR1ManifestPath, delivery: "always_embed" });
     const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: r1Packet.packet_hash, expectedDiffSha256: r1Packet.diff_sha256 });
     requireValue(opencodeOutcome1.delivery_used === "always_embed", "SMOKE_OPENCODE_R1_FAIL: expected always_embed delivery");
 
@@ -208,12 +213,12 @@ async function main() {
     const opencodeR2Prompt = directPrompt(r2Packet, 2); write(join(outputRoot, "opencode-r2-prompt.txt"), opencodeR2Prompt); requireValue(opencodeR2Prompt.includes("R2_DELTA_ONLY_MARKER") && !opencodeR2Prompt.includes("R1_DIFF_MARKER"), "SMOKE_OPENCODE_R2_FAIL: continuation prompt is not delta-only");
     const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id }, provider_allowlist: ["opencode"] };
     const opencodeR2RequestPath = join(outputRoot, "opencode-r2-request.json"); write(opencodeR2RequestPath, opencodeR2Request);
-    const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: join(outputRoot, "opencode-r2-response.json") });
+    const opencodeR2ResponsePath = join(outputRoot, "opencode-r2-response.json"); const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: opencodeR2ResponsePath });
     requireValue(git(source, ["rev-parse", "HEAD"]) === sourceHead, "SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
     const opencodeOutcome2 = assertProviderRound({ providerId: "opencode", round: 2, response: opencodeR2, expectedMarker: "R2_DELTA_ONLY_MARKER", expectedPacketHash: r2Packet.packet_hash, expectedDiffSha256: r2Packet.diff_sha256, expectedRuntimeId: opencodeR1.runtime_id });
     requireValue(opencodeOutcome2.session_id === opencodeOutcome1.session_id, "SMOKE_OPENCODE_R2_FAIL: provider session_id changed instead of continuing");
 
-    evidence.status = "PASS"; evidence.runtimes = { kimi: kimiEvidence, opencode: { runtime_id: opencodeR1.runtime_id, session_id: opencodeOutcome1.session_id, raw_stdout_sha256: [opencodeOutcome1.raw_stdout_sha256, opencodeOutcome2.raw_stdout_sha256], requests: [opencodeR1RequestPath, opencodeR2RequestPath] } };
+    finalizePassEvidence(evidence, { kimiEvidence, opencodeEvidence: { runtime_id: opencodeR1.runtime_id, session_id: opencodeOutcome1.session_id, raw_stdout_sha256: [opencodeOutcome1.raw_stdout_sha256, opencodeOutcome2.raw_stdout_sha256], requests: [opencodeR1RequestPath, opencodeR2RequestPath], executions: [opencodeR1ResponsePath, opencodeR2ResponsePath], attachments: [opencodeR1ManifestPath] } });
     write(evidencePath, evidence); process.stdout.write(`${JSON.stringify({ status: "PASS", evidence: evidencePath })}\n`);
   } catch (error) {
     evidence.status = "FAIL"; evidence.error = String(error?.message ?? error); write(evidencePath, evidence);
