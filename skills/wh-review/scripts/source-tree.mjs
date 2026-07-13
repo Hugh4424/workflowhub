@@ -148,6 +148,10 @@ export function readReviewTreeRef(root, ref) {
 export function deleteReviewTreeRef(root, ref) {
   const repository = repositoryRoot(root);
   const name = reviewRef(repository, ref);
-  try { git(repository, ["update-ref", "-d", name]); }
-  catch { /* Deletion is idempotent so reset/finalize can be retried safely. */ }
+  try { execFileSync("git", ["show-ref", "--verify", "--quiet", name], { cwd: repository, stdio: "ignore" }); }
+  catch (error) {
+    if (error?.status === 1) return;
+    throw new Error(`review tree ref presence check failed: ${String(error.stderr ?? error.message).trim()}`);
+  }
+  git(repository, ["update-ref", "-d", name]);
 }

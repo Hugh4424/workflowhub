@@ -185,9 +185,10 @@ async function main() {
     const taskRoot = join(outputRoot, "wh-review-state"); const taskId = "provider-smoke";
     let kimiEvidence = null;
     if (!skipKimi) {
-      const kimiSource = join(outputRoot, "kimi-worktree"); mkdirSync(kimiSource, { mode: 0o700 }); const kimiBase = setupRepository(kimiSource).base;
+      const kimiTarget = join(outputRoot, "kimi-target-repository"); mkdirSync(kimiTarget, { mode: 0o700 }); const kimiBase = setupRepository(kimiTarget).base;
+      const kimiSource = join(outputRoot, "kimi-worktree"); git(kimiTarget, ["worktree", "add", "-q", "-b", "workflowhub/provider-smoke", kimiSource]);
       git(kimiSource, ["reset", "--hard", "-q", kimiBase]); writeFileSync(join(kimiSource, "smoke.txt"), "base\nR1_DIFF_MARKER\n");
-      write(join(taskRoot, taskId, "worktree.json"), { target_repo_root: kimiSource, worktree_root: kimiSource, branch: git(kimiSource, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" });
+      write(join(taskRoot, taskId, "worktree.json"), { target_repo_root: kimiTarget, worktree_root: kimiSource, branch: git(kimiSource, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" });
       const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r1Packet), task_tracking_root: taskRoot };
       const kimiFirstInputPath = join(outputRoot, "kimi-r1-input.json"); write(kimiFirstInputPath, kimiFirstInput);
       await runWhReview({ inputPath: kimiFirstInputPath, responsePath: join(outputRoot, "kimi-r1-cli.json") });

@@ -33,9 +33,9 @@ function trustedTaskWorktree(input) {
   let state;
   try { state = JSON.parse(readFileSync(statePath, "utf8")); }
   catch (error) { throw new Error(`trusted task worktree.json is invalid JSON: ${error.message}`); }
-  if (!(isAbsolute(state?.target_repo_root ?? "") && isAbsolute(state?.worktree_root ?? "") && typeof state?.branch === "string" && state.branch.length > 0
+  if (!(isAbsolute(state?.target_repo_root ?? "") && isAbsolute(state?.worktree_root ?? "") && state.target_repo_root !== state.worktree_root && typeof state?.branch === "string" && /^workflowhub\//.test(state.branch)
     && state.created_by_stage === "make-decision" && state.push_policy === "verify-code-only" && state.status === "active")) {
-    throw new Error("trusted task worktree.json requires active target_repo_root, worktree_root, branch, created_by_stage, and push_policy");
+    throw new Error("trusted task worktree.json requires distinct active target_repo_root/worktree_root, workflowhub branch, created_by_stage, and push_policy");
   }
   const targetRepoRoot = realpathSync(state.target_repo_root);
   const sourceRoot = realpathSync(state.worktree_root);

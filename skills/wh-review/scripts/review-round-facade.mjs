@@ -211,13 +211,13 @@ export class ReviewRoundFacade {
   #recordInitialTree(taskId, initialTree) {
     const existing = this.#readSourceContext(taskId); if (existing) return existing;
     const context = { version: 1, initial_tree: initialTree, last_approved_tree: null };
-    atomic(this.#sourceContext(taskId), safeJson(context)); return context;
+    this.faultInjector("before-source-context-write", context); atomic(this.#sourceContext(taskId), safeJson(context)); return context;
   }
   #recordLastApprovedTree(taskId, tree) {
     const existing = this.#readSourceContext(taskId);
     if (!existing) throw new Error("task source context is missing");
     const context = { ...existing, last_approved_tree: tree };
-    atomic(this.#sourceContext(taskId), safeJson(context)); return context;
+    this.faultInjector("before-source-context-write", context); atomic(this.#sourceContext(taskId), safeJson(context)); return context;
   }
   #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.reset-approval.json`); }
   #lock(intent) {
@@ -250,16 +250,22 @@ export class ReviewRoundFacade {
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
-    const sourceContext = input.continuation === true ? null : this.#readSourceContext(input.task_id);
-    const initialHostSource = input.continuation === true ? null : buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
     const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
-    return this.#prepareUnderLock(input, lock, initialHostSource);
+    return this.#prepareUnderLock(input, lock);
   }
 
-  async #prepareUnderLock(input, lock, initialHostSource) {
+  async #prepareUnderLock(input, lock) {
     try {
     for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
     if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
+    let initialHostSource = null;
+    if (input.continuation !== true) {
+      const sourceLock = input.stage === "make-decision" ? this.#taskProjectionLock(input.task_id, "source-snapshot") : null;
+      try {
+        const sourceContext = this.#readSourceContext(input.task_id);
+        initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
+      } finally { if (sourceLock) this.#releaseLock(sourceLock); }
+    }
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
@@ -447,11 +453,19 @@ export class ReviewRoundFacade {
       const packetRef = join(prepared.dir, "review-packet.json"); const packetFileHash = sha(readFileSync(packetRef));
       const reviewedTree = packet.source_revision.snapshot_tree;
       const reviewTreeRef = priorFlow?.review_tree_ref ?? this.#treeRef(intent);
+      const oldReviewTree = typeof priorFlow?.review_tree_ref === "string" ? readReviewTreeRef(this.sourceRoot, priorFlow.review_tree_ref) : null;
       if (aggregate.length) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, reviewedTree);
-      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
+      try { this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
         previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)),
-        ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) });
+        ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) }); }
+      catch (error) {
+        if (aggregate.length) {
+          if (oldReviewTree) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, oldReviewTree);
+          else deleteReviewTreeRef(this.sourceRoot, reviewTreeRef);
+        }
+        throw error;
+      }
       // A provider-originated escalation is already a semantic result. Publish
       // its redacted gate projection in this same run, instead of waiting for
       // a later prepare() recovery pass to revoke a stale public pass.
@@ -807,7 +821,10 @@ export class ReviewRoundFacade {
     const flow = this.#readFlow(result.intent); if (flow) {
       const updatedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
       this.#writeFlow(result.intent, updatedFlow);
-      if (semantic_verdict === "pass" && result.intent.stage !== "make-decision") this.#recordLastApprovedTree(result.intent.task_id, updatedFlow.approved_tree);
+      if (semantic_verdict === "pass" && result.intent.stage !== "make-decision") {
+        try { this.#recordLastApprovedTree(result.intent.task_id, updatedFlow.approved_tree); }
+        catch (error) { this.#writeFlow(result.intent, flow); throw error; }
+      }
     }
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
@@ -850,7 +867,8 @@ export class ReviewRoundFacade {
       throw error;
     }
     this.#writeFlow(intent, { ...flow, review_tree_ref: null, finalized_at_ms: this.now() });
-    if (typeof flow.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, flow.review_tree_ref);
+    try { if (typeof flow.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, flow.review_tree_ref); }
+    catch (error) { this.#writeFlow(intent, flow); throw error; }
     return { task_id, stage, review_track, review_flow_id, approved_tree: flow.approved_tree, finalized: true };
   }
 }
