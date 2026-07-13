@@ -58,9 +58,14 @@ describe("Phase 5B Must Read contracts", () => {
     const rows = [...ledger.matchAll(/^\| `(?<id>AGH-[A-Z]+-\d{2})` \| (?<source>.*?) \| (?<decision>keep|host|lens|removed \(evidence\)) \| (?<mapping>.*?) \|$/gm)];
     expect(rows.find((row) => row.groups.id === "AGH-BASE-10").groups.decision).toBe("removed (evidence)");
     expect(rows.find((row) => row.groups.id === "AGH-BASE-14").groups.decision).toBe("removed (evidence)");
-    for (const row of rows.filter((row) => ["keep", "host", "lens"].includes(row.groups.decision))) {
+    expect(rows).toHaveLength(130);
+    for (const row of rows) {
       expect(row.groups.mapping).toMatch(/skills\/wh-review\/(?:contracts|scripts|schemas|stage-skill-plan\.json)/);
       expect(row.groups.mapping).toMatch(/[§#]/);
     }
+    const base10 = rows.find((row) => row.groups.id === "AGH-BASE-10").groups.mapping;
+    expect(base10).toContain("hash-journaled mutable private state");
+    expect(base10).toContain("#updateReceiptAndFlow");
+    expect(base10).toContain("#recoverPendingReceiptBinding");
   });
 });
