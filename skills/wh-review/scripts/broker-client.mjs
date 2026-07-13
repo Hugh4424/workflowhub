@@ -58,6 +58,7 @@ export class BrokerClient {
       if (attachments) {
         await this.#requireCapability("attachments", "THIRD_REVIEW_ATTACHMENT_UNSUPPORTED");
         if (!this.attachmentRoot || !attachmentDelivery) throw new TypeError("attachments require attachmentRoot and attachmentDelivery");
+        if (!deliveryModes.has(attachmentDelivery)) throw new TypeError("attachmentDelivery must be file_only or always_embed");
         const manifestFile = join(temp, "attachments.json");
         writeFileSync(manifestFile, `${JSON.stringify(attachments)}\n`, { mode: 0o600 });
         args.push(`--attachments=${manifestFile}`, `--attachments-root=${this.attachmentRoot}`, `--attachment-delivery=${attachmentDelivery}`);

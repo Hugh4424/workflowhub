@@ -203,7 +203,7 @@ describe("ReviewRoundFacade", () => {
     const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking });
     expect(prepared.packet.packet_hash).toMatch(/^[a-f0-9]{64}$/);
     const result = await facade.run(prepared);
-    expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "complete", semantic_verdict: "pass" }, { provider: "kimi", transport_status: "authentication_failed", packet_status: "material_incomplete", semantic_verdict: null }]);
+    expect(result.provider_outcomes.filter((item) => ["opencode", "kimi"].includes(item.provider))).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "complete", semantic_verdict: "pass" }, { provider: "kimi", transport_status: "authentication_failed", packet_status: "material_incomplete", semantic_verdict: null }]);
     expect(result).not.toHaveProperty("semantic_verdict");
     expect(result).not.toHaveProperty("core_receipt_hash");
     expect(result.merged_findings).toEqual([]);
@@ -233,7 +233,9 @@ describe("ReviewRoundFacade", () => {
   it("uses the initial runtime only on continuation and refuses automatic fresh starts", async () => {
     const tracking = root(); const seen = [];
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => { seen.push(request); return { runtime_id: "22222222-2222-4222-8222-222222222222", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; }) });
-    const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking }));
+    const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking });
+    prepared.resolution.deliveryMode = "always_embed";
+    const first = await facade.run(prepared);
     const second = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking, continuation: true }));
     expect(first.intent.initial_runtime_id).toBeNull();
     expect(second.intent.initial_runtime_id).toBe("22222222-2222-4222-8222-222222222222");
@@ -272,6 +274,8 @@ describe("ReviewRoundFacade", () => {
     expect(second.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH" }]);
     expect(second.merged_findings).toEqual([]);
     expect(second.continuation_eligible).toBe(false);
+    expect(second.blocked_by_human_confirmation).toBe(true);
+    expect(() => facade.publish(second, { items: [] })).toThrow(/human confirmation/);
   });
 
   it("reports every missing candidate and returns NO_CAPABLE_PROVIDER without broker semantics", async () => {
@@ -313,7 +317,11 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const contract = contractPathAndHash("build-code").contractPath; const original = readFileSync(contract, "utf8");
     const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking });
-    try { writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`); await expect(facade.run(prepared)).resolves.toMatchObject({ provider_outcomes: [] }); }
+    try {
+      writeFileSync(contract, `${original}\n<!-- toctou-test -->\n`);
+      const result = await facade.run(prepared);
+      expect(result.provider_outcomes.every((item) => item.diagnostic === "PROVIDER_OUTCOME_MISSING")).toBe(true);
+    }
     finally { writeFileSync(contract, original); }
   });
 
@@ -342,7 +350,7 @@ describe("ReviewRoundFacade", () => {
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(tampered) }] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "tampered-output", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
-    expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", transport_status: "completed", packet_status: "hash_mismatch", business_valid: false, semantic_verdict: null }]);
+    expect(result.provider_outcomes.find((item) => item.provider === "opencode")).toMatchObject({ provider: "opencode", transport_status: "completed", packet_status: "hash_mismatch", business_valid: false, semantic_verdict: null });
     expect(result.merged_findings).toEqual([]);
   });
 

@@ -138,7 +138,7 @@ function verifiedHumanGates(providerOutcomes, declaredGates) {
   return derived;
 }
 function findingId(finding) { return sha(`${finding.file}\0${finding.line}\0${finding.rule_id}\0${finding.issue.trim().toLowerCase()}`); }
-function redact(value) { return JSON.parse(JSON.stringify(value, (key, field) => /runtime_id|session_id|raw_output|diagnostic|workspace|absolute_path/i.test(key) ? undefined : field)); }
+function redact(value) { return JSON.parse(JSON.stringify(value, (key, field) => /runtime_id|session_id|raw_output|diagnostic|workspace|absolute_path|delivery/i.test(key) ? undefined : field)); }
 
 export class ReviewRoundFacade {
   constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now() } = {}) {
@@ -156,7 +156,7 @@ export class ReviewRoundFacade {
     assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertSafeReviewFlowId(input.review_flow_id);
     if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
-    if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery is broker-owned; caller delivery assertions are rejected");
+    if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     const lock = this.#acquireLock({ task_id: input.task_id, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_flow_id}`) });
     return this.#prepareUnderLock(input, lock);
   }
@@ -166,18 +166,19 @@ export class ReviewRoundFacade {
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
-    const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.length > 0).map((item) => item.provider).sort();
+    const reviewTrack = input.review_track ?? null;
+    const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
+    const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.some((mode) => mode === "file_only" || mode === "always_embed")).map((item) => item.provider).sort();
     const continuableProviders = capabilitySnapshot.providers.filter((item) => candidateProviders.includes(item.provider) && item.capabilities.continuation).map((item) => item.provider).sort();
     const prior = this.#readFlow(input); const continuation = input.continuation === true;
     if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
+    if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object")) throw new Error("blocked_by_human_confirmation: initial provider delivery snapshot is missing; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const packet = structuredClone(input.packet);
-    const reviewTrack = input.review_track ?? null;
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
     const { contractHash } = contractPathAndHash(input.stage);
     if (packet.contract_hash !== contractHash && !input.allow_contract_hash_override) return this.#materialIncomplete(input, "contract hash mismatch");
-    const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
     const actualBundleHash = bundleHash(resolution);
     if (packet.skill_bundle_hash !== actualBundleHash) return this.#materialIncomplete(input, "skill bundle hash mismatch");
     packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
@@ -197,7 +198,9 @@ export class ReviewRoundFacade {
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
       freeze("review-packet.v1.json", safeJson(packet)); freeze("contracts/provider-protocol.md", readFileSync(protocolPath)); freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
       for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
-      return { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments };
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments };
+      Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
+      return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
   }
 
@@ -214,12 +217,17 @@ export class ReviewRoundFacade {
       const request = { version: 4, host_provider: input.host_provider, prompt: this.#prompt(intent, packet, input), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
-      const response = await this.broker.run({ request, packet, attachments, attachmentDelivery: "file_only" });
+      const response = intent.candidate_providers.length === 0
+        ? { providers: [], transport_error: { code: "NO_CAPABLE_PROVIDER", message: "doctor reported no ready heterologous provider with a supported attachment delivery" } }
+        : await this.broker.run({ request, packet, attachments, attachmentDelivery: prepared.delivery_policy });
       atomic(join(prepared.dir, "broker-run.json"), safeJson(response));
       const candidateSet = new Set(intent.candidate_providers);
+      const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
       const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
-        ? this.#outcome(item, packet, intent, input, prepared.dir)
+        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider])
         : { provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "UNKNOWN_PROVIDER" });
+      const returnedCandidates = new Set((response.providers ?? []).map((item) => item?.provider).filter((provider) => candidateSet.has(provider)));
+      for (const provider of intent.candidate_providers) if (!returnedCandidates.has(provider)) outcomes.push({ provider, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used: null, diagnostic: "PROVIDER_OUTCOME_MISSING" });
       if (response.transport_error) outcomes.push({ provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: response.transport_error.code });
       const continuable_providers = intent.continuable_providers;
       const eligible = continuable_providers.length > 0 && continuable_providers.every((provider) => outcomes.some((item) => item.provider === provider && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.session_id));
@@ -241,11 +249,13 @@ export class ReviewRoundFacade {
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
       const human_gates = deriveHumanGates(outcomes);
-      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
+      const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true);
+      const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery_used ?? null]));
+      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
-      const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
+      const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       const priorFlow = this.#readFlow(intent);
-      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
+      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
       return result;
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
@@ -308,7 +318,7 @@ export class ReviewRoundFacade {
       const flags = existsSync(projection) ? (JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}) : {};
       if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) continue;
       if (!Array.isArray(saved.dispositions)) continue;
-      this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, receipt_draft_ref: receipt }, { items: saved.dispositions });
+      this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, blocked_by_human_confirmation: saved.blocked_by_human_confirmation, receipt_draft_ref: receipt }, { items: saved.dispositions });
     }
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
@@ -379,8 +389,8 @@ export class ReviewRoundFacade {
     }
     return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
-  #outcome(item, packet, intent, input, directory) {
-    const transport_status = classifyTransport(item); const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null };
+  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery) {
+    const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null; const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null, raw_output_ref: item?.raw_output_ref ?? null };
     if (typeof item?.output === "string" && item.provider) {
       const raw = join(directory, "providers", `${item.provider}.raw.txt`); atomic(raw, item.output); base.raw_output_ref = raw;
     }
@@ -388,6 +398,10 @@ export class ReviewRoundFacade {
       const cancel_source = item?.error?.source;
       return { ...base, cancel_source: cancel_source ?? null, diagnostic: cancel_source ? publicError(item) : "CANCEL_SOURCE_MISSING" };
     }
+    if (item?.delivery_used === undefined || item.delivery_used === null) return { ...base, diagnostic: "DELIVERY_USED_MISSING" };
+    if (item.delivery_used !== "file_only" && item.delivery_used !== "always_embed") return { ...base, diagnostic: "DELIVERY_USED_INVALID" };
+    if (!capabilities?.attachment_delivery?.includes(item.delivery_used)) return { ...base, diagnostic: "DELIVERY_USED_CAPABILITY_MISMATCH" };
+    if (intent.initial_runtime_id && item.delivery_used !== initialDelivery) return { ...base, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH", requires_human_confirmation: true };
     if (transport_status !== "completed") return { ...base, diagnostic: publicError(item) };
     const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "NON_JSON_OUTPUT" };
     const output = parsed.value;
@@ -406,6 +420,7 @@ export class ReviewRoundFacade {
   }
   #publishUnderLock(result, dispositions) {
     if (!Array.isArray(dispositions?.items)) throw new TypeError("dispositions.items is required");
+    if (result.blocked_by_human_confirmation) throw new Error("human confirmation is required before publication");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
     const human_gates = verifiedHumanGates(result.provider_outcomes, result.human_gates);
     if (human_gates.length) throw new Error("human gate requires explicit human confirmation before publication");

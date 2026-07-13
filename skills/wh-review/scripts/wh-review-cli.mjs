@@ -12,7 +12,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../.
 
 export async function runReviewRound(input) {
   if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
-  if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery is broker-owned and cannot be supplied by callers");
+  if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution and cannot be supplied by callers");
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
   const command = input.third_review?.command, config = input.third_review?.config;
   if (!taskTrackingRoot || !command || !config) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config}");
@@ -32,6 +32,7 @@ export async function runReviewRound(input) {
   const transport = {
     review_flow_id: result.intent.review_flow_id,
     continuation_eligible: result.continuation_eligible,
+    blocked_by_human_confirmation: result.blocked_by_human_confirmation,
     provider_outcomes: result.provider_outcomes.map(({ provider, transport_status, packet_status, business_valid, cancel_source, diagnostic }) => ({
       provider, transport_status, packet_status, business_valid, cancel_source: cancel_source ?? null, diagnostic: diagnostic ?? null,
     })),
