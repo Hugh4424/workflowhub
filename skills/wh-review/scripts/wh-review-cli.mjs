@@ -70,10 +70,8 @@ export async function runReviewRound(input) {
     packet: input.packet, continuation: input.continuation === true, ui: input.ui === true,
     attachment_root: input.attachment_root ?? input.attachmentRoot, attachments: input.attachments,
     attachment_delivery: input.attachment_delivery ?? input.attachmentDelivery,
-    changed_file_root: input.changed_file_root ?? input.changedFileRoot,
+    repository_root: input.repository_root ?? input.repositoryRoot,
     provider_capabilities: input.provider_capabilities ?? input.providerCapabilities ?? input.third_review?.provider_capabilities,
-    source_snapshot: input.source_snapshot ?? input.sourceSnapshot,
-    require_source_evidence: true,
   });
   const result = await facade.run(prepared);
   return input.dispositions ? { ...result, publication: facade.publish(result, input.dispositions) } : result;

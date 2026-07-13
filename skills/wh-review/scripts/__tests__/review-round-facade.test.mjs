@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ReviewRoundFacade } from "../review-round-facade.mjs";
@@ -8,17 +9,26 @@ import { contractPathAndHash } from "../lib/safe-id.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
-function root() { const value = mkdtempSync(join(tmpdir(), "wh-review-v4-")); roots.push(value); return value; }
+function root() {
+  const value = mkdtempSync(join(tmpdir(), "wh-review-v4-")); roots.push(value);
+  git(value, ["init", "-q"]); git(value, ["config", "user.email", "review@example.test"]); git(value, ["config", "user.name", "Review Test"]);
+  writeFileSync(join(value, "a"), "old\nline\n"); git(value, ["add", "a"]); git(value, ["commit", "-qm", "base"]);
+  writeFileSync(join(value, "a"), "x"); git(value, ["add", "a"]); git(value, ["commit", "-qm", "head"]);
+  return value;
+}
 function hash(value) { return createHash("sha256").update(value).digest("hex"); }
 function canonical(value) { if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`; if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`; return JSON.stringify(value); }
-function packet({ root, marker = "WH_REVIEW_SMOKE_DIFF_MARKER", builder = false } = {}) {
-  writeFileSync(join(root, "a"), "x"); const unified_diff = `diff --git a/a b/a\n+${marker}\n`; const changed_files = [{ path: "a", status: "modified", sha256: hash("x"), size: 1, old_sha256: hash("old"), old_size: 3 }];
+function packet({ root } = {}) {
+  const base = git(root, ["rev-parse", "HEAD~1"]), head = git(root, ["rev-parse", "HEAD"]);
+  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
+  const oldBytes = execFileSync("git", ["show", `${base}:a`], { cwd: root }); const bytes = execFileSync("git", ["show", `${head}:a`], { cwd: root });
+  const changed_files = [{ path: "a", status: "modified", sha256: hash(bytes), size: bytes.length, old_sha256: hash(oldBytes), old_size: oldBytes.length }];
   const output = {
     version: "review-packet.v1", stage: "build-code", review_track: null,
     diff_sha256: hash(unified_diff), unified_diff, changed_files, raw_requirement: "do the thing",
     acceptance_design_excerpt: "AC: works", test_evidence: [{ name: "unit", status: "passed" }],
     host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
-    source_revision: builder ? { host_diff_builder: "trusted-test-builder" } : { base: "base", head: "head" },
+    source_revision: { base, head },
   };
   output.manifest_hash = hash(canonical({ diff_sha256: output.diff_sha256, changed_files: changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: output.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: output.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: output.test_evidence, host_verified_facts: [], contract_hash: output.contract_hash, skill_bundle_hash: output.skill_bundle_hash, source_revision: output.source_revision }));
   return output;
@@ -31,13 +41,43 @@ function refreshPacketHashes(value) {
 function output(input, verdict = "pass", severity = "blocking") {
   return JSON.stringify({ packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
     contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
-    summary: "review complete", findings: verdict === "pass" ? [] : [{ file: "a", line: 1, rule_id: "hard", severity, issue: "bad", evidence: "marker", suggested_fix: "fix" }],
+    summary: "review complete", findings: ["pass", "escalate_to_human"].includes(verdict) ? [] : [{ file: "a", line: 1, rule_id: "hard", severity, issue: "bad", evidence: "marker", suggested_fix: "fix" }],
     checklist: [{ id: "hard", passed: verdict === "pass", evidence: "packet" }], skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "cause", fixApproach: "fix" } : {}) });
 }
 function fakeBroker(callback) { return { run: callback }; }
+function git(root, args) { return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim(); }
+function trustedPacket(root) {
+  git(root, ["init", "-q"]); git(root, ["config", "user.email", "review@example.test"]); git(root, ["config", "user.name", "Review Test"]);
+  writeFileSync(join(root, "a"), "old\nline\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "base"]);
+  const base = git(root, ["rev-parse", "HEAD"]);
+  writeFileSync(join(root, "a"), "new\nline\nextra\n"); git(root, ["add", "a"]); git(root, ["commit", "-qm", "head"]);
+  const head = git(root, ["rev-parse", "HEAD"]);
+  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: root, encoding: "utf8" });
+  const changed_files = [{ path: "a", status: "modified", sha256: hash("new\nline\nextra\n"), size: Buffer.byteLength("new\nline\nextra\n"), old_sha256: hash("old\nline\n"), old_size: Buffer.byteLength("old\nline\n") }];
+  const value = {
+    version: "review-packet.v1", stage: "build-code", review_track: null, unified_diff, changed_files,
+    raw_requirement: "do the thing", acceptance_design_excerpt: "AC: works", test_evidence: [{ name: "unit", status: "passed" }],
+    host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])), source_revision: { base, head },
+  };
+  return refreshPacketHashes(value);
+}
 
 describe("ReviewRoundFacade", () => {
+  it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const trusted = trustedPacket(tracking);
+    expect(() => facade.prepare({ task_id: "git", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).not.toThrow();
+    expect(() => facade.prepare({ task_id: "tampered", stage: "build-code", review_flow_id: "flow", packet: trustedPacket(root()), repository_root: tracking, source_snapshot: { base_files: {} }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/source_snapshot is not accepted/);
+  });
+
+  it("makes a finding-free escalation a provider-sourced human publication gate", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet, "escalate_to_human") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "human", stage: "build-code", review_flow_id: "flow", packet: trusted, repository_root: tracking, provider_capabilities: { opencode: { continuation: true } } }));
+    expect(result.human_gates).toEqual([{ provider: "opencode", verdict: "escalate_to_human", summary: "review complete" }]);
+    expect(() => facade.publish(result, { items: [] })).toThrow(/human gate/);
+  });
   it("builds one complete packet, accepts only completed/complete/business-valid output, and stores secrets privately", async () => {
     const tracking = root();
     let dispatched;
@@ -106,24 +146,15 @@ describe("ReviewRoundFacade", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");
     expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: badDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*diff_sha256/);
-    const badFile = packet({ root: tracking }); badFile.changed_files[0].size = 2;
-    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow2", packet: badFile, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*changed file/);
-    const fakeDiff = packet({ root: tracking, builder: true });
-    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true }, }, host_diff_builder: () => ({ unified_diff: "diff --git a/other b/other\n", changed_files: fakeDiff.changed_files }) })).toThrow(/MATERIAL_INCOMPLETE.*host diff builder/);
+    const badFile = packet({ root: tracking }); badFile.changed_files[0].size = 2; refreshPacketHashes(badFile);
+    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow2", packet: badFile, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
+    const fakeDiff = packet({ root: tracking }); fakeDiff.unified_diff = "diff --git a/other b/other\n"; refreshPacketHashes(fakeDiff);
+    expect(() => facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow3", packet: fakeDiff, changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/MATERIAL_INCOMPLETE.*source evidence/);
   });
 
-  it("validates delete and rename against explicit base/head snapshots without reading deleted paths", () => {
+  it("rejects caller-provided snapshots instead of treating them as source evidence", () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    const deleted = packet({ root: tracking }); rmSync(join(tracking, "a"));
-    deleted.unified_diff = "diff --git a/gone b/gone\n--- a/gone\n+++ /dev/null\n@@ -1,1 +1,0 @@\n-old\n"; deleted.changed_files = [{ path: "gone", status: "deleted", old_sha256: hash("old"), old_size: 3 }]; refreshPacketHashes(deleted);
-    const deletedSnapshot = { unified_diff: deleted.unified_diff, changed_files: deleted.changed_files, base_ref: "base", head_ref: "head", base_files: { gone: "old" }, head_files: {} };
-    const prepared = facade.prepare({ task_id: "delete", stage: "build-code", review_flow_id: "flow", packet: deleted, changed_file_root: tracking, source_snapshot: deletedSnapshot, provider_capabilities: { opencode: { continuation: true } } }); rmSync(prepared.lock, { recursive: true, force: true });
-    const renamed = packet({ root: tracking }); writeFileSync(join(tracking, "new"), "new"); rmSync(join(tracking, "a"));
-    renamed.unified_diff = "diff --git a/old b/new\n--- a/old\n+++ b/new\n@@ -1,1 +1,1 @@\n-old\n+new\n"; renamed.changed_files = [{ path: "new", old_path: "old", status: "renamed", sha256: hash("new"), size: 3, old_sha256: hash("old"), old_size: 3 }]; refreshPacketHashes(renamed);
-    const renamedSnapshot = { unified_diff: renamed.unified_diff, changed_files: renamed.changed_files, base_ref: "base", head_ref: "head", base_files: { old: "old" }, head_files: { new: "new" } };
-    const renamedPrepared = facade.prepare({ task_id: "rename", stage: "build-code", review_flow_id: "flow", packet: renamed, changed_file_root: tracking, source_snapshot: renamedSnapshot, provider_capabilities: { opencode: { continuation: true } } }); rmSync(renamedPrepared.lock, { recursive: true, force: true });
-    const mismatch = structuredClone(deleted); mismatch.old_sha256 = hash("wrong");
-    expect(() => facade.prepare({ task_id: "bad", stage: "build-code", review_flow_id: "flow", packet: deleted, changed_file_root: tracking, source_snapshot: { ...deletedSnapshot, base_files: { gone: "wrong" } }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/canonical host source diff|source snapshot base file hash mismatch/);
+    expect(() => facade.prepare({ task_id: "snapshot", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, source_snapshot: { base_files: {} }, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/source_snapshot is not accepted/);
   });
 
   it("requires every declared continuable provider and serializes all flows for one task", async () => {

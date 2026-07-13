@@ -25,6 +25,12 @@
           "old_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "old_size": { "type": "integer", "minimum": 0 }
         },
+        "allOf": [
+          { "if": { "properties": { "status": { "const": "added" } }, "required": ["status"] }, "then": { "required": ["sha256", "size"] } },
+          { "if": { "properties": { "status": { "const": "modified" } }, "required": ["status"] }, "then": { "required": ["sha256", "size", "old_sha256", "old_size"] } },
+          { "if": { "properties": { "status": { "const": "deleted" } }, "required": ["status"] }, "then": { "required": ["old_sha256", "old_size"] } },
+          { "if": { "properties": { "status": { "const": "renamed" } }, "required": ["status"] }, "then": { "required": ["path", "old_path", "sha256", "size", "old_sha256", "old_size"] } }
+        ],
         "additionalProperties": false
       }
     },
@@ -40,10 +46,10 @@
     ,"source_revision": {
       "type": "object",
       "properties": {
-        "base": { "type": "string", "minLength": 1 },
-        "head": { "type": "string", "minLength": 1 },
-        "host_diff_builder": { "type": "string", "minLength": 1 }
+        "base": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
       },
+      "required": ["base", "head"],
       "additionalProperties": false
     }
   },

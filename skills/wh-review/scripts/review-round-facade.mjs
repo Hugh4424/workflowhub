@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { contractPathAndHash, assertKnownStage, assertSafeReviewFlowId, assertSafeTaskId, taskRoot } from "./lib/safe-id.mjs";
@@ -33,7 +34,7 @@ function packetComplete(packet) {
   if (packet.stage === "make-decision" ? !["direction", "detail"].includes(packet.review_track) : packet.review_track !== null) return false;
   if (typeof packet.unified_diff !== "string" || !Array.isArray(packet.changed_files) || typeof packet.raw_requirement !== "string" || !Array.isArray(packet.host_verified_facts)) return false;
   if (!["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"].every((key) => typeof packet[key] === "string" && /^[a-f0-9]{64}$/.test(packet[key]))) return false;
-  if (!packet.source_revision || typeof packet.source_revision !== "object" || Array.isArray(packet.source_revision) || !((typeof packet.source_revision.base === "string" && packet.source_revision.base && typeof packet.source_revision.head === "string" && packet.source_revision.head) || (typeof packet.source_revision.host_diff_builder === "string" && packet.source_revision.host_diff_builder))) return false;
+  if (!packet.source_revision || typeof packet.source_revision !== "object" || Array.isArray(packet.source_revision) || typeof packet.source_revision.base !== "string" || !packet.source_revision.base || typeof packet.source_revision.head !== "string" || !packet.source_revision.head) return false;
   if (packet.stage === "make-decision" && packet.review_track === "direction" && ["decision_log_excerpt", "acceptance_design_excerpt", "planning_artifacts", "verification_closure", "test_evidence"].some((key) => Object.hasOwn(packet, key))) return false;
   if (packet.stage === "make-decision" && packet.review_track === "detail" && (typeof packet.decision_log_excerpt !== "string" || typeof packet.acceptance_design_excerpt !== "string")) return false;
   if (packet.stage === "build-spec" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.planning_artifacts))) return false;
@@ -42,29 +43,20 @@ function packetComplete(packet) {
   if (packet.stage === "verify-code" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.verification_closure) || !Array.isArray(packet.test_evidence))) return false;
   return true;
 }
-function sealPacket(packet, changedFileRoot, hostDiffBuilder) {
+function sealPacket(packet) {
   if (!packetComplete(packet)) throw new Error("review-packet.v1 is incomplete");
   const diff = sha(packet.unified_diff);
   if (packet.diff_sha256 && packet.diff_sha256 !== diff) throw new Error("diff_sha256 mismatch");
   packet.diff_sha256 = diff;
-  const diffPaths = [...packet.unified_diff.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].map((match) => match[2]);
-  if (new Set(diffPaths).size !== diffPaths.length || [...new Set(diffPaths)].sort().join("\0") !== packet.changed_files.map(({ path }) => path).sort().join("\0")) throw new Error("unified diff and changed_files do not describe the same source files");
-  if (packet.source_revision.host_diff_builder && typeof hostDiffBuilder === "function") {
-    const built = hostDiffBuilder({ source_revision: structuredClone(packet.source_revision) });
-    if (!built || built.unified_diff !== packet.unified_diff || canonical(built.changed_files) !== canonical(packet.changed_files)) throw new Error("host diff builder output does not match review packet");
-  }
+  // Git owns diff syntax (multiple hunks, mode/index records, binary patches,
+  // and quoted paths). Exact comparison with buildHostGitSource below is the
+  // source-evidence check; do not impose a hand-written diff grammar here.
   for (const entry of packet.changed_files) {
     if (!entry || !safeRelativePath(entry.path) || !["added", "modified", "deleted", "renamed"].includes(entry.status)) throw new Error("invalid changed_files entry");
     const needsCurrent = entry.status !== "deleted";
     if (needsCurrent && (!/^[a-f0-9]{64}$/.test(entry.sha256 ?? "") || !Number.isSafeInteger(entry.size) || entry.size < 0)) throw new Error("invalid changed_files current snapshot");
     if (["modified", "deleted", "renamed"].includes(entry.status) && (!/^[a-f0-9]{64}$/.test(entry.old_sha256 ?? "") || !Number.isSafeInteger(entry.old_size) || entry.old_size < 0)) throw new Error("invalid changed_files base snapshot");
     if (entry.status === "renamed" && !safeRelativePath(entry.old_path)) throw new Error("renamed changed_files entry requires old_path");
-    if (changedFileRoot && needsCurrent) {
-      const target = resolve(changedFileRoot, entry.path); const root = resolve(changedFileRoot);
-      if (target !== root && !target.startsWith(`${root}/`)) throw new Error("changed file escapes root");
-      const stat = lstatSync(target); if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("changed file is not a regular file");
-      const bytes = readFileSync(target); if (entry.size !== bytes.length || entry.sha256 !== sha(bytes)) throw new Error("changed file hash or size mismatch");
-    }
   }
   const manifest = sha(canonical(manifestValue(packet)));
   if (packet.manifest_hash && packet.manifest_hash !== manifest) throw new Error("manifest_hash mismatch");
@@ -72,30 +64,39 @@ function sealPacket(packet, changedFileRoot, hostDiffBuilder) {
   packet.packet_hash = packetHash(packet);
   return packet;
 }
-function verifySourceEvidence(packet, sourceSnapshot, required) {
-  if (!sourceSnapshot) { if (required) throw new Error("source evidence provider is required (base/head git evidence or explicit source_snapshot)"); return; }
-  if (sourceSnapshot.unified_diff !== packet.unified_diff || canonical(sourceSnapshot.changed_files) !== canonical(packet.changed_files)) throw new Error("source evidence provider does not match review packet");
-  const base = sourceSnapshot.base_files ?? {}, head = sourceSnapshot.head_files ?? {};
-  if (packet.source_revision.base && (sourceSnapshot.base_ref !== packet.source_revision.base || sourceSnapshot.head_ref !== packet.source_revision.head)) throw new Error("source snapshot revision does not match packet source_revision");
-  const lines = (value) => value === "" ? [] : String(value).replace(/\n$/u, "").split("\n");
-  const block = (oldPath, newPath, oldValue, newValue) => `diff --git a/${oldPath} b/${newPath}\n--- ${oldValue === null ? "/dev/null" : `a/${oldPath}`}\n+++ ${newValue === null ? "/dev/null" : `b/${newPath}`}\n@@ -1,${oldValue === null ? 0 : lines(oldValue).length} +1,${newValue === null ? 0 : lines(newValue).length} @@\n${oldValue === null ? "" : lines(oldValue).map((line) => `-${line}\n`).join("")}${newValue === null ? "" : lines(newValue).map((line) => `+${line}\n`).join("")}`;
-  const expectedDiff = packet.changed_files.map((entry) => block(entry.status === "renamed" ? entry.old_path : entry.path, entry.path, entry.status === "added" ? null : base[entry.status === "renamed" ? entry.old_path : entry.path], entry.status === "deleted" ? null : head[entry.path])).join("");
-  if (packet.unified_diff !== expectedDiff) throw new Error("unified diff does not equal canonical host source diff");
-  for (const entry of packet.changed_files) {
-    if (entry.status !== "deleted") {
-      const bytes = head[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks current file bytes");
-      if (sha(bytes) !== entry.sha256 || Buffer.byteLength(bytes) !== entry.size) throw new Error("source snapshot current file hash mismatch");
-    }
-    if (entry.status === "deleted" || entry.status === "renamed") {
-      const oldPath = entry.old_path ?? entry.path; const bytes = base[oldPath];
-      if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks base file bytes");
-      if (sha(bytes) !== entry.old_sha256 || Buffer.byteLength(bytes) !== entry.old_size) throw new Error("source snapshot base file hash mismatch");
-    }
-    if (entry.status === "modified") {
-      const bytes = base[entry.path]; if (typeof bytes !== "string" && !Buffer.isBuffer(bytes)) throw new Error("source snapshot lacks modified base bytes");
-      if (sha(bytes) !== entry.old_sha256 || Buffer.byteLength(bytes) !== entry.old_size) throw new Error("source snapshot modified base hash mismatch");
-    }
+function hostGit(root, args, encoding = "utf8") {
+  try { return execFileSync("git", args, { cwd: root, encoding, maxBuffer: 32 * 1024 * 1024 }); }
+  catch (error) { throw new Error(`host git source builder failed: ${String(error.stderr ?? error.message).trim()}`); }
+}
+function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], undefined); }
+function buildHostGitSource(repositoryRoot, requestedRevision) {
+  if (!requestedRevision || typeof requestedRevision.base !== "string" || typeof requestedRevision.head !== "string") throw new Error("source_revision.base and source_revision.head are required");
+  const root = realpathSync(resolve(repositoryRoot));
+  const gitRoot = realpathSync(resolve(String(hostGit(root, ["rev-parse", "--show-toplevel"])).trim()));
+  if (gitRoot !== root) throw new Error("repository_root must be the host git repository root");
+  const base = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.base}^{commit}`])).trim();
+  const head = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.head}^{commit}`])).trim();
+  if (requestedRevision.base !== base || requestedRevision.head !== head) throw new Error("source_revision must use immutable resolved commit ids");
+  const unified_diff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head]));
+  const fields = String(hostGit(root, ["diff", "--name-status", "-z", "--find-renames", base, head])).split("\0");
+  const changed_files = [];
+  for (let index = 0; index < fields.length - 1;) {
+    const statusToken = fields[index++]; if (!statusToken) continue;
+    const kind = statusToken[0];
+    if (!["A", "M", "D", "R"].includes(kind)) throw new Error(`unsupported host git change status: ${statusToken}`);
+    const old_path = kind === "R" ? fields[index++] : null; const path = fields[index++];
+    if (!safeRelativePath(path) || (old_path !== null && !safeRelativePath(old_path))) throw new Error("host git source contains unsafe path");
+    const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed" })[kind] };
+    if (old_path !== null) entry.old_path = old_path;
+    if (kind !== "D") { const bytes = gitBlob(root, head, path); entry.sha256 = sha(bytes); entry.size = bytes.length; }
+    if (kind !== "A") { const bytes = gitBlob(root, base, old_path ?? path); entry.old_sha256 = sha(bytes); entry.old_size = bytes.length; }
+    changed_files.push(entry);
   }
+  return { source_revision: { base, head }, unified_diff, changed_files };
+}
+function verifyHostGitSource(packet, repositoryRoot) {
+  const built = buildHostGitSource(repositoryRoot, packet.source_revision);
+  if (packet.unified_diff !== built.unified_diff || canonical(packet.changed_files) !== canonical(built.changed_files)) throw new Error("review packet source evidence does not match host git base/head revisions");
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
@@ -122,6 +123,7 @@ export class ReviewRoundFacade {
 
   prepare(input) {
     assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertSafeReviewFlowId(input.review_flow_id);
+    if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
     const prior = this.#readFlow(input); const continuation = input.continuation === true;
     const continuableProviders = this.#continuableProviders(input);
     if (continuation && JSON.stringify(continuableProviders) !== JSON.stringify(prior?.continuable_providers ?? [])) throw new Error("blocked_by_human_confirmation: provider continuation capability set changed; use reset with human approval");
@@ -136,7 +138,7 @@ export class ReviewRoundFacade {
     const actualBundleHash = bundleHash(resolution);
     if (packet.skill_bundle_hash !== actualBundleHash) return this.#materialIncomplete(input, "skill bundle hash mismatch");
     packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
-    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot, input.host_diff_builder); verifySourceEvidence(packet, input.source_snapshot, input.require_source_evidence === true); }
+    try { sealPacket(packet); verifyHostGitSource(packet, input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
@@ -148,7 +150,6 @@ export class ReviewRoundFacade {
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
-      if (input.source_snapshot) atomic(join(dir, "source-snapshot.json"), safeJson(input.source_snapshot));
       const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
@@ -190,9 +191,13 @@ export class ReviewRoundFacade {
         }
       }
       const merged_findings = [...unique.values()]; const hard_gates = merged_findings.filter((finding) => finding.severity === "blocking" || finding.rule_id.startsWith("hard"));
-      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, provider_outcomes: outcomes, merged_findings, hard_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
+      // An escalation is a business-valid result, not an empty pass. Keep its
+      // provider provenance independent from findings so a finding-free
+      // escalation cannot disappear during merge or publication.
+      const human_gates = aggregate.filter((item) => item.semantic_verdict === "escalate_to_human").map((item) => ({ provider: item.provider, verdict: item.semantic_verdict, summary: item.summary }));
+      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
-      const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
+      const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       this.#writeFlow(intent, { ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (this.#readFlow(intent)?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
       return result;
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
@@ -288,6 +293,7 @@ export class ReviewRoundFacade {
   publish(result, dispositions) {
     if (!Array.isArray(dispositions?.items)) throw new TypeError("dispositions.items is required");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
+    if (result.human_gates?.length) throw new Error("human gate requires explicit human confirmation before publication");
     const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const seen = new Set();
     for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || finding.rule_id.startsWith("hard")) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
