@@ -17,6 +17,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 | disposition 超次数 | 只到配置上限 | attempts/last_error | `DISPOSITION_ATTEMPTS_EXCEEDED` |
 | runtime TTL 到期 | 不 fresh | broker `expires_at_ms` | 人工 reset/new flow |
 | continuation delta 不匹配 | 不续跑 | frozen hash/baseline 诊断 | 人工 reset/new flow |
+| public core/report/index/stage-result 投影中断 | 不调用 provider；仅重放 | public `projection-pending-*` guard、private receipt/flow pending、projection manifest | `PROJECTION_PENDING`；`recover` 重放或 `PROJECTION_RECOVERY_*` fail-loud |
 
 ## 实现与测试绑定
 
@@ -28,6 +29,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 - disposition 上限：`#recordDispositionFailure()` 原子写入 attempt 与最后错误；到 `intent.limits.max_disposition_attempts` 后立刻写 human block。覆盖：`review-round-facade.test.mjs` 的 “blocks a flow...” 和 “counts schema-invalid...”。
 - TTL：continuation 先调用 broker `status(runtime_id)`，过期就拒绝，不得自动 first round。实现：`ReviewRoundFacade.run()`；覆盖：`review-round-facade.test.mjs` 的 continuation/flow recovery cases。
 - delta mismatch：`#prepareUnderLock()` 对 frozen baseline、previous packet/receipt、base revision、contract 和 skill bundle 全部 hash-bind；`validateClosureBundle()` 再绑定 current delta hash 与文件 hash。覆盖：`review-round-facade.test.mjs` 的 closure-bundle case 与 `skills/wh-review/scripts/__tests__/finding-state.test.mjs` 的 “requires an anchored current-delta closure bundle...”。
+- public projection：`#publishUnderLock()` 在任何私有 receipt/flow authority 写入前创建公开 `projection-pending-*` guard，并将同一 pending binding 写入私有 receipt/flow。所有 core/report/index/stage-result 写完才清两端 pending 和 guard。`prepare()` 取得 task lock 后首先调用 recovery；`wh-review-cli.mjs recover` 可在进程重启后只重放、绝不调用 provider。`phase-gate.mjs` 和 `ci-chain-check.mjs` 只要看见 guard 就拒绝旧 pass。私有 receipt 不存在、guard/metadata 不匹配时分别 `PROJECTION_RECOVERY_RECEIPT_MISSING`、`PROJECTION_RECOVERY_GUARD_*` fail-loud，guard 不清除。覆盖：`review-round-facade.test.mjs` 的 “keeps a public projection guard...” 与 phase-gate/CI guard tests。
 
 ## 真实 provider 验收
 

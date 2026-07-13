@@ -239,6 +239,39 @@ export class ReviewRoundFacade {
   #publicCorePath(intent, coreHash) {
     return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "core-receipts", `${coreHash}.json`);
   }
+  #projectionGuardPath(intent) {
+    const key = reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id);
+    return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", `projection-pending-${key}.json`);
+  }
+  #projectionPending(intent) {
+    return { version: 1, status: "pending", task_id: intent.task_id, stage: intent.stage, review_track: intent.review_track ?? null, review_flow_id: intent.review_flow_id, needs_human: true, guard_ref: relative(taskRoot(this.taskTrackingRoot, intent.task_id), this.#projectionGuardPath(intent)) };
+  }
+  #ensureProjectionGuard(intent) {
+    const pending = this.#projectionPending(intent); const path = this.#projectionGuardPath(intent);
+    if (existsSync(path)) {
+      let saved; try { saved = JSON.parse(readFileSync(path, "utf8")); }
+      catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: projection guard is invalid JSON"); }
+      if (canonical(saved) !== canonical(pending)) throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: projection guard does not bind this flow");
+      return pending;
+    }
+    atomic(path, safeJson(pending), 0o644); return pending;
+  }
+  #completeProjection(intent, receiptPath) {
+    const guard = this.#projectionGuardPath(intent);
+    const flow = this.#readFlow(intent);
+    if (!flow) throw new Error("PROJECTION_RECOVERY_FLOW_MISSING: cannot complete projection without flow");
+    const receipt = JSON.parse(readFileSync(receiptPath, "utf8"));
+    if (receipt.projection_pending !== undefined) {
+      const { projection_pending, ...healedReceipt } = receipt;
+      this.#updateReceiptAndFlow(intent, receiptPath, healedReceipt);
+    }
+    const healedFlow = this.#readFlow(intent);
+    if (healedFlow?.projection_pending !== undefined) {
+      const { projection_pending, ...rest } = healedFlow;
+      this.#writeFlow(intent, rest);
+    }
+    rmSync(guard, { force: true });
+  }
   #readFlow(intent) { const path = this.#flow(intent); return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null; }
   #writeFlow(intent, value) { this.faultInjector("before-flow-write", value); atomic(this.#flow(intent), safeJson(value)); }
 
@@ -261,6 +294,9 @@ export class ReviewRoundFacade {
     let sourceLock = null;
     try {
     sourceLock = input.stage === "make-decision" ? this.#taskProjectionLock(input.task_id, "prepare-source") : null;
+    // Recover before capability discovery or any continuation/runtime gate.
+    // A pending public projection is host state, never a reason to call a provider.
+    this.#recoverProjections(input.task_id);
     for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
     if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
     let initialHostSource = null;
@@ -356,7 +392,6 @@ export class ReviewRoundFacade {
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${reviewTrack ?? "default"}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       validateSchema("review-intent", intent);
-      this.#recoverProjections(input.task_id, input.stage === "make-decision" && !sourceLock);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
@@ -445,7 +480,10 @@ export class ReviewRoundFacade {
       if (findingState.escalate_to_human) human_gates.push({ provider: null, verdict: "escalate_to_human", summary: "blocking finding remained open for three rounds" });
       const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true) || findingState.escalate_to_human || (prepared.closure_bundle_gates?.length ?? 0) > 0;
       const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery_used ?? null]));
-      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
+      // Any durable private review state has a public fail-closed companion.
+      // Until dispositions complete its projection, CI must not trust an older pass.
+      const pending = this.#ensureProjectionGuard(outcomeIntent);
+      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, projection_pending: pending, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent: outcomeIntent, round_kind: intent.round_kind, baseline_packet_hash: intent.baseline_packet_hash,
         previous_findings: prepared.delta?.previous_findings ?? [], closure_evidence: prepared.delta?.closure_evidence ?? [], delta_manifest: prepared.delta?.delta_manifest ?? null,
@@ -461,7 +499,7 @@ export class ReviewRoundFacade {
       try { this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
         previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)),
-        ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) }); }
+        projection_pending: pending, ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) }); }
       catch (error) {
         if (aggregate.length) {
           if (oldReviewTree) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, oldReviewTree);
@@ -563,12 +601,31 @@ export class ReviewRoundFacade {
     try { return this.#recoverProjectionsUnderTaskLock(taskId); }
     finally { this.#releaseLock(lock); }
   }
+  recover({ task_id }) {
+    assertSafeTaskId(task_id);
+    return { recovered: this.#recoverProjections(task_id, true) };
+  }
   #recoverProjectionsUnderTaskLock(taskId) {
-    const privateRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private"); if (!existsSync(privateRoot)) return;
+    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
+    const privateRoot = join(reviews, "private");
+    const guards = existsSync(reviews) ? readdirSync(reviews).filter((name) => /^projection-pending-.*\.json$/.test(name)).map((name) => join(reviews, name)) : [];
+    if (!existsSync(privateRoot)) {
+      if (guards.length) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has no private receipt");
+      return 0;
+    }
+    let recovered = 0; const boundGuards = new Set();
     for (const name of readdirSync(privateRoot)) {
       if (!name.startsWith("round-")) continue; const dir = join(privateRoot, name), projection = join(dir, "projection-manifest.json"), receipt = join(dir, "round-receipt.json");
       if (!existsSync(receipt)) continue;
       const saved = JSON.parse(readFileSync(receipt, "utf8"));
+      const guardPath = this.#projectionGuardPath(saved.intent ?? {});
+      const flow = this.#readFlow(saved.intent ?? {});
+      if (existsSync(guardPath)) boundGuards.add(guardPath);
+      if (saved.projection_pending !== undefined || flow?.projection_pending !== undefined) {
+        if (!existsSync(guardPath)) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: private projection state has no public guard");
+        const pending = this.#projectionPending(saved.intent);
+        if (canonical(saved.projection_pending ?? flow.projection_pending) !== canonical(pending)) throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: private projection metadata does not bind the public guard");
+      }
       const provider_human_gates = deriveHumanGates(saved.provider_outcomes);
       const state_human_gates = (saved.human_gates ?? []).filter((gate) => gate?.provider === null && gate?.verdict === "escalate_to_human");
       const human_gates = [...provider_human_gates, ...state_human_gates];
@@ -580,10 +637,17 @@ export class ReviewRoundFacade {
       }
       verifiedHumanGates(saved.provider_outcomes, saved.human_gates);
       const flags = existsSync(projection) ? (JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}) : {};
-      if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) continue;
+      if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) {
+        if (existsSync(guardPath)) this.#completeProjection(saved.intent, receipt);
+        continue;
+      }
       if (!Array.isArray(saved.dispositions)) continue;
       this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, blocked_by_human_confirmation: saved.blocked_by_human_confirmation, receipt_draft_ref: receipt }, { items: saved.dispositions });
+      recovered += 1;
     }
+    const orphan = guards.filter((path) => !boundGuards.has(path) && existsSync(path));
+    if (orphan.length) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has no bound private receipt");
+    return recovered;
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
     // Receipt and flow are a single recovery unit. Never overwrite the
@@ -591,22 +655,27 @@ export class ReviewRoundFacade {
     // to leave an unrecoverable human gate.
     const flow = this.#readFlow(saved.intent);
     if (flow?.pending_receipt_update) this.#recoverPendingReceiptBinding(saved.intent, flow);
-    const receipt = { ...saved, human_gates };
+    const pending = this.#ensureProjectionGuard(saved.intent);
+    const receipt = { ...saved, human_gates, projection_pending: pending };
     this.#updateReceiptAndFlow(saved.intent, receiptPath, receipt);
+    const pendingFlow = this.#readFlow(saved.intent);
+    if (!pendingFlow) throw new Error("PROJECTION_RECOVERY_FLOW_MISSING: human gate has no flow");
+    this.#writeFlow(saved.intent, { ...pendingFlow, projection_pending: pending });
     const dir = dirname(receiptPath); const { reportPath, indexPath, stageResultPath } = this.#publicPaths(saved.intent);
     const semantic_verdict = "escalate_to_human", needs_human = true;
     const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); const coreHash = sha(readFileSync(corePath));
-    const publicCorePath = this.#publicCorePath(saved.intent, coreHash); atomic(publicCorePath, readFileSync(corePath), 0o644);
-    atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
-    atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
-    atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
+    const publicCorePath = this.#publicCorePath(saved.intent, coreHash); this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644);
+    this.faultInjector("before-public-report-write"); atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
+    this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
     const publishedFlow = this.#readFlow(saved.intent);
     if (publishedFlow) this.#writeFlow(saved.intent, { ...publishedFlow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
     if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, public_core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
     atomic(projectionPath, safeJson(projection));
+    this.#completeProjection(saved.intent, receiptPath);
   }
   #isResolvedByReset(saved, receiptPath, human_gates) {
     const markerPath = join(dirname(receiptPath), "resolved-by-reset.json"); if (!existsSync(markerPath)) return false;
@@ -803,12 +872,12 @@ export class ReviewRoundFacade {
     const corePath = join(dir, "core-receipt.json");
     if (!existsSync(corePath) || sha(readFileSync(corePath)) !== track.core_receipt_hash) throw new Error("make-decision track core receipt is unavailable");
     const publicCorePath = this.#publicCorePath(intent, track.core_receipt_hash);
-    atomic(publicCorePath, readFileSync(corePath), 0o644);
+    this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644);
     const report = `# 审查报告\n\n结论：${track.semantic_verdict === "revise_required" ? "需要修改" : track.semantic_verdict === "pass" ? "通过" : "需要人工确认"}\n\n- 有效审查：${(track.provider_outcomes ?? []).filter((item) => item.business_valid).length}\n- Findings：${(track.merged_findings ?? []).length}\n`;
     const { reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
-    atomic(reportPath, report, 0o644);
-    atomic(indexPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, needs_human: track.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
-    atomic(stageResultPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, verdict: track.semantic_verdict, needs_human: track.needs_human }), 0o644);
+    this.faultInjector("before-public-report-write"); atomic(reportPath, report, 0o644);
+    this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, needs_human: track.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, verdict: track.semantic_verdict, needs_human: track.needs_human }), 0o644);
     const projectionPath = join(dir, "projection-manifest.json");
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, public_core_receipt: true, report: true, report_index: true, stage_result: true };
@@ -825,10 +894,14 @@ export class ReviewRoundFacade {
     };
     const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
     const group = `make-decision-${reviewFlowId}`;
-    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); atomic(corePath, safeJson(aggregateCore), 0o644);
-    const reportPath = join(reviews, `${group}-aggregate.md`); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
-    const indexPath = join(reviews, `report-index-${group}.json`); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
-    const stageResultPath = join(reviews, `stage-result-${group}.json`); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); this.faultInjector("before-public-aggregate-core-write"); atomic(corePath, safeJson(aggregateCore), 0o644);
+    const reportPath = join(reviews, `${group}-aggregate.md`); this.faultInjector("before-public-aggregate-report-write"); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
+    const indexPath = join(reviews, `report-index-${group}.json`); this.faultInjector("before-public-aggregate-index-write"); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    const stageResultPath = join(reviews, `stage-result-${group}.json`); this.faultInjector("before-public-aggregate-stage-result"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
+    for (const track of [direction, detail]) {
+      const receiptPath = resolve(this.#readFlow(track.intent)?.previous_receipt_ref ?? "");
+      this.#completeProjection(track.intent, receiptPath);
+    }
     return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, track_projections };
   }
   #publishUnderLock(result, dispositions) {
@@ -848,7 +921,8 @@ export class ReviewRoundFacade {
     const flowBefore = this.#readFlow(result.intent);
     const sourceContextPath = this.#sourceContext(result.intent.task_id);
     const sourceContextBefore = existsSync(sourceContextPath) ? readFileSync(sourceContextPath) : null;
-    const privateReceipt = JSON.parse(receiptBefore); privateReceipt.dispositions = dispositions.items;
+    const pending = this.#ensureProjectionGuard(result.intent);
+    const privateReceipt = JSON.parse(receiptBefore); privateReceipt.dispositions = dispositions.items; privateReceipt.projection_pending = pending;
     const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
     const coreBytes = safeJson(core); const coreHash = sha(coreBytes);
     const privateCorePath = join(dir, "core-receipt.json");
@@ -868,7 +942,7 @@ export class ReviewRoundFacade {
       // A crash may leave an orphan private core, but never a flow authority
       // that points at a core receipt which has not been persisted yet.
       if (result.intent.stage === "make-decision") atomic(privateCorePath, coreBytes);
-      const publishedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
+      const publishedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), projection_pending: pending, published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
       this.#writeFlow(result.intent, publishedFlow);
       if (result.intent.stage === "make-decision") {
         // The private core is aggregate authority, not a public projection.
@@ -896,13 +970,14 @@ export class ReviewRoundFacade {
       return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: projection?.core_receipt_ref ?? null, report_ref: projection?.report_ref ?? null, report_index_ref: projection?.report_index_ref ?? null, stage_result_ref: projection?.stage_result_ref ?? null, aggregate };
     }
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
-    const corePath = join(dir, "core-receipt.json"); atomic(corePath, coreBytes); done.done_flags.core_receipt = true; atomic(projection, safeJson(done));
-    const publicCorePath = this.#publicCorePath(result.intent, coreHash); atomic(publicCorePath, readFileSync(corePath), 0o644); done.done_flags.public_core_receipt = true; atomic(projection, safeJson(done));
+    const corePath = join(dir, "core-receipt.json"); this.faultInjector("before-private-core-write"); atomic(corePath, coreBytes); done.done_flags.core_receipt = true; atomic(projection, safeJson(done));
+    const publicCorePath = this.#publicCorePath(result.intent, coreHash); this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644); done.done_flags.public_core_receipt = true; atomic(projection, safeJson(done));
     const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
     const { reportPath, indexPath, stageResultPath } = this.#publicPaths(result.intent);
-    atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
-    atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
-    atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
+    this.faultInjector("before-public-report-write"); atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
+    this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
+    this.#completeProjection(result.intent, result.receipt_draft_ref);
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }

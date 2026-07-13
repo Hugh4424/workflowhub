@@ -101,11 +101,17 @@ export function resetReviewFlow(input) {
   return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
 }
 
+export function recoverReviewProjections(input) {
+  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: { run() { throw new Error("recover does not run broker"); } } });
+  return facade.recover({ task_id: input.task_id ?? input.taskId });
+}
+
 async function main() {
   const command = process.argv[2];
-  if (command !== "run" && command !== "reset" && command !== "verify-final") throw new Error("usage: wh-review-cli.mjs <run|reset|verify-final> [input.json]");
+  if (command !== "run" && command !== "reset" && command !== "recover" && command !== "verify-final") throw new Error("usage: wh-review-cli.mjs <run|reset|recover|verify-final> [input.json]");
   const input = JSON.parse(readFileSync(process.argv[3] ?? 0, "utf8"));
-  const result = command === "run" ? await runReviewRound(input) : command === "reset" ? resetReviewFlow(input) : verifyFinalReview(input);
+  const result = command === "run" ? await runReviewRound(input) : command === "reset" ? resetReviewFlow(input) : command === "recover" ? recoverReviewProjections(input) : verifyFinalReview(input);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

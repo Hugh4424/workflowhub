@@ -10,7 +10,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -147,6 +147,23 @@ function checkReview(phaseResult, baseDir, errors, checked, options = {}) {
   }
 }
 
+function checkProjectionGuards(baseDir, errors, checked) {
+  checked.push("projection-recovery");
+  const reviews = resolve(baseDir, "reviews");
+  if (!existsSync(reviews)) return;
+  const guards = readdirSync(reviews).filter((name) => /^projection-pending-.*\.json$/.test(name));
+  for (const name of guards) {
+    const path = join(reviews, name);
+    try {
+      const guard = JSON.parse(readFileSync(path, "utf8"));
+      if (guard?.status !== "pending" || guard?.needs_human !== true) throw new Error("invalid guard shape");
+      errors.push(`PROJECTION_PENDING: public projection recovery is required (${name})`);
+    } catch (error) {
+      errors.push(`PROJECTION_RECOVERY_GUARD_INVALID: ${name}: ${error.message}`);
+    }
+  }
+}
+
 function isRealCommit(worktreeRoot, sha) {
   if (!/^[a-f0-9]{40}$/.test(sha)) return false;
   try {
@@ -263,6 +280,7 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   checkStatus(phaseResult, errors, checked);
   checkEvidence(phaseResult, baseDir, errors, checked);
   checkDiffScan(phaseResult, baseDir, errors, checked);
+  checkProjectionGuards(baseDir, errors, checked);
   checkReview(phaseResult, baseDir, errors, checked, options);
   checkCommitOrNoChange(phaseResult, worktreeRoot, errors, checked);
   checkWorktreeClean(worktreeRoot, errors, checked);

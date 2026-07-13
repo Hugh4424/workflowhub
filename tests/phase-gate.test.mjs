@@ -103,6 +103,16 @@ describe("phase-gate", () => {
     expect(result.ok, result.errors.join("; ")).toBe(true);
   });
 
+  it("blocks an otherwise valid old pass while a public projection guard remains", () => {
+    const phaseResult = fixture();
+    writeJson(join(repo, "reviews", "projection-pending-build-code-flow.json"), {
+      version: 1, status: "pending", task_id: "fixture", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true,
+    });
+    const result = validatePhaseGate(phaseResult, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/PROJECTION_PENDING/);
+  });
+
   it("passes a completed phase with RED/GREEN, diff scan, independent review, commit record, and clean worktree", () => {
     const phaseResult = fixture();
     const result = validatePhaseGate(phaseResult, repo);
@@ -111,6 +121,7 @@ describe("phase-gate", () => {
       "phase-status",
       "red-green-evidence",
       "diff-scan",
+      "projection-recovery",
       "heterogeneous-review",
       "commit-or-no-change",
       "worktree-clean",

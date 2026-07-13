@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolveMakeDecisionStageResultPath, resolveTaskRecordPaths } from '../core/task-record-paths.mjs';
 
 const args = process.argv.slice(2);
@@ -25,6 +25,16 @@ try {
   process.exit(2);
 }
 let errors = 0, warnings = 0;
+
+// A projection guard is deliberately public so every CI consumer fails closed
+// even if a prior stage-result still says pass after a process crash.
+const pendingGuards = existsSync(taskRecords.reviews_dir)
+  ? readdirSync(taskRecords.reviews_dir).filter(name => /^projection-pending-.*\.json$/.test(name))
+  : [];
+if (pendingGuards.length) {
+  console.error(`[FAIL] PROJECTION_PENDING: recover public review projection first (${pendingGuards.join(', ')})`);
+  errors++;
+}
 
 // 1. make-decision
 try {

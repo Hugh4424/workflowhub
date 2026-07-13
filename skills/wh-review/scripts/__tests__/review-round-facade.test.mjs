@@ -365,6 +365,8 @@ describe("ReviewRoundFacade", () => {
     const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: `${request.packet.review_track}-session`, output: makeDecisionOutput(request.packet, request.packet.review_track) }] })) });
     writeFileSync(join(source, "decision.txt"), "COMPLETE_DECISION_MARKER\n"); const flow = "same-tree";
     const direction = await facade.run(facade.prepare({ task_id: "decision-context", stage: "make-decision", review_track: "direction", review_flow_id: flow, packet: makeDecisionPacket(source, "direction") })); facade.publish(direction, { items: [] });
+    expect(existsSync(join(tracking, "decision-context", "reviews", "projection-pending-make-decision-direction-same-tree.json"))).toBe(true);
+    expect(existsSync(join(tracking, "decision-context", "reviews", "stage-result-make-decision-direction.json"))).toBe(false);
     const contextPath = join(tracking, "decision-context", "reviews", "private", "source-context.json");
     expect(JSON.parse(readFileSync(contextPath, "utf8")).last_approved_tree).toBeNull();
     const detailPrepared = await facade.prepare({ task_id: "decision-context", stage: "make-decision", review_track: "detail", review_flow_id: flow, packet: makeDecisionPacket(source, "detail") });
@@ -372,6 +374,7 @@ describe("ReviewRoundFacade", () => {
     const detail = await facade.run(detailPrepared); facade.publish(detail, { items: [] });
     const directionFlow = JSON.parse(readFileSync(join(tracking, "decision-context", "reviews", "private", "flows", `make-decision-direction-${flow}.json`), "utf8"));
     expect(JSON.parse(readFileSync(contextPath, "utf8")).last_approved_tree).toBe(directionFlow.approved_tree);
+    expect(existsSync(join(tracking, "decision-context", "reviews", "projection-pending-make-decision-direction-same-tree.json"))).toBe(false);
   });
 
   it("does not expose either make-decision pass when aggregate source context persistence fails, then publishes both on retry", async () => {
@@ -730,6 +733,33 @@ describe("ReviewRoundFacade", () => {
     expect(stage).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true, blocked_by_human_gate: true, core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
     expect(index).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true, core_receipt_hash: stage.core_receipt_hash });
     expect(core).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true });
+  });
+
+  it("keeps a public projection guard through a crashed pass and replays it without a provider", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const broker = fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }));
+    const crashing = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, faultInjector(point) { if (point === "before-public-stage-result") throw new Error("projection crash"); } });
+    const result = await crashing.run(crashing.prepare({ task_id: "projection-wal", stage: "build-code", review_flow_id: "flow", packet: trusted }));
+    const reviews = join(tracking, "projection-wal", "reviews");
+    const guard = join(reviews, "projection-pending-build-code-flow.json");
+    expect(JSON.parse(readFileSync(guard, "utf8"))).toMatchObject({ status: "pending", stage: "build-code", review_flow_id: "flow", needs_human: true });
+    writeFileSync(join(reviews, "stage-result-build-code.json"), JSON.stringify({ verdict: "pass", semantic_verdict: "pass", needs_human: false }));
+    expect(() => crashing.publish(result, { items: [] })).toThrow(/projection crash/);
+    expect(JSON.parse(readFileSync(guard, "utf8"))).toMatchObject({ status: "pending", stage: "build-code", review_flow_id: "flow", needs_human: true });
+    expect(JSON.parse(readFileSync(join(reviews, "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "pass" });
+    const recovered = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(recovered.recover({ task_id: "projection-wal" })).toMatchObject({ recovered: 1 });
+    expect(existsSync(guard)).toBe(false);
+    expect(JSON.parse(readFileSync(join(reviews, "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "pass", needs_human: false });
+  });
+
+  it("fails loud and retains a guard when recovery has no private receipt", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-projection", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-build-code-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-projection", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-flow.json" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "orphan-projection" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
+    expect(existsSync(guard)).toBe(true);
   });
 
   it("recovers an interrupted immediate human-gate projection through the receipt WAL", async () => {
