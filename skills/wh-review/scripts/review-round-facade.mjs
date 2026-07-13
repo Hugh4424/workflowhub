@@ -86,12 +86,13 @@ export class ReviewRoundFacade {
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
-    const lock = this.#lock(intent); mkdirSync(dirname(lock), { recursive: true, mode: 0o700 });
-    try { mkdirSync(lock, { mode: 0o700 }); } catch { throw new Error("review-already-running"); }
-    this.#recoverProjections(input.task_id);
-    const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
-    atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
-    return { intent, packet, input, lock, dir };
+    const lock = this.#acquireLock(intent);
+    try {
+      this.#recoverProjections(input.task_id);
+      const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
+      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
+      return { intent, packet, input, lock, dir };
+    } catch (error) { this.#releaseLock(lock); throw error; }
   }
 
   async run(prepared) {
@@ -119,7 +120,7 @@ export class ReviewRoundFacade {
       const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       this.#writeFlow(intent, { ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (this.#readFlow(intent)?.business_round ?? 0), packet_hash: packet.packet_hash });
       return result;
-    } finally { rmSync(prepared.lock, { recursive: true, force: true }); if (attachmentPlan?.stagedPacket) rmSync(attachmentPlan.stagedPacket, { force: true }); }
+    } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagedPacket) rmSync(attachmentPlan.stagedPacket, { force: true }); }
   }
 
   #prompt(intent, packet) {
@@ -130,6 +131,25 @@ export class ReviewRoundFacade {
     if (!capabilities || typeof capabilities !== "object") throw new Error("blocked_by_human_confirmation: provider_capabilities are required to establish continuation");
     return Object.entries(capabilities).filter(([, value]) => value?.continuation === true).map(([provider]) => provider).sort();
   }
+  #acquireLock(intent) {
+    const lock = this.#lock(intent); mkdirSync(dirname(lock), { recursive: true, mode: 0o700 });
+    try { mkdirSync(lock, { mode: 0o700 }); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const ownerPath = join(lock, "owner.json"); let owner;
+      try { owner = JSON.parse(readFileSync(ownerPath, "utf8")); }
+      catch { throw new Error("review-already-running: lock metadata is unreadable"); }
+      if (!Number.isInteger(owner?.pid) || owner.pid <= 0 || !Number.isFinite(owner?.created_at_ms) || typeof owner?.idempotency_key !== "string") throw new Error("review-already-running: lock metadata is invalid");
+      let active = true; try { process.kill(owner.pid, 0); } catch (cause) { active = cause?.code !== "ESRCH"; }
+      if (active) throw new Error("review-already-running");
+      // PID is proven absent, so this is a stale crashed owner. Delete only its
+      // lock directory, then create fresh metadata before projection recovery.
+      rmSync(lock, { recursive: true, force: true }); mkdirSync(lock, { mode: 0o700 });
+    }
+    atomic(join(lock, "owner.json"), safeJson({ pid: process.pid, created_at_ms: this.now(), idempotency_key: intent.idempotency_key }));
+    return lock;
+  }
+  #releaseLock(lock) { rmSync(lock, { recursive: true, force: true }); }
   #recoverProjections(taskId) {
     const privateRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private"); if (!existsSync(privateRoot)) return;
     for (const name of readdirSync(privateRoot)) {

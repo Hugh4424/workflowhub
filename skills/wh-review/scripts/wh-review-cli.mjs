@@ -62,7 +62,7 @@ export async function runReviewRound(input) {
   const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
   const command = input.third_review?.command, config = input.third_review?.config;
   if (!taskTrackingRoot || !command || !config) throw new TypeError("V4 review requires task_tracking_root and third_review.{command,config}");
-  const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? repositoryRoot, capabilities: input.third_review?.capabilities });
+  const client = new BrokerClient({ command, config, attachmentRoot: input.attachment_root ?? input.attachmentRoot ?? repositoryRoot });
   const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
   const prepared = facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,

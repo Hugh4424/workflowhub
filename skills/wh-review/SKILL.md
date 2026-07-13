@@ -36,7 +36,7 @@ The only broker execution form is:
 <third_review.command> run --config=<config> --request=<request> [--attachments=<manifest>]
 ```
 
-`third_review.capabilities.attachments:true` is required before the optional attachment arguments are used. `third_review.capabilities.cancel_source:true` is required before a workflow requests cancellation. A base V4 CLI that lacks either interface fails loud during dispatch; wh-review never sends unsupported flags or silently drops a cancellation source.
+Optional attachment and cancellation-source arguments require machine-readable `doctor` capability declarations from the selected broker command: `capabilities.attachments:true` and `capabilities.cancel_source:true`. Caller configuration cannot assert either capability. A base V4 CLI that lacks either declaration fails loud during dispatch; wh-review never sends unsupported flags or silently drops a cancellation source.
 
 The packet is the provider's entire evidence boundary: unified diff, changed-file hashes, requirement/AC/design excerpts, host-verified test evidence, manifest/hash, contract hash, and skill bundle hash. Providers review `review-packet.v1.json` and frozen attachments only. They must not access the real repository, run `git`, or request absolute paths.
 
