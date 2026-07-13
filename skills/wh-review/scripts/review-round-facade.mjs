@@ -9,7 +9,7 @@ import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
 import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
 import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
-import { reconcileFindingState, aggregateMakeDecisionTracks } from "./finding-state.mjs";
+import { reconcileFindingState, aggregateMakeDecisionTracks, validateClosureBundle } from "./finding-state.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -134,19 +134,21 @@ function projectFinding(finding, provider) {
   const projected = { file: finding.file, line: finding.line, rule_id: finding.rule_id, severity: finding.severity, issue: finding.issue, evidence: finding.evidence, suggested_fix: finding.suggested_fix };
   return { ...projected, finding_id: findingId(projected), providers: [provider] };
 }
-function exactClosureEvidence(findings, supplied) {
-  if (findings.length === 0 && supplied === undefined) return [];
+function exactClosureEvidence(findings, supplied, deltaSource) {
+  if (findings.length === 0 && supplied === undefined) return { items: [], unverifiedBlockingIds: [] };
   if (!Array.isArray(supplied)) throw new Error("closure_evidence is required for every previous finding");
-  const required = new Set(findings.map((finding) => finding.finding_id)); const seen = new Set();
+  const byId = new Map(findings.map((finding) => [finding.finding_id, finding])); const required = new Set(byId.keys()); const seen = new Set(); const unverifiedBlockingIds = [];
   for (const item of supplied) {
     if (!item || typeof item.finding_id !== "string" || typeof item.evidence !== "string" || !item.evidence.trim()) throw new Error("closure_evidence item is invalid");
     if (seen.has(item.finding_id)) throw new Error(`closure_evidence has duplicate finding id: ${item.finding_id}`);
     if (!required.has(item.finding_id)) throw new Error(`closure_evidence has unknown finding id: ${item.finding_id}`);
     seen.add(item.finding_id);
+    const checked = validateClosureBundle({ finding: byId.get(item.finding_id), closure: item, delta: deltaSource });
+    if (!checked.valid) unverifiedBlockingIds.push({ finding_id: item.finding_id, reason: checked.reason });
   }
   const missing = [...required].filter((id) => !seen.has(id));
   if (missing.length) throw new Error(`closure_evidence is missing finding ids: ${missing.join(",")}`);
-  return supplied.map((item) => ({ finding_id: item.finding_id, evidence: item.evidence }));
+  return { items: supplied.map((item) => structuredClone(item)), unverifiedBlockingIds };
 }
 function checkedCarryovers(value, previousFindings) {
   if (value === undefined) return [];
@@ -212,7 +214,7 @@ export class ReviewRoundFacade {
     const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
     const candidateProviders = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.some((mode) => mode === "file_only" || mode === "always_embed")).map((item) => item.provider).sort();
     const continuableProviders = capabilitySnapshot.providers.filter((item) => candidateProviders.includes(item.provider) && item.capabilities.continuation).map((item) => item.provider).sort();
-    let prior = this.#readFlow(input); const continuation = input.continuation === true;
+    let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
     if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
@@ -264,10 +266,12 @@ export class ReviewRoundFacade {
     const baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
     if (continuation) {
       const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
-      const closureEvidence = exactClosureEvidence(previousFindings, input.closure_evidence);
-      const crossStageCarryovers = checkedCarryovers(input.cross_stage_carryovers, previousFindings);
       const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
       const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head });
+      const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource);
+      const closureEvidence = closureCheck.items;
+      closureBundleGates = closureCheck.unverifiedBlockingIds;
+      const crossStageCarryovers = checkedCarryovers(input.cross_stage_carryovers, previousFindings);
       delta = buildContinuationDelta({ previousPacket: priorPacket, currentPacket: packet, deltaSource, previousFindings, closureEvidence, crossStageCarryovers, requiredSkills: resolution.definitions });
       const prompt = continuationPrompt(delta, { stage: input.stage, reviewTrack }); const promptBytes = Buffer.byteLength(prompt, "utf8");
       if (promptBytes > this.continuationPromptMaxBytes) throw new Error(`CONTINUATION_PROMPT_TOO_LARGE: ${promptBytes} bytes exceeds host limit ${this.continuationPromptMaxBytes}`);
@@ -297,7 +301,7 @@ export class ReviewRoundFacade {
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
-      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, delta };
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
@@ -351,15 +355,17 @@ export class ReviewRoundFacade {
       const previousFindings = prepared.delta?.previous_findings ?? [];
       const changedPaths = new Set((prepared.delta?.delta_manifest?.changed_files ?? []).flatMap((item) => [item.path, item.old_path].filter(Boolean)));
       const introducedBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial" || (!previousFindings.some((old) => old.finding_id === item.finding_id) && changedPaths.has(item.file))).map((item) => item.finding_id));
-      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], businessRound: intent.business_round, introducedBlockingIds });
+      const closureBundleGateIds = new Set((prepared.closure_bundle_gates ?? []).map((item) => item.finding_id));
+      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds });
       const merged_findings = findingState.findings;
       const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && (finding.severity === "blocking" || isHardRuleId(finding.rule_id)));
       // An escalation is a business-valid result, not an empty pass. Keep its
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
       const human_gates = [...deriveHumanGates(outcomes)];
+      for (const item of prepared.closure_bundle_gates ?? []) human_gates.push({ provider: null, verdict: "escalate_to_human", finding_id: item.finding_id, summary: `blocking closure bundle is insufficient: ${item.reason}` });
       if (findingState.escalate_to_human) human_gates.push({ provider: null, verdict: "escalate_to_human", summary: "blocking finding remained open for three rounds" });
-      const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true) || findingState.escalate_to_human;
+      const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true) || findingState.escalate_to_human || (prepared.closure_bundle_gates?.length ?? 0) > 0;
       const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery_used ?? null]));
       const receipt = { version: 1, intent, delta: prepared.delta, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
@@ -621,6 +627,7 @@ export class ReviewRoundFacade {
     return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id };
   }
   #publishMakeDecisionAggregate(taskId, reviewFlowId) {
+    assertSafeReviewFlowId(reviewFlowId);
     const direction = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "direction");
     const detail = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "detail");
     if (!direction || !detail) return null;
@@ -633,16 +640,20 @@ export class ReviewRoundFacade {
       track_review_flow_ids: { direction: direction.review_flow_id, detail: detail.review_flow_id },
       semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, merged_findings: aggregate.findings,
     };
-    const corePath = join(reviews, "make-decision-aggregate-core-receipt.json"); atomic(corePath, safeJson(aggregateCore), 0o644); const coreHash = sha(readFileSync(corePath));
-    const reportPath = join(reviews, "make-decision-aggregate.md"); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
-    const indexPath = join(reviews, "report-index-make-decision.json"); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
-    const stageResultPath = join(reviews, "stage-result-make-decision.json"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
+    const group = `make-decision-${reviewFlowId}`;
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); atomic(corePath, safeJson(aggregateCore), 0o644); const coreHash = sha(readFileSync(corePath));
+    const reportPath = join(reviews, `${group}-aggregate.md`); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
+    const indexPath = join(reviews, `report-index-${group}.json`); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    const stageResultPath = join(reviews, `stage-result-${group}.json`); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
     return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
   }
   #publishUnderLock(result, dispositions) {
     if (result.blocked_by_human_confirmation) throw new Error("human confirmation is required before publication");
     if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
-    const human_gates = verifiedHumanGates(result.provider_outcomes, result.human_gates);
+    const provider_human_gates = deriveHumanGates(result.provider_outcomes);
+    const state_human_gates = (result.human_gates ?? []).filter((gate) => gate?.provider === null && gate?.verdict === "escalate_to_human");
+    if (canonical(result.human_gates ?? []) !== canonical([...provider_human_gates, ...state_human_gates])) throw new Error("human gate provenance does not match provider outcomes or finding state");
+    const human_gates = [...provider_human_gates, ...state_human_gates];
     if (human_gates.length) throw new Error("human gate requires explicit human confirmation before publication");
     const byId = new Map(result.merged_findings.map((item) => [item.finding_id, item])); const seen = new Set();
     for (const item of dispositions.items) { const finding = byId.get(item.finding_id); if (!finding || seen.has(item.finding_id) || !["accept", "reject", "defer"].includes(item.action) || !item.evidence) throw new Error("invalid disposition"); seen.add(item.finding_id); if ((finding.severity === "blocking" || isHardRuleId(finding.rule_id)) && item.action === "accept") throw new Error("hard invariant finding cannot be accepted"); }

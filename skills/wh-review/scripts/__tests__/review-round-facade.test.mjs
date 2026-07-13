@@ -130,7 +130,7 @@ describe("ReviewRoundFacade", () => {
     const reviews = join(tracking, "track-isolation", "reviews");
     expect(existsSync(join(reviews, "private", "flows", "make-decision-direction-shared-flow.json"))).toBe(true);
     expect(existsSync(join(reviews, "private", "flows", "make-decision-detail-shared-flow.json"))).toBe(true);
-    expect(JSON.parse(readFileSync(join(reviews, "stage-result-make-decision.json"), "utf8"))).toMatchObject({ stage: "make-decision", verdict: "revise_required", review_tracks: ["direction", "detail"] });
+    expect(JSON.parse(readFileSync(join(reviews, "stage-result-make-decision-shared-flow.json"), "utf8"))).toMatchObject({ stage: "make-decision", verdict: "revise_required", review_tracks: ["direction", "detail"] });
     expect(existsSync(join(reviews, "stage-result-make-decision-direction.json"))).toBe(true);
     expect(existsSync(join(reviews, "stage-result-make-decision-detail.json"))).toBe(true);
   });
@@ -145,6 +145,23 @@ describe("ReviewRoundFacade", () => {
       facade.publish(result, { items: [] });
     }
     expect(existsSync(join(tracking, "separate-groups", "reviews", "stage-result-make-decision.json"))).toBe(false);
+  });
+
+  it("does not expose an old aggregate through a new flow's stage-result path", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const track = request.packet.review_track;
+      return { providers: [{ provider: "opencode", status: "completed", session_id: `${track}-session`, output: makeDecisionOutput(request.packet, track) }] };
+    }) });
+    for (const review_track of ["direction", "detail"]) {
+      const result = await facade.run(facade.prepare({ task_id: "stale-aggregate", stage: "make-decision", review_track, review_flow_id: "old-group", packet: makeDecisionPacket(tracking, review_track), repository_root: tracking }));
+      facade.publish(result, { items: [] });
+    }
+    const newer = await facade.run(facade.prepare({ task_id: "stale-aggregate", stage: "make-decision", review_track: "direction", review_flow_id: "new-group", packet: makeDecisionPacket(tracking, "direction"), repository_root: tracking }));
+    expect(facade.publish(newer, { items: [] }).aggregate).toBeNull();
+    const reviews = join(tracking, "stale-aggregate", "reviews");
+    expect(existsSync(join(reviews, "stage-result-make-decision-old-group.json"))).toBe(true);
+    expect(existsSync(join(reviews, "stage-result-make-decision-new-group.json"))).toBe(false);
+    expect(existsSync(join(reviews, "stage-result-make-decision.json"))).toBe(false);
   });
 
   it("takes the shared task lock before publishing a make-decision track", async () => {

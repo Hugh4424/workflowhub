@@ -663,6 +663,8 @@ await runReviewRound({ stage: "make-decision", review_track: "detail", review_fl
 The direction packet contains only the original requirement. The detail packet may add
 the decision log. The shared flow id is the aggregation group; each track still has its
 own runtime, receipt, and continuation. Later rounds use `continuation: true` with the
-same flow id; reset requires an explicit human approval reference.
+same flow id; reset requires an explicit human approval reference. Consume only the
+group-scoped aggregate `stage-result-make-decision-<review_flow_id>.json`; never read a
+fixed make-decision stage-result path.
 
 ## End V4 Review Round
