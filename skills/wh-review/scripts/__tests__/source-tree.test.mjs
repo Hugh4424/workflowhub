@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertCurrentTree, buildTreeMaterial, captureWorktreeTree, headTree } from "../source-tree.mjs";
@@ -77,6 +77,22 @@ describe("source-tree", () => {
     expect(material.unified_diff).toContain("GIT binary patch");
     expect(binaryEntry).toMatchObject({ status: "modified", sha256: sha(gitBytes(repository, ["show", `${snapshotTree}:binary.bin`])), size: binary.length });
     expect(addedEntry).toMatchObject({ status: "added", sha256: sha(Buffer.from("new review material\n")), size: Buffer.byteLength("new review material\n") });
+  });
+
+  it("treats a Git type change as modified material with hashes from both trees", () => {
+    const repository = root(); const baseTree = headTree(repository);
+    rmSync(join(repository, "modified.txt")); symlinkSync("link-target.txt", join(repository, "modified.txt"));
+    const snapshotTree = captureWorktreeTree(repository, { baseTree });
+    const material = buildTreeMaterial(repository, { baseTree, snapshotTree });
+    const typeChanged = material.changed_files.find((entry) => entry.path === "modified.txt");
+
+    expect(typeChanged).toMatchObject({
+      status: "modified",
+      sha256: sha(Buffer.from("link-target.txt")), size: Buffer.byteLength("link-target.txt"),
+      old_sha256: sha(Buffer.from("base modified\n")), old_size: Buffer.byteLength("base modified\n"),
+    });
+    expect(material.unified_diff).toContain("deleted file mode 100644");
+    expect(material.unified_diff).toContain("new file mode 120000");
   });
 
   it("rejects final commit when the worktree no longer equals the approved tree", () => {

@@ -43,7 +43,7 @@ function parseNameStatus(output) {
     const token = fields[index++];
     if (!token) continue;
     const kind = token[0];
-    if (!["A", "M", "D", "R"].includes(kind)) throw new Error(`unsupported source tree change status: ${token}`);
+    if (!["A", "M", "D", "R", "T"].includes(kind)) throw new Error(`unsupported source tree change status: ${token}`);
     const oldPath = kind === "R" ? fields[index++] : null;
     const path = fields[index++];
     if (!safeRelativePath(path) || (oldPath !== null && !safeRelativePath(oldPath))) throw new Error("source tree contains an unsafe path");
@@ -79,7 +79,7 @@ export function buildTreeMaterial(root, { baseTree, snapshotTree } = {}) {
   const unified_diff = String(git(repository, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, snapshot]));
   const changes = parseNameStatus(git(repository, ["diff", "--name-status", "-z", "--find-renames", base, snapshot]));
   const changed_files = changes.map(({ kind, path, oldPath }) => {
-    const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed" })[kind] };
+    const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed", T: "modified" })[kind] };
     if (oldPath !== null) entry.old_path = oldPath;
     if (kind !== "D") {
       const bytes = blob(repository, snapshot, path);
