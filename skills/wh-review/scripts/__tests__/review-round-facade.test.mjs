@@ -17,15 +17,15 @@ function packet({ root, marker = "WH_REVIEW_SMOKE_DIFF_MARKER" } = {}) {
     version: "review-packet.v1", stage: "build-code", review_track: null,
     diff_sha256: hash(unified_diff), unified_diff, changed_files, raw_requirement: "do the thing",
     acceptance_design_excerpt: "AC: works", test_evidence: [{ name: "unit", status: "passed" }],
-    host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash("skills"),
+    host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
   };
   output.manifest_hash = hash(canonical({ diff_sha256: output.diff_sha256, changed_files, raw_requirement: output.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: output.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: output.test_evidence, host_verified_facts: [], contract_hash: output.contract_hash, skill_bundle_hash: output.skill_bundle_hash }));
   return output;
 }
-function output(input, verdict = "pass") {
+function output(input, verdict = "pass", severity = "blocking") {
   return JSON.stringify({ packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
     contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
-    summary: "review complete", findings: verdict === "pass" ? [] : [{ file: "a", line: 1, rule_id: "hard", severity: "blocking", issue: "bad", evidence: "marker", suggested_fix: "fix" }],
+    summary: "review complete", findings: verdict === "pass" ? [] : [{ file: "a", line: 1, rule_id: "hard", severity, issue: "bad", evidence: "marker", suggested_fix: "fix" }],
     checklist: [{ id: "hard", passed: verdict === "pass", evidence: "packet" }], skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "cause", fixApproach: "fix" } : {}) });
 }
@@ -67,6 +67,13 @@ describe("ReviewRoundFacade", () => {
     expect(seen[1].request.continuation).toEqual({ runtime_id: "22222222-2222-4222-8222-222222222222" });
   });
 
+  it("rejects a stage or track mutation after the packet is sealed", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const prepared = facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
+    prepared.packet.stage = "verify-code";
+    await expect(facade.run(prepared)).rejects.toThrow(/sealed review packet was modified/);
+  });
+
   it("does not aggregate cancelled, incomplete, or malformed results and requires a cancel source", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "33333333-3333-4333-8333-333333333333", providers: [
@@ -97,6 +104,15 @@ describe("ReviewRoundFacade", () => {
     const held = facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "one", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } });
     expect(() => facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "two", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true } } })).toThrow(/review-already-running/);
     rmSync(held.lock, { recursive: true, force: true });
+  });
+
+  it("merges equivalent findings without dropping provider evidence or weakening severity", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "55555555-5555-4555-8555-555555555555", providers: [
+      { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet, "revise_required", "minor") },
+      { provider: "kimi", status: "completed", session_id: "k", output: output(request.packet, "revise_required", "blocking") },
+    ] })) });
+    const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking, provider_capabilities: { opencode: { continuation: true }, kimi: { continuation: true } } }));
+    expect(result.merged_findings).toHaveLength(1); expect(result.merged_findings[0]).toMatchObject({ severity: "blocking", providers: ["kimi", "opencode"] }); expect(result.merged_findings[0].evidence_by_provider).toHaveLength(2);
   });
 
   it("records lock ownership, reclaims a proven-stale owner, and releases lock after prepare recovery errors", () => {

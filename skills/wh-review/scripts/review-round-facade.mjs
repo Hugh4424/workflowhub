@@ -14,6 +14,7 @@ function canonical(value) {
 }
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const reviewPacketSchema = JSON.parse(readFileSync(new URL("../schemas/review-packet.schema.json", import.meta.url), "utf8"));
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
 function stripFence(value) { const text = String(value ?? "").trim(); const found = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i); return found ? found[1] : text; }
 function parseOutput(value) { try { return { ok: true, value: JSON.parse(stripFence(value)) }; } catch { return { ok: false }; } }
@@ -24,8 +25,21 @@ function manifestValue(packet) {
   return { diff_sha256: materials.diff_sha256, changed_files: materials.changed_files.map(({ path, sha256, size }) => ({ path, sha256, size })), raw_requirement: materials.raw_requirement, decision_log_excerpt: materials.decision_log_excerpt ?? null, acceptance_design_excerpt: materials.acceptance_design_excerpt ?? null, planning_artifacts: materials.planning_artifacts ?? [], verification_closure: materials.verification_closure ?? [], test_evidence: materials.test_evidence ?? [], host_verified_facts: materials.host_verified_facts, contract_hash: materials.contract_hash, skill_bundle_hash: materials.skill_bundle_hash };
 }
 function packetComplete(packet) {
-  return packet && packet.version === "review-packet.v1" && typeof packet.unified_diff === "string" && Array.isArray(packet.changed_files) &&
-    typeof packet.raw_requirement === "string" && Array.isArray(packet.host_verified_facts) && /^[a-f0-9]{64}$/.test(packet.manifest_hash ?? "") && /^[a-f0-9]{64}$/.test(packet.diff_sha256 ?? "");
+  if (!packet || typeof packet !== "object" || Array.isArray(packet)) return false;
+  if (reviewPacketSchema.required.some((key) => !Object.hasOwn(packet, key))) return false;
+  if (Object.keys(packet).some((key) => !Object.hasOwn(reviewPacketSchema.properties, key))) return false;
+  if (packet.version !== "review-packet.v1" || !reviewPacketSchema.properties.stage.enum.includes(packet.stage)) return false;
+  if (![null, "direction", "detail"].includes(packet.review_track)) return false;
+  if (packet.stage === "make-decision" ? !["direction", "detail"].includes(packet.review_track) : packet.review_track !== null) return false;
+  if (typeof packet.unified_diff !== "string" || !Array.isArray(packet.changed_files) || typeof packet.raw_requirement !== "string" || !Array.isArray(packet.host_verified_facts)) return false;
+  if (!["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"].every((key) => typeof packet[key] === "string" && /^[a-f0-9]{64}$/.test(packet[key]))) return false;
+  if (packet.stage === "make-decision" && packet.review_track === "direction" && ["decision_log_excerpt", "acceptance_design_excerpt", "planning_artifacts", "verification_closure", "test_evidence"].some((key) => Object.hasOwn(packet, key))) return false;
+  if (packet.stage === "make-decision" && packet.review_track === "detail" && (typeof packet.decision_log_excerpt !== "string" || typeof packet.acceptance_design_excerpt !== "string")) return false;
+  if (packet.stage === "build-spec" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.planning_artifacts))) return false;
+  if (packet.stage === "build-plan" && !Array.isArray(packet.planning_artifacts)) return false;
+  if (packet.stage === "build-code" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.test_evidence))) return false;
+  if (packet.stage === "verify-code" && (typeof packet.acceptance_design_excerpt !== "string" || !Array.isArray(packet.verification_closure) || !Array.isArray(packet.test_evidence))) return false;
+  return true;
 }
 function sealPacket(packet, changedFileRoot) {
   if (!packetComplete(packet)) throw new Error("review-packet.v1 is incomplete");
@@ -47,6 +61,7 @@ function sealPacket(packet, changedFileRoot) {
   packet.packet_hash = packetHash(packet);
   return packet;
 }
+function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
 function classifyTransport(item) {
   if (item?.status === "cancelled") return "cancelled";
@@ -77,11 +92,17 @@ export class ReviewRoundFacade {
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const packet = structuredClone(input.packet);
-    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot); }
-    catch (error) { return this.#materialIncomplete(input, error.message); }
-    packet.stage = input.stage; packet.review_track = input.review_track ?? null;
+    const reviewTrack = input.review_track ?? null;
+    if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
     const { contractHash } = contractPathAndHash(input.stage);
     if (packet.contract_hash !== contractHash && !input.allow_contract_hash_override) return this.#materialIncomplete(input, "contract hash mismatch");
+    const resolution = resolveRequiredSkills({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
+    const actualBundleHash = bundleHash(resolution);
+    if (packet.skill_bundle_hash !== actualBundleHash) return this.#materialIncomplete(input, "skill bundle hash mismatch");
+    packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
+    try { sealPacket(packet, input.changed_file_root ?? repositoryRoot); }
+    catch (error) { return this.#materialIncomplete(input, error.message); }
+    if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
@@ -91,7 +112,7 @@ export class ReviewRoundFacade {
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
-      return { intent, packet, input, lock, dir };
+      return { intent, packet, input, lock, dir, resolution, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash };
     } catch (error) { this.#releaseLock(lock); throw error; }
   }
 
@@ -99,6 +120,7 @@ export class ReviewRoundFacade {
     const { intent, packet, input } = prepared;
     let attachmentPlan = null;
     try {
+      if (packet.packet_hash !== prepared.sealed_packet_hash || packetHash(packet) !== prepared.sealed_packet_hash || packet.stage !== intent.stage || packet.review_track !== intent.review_track) throw new Error("MATERIAL_INCOMPLETE: sealed review packet was modified after prepare");
       if (intent.initial_runtime_id && this.broker.status) {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
@@ -113,12 +135,23 @@ export class ReviewRoundFacade {
       const continuable_providers = this.#continuableProviders(input);
       const eligible = continuable_providers.length > 0 && continuable_providers.every((provider) => outcomes.some((item) => item.provider === provider && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.session_id));
       const aggregate = outcomes.filter((item) => item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.semantic_verdict);
-      const unique = new Map(); for (const item of aggregate) for (const finding of item.findings) unique.set(finding.finding_id, finding);
+      const severityRank = { minor: 1, important: 2, blocking: 3 };
+      const unique = new Map();
+      for (const item of aggregate) for (const finding of item.findings) {
+        const existing = unique.get(finding.finding_id);
+        const providerEvidence = { provider: item.provider, evidence: finding.evidence, suggested_fix: finding.suggested_fix, severity: finding.severity };
+        if (!existing) unique.set(finding.finding_id, { ...finding, providers: [item.provider], evidence_by_provider: [providerEvidence] });
+        else {
+          existing.providers = [...new Set([...existing.providers, item.provider])].sort();
+          existing.evidence_by_provider.push(providerEvidence);
+          if (severityRank[finding.severity] > severityRank[existing.severity]) existing.severity = finding.severity;
+        }
+      }
       const merged_findings = [...unique.values()]; const hard_gates = merged_findings.filter((finding) => finding.severity === "blocking" || finding.rule_id.startsWith("hard"));
       const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, provider_outcomes: outcomes, merged_findings, hard_gates, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
-      this.#writeFlow(intent, { ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (this.#readFlow(intent)?.business_round ?? 0), packet_hash: packet.packet_hash });
+      this.#writeFlow(intent, { ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (this.#readFlow(intent)?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
       return result;
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagedPacket) rmSync(attachmentPlan.stagedPacket, { force: true }); }
   }
@@ -187,7 +220,8 @@ export class ReviewRoundFacade {
     const add = (sourcePath, destination, embed = true) => { const bytes = readFileSync(sourcePath); return { source: rel(sourcePath), destination, size: bytes.length, sha256: sha(bytes), embed }; };
     const { contractPath } = contractPathAndHash(prepared.intent.stage);
     const protocol = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
-    const resolution = resolveRequiredSkills({ stage: prepared.intent.stage, reviewTrack: prepared.intent.review_track, ui: Boolean(prepared.input.ui) });
+    const resolution = prepared.resolution;
+    if (bundleHash(resolution) !== prepared.intent.skill_bundle_hash || bundleHash(resolution) !== prepared.frozen_bundle_hash) throw new Error("MATERIAL_INCOMPLETE: attachment bundle hash changed after prepare");
     const entries = [add(stagedPacket, "review-packet.v1.json"), add(protocol, "contracts/provider-protocol.md"), add(contractPath, `contracts/${prepared.intent.stage}.md`)];
     for (const definition of resolution.definitions) for (const file of definition.bundle.files) entries.push(add(join(repositoryRoot, "skills", definition.name, file.path), `skills/${definition.name}/${file.path}`));
     return { stagedPacket, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
