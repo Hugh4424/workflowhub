@@ -11,6 +11,7 @@ const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "veri
 function step(step_id, order, depends_on = [], entry_conditions = null) {
   return {
     step_id,
+    step_slug: `step-${step_id}`,
     order,
     entry_conditions: entry_conditions ?? (
       depends_on.length > 0
@@ -23,8 +24,8 @@ function step(step_id, order, depends_on = [], entry_conditions = null) {
   };
 }
 
-function manifest(steps = [step("prepare", 1), step("execute", 2, ["prepare"])]) {
-  return { schema_version: "1.0.0", stage_slug: "make-decision", steps };
+function manifest(steps = [step(1, 1), step(2, 2, [1])]) {
+  return { schema_version: "2.0.0", stage_slug: "make-decision", steps };
 }
 
 describe("canonical step manifest", () => {
@@ -33,21 +34,21 @@ describe("canonical step manifest", () => {
   });
 
   it("rejects duplicate stable step IDs", () => {
-    const result = validateStepManifest(manifest([step("prepare", 1), step("prepare", 2)]));
+    const result = validateStepManifest(manifest([step(1, 1), step(1, 2)]));
 
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/duplicate.*step_id|step_id.*duplicate/i);
   });
 
   it("rejects an order gap", () => {
-    const result = validateStepManifest(manifest([step("prepare", 1), step("execute", 3)]));
+    const result = validateStepManifest(manifest([step(1, 1), step(2, 3)]));
 
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/continuous|contiguous|order.*gap/i);
   });
 
   it("rejects a step without all required execution evidence fields", () => {
-    const incomplete = step("prepare", 1);
+    const incomplete = step(1, 1);
     delete incomplete.entry_conditions;
     delete incomplete.completion_evidence;
     delete incomplete.observable_result;
@@ -61,7 +62,7 @@ describe("canonical step manifest", () => {
   });
 
   it("rejects a dependency that does not identify a declared step", () => {
-    const result = validateStepManifest(manifest([step("prepare", 1, ["missing-step"]) ]));
+    const result = validateStepManifest(manifest([step(1, 1, [99]) ]));
 
     expect(result.ok).toBe(false);
     expect(result.errors.join("\n")).toMatch(/missing-step|depend/i);
@@ -69,8 +70,8 @@ describe("canonical step manifest", () => {
 
   it("rejects a dependency without matching entry evidence", () => {
     const result = validateStepManifest(manifest([
-      step("prepare", 1),
-      step("execute", 2, ["prepare"], [{ kind: "precondition", uri_or_path: "memory://execute/entry" }]),
+      step(1, 1),
+      step(2, 2, [1], [{ kind: "precondition", uri_or_path: "memory://2/entry" }]),
     ]));
 
     expect(result.ok).toBe(false);
@@ -79,8 +80,8 @@ describe("canonical step manifest", () => {
 
   it("rejects a forward dependency even when its entry evidence is declared", () => {
     const result = validateStepManifest(manifest([
-      step("prepare", 1, ["execute"]),
-      step("execute", 2),
+      step(1, 1, [2]),
+      step(2, 2),
     ]));
 
     expect(result.ok).toBe(false);
@@ -88,14 +89,14 @@ describe("canonical step manifest", () => {
   });
 
   it("rejects blank dependency identifiers", () => {
-    const result = validateStepManifest(manifest([step("prepare", 1, [" "])]));
+    const result = validateStepManifest(manifest([step(1, 1, [0]) ]));
 
     expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/depends_on.*non-empty|dependency.*non-empty/i);
+    expect(result.errors.join("\n")).toMatch(/depends_on.*positive integers|dependency.*positive/i);
   });
 
   it("rejects malformed entry and completion evidence references", () => {
-    const malformed = step("prepare", 1);
+    const malformed = step(1, 1);
     malformed.entry_conditions = [{ kind: "precondition" }];
     malformed.completion_evidence = ["evidence"];
 
@@ -108,7 +109,7 @@ describe("canonical step manifest", () => {
 
   it("rejects cyclic dependencies", () => {
     const result = validateStepManifest(
-      manifest([step("prepare", 1, ["execute"]), step("execute", 2, ["prepare"])])
+      manifest([step(1, 1, [2]), step(2, 2, [1])])
     );
 
     expect(result.ok).toBe(false);

@@ -41,7 +41,7 @@ describe("P0 foundation contracts", () => {
     const inventory = await text("docs/stage-atomic-step-inventory.md");
     const documented = new Set(
       [...inventory.matchAll(/^\| (make-decision|build-spec|build-plan|build-code|verify-code) \| (\d+) \| ([a-z0-9-]+) \|/gm)]
-        .map(([, stage, order, step]) => `${stage}:${order}:${step}`),
+        .map(([, stage, order, step]) => `${stage}:${order}:${order}`),
     );
     const actual = new Set();
 

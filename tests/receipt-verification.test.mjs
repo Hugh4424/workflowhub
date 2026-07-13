@@ -143,8 +143,9 @@ function writeStageResult(dir, content) {
 describe("Phase 2 receipt identity contract", () => {
   const identity = {
     workflow_run_id: "run-phase2-001",
-    stage_slug: "bc",
-    step_id: "bc.work.1",
+    stage_slug: "build-code",
+    step_id: 1,
+    manifest_schema_version: "2.0.0",
     attempt_id: "attempt-1",
     timestamp: "2026-07-13T00:00:00.000Z",
   };
@@ -161,6 +162,7 @@ describe("Phase 2 receipt identity contract", () => {
     expect(() => validateExitPayload({
       ...identity,
       event_type: "step_exit",
+      entry_journal_entry_id: "entry-phase2-001",
       terminal_status: "success",
       completion_evidence: { kind: "test", uri_or_path: "evidence/phase-2-GREEN.json" },
     })).not.toThrow();
