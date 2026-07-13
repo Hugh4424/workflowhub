@@ -657,6 +657,37 @@ describe("ReviewRoundFacade", () => {
     expect(existsSync(join(dirname(result.receipt_draft_ref), "core-receipt.json"))).toBe(false);
   });
 
+  it("takes the shared task projection lock before running a make-decision track", async () => {
+    const tracking = root(); let providerCalls = 0;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { providerCalls += 1; return { providers: [] }; }) });
+    const prepared = await facade.prepare({ task_id: "aggregate-run-lock", stage: "make-decision", review_track: "direction", review_flow_id: "shared-flow", packet: makeDecisionPacket(tracking, "direction") });
+    const sharedLock = join(tracking, "aggregate-run-lock", "reviews", "private", "flows", "aggregate-run-lock.lock"); mkdirSync(sharedLock, { recursive: true });
+    await expect(facade.run(prepared)).rejects.toThrow(/review-already-running/);
+    expect(providerCalls).toBe(0);
+  });
+
+  it("takes the shared task projection lock before recovery", () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    const sharedLock = join(tracking, "aggregate-recover-lock", "reviews", "private", "flows", "aggregate-recover-lock.lock"); mkdirSync(sharedLock, { recursive: true });
+    expect(() => facade.recover({ task_id: "aggregate-recover-lock" })).toThrow(/review-already-running/);
+  });
+
+  it.each(["before-public-aggregate-core-write", "before-public-aggregate-report-write", "before-public-aggregate-index-write", "before-public-aggregate-stage-result"])("rebuilds a make-decision aggregate after a crash at %s", async (crashPoint) => {
+    const tracking = root(); const flow = `aggregate-recover-${crashPoint}`;
+    const broker = fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: `${request.packet.review_track}-session`, output: makeDecisionOutput(request.packet, request.packet.review_track) }] }));
+    const stable = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const direction = await stable.run(stable.prepare({ task_id: "aggregate-recover", stage: "make-decision", review_track: "direction", review_flow_id: flow, packet: makeDecisionPacket(tracking, "direction") }));
+    expect(stable.publish(direction, { items: [] }).aggregate).toBeNull();
+    const crashing = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, faultInjector(point) { if (point === crashPoint) throw new Error(`aggregate crash ${crashPoint}`); } });
+    const detail = await crashing.run(crashing.prepare({ task_id: "aggregate-recover", stage: "make-decision", review_track: "detail", review_flow_id: flow, packet: makeDecisionPacket(tracking, "detail") }));
+    expect(() => crashing.publish(detail, { items: [] })).toThrow(`aggregate crash ${crashPoint}`);
+    const recovered = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(recovered.recover({ task_id: "aggregate-recover" }).recovered).toBeGreaterThanOrEqual(1);
+    const reviews = join(tracking, "aggregate-recover", "reviews"); const group = `make-decision-${flow}`;
+    for (const name of [`${group}-aggregate-core-receipt.json`, `${group}-aggregate.md`, `report-index-${group}.json`, `stage-result-${group}.json`]) expect(existsSync(join(reviews, name))).toBe(true);
+    for (const track of ["direction", "detail"]) expect(existsSync(join(reviews, `projection-pending-make-decision-${track}-${flow}.json`))).toBe(false);
+  });
+
   it("schema-validates packets and provider JSON at their boundaries", async () => {
     const tracking = root(); const value = packet({ root: tracking }); value.fenced = "secret-value";
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
@@ -753,13 +784,49 @@ describe("ReviewRoundFacade", () => {
     expect(JSON.parse(readFileSync(join(reviews, "stage-result-build-code.json"), "utf8"))).toMatchObject({ verdict: "pass", needs_human: false });
   });
 
-  it("fails loud and retains a guard when recovery has no private receipt", () => {
+  it("removes a guard left before any private receipt and permits the flow retry", async () => {
     const tracking = root(); const reviews = join(tracking, "orphan-projection", "reviews"); mkdirSync(reviews, { recursive: true });
     const guard = join(reviews, "projection-pending-build-code-flow.json");
     writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-projection", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-flow.json" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: capabilityBroker(async () => ({ providers: [] })) });
+    expect(facade.recover({ task_id: "orphan-projection" })).toEqual({ recovered: 1 });
+    expect(existsSync(guard)).toBe(false);
+    const prepared = await facade.prepare({ task_id: "orphan-projection", stage: "build-code", review_flow_id: "flow", packet: trustedPacket(tracking) });
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("fails loud and retains an orphan guard when any public projection exists", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-projection", "reviews"); mkdirSync(reviews, { recursive: true });
+    const guard = join(reviews, "projection-pending-build-code-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-projection", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true, guard_ref: "reviews/projection-pending-build-code-flow.json" }));
+    writeFileSync(join(reviews, "stage-result-build-code.json"), JSON.stringify({ verdict: "pass" }));
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
     expect(() => facade.recover({ task_id: "orphan-projection" })).toThrow(/PROJECTION_RECOVERY_RECEIPT_MISSING/);
     expect(existsSync(guard)).toBe(true);
+  });
+
+  it("fails loud and retains a tampered full-done public guard bound to a private receipt", async () => {
+    const tracking = root(); const trusted = trustedPacket(tracking);
+    const crashing = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] })), faultInjector(point) { if (point === "before-public-stage-result") throw new Error("projection crash"); } });
+    const result = await crashing.run(crashing.prepare({ task_id: "tampered-guard", stage: "build-code", review_flow_id: "flow", packet: trusted }));
+    expect(() => crashing.publish(result, { items: [] })).toThrow(/projection crash/);
+    writeFileSync(join(dirname(result.receipt_draft_ref), "projection-manifest.json"), JSON.stringify({ version: 1, done_flags: { core_receipt: true, report: true, report_index: true, stage_result: true } }));
+    const guard = join(tracking, "tampered-guard", "reviews", "projection-pending-build-code-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "tampered-guard", stage: "build-code", review_track: null, review_flow_id: "other", needs_human: true, guard_ref: "reviews/projection-pending-build-code-other.json" }));
+    const recovered = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => recovered.recover({ task_id: "tampered-guard" })).toThrow(/PROJECTION_RECOVERY_GUARD_MISMATCH/);
+    expect(existsSync(guard)).toBe(true);
+  });
+
+  it.each([
+    ["cross-task", JSON.stringify({ intent: { task_id: "other-task", stage: "build-code", review_track: null, review_flow_id: "flow", business_round: 1 } }), /PROJECTION_RECOVERY_RECEIPT_TASK_MISMATCH/],
+    ["corrupt", "{not-json", /PROJECTION_RECOVERY_RECEIPT_INVALID/],
+  ])("fails loud for a %s private recovery receipt", (kind, body, expected) => {
+    const tracking = root(); const receipt = join(tracking, "receipt-recovery", "reviews", "private", `round-${kind}`, "round-receipt.json");
+    mkdirSync(dirname(receipt), { recursive: true }); writeFileSync(receipt, body);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(() => facade.recover({ task_id: "receipt-recovery" })).toThrow(expected);
+    expect(readFileSync(receipt, "utf8")).toBe(body);
   });
 
   it("recovers an interrupted immediate human-gate projection through the receipt WAL", async () => {

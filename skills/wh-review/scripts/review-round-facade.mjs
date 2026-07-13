@@ -246,18 +246,48 @@ export class ReviewRoundFacade {
   #projectionPending(intent) {
     return { version: 1, status: "pending", task_id: intent.task_id, stage: intent.stage, review_track: intent.review_track ?? null, review_flow_id: intent.review_flow_id, needs_human: true, guard_ref: relative(taskRoot(this.taskTrackingRoot, intent.task_id), this.#projectionGuardPath(intent)) };
   }
+  #readVerifiedProjectionGuard(intent) {
+    const path = this.#projectionGuardPath(intent);
+    if (!existsSync(path)) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: private projection state has no public guard");
+    let saved;
+    try { saved = JSON.parse(readFileSync(path, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: projection guard is invalid JSON"); }
+    const pending = this.#projectionPending(intent);
+    if (canonical(saved) !== canonical(pending)) throw new Error("PROJECTION_RECOVERY_GUARD_MISMATCH: projection guard does not bind this flow");
+    return { path, pending };
+  }
+  #readOrphanProjectionGuard(path, taskId) {
+    let saved;
+    try { saved = JSON.parse(readFileSync(path, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: orphan projection guard is invalid JSON"); }
+    if (saved?.task_id !== taskId) throw new Error("PROJECTION_RECOVERY_GUARD_TASK_MISMATCH: orphan projection guard belongs to another task");
+    try { assertSafeTaskId(saved.task_id); assertKnownStage(saved.stage); assertReviewTrack(saved.stage, saved.review_track ?? null); assertSafeReviewFlowId(saved.review_flow_id); }
+    catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: orphan projection guard identity is invalid"); }
+    if (canonical(saved) !== canonical(this.#projectionPending(saved))) throw new Error("PROJECTION_RECOVERY_GUARD_MISMATCH: orphan projection guard does not bind its flow");
+    return saved;
+  }
+  #hasPublicProjection(intent) {
+    const { reviews, reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
+    if ([reportPath, indexPath, stageResultPath].some(existsSync)) return true;
+    if (intent.stage === "make-decision") {
+      const group = `make-decision-${intent.review_flow_id}`;
+      if ([join(reviews, `${group}-aggregate-core-receipt.json`), join(reviews, `${group}-aggregate.md`), join(reviews, `report-index-${group}.json`), join(reviews, `stage-result-${group}.json`)].some(existsSync)) return true;
+    }
+    const cores = join(reviews, "core-receipts");
+    if (!existsSync(cores)) return false;
+    return readdirSync(cores).some((name) => {
+      if (!name.endsWith(".json")) return false;
+      try { return canonical(JSON.parse(readFileSync(join(cores, name), "utf8"))?.intent) === canonical(intent); }
+      catch { return false; }
+    });
+  }
   #ensureProjectionGuard(intent) {
     const pending = this.#projectionPending(intent); const path = this.#projectionGuardPath(intent);
-    if (existsSync(path)) {
-      let saved; try { saved = JSON.parse(readFileSync(path, "utf8")); }
-      catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: projection guard is invalid JSON"); }
-      if (canonical(saved) !== canonical(pending)) throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: projection guard does not bind this flow");
-      return pending;
-    }
+    if (existsSync(path)) return this.#readVerifiedProjectionGuard(intent).pending;
     atomic(path, safeJson(pending), 0o644); return pending;
   }
   #completeProjection(intent, receiptPath) {
-    const guard = this.#projectionGuardPath(intent);
+    const { path: guard } = this.#readVerifiedProjectionGuard(intent);
     const flow = this.#readFlow(intent);
     if (!flow) throw new Error("PROJECTION_RECOVERY_FLOW_MISSING: cannot complete projection without flow");
     const receipt = JSON.parse(readFileSync(receiptPath, "utf8"));
@@ -418,8 +448,9 @@ export class ReviewRoundFacade {
   async run(prepared) {
     prepared = await prepared;
     const { intent, packet, input } = prepared;
-    let attachmentPlan = null;
+    let attachmentPlan = null; let taskLock = null;
     try {
+      if (intent.stage === "make-decision") taskLock = this.#taskProjectionLock(intent.task_id, `run-${intent.review_flow_id}`);
       if (packet.packet_hash !== prepared.sealed_packet_hash || packetHash(packet) !== prepared.sealed_packet_hash || packet.stage !== intent.stage || packet.review_track !== intent.review_track) throw new Error("MATERIAL_INCOMPLETE: sealed review packet was modified after prepare");
       if (intent.initial_runtime_id && this.broker.status) {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
@@ -511,14 +542,14 @@ export class ReviewRoundFacade {
       // its redacted gate projection in this same run, instead of waiting for
       // a later prepare() recovery pass to revoke a stale public pass.
       if (human_gates.length) {
-        let taskLock = null;
+        let humanTaskLock = null;
         try {
-          if (intent.stage === "make-decision") taskLock = this.#taskProjectionLock(intent.task_id, `human-gate-${intent.review_flow_id}`);
+          if (intent.stage !== "make-decision") humanTaskLock = this.#taskProjectionLock(intent.task_id, `human-gate-${intent.review_flow_id}`);
           this.#writeHumanGateBlock(receipt, receiptPath, join(prepared.dir, "projection-manifest.json"), human_gates);
-        } finally { if (taskLock) this.#releaseLock(taskLock); }
+        } finally { if (humanTaskLock) this.#releaseLock(humanTaskLock); }
       }
       return validateSchema("round-run-result", result);
-    } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
+    } finally { if (taskLock) this.#releaseLock(taskLock); this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
 
   #acquireLock(intent) {
@@ -610,17 +641,28 @@ export class ReviewRoundFacade {
     const privateRoot = join(reviews, "private");
     const guards = existsSync(reviews) ? readdirSync(reviews).filter((name) => /^projection-pending-.*\.json$/.test(name)).map((name) => join(reviews, name)) : [];
     if (!existsSync(privateRoot)) {
-      if (guards.length) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has no private receipt");
-      return 0;
+      let recovered = 0;
+      for (const guardPath of guards) {
+        const intent = this.#readOrphanProjectionGuard(guardPath, taskId);
+        if (this.#hasPublicProjection(intent)) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has public artifacts but no private receipt");
+        rmSync(guardPath, { force: true }); recovered += 1;
+      }
+      return recovered;
     }
     let recovered = 0; const boundGuards = new Set();
     for (const name of readdirSync(privateRoot)) {
       if (!name.startsWith("round-")) continue; const dir = join(privateRoot, name), projection = join(dir, "projection-manifest.json"), receipt = join(dir, "round-receipt.json");
       if (!existsSync(receipt)) continue;
-      const saved = JSON.parse(readFileSync(receipt, "utf8"));
-      const guardPath = this.#projectionGuardPath(saved.intent ?? {});
-      const flow = this.#readFlow(saved.intent ?? {});
-      if (existsSync(guardPath)) boundGuards.add(guardPath);
+      let saved;
+      try { saved = JSON.parse(readFileSync(receipt, "utf8")); }
+      catch { throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt is invalid JSON"); }
+      if (saved?.intent?.task_id !== taskId) throw new Error("PROJECTION_RECOVERY_RECEIPT_TASK_MISMATCH: private receipt belongs to another task");
+      try { assertSafeTaskId(saved.intent.task_id); assertKnownStage(saved.intent.stage); assertReviewTrack(saved.intent.stage, saved.intent.review_track ?? null); assertSafeReviewFlowId(saved.intent.review_flow_id); }
+      catch { throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt intent is invalid"); }
+      if (resolve(dir) !== resolve(this.#root(saved.intent))) throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt directory does not bind its intent");
+      const guardPath = this.#projectionGuardPath(saved.intent);
+      const flow = this.#readFlow(saved.intent);
+      if (existsSync(guardPath)) { boundGuards.add(guardPath); this.#readVerifiedProjectionGuard(saved.intent); }
       if (saved.projection_pending !== undefined || flow?.projection_pending !== undefined) {
         if (!existsSync(guardPath)) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: private projection state has no public guard");
         const pending = this.#projectionPending(saved.intent);
@@ -638,15 +680,24 @@ export class ReviewRoundFacade {
       verifiedHumanGates(saved.provider_outcomes, saved.human_gates);
       const flags = existsSync(projection) ? (JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}) : {};
       if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) {
-        if (existsSync(guardPath)) this.#completeProjection(saved.intent, receipt);
+        if (saved.intent.stage === "make-decision") {
+          if (existsSync(guardPath)) {
+            const aggregate = this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
+            if (!aggregate) throw new Error("PROJECTION_RECOVERY_AGGREGATE_MISSING: complete make-decision tracks have no aggregate authority");
+            recovered += 1;
+          }
+        } else if (existsSync(guardPath)) this.#completeProjection(saved.intent, receipt);
         continue;
       }
       if (!Array.isArray(saved.dispositions)) continue;
       this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, blocked_by_human_confirmation: saved.blocked_by_human_confirmation, receipt_draft_ref: receipt }, { items: saved.dispositions });
       recovered += 1;
     }
-    const orphan = guards.filter((path) => !boundGuards.has(path) && existsSync(path));
-    if (orphan.length) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has no bound private receipt");
+    for (const guardPath of guards.filter((path) => !boundGuards.has(path) && existsSync(path))) {
+      const intent = this.#readOrphanProjectionGuard(guardPath, taskId);
+      if (this.#hasPublicProjection(intent)) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has public artifacts but no bound private receipt");
+      rmSync(guardPath, { force: true }); recovered += 1;
+    }
     return recovered;
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
@@ -900,7 +951,11 @@ export class ReviewRoundFacade {
     const stageResultPath = join(reviews, `stage-result-${group}.json`); this.faultInjector("before-public-aggregate-stage-result"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
     for (const track of [direction, detail]) {
       const receiptPath = resolve(this.#readFlow(track.intent)?.previous_receipt_ref ?? "");
-      this.#completeProjection(track.intent, receiptPath);
+      if (existsSync(this.#projectionGuardPath(track.intent))) this.#completeProjection(track.intent, receiptPath);
+      else {
+        const trackReceipt = JSON.parse(readFileSync(receiptPath, "utf8")); const trackFlow = this.#readFlow(track.intent);
+        if (trackReceipt.projection_pending !== undefined || trackFlow?.projection_pending !== undefined) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: aggregate track still has pending projection state");
+      }
     }
     return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, track_projections };
   }
