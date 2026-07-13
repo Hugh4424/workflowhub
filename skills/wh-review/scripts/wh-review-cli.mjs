@@ -1,21 +1,57 @@
 #!/usr/bin/env node
 
 /** V4-only CLI boundary. Workflows call run/reset; legacy prepare/execute paths are retired. */
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { BrokerClient } from "./broker-client.mjs";
 import { ReviewRoundFacade } from "./review-round-facade.mjs";
 import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
+import { assertSafeTaskId } from "./lib/safe-id.mjs";
+
+const sourceOwnedFields = new Set([
+  "source_revision", "sourceRevision", "unified_diff", "unifiedDiff", "changed_files", "changedFiles",
+  "diff_sha256", "diffSha256", "packet_hash", "packetHash", "manifest_hash", "manifestHash",
+  "repository_root", "repositoryRoot", "changed_file_root", "changedFileRoot", "source_root", "sourceRoot",
+  "source_snapshot", "sourceSnapshot",
+]);
+
+function rejectCallerSourceFields(value, scope) {
+  const fields = Object.keys(value ?? {}).filter((field) => sourceOwnedFields.has(field));
+  if (fields.length) throw new Error(`SOURCE_FIELDS_FORBIDDEN: ${scope} cannot provide ${fields.join(", ")}`);
+}
+
+function trustedTaskWorktree(input) {
+  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
+  if (!taskTrackingRoot) throw new TypeError("V4 review requires task_tracking_root");
+  const taskId = input.task_id ?? input.taskId; assertSafeTaskId(taskId);
+  const trackingRoot = realpathSync(taskTrackingRoot);
+  const statePath = join(trackingRoot, taskId, "worktree.json");
+  const stateStat = lstatSync(statePath);
+  if (!stateStat.isFile() || stateStat.isSymbolicLink()) throw new Error("trusted task worktree.json must be a real regular file");
+  let state;
+  try { state = JSON.parse(readFileSync(statePath, "utf8")); }
+  catch (error) { throw new Error(`trusted task worktree.json is invalid JSON: ${error.message}`); }
+  if (!isAbsolute(state?.worktree_root ?? "")) throw new Error("trusted task worktree.json requires an absolute worktree_root");
+  const sourceRoot = realpathSync(state.worktree_root);
+  if (!lstatSync(sourceRoot).isDirectory()) throw new Error("trusted task worktree_root must be a directory");
+  try {
+    const gitRoot = realpathSync(String(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: sourceRoot, encoding: "utf8" })).trim());
+    if (gitRoot !== sourceRoot) throw new Error("worktree_root must be the git worktree root");
+  } catch (error) { throw new Error(`trusted task worktree_root is not a git worktree: ${error.message}`); }
+  return { taskTrackingRoot: trackingRoot, sourceRoot };
+}
 
 export async function runReviewRound(input) {
+  rejectCallerSourceFields(input, "CLI input"); rejectCallerSourceFields(input.packet, "CLI packet");
   if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
   if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution and cannot be supplied by callers");
   if (input.third_review !== undefined || input.attachment_root !== undefined || input.attachmentRoot !== undefined) throw new Error("third_review and attachment_root are host-configured and cannot be supplied by callers");
-  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  if (!taskTrackingRoot) throw new TypeError("V4 review requires task_tracking_root");
+  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
   const thirdReview = loadTrustedThirdReviewConfig();
   const client = new BrokerClient({ command: thirdReview.command, config: thirdReview.config, attachmentRoot: thirdReview.attachmentRoot });
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: client });
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: client });
   const prepared = await facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
     review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
@@ -39,16 +75,16 @@ export async function runReviewRound(input) {
 }
 
 export function verifyFinalReview(input) {
-  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  if (!taskTrackingRoot) throw new TypeError("verify-final requires task_tracking_root");
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: { run() { throw new Error("verify-final does not run broker"); } } });
+  rejectCallerSourceFields(input, "CLI input"); rejectCallerSourceFields(input.packet, "CLI packet");
+  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: { run() { throw new Error("verify-final does not run broker"); } } });
   return facade.verifyFinal({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId });
 }
 
 export function resetReviewFlow(input) {
-  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  if (!taskTrackingRoot) throw new TypeError("reset requires task_tracking_root");
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, broker: { run() { throw new Error("reset does not run broker"); } } });
+  rejectCallerSourceFields(input, "CLI input"); rejectCallerSourceFields(input.packet, "CLI packet");
+  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: { run() { throw new Error("reset does not run broker"); } } });
   return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
 }
 

@@ -8,7 +8,7 @@ import { ReviewRoundFacade } from "../review-round-facade.mjs";
 import { contractPathAndHash, projectStageContract } from "../lib/safe-id.mjs";
 import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 import { reviewPacketHash } from "../review-packet-integrity.mjs";
-import { readReviewTreeRef } from "../source-tree.mjs";
+import { headTree, readReviewTreeRef } from "../source-tree.mjs";
 
 const roots = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -73,6 +73,15 @@ function stagePacket(root, stage) {
   value.decision_log_excerpt = "decision-log.md: scope is approved";
   value.planning_artifacts = [{ path: "plan.md", summary: "ordered implementation and verification" }];
   return refreshPacketHashes(value);
+}
+function uncommittedStagePacket(stage) {
+  const value = hostPacket(); const resolution = resolveRequiredSkills({ stage, reviewTrack: null });
+  value.stage = stage; value.review_track = null;
+  value.contract_hash = projectStageContract(stage).contractHash;
+  value.skill_bundle_hash = resolution.skillBundleHash;
+  value.decision_log_excerpt = "decision-log.md: scope is approved";
+  value.planning_artifacts = [{ path: "plan.md", summary: "ordered implementation and verification" }];
+  return value;
 }
 function stageOutput(input, stage, verdict = "pass") {
   const value = JSON.parse(output(input, verdict)); const resolution = resolveRequiredSkills({ stage, reviewTrack: null });
@@ -210,6 +219,53 @@ describe("ReviewRoundFacade", () => {
     writeFileSync(join(tracking, "a"), "approved without a commit\n");
     expect(facade.verifyFinal({ task_id: "final-tree", stage: "build-code", review_flow_id: "flow" })).toMatchObject({ finalized: true, approved_tree: published.approved_tree });
     expect(readReviewTreeRef(tracking, published.review_tree_ref)).toBeNull();
+  });
+
+  it("scopes protected review refs by task so finalization and reset cannot affect another task", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "shared", output: output(request.packet) }] })) });
+    writeFileSync(join(source, "a"), "task A reviewed source\n");
+    const taskA = await facade.run(facade.prepare({ task_id: "task-a", stage: "build-code", review_flow_id: "shared", packet: hostPacket() })); facade.publish(taskA, { items: [] });
+    const flowAPath = join(tracking, "task-a", "reviews", "private", "flows", "build-code-shared.json"); const flowA = JSON.parse(readFileSync(flowAPath, "utf8"));
+    writeFileSync(join(source, "a"), "task B reviewed source\n");
+    const taskB = await facade.run(facade.prepare({ task_id: "task-b", stage: "build-code", review_flow_id: "shared", packet: hostPacket() })); facade.publish(taskB, { items: [] });
+    const flowBPath = join(tracking, "task-b", "reviews", "private", "flows", "build-code-shared.json"); const flowB = JSON.parse(readFileSync(flowBPath, "utf8"));
+
+    expect(flowA.review_tree_ref).not.toBe(flowB.review_tree_ref);
+    expect(readReviewTreeRef(source, flowA.review_tree_ref)).toBe(flowA.last_reviewed_tree);
+    expect(readReviewTreeRef(source, flowB.review_tree_ref)).toBe(flowB.last_reviewed_tree);
+    writeFileSync(join(source, "a"), "task A reviewed source\n");
+    facade.verifyFinal({ task_id: "task-a", stage: "build-code", review_flow_id: "shared" });
+    expect(readReviewTreeRef(source, flowB.review_tree_ref)).toBe(flowB.last_reviewed_tree);
+    facade.reset({ task_id: "task-a", stage: "build-code", review_flow_id: "shared", new_review_flow_id: "next", reason: "human reset", human_approval_ref: "approval-a" });
+    expect(readReviewTreeRef(source, flowB.review_tree_ref)).toBe(flowB.last_reviewed_tree);
+  });
+
+  it("keeps the protected ref when final flow persistence fails", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "final", output: output(request.packet) }] })), faultInjector(point, value) { if (point === "before-flow-write" && value?.finalized_at_ms) throw new Error("final flow write failed"); } });
+    writeFileSync(join(tracking, "a"), "approved without a commit\n");
+    const result = await facade.run(facade.prepare({ task_id: "final-write-failure", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })); facade.publish(result, { items: [] });
+    const flowPath = join(tracking, "final-write-failure", "reviews", "private", "flows", "build-code-flow.json"); const flow = JSON.parse(readFileSync(flowPath, "utf8"));
+
+    expect(() => facade.verifyFinal({ task_id: "final-write-failure", stage: "build-code", review_flow_id: "flow" })).toThrow("final flow write failed");
+    expect(readReviewTreeRef(tracking, flow.review_tree_ref)).toBe(flow.approved_tree);
+  });
+
+  it("uses the task's last approved uncommitted tree as a later stage baseline", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "stage", output: stageOutput(request.packet, request.packet.stage) }] })) });
+    const initialTree = headTree(source); writeFileSync(join(source, "stage-1.txt"), "STAGE_ONE_MARKER\n");
+    const first = await facade.run(facade.prepare({ task_id: "task-context", stage: "build-spec", review_flow_id: "spec", packet: uncommittedStagePacket("build-spec") })); facade.publish(first, { items: [] });
+    const contextPath = join(tracking, "task-context", "reviews", "private", "source-context.json");
+    const firstFlow = JSON.parse(readFileSync(join(tracking, "task-context", "reviews", "private", "flows", "build-spec-spec.json"), "utf8"));
+    const firstContext = JSON.parse(readFileSync(contextPath, "utf8"));
+    expect(firstContext).toMatchObject({ initial_tree: initialTree, last_approved_tree: firstFlow.approved_tree });
+
+    writeFileSync(join(source, "stage-2.txt"), "STAGE_TWO_MARKER\n");
+    const second = await facade.run(facade.prepare({ task_id: "task-context", stage: "build-plan", review_flow_id: "plan", packet: uncommittedStagePacket("build-plan") }));
+    expect(second.intent.round_kind).toBe("initial");
+    const secondPacket = JSON.parse(readFileSync(join(tracking, "task-context", "reviews", "private", "round-build-plan-plan-1", "review-packet.json"), "utf8"));
+    expect(secondPacket.source_revision.base_tree).toBe(firstContext.last_approved_tree);
+    expect(secondPacket.unified_diff).toContain("STAGE_TWO_MARKER");
+    expect(secondPacket.unified_diff).not.toContain("STAGE_ONE_MARKER");
   });
 
   it("deletes the old review-tree ref when a human reset starts a new flow", async () => {

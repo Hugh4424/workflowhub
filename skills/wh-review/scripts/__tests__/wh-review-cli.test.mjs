@@ -32,4 +32,14 @@ describe("wh-review v4 CLI", () => {
     await expect(runReviewRound({ task_tracking_root: "/tmp", third_review: { command: "broker", config: "/config.json", attachment_root: "/packets" } })).rejects.toThrow(/host-configured/);
     await expect(runReviewRound({ task_tracking_root: "/tmp", attachment_root: "/packets" })).rejects.toThrow(/host-configured/);
   });
+
+  it.each([
+    ["top-level diff", { unified_diff: "forged" }],
+    ["packet hash", { packet: { packet_hash: "0".repeat(64) } }],
+    ["repository root", { repository_root: "/tmp/forged-repo" }],
+    ["source root alias", { sourceRoot: "/tmp/forged-repo" }],
+  ])("rejects caller-supplied %s before loading host configuration", async (_label, fields) => {
+    const { runReviewRound } = await import(cli.href);
+    await expect(runReviewRound({ task_tracking_root: "/tmp", task_id: "safe-task", ...fields })).rejects.toThrow(/SOURCE_FIELDS_FORBIDDEN/);
+  });
 });

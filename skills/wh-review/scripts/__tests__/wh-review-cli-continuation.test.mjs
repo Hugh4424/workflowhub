@@ -94,27 +94,31 @@ function expectPrivateRawDirectory(path, taskRoot) {
 describe("wh-review CLI continuation", () => {
   it("forwards closure evidence and cross-stage carryovers into a real second review round", async () => {
     const { runReviewRound } = await import(cli.href);
-    const { root, base } = repository();
-    const packetRoot = hostConfig(root);
+    const { root: worktree, base } = repository();
+    const tracking = mkdtempSync(join(tmpdir(), "wh-review-cli-tracking-")); roots.push(tracking);
+    const taskId = "cli-continuation";
+    mkdirSync(join(tracking, taskId), { recursive: true });
+    writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify({ worktree_root: worktree }));
+    const packetRoot = hostConfig(tracking);
     const firstPacket = reviewPacket();
-    await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: root });
-    const firstReceipt = JSON.parse(readFileSync(join(root, "cli-continuation", "reviews", "private", "round-build-code-flow-1", "round-receipt.json"), "utf8"));
+    await runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: tracking });
+    const firstReceipt = JSON.parse(readFileSync(join(tracking, taskId, "reviews", "private", "round-build-code-flow-1", "round-receipt.json"), "utf8"));
     const findingId = firstReceipt.merged_findings[0].finding_id;
 
-    writeFileSync(join(root, "a"), "first change\nfixed\n");
+    writeFileSync(join(worktree, "a"), "first change\nfixed\n");
     const secondPacket = reviewPacket(); broker.currentPacket = secondPacket;
     const closure_evidence = [{ finding_id: findingId, evidence: "changes.diff:a:2 records the persistence fix" }];
     const upstream = { intent: { stage: "build-plan" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "verification is scheduled after the build" }] };
-    const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = sha(upstreamBytes); const upstreamPath = join(root, "cli-continuation", "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
+    const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = sha(upstreamBytes); const upstreamPath = join(tracking, taskId, "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
     const cross_stage_carryovers = [{ carryover_id: "verify-later", source_stage: "build-plan", source_core_receipt_hash: upstreamHash, status: "open", evidence: "verification is scheduled after the build" }];
-    const result = await runReviewRound({ task_id: "cli-continuation", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: root, continuation: true, closure_evidence, cross_stage_carryovers });
+    const result = await runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: secondPacket, task_tracking_root: tracking, continuation: true, closure_evidence, cross_stage_carryovers });
 
     expect(result.transport.continuation_eligible).toBe(true);
     expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([packetRoot, packetRoot]);
     expect(broker.calls).toHaveLength(2);
     expect(broker.calls[1]).toMatchObject({ request: expect.objectContaining({ continuation: { runtime_id: "11111111-1111-4111-8111-111111111111" } }) });
     expect(Object.keys(broker.calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
-    expectPrivateRawDirectory(broker.calls[1].privateRawDirectory, join(root, "cli-continuation"));
+    expectPrivateRawDirectory(broker.calls[1].privateRawDirectory, join(realpathSync(tracking), taskId));
     expect(broker.calls[1].request.prompt).toContain(JSON.stringify(closure_evidence, null, 2));
     expect(broker.calls[1].request.prompt).toContain(JSON.stringify(cross_stage_carryovers, null, 2));
   });

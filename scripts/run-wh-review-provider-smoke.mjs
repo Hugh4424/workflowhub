@@ -98,6 +98,15 @@ function privateReceipt(taskRoot, taskId, round) {
   requireValue(existsSync(path), `SMOKE_KIMI_R${round}_FAIL: wh-review private receipt is missing`);
   return { path, value: JSON.parse(readFileSync(path, "utf8")) };
 }
+function privatePacket(taskRoot, taskId, round) {
+  const path = join(taskRoot, taskId, "reviews", "private", `round-build-code-smoke-flow-${round}`, "review-packet.json");
+  requireValue(existsSync(path), `SMOKE_KIMI_R${round}_FAIL: wh-review frozen packet is missing`);
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+function cliPacket(packet) {
+  const { round_kind, baseline_packet_hash, source_revision, unified_diff, changed_files, diff_sha256, manifest_hash, packet_hash, ...metadata } = packet;
+  return metadata;
+}
 function assertWhAggregate(receipt, expectedPacket, expectedMarker, expectedRuntimeId = null) {
   const result = receipt.value; const outcome = assertProviderRound({ providerId: "kimi", round: result.intent.business_round, response: { runtime_id: result.runtime_id, providers: result.provider_outcomes }, expectedMarker, expectedPacketHash: expectedPacket.packet_hash, expectedDiffSha256: expectedPacket.diff_sha256, expectedRuntimeId, requirePacketValidation: true });
   const eligible = result.provider_outcomes.filter((item) => item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid === true);
@@ -176,15 +185,19 @@ async function main() {
     const taskRoot = join(outputRoot, "wh-review-state"); const taskId = "provider-smoke";
     let kimiEvidence = null;
     if (!skipKimi) {
-      const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: r1Packet, task_tracking_root: taskRoot, repository_root: source };
+      const kimiSource = join(outputRoot, "kimi-worktree"); mkdirSync(kimiSource, { mode: 0o700 }); const kimiBase = setupRepository(kimiSource).base;
+      git(kimiSource, ["reset", "--hard", "-q", kimiBase]); writeFileSync(join(kimiSource, "smoke.txt"), "base\nR1_DIFF_MARKER\n");
+      write(join(taskRoot, taskId, "worktree.json"), { worktree_root: kimiSource });
+      const kimiFirstInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r1Packet), task_tracking_root: taskRoot };
       const kimiFirstInputPath = join(outputRoot, "kimi-r1-input.json"); write(kimiFirstInputPath, kimiFirstInput);
       await runWhReview({ inputPath: kimiFirstInputPath, responsePath: join(outputRoot, "kimi-r1-cli.json") });
-      const kimiR1 = privateReceipt(taskRoot, taskId, 1); const kimiOutcome1 = assertWhAggregate(kimiR1, r1Packet, "R1_DIFF_MARKER");
+      const kimiR1 = privateReceipt(taskRoot, taskId, 1); const kimiR1Packet = privatePacket(taskRoot, taskId, 1); const kimiOutcome1 = assertWhAggregate(kimiR1, kimiR1Packet, "R1_DIFF_MARKER");
       requireValue(kimiOutcome1.raw_output_ref && existsSync(kimiOutcome1.raw_output_ref), "SMOKE_KIMI_R1_FAIL: raw output evidence is missing");
-      const kimiSecondInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: r2Packet, task_tracking_root: taskRoot, repository_root: source, continuation: true, closure_evidence: closureEvidence(kimiR1) };
+      writeFileSync(join(kimiSource, "smoke.txt"), "base\nR1_DIFF_MARKER\nR2_DELTA_ONLY_MARKER\n");
+      const kimiSecondInput = { task_id: taskId, stage: "build-code", review_flow_id: "smoke-flow", host_provider: "codex", packet: cliPacket(r2Packet), task_tracking_root: taskRoot, continuation: true, closure_evidence: closureEvidence(kimiR1) };
       const kimiSecondInputPath = join(outputRoot, "kimi-r2-input.json"); write(kimiSecondInputPath, kimiSecondInput);
       await runWhReview({ inputPath: kimiSecondInputPath, responsePath: join(outputRoot, "kimi-r2-cli.json") });
-      const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, r2Packet, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
+      const kimiR2 = privateReceipt(taskRoot, taskId, 2); const kimiR2Packet = privatePacket(taskRoot, taskId, 2); const kimiOutcome2 = assertWhAggregate(kimiR2, kimiR2Packet, "R2_DELTA_ONLY_MARKER", kimiR1.value.runtime_id);
       requireValue(kimiOutcome2.session_id === kimiOutcome1.session_id, "SMOKE_KIMI_R2_FAIL: provider session_id changed instead of continuing");
       kimiEvidence = { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path] };
     }

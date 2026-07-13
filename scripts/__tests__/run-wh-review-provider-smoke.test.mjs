@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { assertProviderRound, directPrompt } from "../run-wh-review-provider-smoke.mjs";
 import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
@@ -50,5 +51,11 @@ describe("run-wh-review-provider-smoke", () => {
     const prompt = directPrompt(current, 2);
     expect(prompt).toContain("R2_DELTA_ONLY_MARKER");
     expect(prompt).not.toContain("R1_DIFF_MARKER");
+  });
+
+  it("creates trusted task worktree state for the Kimi CLI instead of forwarding a repository path", () => {
+    const source = readFileSync(script, "utf8");
+    expect(source).toContain('"worktree.json"');
+    expect(source).not.toContain("repository_root: source");
   });
 });

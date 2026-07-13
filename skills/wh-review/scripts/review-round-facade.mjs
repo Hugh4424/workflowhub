@@ -200,7 +200,25 @@ export class ReviewRoundFacade {
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.json`); }
-  #treeRef(intent) { return `refs/workflowhub/review/${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}`; }
+  #treeRef(intent) { return `refs/workflowhub/review/${intent.task_id}/${reviewStageStorageKey(intent.stage, intent.review_track)}/${intent.review_flow_id}`; }
+  #sourceContext(taskId) { return join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private", "source-context.json"); }
+  #readSourceContext(taskId) {
+    const path = this.#sourceContext(taskId); if (!existsSync(path)) return null;
+    let context; try { context = JSON.parse(readFileSync(path, "utf8")); } catch { throw new Error("task source context is invalid"); }
+    if (!(context?.version === 1 && /^[a-f0-9]{40,64}$/.test(context.initial_tree ?? "") && (context.last_approved_tree === null || /^[a-f0-9]{40,64}$/.test(context.last_approved_tree ?? "")))) throw new Error("task source context is invalid");
+    return context;
+  }
+  #recordInitialTree(taskId, initialTree) {
+    const existing = this.#readSourceContext(taskId); if (existing) return existing;
+    const context = { version: 1, initial_tree: initialTree, last_approved_tree: null };
+    atomic(this.#sourceContext(taskId), safeJson(context)); return context;
+  }
+  #recordLastApprovedTree(taskId, tree) {
+    const existing = this.#readSourceContext(taskId);
+    if (!existing) throw new Error("task source context is missing");
+    const context = { ...existing, last_approved_tree: tree };
+    atomic(this.#sourceContext(taskId), safeJson(context)); return context;
+  }
   #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.reset-approval.json`); }
   #lock(intent) {
     const name = intent.stage === "make-decision" ? `${intent.task_id}-${reviewStageStorageKey(intent.stage, intent.review_track)}.lock` : `${intent.task_id}.lock`;
@@ -222,7 +240,7 @@ export class ReviewRoundFacade {
     return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "core-receipts", `${coreHash}.json`);
   }
   #readFlow(intent) { const path = this.#flow(intent); return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null; }
-  #writeFlow(intent, value) { atomic(this.#flow(intent), safeJson(value)); }
+  #writeFlow(intent, value) { this.faultInjector("before-flow-write", value); atomic(this.#flow(intent), safeJson(value)); }
 
   prepare(input) {
     assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertReviewTrack(input.stage, input.review_track ?? null); assertSafeReviewFlowId(input.review_flow_id);
@@ -232,7 +250,8 @@ export class ReviewRoundFacade {
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
-    const initialHostSource = input.continuation === true ? null : buildHostWorktreeSource(this.sourceRoot, { excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
+    const sourceContext = input.continuation === true ? null : this.#readSourceContext(input.task_id);
+    const initialHostSource = input.continuation === true ? null : buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
     const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
     return this.#prepareUnderLock(input, lock, initialHostSource);
   }
@@ -345,6 +364,7 @@ export class ReviewRoundFacade {
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
+      if (!continuation) this.#recordInitialTree(input.task_id, packet.source_revision.base_tree);
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: initialPromptText };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
@@ -778,7 +798,11 @@ export class ReviewRoundFacade {
     atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
     atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
     atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
-    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) });
+    const flow = this.#readFlow(result.intent); if (flow) {
+      const updatedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
+      this.#writeFlow(result.intent, updatedFlow);
+      if (semantic_verdict === "pass") this.#recordLastApprovedTree(result.intent.task_id, updatedFlow.approved_tree);
+    }
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }
@@ -819,8 +843,8 @@ export class ReviewRoundFacade {
       error.code = "WORKTREE_DRIFT_AFTER_REVIEW";
       throw error;
     }
-    if (typeof flow.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, flow.review_tree_ref);
     this.#writeFlow(intent, { ...flow, review_tree_ref: null, finalized_at_ms: this.now() });
+    if (typeof flow.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, flow.review_tree_ref);
     return { task_id, stage, review_track, review_flow_id, approved_tree: flow.approved_tree, finalized: true };
   }
 }
