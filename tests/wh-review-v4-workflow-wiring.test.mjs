@@ -24,6 +24,11 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function git(cwd, args, encoding = "utf8") { return execFileSync("git", args, { cwd, encoding }).trim(); }
 function bundleHash(stage, reviewTrack) { return sha(canonical(resolveRequiredSkills({ stage, reviewTrack }).definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
+function refreshManifest(result) {
+  result.diff_sha256 = sha(result.unified_diff);
+  result.manifest_hash = sha(canonical({ diff_sha256: result.diff_sha256, changed_files: result.changed_files.map(({ path, old_path, status, sha256: fileHash, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: fileHash ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: result.raw_requirement, decision_log_excerpt: result.decision_log_excerpt ?? null, acceptance_design_excerpt: result.acceptance_design_excerpt ?? null, planning_artifacts: result.planning_artifacts ?? [], verification_closure: result.verification_closure ?? [], test_evidence: result.test_evidence ?? [], host_verified_facts: result.host_verified_facts, contract_hash: result.contract_hash, skill_bundle_hash: result.skill_bundle_hash, source_revision: result.source_revision }));
+  return result;
+}
 function packet(repository, stage, reviewTrack = null) {
   git(repository, ["init", "-q"]); git(repository, ["config", "user.email", "review@example.test"]); git(repository, ["config", "user.name", "Review Test"]);
   writeFileSync(join(repository, "a.txt"), "before\n"); git(repository, ["add", "a.txt"]); git(repository, ["commit", "-qm", "base"]); const base = git(repository, ["rev-parse", "HEAD"]);
@@ -35,8 +40,16 @@ function packet(repository, stage, reviewTrack = null) {
   if (stage === "make-decision" && reviewTrack === "direction") {
     delete result.decision_log_excerpt; delete result.acceptance_design_excerpt; delete result.planning_artifacts; delete result.verification_closure; delete result.test_evidence;
   }
-  result.manifest_hash = sha(canonical({ diff_sha256: result.diff_sha256, changed_files: changed_files.map(({ path, old_path, status, sha256: fileHash, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: fileHash ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: result.raw_requirement, decision_log_excerpt: result.decision_log_excerpt ?? null, acceptance_design_excerpt: result.acceptance_design_excerpt ?? null, planning_artifacts: result.planning_artifacts ?? [], verification_closure: result.verification_closure ?? [], test_evidence: result.test_evidence ?? [], host_verified_facts: result.host_verified_facts, contract_hash: result.contract_hash, skill_bundle_hash: result.skill_bundle_hash, source_revision: result.source_revision }));
-  return result;
+  return refreshManifest(result);
+}
+function deltaPacket(repository, previous) {
+  writeFileSync(join(repository, "a.txt"), "WH_REVIEW_PACKET_MARKER\nafter\nreal delta\n"); git(repository, ["add", "a.txt"]); git(repository, ["commit", "-qm", "continuation delta"]);
+  const base = previous.source_revision.base, head = git(repository, ["rev-parse", "HEAD"]);
+  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: repository, encoding: "utf8" });
+  const oldBytes = Buffer.from("before\n"), bytes = Buffer.from("WH_REVIEW_PACKET_MARKER\nafter\nreal delta\n");
+  const next = { ...previous, packet_hash: "0".repeat(64), unified_diff, changed_files: [{ path: "a.txt", status: "modified", sha256: sha(bytes), size: bytes.length, old_sha256: sha(oldBytes), old_size: oldBytes.length }], source_revision: { base, head } };
+  if (next.test_evidence) next.test_evidence = [...next.test_evidence, { name: "delta", status: "passed" }];
+  return refreshManifest(next);
 }
 function reviewerOutput(packet) {
   const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1"], evidence: "packet marker", conclusion: "checked" }));
@@ -112,14 +125,14 @@ describe("wh-review v4 workflow wiring", () => {
   ])("runs %s/%s with a complete private packet and continues its first runtime", async (stage, reviewTrack) => {
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-wiring-tracking-"));
     const repository = mkdtempSync(join(tmpdir(), "wh-review-wiring-repo-"));
-    const calls = [];
+    const calls = []; let currentPacket;
     try {
       const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: {
         async discoverCapabilities() { return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }; },
-        async run(input) { calls.push(input); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet) }] }; },
+        async run(input) { calls.push(input); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet ?? currentPacket) }] }; },
         async status() { return { expires_at_ms: Date.now() + 60_000 }; },
       } });
-      const firstPacket = packet(repository, stage, reviewTrack);
+      const firstPacket = packet(repository, stage, reviewTrack); currentPacket = firstPacket;
       const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: firstPacket, repository_root: repository };
       const first = await facade.run(facade.prepare(input));
       expect(first.provider_outcomes).toMatchObject([{ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }]);
@@ -127,9 +140,12 @@ describe("wh-review v4 workflow wiring", () => {
       expect(readFileSync(first.receipt_draft_ref, "utf8")).toContain("provider-session");
       const publication = facade.publish(first, { items: [] });
       expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
-      const second = await facade.run(facade.prepare({ ...input, packet: firstPacket, continuation: true }));
+      currentPacket = deltaPacket(repository, firstPacket);
+      const second = await facade.run(facade.prepare({ ...input, packet: currentPacket, continuation: true }));
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
       expect(calls[1].request.continuation).toEqual({ runtime_id: "11111111-1111-4111-8111-111111111111" });
+      expect(Object.keys(calls[1])).toEqual(["request"]);
+      expect(calls[1].request.prompt).toContain("real delta");
     } finally { rmSync(tracking, { recursive: true, force: true }); rmSync(repository, { recursive: true, force: true }); }
   });
 });

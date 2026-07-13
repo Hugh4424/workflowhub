@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { contractPathAndHash, assertKnownStage, assertSafeReviewFlowId, assertSafeTaskId, taskRoot } from "./lib/safe-id.mjs";
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
 import { resolveRequiredSkills } from "./required-skill-resolver.mjs";
+import { buildContinuationDelta, continuationPrompt, initialPrompt } from "./review-prompt.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 function canonical(value) {
@@ -139,6 +140,32 @@ function verifiedHumanGates(providerOutcomes, declaredGates) {
 }
 function findingId(finding) { return sha(`${finding.file}\0${finding.line}\0${finding.rule_id}\0${finding.issue.trim().toLowerCase()}`); }
 function redact(value) { return JSON.parse(JSON.stringify(value, (key, field) => /runtime_id|session_id|raw_output|diagnostic|workspace|absolute_path|delivery/i.test(key) ? undefined : field)); }
+function exactClosureEvidence(findings, supplied) {
+  if (findings.length === 0 && supplied === undefined) return [];
+  if (!Array.isArray(supplied)) throw new Error("closure_evidence is required for every previous finding");
+  const required = new Set(findings.map((finding) => finding.finding_id)); const seen = new Set();
+  for (const item of supplied) {
+    if (!item || typeof item.finding_id !== "string" || typeof item.evidence !== "string" || !item.evidence.trim()) throw new Error("closure_evidence item is invalid");
+    if (seen.has(item.finding_id)) throw new Error(`closure_evidence has duplicate finding id: ${item.finding_id}`);
+    if (!required.has(item.finding_id)) throw new Error(`closure_evidence has unknown finding id: ${item.finding_id}`);
+    seen.add(item.finding_id);
+  }
+  const missing = [...required].filter((id) => !seen.has(id));
+  if (missing.length) throw new Error(`closure_evidence is missing finding ids: ${missing.join(",")}`);
+  return supplied.map((item) => ({ finding_id: item.finding_id, evidence: item.evidence }));
+}
+function checkedCarryovers(value, previousFindings) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("cross_stage_carryovers must be an array");
+  const oldIds = new Set(previousFindings.map((finding) => finding.finding_id)); const seen = new Set();
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item) || Object.hasOwn(item, "finding_id") || oldIds.has(item.carryover_id)) throw new Error("cross_stage_carryovers cannot contain a previous finding");
+    const allowed = new Set(["carryover_id", "source_stage", "status", "evidence"]);
+    if (Object.keys(item).some((key) => !allowed.has(key)) || typeof item.carryover_id !== "string" || !item.carryover_id || seen.has(item.carryover_id)
+      || !["open", "closed", "deferred"].includes(item.status) || typeof item.evidence !== "string" || !item.evidence.trim()) throw new Error("cross_stage_carryovers requires explicit carryover_id, status, and evidence fields");
+    seen.add(item.carryover_id); return structuredClone(item);
+  });
+}
 
 export class ReviewRoundFacade {
   constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now() } = {}) {
@@ -163,6 +190,7 @@ export class ReviewRoundFacade {
 
   async #prepareUnderLock(input, lock) {
     try {
+    for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
@@ -178,27 +206,73 @@ export class ReviewRoundFacade {
     const packet = structuredClone(input.packet);
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
     const { contractHash } = contractPathAndHash(input.stage);
-    if (packet.contract_hash !== contractHash && !input.allow_contract_hash_override) return this.#materialIncomplete(input, "contract hash mismatch");
+    if (packet.contract_hash !== contractHash && !input.allow_contract_hash_override) {
+      if (continuation) throw new Error("blocked_by_human_confirmation: frozen contract changed; use reset with human approval");
+      return this.#materialIncomplete(input, "contract hash mismatch");
+    }
     const actualBundleHash = bundleHash(resolution);
-    if (packet.skill_bundle_hash !== actualBundleHash) return this.#materialIncomplete(input, "skill bundle hash mismatch");
+    if (packet.skill_bundle_hash !== actualBundleHash) {
+      if (continuation) throw new Error("blocked_by_human_confirmation: frozen skill bundle changed; use reset with human approval");
+      return this.#materialIncomplete(input, "skill bundle hash mismatch");
+    }
+    let priorPacket = null; let priorReceipt = null; let delta = null;
+    if (continuation) {
+      if (!prior.baseline_packet_hash || !prior.baseline_packet_ref || !prior.baseline_packet_file_sha256 || !prior.previous_packet_ref || !prior.previous_packet_file_sha256 || !prior.previous_receipt_ref || !prior.previous_receipt_sha256) throw new Error("blocked_by_human_confirmation: frozen baseline packet or previous private receipt is missing; use reset with human approval");
+      const privateRoot = resolve(join(taskRoot(this.taskTrackingRoot, input.task_id), "reviews", "private"));
+      const readFrozen = (path, expectedHash, label) => {
+        const target = resolve(path);
+        if (!target.startsWith(`${privateRoot}/`) || !existsSync(target)) throw new Error(`blocked_by_human_confirmation: frozen ${label} is unavailable; use reset with human approval`);
+        const bytes = readFileSync(target);
+        if (sha(bytes) !== expectedHash) throw new Error(`blocked_by_human_confirmation: frozen ${label} hash changed; use reset with human approval`);
+        try { return JSON.parse(bytes); } catch { throw new Error(`blocked_by_human_confirmation: frozen ${label} is invalid; use reset with human approval`); }
+      };
+      const baselinePacket = readFrozen(prior.baseline_packet_ref, prior.baseline_packet_file_sha256, "baseline packet");
+      priorPacket = readFrozen(prior.previous_packet_ref, prior.previous_packet_file_sha256, "previous packet");
+      priorReceipt = readFrozen(prior.previous_receipt_ref, prior.previous_receipt_sha256, "previous private receipt");
+      const priorBaselineBinding = priorPacket.round_kind === "initial" ? priorPacket.packet_hash : priorPacket.baseline_packet_hash;
+      if (baselinePacket.packet_hash !== prior.baseline_packet_hash || priorBaselineBinding !== prior.baseline_packet_hash || priorPacket.packet_hash !== prior.packet_hash) throw new Error("blocked_by_human_confirmation: baseline packet binding is inconsistent; use reset with human approval");
+      if (packet.source_revision?.base !== baselinePacket.source_revision?.base) throw new Error("blocked_by_human_confirmation: current packet is not based on the frozen baseline; use reset with human approval");
+      if (packet.round_kind !== undefined && packet.round_kind !== "continuation") throw new Error("blocked_by_human_confirmation: caller round_kind conflicts with continuation flow");
+      if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== prior.baseline_packet_hash) throw new Error("blocked_by_human_confirmation: caller baseline_packet_hash conflicts with frozen baseline");
+      packet.round_kind = "continuation"; packet.baseline_packet_hash = prior.baseline_packet_hash;
+    } else {
+      if (input.closure_evidence !== undefined || input.cross_stage_carryovers !== undefined) return this.#materialIncomplete(input, "closure_evidence and cross_stage_carryovers are continuation-only");
+      if (packet.round_kind !== undefined && packet.round_kind !== "initial") return this.#materialIncomplete(input, "initial packet round_kind is invalid");
+      if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== null) return this.#materialIncomplete(input, "initial packet baseline_packet_hash must be null");
+      packet.round_kind = "initial"; packet.baseline_packet_hash = null;
+    }
     packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
     try { sealPacket(packet); verifyHostGitSource(packet, input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
+    const baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
+    if (continuation) {
+      const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
+      const closureEvidence = exactClosureEvidence(previousFindings, input.closure_evidence);
+      const crossStageCarryovers = checkedCarryovers(input.cross_stage_carryovers, previousFindings);
+      const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
+      const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head });
+      delta = buildContinuationDelta({ previousPacket: priorPacket, currentPacket: packet, deltaSource, previousFindings, closureEvidence, crossStageCarryovers, requiredSkills: resolution.definitions });
+    }
     const intent = { task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id,
       business_round: (prior?.business_round ?? 0) + 1, contract_hash: packet.contract_hash, material_manifest_hash: packet.manifest_hash, skill_bundle_hash: packet.skill_bundle_hash,
+      round_kind: continuation ? "continuation" : "initial", baseline_packet_hash: baselinePacketHash,
       initial_runtime_id: continuation ? prior.initial_runtime_id : null, previous_core_receipt_hash: prior?.core_receipt_hash ?? null,
+      previous_private_receipt_hash: continuation ? prior.previous_receipt_sha256 : null,
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       this.#recoverProjections(input.task_id);
       const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
-      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files }));
+      const changesDiff = continuation ? delta.delta_manifest : { changes_diff_sha256: packet.diff_sha256, changes_diff_size: Buffer.byteLength(packet.unified_diff) };
+      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, changed_files: packet.changed_files, attachments: continuation ? [] : [{ destination: "changes.diff", sha256: changesDiff.changes_diff_sha256, size: changesDiff.changes_diff_size }], delta_manifest: continuation ? delta.delta_manifest : null }));
       const { contractPath } = contractPathAndHash(input.stage); const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
-      freeze("review-packet.v1.json", safeJson(packet)); freeze("contracts/provider-protocol.md", readFileSync(protocolPath)); freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
+      freeze("review-packet.v1.json", safeJson(packet));
+      if (!continuation) freeze("changes.diff", packet.unified_diff);
+      freeze("contracts/provider-protocol.md", readFileSync(protocolPath)); freeze(`contracts/${input.stage}.md`, readFileSync(contractPath));
       for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
-      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments };
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, delta };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
@@ -214,12 +288,12 @@ export class ReviewRoundFacade {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
-      const request = { version: 4, host_provider: input.host_provider, prompt: this.#prompt(intent, packet, input), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
+      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? continuationPrompt(prepared.delta) : initialPrompt({ intent, packet }), continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null };
       attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0
         ? { providers: [], transport_error: { code: "NO_CAPABLE_PROVIDER", message: "doctor reported no ready heterologous provider with a supported attachment delivery" } }
-        : await this.broker.run({ request, packet, attachments, attachmentDelivery: prepared.delivery_policy });
+        : await this.broker.run(intent.round_kind === "continuation" ? { request } : { request, packet, attachments, attachmentDelivery: prepared.delivery_policy });
       atomic(join(prepared.dir, "broker-run.json"), safeJson(response));
       const candidateSet = new Set(intent.candidate_providers);
       const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
@@ -251,18 +325,22 @@ export class ReviewRoundFacade {
       const human_gates = deriveHumanGates(outcomes);
       const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true);
       const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery_used ?? null]));
-      const receipt = { version: 1, intent, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
+      const receipt = { version: 1, intent, delta: prepared.delta, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
-      const result = { intent, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
+      const result = { intent, round_kind: intent.round_kind, baseline_packet_hash: intent.baseline_packet_hash,
+        previous_findings: prepared.delta?.previous_findings ?? [], closure_evidence: prepared.delta?.closure_evidence ?? [], delta_manifest: prepared.delta?.delta_manifest ?? null,
+        affected_materials: prepared.delta?.affected_materials ?? {}, current_material_manifest: prepared.delta?.current_material_manifest ?? {},
+        cross_stage_carryovers: prepared.delta?.cross_stage_carryovers ?? [], required_skill_lens_hashes: prepared.delta?.required_skill_lens_hashes ?? [],
+        provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       const priorFlow = this.#readFlow(intent);
-      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash });
+      const packetRef = join(prepared.dir, "review-packet.json"); const packetFileHash = sha(readFileSync(packetRef));
+      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...intent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
+        baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
+        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)) });
       return result;
     } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
 
-  #prompt(intent, packet) {
-    return `You are an independent read-only reviewer. Review only review-packet.v1.json in your private workspace. Do not access a repository, run git, request absolute paths, or infer missing material. Return only reviewer-output JSON.\npacket_hash=${packet.packet_hash}\ndiff_sha256=${packet.diff_sha256}\ncontract_hash=${intent.contract_hash}\nskill_bundle_hash=${intent.skill_bundle_hash}`;
-  }
   #acquireLock(intent) {
     const lock = this.#lock(intent); mkdirSync(dirname(lock), { recursive: true, mode: 0o700 });
     let acquired = false;
@@ -437,7 +515,7 @@ export class ReviewRoundFacade {
     const reportPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `${result.intent.stage}-${result.intent.review_flow_id}.md`); atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
     const indexPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", "report-index.json"); atomic(indexPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
     const stageResultPath = join(taskRoot(this.taskTrackingRoot, result.intent.task_id), "reviews", `stage-result-${result.intent.stage}.json`); atomic(stageResultPath, safeJson({ stage: result.intent.stage, core_receipt_hash: coreHash, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
-    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash });
+    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)) });
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
   }
   reset({ task_id, stage, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {

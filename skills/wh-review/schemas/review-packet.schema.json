@@ -2,9 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "review-packet.v1",
   "type": "object",
-  "required": ["version", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "raw_requirement", "host_verified_facts", "contract_hash", "skill_bundle_hash", "source_revision"],
+  "required": ["version", "round_kind", "baseline_packet_hash", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "raw_requirement", "host_verified_facts", "contract_hash", "skill_bundle_hash", "source_revision"],
   "properties": {
     "version": { "const": "review-packet.v1" },
+    "round_kind": { "enum": ["initial", "continuation"] },
+    "baseline_packet_hash": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "review_track": { "type": ["string", "null"] },
     "packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -54,6 +56,11 @@
     }
   },
   "allOf": [
+    {
+      "if": { "properties": { "round_kind": { "const": "initial" } }, "required": ["round_kind"] },
+      "then": { "properties": { "baseline_packet_hash": { "type": "null" } } },
+      "else": { "properties": { "baseline_packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } }
+    },
     {
       "if": { "properties": { "stage": { "const": "make-decision" }, "review_track": { "const": "direction" } }, "required": ["stage", "review_track"] },
       "then": { "not": { "anyOf": [{ "required": ["decision_log_excerpt"] }, { "required": ["acceptance_design_excerpt"] }, { "required": ["planning_artifacts"] }, { "required": ["verification_closure"] }, { "required": ["test_evidence"] }] } }

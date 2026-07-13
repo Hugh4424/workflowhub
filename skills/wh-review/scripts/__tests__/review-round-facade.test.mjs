@@ -189,7 +189,7 @@ describe("ReviewRoundFacade", () => {
   it("keeps an approved reset marker valid after the successor runs, publishes, and continues", async () => {
     const tracking = root(); const trusted = trustedPacket(tracking); let calls = 0;
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
-      calls += 1; return { runtime_id: "77777777-7777-4777-8777-777777777777", providers: [{ provider: "opencode", status: "completed", session_id: `s-${calls}`, output: output(request.packet, calls === 1 ? "escalate_to_human" : "pass") }] };
+      calls += 1; return { runtime_id: "77777777-7777-4777-8777-777777777777", providers: [{ provider: "opencode", status: "completed", session_id: `s-${calls}`, output: output(request.packet ?? trusted, calls === 1 ? "escalate_to_human" : "pass") }] };
     }) });
     await facade.run(facade.prepare({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", packet: trusted, repository_root: tracking }));
     facade.reset({ task_id: "reset-survives-run", stage: "build-code", review_flow_id: "old-flow", new_review_flow_id: "approved-flow", reason: "human approved", human_approval_ref: "approval-77" });
@@ -241,11 +241,12 @@ describe("ReviewRoundFacade", () => {
 
   it("uses the initial runtime only on continuation and refuses automatic fresh starts", async () => {
     const tracking = root(); const seen = [];
-    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => { seen.push(request); return { runtime_id: "22222222-2222-4222-8222-222222222222", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; }) });
-    const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking });
+    const value = packet({ root: tracking });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => { seen.push(request); return { runtime_id: "22222222-2222-4222-8222-222222222222", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? value) }] }; }) });
+    const prepared = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking });
     prepared.resolution.deliveryMode = "always_embed";
     const first = await facade.run(prepared);
-    const second = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking, continuation: true }));
+    const second = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, changed_file_root: tracking, continuation: true }));
     expect(first.intent.initial_runtime_id).toBeNull();
     expect(second.intent.initial_runtime_id).toBe("22222222-2222-4222-8222-222222222222");
     expect(seen[1].request.continuation).toEqual({ runtime_id: "22222222-2222-4222-8222-222222222222" });
@@ -255,8 +256,8 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("sends a full initial packet with a real multiline changes.diff attachment", async () => {
-    const tracking = root(); let dispatched;
-    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => { dispatched = request; return { runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; }) });
+    const tracking = root(); let dispatched; let dispatchedDiff;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, skillsRoot: tracking, broker: fakeBroker(async (request) => { dispatched = request; const entry = request.attachments.entries.find((item) => item.destination === "changes.diff"); dispatchedDiff = readFileSync(join(tracking, entry.source), "utf8"); return { runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; }) });
     const firstPacket = packet({ root: tracking });
     const prepared = await facade.prepare({ task_id: "initial-diff", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, changed_file_root: tracking });
     expect(prepared.intent).toMatchObject({ round_kind: "initial", baseline_packet_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
@@ -264,7 +265,7 @@ describe("ReviewRoundFacade", () => {
     const result = await facade.run(prepared);
     const diffEntry = dispatched.attachments.entries.find((entry) => entry.destination === "changes.diff");
     expect(diffEntry).toMatchObject({ sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
-    expect(readFileSync(join(dispatched.attachmentsRoot ?? tracking, diffEntry.source), "utf8")).toBe(prepared.packet.unified_diff);
+    expect(dispatchedDiff).toBe(prepared.packet.unified_diff);
     expect(dispatched.request.prompt).toContain("Must Read: changes.diff");
     expect(dispatched.request.prompt).toContain(`changes_diff_sha256=${prepared.packet.diff_sha256}`);
     const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
@@ -328,16 +329,16 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("stores actual delivery only in private state and rejects a changed continuation echo", async () => {
-    const tracking = root(); let call = 0;
+    const tracking = root(); let call = 0; let continuationPacket;
     const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } }] };
-    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "always_embed" : "file_only", output: output(request.packet, call === 1 ? "pass" : "revise_required") }] }; } };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "always_embed" : "file_only", output: output(request.packet ?? continuationPacket, call === 1 ? "pass" : "revise_required") }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const input = { task_id: "delivery-freeze", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }), changed_file_root: tracking };
     const first = await facade.run(facade.prepare(input)); const publication = facade.publish(first, { items: [] });
     const privateReceipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
     expect(privateReceipt.initial_delivery_by_provider).toEqual({ opencode: "always_embed" });
     expect(privateReceipt.provider_outcomes[0].delivery_used).toBe("always_embed");
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toMatch(/delivery_used|always_embed/);
-    const second = await facade.run(facade.prepare({ ...input, continuation: true }));
+    continuationPacket = input.packet; const second = await facade.run(facade.prepare({ ...input, continuation: true }));
     expect(second.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH" }]);
     expect(second.merged_findings).toEqual([]);
     expect(second.continuation_eligible).toBe(false);
