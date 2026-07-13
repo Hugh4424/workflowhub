@@ -108,7 +108,7 @@ describe("BrokerClient", () => {
       expect(readFileSync(outcome.raw_stdout_ref, "utf8")).toBe(stdout); expect(readFileSync(outcome.raw_stderr_ref, "utf8")).toBe(stderr);
       expect(sha256(readFileSync(outcome.raw_stdout_ref))).toBe(outcome.raw_stdout_sha256);
       expect(sha256(readFileSync(outcome.raw_stderr_ref))).toBe(outcome.raw_stderr_sha256);
-      expect(outcome.output).toBe("parsed provider output"); expect(existsSync(join(privateRawDirectory, `${provider}.stdout.raw`))).toBe(true);
+      expect(outcome.output).toBe("parsed provider output"); expect(existsSync(outcome.raw_stdout_ref)).toBe(true);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 

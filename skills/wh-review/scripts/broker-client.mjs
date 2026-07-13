@@ -154,8 +154,11 @@ export class BrokerClient {
       if (relative(runtime, source).startsWith("..") || source === runtime) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} source escapes runtime`);
       const bytes = readFileSync(source);
       if (sha256(bytes) !== expected.toLowerCase()) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} bytes do not match broker hash`);
-      const target = join(destinationRoot, `${provider}.${stream}.raw`);
-      writeFileSync(target, bytes, { mode: 0o400, flag: "wx" });
+      const target = join(destinationRoot, `${provider}.${stream}.${expected.toLowerCase()}.raw`);
+      try { writeFileSync(target, bytes, { mode: 0o400, flag: "wx" }); }
+      catch (error) {
+        if (error?.code !== "EEXIST" || sha256(readFileSync(target)) !== expected.toLowerCase()) throw error;
+      }
       return target;
     };
     const providers = result.providers.map((item) => {
