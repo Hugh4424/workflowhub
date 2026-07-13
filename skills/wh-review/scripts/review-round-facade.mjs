@@ -286,7 +286,10 @@ export class ReviewRoundFacade {
     let index;
     try { index = JSON.parse(readFileSync(indexPath, "utf8")); }
     catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: report index is invalid JSON"); }
-    if (index?.stage !== intent.stage || (index.review_track ?? null) !== (intent.review_track ?? null)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: report index does not bind this stage track");
+    // report-index.json is shared by ordinary stages (and by make-decision
+    // tracks). A well-formed projection for another stage/track cannot bind
+    // this guard, so leave it to that flow instead of treating it as tamper.
+    if (index?.stage !== intent.stage || (index.review_track ?? null) !== (intent.review_track ?? null)) return false;
     return this.#publicCoreMatchesIntent(intent, index.core_receipt_hash);
   }
   #aggregateCoreMatchesIntent(intent, coreHash) {

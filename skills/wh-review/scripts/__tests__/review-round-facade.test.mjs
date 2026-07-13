@@ -822,6 +822,19 @@ describe("ReviewRoundFacade", () => {
     expect(existsSync(guard)).toBe(false);
   });
 
+  it("ignores a valid shared report index from another ordinary stage", () => {
+    const tracking = root(); const reviews = join(tracking, "orphan-index-other-stage", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
+    const guard = join(reviews, "projection-pending-build-plan-new-flow.json");
+    writeFileSync(guard, JSON.stringify({ version: 1, status: "pending", task_id: "orphan-index-other-stage", stage: "build-plan", review_track: null, review_flow_id: "new-flow", needs_human: true, guard_ref: "reviews/projection-pending-build-plan-new-flow.json" }));
+    const core = { version: 1, intent: { task_id: "orphan-index-other-stage", stage: "build-code", review_track: null, review_flow_id: "old-flow", business_round: 1 }, semantic_verdict: "pass" };
+    const coreBytes = JSON.stringify(core, null, 2) + "\n"; const coreHash = hash(coreBytes);
+    writeFileSync(join(reviews, "core-receipts", `${coreHash}.json`), coreBytes);
+    writeFileSync(join(reviews, "report-index.json"), JSON.stringify({ stage: "build-code", review_track: null, core_receipt_hash: coreHash, semantic_verdict: "pass" }));
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { run() { throw new Error("recover must not call provider"); } } });
+    expect(facade.recover({ task_id: "orphan-index-other-stage" })).toEqual({ recovered: 1 });
+    expect(existsSync(guard)).toBe(false);
+  });
+
   it("fails loud when a shared report index binds the orphan guard's core", () => {
     const tracking = root(); const reviews = join(tracking, "orphan-index-current", "reviews"); mkdirSync(join(reviews, "core-receipts"), { recursive: true });
     const guard = join(reviews, "projection-pending-build-code-flow.json");
