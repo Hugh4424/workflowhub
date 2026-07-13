@@ -148,6 +148,9 @@ describe("wh-review v4 workflow wiring", () => {
       expect(readFileSync(first.receipt_draft_ref, "utf8")).toContain("provider-session");
       const publication = facade.publish(first, { items: [] });
       expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
+      const core = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
+      expect(Array.isArray(core.provider_outcomes[0].skillResults)).toBe(true);
+      expect(core.provider_outcomes[0].skillResults).toEqual(expect.arrayContaining(first.provider_outcomes[0].skillResults ?? []));
       currentPacket = deltaPacket(repository, firstPacket);
       const second = await facade.run(facade.prepare({ ...input, packet: currentPacket, continuation: true }));
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");

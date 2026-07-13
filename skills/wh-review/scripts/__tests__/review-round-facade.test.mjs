@@ -511,6 +511,25 @@ describe("ReviewRoundFacade", () => {
     expect(result.continuation_eligible).toBe(false);
   });
 
+  it("allowlists and redacts every public reviewer free-string field", async () => {
+    const tracking = root(); const secretId = "123e4567-e89b-12d3-a456-426614174000"; const secretPath = "/Users/reviewer/private/raw.txt";
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const raw = JSON.parse(output(request.packet, "revise_required", "important"));
+      raw.summary = `src/a.mjs:12 checked session ${secretId}`;
+      raw.checklist[0] = { id: "hard", passed: true, evidence: "src/a.mjs:12 used Bearer top-secret-token" };
+      raw.pass_items = [{ rule_id: "hard", artifact_anchor: "src/a.mjs:12", evidence: `src/a.mjs:12 raw ref ${secretPath}` }];
+      raw.findings[0].evidence = `src/a.mjs:12 session ${secretId} exposes token=must-not-publish`;
+      return { runtime_id: secretId, providers: [{ provider: "opencode", status: "completed", session_id: secretId, output: JSON.stringify(raw) }] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "public-redaction", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), changed_file_root: tracking }));
+    const publication = facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: `src/a.mjs:12 rejects ${secretPath}` }] }); const core = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
+    expect(core.provider_outcomes[0]).toEqual(expect.objectContaining({ summary: expect.any(String), checklist: expect.any(Array), pass_items: expect.any(Array), skillResults: [] }));
+    expect(core.merged_findings[0]).toEqual(expect.objectContaining({ evidence: expect.any(String), suggested_fix: expect.any(String) }));
+    for (const path of [publication.core_receipt_ref, publication.report_ref, publication.report_index_ref, publication.stage_result_ref]) {
+      expect(readFileSync(path, "utf8")).not.toMatch(/123e4567|Bearer|top-secret-token|\/Users\/reviewer|raw\.txt|token=/i);
+    }
+  });
+
   it("seals real diff, manifest, and changed-file bytes before broker dispatch", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     const badDiff = packet({ root: tracking }); badDiff.diff_sha256 = hash("not the diff");
