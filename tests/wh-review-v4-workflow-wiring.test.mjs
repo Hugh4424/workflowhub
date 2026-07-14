@@ -200,9 +200,12 @@ describe("wh-review v4 workflow wiring", () => {
       expect(secondPrepared.packet.unified_diff).toContain("WIRING_R2_DELTA_ONLY_MARKER");
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
       expect(calls[1].request.continuation).toEqual({ runtime_id: "11111111-1111-4111-8111-111111111111" });
-      expect(Object.keys(calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
+      expect(Object.keys(calls[1]).sort()).toEqual(["attachmentDelivery", "attachments", "privateRawDirectory", "request"]);
       expectPrivateRawDirectory(calls[1].privateRawDirectory, join(tracking, input.task_id));
-      expect(calls[1].request.prompt).toContain("WIRING_R2_DELTA_ONLY_MARKER");
+      expect(calls[1].request).not.toHaveProperty("packet");
+      expect(calls[1].request.prompt).not.toContain("WIRING_R2_DELTA_ONLY_MARKER");
+      expect(calls[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+      expect(calls[1].attachments.entries.map((entry) => entry.destination)).toEqual(expect.arrayContaining(["review-packet.v1.json", "changes.diff", "continuation-delta.v1.json", "manifest.json"]));
     } finally { rmSync(tracking, { recursive: true, force: true }); if (sourceRoot) rmSync(sourceRoot, { recursive: true, force: true }); rmSync(repository, { recursive: true, force: true }); }
   });
 });

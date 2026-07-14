@@ -44,7 +44,16 @@ function output(input, verdict = "pass", severity = "blocking", ruleId = "H1") {
     pass_items: checkIds.filter((id) => !(revised && id === ruleId)).map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "publication and persistence have separate boundaries", fixApproach: "move publication after the atomic persistence step" } : {}) });
 }
-function fakeBroker(callback) { return capabilityBroker(callback); }
+function packetFromDeliveryRequest(request) {
+  const prompt = request.request?.prompt ?? "";
+  const field = (name) => prompt.match(new RegExp(`^${name}=([^\\n]+)$`, "m"))?.[1];
+  return {
+    packet_hash: field("packet_hash"), manifest_hash: field("manifest_hash"), diff_sha256: field("diff_sha256"),
+    contract_hash: field("contract_hash"), skill_bundle_hash: field("skill_bundle_hash"), stage: field("stage"),
+    review_track: field("review_track") === "default" ? null : field("review_track"),
+  };
+}
+function fakeBroker(callback) { return capabilityBroker(async (request) => callback({ ...request, packet: packetFromDeliveryRequest(request) })); }
 function capabilityBroker(callback, snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
   { provider: "claude-code", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
   { provider: "codex", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
@@ -153,6 +162,68 @@ describe("ReviewRoundFacade", () => {
     expect(prepared.packet.packet_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(prepared.packet.manifest_hash).toMatch(/^[a-f0-9]{64}$/);
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("seals the complete provider-visible triad before rendering a file-only prompt", async () => {
+    const tracking = root();
+    writeFileSync(join(tracking, "a"), "R1_DIFF_MARKER\n");
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+
+    const prepared = await facade.prepare({ task_id: "sealed-triad", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+    const manifestPath = join(prepared.frozen_snapshot_dir, "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    expect(manifest.version).toBe("provider-material-manifest.v1");
+    expect(manifest.packet_hash).toBe(prepared.packet.packet_hash);
+    expect(manifest.diff_sha256).toBe(prepared.packet.diff_sha256);
+    expect(manifest.files.map((item) => item.destination)).toEqual(expect.arrayContaining(["review-packet.v1.json", "changes.diff"]));
+    expect(manifest.files.every((item) => item.coverage === "complete")).toBe(true);
+    expect(prepared.frozen_attachments.map((item) => item.destination)).toContain("manifest.json");
+    expect(prepared.initial_prompt).not.toContain("R1_DIFF_MARKER");
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("delivers a large file-only packet without embedding its diff in the broker request", async () => {
+    const tracking = root(); const calls = [];
+    writeFileSync(join(tracking, "large.txt"), `FIRST_DIFF_MARKER\n${"x".repeat(427 * 1024)}\nLAST_DIFF_MARKER\n`);
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: { async discoverCapabilities() { return snapshot; }, async run(request) { calls.push(request); return { providers: [] }; } } });
+
+    await facade.run(facade.prepare({ task_id: "large-file-only", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toHaveProperty("packet");
+    expect(calls[0].request.prompt).not.toContain("FIRST_DIFF_MARKER");
+    expect(calls[0].request.prompt).not.toContain("LAST_DIFF_MARKER");
+    expect(calls[0].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+  });
+
+  it("fails closed before broker dispatch when raw source material contains an absolute path", async () => {
+    const tracking = root(); let calls = 0;
+    writeFileSync(join(tracking, "a"), "const source = '/Users/Hugh/secret';\n");
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
+
+    await expect(facade.prepare({ task_id: "absolute-source", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    expect(calls).toBe(0);
+  });
+
+  it("fails closed on an absolute path in a provider-visible packet supplement", async () => {
+    const tracking = root(); let calls = 0;
+    const supplemental = { ...hostPacket(), planning_artifacts: [{ path: "/Users/Hugh/private-plan.md", summary: "must not be delivered" }] };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
+
+    await expect(facade.prepare({ task_id: "absolute-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    expect(calls).toBe(0);
+  });
+
+  it("fails closed when the frozen provider-visible manifest is forged before delivery", async () => {
+    const tracking = root(); let calls = 0;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
+    const prepared = await facade.prepare({ task_id: "forged-visible-manifest", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+    writeFileSync(join(prepared.frozen_snapshot_dir, "manifest.json"), "{}\n");
+
+    await expect(facade.run(prepared)).rejects.toThrow("provider-visible manifest binding is invalid");
+    expect(calls).toBe(0);
   });
 
   it("accepts the real Kimi lower-case pass output when changes.diff is the complete frozen anchor", async () => {
@@ -1204,7 +1275,7 @@ describe("ReviewRoundFacade", () => {
     expect(seen[1].request.provider_allowlist).toEqual(["opencode"]);
     expect(seen[0].attachments).toBeTruthy();
     expect(seen[0].attachmentDelivery).toBe("file_only");
-    expect(seen[1].attachments).toBeUndefined();
+    expect(seen[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
   });
 
   it("sends a full initial packet with a real multiline changes.diff attachment", async () => {
@@ -1247,20 +1318,15 @@ describe("ReviewRoundFacade", () => {
     expect(secondPrepared.packet.source_revision.snapshot_tree).not.toBe(first.intent.baseline_packet_hash);
     const second = await facade.run(secondPrepared);
     expect(second.intent).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash });
-    expect(Object.keys(calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
     expect(calls[1].request).toMatchObject({ continuation: { runtime_id: "34343434-3434-4434-8434-343434343434" } });
-    expect(calls[1].request).not.toHaveProperty("attachments");
+    expect(calls[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
     expect(calls[1].request.prompt).not.toContain(initial.unified_diff);
-    expect(calls[1].request.prompt).toContain("Continue using the frozen first-round contracts/provider-protocol.md, contracts/build-code.md, schemas/reviewer-output.schema.json, and StageSkillPlan skill bundle");
-    expect(calls[1].request.prompt).toContain(`current_packet_hash=${secondPrepared.packet.packet_hash}`);
-    expect(calls[1].request.prompt).toContain(`current_manifest_hash=${secondPrepared.packet.manifest_hash}`);
-    expect(calls[1].request.prompt).toContain(`current_diff_sha256=${secondPrepared.packet.diff_sha256}`);
-    expect(calls[1].request.prompt).toContain("skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.");
-    expect(calls[1].request.prompt).toContain("fixed\n");
-    expect(calls[1].request.prompt).not.toContain("\n x\n");
-    expect(calls[1].request.prompt).not.toMatch(/^@@ .* @@ .+$/m);
-    const headings = ["PreviousFindings", "ClosureEvidence", "DeltaManifest", "AffectedMaterials", "CurrentMaterialManifest", "CrossStageCarryovers", "RequiredSkillLensHashes", "OutputRequirements"];
-    expect(headings.map((heading) => calls[1].request.prompt.indexOf(heading))).toEqual([...headings.map((heading) => calls[1].request.prompt.indexOf(heading))].sort((a, b) => a - b));
+    expect(calls[1].request.prompt).toContain("Continue the existing review session using only this isolated delta attachment workspace.");
+    expect(calls[1].request.prompt).toContain(`packet_hash=${secondPrepared.packet.packet_hash}`);
+    expect(calls[1].request.prompt).toContain(`manifest_hash=${secondPrepared.packet.manifest_hash}`);
+    expect(calls[1].request.prompt).toContain(`diff_sha256=${secondPrepared.packet.diff_sha256}`);
+    expect(calls[1].request.prompt).not.toContain("fixed\n");
+    expect(calls[1].attachments.entries.map((entry) => entry.destination)).toEqual(expect.arrayContaining(["review-packet.v1.json", "changes.diff", "continuation-delta.v1.json", "manifest.json"]));
     expect(second).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash, previous_findings: [{ finding_id: findingId }] });
   });
 
@@ -1344,23 +1410,19 @@ describe("ReviewRoundFacade", () => {
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
-  it("enforces a host-owned UTF-8 continuation prompt byte limit before broker dispatch", async () => {
+  it("keeps a large continuation delta out of the prompt and in the sealed attachment triad", async () => {
     const tracking = root(); let calls = 0; let currentPacket;
     const broker = fakeBroker(async (request) => { calls += 1; return { runtime_id: "89898989-8989-4898-8989-898989898989", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet ?? currentPacket) }] }; });
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const initial = trustedPacket(tracking); currentPacket = initial;
     await facade.run(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: initial }));
-    currentPacket = advancePacket(tracking, initial); currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(200) }]; refreshPacketHashes(currentPacket);
+    currentPacket = advancePacket(tracking, initial); currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(180000) }]; refreshPacketHashes(currentPacket);
     await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true, continuation_prompt_max_bytes: 9999999 })).rejects.toThrow(/caller.*continuation.*limit|continuation.*caller/i);
     const probe = await facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true });
-    const exactBytes = Buffer.byteLength(probe.delta.prompt, "utf8"); rmSync(probe.lock, { recursive: true, force: true });
-    const exactFacade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, continuationPromptMaxBytes: exactBytes });
-    const exact = await exactFacade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true });
-    rmSync(exact.lock, { recursive: true, force: true });
-    const belowFacade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, continuationPromptMaxBytes: exactBytes - 1 });
-    await expect(belowFacade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true })).rejects.toThrow(new RegExp(`CONTINUATION_PROMPT_TOO_LARGE.*${exactBytes - 1}`));
-    currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(180000) }]; refreshPacketHashes(currentPacket);
-    await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true })).rejects.toThrow(/CONTINUATION_PROMPT_TOO_LARGE.*524288/);
+    expect(Buffer.byteLength(probe.initial_prompt)).toBeLessThan(2048);
+    expect(probe.initial_prompt).not.toContain("界");
+    expect(probe.frozen_attachments.find((entry) => entry.destination === "continuation-delta.v1.json").size).toBeGreaterThan(524288);
+    rmSync(probe.lock, { recursive: true, force: true });
     expect(calls).toBe(1);
   });
 
@@ -1371,7 +1433,7 @@ describe("ReviewRoundFacade", () => {
   ])("makes a completed provider business-invalid when delivery_used=%s", async (delivery_used, diagnostic) => {
     const tracking = root();
     const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } }] };
-    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", providers: [{ provider: "opencode", status: "completed", session_id: "s", ...(delivery_used === undefined ? {} : { delivery_used }), output: output(request.packet, "revise_required") }] }; } };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", providers: [{ provider: "opencode", status: "completed", session_id: "s", ...(delivery_used === undefined ? {} : { delivery_used }), output: output(packetFromDeliveryRequest(request), "revise_required") }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const result = await facade.run(facade.prepare({ task_id: `delivery-${diagnostic.toLowerCase()}`, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }) }));
     expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic }]);
@@ -1397,7 +1459,7 @@ describe("ReviewRoundFacade", () => {
     const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
       { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } },
     ] };
-    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: "always_embed", output: output(request.packet) }] }; } };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: "always_embed", output: output(packetFromDeliveryRequest(request)) }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const result = await facade.run(facade.prepare({ task_id: "delivery-policy", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
     expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", business_valid: false, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" }));
@@ -1406,7 +1468,7 @@ describe("ReviewRoundFacade", () => {
   it("stores actual delivery only in private state and rejects a changed continuation echo", async () => {
     const tracking = root(); let call = 0; let continuationPacket;
     const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only", "always_embed"] } }] };
-    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "file_only" : "always_embed", output: output(request.packet ?? continuationPacket, call === 1 ? "pass" : "revise_required") }] }; } };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { call += 1; return { runtime_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", providers: [{ provider: "opencode", status: "completed", session_id: "s", delivery_used: call === 1 ? "file_only" : "always_embed", output: output(packetFromDeliveryRequest(request), call === 1 ? "pass" : "revise_required") }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const input = { task_id: "delivery-freeze", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }) };
     const first = await facade.run(facade.prepare(input)); const publication = facade.publish(first, { items: [] });
     const privateReceipt = JSON.parse(readFileSync(first.receipt_draft_ref, "utf8"));
@@ -1442,7 +1504,7 @@ describe("ReviewRoundFacade", () => {
 
   it("blocks continuation when the broker doctor snapshot changes", async () => {
     const tracking = root(); let snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] };
-    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "99999999-9999-4999-8999-999999999999", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }; } };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) { return { runtime_id: "99999999-9999-4999-8999-999999999999", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(packetFromDeliveryRequest(request)) }] }; } };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const input = { task_id: "cap-change", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) };
     await facade.run(facade.prepare(input)); snapshot = { ...snapshot, providers: [{ ...snapshot.providers[0], status: "unavailable" }] };
     await expect(facade.prepare({ ...input, continuation: true })).rejects.toThrow(/blocked_by_human_confirmation.*snapshot changed/);

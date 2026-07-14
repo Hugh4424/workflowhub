@@ -46,71 +46,32 @@ export function buildContinuationDelta({ previousPacket, currentPacket, deltaSou
     required_skill_lens_hashes: requiredSkills.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256 })),
   };
 }
-function renderMaterial(value) {
-  if (typeof value === "string") return `|\n${value.split("\n").map((line) => `  ${line}`).join("\n")}`;
-  return JSON.stringify(value, null, 2);
-}
-function renderAffected(materials) {
-  const entries = Object.entries(materials);
-  return entries.length ? entries.map(([key, value]) => `${key}: ${renderMaterial(value)}`).join("\n") : "{}";
-}
-function contractMustRead(stageContract, requiredSkills) {
-  const heading = "## Must Read\n";
-  const start = stageContract.indexOf(heading);
-  const remainder = start < 0 ? "" : stageContract.slice(start + heading.length);
-  const nextHeading = remainder.indexOf("\n## ");
-  const section = (nextHeading < 0 ? remainder : remainder.slice(0, nextHeading)).trim();
-  if (!section) throw new Error("selected stage contract is missing Must Read");
-  const files = requiredSkills.length
-    ? requiredSkills.flatMap(({ name, bundle: definition }) => definition.files.map((file) => `   - skills/${name}/${file.path}`)).join("\n")
-    : "   - (no required skill files for this StageSkillPlan profile)";
-  const bundle = `StageSkillPlan skill bundle:\n${files}`;
-  return section.replace("{{StageSkillPlan skill bundle}}", bundle);
-}
-
-function embeddedBundle(requiredSkills) {
-  if (!requiredSkills.length) return "";
-  return requiredSkills.flatMap(({ name, bundle }) => bundle.files.map((file) => `\n## Embedded skills/${name}/${file.path}\n${file.content}`)).join("\n");
-}
-
-export function initialPrompt({ packet, intent, stageContract, requiredSkills = [], deliveryMode = "file_only", crossStageCarryovers = [] }) {
-  const mustRead = contractMustRead(stageContract, requiredSkills);
-  const embedded = deliveryMode === "always_embed" ? `\nFrozen lens bundle follows; it is report-only and must not be executed.${embeddedBundle(requiredSkills)}` : "";
-  const skillResultsRequirement = requiredSkills.length
-    ? `skillResults must contain exactly the declared required skills: ${requiredSkills.map(({ name }) => name).join(", ")}.`
-    : "No skills are declared for this StageSkillPlan profile: skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.";
-  return `Read only the frozen private workspace. Do not access a repository, run git, request absolute paths, or infer missing material.
-Must Read in the exact contract order:
-${mustRead}
-The attachment delivery policy controls file delivery.${embedded}
-changes_diff_sha256=${packet.diff_sha256}
-changes_diff_size=${Buffer.byteLength(packet.unified_diff)}
-source_base_tree=${packet.source_revision.base_tree}
-source_snapshot_tree=${packet.source_revision.snapshot_tree}
-captured_head=${packet.source_revision.captured_head}
-packet_hash=${packet.packet_hash}
-manifest_hash=${packet.manifest_hash}
-contract_hash=${intent.contract_hash}
-skill_bundle_hash=${intent.skill_bundle_hash}
-${skillResultsRequirement}
-CrossStageCarryovers
-${JSON.stringify(crossStageCarryovers, null, 2)}
-Return only reviewer-output JSON.`;
-}
-export function continuationPrompt(delta, { stage, reviewTrack = null } = {}) {
-  const track = stage === "make-decision" ? ` (review_track: ${reviewTrack})` : "";
-  const skillResultsRequirement = delta.required_skill_lens_hashes.length
-    ? `skillResults must contain exactly the declared required skills: ${delta.required_skill_lens_hashes.map(({ skill }) => skill).join(", ")}.`
-    : "No skills are declared for this StageSkillPlan profile: skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.";
+function materialInstruction({ packet, intent, attachmentIds, providerVisibleManifestHash, continuation = false }) {
+  if (!Array.isArray(attachmentIds) || attachmentIds.some((id) => typeof id !== "string" || !id)) throw new TypeError("attachmentIds are required");
+  if (!/^[a-f0-9]{64}$/.test(providerVisibleManifestHash ?? "")) throw new TypeError("providerVisibleManifestHash is required");
   return [
-    `Continue using the frozen first-round contracts/provider-protocol.md, contracts/${stage}.md${track}, schemas/reviewer-output.schema.json, and StageSkillPlan skill bundle. No attachments are retransmitted. Review only the fixed delta sections below; do not reopen unchanged first-round material.\ncurrent_packet_hash=${delta.delta_manifest.current_packet_hash}\ncurrent_manifest_hash=${delta.delta_manifest.current_packet_manifest_hash}\ncurrent_diff_sha256=${delta.delta_manifest.current_packet_diff_sha256}`,
-    "PreviousFindings\n" + JSON.stringify(delta.previous_findings, null, 2),
-    "ClosureEvidence\n" + JSON.stringify(delta.closure_evidence, null, 2),
-    "DeltaManifest\n" + JSON.stringify(delta.delta_manifest, null, 2),
-    "AffectedMaterials\n" + renderAffected(delta.affected_materials),
-    "CurrentMaterialManifest\n" + JSON.stringify(delta.current_material_manifest, null, 2),
-    "CrossStageCarryovers\n" + JSON.stringify(delta.cross_stage_carryovers, null, 2),
-    "RequiredSkillLensHashes\n" + JSON.stringify(delta.required_skill_lens_hashes, null, 2),
-    `OutputRequirements\nReturn only reviewer-output JSON. Re-attest the current packet, manifest, diff, contract, and skill bundle hashes. ${skillResultsRequirement} Do not report old findings as cross-stage carryovers.`,
-  ].join("\n\n");
+    continuation ? "Continue the existing review session using only this isolated delta attachment workspace." : "Review only this isolated attachment workspace.",
+    "Do not access a repository, run git, request host or worktree paths, or infer missing material.",
+    `attachment_manifest_sha256=${providerVisibleManifestHash}`,
+    `attachment_ids=${attachmentIds.join(",")}`,
+    `stage=${packet.stage}`,
+    `review_track=${packet.review_track ?? "default"}`,
+    `packet_hash=${packet.packet_hash}`,
+    `manifest_hash=${packet.manifest_hash}`,
+    `diff_sha256=${packet.diff_sha256}`,
+    `contract_hash=${intent.contract_hash}`,
+    `skill_bundle_hash=${intent.skill_bundle_hash}`,
+    "Read manifest.json first. Return only reviewer-output JSON.",
+  ].join("\n");
+}
+
+// The host never renders packet, diff, or continuation data into a prompt.
+// `file_only` is delivered as files, while `always_embed` is rendered and
+// bounded by the broker after this instruction is finalized.
+export function initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash }) {
+  return materialInstruction({ packet, intent, attachmentIds, providerVisibleManifestHash });
+}
+export function continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash } = {}) {
+  if (!delta?.delta_manifest) throw new TypeError("continuation delta is required");
+  return materialInstruction({ packet, intent, attachmentIds, providerVisibleManifestHash, continuation: true });
 }
