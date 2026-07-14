@@ -3,10 +3,12 @@ kind: sub-skill  # helper sub-skill invoked within build-plan's stage; metrics c
 name: spec-tasks
 description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可执行的任务列表 tasks.md，支持 --stage N 阶段分组。改编自 speckit-tasks，适配为 workflowhub 契约。
 ---
+<!-- markdownlint-disable MD040 -->
 
 # spec-tasks
 
 > 本文件改造自 speckit-tasks，适配为 workflowhub 契约：
+>
 > - 去 git 分支耦合，改用 task-id 参数推导产物路径；
 > - 模板由 workflowhub 内置（`./templates/tasks-template.md`），不读目标项目 `.specify/`；
 > - 保留依赖排序任务生成核心能力，移除 `.specify/` 和 git 分支推断。
@@ -55,6 +57,10 @@ description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可�
      - 使用模板中的 checklist 格式：`- [ ] [TaskID] [P?] [Story?] Description with file path`；
      - 包含至少一个 FR 映射引用（`FR: FR-XXX-XXX`）；
      - 包含精确的文件路径。
+     - 是可独立验收的纵向切片：同一任务内包含 test → minimal implementation → verification，不得拆成“先所有测试、后所有实现”。
+     - 包含 `Interfaces: Consumes / Produces`，精确列出相邻任务交换的签名、参数/返回类型或文件 schema。
+     - 自动继承 plan.md 的 `Global Constraints`，不在任务中改写或弱化。
+   - **Task Right-Sizing**：脚手架、配置、文档并入需要它们的交付任务。只有 reviewer 可以合理地独立拒绝一边时才分拆相邻任务。
    - 从前置步骤 5 中可为无法唯一确定任务的工作估算额外任务（如验证任务、范围边界检查任务）。
 
 7. **处理 --stage N 阶段分组**（若传入）：
@@ -65,10 +71,12 @@ description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可�
      - 每个阶段以 `## Stage N` 二级标题起块，块内列出该阶段的任务项。
      - 同阶段内任务可并行。
    - 每条任务标注阶段序号和依赖关系，格式为：
+
      ```
      - [ ] T001 任务描述 (stage:1, depends:无)
      - [ ] T003 任务描述 (stage:2, depends:T001,T002)
      ```
+
    - **依赖有效性约束**：
      - depends 中引用的所有任务 ID 必须存在（在 tasks.md 的任务列表中可找到）；
      - 被依赖任务的 stage 序号必须 <= 当前任务的 stage 序号（阶段排前面或同阶段）。
@@ -96,6 +104,7 @@ description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可�
 ### no-placeholder iron rule (FR-TASKS-001)
 
 After generating the task list, scan every task description and the generated `tasks.md` for placeholders:
+
 - **Forbidden tokens**: `TODO`, `TBD`, `placeholder`, `待定`, `暂缺`, and any literal `<...>` placeholder markers
 - If found:
   - Mark the task with `blocking_item: true`
@@ -110,6 +119,7 @@ This rule protects downstream build-code phases from receiving undefined work. T
 ### STOP/Knowledge label convention (FR-TASKS-002 soft requirement)
 
 Tasks may carry a label indicating a mandatory validation point:
+
 - `STOP` — the task must pause at this point and wait for explicit validation before continuing
 - `Knowledge` — the task depends on a piece of external knowledge that must be verified or documented
 
@@ -143,6 +153,7 @@ const taskDir = parseTaskDir(); // final project task_tracking_root; env direct 
 ## 去耦约束
 
 本 skill 已从 speckit-tasks 解耦，硬性约束如下：
+
 - **不执行 git 命令**：禁止执行任何 git 命令（含 checkout / branch / rev-parse）、create-new-feature.sh、check-prerequisites.sh 等脚本。
 - **不读 `.specify/` 目录**：不从目标项目 `.specify/` 读取任何文件（模板、脚本、配置）。
 - **不调用 speckit 脚本**：不执行任何 `speckit-*` 前缀的脚本或命令行工具。
@@ -152,6 +163,22 @@ const taskDir = parseTaskDir(); // final project task_tracking_root; env direct 
 ## 产出
 
 - `specs/{task-id}/tasks.md`：依赖排序的任务列表（含 checklist 格式、FR 映射、阶段分组）
+
+## 六节映射
+
+每个用户故事任务块必须明确映射 `Goal / Files / Tasks / Verify / Knowledge / STOP`：
+
+- `Goal`：可观测的交付结果。
+- `Files`：精确 create/modify/test 路径。
+- `Tasks`：纵向切片内的有序操作。
+- `Verify`：精确命令、预期 RED 信号和预期 GREEN 信号。
+- `Knowledge`：已核实外部事实/文档；无则 `None`。
+- `STOP`：人工验证或不可逆边界；无则 `None`。
+
+## 来源
+
+- Speckit tasks：原有 workflowhub 迁移基线。
+- Superpowers `writing-plans`：<https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md（MIT）。仅吸收> Task Right-Sizing、Global Constraints 和 Interfaces。
 
 ## stage-result
 

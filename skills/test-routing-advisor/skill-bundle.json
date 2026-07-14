@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "skill": "test-routing-advisor",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "39c655fe4dc92df91e9e01b1172745415e9a7e5df8efab7b5d17ba015aa1206a"
+    },
+    {
+      "path": "__tests__/skill-contract.test.mjs",
+      "sha256": "6a3009ded4d8fc86cd4ec44c0043511f95c57942846daf56fb434e70d7bca01c"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/Hugh4424/AgentHub",
+      "commit": "f59b4b471df3522fcf46ec4f01c78874c90ded3c",
+      "path": "packages/core/agenthub/skills/test-routing-advisor/SKILL.md",
+      "license": "project-origin; independently adapted"
+    }
+  ]
+}

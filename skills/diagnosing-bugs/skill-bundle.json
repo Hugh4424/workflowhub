@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "skill": "diagnosing-bugs",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "e301933145fa4c00f81f41167b08d6508729b447ead053db6929a0eeb5b3496b"
+    },
+    {
+      "path": "SKILL.md",
+      "sha256": "2da11831b509a49d301047beb0af0c04c90338d4bd8defaade0a1d056e22311f"
+    },
+    {
+      "path": "__tests__/skill-contract.test.mjs",
+      "sha256": "0d8a56d54d5942569451ce820a072ec9bf71d2d24d95b7ad23e98788e506f08a"
+    },
+    {
+      "path": "hitl-loop.template.sh",
+      "sha256": "b2932630950e5210075bcd6f850e5accf30c101c5367b29eac3a29b4dd8084c8"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/mattpocock/skills",
+      "commit": "66898f60e8c744e269f8ce06c2b2b99ce7660d5f",
+      "path": "skills/engineering/diagnosing-bugs",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/obra/superpowers",
+      "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "path": "skills/systematic-debugging",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/garrytan/gstack",
+      "commit": "7c9df1c568a9ea745508f679a329332b2c338063",
+      "path": "investigate",
+      "license": "MIT"
+    }
+  ]
+}

@@ -7,10 +7,12 @@ description: Generate an implementation plan from a feature specification. Adapt
 # spec-plan
 
 > 本文件改造自 speckit-plan，适配为 workflowhub 契约：
+>
 > - 去 git 分支耦合，改用 task-id 参数推导产物路径；
 > - 模板由 workflowhub 内置（`skills/spec-plan/templates/plan-template.md`），不读目标项目 `.specify/`；
 > - 输入取自上游 build-spec 产出的 spec.md，输出 plan.md 到 `specs/{task-id}/plan.md`。
 > - 核心规划能力保留：从 spec 提取 Technical Context、填充 Constitution Check（21 条）、生成 Implementation Steps、F10 Gate、Verification Mapping。
+> - 吸收 Superpowers `writing-plans` 的 Task Right-Sizing、Global Constraints 和 Interfaces；不引入其 worktree、提交或执行编排。
 
 ## 输入
 
@@ -50,19 +52,21 @@ description: Generate an implementation plan from a feature specification. Adapt
 
    2. **填充 Constitution Check**：从 `constitution-checklist.md` 读取 21 条（F1-F10 / Q1-Q3 / S1-S8），逐条填入模板 `## Constitution Check` 章节。每条含 `[x]` 或 `[ ]` 勾选状态 + 判据文字。21 条必须全部在场，不得缺条。
 
-   3. **提取 Project Structure**：根据 spec 中的模块划分和影响范围，推导需要创建或修改的文件树，标注 NEW/MODIFY/UNCHANGED，填入 `## Project Structure` 章节。
+   3. **提取 Global Constraints 与 Project Structure**：把 spec 中的版本下限、依赖限制、命名/文案、平台和范围红线按原值写入 `## Global Constraints`，不得改写或分散。再推导文件树，标注 NEW/MODIFY/UNCHANGED。每个文件一个主要职责；不借计划无关重构。
 
    4. **生成 Implementation Steps**：将 spec 中的 User Scenarios 和 FR 转化为有序的实施步骤，按 Phase 分组填入模板 `## Implementation Steps`：
       - **Phase 1: Setup / Foundation** — 基础设施、依赖安装、配置、项目骨架
       - **Phase 2: Core Implementation** — 按 User Story 或 FR 优先级排列的核心功能实现
       - **Phase 3: Polish / Verification** — 收尾、打磨、测试补充、文档更新
-      每个 Phase 包含若干 Step，每步说明：做什么、涉及哪些文件、映射到哪些 FR。Phase 分组确保实施有清晰的里程碑和依赖顺序。
+      每个 Phase 包含若干 Step，每步说明：做什么、涉及哪些文件、映射到哪些 FR。每步声明 `Interfaces: Consumes / Produces`，给出精确签名、参数、返回类型或文件 schema。
 
-   5. **检查 Scope Boundary**：根据 spec 中的 FR-SCOPE 要求，在 `### Scope Boundary Verification` 下明确列出不可触碰的文件和路径（如 `workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md` 等）。
+   5. **Task Right-Sizing 预检**：一个后续 task 必须自带完整测试循环，产出可独立验收的纵向切片。脚手架、配置、文档并入需要它们的交付任务。只有 reviewer 可合理地“批准一个、拒绝相邻一个”时才拆分。禁止先写完所有测试、再横向写完所有实现。
 
-   6. **生成 Verification Mapping**：将每个 Implementation Step 映射到对应的 FR 编号和 AC（验收标准）编号，填入 `## Verification Mapping` 章节。
+   6. **检查 Scope Boundary**：根据 spec 中的 FR-SCOPE 要求，在 `### Scope Boundary Verification` 下明确列出不可触碰的文件和路径（如 `workflows/build-code/SKILL.md`、`workflows/verify-code/SKILL.md` 等）。
 
-   7. **Complexity Tracking**：如果实现设计存在宪法违规需说明的情况，填入 `## Complexity Tracking` 章节；无违规时填 "No constitution violations requiring justification."。
+   7. **生成 Verification Mapping**：将每个 Implementation Step 映射到对应的 FR 编号和 AC（验收标准）编号，填入 `## Verification Mapping` 章节。
+
+   8. **Complexity Tracking**：如果实现设计存在宪法违规需说明的情况，填入 `## Complexity Tracking` 章节；无违规时填 "No constitution violations requiring justification."。
 
 5. **F10 Anti-Over-Engineering Gate**：
    - 对本计划中提出的每一个新机制，回答 F10 gate 四问：
@@ -81,6 +85,7 @@ description: Generate an implementation plan from a feature specification. Adapt
 ## 去耦约束
 
 本 skill 已从 speckit-plan 解耦，硬性约束如下：
+
 - **不执行 git 命令**：不执行 git checkout / git branch / git fetch / git ls-remote / create-new-feature.sh / setup-plan.sh 或任何等效 git 操作。
 - **不读 `.specify/` 目录**：不从目标项目 `.specify/` 读取任何文件（模板、脚本、配置）。
 - **模板从 workflowhub 内部加载**：模板路径固定为 `skills/spec-plan/templates/plan-template.md`，不做 `.specify/` 回退。
@@ -88,6 +93,11 @@ description: Generate an implementation plan from a feature specification. Adapt
 ## 产出
 
 - `specs/{task-id}/plan.md`：结构化实施计划，含 Summary、Technical Context、Constitution Check（21 条）、Project Structure、Implementation Steps、F10 Gate、Verification Mapping。
+
+## 来源
+
+- Speckit plan：原有 workflowhub 迁移基线。
+- Superpowers `writing-plans`：<https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md（MIT）。仅吸收任务尺寸、全局约束和接口合同。>
 
 ## 下一步
 

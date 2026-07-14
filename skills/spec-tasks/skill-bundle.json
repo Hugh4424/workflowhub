@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "skill": "spec-tasks",
+  "files": [
+    { "path": "SKILL.md", "sha256": "394fe284040835b3ce60318ce505463e90e156df1cc130a53d578b247e06c04f" },
+    { "path": "templates/tasks-template.md", "sha256": "0ab231bd26bba38d72b8ddef3c84498a5735447106d09eb613a06fd8f2189969" }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/obra/superpowers",
+      "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "path": "skills/writing-plans/SKILL.md",
+      "license": "MIT"
+    }
+  ]
+}

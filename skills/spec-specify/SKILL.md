@@ -6,6 +6,7 @@ description: Create or update a feature specification from a natural language fe
 # spec-specify
 
 > 本文件改造自 speckit-specify，适配为 workflowhub 契约：
+>
 > - 去 git 分支耦合，改用 task-id 参数推导产物路径；
 > - 模板由 workflowhub 内置（`./templates/spec-template.md`），不读目标项目 `.specify/`；
 > - 接 workflowhub M4 metrics 系统（`metrics/collector.mjs`）的 recordSkeleton + updateOwnResult。
@@ -132,6 +133,7 @@ description: Create or update a feature specification from a natural language fe
 ## 去耦约束
 
 本 skill 已从 speckit-specify 解耦，硬性约束如下：
+
 - **不执行 git 命令**：不执行 git checkout / git branch / git fetch / git ls-remote / create-new-feature.sh 或任何等效 git 操作。
 - **不读 `.specify/` 目录**：不从目标项目 `.specify/` 读取任何文件（模板、脚本、配置）。
 - **不调用 speckit 脚本**：不执行任何 `speckit-*` 前缀的脚本或命令行工具。
@@ -158,11 +160,13 @@ description: Create or update a feature specification from a natural language fe
 ### 成功标准示例
 
 **好**：
+
 - "用户可在 3 分钟内完成结账"
 - "系统支持 10,000 并发用户"
 - "95% 搜索在 1 秒内返回结果"
 
 **差**（含实现细节）：
+
 - "API 响应时间低于 200ms"（太技术化）
 - "数据库承载 1000 TPS"（实现细节）
 - "React 组件高效渲染"（框架特定）
@@ -174,6 +178,7 @@ description: Create or update a feature specification from a natural language fe
 ### 合理默认值示例
 
 以下不必提问，直接取合理默认值（全部采用产品/领域口径，不写具体技术栈、协议或框架）：
+
 - 数据保留：行业的通行做法
 - 性能目标：行业同类产品常见体验水准（未指定时）
 - 错误处理：用户友好提示 + 适当降级

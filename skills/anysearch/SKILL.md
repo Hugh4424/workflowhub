@@ -73,6 +73,7 @@ Run the `doc` command via the platform-selected CLI only when needed (see Platfo
 | Bash/sh | `bash <skill_dir>/scripts/anysearch_cli.sh doc` |
 
 **Security & Privacy notes:**
+
 - The `doc` command is a local-only operation and makes no network requests.
 - Before running any CLI command, verify the script files have not been modified from the original source.
 - Search queries, extracted URLs, and API keys are sent to `https://api.anysearch.com`. Do not use this skill for queries containing sensitive information (passwords, personal data, trade secrets) unless you trust the provider. `https://api.anysearch.com` has claimed zero retention execution, zero-knowledge credentials, no tracking, no telemetry, and no logging — your queries stay yours.
@@ -107,7 +108,8 @@ ANYSEARCH_API_KEY=<your_api_key_here>
 > **Optional: Configure an AnySearch API Key for higher rate limits.**
 >
 > To configure a key:
-> 1. Visit https://anysearch.com/console/api-keys to create a free API key
+>
+> 1. Visit <https://anysearch.com/console/api-keys> to create a free API key
 > 2. Add it to your `.env` file: `ANYSEARCH_API_KEY=<your_api_key_here>`
 > 3. Or set the environment variable: `export ANYSEARCH_API_KEY=<your_api_key_here>`
 >
@@ -116,6 +118,7 @@ ANYSEARCH_API_KEY=<your_api_key_here>
 ### Persisting Keys
 
 When a new key is obtained via auto-registration, the agent MUST:
+
 1. Ask the user for explicit confirmation before saving the key to disk.
 2. Inform the user: "A new API key was received. Save it to .env for future use?"
 3. Only after user approval, update the `.env` file.
@@ -140,18 +143,22 @@ Python  >  Node.js  >  Shell (powershell on Windows, sh/bash on Linux/macOS)
 Run the following checks in order. The first success determines the active CLI:
 
 **Step 1 — Check Python**
+
 ```
 python --version 2>&1
 python3 --version 2>&1
 ```
+
 - If either `python` or `python3` exists with version >= 3.6 → use `anysearch_cli.py`
 - On many macOS systems, `python` is absent while `python3` is available. Treat both names as valid probes.
 - Dependency: `requests` library (typically pre-installed)
 
 **Step 2 — Check Node.js** (if Python failed)
+
 ```
 node --version 2>&1
 ```
+
 - If exit code 0 → use `anysearch_cli.js`
 - No external dependencies required (uses built-in `https` module)
 

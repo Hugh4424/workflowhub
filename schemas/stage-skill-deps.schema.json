@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/schemas/stage-skill-deps.schema.json",
+  "type": "object",
+  "required": ["stage", "skills", "runtime_capabilities", "external_capabilities"],
+  "properties": {
+    "stage": { "type": "string", "minLength": 1 },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "execution", "invocation", "trigger", "bundle"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "pattern": "^skills/[^/]+/SKILL\\.md$" },
+          "execution": { "enum": ["inline", "independent"] },
+          "invocation": { "enum": ["always", "conditional"] },
+          "trigger": { "type": "string", "minLength": 1 },
+          "bundle": { "type": "string", "pattern": "^skills/[^/]+/skill-bundle\\.json$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "runtime_capabilities": { "type": "array" },
+    "external_capabilities": { "type": "array" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "skill": "verify-change",
+  "files": [
+    "SKILL.md",
+    "review-bundle.json"
+  ]
+}

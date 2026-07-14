@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "skill": "isolated-browser-qa",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "58ef60f89943aee5221f854829675df6a881e18124c8e11a370d91072d987c57"
+    },
+    {
+      "path": "__tests__/skill-contract.test.mjs",
+      "sha256": "2f7abe678d2c959c0bfc8d27293b5751848b52868b2b49a738d87656f1579d1b"
+    },
+    {
+      "path": "references/agent-browser.md",
+      "sha256": "b2562a73475c9c98c3f4e69ec4ee928ed70efba09ff2d6210ead2b57d06c70aa"
+    },
+    {
+      "path": "references/auth.md",
+      "sha256": "f28e502d84645b42357bc08efd0848efed3e5b46f18eab270f1d788feefbe754"
+    },
+    {
+      "path": "references/browser-use.md",
+      "sha256": "9f43ceed28c6d4db91d95b9c47114692fb96b98191468ee060b365c381cb3b04"
+    },
+    {
+      "path": "references/fallback.md",
+      "sha256": "6e5bc78061879135888758a07e4a54b3d1bbe580d7e6f24ffc6741aa4be90f01"
+    },
+    {
+      "path": "scripts/browser-qa-cleanup.sh",
+      "sha256": "aad133b1976d025ce57b6edb252dedd5c08a3fa3f3d8526f9c618f12e2565c5f"
+    },
+    {
+      "path": "scripts/browser-qa-context.sh",
+      "sha256": "0ea7fe3fdebb569eabdde91f02bfdafa7a713f5b293ac3da6892f009acfe0292"
+    },
+    {
+      "path": "scripts/browser-qa-doctor.sh",
+      "sha256": "aac073f372b319498e7a06a5f5f519ebd552e9d796be9b34398864637bbff32f"
+    },
+    {
+      "path": "scripts/cleanup-browser-qa.sh",
+      "sha256": "ec8f07a8237de8b268967b218265e52365b2f91f2254f376fb1e5a2081957862"
+    },
+    {
+      "path": "scripts/cleanup-codex-qa.sh",
+      "sha256": "408ad32a67e3ed784b02ceb7d99b801131cab22158e34702ef9171c687a9aacb"
+    }
+  ],
+  "sources": [
+    {
+      "kind": "user-provided-local-source",
+      "path": "isolated-browser-qa",
+      "license": "user-owned"
+    }
+  ]
+}

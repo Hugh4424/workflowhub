@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "skill": "intake-decision-review",
+  "files": [
+    "SKILL.md"
+  ]
+}

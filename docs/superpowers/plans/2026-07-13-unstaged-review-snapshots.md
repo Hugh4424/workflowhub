@@ -31,6 +31,7 @@
 ### Task 1: Capture a temporary-index tree
 
 **Files:**
+
 - Create: `skills/wh-review/scripts/source-tree.mjs`
 - Test: `skills/wh-review/scripts/__tests__/source-tree.test.mjs`
 
@@ -96,6 +97,7 @@ git commit -m "feat(wh-review): capture uncommitted source trees"
 > **Atomic boundary:** Task 2 changes the source schema used by continuation. Do not require the full facade suite to pass between Tasks 2 and 3; implement Task 3 immediately, then run the combined continuation/facade suite before either task is reviewed.
 
 **Files:**
+
 - Modify: `skills/wh-review/schemas/review-packet.schema.json`
 - Modify: `skills/wh-review/scripts/review-round-facade.mjs`
 - Modify: `skills/wh-review/scripts/review-packet-integrity.mjs`
@@ -154,6 +156,7 @@ git commit -m "feat(wh-review): seal host worktree review packets"
 ### Task 3: Continue from a reviewed tree and verify final equality
 
 **Files:**
+
 - Modify: `skills/wh-review/scripts/source-tree.mjs`
 - Modify: `skills/wh-review/scripts/review-round-facade.mjs`
 - Modify: `skills/wh-review/scripts/wh-review-cli.mjs`
@@ -220,6 +223,7 @@ git commit -m "feat(wh-review): continue uncommitted review flows"
 ### Task 4: Remove the per-stage commit gate
 
 **Files:**
+
 - Modify: `scripts/phase-gate.mjs`
 - Modify: `scripts/validate-stage-result.mjs`
 - Modify: `contracts/facts-subschema.json`
@@ -274,6 +278,7 @@ git commit -m "fix(workflow): commit once after final review"
 ### Task 5: Prove real providers see uncommitted material
 
 **Files:**
+
 - Modify: `scripts/run-wh-review-provider-smoke.mjs`
 - Modify: `scripts/__tests__/run-wh-review-provider-smoke.test.mjs`
 - Modify: `tests/wh-review-v4-workflow-wiring.test.mjs`

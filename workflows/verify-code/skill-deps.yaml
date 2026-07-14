@@ -1,0 +1,15 @@
+stage: verify-code
+skills:
+  - { name: test-strategy, path: skills/test-strategy/SKILL.md, execution: independent, invocation: always, trigger: test_strategy, bundle: skills/test-strategy/skill-bundle.json }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
+  - { name: isolated-browser-qa, path: skills/isolated-browser-qa/SKILL.md, execution: independent, invocation: conditional, trigger: ui_acceptance, bundle: skills/isolated-browser-qa/skill-bundle.json }
+  - { name: qa-only, path: skills/qa-only/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_qa_lens, bundle: skills/qa-only/skill-bundle.json }
+  - { name: verify-change, path: skills/verify-change/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_diff_lens, bundle: skills/verify-change/skill-bundle.json }
+runtime_capabilities:
+  - { id: node, kind: cli, version_policy: ">=24", required_when: always }
+  - { id: git, kind: cli, required_when: always }
+  - { id: target-test-command, kind: cli, required_when: always }
+  - { id: browser-cli, kind: cli, required_when: ui_acceptance }
+external_capabilities:
+  - { id: host-subagent, kind: host, required_when: test_strategy_or_ui }
+  - { id: wh-review-provider, kind: review, required_when: review }

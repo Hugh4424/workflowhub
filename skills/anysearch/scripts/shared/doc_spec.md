@@ -1,7 +1,8 @@
 # AnySearch Interface Specification (for AI Agent)
 
 ## Protocol
-- Endpoint: POST https://api.anysearch.com/mcp
+
+- Endpoint: POST <https://api.anysearch.com/mcp>
 - Format: JSON-RPC 2.0, method = "tools/call"
 - Auth: Header "Authorization: Bearer <API_KEY>" (optional, anonymous has lower rate limits)
 
@@ -14,6 +15,7 @@
 ## Available Commands
 
 ### 1. search — Single query search
+
 Two modes: general (omit --domain) and vertical (requires --domain + --sub_domain).
 
 | Option | Type | Required | Description |
@@ -25,6 +27,7 @@ Two modes: general (omit --domain) and vertical (requires --domain + --sub_domai
 | --max_results, -m | int | no | 1-10, default 10 |
 
 ### 2. get_sub_domains — Query vertical domain directory
+
 MUST be called before vertical search to discover available sub_domains and their required parameters.
 
 | Option | Type | Required | Description |
@@ -37,6 +40,7 @@ Returns a Markdown table grouped by domain. Each sub_domain entry shows: sub_dom
 IMPORTANT: Cache get_sub_domains results per domain within a session. Do NOT call repeatedly.
 
 ### 3. batch_search — Execute 2-5 search queries in parallel
+
 Single failure does not block others; results are merged.
 
 | Option | Type | Required | Description |
@@ -51,6 +55,7 @@ Each query object supports: query (required), domain, sub_domain, sub_domain_par
 Shared --domain/--sub_domain/--sdp are injected into items that lack their own values; per-item fields always take precedence.
 
 ### 4. extract — Fetch full page content as Markdown
+
 Truncated at 50,000 chars. HTML pages only.
 
 | Option | Type | Required | Description |
@@ -64,12 +69,14 @@ Truncated at 50,000 chars. HTML pages only.
 Search has two paths. Path 1 is a narrow exception for pure encyclopedia only. Path 2 (the DEFAULT) requires `get_sub_domains` before search.
 
 ### Path 1 — General query (RARE EXCEPTION)
+
 ONLY for pure encyclopedia / common knowledge with ZERO domain overlap.
 "How high is Mount Everest?", "Who wrote Hamlet?", "What is gravity?"
 
 → {{LANG_INVOKE}} search "query" --max_results 10
 
 ### Path 2 — Vertical query (THE DEFAULT)
+
 EVERYTHING that is NOT pure encyclopedia. Structured data, domain-specific topics,
 specialized info, real-time data, locations, or ANY ambiguity.
 
@@ -224,5 +231,6 @@ From a JSON file:
 ---
 
 ## Rate Limit Handling
+
 - On rate limit error with auto_registered api_key in response: present key to user for approval, then save to .env and retry
 - On anonymous quota exhausted: inform user that a key provides higher limits; suggest configuring one via .env or environment variable
