@@ -281,9 +281,11 @@ Identify all files and modules that will be touched by the plan. For deletions o
 
 Every task in tasks.md must reference at least one FR from the spec. Check the plan against any list of forbidden files before finalising.
 
-### Step 10.5: Commit 触发点 (FR-WORKTREE-COMMIT-004)
+### Step 10.5: 提交边界
 
-当本阶段对目标仓库产生文件变更时，须 `git add` + `git commit`，message 含 `workflowhub(build-plan)` 前缀（例如 `workflowhub(build-plan): <description>`）。所有 `git add`/`git commit` 必须在 `worktree_root`（本任务的 linked worktree，当前 task branch）中执行；严禁在 `target_repo_root` 的主工作树上执行提交。若本阶段无文件变更，禁止空提交，须在 stage-result 或 journal 记录 no-change reason；字段路径固定为 stage-result 的 `facts.no_change_reason`（string），仅在本阶段无文件变更时写入该字段（例如 `"facts": {"no_change_reason": "build-plan stage produced no file changes", ...}`），有文件变更时该字段不出现；no-change 记录为必填项，不得两者皆无地静默结束本阶段。
+在审查修复完成、`verify-final` 成功、当前 final flow 已获得 published semantic `pass` 且人工明确确认继续之前，禁止在 task worktree 执行 `git add`、`git commit` 或 `git merge`。所有目标仓库改动持续保留在同一 task worktree，后续 wh-review 直接审查完整未提交 diff；不得为了阶段结束制造中间提交或提前合并。
+
+唯一的普通实现提交由 `verify-code` 统一执行：当前 final flow 已获得 published semantic `pass`、`verify-final` 确认审过的临时-index tree 未漂移、且人工明确确认继续后，才在该 task worktree 执行一次 `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`。task_tracking_root 中的 stage-result、journal 等流程记录照常落盘，不构成提交理由。
 
 ## Produce a stage-result
 

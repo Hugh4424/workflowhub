@@ -60,20 +60,14 @@ function fixture(overrides = {}, artifactOverrides = {}) {
     },
     diff_scan: { path: diffPath, violations: [] },
     review: { core_receipt_hash: coreHash, semantic_verdict: "pass", needs_human: false },
-    commit_intent: "file_changes",
-    commit_records: [],
     ...overrides,
   };
 
   const phaseResultPath = join(repo, "phase-result.json");
   writeJson(phaseResultPath, phaseResult);
+  if (artifactOverrides.leaveDirty) return phaseResult;
   sh("git add .", repo);
   sh('git commit -m "phase implementation"', repo);
-  const phaseCommit = sh("git rev-parse HEAD", repo).trim();
-  phaseResult.commit_records = [{ phase_id: "phase-1", commit_sha: phaseCommit }];
-  if (overrides.commit_records !== undefined) {
-    phaseResult.commit_records = overrides.commit_records;
-  }
   return phaseResult;
 }
 
@@ -103,7 +97,32 @@ describe("phase-gate", () => {
     expect(result.ok, result.errors.join("; ")).toBe(true);
   });
 
-  it("passes a completed phase with RED/GREEN, diff scan, independent review, commit record, and clean worktree", () => {
+  it("blocks an otherwise valid old pass while a public projection guard remains", () => {
+    const phaseResult = fixture();
+    writeJson(join(repo, "reviews", "projection-pending-build-code-flow.json"), {
+      version: 1, status: "pending", task_id: "fixture", stage: "build-code", review_track: null, review_flow_id: "flow", needs_human: true,
+    });
+    const result = validatePhaseGate(phaseResult, repo);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join("\n")).toMatch(/PROJECTION_PENDING/);
+  });
+
+  it("accepts dirty tracked and untracked implementation with a published passing core", () => {
+    const phaseResult = fixture();
+    writeFileSync(join(repo, "README.md"), "# fixture\ntracked worktree change\n", "utf8");
+    writeFileSync(join(repo, "untracked.txt"), "unreviewed commit boundary is not required\n", "utf8");
+    const result = validatePhaseGate(phaseResult, repo);
+    expect(result.ok, result.errors.join("; ")).toBe(true);
+    expect(result.checked).toEqual([
+      "phase-status",
+      "red-green-evidence",
+      "diff-scan",
+      "projection-recovery",
+      "heterogeneous-review",
+    ]);
+  });
+
+  it("passes a completed phase with RED/GREEN, diff scan, and independent review", () => {
     const phaseResult = fixture();
     const result = validatePhaseGate(phaseResult, repo);
     expect(result.ok, result.errors.join("; ")).toBe(true);
@@ -111,9 +130,8 @@ describe("phase-gate", () => {
       "phase-status",
       "red-green-evidence",
       "diff-scan",
+      "projection-recovery",
       "heterogeneous-review",
-      "commit-or-no-change",
-      "worktree-clean",
     ]);
   });
 
@@ -151,35 +169,6 @@ describe("phase-gate", () => {
     }
   });
 
-  it("fails a file-changing phase that has no commit record", () => {
-    const phaseResult = fixture({
-      commit_intent: "file_changes",
-      commit_records: [],
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/commit/);
-  });
-
-  it("fails a fake commit record that does not exist in the worktree", () => {
-    const phaseResult = fixture({
-      commit_intent: "file_changes",
-      commit_records: [{ phase_id: "phase-1", commit_sha: "a".repeat(40) }],
-    });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails a real commit record from a different phase", () => {
-    const phaseResult = fixture();
-    const realCommit = sh("git rev-parse HEAD", repo).trim();
-    phaseResult.commit_records = [{ phase_id: "phase-0", commit_sha: realCommit }];
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
   it("fails when phase_id is missing", () => {
     const phaseResult = fixture();
     delete phaseResult.phase_id;
@@ -188,74 +177,4 @@ describe("phase-gate", () => {
     expect(result.errors.join("\n")).toMatch(/phase_id/);
   });
 
-  it("fails when the consumed commit record has no phase_id", () => {
-    const phaseResult = fixture();
-    const implementationCommit = sh("git rev-parse HEAD", repo).trim();
-    phaseResult.commit_records = [{ commit_sha: implementationCommit }];
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails top-level commit_sha without a valid current phase id", () => {
-    const phaseResult = fixture();
-    phaseResult.commit_sha = sh("git rev-parse HEAD", repo).trim();
-    delete phaseResult.commit_records;
-    delete phaseResult.commit_phase_id;
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails when the recorded implementation commit only contains tracking artifacts", () => {
-    const phaseResult = fixture({}, { skipImplementation: true });
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails when a later tracking commit moves HEAD past the implementation commit", () => {
-    const phaseResult = fixture();
-    const implementationCommit = sh("git rev-parse HEAD", repo).trim();
-    writeJson(join(repo, "phase-result.json"), phaseResult);
-    sh("git add phase-result.json", repo);
-    sh('git commit -m "tracking commit"', repo);
-    phaseResult.commit_records = [{ phase_id: "phase-1", commit_sha: implementationCommit }];
-
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails when the tracking commit records a different phase", () => {
-    const phaseResult = fixture();
-    writeJson(join(repo, "phase-result.json"), { ...phaseResult, phase_id: "phase-2" });
-    sh("git add phase-result.json", repo);
-    sh('git commit -m "different phase tracking commit"', repo);
-
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails when a file-changing phase records the tracking-only HEAD as the implementation commit", () => {
-    const phaseResult = fixture();
-    writeJson(join(repo, "phase-result.json"), phaseResult);
-    sh("git add phase-result.json", repo);
-    sh('git commit -m "tracking commit"', repo);
-    const trackingHead = sh("git rev-parse HEAD", repo).trim();
-    phaseResult.commit_records = [{ phase_id: "phase-1", commit_sha: trackingHead }];
-
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/current-phase real 40-hex .*commit record/);
-  });
-
-  it("fails when the worktree is dirty at phase completion", () => {
-    const phaseResult = fixture();
-    writeFileSync(join(repo, "untracked.txt"), "dirty\n", "utf8");
-    const result = validatePhaseGate(phaseResult, repo);
-    expect(result.ok).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/worktree must be clean/);
-  });
 });

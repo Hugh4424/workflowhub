@@ -48,6 +48,8 @@ describe("Phase 5B Must Read contracts", () => {
     expect(protocol).toContain("pass_items");
     expect(protocol).toContain("changes.diff:line <n>");
     expect(protocol).toContain("skillResults");
+    expect(protocol).toContain("skillResults` 必须精确为 `[]`");
+    expect(protocol).toContain("不得添加未声明的条目");
     for (const field of schema.required) expect(protocol).toContain(`\`${field}\``);
   });
 

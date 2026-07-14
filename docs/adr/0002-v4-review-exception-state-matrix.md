@@ -17,6 +17,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 | disposition 超次数 | 只到配置上限 | attempts/last_error | `DISPOSITION_ATTEMPTS_EXCEEDED` |
 | runtime TTL 到期 | 不 fresh | broker `expires_at_ms` | 人工 reset/new flow |
 | continuation delta 不匹配 | 不续跑 | frozen hash/baseline 诊断 | 人工 reset/new flow |
+| public core/report/index/stage-result 投影中断 | 不调用 provider；仅重放 | public `projection-pending-*` guard、private receipt/flow pending、projection manifest | `PROJECTION_PENDING`；`recover` 重放或 `PROJECTION_RECOVERY_*` fail-loud |
 
 ## 实现与测试绑定
 
@@ -28,6 +29,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 - disposition 上限：`#recordDispositionFailure()` 原子写入 attempt 与最后错误；到 `intent.limits.max_disposition_attempts` 后立刻写 human block。覆盖：`review-round-facade.test.mjs` 的 “blocks a flow...” 和 “counts schema-invalid...”。
 - TTL：continuation 先调用 broker `status(runtime_id)`，过期就拒绝，不得自动 first round。实现：`ReviewRoundFacade.run()`；覆盖：`review-round-facade.test.mjs` 的 continuation/flow recovery cases。
 - delta mismatch：`#prepareUnderLock()` 对 frozen baseline、previous packet/receipt、base revision、contract 和 skill bundle 全部 hash-bind；`validateClosureBundle()` 再绑定 current delta hash 与文件 hash。覆盖：`review-round-facade.test.mjs` 的 closure-bundle case 与 `skills/wh-review/scripts/__tests__/finding-state.test.mjs` 的 “requires an anchored current-delta closure bundle...”。
+- public projection：`#publishUnderLock()` 在任何私有 receipt/flow authority 写入前创建公开 `projection-pending-*` guard，并将同一 pending binding 写入私有 receipt/flow。所有 core/report/index/stage-result 写完才清两端 pending 和 guard。`prepare()` 取得 task lock 后首先调用 recovery；`wh-review-cli.mjs recover` 可在进程重启后只重放、绝不调用 provider。`phase-gate.mjs` 和 `ci-chain-check.mjs` 只要看见 guard 就拒绝旧 pass。私有 receipt 不存在时，只有 guard 本身完整、且同一 flow 没有任何 public artifact 的 pre-receipt orphan 可以删除并重试；任一 public artifact、损坏 guard 或私有 binding 不匹配仍分别 `PROJECTION_RECOVERY_RECEIPT_MISSING`、`PROJECTION_RECOVERY_GUARD_*` fail-loud，guard 不清除。覆盖：`review-round-facade.test.mjs` 的 “keeps a public projection guard...” 与 phase-gate/CI guard tests。
 
 ## 真实 provider 验收
 
@@ -35,6 +37,6 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 
 - Kimi：`wh-review-cli.mjs run`，验证 V4 aggregate 只含有效 outcome；
 - OpenCode：`3rd-review.mjs run`，验证 `always_embed` 的实际 stdin/附件路径；
-- 两者均执行 R1 与同 runtime/session 的 R2，并要求 R1 `R1_DIFF_MARKER`、R2 `R2_DELTA_ONLY_MARKER`，保存 runtime、session、raw hash 与证据路径。
+- 两者均从 temporary-index 捕获的未提交 R1/R2 tree 执行，并断言 HEAD 未变；R2 复用同一 runtime/session。要求 R1 `R1_DIFF_MARKER`、R2 `R2_DELTA_ONLY_MARKER`，保存 packet/hash、runtime、session、raw hash 与证据路径。
 
 未设置 `WH_REVIEW_PROVIDER_SMOKE=1` 或原生登录态未由 `WH_REVIEW_SMOKE_ASSUME_NATIVE_AUTH=1` 显式确认时返回 `SKIP`，绝不写 `PASS`。provider 认证、解析、非 JSON、超时等真实失败返回 `FAIL` 并写 `evidence.json`，不能被跳过掩盖。

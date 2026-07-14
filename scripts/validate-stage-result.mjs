@@ -13,7 +13,7 @@
  * No AJV — hand-written validator consistent with core/validate-contract.mjs (FR-NC-004).
  */
 
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname, isAbsolute, relative } from "node:path";
@@ -46,69 +46,6 @@ function isNonEmpty(value) {
   if (typeof value === "object") return Object.keys(value).length > 0;
   // number, boolean — truthy wins
   return Boolean(value);
-}
-
-function isTrackingArtifactPath(file) {
-  return (
-    file === "phase-result.json" ||
-    file.endsWith("/phase-result.json") ||
-    file === "stage-result-build-code.json" ||
-    file.endsWith("/stage-result-build-code.json") ||
-    file.startsWith("tasks/") ||
-    file.includes("/evidence/") ||
-    file.startsWith("evidence/") ||
-    file.includes("/reviews/") ||
-    file.startsWith("reviews/")
-  );
-}
-
-function commitChangedFiles(worktreeRoot, sha) {
-  return execFileSync("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", sha], {
-    cwd: worktreeRoot,
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  })
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function worktreeHead(worktreeRoot, errors) {
-  try {
-    return execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: worktreeRoot,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch (err) {
-    errors.push(`facts["worktree_root"] for stage "build-code" must be a readable git worktree: ${err.message}`);
-    return null;
-  }
-}
-
-function validateBuildCodeCommitRecordAgainstWorktree(record, worktreeRoot, errors) {
-  let changed;
-  try {
-    changed = commitChangedFiles(worktreeRoot, record.commit_sha);
-  } catch (err) {
-    errors.push(`facts["phase_completion"].commit_records commit_sha for phase "${record.phase_id}" must be readable in worktree: ${err.message}`);
-    return;
-  }
-  if (!changed.some((file) => !isTrackingArtifactPath(file))) {
-    errors.push(`facts["phase_completion"].commit_records commit_sha for phase "${record.phase_id}" must include at least one non-tracking implementation/test file`);
-  }
-}
-
-function validateBuildCodeCommitRecordsAgainstWorktree(records, worktreeRoot, errors) {
-  const head = worktreeHead(worktreeRoot, errors);
-  if (!head) return;
-  for (const record of records) {
-    validateBuildCodeCommitRecordAgainstWorktree(record, worktreeRoot, errors);
-  }
-  const finalRecord = records.at(-1);
-  if (finalRecord && finalRecord.commit_sha !== head) {
-    errors.push(`facts["phase_completion"].commit_records final implementation commit for phase "${finalRecord.phase_id}" must match worktree HEAD`);
-  }
 }
 
 /**
@@ -172,47 +109,31 @@ export function validateStageResult(stage, artifact) {
       errors.push(`facts["review"] for stage "build-code" must be an object`);
     }
     if (facts.phase_completion && typeof facts.phase_completion === "object" && !Array.isArray(facts.phase_completion)) {
-      const commitRecords = Array.isArray(facts.phase_completion.commit_records)
-        ? facts.phase_completion.commit_records
-        : null;
-      const noChangeRecords = Array.isArray(facts.phase_completion.no_change_records)
-        ? facts.phase_completion.no_change_records
-        : null;
-      if (!commitRecords) {
-        errors.push(`facts["phase_completion"].commit_records for stage "build-code" must be an array`);
+      const phaseCompletion = facts.phase_completion;
+      if (Object.keys(phaseCompletion).some((key) => key !== "phase_records")) {
+        errors.push(`facts["phase_completion"] for stage "build-code" must contain only phase_records`);
       }
-      if (!noChangeRecords) {
-        errors.push(`facts["phase_completion"].no_change_records for stage "build-code" must be an array`);
+      const phaseRecords = Array.isArray(phaseCompletion.phase_records)
+        ? phaseCompletion.phase_records
+        : null;
+      if (!phaseRecords) {
+        errors.push(`facts["phase_completion"].phase_records for stage "build-code" must be an array`);
       }
-      const validCommitRecords = (commitRecords ?? []).filter(
+      const validPhaseRecords = (phaseRecords ?? []).filter(
         (record) =>
           record &&
           typeof record === "object" &&
+          Object.keys(record).length === 2 &&
+          Object.keys(record).every((key) => key === "phase_id" || key === "changed") &&
           typeof record.phase_id === "string" &&
           record.phase_id.trim() !== "" &&
-          typeof record.commit_sha === "string" &&
-          /^[a-f0-9]{40}$/.test(record.commit_sha)
+          typeof record.changed === "boolean"
       );
-      const validNoChangeRecords = (noChangeRecords ?? []).filter(
-        (record) =>
-          record &&
-          typeof record === "object" &&
-          typeof record.phase_id === "string" &&
-          record.phase_id.trim() !== "" &&
-          typeof record.no_change_reason === "string" &&
-          record.no_change_reason.trim() !== ""
-      );
-      if ((commitRecords?.length ?? 0) + (noChangeRecords?.length ?? 0) === 0) {
-        errors.push(`facts["phase_completion"] for stage "build-code" must include at least one commit_records or no_change_records entry`);
+      if ((phaseRecords?.length ?? 0) === 0) {
+        errors.push(`facts["phase_completion"] for stage "build-code" must include at least one phase_records entry`);
       }
-      if (commitRecords && validCommitRecords.length !== commitRecords.length) {
-        errors.push(`facts["phase_completion"].commit_records entries must include phase_id and a real 40-hex commit_sha shape`);
-      }
-      if (noChangeRecords && validNoChangeRecords.length !== noChangeRecords.length) {
-        errors.push(`facts["phase_completion"].no_change_records entries must include phase_id and non-empty no_change_reason`);
-      }
-      if (validCommitRecords.length > 0 && typeof facts.worktree_root === "string" && isAbsolute(facts.worktree_root)) {
-        validateBuildCodeCommitRecordsAgainstWorktree(validCommitRecords, facts.worktree_root, errors);
+      if (phaseRecords && validPhaseRecords.length !== phaseRecords.length) {
+        errors.push(`facts["phase_completion"].phase_records entries must contain only phase_id and changed boolean`);
       }
     } else if ("phase_completion" in facts) {
       errors.push(`facts["phase_completion"] for stage "build-code" must be an object`);

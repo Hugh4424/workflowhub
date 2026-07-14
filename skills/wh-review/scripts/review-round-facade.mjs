@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, isDownstreamReviewStage, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
@@ -11,91 +11,12 @@ import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "./review-packet-integrity.mjs";
+import { buildTreeMaterial, captureWorktreeTree, capturedHead, deleteReviewTreeRef, headTree, readReviewTreeRef, updateReviewTreeRef } from "./source-tree.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
-const providerId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const EMBED_DIFF_CHUNK_BYTES = 192 * 1024;
-// A provider is deliberately not a host-worktree principal.  Keep the host
-// packet immutable and redact only the provider-facing diff projection.
-// Tokens use a digest rather than an ordinal so repeated literals retain one
-// stable reference across chunks without disclosing the source path.
-const absolutePathCandidate = /(?:\/(?:[A-Za-z0-9._~%+=,@-]+)){2,}|[A-Za-z]:\\(?:[A-Za-z0-9._~%+=,@ -]+\\?)+/g;
-const absolutePathBoundary = /[\s"'`=:(\[<{,+-]/;
-function absolutePathMatches(value) {
-  const text = String(value ?? ""); const matches = []; let match;
-  absolutePathCandidate.lastIndex = 0;
-  while ((match = absolutePathCandidate.exec(text))) {
-    const path = match[0]; const previous = match.index === 0 ? "" : text[match.index - 1];
-    if ((previous && !absolutePathBoundary.test(previous)) || path === "/dev/null") continue;
-    matches.push({ path, index: match.index, byte_offset: Buffer.byteLength(text.slice(0, match.index)), byte_length: Buffer.byteLength(path) });
-  }
-  return matches;
-}
-function redactProviderDiff(unifiedDiff) {
-  const raw = String(unifiedDiff ?? ""); const matches = absolutePathMatches(raw);
-  if (!matches.length) return { value: raw, redactions: [] };
-  let cursor = 0; let value = "";
-  const redactions = matches.map(({ path, index, byte_offset, byte_length }) => {
-    const token = `[[ABSOLUTE_PATH_${sha(path).slice(0, 16)}]]`;
-    value += raw.slice(cursor, index) + token; cursor = index + path.length;
-    return { category: "absolute_path", token, raw_sha256: sha(path), byte_offset, byte_length };
-  });
-  value += raw.slice(cursor);
-  return { value, redactions };
-}
-export function buildProviderReviewPacket(packet) {
-  const redacted = redactProviderDiff(packet.unified_diff);
-  const rawBytes = Buffer.from(packet.unified_diff, "utf8");
-  if (!redacted.redactions.length) return {
-    packet,
-    receipt: { version: 1, raw_diff_sha256: packet.diff_sha256, raw_diff_bytes: rawBytes.length, sanitized_diff_sha256: packet.diff_sha256, sanitized_diff_bytes: rawBytes.length, redaction_count: 0, categories: {}, coverage_sha256: sha(canonical([])) },
-  };
-  const providerPacket = structuredClone(packet);
-  providerPacket.unified_diff = redacted.value;
-  providerPacket.redactions_applied = { version: 1, count: redacted.redactions.length, categories: { absolute_path: redacted.redactions.length } };
-  providerPacket.diff_sha256 = sha(providerPacket.unified_diff);
-  providerPacket.manifest_hash = reviewManifestHash(providerPacket);
-  providerPacket.packet_hash = reviewPacketHash(providerPacket);
-  sealPacket(providerPacket);
-  return {
-    packet: providerPacket,
-    receipt: {
-      version: 1,
-      raw_diff_sha256: packet.diff_sha256,
-      raw_diff_bytes: rawBytes.length,
-      sanitized_diff_sha256: providerPacket.diff_sha256,
-      sanitized_diff_bytes: Buffer.byteLength(providerPacket.unified_diff),
-      redaction_count: redacted.redactions.length,
-      categories: { absolute_path: redacted.redactions.length },
-      redactions: redacted.redactions,
-      coverage_sha256: sha(canonical(redacted.redactions)),
-    },
-  };
-}
-export function verifyProviderReviewPacket(rawPacket, providerPacket, receipt) {
-  const expected = buildProviderReviewPacket(rawPacket);
-  if (canonical(expected.packet) !== canonical(providerPacket) || canonical(expected.receipt) !== canonical(receipt)) throw new Error("MATERIAL_INCOMPLETE: provider diff redaction receipt does not cover the host packet");
-  if (absolutePathMatches(providerPacket.unified_diff).length) throw new Error("MATERIAL_INCOMPLETE: provider packet still contains an absolute path");
-  if (receipt.redaction_count > 0 && (!providerPacket.redactions_applied || providerPacket.redactions_applied.count !== receipt.redaction_count)) throw new Error("MATERIAL_INCOMPLETE: provider redaction declaration is missing");
-  return true;
-}
-function buildProviderContinuationDelta(delta, providerPacket) {
-  if (!delta?.affected_materials?.changes_diff) return delta;
-  const redacted = redactProviderDiff(delta.affected_materials.changes_diff);
-  if (!redacted.redactions.length) return delta;
-  const providerDelta = structuredClone(delta);
-  providerDelta.affected_materials.changes_diff = redacted.value;
-  providerDelta.delta_manifest.current_packet_hash = providerPacket.packet_hash;
-  providerDelta.delta_manifest.current_packet_manifest_hash = providerPacket.manifest_hash;
-  providerDelta.delta_manifest.current_packet_diff_sha256 = providerPacket.diff_sha256;
-  providerDelta.delta_manifest.changes_diff_sha256 = sha(redacted.value);
-  providerDelta.delta_manifest.changes_diff_size = Buffer.byteLength(redacted.value);
-  providerDelta.delta_manifest.redactions_applied = { version: 1, count: redacted.redactions.length, categories: { absolute_path: redacted.redactions.length } };
-  return providerDelta;
-}
 export function aggregateMakeDecisionReviewTracks(input) { return aggregateMakeDecisionTracks(input); }
 function atomic(path, value, mode = 0o600) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temp = `${path}.${process.pid}.tmp`; writeFileSync(temp, value, { mode }); renameSync(temp, path); }
 function writeImmutable(path, value) {
@@ -125,8 +46,11 @@ function privateFileHash(directory, ref, expectedHash) {
   } catch { return null; }
 }
 function packetHash(packet) { return reviewPacketHash(packet); }
+function attachmentRecords(entries) { return entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed })); }
+function canonicalInnerManifestHash(manifest) { const { inner_manifest_hash: ignored, ...value } = manifest; return sha(canonical(value)); }
+function canonicalDeliveryManifestHash(bundleId, files, deliveryMode) { return sha(canonical({ version: 1, bundle_id: bundleId, delivery_mode: deliveryMode, files: files.filter((item) => item.target !== "manifest.json").map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
+function canonicalMaterialManifestHash(bundleId, files) { return sha(canonical({ version: 1, bundle_id: bundleId, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
-function stripHunkSectionHeaders(unifiedDiff) { return unifiedDiff.replace(/^(@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@).*$/gm, "$1"); }
 function addedDeltaLineKeys(unifiedDiff) {
   const keys = new Set();
   let file = null; let nextLine = null;
@@ -148,13 +72,21 @@ function addedDeltaLineKeys(unifiedDiff) {
   return keys;
 }
 function sealPacket(packet) {
+  packet.diff_sha256 ??= sha(packet.unified_diff);
+  const sourceManifestHash = reviewManifestHash(packet);
+  packet.source_manifest_hash ??= sourceManifestHash;
+  if (packet.source_manifest_hash !== sourceManifestHash) throw new Error("source_manifest_hash mismatch");
+  // Before attachment freezing this is the source-material binding. The
+  // provider packet's manifest_hash is replaced below with the triad material
+  // manifest required by the broker contract.
+  packet.manifest_hash = sourceManifestHash;
+  packet.packet_hash ??= "0".repeat(64);
   validateSchema("review-packet", packet);
   const diff = sha(packet.unified_diff);
   if (packet.diff_sha256 && packet.diff_sha256 !== diff) throw new Error("diff_sha256 mismatch");
   packet.diff_sha256 = diff;
   // Git owns diff syntax (multiple hunks, mode/index records, binary patches,
-  // and quoted paths). Exact comparison with buildHostGitSource below is the
-  // source-evidence check; do not impose a hand-written diff grammar here.
+  // and quoted paths); this facade receives it only from source-tree.mjs.
   for (const entry of packet.changed_files) {
     if (!entry || !safeRelativePath(entry.path) || !["added", "modified", "deleted", "renamed"].includes(entry.status)) throw new Error("invalid changed_files entry");
     const needsCurrent = entry.status !== "deleted";
@@ -162,105 +94,46 @@ function sealPacket(packet) {
     if (["modified", "deleted", "renamed"].includes(entry.status) && (!/^[a-f0-9]{64}$/.test(entry.old_sha256 ?? "") || !Number.isSafeInteger(entry.old_size) || entry.old_size < 0)) throw new Error("invalid changed_files base snapshot");
     if (entry.status === "renamed" && !safeRelativePath(entry.old_path)) throw new Error("renamed changed_files entry requires old_path");
   }
-  const manifest = reviewManifestHash(packet);
-  if (packet.manifest_hash && packet.manifest_hash !== manifest) throw new Error("manifest_hash mismatch");
-  packet.manifest_hash = manifest;
   packet.packet_hash = packetHash(packet);
   return packet;
 }
-function hostGit(root, args, encoding = "utf8") {
-  try { return execFileSync("git", args, { cwd: root, encoding, maxBuffer: 32 * 1024 * 1024 }); }
-  catch (error) { throw new Error(`host git source builder failed: ${String(error.stderr ?? error.message).trim()}`); }
+const sourceOwnedFields = new Set(["source_revision", "unified_diff", "changed_files", "diff_sha256", "packet_hash", "source_manifest_hash", "manifest_hash", "repository_root", "repositoryRoot", "changed_file_root", "changedFileRoot"]);
+function rejectCallerSourceFields(value, scope = "caller input") {
+  const fields = Object.keys(value ?? {}).filter((field) => sourceOwnedFields.has(field));
+  if (fields.length) throw new Error(`SOURCE_FIELDS_FORBIDDEN: ${scope} cannot provide ${fields.join(", ")}`);
+}
+function buildHostWorktreeSource(root, { baseTree, excludePaths } = {}) {
+  const base_tree = baseTree ?? headTree(root);
+  const snapshot_tree = captureWorktreeTree(root, { baseTree: base_tree, excludePaths });
+  const material = buildTreeMaterial(root, { baseTree: base_tree, snapshotTree: snapshot_tree });
+  return { ...material, source_revision: { ...material.source_revision, captured_head: capturedHead(root) } };
+}
+function internalLedgerExclusion(sourceRoot, taskTrackingRoot, taskId) {
+  const source = resolve(sourceRoot); const tracking = resolve(taskTrackingRoot);
+  const excluded = new Set();
+  const addIfVisible = (ledger) => {
+    const candidate = relative(source, ledger);
+    if (candidate === "reviews" || safeRelativePath(candidate)) excluded.add(candidate);
+  };
+  // The active task id is the host contract: its reviews directory always
+  // belongs to this facade, including before the first private artifact exists.
+  addIfVisible(join(taskRoot(tracking, taskId), "reviews"));
+  // When the source and tracking trees overlap, earlier tasks' private
+  // packets/receipts are source material only by accident. Identify those
+  // ledgers by the host-only private layout; do not blanket-exclude arbitrary
+  // project directories named "reviews".
+  for (const entry of readdirSync(tracking, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !safeRelativePath(entry.name) || entry.name === taskId) continue;
+    const ledger = join(taskRoot(tracking, entry.name), "reviews");
+    if (existsSync(join(ledger, "private", "flows")) || existsSync(join(ledger, "private", "source-context.json"))) addIfVisible(ledger);
+  }
+  return [...excluded];
 }
 function processStartIdentity(pid) {
   try {
     const value = String(execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" })).trim();
     return value || null;
   } catch { return null; }
-}
-function gitBlob(root, revision, path) { return hostGit(root, ["show", `${revision}:${path}`], "buffer"); }
-export function buildHostGitSource(repositoryRoot, requestedRevision, { contextLines = null } = {}) {
-  if (!requestedRevision || typeof requestedRevision.base !== "string" || typeof requestedRevision.head !== "string") throw new Error("source_revision.base and source_revision.head are required");
-  const root = realpathSync(resolve(repositoryRoot));
-  const gitRoot = realpathSync(resolve(String(hostGit(root, ["rev-parse", "--show-toplevel"])).trim()));
-  if (gitRoot !== root) throw new Error("repository_root must be the host git repository root");
-  const base = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.base}^{commit}`])).trim();
-  const head = String(hostGit(root, ["rev-parse", "--verify", `${requestedRevision.head}^{commit}`])).trim();
-  if (requestedRevision.base !== base || requestedRevision.head !== head) throw new Error("source_revision must use immutable resolved commit ids");
-  const context = contextLines === null ? [] : [`-U${contextLines}`];
-  const rawDiff = String(hostGit(root, ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", ...context, base, head]));
-  const unified_diff = contextLines === 0 ? stripHunkSectionHeaders(rawDiff) : rawDiff;
-  const fields = String(hostGit(root, ["diff", "--name-status", "-z", "--find-renames", base, head])).split("\0");
-  const changed_files = [];
-  for (let index = 0; index < fields.length - 1;) {
-    const statusToken = fields[index++]; if (!statusToken) continue;
-    const kind = statusToken[0];
-    if (!["A", "M", "D", "R"].includes(kind)) throw new Error(`unsupported host git change status: ${statusToken}`);
-    const old_path = kind === "R" ? fields[index++] : null; const path = fields[index++];
-    if (!safeRelativePath(path) || (old_path !== null && !safeRelativePath(old_path))) throw new Error("host git source contains unsafe path");
-    const entry = { path, status: ({ A: "added", M: "modified", D: "deleted", R: "renamed" })[kind] };
-    if (old_path !== null) entry.old_path = old_path;
-    if (kind !== "D") { const bytes = gitBlob(root, head, path); entry.sha256 = sha(bytes); entry.size = bytes.length; }
-    if (kind !== "A") { const bytes = gitBlob(root, base, old_path ?? path); entry.old_sha256 = sha(bytes); entry.old_size = bytes.length; }
-    changed_files.push(entry);
-  }
-  return { source_revision: { base, head }, unified_diff, changed_files };
-}
-function verifyHostGitSource(packet, repositoryRoot) {
-  const built = buildHostGitSource(repositoryRoot, packet.source_revision);
-  const normalizeChangedFiles = (entries) => entries.map((entry) => {
-    const normalized = { ...entry };
-    if (normalized.status !== "renamed" && normalized.old_path === null) delete normalized.old_path;
-    return normalized;
-  });
-  if (packet.unified_diff !== built.unified_diff || canonical(normalizeChangedFiles(packet.changed_files)) !== canonical(normalizeChangedFiles(built.changed_files))) throw new Error("review packet source evidence does not match host git base/head revisions");
-}
-export function buildProviderPacketAttachments(packet) {
-  const packetBytes = Buffer.from(safeJson(packet));
-  if (packetBytes.length <= EMBED_DIFF_CHUNK_BYTES) return [{ destination: "review-packet.v1.json", bytes: packetBytes }, { destination: "changes.diff", bytes: Buffer.from(packet.unified_diff, "utf8") }];
-  const diff = Buffer.from(packet.unified_diff, "utf8"); const chunks = [];
-  for (let offset = 0; offset < diff.length; offset += EMBED_DIFF_CHUNK_BYTES) {
-    const bytes = diff.subarray(offset, Math.min(offset + EMBED_DIFF_CHUNK_BYTES, diff.length));
-    chunks.push({ destination: `changes.diff.parts/${String(chunks.length + 1).padStart(4, "0")}`, bytes, sha256: sha(bytes), size: bytes.length });
-  }
-  const manifest = { version: 1, packet_hash: packet.packet_hash, diff_sha256: packet.diff_sha256, diff_size: diff.length, chunks: chunks.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
-  const { unified_diff, ...metadata } = packet;
-  const providerPacket = { ...metadata, diff_attachment_manifest: "changes.diff.manifest.json" };
-  return [
-    { destination: "review-packet.v1.json", bytes: Buffer.from(safeJson(providerPacket)) },
-    { destination: "changes.diff.manifest.json", bytes: Buffer.from(safeJson(manifest)) },
-    ...chunks,
-  ];
-}
-function verifyProviderPacketAttachments(packet, frozenAttachments) {
-  const manifestAttachment = frozenAttachments.find((item) => item.destination === "changes.diff.manifest.json");
-  if (!manifestAttachment) return;
-  let manifest; try { manifest = JSON.parse(readFileSync(manifestAttachment.path, "utf8")); } catch { throw new Error("MATERIAL_INCOMPLETE: chunked diff manifest is invalid"); }
-  if (manifest?.version !== 1 || manifest.packet_hash !== packet.packet_hash || manifest.diff_sha256 !== packet.diff_sha256 || !Array.isArray(manifest.chunks)) throw new Error("MATERIAL_INCOMPLETE: chunked diff manifest is not bound to the sealed packet");
-  const byDestination = new Map(frozenAttachments.map((item) => [item.destination, item])); const bytes = [];
-  for (const chunk of manifest.chunks) {
-    const frozen = byDestination.get(chunk?.destination); if (!frozen || frozen.sha256 !== chunk.sha256 || frozen.size !== chunk.size) throw new Error("MATERIAL_INCOMPLETE: chunked diff coverage is incomplete");
-    const value = readFileSync(frozen.path); if (sha(value) !== chunk.sha256 || value.length !== chunk.size) throw new Error("MATERIAL_INCOMPLETE: chunked diff hash mismatch"); bytes.push(value);
-  }
-  const rebuilt = Buffer.concat(bytes);
-  if (rebuilt.length !== manifest.diff_size || sha(rebuilt) !== packet.diff_sha256 || rebuilt.toString("utf8") !== packet.unified_diff) throw new Error("MATERIAL_INCOMPLETE: chunked diff reconstruction does not match the sealed packet");
-}
-export function buildHostReviewPacket({ repository_root, source_revision, stage, review_track = null, round_kind = "initial", baseline_packet_hash = null, raw_requirement, decision_log_excerpt, acceptance_design_excerpt, planning_artifacts = [], verification_closure = [], test_evidence = [], host_verified_facts = [] } = {}) {
-  assertKnownStage(stage); assertReviewTrack(stage, review_track);
-  const source = buildHostGitSource(repository_root, source_revision);
-  const contract = projectStageContract(stage, review_track);
-  const skills = resolveRequiredSkills({ stage, reviewTrack: review_track });
-  const packet = {
-    version: "review-packet.v1", stage, review_track, round_kind, baseline_packet_hash,
-    ...source,
-    raw_requirement, decision_log_excerpt, acceptance_design_excerpt, planning_artifacts,
-    verification_closure, test_evidence, host_verified_facts,
-    contract_hash: contract.contractHash, skill_bundle_hash: skills.skillBundleHash,
-  };
-  packet.diff_sha256 = sha(packet.unified_diff);
-  packet.manifest_hash = reviewManifestHash(packet);
-  packet.packet_hash = packetHash(packet);
-  return sealPacket(packet);
 }
 function bundleHash(resolution) { return sha(canonical(resolution.definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
 function publicError(item) { return item?.error?.code ?? item?.error?.message ?? "PROVIDER_FAILED"; }
@@ -337,18 +210,37 @@ function checkedCarryovers(value, previousFindings, { taskTrackingRoot, taskId, 
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
+  constructor({ taskTrackingRoot, sourceRoot = taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
     if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(initialPromptMaxBytes) || initialPromptMaxBytes < 1) throw new TypeError("initialPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(maxDispositionAttempts) || maxDispositionAttempts < 1) throw new TypeError("maxDispositionAttempts must be a positive integer");
     if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
-    this.taskTrackingRoot = resolve(taskTrackingRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
+    this.taskTrackingRoot = resolve(taskTrackingRoot); this.sourceRoot = resolve(sourceRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
     this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.maxDispositionAttempts = maxDispositionAttempts; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
   #flow(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.json`); }
+  #treeRef(intent) { return `refs/workflowhub/review/${intent.task_id}/${reviewStageStorageKey(intent.stage, intent.review_track)}/${intent.review_flow_id}`; }
+  #sourceContext(taskId) { return join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private", "source-context.json"); }
+  #readSourceContext(taskId) {
+    const path = this.#sourceContext(taskId); if (!existsSync(path)) return null;
+    let context; try { context = JSON.parse(readFileSync(path, "utf8")); } catch { throw new Error("task source context is invalid"); }
+    if (!(context?.version === 1 && /^[a-f0-9]{40,64}$/.test(context.initial_tree ?? "") && (context.last_approved_tree === null || /^[a-f0-9]{40,64}$/.test(context.last_approved_tree ?? "")))) throw new Error("task source context is invalid");
+    return context;
+  }
+  #recordInitialTree(taskId, initialTree) {
+    const existing = this.#readSourceContext(taskId); if (existing) return existing;
+    const context = { version: 1, initial_tree: initialTree, last_approved_tree: null };
+    this.faultInjector("before-source-context-write", context); atomic(this.#sourceContext(taskId), safeJson(context)); return context;
+  }
+  #recordLastApprovedTree(taskId, tree) {
+    const existing = this.#readSourceContext(taskId);
+    if (!existing) throw new Error("task source context is missing");
+    const context = { ...existing, last_approved_tree: tree };
+    this.faultInjector("before-source-context-write", context); atomic(this.#sourceContext(taskId), safeJson(context)); return context;
+  }
   #resetApproval(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", "flows", `${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}.reset-approval.json`); }
   #lock(intent) {
     const name = intent.stage === "make-decision" ? `${intent.task_id}-${reviewStageStorageKey(intent.stage, intent.review_track)}.lock` : `${intent.task_id}.lock`;
@@ -369,11 +261,156 @@ export class ReviewRoundFacade {
   #publicCorePath(intent, coreHash) {
     return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "core-receipts", `${coreHash}.json`);
   }
+  #projectionGuardPath(intent) {
+    const key = reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id);
+    return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", `projection-pending-${key}.json`);
+  }
+  #projectionPending(intent) {
+    return { version: 1, status: "pending", task_id: intent.task_id, stage: intent.stage, review_track: intent.review_track ?? null, review_flow_id: intent.review_flow_id, needs_human: true, guard_ref: relative(taskRoot(this.taskTrackingRoot, intent.task_id), this.#projectionGuardPath(intent)) };
+  }
+  #readVerifiedProjectionGuard(intent) {
+    const path = this.#projectionGuardPath(intent);
+    if (!existsSync(path)) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: private projection state has no public guard");
+    let saved;
+    try { saved = JSON.parse(readFileSync(path, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: projection guard is invalid JSON"); }
+    const pending = this.#projectionPending(intent);
+    if (canonical(saved) !== canonical(pending)) throw new Error("PROJECTION_RECOVERY_GUARD_MISMATCH: projection guard does not bind this flow");
+    return { path, pending };
+  }
+  #readOrphanProjectionGuard(path, taskId) {
+    let saved;
+    try { saved = JSON.parse(readFileSync(path, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: orphan projection guard is invalid JSON"); }
+    if (saved?.task_id !== taskId) throw new Error("PROJECTION_RECOVERY_GUARD_TASK_MISMATCH: orphan projection guard belongs to another task");
+    try { assertSafeTaskId(saved.task_id); assertKnownStage(saved.stage); assertReviewTrack(saved.stage, saved.review_track ?? null); assertSafeReviewFlowId(saved.review_flow_id); }
+    catch { throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: orphan projection guard identity is invalid"); }
+    if (canonical(saved) !== canonical(this.#projectionPending(saved))) throw new Error("PROJECTION_RECOVERY_GUARD_MISMATCH: orphan projection guard does not bind its flow");
+    return saved;
+  }
+  #publicCoreMatchesIntent(intent, coreHash) {
+    if (typeof coreHash !== "string" || !/^[a-f0-9]{64}$/i.test(coreHash)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public stage-result has an invalid core hash");
+    const path = this.#publicCorePath(intent, coreHash);
+    if (!existsSync(path)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public stage-result core receipt is missing");
+    const bytes = readFileSync(path);
+    if (sha(bytes) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt hash mismatch");
+    let core;
+    try { core = JSON.parse(bytes); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt is invalid JSON"); }
+    const coreIntent = core?.intent;
+    const sameFlow = coreIntent?.task_id === intent.task_id && coreIntent.stage === intent.stage && (coreIntent.review_track ?? null) === (intent.review_track ?? null) && coreIntent.review_flow_id === intent.review_flow_id;
+    if (!sameFlow) return false;
+    if (!Number.isSafeInteger(coreIntent.business_round) || coreIntent.business_round <= 0) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt round is invalid");
+    return true;
+  }
+  #publicIndexMatchesIntent(intent, indexPath) {
+    if (!existsSync(indexPath)) return false;
+    let index;
+    try { index = JSON.parse(readFileSync(indexPath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: report index is invalid JSON"); }
+    // report-index.json is shared by stages. Another stage is unrelated, but
+    // an index for this stage must name this exact track (including null for
+    // ordinary stages), otherwise it is a corrupted current-stage artifact.
+    if (index?.stage !== intent.stage) return false;
+    if ((index.review_track ?? null) !== (intent.review_track ?? null)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: report index does not bind this stage track");
+    return this.#publicCoreMatchesIntent(intent, index.core_receipt_hash);
+  }
+  #aggregateCoreMatchesIntent(intent, coreHash) {
+    if (typeof coreHash !== "string" || !/^[a-f0-9]{64}$/i.test(coreHash)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate artifact has an invalid core hash");
+    const { reviews } = this.#publicPaths(intent); const group = `make-decision-${intent.review_flow_id}`;
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`);
+    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt hash mismatch");
+    let core;
+    try { core = JSON.parse(readFileSync(corePath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt is invalid JSON"); }
+    if (core?.stage !== "make-decision" || core.review_flow_id !== intent.review_flow_id || canonical(core.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate core receipt does not bind this flow");
+    return true;
+  }
+  #aggregateProjectionMatchesIntent(intent) {
+    const { reviews } = this.#publicPaths(intent);
+    const group = `make-decision-${intent.review_flow_id}`;
+    const stagePath = join(reviews, `stage-result-${group}.json`);
+    if (!existsSync(stagePath)) return false;
+    let stageResult;
+    try { stageResult = JSON.parse(readFileSync(stagePath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result is invalid JSON"); }
+    if (stageResult?.stage !== "make-decision" || stageResult.review_flow_id !== intent.review_flow_id || canonical(stageResult.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate stage-result does not bind this flow");
+    return this.#aggregateCoreMatchesIntent(intent, stageResult.core_receipt_hash);
+  }
+  #aggregateIndexMatchesIntent(intent) {
+    const { reviews } = this.#publicPaths(intent); const group = `make-decision-${intent.review_flow_id}`;
+    const indexPath = join(reviews, `report-index-${group}.json`);
+    if (!existsSync(indexPath)) return false;
+    let index;
+    try { index = JSON.parse(readFileSync(indexPath, "utf8")); }
+    catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate report index is invalid JSON"); }
+    if (index?.stage !== "make-decision" || index.review_flow_id !== intent.review_flow_id || canonical(index.review_tracks) !== canonical(["direction", "detail"])) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: aggregate report index does not bind this flow");
+    return this.#aggregateCoreMatchesIntent(intent, index.core_receipt_hash);
+  }
+  #hasPublicProjection(intent) {
+    const { reviews, reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
+    // A per-flow report path itself encodes the complete flow identity. The
+    // shared stage-result and report-index paths do not, so only a core hash
+    // binding can make them evidence of this pending guard.
+    if (this.#publicIndexMatchesIntent(intent, indexPath)) return true;
+    if (existsSync(reportPath)) return true;
+    if (existsSync(stageResultPath)) {
+      let stageResult;
+      try { stageResult = JSON.parse(readFileSync(stageResultPath, "utf8")); }
+      catch { throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: stage-result is invalid JSON"); }
+      if (stageResult?.stage !== intent.stage || (stageResult.review_track ?? null) !== (intent.review_track ?? null)) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: stage-result does not bind this stage track");
+      if (this.#publicCoreMatchesIntent(intent, stageResult.core_receipt_hash)) return true;
+    }
+    if (intent.stage === "make-decision") {
+      const group = `make-decision-${intent.review_flow_id}`;
+      if (this.#aggregateIndexMatchesIntent(intent)) return true;
+      if (existsSync(join(reviews, `${group}-aggregate.md`))) return true;
+      if (this.#aggregateProjectionMatchesIntent(intent)) return true;
+    }
+    const cores = join(reviews, "core-receipts");
+    if (!existsSync(cores)) return false;
+    return readdirSync(cores).some((name) => {
+      if (!name.endsWith(".json")) return false;
+      const path = join(cores, name); let core;
+      try { core = JSON.parse(readFileSync(path, "utf8")); }
+      catch { return false; }
+      const coreIntent = core?.intent;
+      const sameFlow = coreIntent?.task_id === intent.task_id && coreIntent.stage === intent.stage && (coreIntent.review_track ?? null) === (intent.review_track ?? null) && coreIntent.review_flow_id === intent.review_flow_id;
+      if (!sameFlow) return false;
+      const coreHash = name.slice(0, -5);
+      if (!/^[a-f0-9]{64}$/i.test(coreHash) || sha(readFileSync(path)) !== coreHash) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt hash mismatch");
+      if (!Number.isSafeInteger(coreIntent.business_round) || coreIntent.business_round <= 0) throw new Error("PROJECTION_RECOVERY_PUBLIC_ARTIFACT_INVALID: public core receipt round is invalid");
+      return true;
+    });
+  }
+  #ensureProjectionGuard(intent) {
+    const pending = this.#projectionPending(intent); const path = this.#projectionGuardPath(intent);
+    if (existsSync(path)) return this.#readVerifiedProjectionGuard(intent).pending;
+    atomic(path, safeJson(pending), 0o644); return pending;
+  }
+  #completeProjection(intent, receiptPath) {
+    const { path: guard } = this.#readVerifiedProjectionGuard(intent);
+    const flow = this.#readFlow(intent);
+    if (!flow) throw new Error("PROJECTION_RECOVERY_FLOW_MISSING: cannot complete projection without flow");
+    const receipt = JSON.parse(readFileSync(receiptPath, "utf8"));
+    if (receipt.projection_pending !== undefined) {
+      const { projection_pending, ...healedReceipt } = receipt;
+      this.#updateReceiptAndFlow(intent, receiptPath, healedReceipt);
+    }
+    const healedFlow = this.#readFlow(intent);
+    if (healedFlow?.projection_pending !== undefined) {
+      const { projection_pending, ...rest } = healedFlow;
+      this.#writeFlow(intent, rest);
+    }
+    rmSync(guard, { force: true });
+  }
   #readFlow(intent) { const path = this.#flow(intent); return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null; }
-  #writeFlow(intent, value) { atomic(this.#flow(intent), safeJson(value)); }
+  #writeFlow(intent, value) { this.faultInjector("before-flow-write", value); atomic(this.#flow(intent), safeJson(value)); }
 
   prepare(input) {
     assertSafeTaskId(input.task_id); assertKnownStage(input.stage); assertReviewTrack(input.stage, input.review_track ?? null); assertSafeReviewFlowId(input.review_flow_id);
+    rejectCallerSourceFields(input);
+    rejectCallerSourceFields(input.packet, "caller packet");
     if (input.source_snapshot !== undefined || input.sourceSnapshot !== undefined) throw new Error("source_snapshot is not accepted; wh-review builds source evidence from host git revisions");
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
@@ -383,26 +420,40 @@ export class ReviewRoundFacade {
   }
 
   async #prepareUnderLock(input, lock) {
+    // Ordinary stages already hold the task-wide lock as their flow lock.
+    // make-decision has per-track flow locks, so it additionally takes this
+    // same task projection lock while it reads/captures source state.
+    let sourceLock = null;
     try {
+    sourceLock = input.stage === "make-decision" ? this.#taskProjectionLock(input.task_id, "prepare-source") : null;
+    // Recover before capability discovery or any continuation/runtime gate.
+    // A pending public projection is host state, never a reason to call a provider.
+    this.#recoverProjections(input.task_id);
     for (const field of ["previous_findings", "delta_manifest", "affected_materials", "current_material_manifest", "required_skill_lens_hashes"]) if (input[field] !== undefined) throw new Error(`${field} is derived by wh-review and caller values are rejected`);
     if (input.continuation_prompt_max_bytes !== undefined || input.continuationPromptMaxBytes !== undefined) throw new Error("caller continuation prompt limit is rejected; the host owns this limit");
+    let initialHostSource = null;
+    if (input.continuation !== true) {
+      const sourceContext = this.#readSourceContext(input.task_id);
+      initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
+      this.#recordInitialTree(input.task_id, initialHostSource.source_revision.base_tree);
+    }
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
     const capabilitySnapshot = await this.broker.discoverCapabilities();
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
     const reviewTrack = input.review_track ?? null;
     const resolution = this.requiredSkillResolver({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
-    if (input.provider_allowlist !== undefined && (!Array.isArray(input.provider_allowlist) || input.provider_allowlist.some((provider) => typeof provider !== "string" || !providerId.test(provider)) || new Set(input.provider_allowlist ?? []).size !== (input.provider_allowlist ?? []).length)) throw new Error("provider_allowlist must be a unique array of provider ids");
-    if (input.continuation === true && input.provider_allowlist !== undefined) throw new Error("provider_allowlist is initial-round only; continuation providers are frozen");
-    const requestedProviders = input.provider_allowlist ? new Set(input.provider_allowlist) : null;
-    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode) && (!requestedProviders || requestedProviders.has(item.provider))).map((item) => item.provider).sort();
+    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider).sort();
     let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
     if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
-    if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object")) throw new Error("blocked_by_human_confirmation: initial provider delivery snapshot is missing; use reset with human approval");
+    if (continuation && (!/^[a-f0-9]{40,64}$/.test(prior?.last_reviewed_tree ?? "") || typeof prior?.review_tree_ref !== "string" || readReviewTreeRef(this.sourceRoot, prior.review_tree_ref) !== prior.last_reviewed_tree)) throw new Error("blocked_by_human_confirmation: last reviewed tree is unavailable; use reset with human approval");
+    if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object" || !/^[a-f0-9]{64}$/.test(prior.initial_material_manifest_hash ?? "")
+      || ((prior.continuation_sequence ?? 0) === 0 ? prior.last_delivery_manifest_hash !== null || prior.last_provider_delivery_manifest_hash !== null : !/^[a-f0-9]{64}$/.test(prior.last_delivery_manifest_hash ?? "") || !/^[a-f0-9]{64}$/.test(prior.last_provider_delivery_manifest_hash ?? "")))) throw new Error("blocked_by_human_confirmation: verified initial provider delivery is missing; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const candidateProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : doctorCandidates;
     const continuableProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : [];
+    if (continuation && (!prior.initial_provider_sessions || typeof prior.initial_provider_sessions !== "object" || continuableProviders.some((provider) => typeof prior.initial_provider_sessions[provider] !== "string" || !prior.initial_provider_sessions[provider]))) throw new Error("blocked_by_human_confirmation: initial provider sessions are missing; use reset with human approval");
     const packet = structuredClone(input.packet);
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
     const stageContract = projectStageContract(input.stage, reviewTrack);
@@ -432,26 +483,25 @@ export class ReviewRoundFacade {
       priorReceipt = readFrozen(prior.previous_receipt_ref, prior.previous_receipt_sha256, "previous private receipt");
       const priorBaselineBinding = priorPacket.round_kind === "initial" ? priorPacket.packet_hash : priorPacket.baseline_packet_hash;
       if (baselinePacket.packet_hash !== prior.baseline_packet_hash || priorBaselineBinding !== prior.baseline_packet_hash || priorPacket.packet_hash !== prior.packet_hash) throw new Error("blocked_by_human_confirmation: baseline packet binding is inconsistent; use reset with human approval");
-      if (packet.source_revision?.base !== baselinePacket.source_revision?.base) throw new Error("blocked_by_human_confirmation: current packet is not based on the frozen baseline; use reset with human approval");
       if (packet.round_kind !== undefined && packet.round_kind !== "continuation") throw new Error("blocked_by_human_confirmation: caller round_kind conflicts with continuation flow");
       if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== prior.baseline_packet_hash) throw new Error("blocked_by_human_confirmation: caller baseline_packet_hash conflicts with frozen baseline");
+      Object.assign(packet, buildHostWorktreeSource(this.sourceRoot, { baseTree: prior.last_reviewed_tree, excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) }));
       packet.round_kind = "continuation"; packet.baseline_packet_hash = prior.baseline_packet_hash;
     } else {
       if (input.closure_evidence !== undefined) return this.#materialIncomplete(input, "closure_evidence is continuation-only");
       if (packet.round_kind !== undefined && packet.round_kind !== "initial") return this.#materialIncomplete(input, "initial packet round_kind is invalid");
       if (packet.baseline_packet_hash !== undefined && packet.baseline_packet_hash !== null) return this.#materialIncomplete(input, "initial packet baseline_packet_hash must be null");
+      Object.assign(packet, initialHostSource);
       packet.round_kind = "initial"; packet.baseline_packet_hash = null;
       delta = { cross_stage_carryovers: checkedCarryovers(input.cross_stage_carryovers, [], { taskTrackingRoot: this.taskTrackingRoot, taskId: input.task_id, stage: input.stage }) };
     }
-    packet.packet_hash = /^[a-f0-9]{64}$/.test(packet.packet_hash ?? "") ? packet.packet_hash : "0".repeat(64);
-    try { sealPacket(packet); verifyHostGitSource(packet, input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot); }
+    try { sealPacket(packet); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
-    const baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
+    let baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
     if (continuation) {
       const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
-      const sourceRoot = input.repository_root ?? input.repositoryRoot ?? input.changed_file_root ?? input.changedFileRoot ?? repositoryRoot;
-      const deltaSource = buildHostGitSource(sourceRoot, { base: priorPacket.source_revision.head, head: packet.source_revision.head }, { contextLines: 0 });
+      const deltaSource = buildTreeMaterial(this.sourceRoot, { baseTree: prior.last_reviewed_tree, snapshotTree: packet.source_revision.snapshot_tree });
       const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource, stageContract.hardIds);
       const closureEvidence = closureCheck.items;
       closureBundleGates = closureCheck.unverifiedBlockingIds;
@@ -473,63 +523,90 @@ export class ReviewRoundFacade {
       capability_snapshot_hash: capabilitySnapshotHash, candidate_providers: candidateProviders, continuable_providers: continuableProviders,
       idempotency_key: sha(`${input.task_id}\0${input.stage}\0${reviewTrack ?? "default"}\0${input.review_flow_id}\0${packet.packet_hash}\0${prior?.initial_runtime_id ?? "initial"}`) };
       validateSchema("review-intent", intent);
-      this.#recoverProjections(input.task_id, input.stage === "make-decision");
-      const providerPacketBundle = buildProviderReviewPacket(packet);
-      const providerPacket = providerPacketBundle.packet;
-      verifyProviderReviewPacket(packet, providerPacket, providerPacketBundle.receipt);
-      const providerDelta = continuation ? buildProviderContinuationDelta(delta, providerPacket) : null;
-      if (providerDelta) {
-        const prompt = continuationPrompt(providerDelta, { stage: input.stage, reviewTrack }); const promptBytes = Buffer.byteLength(prompt, "utf8");
-        if (promptBytes > this.continuationPromptMaxBytes) throw new Error(`CONTINUATION_PROMPT_TOO_LARGE: ${promptBytes} bytes exceeds host limit ${this.continuationPromptMaxBytes}`);
-        Object.defineProperty(delta, "prompt", { value: prompt, enumerable: false });
-      }
-      const dir = this.#root(intent); atomic(join(dir, "review-packet.json"), safeJson(packet));
-      atomic(join(dir, "provider-packet-redaction-receipt.json"), safeJson(providerPacketBundle.receipt));
+      const dir = this.#root(intent);
       const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
-      const initialPromptText = !continuation ? initialPrompt({ intent, packet: providerPacket, stageContract: stageContract.content, requiredSkills: resolution.definitions, deliveryMode: resolution.deliveryMode, crossStageCarryovers: delta?.cross_stage_carryovers ?? [] }) : null;
-      if (initialPromptText && Buffer.byteLength(initialPromptText, "utf8") > this.initialPromptMaxBytes) throw new Error(`PROMPT_TOO_LARGE: ${Buffer.byteLength(initialPromptText, "utf8")} bytes exceeds host limit ${this.initialPromptMaxBytes}`);
       if (!continuation) {
         freeze("contracts/provider-protocol.md", readFileSync(protocolPath));
         freeze(`contracts/${input.stage}.md`, stageContract.content);
         freeze("schemas/reviewer-output.schema.json", readFileSync(outputSchemaPath));
-        for (const attachment of buildProviderPacketAttachments(providerPacket)) freeze(attachment.destination, attachment.bytes);
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
-      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_packet_hash: providerPacket.packet_hash, provider_manifest_hash: providerPacket.manifest_hash, provider_diff_sha256: providerPacket.diff_sha256, redaction_receipt_sha256: sha(safeJson(providerPacketBundle.receipt)), changed_files: packet.changed_files, attachments: frozenAttachments.map(({ destination, sha256, size }) => ({ destination, sha256, size })), delta_manifest: continuation ? delta.delta_manifest : null }));
-      verifyProviderPacketAttachments(providerPacket, frozenAttachments);
-      const prepared = { intent, packet, provider_packet: providerPacket, redaction_receipt: providerPacketBundle.receipt, provider_delta: providerDelta, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: initialPromptText };
+      freeze("changes.diff", packet.unified_diff);
+      if (continuation) freeze("continuation-delta.v1.json", safeJson(delta));
+      const bundleId = `wh-review-${intent.idempotency_key}`;
+      // Delivery metadata is hash-bound before prompt rendering. file_only
+      // explicitly denies embedding; always_embed explicitly permits it.
+      const attachmentEmbed = resolution.deliveryMode === "always_embed";
+      const materialBindingFiles = attachmentRecords(frozenAttachments.map((item) => ({ ...item, embed: attachmentEmbed })));
+      const materialManifestHash = canonicalMaterialManifestHash(bundleId, materialBindingFiles);
+      // 3rd-review's triad contract binds packet.manifest_hash to all
+      // provider-visible material except the packet and inner manifest
+      // themselves. Keep the independently derived source binding alongside
+      // it, then re-seal the complete provider packet.
+      packet.manifest_hash = materialManifestHash;
+      packet.packet_hash = packetHash(packet);
+      validateSchema("review-packet", packet);
+      intent.material_manifest_hash = materialManifestHash;
+      if (!continuation) {
+        baselinePacketHash = packet.packet_hash;
+        intent.baseline_packet_hash = baselinePacketHash;
+      }
+      atomic(join(dir, "review-packet.json"), safeJson(packet));
+      freeze("review-packet.v1.json", safeJson(packet));
+      const outerFilesBeforeInner = attachmentRecords(frozenAttachments.map((item) => ({ ...item, embed: attachmentEmbed })));
+      const providerManifest = { version: "review-attachment-manifest.v1", delivery_mode: resolution.deliveryMode, packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, attachments: outerFilesBeforeInner.map(({ target: destination, sha256, size }) => ({ destination, sha256, size })), delivery_manifest_hash: canonicalDeliveryManifestHash(bundleId, outerFilesBeforeInner, resolution.deliveryMode), ...(continuation ? { continuation: { initial_material_manifest_hash: prior.initial_material_manifest_hash, sequence: (prior.continuation_sequence ?? 0) + 1, previous_delivery_manifest_hash: prior.last_delivery_manifest_hash } } : {}) };
+      providerManifest.inner_manifest_hash = canonicalInnerManifestHash(providerManifest);
+      const providerManifestBytes = safeJson(providerManifest); const providerVisibleManifestHash = sha(providerManifestBytes);
+      freeze("manifest.json", providerManifestBytes);
+      const outerFiles = attachmentRecords(frozenAttachments.map((item) => ({ ...item, embed: attachmentEmbed })));
+      const materialBytes = outerFiles.reduce((total, item) => total + item.size, 0);
+      const attachmentIds = frozenAttachments.map(({ destination }) => destination);
+      const prompt = continuation
+        ? continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash })
+        : initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash });
+      atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, attachments: outerFiles, delta_manifest: continuation ? delta.delta_manifest : null }));
+      const expectedDelivery = { delivery_mode: resolution.deliveryMode, raw_material_manifest_hash: materialManifestHash, previous_provider_delivery_manifest_hash: prior?.last_provider_delivery_manifest_hash ?? null };
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, initial_provider_sessions: prior?.initial_provider_sessions ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
+    finally { if (sourceLock) this.#releaseLock(sourceLock); }
   }
 
   async run(prepared) {
     prepared = await prepared;
-    const { intent, packet, provider_packet: providerPacket, input } = prepared;
-    let attachmentPlan = null;
+    const { intent, packet, input } = prepared;
+    let attachmentPlan = null; let taskLock = null;
     try {
+      if (intent.stage === "make-decision") taskLock = this.#taskProjectionLock(intent.task_id, `run-${intent.review_flow_id}`);
       if (packet.packet_hash !== prepared.sealed_packet_hash || packetHash(packet) !== prepared.sealed_packet_hash || packet.stage !== intent.stage || packet.review_track !== intent.review_track) throw new Error("MATERIAL_INCOMPLETE: sealed review packet was modified after prepare");
       if (intent.initial_runtime_id && this.broker.status) {
         const state = await this.broker.status({ runtime_id: intent.initial_runtime_id });
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
-      const request = { version: 4, host_provider: input.host_provider, prompt: intent.round_kind === "continuation" ? prepared.delta.prompt : prepared.initial_prompt, continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id } : null, provider_allowlist: intent.candidate_providers };
-      attachmentPlan = intent.initial_runtime_id ? null : this.#attachments(prepared);
+      attachmentPlan = this.#attachments(prepared);
+      const request = { version: 4, host_provider: input.host_provider, prompt: prepared.initial_prompt, continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id, ...prepared.provider_visible_manifest.continuation } : null, provider_allowlist: intent.candidate_providers, material_manifest_sha256: prepared.material_manifest_hash, attachment_ids: attachmentPlan.manifest.entries.map(({ destination, sha256 }) => ({ destination, sha256 })) };
       const attachments = attachmentPlan?.manifest;
       const response = intent.candidate_providers.length === 0
         ? { providers: [], transport_error: { code: "NO_CAPABLE_PROVIDER", message: "doctor reported no ready heterologous provider with a supported attachment delivery" } }
-        : await this.broker.run(intent.round_kind === "continuation"
-          ? { request, privateRawDirectory: join(prepared.dir, "provider-raw") }
-          : { request, packet: providerPacket, attachments, attachmentDelivery: prepared.delivery_policy, privateRawDirectory: join(prepared.dir, "provider-raw") });
+        : await this.broker.run({ request, attachments, attachmentDelivery: prepared.delivery_policy, privateRawDirectory: join(prepared.dir, "provider-raw") });
       atomic(join(prepared.dir, "broker-run.json"), safeJson(response));
       const candidateSet = new Set(intent.candidate_providers);
       const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
       const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
-        ? this.#outcome(item, providerPacket, { ...intent, material_manifest_hash: providerPacket.manifest_hash }, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.delivery_policy, prepared.stage_contract_rules)
+        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.expected_delivery, prepared.stage_contract_rules)
         : { provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "UNKNOWN_PROVIDER" });
+      if (intent.initial_runtime_id) {
+        for (let index = 0; index < outcomes.length; index += 1) {
+          const item = outcomes[index];
+          if (!item.provider) continue;
+          if (response.runtime_id !== intent.initial_runtime_id) outcomes[index] = { ...item, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "CONTINUATION_RUNTIME_MISMATCH" };
+          else if (item.session_id !== prepared.initial_provider_sessions?.[item.provider]) outcomes[index] = { ...item, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "CONTINUATION_SESSION_MISMATCH" };
+        }
+      }
       const returnedCandidates = new Set((response.providers ?? []).map((item) => item?.provider).filter((provider) => candidateSet.has(provider)));
       for (const provider of intent.candidate_providers) if (!returnedCandidates.has(provider)) outcomes.push({ provider, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used: null, diagnostic: "PROVIDER_OUTCOME_MISSING" });
       if (response.transport_error) outcomes.push({ provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: response.transport_error.code });
@@ -570,8 +647,13 @@ export class ReviewRoundFacade {
       for (const item of prepared.closure_bundle_gates ?? []) human_gates.push({ provider: null, verdict: "escalate_to_human", finding_id: item.finding_id, summary: `blocking closure bundle is insufficient: ${item.reason}` });
       if (findingState.escalate_to_human) human_gates.push({ provider: null, verdict: "escalate_to_human", summary: "blocking finding remained open for three rounds" });
       const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true) || findingState.escalate_to_human || (prepared.closure_bundle_gates?.length ?? 0) > 0;
-      const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery_used ?? null]));
-      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: response.runtime_id ?? intent.initial_runtime_id, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, created_at_ms: this.now() };
+      const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery ?? null]));
+      const initialProviderSessions = prepared.initial_provider_sessions ?? Object.fromEntries(outcomes.filter((item) => typeof item.provider === "string" && typeof item.session_id === "string" && item.session_id).map((item) => [item.provider, item.session_id]));
+      // Any durable private review state has a public fail-closed companion.
+      // Until dispositions complete its projection, CI must not trust an older pass.
+      const pending = this.#ensureProjectionGuard(outcomeIntent);
+      const delivery = { delivery_mode: prepared.delivery_policy, raw_material_manifest_sha256: prepared.material_manifest_hash, delivery_manifest_hash: prepared.delivery_manifest_hash, material_total_bytes: prepared.material_total_bytes };
+      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, delivery, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, projection_pending: pending, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent: outcomeIntent, round_kind: intent.round_kind, baseline_packet_hash: intent.baseline_packet_hash,
         previous_findings: prepared.delta?.previous_findings ?? [], closure_evidence: prepared.delta?.closure_evidence ?? [], delta_manifest: prepared.delta?.delta_manifest ?? null,
@@ -580,21 +662,37 @@ export class ReviewRoundFacade {
         provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       const priorFlow = this.#readFlow(intent);
       const packetRef = join(prepared.dir, "review-packet.json"); const packetFileHash = sha(readFileSync(packetRef));
-      this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
+      const reviewedTree = packet.source_revision.snapshot_tree;
+      const reviewTreeRef = priorFlow?.review_tree_ref ?? this.#treeRef(intent);
+      const oldReviewTree = typeof priorFlow?.review_tree_ref === "string" ? readReviewTreeRef(this.sourceRoot, priorFlow.review_tree_ref) : null;
+      if (aggregate.length) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, reviewedTree);
+      const verifiedInitialMaterial = !intent.initial_runtime_id ? [...new Set(outcomes.filter((item) => item.business_valid).map((item) => item.delivery?.raw_material_manifest_hash).filter(Boolean))] : [priorFlow?.initial_material_manifest_hash];
+      const verifiedProviderDelivery = [...new Set(outcomes.filter((item) => item.business_valid).map((item) => item.delivery?.derived_attestation?.delivery_manifest_hash).filter(Boolean))];
+      if (aggregate.length && (verifiedInitialMaterial.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedInitialMaterial[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one initial material hash");
+      if (aggregate.length && (verifiedProviderDelivery.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedProviderDelivery[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one derived delivery hash");
+      try { this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, initial_material_manifest_hash: priorFlow?.initial_material_manifest_hash ?? verifiedInitialMaterial[0] ?? null, last_delivery_manifest_hash: aggregate.length && intent.round_kind === "continuation" ? prepared.delivery_manifest_hash : priorFlow?.last_delivery_manifest_hash ?? null, continuation_sequence: aggregate.length ? (prepared.provider_visible_manifest.continuation?.sequence ?? priorFlow?.continuation_sequence ?? 0) : priorFlow?.continuation_sequence ?? 0, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
-        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)) });
+        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)), last_provider_delivery_manifest_hash: aggregate.length && intent.round_kind === "continuation" ? verifiedProviderDelivery[0] : priorFlow?.last_provider_delivery_manifest_hash ?? null,
+        projection_pending: pending, ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) }); }
+      catch (error) {
+        if (aggregate.length) {
+          if (oldReviewTree) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, oldReviewTree);
+          else deleteReviewTreeRef(this.sourceRoot, reviewTreeRef);
+        }
+        throw error;
+      }
       // A provider-originated escalation is already a semantic result. Publish
       // its redacted gate projection in this same run, instead of waiting for
       // a later prepare() recovery pass to revoke a stale public pass.
       if (human_gates.length) {
-        let taskLock = null;
-        try {
-          if (intent.stage === "make-decision") taskLock = this.#taskProjectionLock(intent.task_id, `human-gate-${intent.review_flow_id}`);
-          this.#writeHumanGateBlock(receipt, receiptPath, join(prepared.dir, "projection-manifest.json"), human_gates);
-        } finally { if (taskLock) this.#releaseLock(taskLock); }
+        // run() already holds the task-wide projection lock: ordinary stages
+        // use their flow lock, and make-decision uses taskLock above. Taking
+        // it again is non-reentrant and turns every human gate into a false
+        // "review-already-running" failure.
+        this.#writeHumanGateBlock(receipt, receiptPath, join(prepared.dir, "projection-manifest.json"), human_gates);
       }
       return validateSchema("round-run-result", result);
-    } finally { this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
+    } finally { if (taskLock) this.#releaseLock(taskLock); this.#releaseLock(prepared.lock); if (attachmentPlan?.stagingDir) rmSync(attachmentPlan.stagingDir, { recursive: true, force: true }); }
   }
 
   #acquireLock(intent) {
@@ -677,12 +775,47 @@ export class ReviewRoundFacade {
     try { return this.#recoverProjectionsUnderTaskLock(taskId); }
     finally { this.#releaseLock(lock); }
   }
+  recover({ task_id }) {
+    assertSafeTaskId(task_id);
+    return { recovered: this.#recoverProjections(task_id, true) };
+  }
   #recoverProjectionsUnderTaskLock(taskId) {
-    const privateRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private"); if (!existsSync(privateRoot)) return;
+    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
+    const privateRoot = join(reviews, "private");
+    const guards = existsSync(reviews) ? readdirSync(reviews).filter((name) => /^projection-pending-.*\.json$/.test(name)).map((name) => join(reviews, name)) : [];
+    if (!existsSync(privateRoot)) {
+      let recovered = 0;
+      for (const guardPath of guards) {
+        const intent = this.#readOrphanProjectionGuard(guardPath, taskId);
+        if (this.#hasPublicProjection(intent)) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has public artifacts but no private receipt");
+        rmSync(guardPath, { force: true }); recovered += 1;
+      }
+      return recovered;
+    }
+    let recovered = 0; const boundGuards = new Set();
     for (const name of readdirSync(privateRoot)) {
       if (!name.startsWith("round-")) continue; const dir = join(privateRoot, name), projection = join(dir, "projection-manifest.json"), receipt = join(dir, "round-receipt.json");
       if (!existsSync(receipt)) continue;
-      const saved = JSON.parse(readFileSync(receipt, "utf8"));
+      let saved;
+      try { saved = JSON.parse(readFileSync(receipt, "utf8")); }
+      catch { throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt is invalid JSON"); }
+      if (saved?.intent?.task_id !== taskId) throw new Error("PROJECTION_RECOVERY_RECEIPT_TASK_MISMATCH: private receipt belongs to another task");
+      try { assertSafeTaskId(saved.intent.task_id); assertKnownStage(saved.intent.stage); assertReviewTrack(saved.intent.stage, saved.intent.review_track ?? null); assertSafeReviewFlowId(saved.intent.review_flow_id); }
+      catch { throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt intent is invalid"); }
+      if (resolve(dir) !== resolve(this.#root(saved.intent))) throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt directory does not bind its intent");
+      const guardPath = this.#projectionGuardPath(saved.intent);
+      // A receipt-write crash leaves the new receipt bytes and the old flow
+      // hash behind. Heal (or reject a tampered journal) before any attempt
+      // to replay the projection; otherwise replay tries a second receipt
+      // update and reports an unrelated old-hash mismatch.
+      let flow = this.#readFlow(saved.intent);
+      if (flow?.pending_receipt_update) flow = this.#recoverPendingReceiptBinding(saved.intent, flow);
+      if (existsSync(guardPath)) { boundGuards.add(guardPath); this.#readVerifiedProjectionGuard(saved.intent); }
+      if (saved.projection_pending !== undefined || flow?.projection_pending !== undefined) {
+        if (!existsSync(guardPath)) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: private projection state has no public guard");
+        const pending = this.#projectionPending(saved.intent);
+        if (canonical(saved.projection_pending ?? flow.projection_pending) !== canonical(pending)) throw new Error("PROJECTION_RECOVERY_GUARD_INVALID: private projection metadata does not bind the public guard");
+      }
       const provider_human_gates = deriveHumanGates(saved.provider_outcomes);
       const state_human_gates = (saved.human_gates ?? []).filter((gate) => gate?.provider === null && gate?.verdict === "escalate_to_human");
       const human_gates = [...provider_human_gates, ...state_human_gates];
@@ -694,10 +827,26 @@ export class ReviewRoundFacade {
       }
       verifiedHumanGates(saved.provider_outcomes, saved.human_gates);
       const flags = existsSync(projection) ? (JSON.parse(readFileSync(projection, "utf8")).done_flags ?? {}) : {};
-      if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) continue;
+      if (flags.core_receipt && flags.report && flags.report_index && flags.stage_result) {
+        if (saved.intent.stage === "make-decision") {
+          if (existsSync(guardPath)) {
+            const aggregate = this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
+            if (!aggregate) throw new Error("PROJECTION_RECOVERY_AGGREGATE_MISSING: complete make-decision tracks have no aggregate authority");
+            recovered += 1;
+          }
+        } else if (existsSync(guardPath)) this.#completeProjection(saved.intent, receipt);
+        continue;
+      }
       if (!Array.isArray(saved.dispositions)) continue;
       this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, blocked_by_human_confirmation: saved.blocked_by_human_confirmation, receipt_draft_ref: receipt }, { items: saved.dispositions });
+      recovered += 1;
     }
+    for (const guardPath of guards.filter((path) => !boundGuards.has(path) && existsSync(path))) {
+      const intent = this.#readOrphanProjectionGuard(guardPath, taskId);
+      if (this.#hasPublicProjection(intent)) throw new Error("PROJECTION_RECOVERY_RECEIPT_MISSING: projection guard has public artifacts but no bound private receipt");
+      rmSync(guardPath, { force: true }); recovered += 1;
+    }
+    return recovered;
   }
   #writeHumanGateBlock(saved, receiptPath, projectionPath, human_gates) {
     // Receipt and flow are a single recovery unit. Never overwrite the
@@ -705,22 +854,27 @@ export class ReviewRoundFacade {
     // to leave an unrecoverable human gate.
     const flow = this.#readFlow(saved.intent);
     if (flow?.pending_receipt_update) this.#recoverPendingReceiptBinding(saved.intent, flow);
-    const receipt = { ...saved, human_gates };
+    const pending = this.#ensureProjectionGuard(saved.intent);
+    const receipt = { ...saved, human_gates, projection_pending: pending };
     this.#updateReceiptAndFlow(saved.intent, receiptPath, receipt);
+    const pendingFlow = this.#readFlow(saved.intent);
+    if (!pendingFlow) throw new Error("PROJECTION_RECOVERY_FLOW_MISSING: human gate has no flow");
+    this.#writeFlow(saved.intent, { ...pendingFlow, projection_pending: pending });
     const dir = dirname(receiptPath); const { reportPath, indexPath, stageResultPath } = this.#publicPaths(saved.intent);
     const semantic_verdict = "escalate_to_human", needs_human = true;
     const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); const coreHash = sha(readFileSync(corePath));
-    const publicCorePath = this.#publicCorePath(saved.intent, coreHash); atomic(publicCorePath, readFileSync(corePath), 0o644);
-    atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
-    atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
-    atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
+    const publicCorePath = this.#publicCorePath(saved.intent, coreHash); this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644);
+    this.faultInjector("before-public-report-write"); atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
+    this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
     const publishedFlow = this.#readFlow(saved.intent);
     if (publishedFlow) this.#writeFlow(saved.intent, { ...publishedFlow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
     if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
     const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
     projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, public_core_receipt: true, report: true, report_index: true, stage_result: true, human_gate_blocked: true };
     atomic(projectionPath, safeJson(projection));
+    this.#completeProjection(saved.intent, receiptPath);
   }
   #isResolvedByReset(saved, receiptPath, human_gates) {
     const markerPath = join(dirname(receiptPath), "resolved-by-reset.json"); if (!existsSync(markerPath)) return false;
@@ -751,13 +905,26 @@ export class ReviewRoundFacade {
     }
     return markers;
   }
-  #materialIncomplete(input, message) {
+  #materialIncomplete(input, message, code = "MATERIAL_INCOMPLETE") {
     const root = join(taskRoot(this.taskTrackingRoot, input.task_id), "reviews", "private", "diagnostics");
-    atomic(join(root, `material-incomplete-${this.now()}.json`), safeJson({ code: "MATERIAL_INCOMPLETE", message, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id }));
-    throw new Error(`MATERIAL_INCOMPLETE: ${message}`);
+    atomic(join(root, `material-incomplete-${this.now()}.json`), safeJson({ code, message, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id }));
+    throw new Error(`${code}: ${message}`);
   }
   #attachments(prepared) {
     if (prepared.input.attachments) throw new Error("MATERIAL_INCOMPLETE: custom attachments cannot replace the sealed review packet bundle");
+    const manifestEntry = prepared.frozen_attachments.find((item) => item.destination === "manifest.json");
+    if (!manifestEntry) throw new Error("MATERIAL_INCOMPLETE: provider-visible manifest is missing");
+    let visible;
+    try { visible = JSON.parse(readFileSync(manifestEntry.path, "utf8")); }
+    catch { throw new Error("MATERIAL_INCOMPLETE: provider-visible manifest is invalid"); }
+    const outerFiles = attachmentRecords(prepared.frozen_attachments.map((item) => ({ ...item, embed: prepared.delivery_policy === "always_embed" })));
+    const covered = outerFiles.filter((item) => item.target !== "manifest.json").map(({ target: destination, sha256, size }) => ({ destination, sha256, size }));
+    if (sha(readFileSync(manifestEntry.path)) !== prepared.provider_visible_manifest_sha256
+      || visible?.version !== "review-attachment-manifest.v1" || visible.delivery_mode !== prepared.delivery_policy || visible.packet_hash !== prepared.packet.packet_hash
+      || visible.manifest_hash !== prepared.packet.manifest_hash || visible.diff_sha256 !== prepared.packet.diff_sha256
+      || canonical(visible.attachments) !== canonical(covered) || visible.delivery_manifest_hash !== prepared.delivery_manifest_hash
+      || visible.inner_manifest_hash !== canonicalInnerManifestHash(visible)
+      || (prepared.intent.round_kind === "continuation" && canonical(visible.continuation) !== canonical(prepared.provider_visible_manifest.continuation))) throw new Error("MATERIAL_INCOMPLETE: provider-visible manifest binding is invalid");
     const root = resolve(prepared.input.attachment_root ?? this.skillsRoot);
     const rel = (path) => {
       const value = relative(root, path).split("\\").join("/");
@@ -770,37 +937,58 @@ export class ReviewRoundFacade {
     for (const frozen of prepared.frozen_attachments) {
       const target = join(stagingDir, ...frozen.destination.split("/")); const bytes = readFileSync(frozen.path);
       if (bytes.length !== frozen.size || sha(bytes) !== frozen.sha256) throw new Error("MATERIAL_INCOMPLETE: private frozen attachment changed");
-      atomic(target, bytes); entries.push({ source: rel(target), destination: frozen.destination, size: frozen.size, sha256: frozen.sha256, embed: true });
+      atomic(target, bytes); entries.push({ source: rel(target), destination: frozen.destination, size: frozen.size, sha256: frozen.sha256, embed: prepared.delivery_policy === "always_embed" });
     }
     return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
-  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, deliveryPolicy, contractRules) {
+  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, expectedDelivery, contractRules) {
     const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null;
     const rawHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value) ? value.toLowerCase() : null;
     const raw_stdout_sha256 = rawHash(item?.raw_stdout_sha256); const raw_stderr_sha256 = rawHash(item?.raw_stderr_sha256);
     const raw_stdout_ref = privateFileHash(directory, item?.raw_stdout_ref, raw_stdout_sha256);
     const raw_stderr_ref = privateFileHash(directory, item?.raw_stderr_ref, raw_stderr_sha256);
     const rawAuditDeclared = item?.raw_stdout_ref !== undefined || item?.raw_stderr_ref !== undefined || item?.raw_stdout_sha256 !== undefined || item?.raw_stderr_sha256 !== undefined;
-    const rawAuditComplete = !rawAuditDeclared || (raw_stdout_ref && raw_stderr_ref && raw_stdout_sha256 && raw_stderr_sha256);
+    const rawAuditComplete = rawAuditDeclared && raw_stdout_ref && raw_stderr_ref && raw_stdout_sha256 && raw_stderr_sha256;
     const base = { provider: item?.provider ?? null, transport_status, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used, session_id: item?.session_id ?? null,
       raw_output_ref: raw_stdout_ref, raw_stdout_ref, raw_stderr_ref, raw_stdout_sha256, raw_stderr_sha256 };
     if (typeof item?.output === "string" && item.provider) {
       const parsed = join(directory, "providers", `${item.provider}.parsed-output.txt`); atomic(parsed, item.output); base.parsed_output_ref = parsed; base.parsed_output_sha256 = sha(readFileSync(parsed));
     }
-    if (item?.raw_audit_error?.code) return { ...base, diagnostic: item.raw_audit_error.code };
-    if (!rawAuditComplete) return { ...base, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" };
     if (transport_status === "cancelled") {
       const cancel_source = item?.error?.source;
       if (!cancel_source) return { ...base, cancel_source: null, diagnostic: "CANCEL_SOURCE_MISSING" };
       if (!cancellationSources.has(cancel_source)) return { ...base, cancel_source: null, diagnostic: "CANCEL_SOURCE_INVALID" };
       return { ...base, cancel_source, diagnostic: publicError(item) };
     }
+    if (transport_status !== "completed") return { ...base, diagnostic: publicError(item) };
+    if (!rawAuditComplete) return { ...base, diagnostic: "BROKER_RAW_AUDIT_MISMATCH" };
     if (item?.delivery_used === undefined || item.delivery_used === null) return { ...base, diagnostic: "DELIVERY_USED_MISSING" };
     if (item.delivery_used !== "file_only" && item.delivery_used !== "always_embed") return { ...base, diagnostic: "DELIVERY_USED_INVALID" };
     if (!capabilities?.attachment_delivery?.includes(item.delivery_used)) return { ...base, diagnostic: "DELIVERY_USED_CAPABILITY_MISMATCH" };
-    if (intent.initial_runtime_id && item.delivery_used !== initialDelivery) return { ...base, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH", requires_human_confirmation: true };
-    if (item.delivery_used !== deliveryPolicy) return { ...base, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" };
-    if (transport_status !== "completed") return { ...base, diagnostic: publicError(item) };
+    if (intent.initial_runtime_id && item.delivery_used !== initialDelivery?.delivery_mode) return { ...base, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH", requires_human_confirmation: true };
+    if (item.delivery_used !== expectedDelivery.delivery_mode) return { ...base, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" };
+    const delivery = item?.delivery;
+    const normalizedDelivery = delivery && typeof delivery === "object" && !Array.isArray(delivery) ? { delivery_mode: delivery.delivery_mode, raw_material_manifest_hash: delivery.raw_material_manifest_hash, material_manifest_hash: delivery.material_manifest_hash, material_representation: delivery.material_representation, redaction: delivery.redaction, derived_attestation: delivery.derived_attestation, material_total_bytes: delivery.material_total_bytes, ...(delivery.rendered_prompt_bytes !== undefined ? { rendered_prompt_bytes: delivery.rendered_prompt_bytes } : {}), provider_visible_attachment_manifest: delivery.provider_visible_attachment_manifest } : null;
+    const renderedPromptInvalid = expectedDelivery.delivery_mode === "file_only"
+      ? normalizedDelivery?.rendered_prompt_bytes !== undefined
+      : !Number.isSafeInteger(normalizedDelivery?.rendered_prompt_bytes) || normalizedDelivery.rendered_prompt_bytes < 0 || normalizedDelivery.rendered_prompt_bytes > 512 * 1024;
+    const redaction = normalizedDelivery?.redaction; const derived = normalizedDelivery?.derived_attestation;
+    const visible = normalizedDelivery?.provider_visible_attachment_manifest;
+    const visibleByName = new Map(Array.isArray(visible) ? visible.map((entry) => [entry?.destination, entry]) : []);
+    const attestationInvalid = !normalizedDelivery || normalizedDelivery.delivery_mode !== expectedDelivery.delivery_mode
+      || normalizedDelivery.raw_material_manifest_hash !== expectedDelivery.raw_material_manifest_hash
+      || !/^[a-f0-9]{64}$/.test(normalizedDelivery.material_manifest_hash ?? "") || !["raw", "sanitized"].includes(normalizedDelivery.material_representation)
+      || !Number.isSafeInteger(normalizedDelivery.material_total_bytes) || normalizedDelivery.material_total_bytes < 0 || renderedPromptInvalid
+      || !Array.isArray(visible) || visible.length !== visibleByName.size || !visibleByName.has("review-packet.v1.json") || !visibleByName.has("changes.diff") || !visibleByName.has("manifest.json")
+      || !redaction || typeof redaction.rule_version !== "string" || !/^[a-f0-9]{64}$/.test(redaction.root_set_hash ?? "") || !Array.isArray(redaction.roots)
+      || !Number.isSafeInteger(redaction.replacement_count) || redaction.replacement_count < 0 || redaction.residual_scan !== "passed"
+      || redaction.raw_material_manifest_hash !== normalizedDelivery.raw_material_manifest_hash || redaction.derived_material_manifest_hash !== normalizedDelivery.material_manifest_hash
+      || !derived || !/^[a-f0-9]{64}$/.test(derived.packet_hash ?? "") || derived.manifest_hash !== normalizedDelivery.material_manifest_hash || !/^[a-f0-9]{64}$/.test(derived.diff_sha256 ?? "") || !/^[a-f0-9]{64}$/.test(derived.delivery_manifest_hash ?? "");
+    if (attestationInvalid) return { ...base, diagnostic: "DELIVERY_RECORD_MISMATCH" };
+    if (intent.initial_runtime_id && (redaction.rule_version !== initialDelivery?.redaction?.rule_version || redaction.root_set_hash !== initialDelivery?.redaction?.root_set_hash
+      || derived.continuation?.initial_material_manifest_hash !== initialDelivery?.material_manifest_hash
+      || derived.continuation?.previous_delivery_manifest_hash !== expectedDelivery.previous_provider_delivery_manifest_hash)) return { ...base, diagnostic: "DELIVERY_ATTESTATION_CONTINUATION_MISMATCH", requires_human_confirmation: true };
+    base.delivery = structuredClone(normalizedDelivery);
     const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "NON_JSON_OUTPUT" };
     const output = parsed.value;
     try { validateSchema("reviewer-output", output); }
@@ -808,9 +996,9 @@ export class ReviewRoundFacade {
       if (error instanceof SchemaValidationError) return { ...base, packet_status: "material_incomplete", diagnostic: `${error.code}:${error.pointer || "/"}` };
       throw error;
     }
-    if (output.packet_hash !== packet.packet_hash || output.manifest_hash !== packet.manifest_hash || output.diff_sha256 !== packet.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
+    if (output.packet_hash !== derived.packet_hash || output.manifest_hash !== derived.manifest_hash || output.diff_sha256 !== derived.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
     if (output.packet_status !== "complete") return { ...base, packet_status: output.packet_status ?? "material_incomplete", diagnostic: "PROVIDER_PACKET_INCOMPLETE" };
-    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet, intent, contractRules });
+    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet: { ...packet, packet_hash: derived.packet_hash, manifest_hash: derived.manifest_hash, diff_sha256: derived.diff_sha256 }, intent: { ...intent, material_manifest_hash: derived.manifest_hash }, contractRules });
     if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "BUSINESS_INVALID" };
     let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
     catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }
@@ -872,7 +1060,7 @@ export class ReviewRoundFacade {
       continuation_eligible: receipt.continuation_eligible, receipt_draft_ref: receiptPath };
     return validateSchema("round-run-result", trusted);
   }
-  #latestPublishedMakeDecisionTrack(taskId, reviewFlowId, reviewTrack) {
+  #latestAuthorizedMakeDecisionTrack(taskId, reviewFlowId, reviewTrack) {
     const flowsRoot = join(taskRoot(this.taskTrackingRoot, taskId), "reviews", "private", "flows");
     if (!existsSync(flowsRoot)) return null;
     const candidates = readdirSync(flowsRoot).filter((name) => name.endsWith(".json") && !name.endsWith(".reset-approval.json")).map((name) => {
@@ -884,28 +1072,75 @@ export class ReviewRoundFacade {
     if (!existsSync(corePath) || sha(readFileSync(corePath)) !== flow.core_receipt_hash) throw new Error("make-decision aggregate core receipt binding is invalid");
     const core = JSON.parse(readFileSync(corePath, "utf8"));
     if (core?.intent?.stage !== "make-decision" || core.intent.review_track !== reviewTrack || core.semantic_verdict === null) throw new Error("make-decision aggregate track receipt is invalid");
-    return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id };
+    return { ...core, core_receipt_hash: flow.core_receipt_hash, review_flow_id: flow.review_flow_id, approved_tree: flow.approved_tree ?? null };
   }
-  #publishMakeDecisionAggregate(taskId, reviewFlowId) {
+  // This is deliberately a private authority step.  A make-decision pass is
+  // not a stage pass until both isolated tracks bind the same tree and the
+  // task source context accepts that tree.  Keep it before every public
+  // projection so a failed context write cannot leak a track-level PASS.
+  #prepareMakeDecisionAggregateAuthority(taskId, reviewFlowId) {
     assertSafeReviewFlowId(reviewFlowId);
-    const direction = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "direction");
-    const detail = this.#latestPublishedMakeDecisionTrack(taskId, reviewFlowId, "detail");
+    const direction = this.#latestAuthorizedMakeDecisionTrack(taskId, reviewFlowId, "direction");
+    const detail = this.#latestAuthorizedMakeDecisionTrack(taskId, reviewFlowId, "detail");
     if (!direction || !detail) return null;
     const aggregate = aggregateMakeDecisionTracks({ direction, detail });
     if (!aggregate.semantic_verdict) throw new Error("make-decision aggregate requires semantic verdicts from both tracks");
-    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
+    if (aggregate.semantic_verdict === "pass") {
+      if (!/^[a-f0-9]{40,64}$/.test(direction.approved_tree ?? "") || direction.approved_tree !== detail.approved_tree) {
+        throw new Error("MAKE_DECISION_TRACK_SNAPSHOT_MISMATCH: direction and detail must pass the same source tree");
+      }
+      this.#recordLastApprovedTree(taskId, direction.approved_tree);
+    }
     const aggregateCore = {
       version: 1, stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"],
       track_core_receipt_hashes: { direction: direction.core_receipt_hash, detail: detail.core_receipt_hash },
       track_review_flow_ids: { direction: direction.review_flow_id, detail: detail.review_flow_id },
       semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, merged_findings: aggregate.findings,
     };
+    return { direction, detail, aggregate, aggregateCore, coreHash: sha(safeJson(aggregateCore)) };
+  }
+  #writeMakeDecisionTrackProjection(track) {
+    const intent = track.intent;
+    const receiptPath = resolve(this.#readFlow(intent)?.previous_receipt_ref ?? "");
+    const dir = dirname(receiptPath);
+    const corePath = join(dir, "core-receipt.json");
+    if (!existsSync(corePath) || sha(readFileSync(corePath)) !== track.core_receipt_hash) throw new Error("make-decision track core receipt is unavailable");
+    const publicCorePath = this.#publicCorePath(intent, track.core_receipt_hash);
+    this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644);
+    const report = `# 审查报告\n\n结论：${track.semantic_verdict === "revise_required" ? "需要修改" : track.semantic_verdict === "pass" ? "通过" : "需要人工确认"}\n\n- 有效审查：${(track.provider_outcomes ?? []).filter((item) => item.business_valid).length}\n- Findings：${(track.merged_findings ?? []).length}\n`;
+    const { reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
+    this.faultInjector("before-public-report-write"); atomic(reportPath, report, 0o644);
+    this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, needs_human: track.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, verdict: track.semantic_verdict, needs_human: track.needs_human }), 0o644);
+    const projectionPath = join(dir, "projection-manifest.json");
+    const projection = existsSync(projectionPath) ? JSON.parse(readFileSync(projectionPath, "utf8")) : { version: 1, done_flags: {} };
+    projection.done_flags = { ...(projection.done_flags ?? {}), core_receipt: true, public_core_receipt: true, report: true, report_index: true, stage_result: true };
+    atomic(projectionPath, safeJson(projection));
+    return { core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+  }
+  #publishMakeDecisionAggregate(taskId, reviewFlowId, authority = null) {
+    authority ??= this.#prepareMakeDecisionAggregateAuthority(taskId, reviewFlowId);
+    if (!authority) return null;
+    const { direction, detail, aggregate, aggregateCore, coreHash } = authority;
+    const track_projections = {
+      direction: this.#writeMakeDecisionTrackProjection(direction),
+      detail: this.#writeMakeDecisionTrackProjection(detail),
+    };
+    const reviews = join(taskRoot(this.taskTrackingRoot, taskId), "reviews");
     const group = `make-decision-${reviewFlowId}`;
-    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); atomic(corePath, safeJson(aggregateCore), 0o644); const coreHash = sha(readFileSync(corePath));
-    const reportPath = join(reviews, `${group}-aggregate.md`); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
-    const indexPath = join(reviews, `report-index-${group}.json`); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
-    const stageResultPath = join(reviews, `stage-result-${group}.json`); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
-    return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath };
+    const corePath = join(reviews, `${group}-aggregate-core-receipt.json`); this.faultInjector("before-public-aggregate-core-write"); atomic(corePath, safeJson(aggregateCore), 0o644);
+    const reportPath = join(reviews, `${group}-aggregate.md`); this.faultInjector("before-public-aggregate-report-write"); atomic(reportPath, `# Make Decision 汇总审查报告\n\n结论：${aggregate.semantic_verdict}\n\n- direction flow：${direction.review_flow_id}\n- detail flow：${detail.review_flow_id}\n- Findings：${aggregate.findings.length}\n`, 0o644);
+    const indexPath = join(reviews, `report-index-${group}.json`); this.faultInjector("before-public-aggregate-index-write"); atomic(indexPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
+    const stageResultPath = join(reviews, `stage-result-${group}.json`); this.faultInjector("before-public-aggregate-stage-result"); atomic(stageResultPath, safeJson({ stage: "make-decision", review_flow_id: reviewFlowId, review_tracks: ["direction", "detail"], core_receipt_hash: coreHash, verdict: aggregate.semantic_verdict, semantic_verdict: aggregate.semantic_verdict, needs_human: aggregate.needs_human }), 0o644);
+    for (const track of [direction, detail]) {
+      const receiptPath = resolve(this.#readFlow(track.intent)?.previous_receipt_ref ?? "");
+      if (existsSync(this.#projectionGuardPath(track.intent))) this.#completeProjection(track.intent, receiptPath);
+      else {
+        const trackReceipt = JSON.parse(readFileSync(receiptPath, "utf8")); const trackFlow = this.#readFlow(track.intent);
+        if (trackReceipt.projection_pending !== undefined || trackFlow?.projection_pending !== undefined) throw new Error("PROJECTION_RECOVERY_GUARD_MISSING: aggregate track still has pending projection state");
+      }
+    }
+    return { semantic_verdict: aggregate.semantic_verdict, core_receipt_hash: coreHash, needs_human: aggregate.needs_human, core_receipt_ref: corePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, track_projections };
   }
   #publishUnderLock(result, dispositions) {
     if (result.blocked_by_human_confirmation) throw new Error("human confirmation is required before publication");
@@ -920,26 +1155,77 @@ export class ReviewRoundFacade {
     if (seen.size !== byId.size) throw new Error("every finding requires exactly one disposition");
     const semantic_verdict = result.hard_gates.length || result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict === "revise_required") ? "revise_required" : "pass";
     const needs_human = semantic_verdict !== "pass";
-    const privateReceipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); privateReceipt.dispositions = dispositions.items; this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, privateReceipt);
+    const receiptBefore = readFileSync(result.receipt_draft_ref);
+    const flowBefore = this.#readFlow(result.intent);
+    const sourceContextPath = this.#sourceContext(result.intent.task_id);
+    const sourceContextBefore = existsSync(sourceContextPath) ? readFileSync(sourceContextPath) : null;
+    const pending = this.#ensureProjectionGuard(result.intent);
+    const privateReceipt = JSON.parse(receiptBefore); privateReceipt.dispositions = dispositions.items; privateReceipt.projection_pending = pending;
     const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
+    const coreBytes = safeJson(core); const coreHash = sha(coreBytes);
+    const privateCorePath = join(dir, "core-receipt.json");
+    const privateCoreBefore = existsSync(privateCorePath) ? readFileSync(privateCorePath) : null;
+    let aggregateAuthority = null;
+    // Persist all authority-bearing private state before writing any artifact
+    // that a CI consumer can treat as a pass. The receipt journal makes the
+    // receipt/flow transition recoverable; this small compensation block is
+    // only for a failure before public projection begins.
+    // A failure inside the journalled receipt transition is deliberately left
+    // to #recoverPendingReceiptBinding on the next operation. Compensation
+    // starts only after that recovery unit has completed.
+    this.#updateReceiptAndFlow(result.intent, result.receipt_draft_ref, privateReceipt);
+    try {
+      const flow = this.#readFlow(result.intent);
+      if (!flow) throw new Error("publication flow is missing");
+      // A crash may leave an orphan private core, but never a flow authority
+      // that points at a core receipt which has not been persisted yet.
+      if (result.intent.stage === "make-decision") atomic(privateCorePath, coreBytes);
+      const publishedFlow = { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), projection_pending: pending, published_at_ms: this.now(), ...(semantic_verdict === "pass" ? { approved_tree: flow.last_reviewed_tree } : {}) };
+      this.#writeFlow(result.intent, publishedFlow);
+      if (result.intent.stage === "make-decision") {
+        // The private core is aggregate authority, not a public projection.
+        // It must exist before the sibling track can be verified, while the
+        // task source context must succeed before either track becomes public.
+        aggregateAuthority = this.#prepareMakeDecisionAggregateAuthority(result.intent.task_id, result.intent.review_flow_id);
+      } else if (semantic_verdict === "pass") this.#recordLastApprovedTree(result.intent.task_id, publishedFlow.approved_tree);
+    } catch (error) {
+      // No public artifact has been written yet. Restore the three private
+      // records as one unit, including the receipt-update journal, so retry
+      // starts from the exact pre-publication state.
+      atomic(result.receipt_draft_ref, receiptBefore);
+      if (flowBefore) this.#writeFlow(result.intent, flowBefore);
+      else rmSync(this.#flow(result.intent), { force: true });
+      if (sourceContextBefore) atomic(sourceContextPath, sourceContextBefore);
+      else rmSync(sourceContextPath, { force: true });
+      if (privateCoreBefore) atomic(privateCorePath, privateCoreBefore);
+      else rmSync(privateCorePath, { force: true });
+      rmSync(join(dirname(result.receipt_draft_ref), "receipt-update-journal.json"), { force: true });
+      throw error;
+    }
+    if (result.intent.stage === "make-decision") {
+      const aggregate = aggregateAuthority ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id, aggregateAuthority) : null;
+      const projection = aggregate?.track_projections?.[result.intent.review_track] ?? null;
+      return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: projection?.core_receipt_ref ?? null, report_ref: projection?.report_ref ?? null, report_index_ref: projection?.report_index_ref ?? null, stage_result_ref: projection?.stage_result_ref ?? null, aggregate };
+    }
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
-    const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); done.done_flags.core_receipt = true; atomic(projection, safeJson(done)); const coreHash = sha(readFileSync(corePath));
-    const publicCorePath = this.#publicCorePath(result.intent, coreHash); atomic(publicCorePath, readFileSync(corePath), 0o644); done.done_flags.public_core_receipt = true; atomic(projection, safeJson(done));
+    const corePath = join(dir, "core-receipt.json"); this.faultInjector("before-private-core-write"); atomic(corePath, coreBytes); done.done_flags.core_receipt = true; atomic(projection, safeJson(done));
+    const publicCorePath = this.#publicCorePath(result.intent, coreHash); this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644); done.done_flags.public_core_receipt = true; atomic(projection, safeJson(done));
     const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
     const { reportPath, indexPath, stageResultPath } = this.#publicPaths(result.intent);
-    atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
-    atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
-    atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
-    const flow = this.#readFlow(result.intent); if (flow) this.#writeFlow(result.intent, { ...flow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(result.receipt_draft_ref)), published_at_ms: this.now() });
+    this.faultInjector("before-public-report-write"); atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
+    this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
+    this.#completeProjection(result.intent, result.receipt_draft_ref);
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };
   }
   reset({ task_id, stage, review_track = null, review_flow_id, new_review_flow_id, reason, human_approval_ref }) {
     assertSafeTaskId(task_id); assertKnownStage(stage); assertReviewTrack(stage, review_track); assertSafeReviewFlowId(review_flow_id); if (!reason || !human_approval_ref) throw new Error("reset requires reason and human_approval_ref");
     const nextId = new_review_flow_id ?? `${review_flow_id}-reset-${this.now()}`; assertSafeReviewFlowId(nextId);
-    const flow = { task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
+    let flow = { task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, reset_at_ms: this.now(), reason, human_approval_ref, initial_runtime_id: null, continuation_eligible: false, business_round: 0 };
     const lock = this.#acquireLock({ ...flow, idempotency_key: sha(`reset\0${task_id}\0${stage}\0${review_track ?? "default"}\0${review_flow_id}\0${nextId}\0${human_approval_ref}`) });
     try {
+      const previous = this.#readFlow({ task_id, stage, review_track, review_flow_id });
       const flowPath = this.#flow(flow), approvalPath = this.#resetApproval(flow);
       const approval = { version: 1, task_id, stage, review_track, review_flow_id: nextId, parent_review_flow_id: review_flow_id, human_approval_ref, reason, approved_at_ms: this.now() };
       if (existsSync(approvalPath)) {
@@ -948,10 +1234,41 @@ export class ReviewRoundFacade {
       } else writeImmutable(approvalPath, approval);
       // Both records are create-exclusive. Until they exist, no old gate has a
       // supersession marker, so a partial reset remains blocked.
-      writeImmutable(flowPath, flow);
+      if (existsSync(flowPath)) {
+        const savedFlow = JSON.parse(readFileSync(flowPath, "utf8"));
+        if (!(savedFlow?.task_id === task_id && savedFlow.stage === stage && (savedFlow.review_track ?? null) === review_track
+          && savedFlow.review_flow_id === nextId && savedFlow.parent_review_flow_id === review_flow_id
+          && savedFlow.reason === reason && savedFlow.human_approval_ref === human_approval_ref
+          && Number.isFinite(savedFlow.reset_at_ms) && savedFlow.initial_runtime_id === null
+          && savedFlow.continuation_eligible === false && savedFlow.business_round === 0)) throw new Error("reset flow does not match requested reset");
+        flow = savedFlow;
+      } else writeImmutable(flowPath, flow);
       const privateRoot = join(taskRoot(this.taskTrackingRoot, task_id), "reviews", "private"); const approvalBytes = readFileSync(approvalPath);
       const superseded_receipt_refs = this.#markResetResolvedGates({ task_id, stage, review_track, review_flow_id, new_review_flow_id: nextId, reset_approval_ref: relative(privateRoot, approvalPath), reset_approval_sha256: sha(approvalBytes), reason, human_approval_ref });
+      // Keep the old snapshot alive until the successor flow and every
+      // supersession marker are durably written; otherwise a failed reset
+      // would destroy the only reproducible review source.
+      if (typeof previous?.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, previous.review_tree_ref);
       return { ...flow, reset_approval_ref: relative(privateRoot, approvalPath), superseded_receipt_refs };
     } finally { this.#releaseLock(lock); }
+  }
+
+  verifyFinal({ task_id, stage, review_track = null, review_flow_id }) {
+    assertSafeTaskId(task_id); assertKnownStage(stage); assertReviewTrack(stage, review_track); assertSafeReviewFlowId(review_flow_id);
+    const intent = { task_id, stage, review_track, review_flow_id };
+    const flow = this.#readFlow(intent);
+    if (!/^[a-f0-9]{40,64}$/.test(flow?.approved_tree ?? "")) throw new Error("FINAL_REVIEW_TREE_MISSING: publish a semantic pass before final verification");
+    if (!this.#publicCoreMatchesIntent(intent, flow.core_receipt_hash)) throw new Error("FINAL_REVIEW_CORE_MISSING: published semantic core is unavailable");
+    if (stage === "make-decision" && !this.#aggregateProjectionMatchesIntent(intent)) throw new Error("FINAL_REVIEW_AGGREGATE_MISSING: make-decision aggregate is unavailable");
+    const current = captureWorktreeTree(this.sourceRoot, { baseTree: flow.approved_tree, excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, task_id) });
+    if (current !== flow.approved_tree) {
+      const error = new Error(`WORKTREE_DRIFT_AFTER_REVIEW: current tree ${current} differs from approved tree ${flow.approved_tree}`);
+      error.code = "WORKTREE_DRIFT_AFTER_REVIEW";
+      throw error;
+    }
+    this.#writeFlow(intent, { ...flow, review_tree_ref: null, finalized_at_ms: this.now() });
+    try { if (typeof flow.review_tree_ref === "string") deleteReviewTreeRef(this.sourceRoot, flow.review_tree_ref); }
+    catch (error) { this.#writeFlow(intent, flow); throw error; }
+    return { task_id, stage, review_track, review_flow_id, approved_tree: flow.approved_tree, finalized: true };
   }
 }

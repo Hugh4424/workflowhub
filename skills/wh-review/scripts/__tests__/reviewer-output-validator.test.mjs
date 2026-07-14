@@ -76,6 +76,18 @@ describe("reviewer-output validator", () => {
     }
   });
 
+  it("accepts the real Kimi pass shape when it anchors a whole frozen changes.diff artifact", () => {
+    const kimi = fixture();
+    kimi.output.summary = "本次变更仅向 smoke.txt 追加 R1_DIFF_MARKER 一行，满足 packet 中 AC 要求，且不涉及状态流转、依赖或边界越界。所有 C/H 检查项通过。";
+    kimi.output.checklist = kimi.output.checklist.map((item) => ({ ...item, evidence: `changes.diff:line 7 与 review-packet.v1.json:acceptance_design_excerpt 共同证明 ${item.id}。` }));
+    kimi.output.pass_items = kimi.output.pass_items.map((item) => ({ ...item, artifact_anchor: item.rule_id === "H2" ? "changes.diff" : item.artifact_anchor, evidence: `${item.rule_id} 的当前冻结材料证据具体且可复核。` }));
+    expect(validate(kimi).valid).toBe(true);
+
+    const unknownArtifact = structuredClone(kimi); unknownArtifact.output.pass_items.find((item) => item.rule_id === "H2").artifact_anchor = "untrusted.diff";
+    expect(validate(unknownArtifact).errors).toContain("invalid pass item: 4");
+    expect(validate(fixture({ verdict: "REVISE" })).valid).toBe(false);
+  });
+
   it("normalizes punctuation and rejects long combinations of hollow evidence without rejecting anchors", () => {
     const hollow = " 已检查通过，全部符合要求。 ";
     for (const mutate of [
@@ -160,5 +172,14 @@ describe("reviewer-output validator", () => {
     expect(call().errors).toContain("unexpected skill result: unrequested-skill");
     item.output.skillResults.pop(); item.output.packet_hash = "9".repeat(64);
     expect(call().errors).toContain("packet_hash does not match packet");
+  });
+
+  it("requires an exact empty skillResults array when build-code declares no lenses", () => {
+    const item = fixture({ stage: "build-code" });
+    const call = () => validateReviewerOutput({ stage: "build-code", output: item.output, packet: item.packet, intent: item.intent });
+    expect(item.resolution.definitions).toEqual([]);
+    expect(call().valid).toBe(true);
+    item.output.skillResults = [{ skill: "build-code-no-extra-lens", bundle_hash: item.output.skill_bundle_hash, mode: "lens-only", checked_objects: ["review-packet.v1.json", "changes.diff"], evidence: "changes.diff covers the whole frozen diff", conclusion: "no extra lens was declared" }];
+    expect(call().errors).toEqual(expect.arrayContaining(["unexpected skill result: build-code-no-extra-lens", "missing checked objects: build-code-no-extra-lens"]));
   });
 });

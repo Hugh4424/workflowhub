@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
@@ -10,6 +10,52 @@ const providerStatuses = new Set(["ready", "disabled", "unavailable"]);
 const deliveryModes = new Set(["file_only", "always_embed"]);
 const cancellationSources = new Set(["user", "workflow_shutdown", "broker_idle_timeout", "broker_max_duration"]);
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+function packetHash(packet) { const { packet_hash: ignored, ...value } = packet; return sha256(canonical(value)); }
+function innerManifestHash(manifest) { const { inner_manifest_hash: ignored, ...value } = manifest; return sha256(canonical(value)); }
+function deliveryManifestHash(bundleId, files, deliveryMode) {
+  return sha256(canonical({ version: 1, bundle_id: bundleId, delivery_mode: deliveryMode, files: files.filter((item) => item.destination !== "manifest.json").map(({ destination: target, sha256: digest, size }) => ({ target, sha256: digest, size, embed: deliveryMode === "always_embed" })) }));
+}
+function materialManifestHash(bundleId, files, deliveryMode) {
+  return sha256(canonical({ version: 1, bundle_id: bundleId, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.destination)).map(({ destination: target, sha256: digest, size }) => ({ target, sha256: digest, size, embed: deliveryMode === "always_embed" })) }));
+}
+function safeDestination(value) { return typeof value === "string" && value.length > 0 && !isAbsolute(value) && !value.includes("\\") && value.split("/").every((part) => part && part !== "." && part !== ".."); }
+function preparedRedactionRoots(items) {
+  if (!Array.isArray(items) || items.length === 0) throw new Error("redaction roots are unavailable");
+  const roots = items.map((item) => {
+    if (!item || typeof item !== "object" || !/^[a-z][a-z0-9_-]{0,63}$/u.test(item.root_id ?? "") || typeof item.value !== "string" || !item.value
+      || !Number.isSafeInteger(item.order) || item.order < 0 || item.token !== `[PRIVATE_ROOT_${item.root_id.toUpperCase().replace(/-/gu, "_")}]`) throw new Error("redaction root is invalid");
+    return { root_id: item.root_id, token: item.token, value: item.value, order: item.order };
+  });
+  roots.sort((a, b) => b.value.length - a.value.length || a.order - b.order || a.value.localeCompare(b.value));
+  return roots;
+}
+function redactionRootSetHash(roots) { return sha256(JSON.stringify(roots.map(({ root_id, value, order }) => ({ root_id, value, order })))); }
+function rootBoundary(value, end) { return end === value.length || value[end] === "/" || value[end] === "\\"; }
+function nextRootMatch(value, start, roots) {
+  let best = null;
+  for (const root of roots) {
+    let index = value.indexOf(root.value, start);
+    while (index >= 0 && !rootBoundary(value, index + root.value.length)) index = value.indexOf(root.value, index + 1);
+    if (index >= 0 && (!best || index < best.index || (index === best.index && root.value.length > best.root.value.length))) best = { index, root };
+  }
+  return best;
+}
+function replaceRegisteredRoots(value, roots, counts) {
+  let cursor = 0; let output = ""; let match;
+  while ((match = nextRootMatch(value, cursor, roots))) { output += value.slice(cursor, match.index) + match.root.token; cursor = match.index + match.root.value.length; counts.set(match.root.root_id, (counts.get(match.root.root_id) ?? 0) + 1); }
+  return output + value.slice(cursor);
+}
+function replaceRegisteredValue(value, roots, counts) {
+  if (typeof value === "string") return replaceRegisteredRoots(value, roots, counts);
+  if (Array.isArray(value)) return value.map((item) => replaceRegisteredValue(item, roots, counts));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [replaceRegisteredRoots(key, roots, counts), replaceRegisteredValue(item, roots, counts)]));
+  return value;
+}
 function deepFreeze(value) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     for (const child of Object.values(value)) deepFreeze(child);
@@ -59,6 +105,14 @@ export class BrokerClient {
   async run({ request, attachments, attachmentDelivery, privateRawDirectory } = {}) {
     const temp = mkdtempSync(join(tmpdir(), "wh-review-v4-broker-"));
     try {
+      const rawRequestBinding = attachments ? {
+        bundle_id: attachments.bundle_id,
+        delivery_mode: attachmentDelivery,
+        continuation: request?.continuation ?? null,
+        material_manifest_sha256: request?.material_manifest_sha256,
+        attachment_ids: structuredClone(request?.attachment_ids),
+        records: structuredClone(attachments.entries),
+      } : null;
       const requestFile = join(temp, "request.json");
       writeFileSync(requestFile, `${JSON.stringify(request)}\n`, { mode: 0o600 });
       const args = [...this.command.slice(1), "run", `--config=${this.config}`, `--request=${requestFile}`];
@@ -75,7 +129,7 @@ export class BrokerClient {
       let parsed;
       try { parsed = JSON.parse(result.stdout); }
       catch { return { transport_error: { code: "BROKER_OUTPUT_INVALID", message: "3rd-review returned non-JSON" } }; }
-      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory, result) : parsed;
+      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory, rawRequestBinding) : parsed;
     } finally { rmSync(temp, { recursive: true, force: true }); }
   }
 
@@ -125,7 +179,7 @@ export class BrokerClient {
     });
   }
 
-  #materializePrivateRaw(result, privateRawDirectory, brokerWire) {
+  #materializePrivateRaw(result, privateRawDirectory, rawRequestBinding) {
     if (!result || typeof result !== "object" || !Array.isArray(result.providers) || typeof result.runtime_id !== "string") {
       throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker result has no runtime provider evidence");
     }
@@ -143,20 +197,111 @@ export class BrokerClient {
     if (state?.runtime_id !== result.runtime_id || !state.providers || typeof state.providers !== "object") throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker state does not bind the runtime");
     const destinationRoot = resolve(privateRawDirectory);
     mkdirSync(destinationRoot, { recursive: true, mode: 0o700 });
-    // Keep the broker wire response even when a provider omitted its native raw
-    // streams. That omission is material-insufficient, never a semantic pass,
-    // but the host still needs durable evidence for a later disposition.
-    const wire = (stream, value) => {
-      const bytes = Buffer.from(value ?? "", "utf8"); const digest = sha256(bytes);
-      const target = join(destinationRoot, `broker-wire.${stream}.${digest}.raw`);
-      try { writeFileSync(target, bytes, { mode: 0o400, flag: "wx" }); }
-      catch (error) {
-        if (error?.code !== "EEXIST" || sha256(readFileSync(target)) !== digest) throw error;
+    const materialAttestation = (provider, stateProvider, publicProvider) => {
+      const delivery = stateProvider?.delivery;
+      if (!delivery || canonical(delivery) !== canonical(publicProvider?.delivery)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} delivery differs from private broker state`);
+      const visible = delivery.provider_visible_attachment_manifest;
+      const redaction = delivery.redaction;
+      if (!Array.isArray(visible) || !/^[a-f0-9]{64}$/i.test(delivery.raw_material_manifest_hash ?? "") || !/^[a-f0-9]{64}$/i.test(delivery.material_manifest_hash ?? "")
+        || !["raw", "sanitized"].includes(delivery.material_representation) || !redaction || redaction.raw_material_manifest_hash !== delivery.raw_material_manifest_hash
+        || redaction.derived_material_manifest_hash !== delivery.material_manifest_hash || !/^[a-f0-9]{64}$/i.test(redaction.root_set_hash ?? "")
+        || typeof redaction.rule_version !== "string" || !Number.isSafeInteger(redaction.replacement_count) || redaction.replacement_count < 0
+        || redaction.residual_scan !== "passed" || !Array.isArray(redaction.roots)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} delivery attestation is incomplete`);
+      if (!Array.isArray(visible) || visible.length === 0 || visible.some((item) => !safeDestination(item?.destination) || !/^[a-f0-9]{64}$/i.test(item?.sha256 ?? "") || !Number.isSafeInteger(item?.size) || item.size < 0)
+        || new Set(visible.map((item) => item.destination)).size !== visible.length) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} provider-visible manifest is unsafe`);
+      const hostRecords = rawRequestBinding?.records;
+      const hostIds = rawRequestBinding?.attachment_ids;
+      if (!rawRequestBinding || typeof rawRequestBinding.bundle_id !== "string" || !rawRequestBinding.bundle_id || rawRequestBinding.delivery_mode !== delivery.delivery_mode
+        || !Array.isArray(hostRecords) || hostRecords.length === 0 || !Array.isArray(hostIds) || hostIds.length !== hostRecords.length
+        || hostRecords.some((item) => !safeDestination(item?.source) || !safeDestination(item?.destination) || !/^[a-f0-9]{64}$/i.test(item?.sha256 ?? "") || !Number.isSafeInteger(item?.size) || item.size < 0 || typeof item?.embed !== "boolean")
+        || canonical(hostIds) !== canonical(hostRecords.map(({ destination, sha256: digest }) => ({ destination, sha256: digest })))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} host request attachment binding is incomplete`);
+      const frozenRecords = hostRecords.map(({ destination, sha256: digest, size, embed }) => ({ destination, sha256: digest.toLowerCase(), size, embed }));
+      const frozenRawHash = materialManifestHash(rawRequestBinding.bundle_id, frozenRecords, rawRequestBinding.delivery_mode);
+      const frozenDeliveryHash = deliveryManifestHash(rawRequestBinding.bundle_id, frozenRecords, rawRequestBinding.delivery_mode);
+      if (rawRequestBinding.material_manifest_sha256 !== frozenRawHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} host request material hash is incomplete`);
+      const workspace = join(runtime, "workspace");
+      const workspaceRoot = realpathSync(workspace);
+      const readOnce = (candidate, destination) => {
+        const candidateRoot = realpathSync(candidate);
+        if (candidateRoot === workspaceRoot || relative(workspaceRoot, candidateRoot).startsWith("..") || isAbsolute(relative(workspaceRoot, candidateRoot))) throw new Error("workspace candidate escapes runtime workspace");
+        const target = resolve(candidateRoot, ...destination.split("/"));
+        if (relative(candidateRoot, target).startsWith("..") || target === candidateRoot || lstatSync(target).isSymbolicLink() || realpathSync(target) !== target) throw new Error("unsafe workspace attachment");
+        let descriptor; try {
+          descriptor = openSync(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)); const before = fstatSync(descriptor);
+          if (!before.isFile() || before.nlink !== 1) throw new Error("workspace attachment is not a private regular file");
+          const bytes = readFileSync(descriptor); const after = fstatSync(descriptor);
+          if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || bytes.length !== after.size) throw new Error("workspace attachment changed while reading");
+          return bytes;
+        } finally { if (descriptor !== undefined) closeSync(descriptor); }
+      };
+      const snapshotWorkspace = (candidate, declared, deliveryMode, internalBytes = null) => {
+        try {
+          const candidateRoot = realpathSync(candidate);
+          if (candidateRoot === workspaceRoot || relative(workspaceRoot, candidateRoot).startsWith("..") || isAbsolute(relative(workspaceRoot, candidateRoot))) return null;
+          const files = new Map();
+          for (const item of declared) { const bytes = readOnce(candidateRoot, item.destination); if (bytes.length !== item.size || sha256(bytes) !== item.sha256.toLowerCase()) return null; files.set(item.destination, bytes); }
+          const internal = JSON.parse((internalBytes ?? readOnce(candidateRoot, "attachments-manifest.json")).toString("utf8"));
+          const computed = declared.map(({ destination: target, sha256: digest, size }) => ({ target, sha256: digest.toLowerCase(), size, embed: deliveryMode === "always_embed" }));
+          if (internal?.version !== 1 || typeof internal.bundle_id !== "string" || !internal.bundle_id || canonical(internal.files) !== canonical(computed)
+            || internal.manifest_hash !== materialManifestHash(internal.bundle_id, declared, deliveryMode)) return null;
+          return { candidate, bundle_id: internal.bundle_id, files, internal, records: declared.map(({ destination, size }) => ({ destination, size, sha256: sha256(files.get(destination)) })) };
+        } catch { return null; }
+      };
+      const candidates = readdirSync(workspace, { withFileTypes: true }).filter((entry) => entry.isDirectory() && (entry.name === provider || entry.name.startsWith(`${provider}-delta-`))).map((entry) => join(workspace, entry.name));
+      const matched = candidates.map((candidate) => snapshotWorkspace(candidate, visible, delivery.delivery_mode)).filter(Boolean);
+      if (matched.length !== 1) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} derived workspace is missing or ambiguous`);
+      const derivedSnapshot = matched[0]; const current = (state.continuation_materials ?? []).find((item) => item.provider_material_manifest_hash === delivery.material_manifest_hash && item.provider_sessions?.[provider] === stateProvider.session_id);
+      const expectedBundleId = current?.bundle_id ?? state.attachments?.bundle_id;
+      if (!expectedBundleId || derivedSnapshot.bundle_id !== expectedBundleId) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} delivery bundle id is not bound to private broker state`);
+      const rawCandidate = join(workspace, `raw-${derivedSnapshot.candidate.split("/").at(-1)}`); const rawInternalBytes = readOnce(rawCandidate, "attachments-manifest.json");
+      const rawInternal = JSON.parse(rawInternalBytes.toString("utf8"));
+      if (rawInternal?.version !== 1 || rawInternal.bundle_id !== expectedBundleId || !Array.isArray(rawInternal.files)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace manifest is invalid`);
+      const rawDeclared = rawInternal.files.map(({ target: destination, sha256: digest, size, embed }) => ({ destination, sha256: digest, size, embed }));
+      if (rawDeclared.some((item) => item.embed !== (delivery.delivery_mode === "always_embed"))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace delivery mode is invalid`);
+      const rawSnapshot = snapshotWorkspace(rawCandidate, rawDeclared, delivery.delivery_mode, rawInternalBytes);
+      if (!rawSnapshot || rawSnapshot.bundle_id !== expectedBundleId) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace is incomplete`);
+      if (rawSnapshot.bundle_id !== rawRequestBinding.bundle_id || canonical(rawSnapshot.records) !== canonical(frozenRecords.map(({ destination, size, sha256: digest }) => ({ destination, size, sha256: digest })))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace differs from the frozen host request`);
+      const expectedRawHash = current?.manifest_hash ?? state.attachments?.manifest_hash;
+      if (expectedRawHash !== delivery.raw_material_manifest_hash || rawInternal.manifest_hash !== expectedRawHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw material hash is not bound to private broker state`);
+      if (current) {
+        if (rawRequestBinding.continuation?.sequence !== current.sequence || current.bundle_id !== rawRequestBinding.bundle_id || current.manifest_hash !== frozenRawHash || current.delivery_manifest_hash !== frozenDeliveryHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} continuation raw delivery differs from the frozen host request`);
+      } else if (rawRequestBinding.continuation !== null || state.attachments?.bundle_id !== rawRequestBinding.bundle_id || state.attachments?.requested_delivery !== rawRequestBinding.delivery_mode
+        || state.attachments?.manifest_hash !== frozenRawHash || canonical(state.attachments?.files) !== canonical(frozenRecords.map(({ destination: target, sha256: digest, size, embed }) => ({ target, sha256: digest, size, embed })))) {
+        throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} initial raw delivery differs from the frozen host request`);
       }
-      return { ref: target, sha256: digest };
+      const roots = preparedRedactionRoots(state.attachments?.redaction_roots); const rootSetHash = redactionRootSetHash(roots);
+      if (state.attachments?.redaction_root_set_hash !== rootSetHash || redaction.root_set_hash !== rootSetHash || redaction.rule_version !== state.attachments?.provider_material?.redaction?.rule_version) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} redaction root set or rule is invalid`);
+      const counts = new Map(); const expectedBytes = new Map();
+      for (const [destination, bytes] of rawSnapshot.files) {
+        if (["review-packet.v1.json", "manifest.json"].includes(destination)) continue;
+        expectedBytes.set(destination, Buffer.from(replaceRegisteredRoots(bytes.toString("utf8"), roots, counts)));
+      }
+      let rawPacket; let rawManifest; let packet; let manifest;
+      try {
+        rawPacket = JSON.parse(rawSnapshot.files.get("review-packet.v1.json").toString("utf8")); rawManifest = JSON.parse(rawSnapshot.files.get("manifest.json").toString("utf8"));
+        packet = JSON.parse(derivedSnapshot.files.get("review-packet.v1.json").toString("utf8")); manifest = JSON.parse(derivedSnapshot.files.get("manifest.json").toString("utf8"));
+      } catch (error) { throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} review triad is unreadable: ${error.message}`); }
+      const expectedPacket = replaceRegisteredValue(rawPacket, roots, counts); const expectedManifest = replaceRegisteredValue(rawManifest, roots, counts);
+      const stripPacket = (value) => { const output = structuredClone(value); for (const field of ["packet_hash", "manifest_hash", "diff_sha256"]) delete output[field]; return output; };
+      const stripManifest = (value) => { const output = structuredClone(value); for (const field of ["packet_hash", "manifest_hash", "diff_sha256", "attachments", "delivery_manifest_hash", "inner_manifest_hash", "continuation"]) delete output[field]; return output; };
+      if (canonical(stripPacket(expectedPacket)) !== canonical(stripPacket(packet)) || canonical(stripManifest(expectedManifest)) !== canonical(stripManifest(manifest))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} derived JSON payload is not the deterministic redaction of raw material`);
+      for (const [destination, expected] of expectedBytes) if (!derivedSnapshot.files.get(destination)?.equals(expected)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${destination} is not the deterministic redaction of raw material`);
+      for (const [destination, bytes] of derivedSnapshot.files) if (nextRootMatch(bytes.toString("utf8"), 0, roots)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${destination} retains a registered host root`);
+      const rootReceipt = new Map(redaction.roots.map((item) => [item?.root_id, item])); const rootIds = [...new Set(roots.map((item) => item.root_id))];
+      if (rootReceipt.size !== rootIds.length || rootIds.some((rootId) => { const item = rootReceipt.get(rootId); const root = roots.find((candidate) => candidate.root_id === rootId); return !item || item.token !== root.token || item.count !== (counts.get(rootId) ?? 0); })) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} redaction root receipt is invalid`);
+      const replacementCount = [...counts.values()].reduce((sum, count) => sum + count, 0); const bytesDiffer = [...rawSnapshot.files].some(([destination, bytes]) => !derivedSnapshot.files.get(destination)?.equals(bytes));
+      if (redaction.replacement_count !== replacementCount || redaction.residual_scan !== "passed"
+        || (delivery.material_representation === "raw" && (bytesDiffer || replacementCount !== 0))
+        || (delivery.material_representation === "sanitized" && !bytesDiffer)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} material representation receipt is invalid`);
+      const diff = derivedSnapshot.files.get("changes.diff");
+      if (packet.packet_hash !== packetHash(packet) || packet.diff_sha256 !== sha256(diff) || packet.manifest_hash !== delivery.material_manifest_hash
+        || manifest.packet_hash !== packet.packet_hash || manifest.diff_sha256 !== packet.diff_sha256 || manifest.manifest_hash !== packet.manifest_hash
+        || manifest.inner_manifest_hash !== innerManifestHash(manifest) || canonical(manifest.attachments) !== canonical(visible.filter((item) => item.destination !== "manifest.json"))
+        || manifest.delivery_manifest_hash !== deliveryManifestHash(expectedBundleId, visible, delivery.delivery_mode)
+        || delivery.material_total_bytes !== [...derivedSnapshot.files.values()].reduce((total, bytes) => total + bytes.length, 0)
+        || delivery.material_manifest_hash !== materialManifestHash(expectedBundleId, visible, delivery.delivery_mode)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} derived triad binding is invalid`);
+      return { packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, delivery_manifest_hash: manifest.delivery_manifest_hash, continuation: manifest.continuation ?? null };
     };
-    const broker_raw_stdout = wire("stdout", brokerWire?.stdout);
-    const broker_raw_stderr = wire("stderr", brokerWire?.stderr);
     const copyStream = (provider, stream, stateProvider, publicProvider) => {
       const ref = stateProvider[`raw_${stream}_ref`]; const expected = stateProvider[`raw_${stream}_sha256`];
       const announced = publicProvider[`raw_${stream}_sha256`];
@@ -175,29 +320,20 @@ export class BrokerClient {
       }
       return target;
     };
-    const auditFailure = (item, error) => ({ ...item, raw_audit_error: {
-      code: String(error?.message ?? error).startsWith("BROKER_RAW_AUDIT_UNAVAILABLE") ? "BROKER_RAW_AUDIT_UNAVAILABLE" : "BROKER_RAW_AUDIT_FAILED",
-    } });
     const providers = result.providers.map((item) => {
       if (!item || typeof item !== "object" || !providerId.test(item.provider ?? "") || !providerIds.has(item.provider)) return item;
-      // The broker's terminal CANCELLED is a caller-side cancellation signal,
-      // not a model timeout or a review verdict. Older adapters omitted the
-      // source; retain the truthful caller boundary rather than misclassifying
-      // it as provider failure.
-      if (item.status === "cancelled" && item?.error?.code === "CANCELLED" && !item.error.source) item = { ...item, error: { ...item.error, source: "workflow_shutdown" } };
-      try {
-        const privateState = state.providers[item.provider];
-        const expectsRaw = item.status === "completed" || item.raw_stdout_sha256 !== undefined || item.raw_stderr_sha256 !== undefined;
-        if (!privateState || typeof privateState !== "object") {
-          if (expectsRaw) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
-          return item;
-        }
-        const raw_stdout_ref = copyStream(item.provider, "stdout", privateState, item);
-        const raw_stderr_ref = copyStream(item.provider, "stderr", privateState, item);
-        if (expectsRaw && (!raw_stdout_ref || !raw_stderr_ref)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} lacks raw stream evidence`);
-        return { ...item, ...(raw_stdout_ref ? { raw_stdout_ref } : {}), ...(raw_stderr_ref ? { raw_stderr_ref } : {}) };
-      } catch (error) { return auditFailure(item, error); }
+      const privateState = state.providers[item.provider];
+      const expectsRaw = item.status === "completed" || item.raw_stdout_sha256 !== undefined || item.raw_stderr_sha256 !== undefined;
+      if (!privateState || typeof privateState !== "object") {
+        if (expectsRaw) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
+        return item;
+      }
+      const raw_stdout_ref = copyStream(item.provider, "stdout", privateState, item);
+      const raw_stderr_ref = copyStream(item.provider, "stderr", privateState, item);
+      if (expectsRaw && (!raw_stdout_ref || !raw_stderr_ref)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} lacks raw stream evidence`);
+      const derived_attestation = item.status === "completed" && item.delivery ? materialAttestation(item.provider, privateState, item) : null;
+      return { ...item, ...(derived_attestation ? { delivery: { ...privateState.delivery, derived_attestation } } : {}), ...(raw_stdout_ref ? { raw_stdout_ref } : {}), ...(raw_stderr_ref ? { raw_stderr_ref } : {}) };
     });
-    return { ...result, broker_raw_stdout_ref: broker_raw_stdout.ref, broker_raw_stdout_sha256: broker_raw_stdout.sha256, broker_raw_stderr_ref: broker_raw_stderr.ref, broker_raw_stderr_sha256: broker_raw_stderr.sha256, providers };
+    return { ...result, providers };
   }
 }

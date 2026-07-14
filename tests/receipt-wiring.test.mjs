@@ -72,3 +72,31 @@ describe("Phase 2 observed-fact receipt wiring", () => {
     });
   }
 });
+
+describe("single final implementation commit wiring", () => {
+  const earlyStages = ["build-spec", "build-plan", "make-decision"];
+
+  it.each(earlyStages)("forbids commit or merge until the final gate", (stage) => {
+    const content = readFileSync(resolve(`workflows/${stage}/SKILL.md`), "utf8");
+    expect(content).toContain("审查修复完成");
+    expect(content).toContain("`git add`");
+    expect(content).toContain("`git commit`");
+    expect(content).toContain("`git merge`");
+    expect(content).not.toContain(`workflowhub(${stage})`);
+    expect(content).toContain("published semantic `pass`");
+    expect(content).toContain("`verify-final`");
+    expect(content).toContain("人工明确确认继续");
+    expect(content).toContain('workflowhub(verify-code): finalize {task-id}');
+  });
+
+  it("places the ordinary commit after verify-final and explicit human confirmation", () => {
+    const content = readFileSync(resolve("workflows/verify-code/SKILL.md"), "utf8");
+    const verifyFinal = content.indexOf("wh-review-cli.mjs verify-final");
+    const confirmation = content.indexOf("User confirms（选择\"继续\"）");
+    const commit = content.indexOf('git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"');
+
+    expect(verifyFinal).toBeGreaterThanOrEqual(0);
+    expect(confirmation).toBeGreaterThan(verifyFinal);
+    expect(commit).toBeGreaterThan(confirmation);
+  });
+});

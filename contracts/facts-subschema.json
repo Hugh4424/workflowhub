@@ -33,7 +33,7 @@
         "review": "Published wh-review tuple only: core_receipt_hash, semantic_verdict, needs_human; never a private/raw artifact path",
         "worktree_root": "Absolute path to the task implementation worktree consumed by downstream stages",
         "task_tracking_root": "Absolute path to the task execution-record root consumed by downstream stages",
-        "phase_completion": "Commit/no-change completion facts copied from accepted PHASE_RESULT records: commit_records[] and no_change_records[]"
+        "phase_completion": "Phase completion facts copied from accepted PHASE_RESULT records: phase_records[] with phase_id and changed boolean; no commit SHA or private review ref"
       }
     },
     "verify-code": {

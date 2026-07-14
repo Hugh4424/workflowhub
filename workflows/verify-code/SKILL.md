@@ -109,13 +109,21 @@ At stage start, call `metrics/collector.mjs` `recordSkeleton`, passing a seed wi
 Use `ReviewRoundFacade` through `runReviewRound()` only:
 
 ```js
-await runReviewRound({ stage: "verify-code", review_flow_id: "verify-code-flow", packet });
+await runReviewRound({
+  task_id: taskId,
+  task_tracking_root: taskRecords.task_tracking_root,
+  stage: "verify-code",
+  review_flow_id: "verify-code-flow",
+  packet,
+});
 ```
 
-The `review-packet.v1` contains the canonical total diff, changed-file manifest,
-acceptance/design excerpt and host test evidence. Providers review only this packet. Do
-not run git, read the real repository, request absolute paths, or write reports. Keep raw
-provider evidence below `<task>/reviews/private/round-.../`; record cancellation with
+`packet` carries only supplemental context such as acceptance/design excerpt and host
+test evidence. The host captures the canonical source diff, changed-file manifest and
+hashes from the trusted task worktree; callers must not supply source fields. Providers
+review only the sealed `review-packet.v1`. Do not run git, read the real repository, request absolute
+paths, or write reports. Keep raw provider evidence below
+`<task>/reviews/private/round-.../`; record cancellation with
 `cancel_source` separately from semantic verdicts. Continuations retain the initial
 runtime; a new flow requires human-approved reset. An unpublished `runReviewRound()`
 return is transport/packet evidence only: it has no semantic verdict. After host
@@ -250,7 +258,7 @@ wh-review pass。不得让 `facts.review.semantic_verdict=pass` 指向上一轮
 `revise_required` core receipt。当前轮 wh-review 返回 semantic `pass` 后，才允许在步骤⑤
 最终落盘时把 `review_status=pass`、`status=success` 写入 stage-result。
 
-③ **V4 review**：在人工确认 merge 前，由 host 从冻结 revision 构建 canonical packet 并调用 `ReviewRoundFacade`。provider 只读 packet，不能读取 worktree、运行 git 或接收输出路径。只有 public core receipt 的语义结论可供后续人工决策；transport、packet 或取消问题不会伪造 verdict。
+③ **V4 review 与最终提交准备**：在人工确认 merge 前，由 host 从当前 task worktree 的临时-index tree 构建 canonical packet 并调用 `ReviewRoundFacade`。provider 只读 packet，不能读取 worktree、运行 git 或接收输出路径。只有 public core receipt 的语义结论可供后续人工决策；transport、packet 或取消问题不会伪造 verdict。若 semantic verdict 为 `pass`，必须先用同一个 final flow 调用 `wh-review-cli.mjs verify-final`，确认当前临时-index tree 仍等于刚获通过的 tree；不相等就停止并回到 review。步骤③不得执行 `git add` 或 `git commit`：verify-final 本身永不提交，build-spec/build-plan/make-decision/build-code 也不得提前提交。
 
 ④ **不可逆动作 8 步线性序列**（严格顺序，仅在步骤三 verdict=pass 且用户确认后执行）：
   1. 归档 commit：先执行 repo 内规格归档移动 `git mv specs/{task-id} specs/archive/{task-id}`（若 `specs/{task-id}` 不存在则 fail-loud；若 `specs/archive/{task-id}` 已存在则 fail-loud，不得覆盖），再提交归档 commit。commit message 精确为 `workflowhub(close): archive {task-id}`；close 不是独立 stage，不得使用 `workflowhub(verify-code)` 前缀；提交产生的 commit_sha 须记入本阶段 stage-result 的 `facts.close_commit_sha` 字段，字段路径与 close 流程共用同一命名，不得使用其他别名。该 commit 的 diff 必须包含 `specs/{task-id}/` 到 `specs/archive/{task-id}/` 的 rename/move；只提交测试报告或任务执行记录不算完成归档。
@@ -292,6 +300,22 @@ Before asking for confirmation, produce a plain-language decision brief followin
 they do not access the worktree. A non-pass semantic result is surfaced to the human
 before any irreversible action.
 
+After the current flow returns semantic `pass`, run `verify-final` before any
+`git add` or commit. Set `task_tracking_root` from the already parsed
+`taskRecords.task_tracking_root`; never infer it from the current checkout. Its input
+identifies the trusted task worktree and the approved flow; it never accepts a caller
+diff or commits:
+
+```bash
+node <workflowhub_package_root>/skills/wh-review/scripts/wh-review-cli.mjs verify-final <<'JSON'
+{"task_id":"<task-id>","task_tracking_root":"<taskRecords.task_tracking_root>","stage":"verify-code","review_flow_id":"verify-code-flow"}
+JSON
+```
+
+If `verify-final` reports `WORKTREE_DRIFT_AFTER_REVIEW`, do not commit. Re-run the
+review from the changed worktree. A successful `verify-final` only prepares the
+human merge gate: it does not authorize a commit by itself.
+
 **执行规则：** provider 只见 `review-packet.v1` 与冻结 skill bundle；不能读取 worktree、执行 git、请求绝对路径或写报告。私有 raw/session/status 只在 round receipt 中保存。
 
 **Verdict handling:**
@@ -309,7 +333,12 @@ directly into `stage-result.facts.review`:
 
 ```js
 const published = await runReviewRound({
-  stage: "verify-code", review_flow_id: "verify-code-flow", packet, dispositions,
+  task_id: taskId,
+  task_tracking_root: taskRecords.task_tracking_root,
+  stage: "verify-code",
+  review_flow_id: "verify-code-flow",
+  packet,
+  dispositions,
 });
 const review = published.semantic_verdict
   ? { core_receipt_hash: published.core_receipt_hash, semantic_verdict: published.semantic_verdict, needs_human: published.needs_human }
@@ -333,7 +362,7 @@ Step 9 already showed the plain-language brief (七要素) without asking for co
 - 暂停 —— 不执行 merge，保留当前状态，人工另行处理。
 ```
 
-- **User confirms（选择"继续"）**: Execute the merge and branch deletion. Set `user_decision=true`. Before deleting remote/local branch, verify the task branch's target commit is included in main; if verification fails, stop close, do not delete any branch, set `needs_human=true`.
+- **User confirms（选择"继续"）**: First execute the one ordinary implementation commit in the task worktree: `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`. This is permitted only after the current final flow has published semantic `pass`, `verify-final` succeeded, and this explicit confirmation was received. Then execute the close sequence (archive, merge, and cleanup). Set `user_decision=true`. Before deleting remote/local branch, verify the task branch's target commit is included in main; if verification fails, stop close, do not delete any branch, set `needs_human=true`.
 - **User rejects（选择"暂停"）**: Set `user_decision=false`, skip all irreversible operations, proceed to step 12 to write the stage-result with the rejection reason (FR-CLOSE-002). Do not exit early.
 
 Wait for explicit user confirmation before proceeding (FR-CLOSE-001/003). Do not execute merge or delete without user consent.

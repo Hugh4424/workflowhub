@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -24,6 +24,20 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function git(cwd, args, encoding = "utf8") { return execFileSync("git", args, { cwd, encoding }).trim(); }
 function bundleHash(stage, reviewTrack) { return sha(canonical(resolveRequiredSkills({ stage, reviewTrack }).definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
+function deliveryForInput(input, packet) {
+  const files = input.attachments.entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
+  const material_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) }));
+  const visible = input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size }));
+  const delivery_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, delivery_mode: input.attachmentDelivery, files: files.filter((item) => item.target !== "manifest.json") }));
+  const continuation = input.request.continuation ? { initial_material_manifest_hash: input.request.continuation.initial_material_manifest_hash, sequence: input.request.continuation.sequence, previous_delivery_manifest_hash: input.request.continuation.previous_delivery_manifest_hash } : null;
+  return { delivery_mode: input.attachmentDelivery, raw_material_manifest_hash: material_manifest_hash, material_manifest_hash, material_representation: "raw", redaction: { rule_version: "host-root-prefix.v1", root_set_hash: sha("test-roots"), roots: [], replacement_count: 0, raw_material_manifest_hash: material_manifest_hash, derived_material_manifest_hash: material_manifest_hash, residual_scan: "passed" }, derived_attestation: { packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, delivery_manifest_hash, continuation }, material_total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), ...(input.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: visible };
+}
+function completedProvider(input, packet) {
+  const output = reviewerOutput(packet); const stdout = join(input.privateRawDirectory, "opencode.stdout.raw"); const stderr = join(input.privateRawDirectory, "opencode.stderr.raw");
+  mkdirSync(input.privateRawDirectory, { recursive: true });
+  writeFileSync(stdout, output); writeFileSync(stderr, "");
+  return { provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery, delivery: deliveryForInput(input, packet), raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: sha(output), raw_stderr_sha256: sha(""), output };
+}
 function projectedContract(stage, reviewTrack) {
   const source = readFileSync(contractPathAndHash(stage).contractPath, "utf8");
   if (stage !== "make-decision") return source;
@@ -31,32 +45,36 @@ function projectedContract(stage, reviewTrack) {
   const start = source.indexOf(selected); const next = source.indexOf("## review_track:", start + selected.length);
   return `${source.slice(0, source.indexOf("## review_track:"))}${source.slice(start, next < 0 ? undefined : next)}`;
 }
-function refreshManifest(result) {
-  result.diff_sha256 = sha(result.unified_diff);
-  result.manifest_hash = sha(canonical({ diff_sha256: result.diff_sha256, changed_files: result.changed_files.map(({ path, old_path, status, sha256: fileHash, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: fileHash ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: result.raw_requirement, decision_log_excerpt: result.decision_log_excerpt ?? null, acceptance_design_excerpt: result.acceptance_design_excerpt ?? null, planning_artifacts: result.planning_artifacts ?? [], verification_closure: result.verification_closure ?? [], test_evidence: result.test_evidence ?? [], host_verified_facts: result.host_verified_facts, contract_hash: result.contract_hash, skill_bundle_hash: result.skill_bundle_hash, source_revision: result.source_revision }));
-  return result;
-}
-function packet(repository, stage, reviewTrack = null) {
-  git(repository, ["init", "-q"]); git(repository, ["config", "user.email", "review@example.test"]); git(repository, ["config", "user.name", "Review Test"]);
-  writeFileSync(join(repository, "a.txt"), "before\n"); git(repository, ["add", "a.txt"]); git(repository, ["commit", "-qm", "base"]); const base = git(repository, ["rev-parse", "HEAD"]);
-  writeFileSync(join(repository, "a.txt"), "WH_REVIEW_PACKET_MARKER\nafter\n"); git(repository, ["add", "a.txt"]); git(repository, ["commit", "-qm", "head"]); const head = git(repository, ["rev-parse", "HEAD"]);
-  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: repository, encoding: "utf8" });
-  const oldBytes = Buffer.from("before\n"), bytes = Buffer.from("WH_REVIEW_PACKET_MARKER\nafter\n");
-  const changed_files = [{ path: "a.txt", status: "modified", sha256: sha(bytes), size: bytes.length, old_sha256: sha(oldBytes), old_size: oldBytes.length }];
-  const result = { version: "review-packet.v1", stage, review_track: reviewTrack, packet_hash: "0".repeat(64), unified_diff, diff_sha256: sha(unified_diff), changed_files, raw_requirement: "review this change", acceptance_design_excerpt: "AC: marker is visible", decision_log_excerpt: "decision", planning_artifacts: [], verification_closure: [], test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: sha(projectedContract(stage, reviewTrack)), skill_bundle_hash: bundleHash(stage, reviewTrack), source_revision: { base, head } };
+function materialPacket(stage, reviewTrack = null) {
+  const result = {
+    version: "review-packet.v1",
+    stage,
+    review_track: reviewTrack,
+    raw_requirement: "review this change",
+    acceptance_design_excerpt: "AC: marker is visible",
+    decision_log_excerpt: "decision",
+    planning_artifacts: [],
+    verification_closure: [],
+    test_evidence: [{ name: "unit", status: "passed" }],
+    host_verified_facts: [],
+    contract_hash: sha(projectedContract(stage, reviewTrack)),
+    skill_bundle_hash: bundleHash(stage, reviewTrack),
+  };
   if (stage === "make-decision" && reviewTrack === "direction") {
     delete result.decision_log_excerpt; delete result.acceptance_design_excerpt; delete result.planning_artifacts; delete result.verification_closure; delete result.test_evidence;
   }
-  return refreshManifest(result);
+  return result;
 }
-function deltaPacket(repository, previous) {
-  writeFileSync(join(repository, "a.txt"), "WH_REVIEW_PACKET_MARKER\nafter\nreal delta\n"); git(repository, ["add", "a.txt"]); git(repository, ["commit", "-qm", "continuation delta"]);
-  const base = previous.source_revision.base, head = git(repository, ["rev-parse", "HEAD"]);
-  const unified_diff = execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", base, head], { cwd: repository, encoding: "utf8" });
-  const oldBytes = Buffer.from("before\n"), bytes = Buffer.from("WH_REVIEW_PACKET_MARKER\nafter\nreal delta\n");
-  const next = { ...previous, packet_hash: "0".repeat(64), unified_diff, changed_files: [{ path: "a.txt", status: "modified", sha256: sha(bytes), size: bytes.length, old_sha256: sha(oldBytes), old_size: oldBytes.length }], source_revision: { base, head } };
-  if (next.test_evidence) next.test_evidence = [...next.test_evidence, { name: "delta", status: "passed" }];
-  return refreshManifest(next);
+function initializeTargetRepository(repository) {
+  git(repository, ["init", "-q"]); git(repository, ["config", "user.email", "review@example.test"]); git(repository, ["config", "user.name", "Review Test"]);
+  writeFileSync(join(repository, "a.txt"), "before\n"); git(repository, ["add", "a.txt"]); git(repository, ["commit", "-qm", "base"]);
+  return git(repository, ["rev-parse", "HEAD"]);
+}
+function linkedTaskWorktree(repository, branch) {
+  const worktree = mkdtempSync(join(tmpdir(), "wh-review-wiring-worktree-"));
+  rmSync(worktree, { recursive: true, force: true });
+  git(repository, ["worktree", "add", "-q", "-b", branch, worktree]);
+  return worktree;
 }
 function expectPrivateRawDirectory(path, taskRoot) {
   expect(path).toEqual(expect.any(String));
@@ -105,6 +123,18 @@ describe("wh-review v4 workflow wiring", () => {
     expect(content).not.toContain("code-quality");
   });
 
+  it("binds build-code and verify-code review calls to the trusted task worktree", () => {
+    for (const stage of ["build-code", "verify-code"]) {
+      const content = skill(stage);
+      expect(content).toContain("task_id:");
+      expect(content).toContain("task_tracking_root: taskRecords.task_tracking_root");
+      expect(content).toContain(`stage: "${stage}"`);
+      expect(content).toContain("review_flow_id:");
+      expect(content).toContain("packet");
+      expect(content).toMatch(/host.*(?:capture|generat).*source diff/i);
+    }
+  });
+
   it("documents packet-only provider isolation and private receipt evidence", () => {
     for (const stage of stages) {
       const content = v4(stage);
@@ -140,41 +170,58 @@ describe("wh-review v4 workflow wiring", () => {
 
   it.each([
     ["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null], ["build-plan", null], ["build-code", null], ["verify-code", null],
-  ])("runs %s/%s with a complete private packet and continues its first runtime", async (stage, reviewTrack) => {
+  ])("captures uncommitted trusted-worktree packets and continues its first runtime for %s/%s", async (stage, reviewTrack) => {
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-wiring-tracking-"));
     const repository = mkdtempSync(join(tmpdir(), "wh-review-wiring-repo-"));
     const calls = []; let currentPacket; let frozenStageContract;
+    let sourceRoot = null;
     try {
-      const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: {
+      const initialHead = initializeTargetRepository(repository);
+      const branch = `workflowhub/wiring-${stage.replace("-", "")}-${reviewTrack ?? "main"}`;
+      sourceRoot = linkedTaskWorktree(repository, branch);
+      writeFileSync(join(sourceRoot, "a.txt"), "before\nWIRING_R1_UNCOMMITTED_MARKER\n");
+      const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot, broker: {
         async discoverCapabilities() { return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }; },
-        async run(input) { calls.push(input); const contractEntry = input.attachments?.entries.find(({ destination }) => destination === `contracts/${stage}.md`); if (contractEntry) frozenStageContract = readFileSync(join(root, contractEntry.source), "utf8"); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet ?? currentPacket) }] }; },
+        async run(input) { calls.push(input); const contractEntry = input.attachments?.entries.find(({ destination }) => destination === `contracts/${stage}.md`); if (contractEntry) frozenStageContract = readFileSync(join(root, contractEntry.source), "utf8"); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [completedProvider(input, currentPacket)] }; },
         async status() { return { expires_at_ms: Date.now() + 60_000 }; },
       } });
-      const firstPacket = packet(repository, stage, reviewTrack); currentPacket = firstPacket;
-      const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: firstPacket, repository_root: repository };
-      const first = await facade.run(facade.prepare(input));
+      const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: materialPacket(stage, reviewTrack) };
+      const firstPrepared = await facade.prepare(input); currentPacket = firstPrepared.packet;
+      const first = await facade.run(firstPrepared);
       if (stage === "make-decision") {
         expect(frozenStageContract).toContain(`## review_track: ${reviewTrack}`);
         expect(frozenStageContract).not.toContain(`## review_track: ${reviewTrack === "direction" ? "detail" : "direction"}`);
-        expect(sha(frozenStageContract)).toBe(firstPacket.contract_hash);
+        expect(sha(frozenStageContract)).toBe(firstPrepared.packet.contract_hash);
       }
+      expect(git(sourceRoot, ["rev-parse", "HEAD"])).toBe(initialHead);
+      expect(firstPrepared.packet.unified_diff).toContain("WIRING_R1_UNCOMMITTED_MARKER");
+      expect(firstPrepared.packet.source_revision.snapshot_tree).toMatch(/^[a-f0-9]{40,64}$/);
       expect(first.provider_outcomes).toMatchObject([{ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }]);
       expect(first).not.toHaveProperty("semantic_verdict");
       expect(readFileSync(first.receipt_draft_ref, "utf8")).toContain("provider-session");
-      const publication = facade.publish(first, { items: [] });
-      expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
-      const core = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
-      expect(Array.isArray(core.provider_outcomes[0].skillResults)).toBe(true);
-      expect(core.provider_outcomes[0].skillResults).toHaveLength(first.provider_outcomes[0].skillResults?.length ?? 0);
-      if (stage !== "build-plan") expect(core.provider_outcomes[0].skillResults).toEqual(expect.arrayContaining(first.provider_outcomes[0].skillResults ?? []));
-      expect(JSON.stringify(core)).not.toMatch(/\/Users\/reviewer|Bearer|skill-secret-token|123e4567/i);
-      currentPacket = deltaPacket(repository, firstPacket);
-      const second = await facade.run(facade.prepare({ ...input, packet: currentPacket, continuation: true }));
+      if (stage !== "make-decision") {
+        const publication = facade.publish(first, { items: [] });
+        expect(publication).toMatchObject({ semantic_verdict: "pass", core_receipt_hash: expect.stringMatching(/^[a-f0-9]{64}$/), needs_human: false });
+        const core = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
+        expect(Array.isArray(core.provider_outcomes[0].skillResults)).toBe(true);
+        expect(core.provider_outcomes[0].skillResults).toHaveLength(first.provider_outcomes[0].skillResults?.length ?? 0);
+        if (stage !== "build-plan") expect(core.provider_outcomes[0].skillResults).toEqual(expect.arrayContaining(first.provider_outcomes[0].skillResults ?? []));
+        expect(JSON.stringify(core)).not.toMatch(/\/Users\/reviewer|Bearer|skill-secret-token|123e4567/i);
+      }
+      writeFileSync(join(sourceRoot, "a.txt"), "before\nWIRING_R1_UNCOMMITTED_MARKER\nWIRING_R2_DELTA_ONLY_MARKER\n");
+      const secondPrepared = await facade.prepare({ ...input, packet: materialPacket(stage, reviewTrack), continuation: true }); currentPacket = secondPrepared.packet;
+      const second = await facade.run(secondPrepared);
+      expect(git(sourceRoot, ["rev-parse", "HEAD"])).toBe(initialHead);
+      expect(secondPrepared.packet.source_revision.base_tree).toBe(firstPrepared.packet.source_revision.snapshot_tree);
+      expect(secondPrepared.packet.unified_diff).toContain("WIRING_R2_DELTA_ONLY_MARKER");
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
-      expect(calls[1].request.continuation).toEqual({ runtime_id: "11111111-1111-4111-8111-111111111111" });
-      expect(Object.keys(calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
+      expect(calls[1].request.continuation).toMatchObject({ runtime_id: "11111111-1111-4111-8111-111111111111", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: null });
+      expect(Object.keys(calls[1]).sort()).toEqual(["attachmentDelivery", "attachments", "privateRawDirectory", "request"]);
       expectPrivateRawDirectory(calls[1].privateRawDirectory, join(tracking, input.task_id));
-      expect(calls[1].request.prompt).toContain("real delta");
-    } finally { rmSync(tracking, { recursive: true, force: true }); rmSync(repository, { recursive: true, force: true }); }
+      expect(calls[1].request).not.toHaveProperty("packet");
+      expect(calls[1].request.prompt).not.toContain("WIRING_R2_DELTA_ONLY_MARKER");
+      expect(calls[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+      expect(calls[1].attachments.entries.map((entry) => entry.destination)).toEqual(expect.arrayContaining(["review-packet.v1.json", "changes.diff", "continuation-delta.v1.json", "manifest.json"]));
+    } finally { rmSync(tracking, { recursive: true, force: true }); if (sourceRoot) rmSync(sourceRoot, { recursive: true, force: true }); rmSync(repository, { recursive: true, force: true }); }
   });
 });

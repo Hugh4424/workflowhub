@@ -30,4 +30,12 @@ describe("ci-chain-check", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("stage-result-make-decision-decision-flow.json");
   });
+
+  it("fails closed while a task has a pending public review projection", () => {
+    const item = fixture({ group: true });
+    writeFileSync(join(item.taskTrackingRoot, "demo-task", "reviews", "projection-pending-build-code-flow.json"), JSON.stringify({ status: "pending", needs_human: true }));
+    const result = run(item.cwd, "--task-id=demo-task", "--review-flow-id=decision-flow", `--task-tracking-root=${item.taskTrackingRoot}`);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("PROJECTION_PENDING");
+  });
 });
