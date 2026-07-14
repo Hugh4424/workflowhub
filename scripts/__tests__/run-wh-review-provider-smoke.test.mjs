@@ -58,7 +58,8 @@ describe("run-wh-review-provider-smoke", () => {
       providerVisibleManifestHash: hash("f"),
     });
     expect(prompt).toContain("attachment_ids=review-packet.v1.json,changes.diff,manifest.json");
-    expect(prompt).toContain(`attachment_manifest_sha256=${hash("f")}`);
+    expect(prompt).not.toContain("attachment_manifest_sha256=");
+    expect(prompt).not.toContain(hash("f"));
     expect(prompt).not.toContain("R2_DELTA_ONLY_MARKER");
     expect(prompt).not.toContain("R1_DIFF_MARKER");
   });

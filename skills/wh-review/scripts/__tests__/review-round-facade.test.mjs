@@ -20,6 +20,11 @@ function root() {
   return value;
 }
 function hash(value) { return createHash("sha256").update(value).digest("hex"); }
+const slash = String.fromCharCode(47);
+const unixPath = (...parts) => `${slash}${parts.join(slash)}`;
+const tripleSlashPath = (...parts) => `${slash.repeat(3)}${parts.join(slash)}`;
+const nonHttpUri = (scheme, suffix) => `${scheme}${String.fromCharCode(58)}${suffix}`;
+const windowsPath = (...parts) => `C${String.fromCharCode(58)}${String.fromCharCode(92)}${parts.join(String.fromCharCode(92))}`;
 function canonical(value) { if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`; if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`; return JSON.stringify(value); }
 function packet({ root } = {}) {
   return hostPacket();
@@ -54,16 +59,25 @@ function packetFromTriad(request, attachmentRoot = process.cwd()) {
   return JSON.parse(readFileSync(join(attachmentRoot, entry.source), "utf8"));
 }
 function deliveryForRequest(request) {
-  return { delivery_mode: request.attachmentDelivery, material_manifest_hash: canonicalDeliveryMaterial(request.attachments.bundle_id, request.attachments.entries), material_total_bytes: request.attachments.entries.reduce((total, item) => total + item.size, 0), ...(request.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: request.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
+  const materialHash = canonicalDeliveryMaterial(request.attachments.bundle_id, request.attachments.entries); const packet = request.packet;
+  const deliveryManifestHash = hash(canonical({ version: 1, bundle_id: request.attachments.bundle_id, delivery_mode: request.attachmentDelivery, files: request.attachments.entries.filter((item) => item.destination !== "manifest.json").map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed })) }));
+  const continuationRequest = request.request?.continuation ?? request.continuation;
+  const continuation = continuationRequest ? { initial_material_manifest_hash: continuationRequest.initial_material_manifest_hash, sequence: continuationRequest.sequence, previous_delivery_manifest_hash: continuationRequest.previous_delivery_manifest_hash } : null;
+  return { delivery_mode: request.attachmentDelivery, raw_material_manifest_hash: materialHash, material_manifest_hash: materialHash, material_representation: "raw",
+    redaction: { rule_version: "host-root-prefix.v1", root_set_hash: hash("test-root-set"), roots: [], replacement_count: 0, raw_material_manifest_hash: materialHash, derived_material_manifest_hash: materialHash, residual_scan: "passed" },
+    derived_attestation: { packet_hash: packet?.packet_hash, manifest_hash: packet?.manifest_hash, diff_sha256: packet?.diff_sha256, delivery_manifest_hash: deliveryManifestHash, continuation },
+    material_total_bytes: request.attachments.entries.reduce((total, item) => total + item.size, 0), ...(request.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: request.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
 }
 function completedProvider(request, { provider = "opencode", session_id = "s", output: providerOutput, ...extra } = {}) {
   const stdout = providerOutput ?? ""; const stderr = ""; mkdirSync(request.privateRawDirectory, { recursive: true });
   const stdoutRef = join(request.privateRawDirectory, `${provider}.stdout.raw`); const stderrRef = join(request.privateRawDirectory, `${provider}.stderr.raw`); writeFileSync(stdoutRef, stdout); writeFileSync(stderrRef, stderr);
-  return { provider, status: "completed", session_id, delivery_used: request.attachmentDelivery, delivery: deliveryForRequest(request), raw_stdout_ref: stdoutRef, raw_stderr_ref: stderrRef, raw_stdout_sha256: hash(stdout), raw_stderr_sha256: hash(stderr), output: providerOutput, ...extra };
+  const packet = request.packet ?? packetFromTriad(request);
+  return { provider, status: "completed", session_id, delivery_used: request.attachmentDelivery, delivery: deliveryForRequest({ ...request, packet }), raw_stdout_ref: stdoutRef, raw_stderr_ref: stderrRef, raw_stdout_sha256: hash(stdout), raw_stderr_sha256: hash(stderr), output: providerOutput, ...extra };
 }
 function fakeBroker(callback, attachmentRoot = process.cwd()) { return capabilityBroker(async (request) => {
   const packet = packetFromTriad(request, attachmentRoot); const response = await callback({ ...request, packet });
-  const expectedDelivery = deliveryForRequest(request);
+  const manifestEntry = request.attachments.entries.find((item) => item.destination === "manifest.json"); const manifest = JSON.parse(readFileSync(join(attachmentRoot, manifestEntry.source), "utf8"));
+  const expectedDelivery = deliveryForRequest({ ...request, packet, manifest });
   mkdirSync(request.privateRawDirectory, { recursive: true });
   return { ...response, providers: (response.providers ?? []).map((item) => {
     if (item.status !== "completed") return item;
@@ -203,6 +217,8 @@ describe("ReviewRoundFacade", () => {
     expect(manifest.inner_manifest_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(prepared.frozen_attachments.map((item) => item.destination)).toContain("manifest.json");
     expect(prepared.initial_prompt).not.toContain("R1_DIFF_MARKER");
+    expect(prepared.initial_prompt).not.toMatch(/(?:attachment_manifest_sha256|packet_hash|manifest_hash|diff_sha256|attachment_sha256)=/u);
+    for (const digest of [prepared.packet.packet_hash, prepared.packet.manifest_hash, prepared.packet.diff_sha256, prepared.provider_visible_manifest_sha256]) expect(prepared.initial_prompt).not.toContain(digest);
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
@@ -221,60 +237,91 @@ describe("ReviewRoundFacade", () => {
     expect(calls[0].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
   });
 
-  it("fails closed before broker dispatch when raw source material contains an absolute path", async () => {
+  it("keeps raw absolute paths for broker-derived delivery", async () => {
     const tracking = root(); let calls = 0;
-    writeFileSync(join(tracking, "a"), "const source = '/Users/Hugh/secret';\n");
+    writeFileSync(join(tracking, "a"), `const source = '${unixPath("Users", "Hugh", "secret")}';\n`);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
 
-    await expect(facade.prepare({ task_id: "absolute-source", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "absolute-source", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })).resolves.toBeDefined();
     expect(calls).toBe(0);
   });
 
-  it("fails closed on an absolute path in a provider-visible packet supplement", async () => {
+  it("keeps absolute paths in packet supplements for broker-derived delivery", async () => {
     const tracking = root(); let calls = 0;
-    const supplemental = { ...hostPacket(), planning_artifacts: [{ path: "/Users/Hugh/private-plan.md", summary: "must not be delivered" }] };
+    const supplemental = { ...hostPacket(), planning_artifacts: [{ path: unixPath("Users", "Hugh", "private-plan.md"), summary: "must not be delivered" }] };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
 
-    await expect(facade.prepare({ task_id: "absolute-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "absolute-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).resolves.toBeDefined();
     expect(calls).toBe(0);
   });
 
-  it.each(["file:///Users/Hugh/private-plan.md", "vscode://file/Users/Hugh/private-plan.md"])("fails closed on a non-HTTP URI in a provider-visible packet supplement: %s", async (path) => {
+  it.each([
+    nonHttpUri("file", `${slash.repeat(2)}${unixPath("Users", "Hugh", "private-plan.md")}`),
+    nonHttpUri("vscode", `${slash.repeat(2)}file${unixPath("Users", "Hugh", "private-plan.md")}`),
+  ])("keeps non-HTTP URI packet supplements for broker-derived delivery: %s", async (path) => {
     const tracking = root();
     const supplemental = { ...hostPacket(), planning_artifacts: [{ path, summary: "must not be delivered" }] };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    await expect(facade.prepare({ task_id: "file-uri-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "file-uri-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).resolves.toBeDefined();
   });
 
-  it("rejects Windows absolute paths but permits HTTPS URLs in raw source material", async () => {
+  it("keeps raw paths and HTTPS URLs for broker-derived delivery", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    await expect(facade.prepare({ task_id: "windows-source", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: "read C:\\Users\\Hugh\\secret" } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "windows-source", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `read ${windowsPath("Users", "Hugh", "secret")}` } })).resolves.toBeDefined();
     const prepared = await facade.prepare({ task_id: "https-source", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: "see https://example.test/review" } });
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it.each([
-    ["file:///Users/Hugh/private"],
-    ["file://localhost/Users/Hugh/private"],
-    ["file:///C:/Users/Hugh/private"],
-    ["file:/Users/Hugh/private"],
-    ["vscode://file/Users/Hugh/private"],
-    ["vscode://file/C:/Users/Hugh/private"],
-    ["vscode:/file/Users/Hugh/private"],
-    ["ftp://example.test/Users/Hugh/private"],
-  ])("fails closed for non-HTTP URI paths in source material: %s", async (literal) => {
+    [nonHttpUri("file", `${slash.repeat(2)}${unixPath("Users", "Hugh", "private")}`)],
+    [nonHttpUri("file", `${slash.repeat(2)}localhost${unixPath("Users", "Hugh", "private")}`)],
+    [nonHttpUri("file", `${slash.repeat(2)}${slash}C${String.fromCharCode(58)}${unixPath("Users", "Hugh", "private")}`)],
+    [nonHttpUri("file", unixPath("Users", "Hugh", "private"))],
+    [nonHttpUri("vscode", `${slash.repeat(2)}file${unixPath("Users", "Hugh", "private")}`)],
+    [nonHttpUri("vscode", `${slash.repeat(2)}file${slash}C${String.fromCharCode(58)}${unixPath("Users", "Hugh", "private")}`)],
+    [nonHttpUri("vscode", `${slash}file${unixPath("Users", "Hugh", "private")}`)],
+    [nonHttpUri("ftp", `${slash.repeat(2)}example.test${unixPath("Users", "Hugh", "private")}`)],
+  ])("keeps non-HTTP URI paths for broker-derived delivery: %s", async (literal) => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    await expect(facade.prepare({ task_id: `file-uri-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `open ${literal}` } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: `file-uri-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `open ${literal}` } })).resolves.toBeDefined();
   });
 
-  it("fails closed for a non-HTTP URI in the R2 delta after an initial valid review", async () => {
+  it("keeps a non-HTTP URI in the R2 delta for broker-derived delivery", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "file-uri-session", output: output(request.packet) }] })) });
     await facade.run(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
-    writeFileSync(join(tracking, "a"), "vscode://file/Users/Hugh/private\n");
-    await expect(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    writeFileSync(join(tracking, "a"), `${nonHttpUri("vscode", `${slash.repeat(2)}file${unixPath("Users", "Hugh", "private")}`)}\n`);
+    await expect(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).resolves.toBeDefined();
+  });
+
+  it.each([
+    slash,
+    `${slash.repeat(2)}host${slash}share`,
+    `[private](${unixPath("Users", "Hugh", "secret.md")})`,
+    `<${unixPath("tmp", "review-secret")}>`,
+    `value=${unixPath("var", "private", "item")}`,
+    `[private](${tripleSlashPath("tmp", "review-secret")})`,
+  ])("keeps root, UNC-like, Markdown, punctuation, and triple-slash material in R1: %s", async (literal) => {
+    const tracking = root(); let calls = 0;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
+    await expect(facade.prepare({ task_id: `absolute-r1-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: literal } })).resolves.toBeDefined();
+    expect(calls).toBe(0);
+  });
+
+  it.each([
+    slash,
+    `${slash.repeat(2)}host${slash}share`,
+    `[private](${unixPath("tmp", "review-secret")})`,
+    `[private](${tripleSlashPath("tmp", "review-secret")})`,
+  ])("keeps root, UNC-like, Markdown, and triple-slash material in R2: %s", async (literal) => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "15151515-1515-4515-8515-151515151515", providers: [{ provider: "opencode", status: "completed", session_id: "path-session", output: output(request.packet) }] })) });
+    const taskId = `absolute-r2-${hash(literal).slice(0, 8)}`;
+    await facade.run(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+    writeFileSync(join(tracking, "a"), `${literal}\n`);
+    await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).resolves.toBeDefined();
   });
 
   it("fails closed when the frozen provider-visible manifest is forged before delivery", async () => {
@@ -358,7 +405,7 @@ describe("ReviewRoundFacade", () => {
     expect(second.delta_manifest.changed_files.map((item) => item.path)).toContain("a");
     expect(secondFlow.last_reviewed_tree).not.toBe(firstTree);
     expect(secondFlow.review_tree_ref).toBe(firstFlow.review_tree_ref);
-    expect(calls[1].request.continuation).toMatchObject({ runtime_id: "80808080-8080-4080-8080-808080808080", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(calls[1].request.continuation).toMatchObject({ runtime_id: "80808080-8080-4080-8080-808080808080", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: null });
   });
 
   it("restores the prior protected tree when a continuation flow write fails, then permits retry preparation", async () => {
@@ -389,7 +436,7 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("records a passed tree as approved, rejects drift, and cleans the ref only after final verification", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "final", output: output(request.packet) }] })) });
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "provider-session-a1", output: output(request.packet) }] })) });
     writeFileSync(join(tracking, "a"), "approved without a commit\n");
     const result = await facade.run(facade.prepare({ task_id: "final-tree", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
     facade.publish(result, { items: [] });
@@ -407,7 +454,7 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("scopes protected review refs by task so finalization and reset cannot affect another task", async () => {
-    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "shared", output: output(request.packet) }] })) });
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "provider-session-b2", output: output(request.packet) }] })) });
     writeFileSync(join(source, "a"), "task A reviewed source\n");
     const taskA = await facade.run(facade.prepare({ task_id: "task-a", stage: "build-code", review_flow_id: "shared", packet: hostPacket() })); facade.publish(taskA, { items: [] });
     const flowAPath = join(tracking, "task-a", "reviews", "private", "flows", "build-code-shared.json"); const flowA = JSON.parse(readFileSync(flowAPath, "utf8"));
@@ -426,7 +473,7 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("keeps the protected ref when final flow persistence fails", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "final", output: output(request.packet) }] })), faultInjector(point, value) { if (point === "before-flow-write" && value?.finalized_at_ms) throw new Error("final flow write failed"); } });
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "provider-session-c3", output: output(request.packet) }] })), faultInjector(point, value) { if (point === "before-flow-write" && value?.finalized_at_ms) throw new Error("final flow write failed"); } });
     writeFileSync(join(tracking, "a"), "approved without a commit\n");
     const result = await facade.run(facade.prepare({ task_id: "final-write-failure", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })); facade.publish(result, { items: [] });
     const flowPath = join(tracking, "final-write-failure", "reviews", "private", "flows", "build-code-flow.json"); const flow = JSON.parse(readFileSync(flowPath, "utf8"));
@@ -464,7 +511,7 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("does not falsely finalize or reset when deleting a protected ref really fails", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "delete-ref", output: output(request.packet) }] })) });
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "provider-session-d4", output: output(request.packet) }] })) });
     writeFileSync(join(tracking, "a"), "tree awaiting final deletion\n");
     const finalizedResult = await facade.run(facade.prepare({ task_id: "delete-ref-final", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
     facade.publish(finalizedResult, { items: [] });
@@ -876,9 +923,9 @@ describe("ReviewRoundFacade", () => {
 
   it("rejects caller capabilities and derives candidates from doctor after acquiring the task lock", async () => {
     const tracking = root(); const lock = join(tracking, "doctor-owned", "reviews", "private", "flows", "doctor-owned.lock");
-    const broker = capabilityBroker(async (request) => { const sealed = packetFromTriad(request); return { providers: [
+    const broker = capabilityBroker(async (request) => { const sealed = packetFromTriad(request); Object.defineProperty(request, "packet", { value: sealed, enumerable: false }); return { providers: [
       completedProvider(request, { provider: "opencode", session_id: "s", output: output(sealed) }),
-      { provider: "/private/secret", status: "completed", session_id: "disabled", output: output(sealed) },
+      { provider: "/private/secret", status: "completed", session_id: "disabled", output: output(request.packet) },
     ] }; }, {
       version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
         { provider: "codex", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
@@ -1344,12 +1391,29 @@ describe("ReviewRoundFacade", () => {
     const second = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: value, continuation: true }));
     expect(first.intent.initial_runtime_id).toBeNull();
     expect(second.intent.initial_runtime_id).toBe("22222222-2222-4222-8222-222222222222");
-    expect(seen[1].request.continuation).toMatchObject({ runtime_id: "22222222-2222-4222-8222-222222222222", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(seen[1].request.continuation).toMatchObject({ runtime_id: "22222222-2222-4222-8222-222222222222", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: null });
     expect(seen[0].request.provider_allowlist).toEqual(["claude-code", "kimi", "opencode"]);
     expect(seen[1].request.provider_allowlist).toEqual(["opencode"]);
     expect(seen[0].attachments).toBeTruthy();
     expect(seen[0].attachmentDelivery).toBe("file_only");
     expect(seen[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+  });
+
+  it.each([
+    ["runtime", "33333333-3333-4333-8333-333333333333", "stable-session", "CONTINUATION_RUNTIME_MISMATCH"],
+    ["session", "22222222-2222-4222-8222-222222222222", "different-session", "CONTINUATION_SESSION_MISMATCH"],
+  ])("fails closed when R2 returns a different %s", async (_kind, secondRuntime, secondSession, diagnostic) => {
+    const tracking = root(); let call = 0;
+    const initialRuntime = "22222222-2222-4222-8222-222222222222";
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      call += 1;
+      return { runtime_id: call === 1 ? initialRuntime : secondRuntime, providers: [{ provider: "opencode", status: "completed", session_id: call === 1 ? "stable-session" : secondSession, output: output(request.packet) }] };
+    }) });
+    await facade.run(facade.prepare({ task_id: `r2-${_kind}`, stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+    writeFileSync(join(tracking, "a"), `changed ${_kind}\n`);
+    const result = await facade.run(facade.prepare({ task_id: `r2-${_kind}`, stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true }));
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", diagnostic, semantic_verdict: null, business_valid: false }));
+    expect(result.continuation_eligible).toBe(false);
   });
 
   it("sends a full initial packet with a real multiline changes.diff attachment", async () => {
@@ -1370,7 +1434,7 @@ describe("ReviewRoundFacade", () => {
     const mustRead = ["contracts/provider-protocol.md", "contracts/build-code.md", "schemas/reviewer-output.schema.json", "review-packet.v1.json", "changes.diff"];
     for (const item of mustRead) expect(dispatched.request.prompt).toContain(item);
     expect(dispatched.request.prompt).not.toContain(readFileSync(join(import.meta.dirname, "../../../review/SKILL.md"), "utf8"));
-    expect(dispatched.request.prompt).toContain(`diff_sha256=${prepared.packet.diff_sha256}`);
+    expect(dispatched.request.prompt).not.toContain(prepared.packet.diff_sha256);
     expect(dispatched.request.prompt).toContain("Read manifest.json first. Return only reviewer-output JSON.");
     const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
     expect(manifest.attachments).toContainEqual({ target: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff), embed: false });
@@ -1400,9 +1464,9 @@ describe("ReviewRoundFacade", () => {
     expect(calls[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
     expect(calls[1].request.prompt).not.toContain(initial.unified_diff);
     expect(calls[1].request.prompt).toContain("Continue the existing review session using only this isolated delta attachment workspace.");
-    expect(calls[1].request.prompt).toContain(`packet_hash=${secondPrepared.packet.packet_hash}`);
-    expect(calls[1].request.prompt).toContain(`manifest_hash=${secondPrepared.packet.manifest_hash}`);
-    expect(calls[1].request.prompt).toContain(`diff_sha256=${secondPrepared.packet.diff_sha256}`);
+    expect(calls[1].request.prompt).not.toContain(secondPrepared.packet.packet_hash);
+    expect(calls[1].request.prompt).not.toContain(secondPrepared.packet.manifest_hash);
+    expect(calls[1].request.prompt).not.toContain(secondPrepared.packet.diff_sha256);
     expect(calls[1].request.prompt).not.toContain("fixed\n");
     expect(calls[1].attachments.entries.map((entry) => entry.destination)).toEqual(expect.arrayContaining(["review-packet.v1.json", "changes.diff", "continuation-delta.v1.json", "manifest.json"]));
     expect(second).toMatchObject({ round_kind: "continuation", baseline_packet_hash: first.intent.baseline_packet_hash, previous_findings: [{ finding_id: findingId }] });

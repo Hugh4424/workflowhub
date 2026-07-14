@@ -24,16 +24,19 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function git(cwd, args, encoding = "utf8") { return execFileSync("git", args, { cwd, encoding }).trim(); }
 function bundleHash(stage, reviewTrack) { return sha(canonical(resolveRequiredSkills({ stage, reviewTrack }).definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
-function deliveryForInput(input) {
+function deliveryForInput(input, packet) {
   const files = input.attachments.entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
   const material_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) }));
-  return { delivery_mode: input.attachmentDelivery, material_manifest_hash, material_total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), ...(input.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
+  const visible = input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size }));
+  const delivery_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, delivery_mode: input.attachmentDelivery, files: files.filter((item) => item.target !== "manifest.json") }));
+  const continuation = input.request.continuation ? { initial_material_manifest_hash: input.request.continuation.initial_material_manifest_hash, sequence: input.request.continuation.sequence, previous_delivery_manifest_hash: input.request.continuation.previous_delivery_manifest_hash } : null;
+  return { delivery_mode: input.attachmentDelivery, raw_material_manifest_hash: material_manifest_hash, material_manifest_hash, material_representation: "raw", redaction: { rule_version: "host-root-prefix.v1", root_set_hash: sha("test-roots"), roots: [], replacement_count: 0, raw_material_manifest_hash: material_manifest_hash, derived_material_manifest_hash: material_manifest_hash, residual_scan: "passed" }, derived_attestation: { packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, delivery_manifest_hash, continuation }, material_total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), ...(input.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: visible };
 }
 function completedProvider(input, packet) {
   const output = reviewerOutput(packet); const stdout = join(input.privateRawDirectory, "opencode.stdout.raw"); const stderr = join(input.privateRawDirectory, "opencode.stderr.raw");
   mkdirSync(input.privateRawDirectory, { recursive: true });
   writeFileSync(stdout, output); writeFileSync(stderr, "");
-  return { provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery, delivery: deliveryForInput(input), raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: sha(output), raw_stderr_sha256: sha(""), output };
+  return { provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery, delivery: deliveryForInput(input, packet), raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: sha(output), raw_stderr_sha256: sha(""), output };
 }
 function projectedContract(stage, reviewTrack) {
   const source = readFileSync(contractPathAndHash(stage).contractPath, "utf8");
@@ -210,7 +213,7 @@ describe("wh-review v4 workflow wiring", () => {
       expect(secondPrepared.packet.source_revision.base_tree).toBe(firstPrepared.packet.source_revision.snapshot_tree);
       expect(secondPrepared.packet.unified_diff).toContain("WIRING_R2_DELTA_ONLY_MARKER");
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
-      expect(calls[1].request.continuation).toMatchObject({ runtime_id: "11111111-1111-4111-8111-111111111111", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      expect(calls[1].request.continuation).toMatchObject({ runtime_id: "11111111-1111-4111-8111-111111111111", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: null });
       expect(Object.keys(calls[1]).sort()).toEqual(["attachmentDelivery", "attachments", "privateRawDirectory", "request"]);
       expectPrivateRawDirectory(calls[1].privateRawDirectory, join(tracking, input.task_id));
       expect(calls[1].request).not.toHaveProperty("packet");
