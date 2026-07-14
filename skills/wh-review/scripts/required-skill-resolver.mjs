@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateReviewBundleProjection } from "../../../core/local-skill-resolver.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
@@ -35,28 +36,23 @@ function regularSingleLink(pathname, skillName) {
 }
 
 export function validateReviewBundle({ skillDir, name }) {
-  const bundlePath = join(skillDir, "review-bundle.json");
-  regularSingleLink(bundlePath, name);
-  let parsed;
-  try { parsed = JSON.parse(readFileSync(bundlePath, "utf8")); }
-  catch (error) { throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} has invalid review-bundle.json: ${error.message}`); }
-  const entrypoint = parsed.entrypoint ?? "SKILL.md";
-  if (parsed.version !== 1 || !Array.isArray(parsed.files) || !parsed.files.includes(entrypoint) || !safeBundlePath(entrypoint) || parsed.files.some((entry) => !safeBundlePath(entry))) {
-    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} review-bundle.json must declare a safe entrypoint`);
+  if (resolve(skillDir) !== join(REPOSITORY_SKILLS_ROOT, name)) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} must resolve from the repository skills root`);
   }
-  if ((parsed.mode !== undefined && parsed.mode !== "lens-only") || (parsed.delivery_mode !== undefined && parsed.delivery_mode !== "file_only")) {
-    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} bundle may only declare lens-only file_only delivery`);
+  try {
+    const checked = validateReviewBundleProjection(repoRoot, `skills/${name}/review-bundle.json`, `skills/${name}/SKILL.md`);
+    const files = checked.files.map(entry => ({ ...entry, content: readFileSync(entry.resolved, "utf8") }));
+    return {
+      sha256: checked.projectionHash,
+      skillBundleHash: checked.bundleHash,
+      files,
+      entrypoint: checked.entrypoint,
+      content: files.find(file => file.path === checked.entrypoint).content,
+      deliveryMode: checked.projection.delivery_mode,
+    };
+  } catch (error) {
+    throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} invalid local review projection: ${error.message}`);
   }
-  const files = [...new Set(parsed.files)].sort().map((entry) => {
-    const file = join(skillDir, entry);
-    const resolved = resolve(file);
-    if (!isInside(skillDir, resolved)) throw new RequiredSkillResolutionError("required-skill-unavailable", `${name} bundle escapes its skill directory`);
-    regularSingleLink(resolved, name);
-    const bytes = readFileSync(resolved);
-    return { path: entry, sha256: createHash("sha256").update(bytes).digest("hex"), content: bytes.toString("utf8") };
-  });
-  const sha256 = createHash("sha256").update(JSON.stringify(files.map(({ path, sha256: fileHash }) => ({ path, sha256: fileHash })))).digest("hex");
-  return { sha256, files, entrypoint, content: files.find((file) => file.path === entrypoint).content };
 }
 
 function bundleAt(root, name) {

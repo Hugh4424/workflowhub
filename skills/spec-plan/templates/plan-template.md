@@ -23,6 +23,12 @@
 **Constraints**: <!-- 约束条件 -->
 **Scale/Scope**: <!-- 改动规模，如 "3 new files, ~500 lines" -->
 
+## Global Constraints
+
+<!-- 从 spec 原样复制版本下限、依赖限制、命名/文案、平台和范围红线。每行一项精确值。 -->
+
+- <!-- 约束 -->
+
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
@@ -105,6 +111,10 @@ specs/{task-id}/
 
 **Files**: <!-- 涉及文件列表 -->
 **Maps to**: <!-- 对应的 FR 编号 -->
+**Interfaces**:
+
+- Consumes: <!-- 精确签名/schema；无则 None -->
+- Produces: <!-- 精确签名/schema；无则 None -->
 
 #### Step 1.2: [步骤名]
 
@@ -137,6 +147,7 @@ specs/{task-id}/
 <!-- 明确列出不可触碰的文件和路径（FR-SCOPE）。 -->
 
 **DO NOT TOUCH**:
+
 - `workflows/build-code/SKILL.md`
 - `workflows/verify-code/SKILL.md`
 - <!-- 补充其他受保护路径 -->

@@ -33,7 +33,7 @@ unzip anysearch-skill.zip
 
 ### For Humans
 
-1. Download the zip: https://github.com/anysearch-ai/anysearch-skill/archive/refs/heads/main.zip
+1. Download the zip: <https://github.com/anysearch-ai/anysearch-skill/archive/refs/heads/main.zip>
 2. Unzip to your agent's skill directory
 3. Configure API key (see below)
 4. Run the entry test to verify installation
@@ -61,7 +61,7 @@ $env:ANYSEARCH_API_KEY="<your_api_key_here>"    # Windows PowerShell
 
 ### Get an API Key
 
-Visit https://anysearch.com/console/api-keys to sign up and create a free API key.
+Visit <https://anysearch.com/console/api-keys> to sign up and create a free API key.
 
 Key priority order: `--api_key` CLI flag > `.env` file > environment variable > anonymous
 

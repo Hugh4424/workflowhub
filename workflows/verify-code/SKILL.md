@@ -2,12 +2,19 @@
 name: verify-code
 description: Run a full verification pass against the spec acceptance criteria, produce a final test report and V4 packet review before stage-result commit.
 ---
+<!-- markdownlint-disable MD040 -->
 
 # verify-code
 
 ## Goal
 
 Confirm that the implementation satisfies every acceptance criterion in the spec. Produce a final test report and an explicit pass/fail verdict before the change is considered deliverable.
+
+## Local skill resolution and capability boundary
+
+调用方必须显式传入 `workflowhub_package_root`。本 stage 只读取同目录 `skill-deps.yaml`，将技能 realpath 限制在 `${workflowhub_package_root}/skills/`，并通过 `{name,resolved_skill_path,resolved_bundle_paths,bundle_hash,source_manifest,package_root}` payload 调用。禁止只传名称、HOME/cwd fallback、全局同名覆盖或外仓 prompt。
+
+本 stage 的本地技能为 `test-strategy`、`wh-review`，UI 条件技能为 `isolated-browser-qa`；review lens `qa-only`、`verify-change` 由 `wh-review` 本地 bundle 解析。Node、git、shell、目标项目测试命令、浏览器本体、`agent-browser`/条件 `browser-use` CLI、宿主独立上下文与 review provider/凭据是 runtime/external capability，不是 skill。UI trigger 未命中时记 `not_invoked`；命中后 capability 缺失则 fail loud，不得加载全局 browser skill 或替换引擎。
 
 ## Scope boundary: verify-code vs verify-change
 
@@ -195,7 +202,7 @@ true`, a missing required L3 report contributes to `missing_ac_coverage`.
 Determine if the task has UI acceptance items. Check the spec for `ui_change: true` or explicit browser/QA acceptance criteria.
 
 - **No UI items**: SKIP browser acceptance. Record in `missing_items`: `"browser-acceptance: no UI acceptance items"`. If the spec also contains `no_browser_test: true`, trace-check must treat the missing L3 report as an intentional skip.
-- **UI items exist**: Directly invoke the existing isolated-browser-qa skill via `workflows/verify-code/isolated-browser-qa.md`. Do not modify or replace the browser engine. Store screenshots under `evidence/screenshots/` and require the machine-readable report at `l3-e2e-report.json`. The report must include `git_sha` and `flaky_failure`.
+- **UI items exist**: 使用 stage manifest 解析出的本地 `skills/isolated-browser-qa/SKILL.md` 与完整 bundle，通过 resolved-path payload 调用。Do not modify or replace the browser engine. Store screenshots under `evidence/screenshots/` and require the machine-readable report at `l3-e2e-report.json`. The report must include `git_sha` and `flaky_failure`.
 
 After L3 completes, enforce the L3 iron law by reading `l3-e2e-report.json` and
 call `freshness.mjs` `checkL3IronLaw` with that report and the current HEAD.
@@ -214,6 +221,8 @@ present, classify the result as yellow.
 - 这份覆盖清单同时是步骤 9 明文摘要"原始需求覆盖情况"那一条的事实来源。
 
 ## Close 章节：5 步骤序列总览（严格顺序）
+
+若交付物是 standalone distributable（CLI、包、镜像或可部署应用），进入 close 前额外核对 release pipeline：产物可从干净 checkout 重建、版本与入口正确、运行时依赖已声明、最小安装 smoke 通过、回滚或撤回路径明确。这里只吸收 gstack Ship 的发布纪律，不调用 gstack runtime，也不自动发布。
 
 verify-code 阶段的收尾（close）流程严格按以下 5 个步骤顺序执行，任一步骤失败均按其自身契约处理，不得跳步或乱序：
 
@@ -234,6 +243,7 @@ wh-review pass。不得让 `facts.review.semantic_verdict=pass` 指向上一轮
 ③ **V4 review 与最终提交准备**：在人工确认 merge 前，由 host 从当前 task worktree 的临时-index tree 构建 canonical packet 并调用 `ReviewRoundFacade`。provider 只读 packet，不能读取 worktree、运行 git 或接收输出路径。只有 public core receipt 的语义结论可供后续人工决策；transport、packet 或取消问题不会伪造 verdict。若 semantic verdict 为 `pass`，必须先用同一个 final flow 调用 `wh-review-cli.mjs verify-final`，确认当前临时-index tree 仍等于刚获通过的 tree；不相等就停止并回到 review。步骤③不得执行 `git add` 或 `git commit`：verify-final 本身永不提交，build-spec/build-plan/make-decision/build-code 也不得提前提交。
 
 ④ **不可逆动作 8 步线性序列**（严格顺序，仅在步骤三 verdict=pass 且用户确认后执行）：
+
   1. 归档 commit：先执行 repo 内规格归档移动 `git mv specs/{task-id} specs/archive/{task-id}`（若 `specs/{task-id}` 不存在则 fail-loud；若 `specs/archive/{task-id}` 已存在则 fail-loud，不得覆盖），再提交归档 commit。commit message 精确为 `workflowhub(close): archive {task-id}`；close 不是独立 stage，不得使用 `workflowhub(verify-code)` 前缀；提交产生的 commit_sha 须记入本阶段 stage-result 的 `facts.close_commit_sha` 字段，字段路径与 close 流程共用同一命名，不得使用其他别名。该 commit 的 diff 必须包含 `specs/{task-id}/` 到 `specs/archive/{task-id}/` 的 rename/move；只提交测试报告或任务执行记录不算完成归档。
      - 历史补归档例外：仅当一次性清理多个已完成历史 task spec 且这些 task 已经不处于活跃 stage 时，允许 batch archive commit，message 可为 `workflowhub(close): archive completed specs`。batch gate 必须同时满足：①每个被移动目录都是 `specs/{task-id}` 到 `specs/archive/{task-id}` 的 rename/move；②`specs/` 顶层除 `archive/` 外无已完成 task 目录残留；③可执行测试不因归档被静默排除（若归档目录下存在 `*.test.*`，须迁到活跃 `tests/` 或保证仍被测试发现）；④`npm test` 通过；⑤batch commit push 前必须有异源 3rd-review `verdict=pass`。任一条件不满足，不得 push。
   2. 切主 checkout（切换到主分支）
@@ -347,6 +357,7 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
 **必须处理两条落盘路径：**
 
 **路径 A — merge 完成（V4 semantic pass + user_decision=true）：**
+
 ```json
 {
   "status": "success",
@@ -364,6 +375,7 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
 ```
 
 **路径 B — revise_required 阻止 merge（merge 未发生）：**
+
 ```json
 {
   "status": "failed",
@@ -385,6 +397,7 @@ Call `facts-assembly.mjs` `assembleStageResult` + `writeStageResult`. Write the 
 路径 B 须在 `stageResult.facts.review = reviewFact` 赋值后、`writeStageResult` 调用前确保 `needs_human=true` 字段写入。无论哪条路径，stage-result 文件必须存在，不得因未 merge 而跳过落盘。
 
 **路径 C — 当前轮 wh-review 输入候选态（仅用于步骤③前，不是最终完成态）：**
+
 ```json
 {
   "status": "unknown",
@@ -492,3 +505,7 @@ if (!receiptResult.ok) {
   process.exit(1);
 }
 ```
+
+## Workflow friction
+
+发现流程卡点立即追加到 `path.join(taskRoot, "friction.md")`：`[FRICTION] <stage>/<step>: <卡点> | impact: <影响> | suggestion: <建议或 none>`。将该文件路径写入 metrics/stage-result 的 `friction_ref`；无记录时为 `null`。只记录事实，不恢复外部 feedback skill，不因记录失败掩盖原始错误。

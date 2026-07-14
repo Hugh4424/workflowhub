@@ -8,7 +8,7 @@ If you discover a security vulnerability in this project, please report it respo
 
 ### How to Report
 
-Send an email to **security@anysearch.com** with:
+Send an email to **<security@anysearch.com>** with:
 
 - Description of the vulnerability
 - Steps to reproduce
@@ -26,6 +26,7 @@ Send an email to **security@anysearch.com** with:
 ### Scope
 
 This policy covers:
+
 - This repository's skill definition and configuration examples
 - CLI scripts under `scripts/`
 - Official documentation (`SKILL.md`, `README.md`)

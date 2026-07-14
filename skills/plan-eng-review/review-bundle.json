@@ -1,4 +1,1 @@
-{
-  "version": 1,
-  "files": ["SKILL.md"]
-}
+{"schema_version":1,"skill":"plan-eng-review","mode":"lens-only","delivery_mode":"file_only","entrypoint":"SKILL.md","files":["SKILL.md"]}

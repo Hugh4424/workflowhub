@@ -2,12 +2,19 @@
 name: build-plan
 description: Break the spec into an ordered implementation plan and a task list that developers can execute phase by phase. v1 upgraded: orchestrates spec-plan, spec-tasks, spec-analyze sub-skills, performs constitution compliance check (21 clauses), M10 baseline comparison (5 metrics), and includes a human review checkpoint before stage-result.
 ---
+<!-- markdownlint-disable MD040 -->
 
 # build-plan
 
 ## Goal
 
 Take the spec from `build-spec` and decompose it into a concrete plan (`plan.md`) and a sequenced task list (`tasks.md`). The plan is the bridge between requirements and code.
+
+## Local skill resolution and capability boundary
+
+调用方必须显式传入 `workflowhub_package_root`。本 stage 只读取同目录 `skill-deps.yaml`，将技能路径解析到 `${workflowhub_package_root}/skills/` 内，并通过 `{name,resolved_skill_path,resolved_bundle_paths,bundle_hash,source_manifest,package_root}` payload 调用。禁止按名称全局发现、HOME/cwd fallback、外仓 prompt 或同名覆盖。
+
+本 stage 的本地技能为 `spec-research`、`simplicity-guard`、`spec-plan`、`spec-tasks`、`spec-analyze`、`wh-review`；review lens `spec-analyze`、`plan-eng-review`、`review` 由 `wh-review` 本地 bundle 解析。Node、git、shell、宿主独立上下文及 review provider/凭据是 runtime/external capability，不是 skill。所需 capability 缺失按 manifest fail loud；不得静默 inline 或改走第二条 review 路径。
 
 v1 upgrade: orchestrates three repository sub-skills (spec-plan, spec-tasks, spec-analyze), adds constitution compliance check against `constitution-checklist.md` (21 clauses), M10 baseline comparison (5 metrics), and a human review checkpoint before producing stage-result.
 
@@ -20,6 +27,7 @@ The human review checkpoint (Step 9) is distinct: it is the single hard gate in 
 ### Step 0: Call spec-research sub-skill
 
 Call the `spec-research` skill located at `skills/spec-research/SKILL.md`:
+
 - Pass the explicit `task-id` parameter and a concise `feature_desc` summarising the feature goal.
 - spec-research calls `core/task-dir-parser.mjs` to locate the task directory, then writes `specs/{task-id}/research.md`
 - If `skip_research: true` is provided with a `skip_reason`, record the reason and continue; do not treat skip as failure
@@ -43,6 +51,7 @@ node core/worktree-context.mjs "$(node core/task-record-paths.mjs {task-id} work
 ### Step 1: Read upstream inputs
 
 Read the spec from upstream `build-spec`:
+
 - `specs/{task-id}/spec.md` — the authoritative feature specification
 - If the spec does not exist, fail with clear error: "spec not found at specs/{task-id}/spec.md"
 - Read the decision log from the task directory for any constraints the spec may not capture.
@@ -63,6 +72,7 @@ All task execution files (`worktree.json`, `stage-result-*.json`, evidence, revi
 ### Step 1.5: Produce data-contracts
 
 Before decomposing the spec into implementation steps, capture the data contracts that cross the feature boundary:
+
 - Read `specs/{task-id}/spec.md` and extract every input/output schema, API surface, file format, or shared data structure mentioned
 - Write a concise `specs/{task-id}/data-contracts.md` containing: (a) contract name, (b) owner side, (c) consumer side, (d) required fields/types, (e) validation rules, (f) version or compatibility notes
 - If the spec contains no cross-boundary data contract, write `specs/{task-id}/data-contracts.md` with a single-line statement "No cross-boundary data contracts identified" — the file must still exist so downstream steps can rely on it
@@ -72,13 +82,15 @@ Before decomposing the spec into implementation steps, capture the data contract
 ### Step 2: Simplicity-guard pre-check and call spec-plan sub-skill
 
 **Simplicity-guard pre-check**:
+
 - Call the `simplicity-guard` skill located at `skills/simplicity-guard/SKILL.md`
 - Pass the explicit `task-id` parameter and the path to `specs/{task-id}/spec.md`
 - simplicity-guard evaluates reuse opportunities against existing skills/workflows and outputs a `minimal-path` field describing the smallest valid implementation path
-- If simplicity-guard is unavailable, record `minimal-path: unavailable` and continue
+- If simplicity-guard cannot be dispatched or its independent context capability is unavailable, fail loud and set `needs_human=true`; do not continue to spec-plan until a human repairs the capability or explicitly changes the stage contract. It is an `always` dependency, not an optional hint.
 - Use the `minimal-path` conclusion as a gating input to spec-plan: spec-plan must not introduce new files or mechanisms that contradict the minimal path without documenting the override rationale
 
 **Call spec-plan sub-skill**:
+
 - Call the `spec-plan` skill located at `skills/spec-plan/SKILL.md`
 - Pass the explicit `task-id` parameter
 - spec-plan reads `specs/{task-id}/spec.md`, applies its built-in template (`skills/spec-plan/templates/plan-template.md`), and writes `specs/{task-id}/plan.md`
@@ -89,6 +101,7 @@ Before decomposing the spec into implementation steps, capture the data contract
 ### Step 3: Call spec-tasks sub-skill
 
 Call the `spec-tasks` skill located at `skills/spec-tasks/SKILL.md`:
+
 - Pass the explicit `task-id` parameter and `--stage N` parameter (N is the number of stages, positive integer)
 - spec-tasks reads `specs/{task-id}/spec.md` and `specs/{task-id}/plan.md`, applies its built-in template (`skills/spec-tasks/templates/tasks-template.md`), and writes `specs/{task-id}/tasks.md`
 - The generated tasks.md must contain: (a) task list sorted by dependencies, (b) each task annotated with corresponding FR, (c) dependency relationships between tasks
@@ -99,6 +112,7 @@ Call the `spec-tasks` skill located at `skills/spec-tasks/SKILL.md`:
 ### Step 4: Call spec-analyze sub-skill
 
 Call the `spec-analyze` skill located at `skills/spec-analyze/SKILL.md`:
+
 - Pass the explicit `task-id` parameter
 - spec-analyze loads all three artifacts (`specs/{task-id}/spec.md`, `specs/{task-id}/plan.md`, `specs/{task-id}/tasks.md`) and performs a cross-file consistency scan
 - Produces a read-only analysis report at `tasks/{task-id}/artifacts/build-plan-cross-artifact-analysis.md`
@@ -113,6 +127,7 @@ Call the `spec-analyze` skill located at `skills/spec-analyze/SKILL.md`:
 Perform a constitution compliance check by reading `constitution-checklist.md` (located at the repo root). This is a non-blocking check — results are recorded but do not prevent normal completion.
 
 **Procedure**:
+
 1. Read `constitution-checklist.md` — 该文件含 21 条 (F1-F10, Q1-Q3, S1-S8) with pre-formatted `[ ]` checkboxes
 2. For each of the 21 clauses, fill in:
    - Status: `[x]` (compliant) or `[ ]` (non-compliant)
@@ -120,12 +135,14 @@ Perform a constitution compliance check by reading `constitution-checklist.md` (
 3. Write the filled checklist as part of the plan product (integrated into `plan.md` under a "Constitution Check" section, or as a separate constitution-check result section in stage-result)
 
 **Completeness requirement (FR-CONSTITUTION-003)**:
+
 - ALL 21 clauses must be present — missing any clause = incomplete output failure
 - Each clause must have a status (`[x]` or `[ ]`) — no status = incomplete output failure
 - Each clause must have rationale text — no rationale = incomplete output failure
 - `[ ]` WITH rationale IS valid output (records non-compliance, does not block)
 
 **不阻断语义 (FR-CONSTITUTION-002)**:
+
 - 宪法检查结果仅记录浮现供人审查，不阻断推进
 - 不达标项 (`[ ]` items) 不阻断 stage-result（status 仍可为 success）
 - The check is about recording facts (Q1: 记事实而非阻断), NOT about passing a quality gate
@@ -135,6 +152,7 @@ Perform a constitution compliance check by reading `constitution-checklist.md` (
 Produce an M10 baseline comparison table with 5 metrics: missed_step_rate, test_execution_rate, review_execution_rate, rework_rounds, rework_proxy_count.
 
 **Baseline values** (from `specs/archive/m10-baseline-switch/baseline-report.md`):
+
 | Metric | M10 Baseline |
 |---|---|
 | missed_step_rate | 0.05 |
@@ -144,6 +162,7 @@ Produce an M10 baseline comparison table with 5 metrics: missed_step_rate, test_
 | rework_proxy_count | 25.25 |
 
 **M12 values at build-plan stage** — ALL 5 values are `unknown` because:
+
 - **missed_step_rate**: `unknown` — 仅 upstream make-decision/build-spec 两段已完成且已落盘，全五段值待 verify-code 完成后才可计算
 - **test_execution_rate**: `unknown` — build-plan 阶段无测试执行数据，待 build-code/verify-code
 - **review_execution_rate**: `unknown` — review 阶段尚未执行
@@ -153,6 +172,7 @@ Produce an M10 baseline comparison table with 5 metrics: missed_step_rate, test_
 **Delta column**: For all 5 rows, delta = `unknown` (delta is unknown when M12 values are unknown; do not fabricate direction).
 
 **Output format**: A 5-row comparison table with 4 columns:
+
 | 指标名 | M12 实值 | M10 baseline | delta |
 |---|---|---|---|
 | missed_step_rate | unknown（仅 upstream make-decision/build-spec 两段已完成且已落盘，全五段值待 verify-code 完成后才可计算） | 0.05 | unknown |
@@ -162,6 +182,7 @@ Produce an M10 baseline comparison table with 5 metrics: missed_step_rate, test_
 | rework_proxy_count | unknown（全流程未完成，无代理返工数据） | 25.25 | unknown |
 
 **Rules**:
+
 - The metric name `rework_proxy_count` MUST use this exact name — no aliases
 - DO NOT use placeholder values (0, "-", "--") for unknown metrics — write `unknown` + reason. 不得使用占位值（0、-、--），不可得必写 `unknown` + 原因。
 - DO NOT reference build-plan's own not-yet-written metrics, nor build-code/verify-code metrics — only upstream data (make-decision, build-spec stage-result records) is available at this stage
@@ -209,6 +230,7 @@ This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. 
 **唯一确认界面：大白话七要素摘要 + 请确认块。** 不得另外展示旧的 artifact 路径列表当作确认依据——上面这份 artifact 清单只是本步骤内部核对用的产物清单，人看到的必须是下面这份七要素摘要，按 `docs/human-brief-template.md` 的"七要素 + A. 决策 gate 阶段结尾"格式输出：全篇大白话中文（当对方是高中生），不出现内部产物名/字段名/编号（如 `plan.md`、`stage-result`、`plan-eng-review.md` 等——要提就翻成人话）。
 
 **七要素**：
+
 1. **这阶段做了什么**：用一两句话说清楚这次把方案排成了怎样的可执行步骤清单
 2. **审了几次、结论是什么**：外部审查/独立审查过了几轮、每轮提了什么问题、有没有改完、最终结论——内部代号（如具体审查工具名）只能出现在 stage-result 的机器字段里，不能出现在这份大白话摘要正文
 3. **这个 task 要解决什么**：用一两句话说清楚这个任务是要解决什么问题、为什么要做
@@ -218,6 +240,7 @@ This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. 
 7. **下一步**：确认后进入哪个阶段
 
 七要素之后，按模板 A 类结尾加"请确认"块：
+
 ```
 请确认：
 - **推荐：继续** —— 后果：<继续会发生什么，如"排定的步骤清单和任务列表进入下一阶段实施">
@@ -245,6 +268,7 @@ This is the ONE AND ONLY human review checkpoint in the build-plan v1 workflow. 
 ```
 
 **Review state rules**:
+
 - **approved**: 人工选择"继续"。`review.state="approved"`。`review.reviewer` 与 `review.timestamp` must be non-empty。`review.decision` describes the approval reason (e.g. "plan/tasks 产物通过、宪法检查无不符项、baseline 对照阈值符合预期")。Stage-result `status` determined by process result (can be success)。
 - **rejected**: 人工选择"暂停"或"修改后继续"且不再回到本步骤重新确认时的最终记录。`review.state="rejected"`。`review.reviewer` 与 `review.timestamp` must be non-empty。`review.decision` describes the reason。Stage-result `status="failure"`，`reason` records it。This is a factual record, not a blocking gate beyond this checkpoint — human decides whether to re-run。
 
@@ -297,6 +321,7 @@ When the stage is complete, write a `stage-result` record with:
 This stage-result is only written AFTER Step 9 resolves to an explicit human decision (approved or rejected). If Step 9 has not resolved, no stage-result is produced — the stage remains halted with `needs_human=true` reported instead.
 
 **Field preservation (M6 contract — FR-BP-003, FR-SKELETON-002)**:
+
 - `status`, `error_code`, `retryable`, `missing_items`, `user_decision`, `reason` — M6 fields, preserved unchanged
 - `facts.plan_ref` — M6 field, kept
 - `facts.tasks` — M6 field, kept
@@ -368,3 +393,7 @@ only, never a semantic verdict. After host dispositions, the published return is
 `{ semantic_verdict, core_receipt_hash, needs_human }`; only it may advance this stage.
 
 ## End V4 Review Round
+
+## Workflow friction
+
+发现流程卡点立即追加到 `path.join(taskRoot, "friction.md")`：`[FRICTION] <stage>/<step>: <卡点> | impact: <影响> | suggestion: <建议或 none>`。将该文件路径写入 metrics/stage-result 的 `friction_ref`；无记录时为 `null`。只记录事实，不恢复外部 feedback skill，不因记录失败掩盖原始错误。

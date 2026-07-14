@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "skill": "debate",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "a2d31d50352630fff4bb4fd61efe6e4764d8ea3833b6ba4bd041af79833e0ccc"
+    },
+    {
+      "path": "SKILL.md",
+      "sha256": "3b49b6d0a33be19c75c9ab1806f04adb7bfbe21a4fdce7a325677f3a89994a57"
+    },
+    {
+      "path": "__tests__/skill-contract.test.mjs",
+      "sha256": "7759fda198cdb3887a501c3ca532a4fa562f798bd7819e1634a724ab7617e56a"
+    },
+    {
+      "path": "examples/sample-input.md",
+      "sha256": "8b2196f52eacc48d71e023ad8a186bf3bdc2f383308062300b90c259ba6e13ed"
+    },
+    {
+      "path": "examples/sample-verdict.md",
+      "sha256": "388de02edb89385b646e350dbc1bcc94bb6abcded4b6cda4f0dd749f50ec7971"
+    },
+    {
+      "path": "pk-rules.test.ts",
+      "sha256": "c1ba054e3115cd23575906bfb5bffcd94d051cc3fe807c5bb72c8d92d269464f"
+    },
+    {
+      "path": "pk-rules.ts",
+      "sha256": "6eef29d3cb390659cfc85b01c24ab6d0dfb4a9efb01f404148db5ec59e7bc6bf"
+    },
+    {
+      "path": "references/anti-bias-guardrails.md",
+      "sha256": "552bea7a7765500b84b1bfe6a64d3cb0e0a80caf772a88f47b73e4df66010c53"
+    },
+    {
+      "path": "references/arbitration-protocol.md",
+      "sha256": "9006295ca2c7d1feea5463002dfd28b273dbe51a01de43508bafb9caa97ced55"
+    },
+    {
+      "path": "references/output-template.md",
+      "sha256": "9c0bcbb91d4720c451ccfd817ecf1ad73b6b8f27d0a27148652777c205c49e45"
+    },
+    {
+      "path": "references/role-spawn-templates.md",
+      "sha256": "2cc6f4dc1f090948028933d54db2613c7d392ff04d9c6d96f5fc30aa9f2255c2"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/Hugh4424/debate",
+      "commit": "af121a1e24ae3af48f5e132d3de1342d16eccf31",
+      "path": "SKILL.md",
+      "license": "MIT"
+    }
+  ]
+}

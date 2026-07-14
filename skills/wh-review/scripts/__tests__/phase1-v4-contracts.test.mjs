@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { STAGE_CONTRACT_MAP } from "../lib/safe-id.mjs";
-import { resolveRequiredSkills, validateReviewBundle } from "../required-skill-resolver.mjs";
+import { resolveRequiredSkills } from "../required-skill-resolver.mjs";
 import { validateReviewerOutput } from "../reviewer-output-validator.mjs";
+import { validateReviewBundleProjection } from "../../../../core/local-skill-resolver.mjs";
 
 describe("wh-review v4 Phase 1 contract foundation", () => {
   it("uses the workflow stage names as the only contract names", () => {
@@ -39,7 +40,7 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     for (const name of ["plan-ceo-review", "review", "plan-design-review", "plan-eng-review", "qa-only", "spec-analyze", "verify-change"]) {
       const body = readFileSync(new URL(`../../../${name}/SKILL.md`, import.meta.url), "utf8");
       const bundle = JSON.parse(readFileSync(new URL(`../../../${name}/review-bundle.json`, import.meta.url), "utf8"));
-      expect(bundle).toMatchObject({ version: 1 });
+      expect(bundle).toMatchObject({ schema_version: 1, skill: name, mode: "lens-only", delivery_mode: "file_only" });
       expect(bundle.files).toContain(name === "spec-analyze" ? "packet-lens.md" : "SKILL.md");
       if (name === "spec-analyze" || name === "verify-change") {
         expect(bundle).toMatchObject({ mode: "lens-only", delivery_mode: "file_only" });
@@ -99,8 +100,8 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
 
   it("rejects traversal, symlink, hardlink, and directory bundle entries", () => {
     const root = mkdtempSync(join(tmpdir(), "bundle-attack-"));
-    const skill = join(root, "review");
-    mkdirSync(skill);
+    const skill = join(root, "skills", "review");
+    mkdirSync(skill, { recursive: true });
     writeFileSync(join(skill, "SKILL.md"), "skill");
     writeFileSync(join(skill, "outside.md"), "outside");
     const linked = join(skill, "linked.md");
@@ -109,8 +110,9 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
     linkSync(join(skill, "outside.md"), hardlinked);
     for (const files of [["../outside.md"], ["SKILL.md", "dir"], ["SKILL.md", "linked.md"], ["SKILL.md", "hardlinked.md"]]) {
       if (files.includes("dir")) mkdirSync(join(skill, "dir"), { recursive: true });
-      writeFileSync(join(skill, "review-bundle.json"), JSON.stringify({ version: 1, files }));
-      expect(() => validateReviewBundle({ skillDir: skill, name: "review" })).toThrow(/bundle/i);
+      writeFileSync(join(skill, "review-bundle.json"), JSON.stringify({ schema_version: 1, skill: "review", mode: "lens-only", delivery_mode: "file_only", entrypoint: files[0], files }));
+      writeFileSync(join(skill, "skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "review", files: ["SKILL.md", "review-bundle.json", ...files.filter(file => file !== "SKILL.md")] }));
+      expect(() => validateReviewBundleProjection(root, "skills/review/review-bundle.json", "skills/review/SKILL.md")).toThrow(/bundle|relative|regular|directory|link|traverse/i);
     }
   });
 });

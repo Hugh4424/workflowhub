@@ -48,14 +48,16 @@ function assertSkillFrontmatter(name, baseDir = "workflows") {
   );
 }
 
-// --- Existence checks (7 independent literal tests — no for-of loop) ---
-describe("seven skill directories have SKILL.md", () => {
+// --- Runtime existence checks; scope-triage is deliberately absorbed ---
+describe("runtime skill directories have SKILL.md", () => {
   test('workflows/make-decision/SKILL.md exists', () => { assertSkillExists("make-decision"); });
   test('workflows/build-spec/SKILL.md exists',    () => { assertSkillExists("build-spec"); });
   test('workflows/build-plan/SKILL.md exists',    () => { assertSkillExists("build-plan"); });
   test('workflows/build-code/SKILL.md exists',    () => { assertSkillExists("build-code"); });
   test('workflows/verify-code/SKILL.md exists',   () => { assertSkillExists("verify-code"); });
-  test('skills/scope-triage/SKILL.md exists',  () => { assertSkillExists("scope-triage", "skills"); });
+  test('skills/scope-triage/SKILL.md is absent after inline absorption', () => {
+    assert.equal(existsSync(join(REPO_ROOT, "skills", "scope-triage", "SKILL.md")), false);
+  });
   test('skills/decision-log/SKILL.md exists',  () => { assertSkillExists("decision-log", "skills"); });
 });
 
@@ -66,7 +68,9 @@ describe("SKILL.md files have valid frontmatter", () => {
   test('workflows/build-plan/SKILL.md has name="build-plan" and non-empty description',       () => { assertSkillFrontmatter("build-plan"); });
   test('workflows/build-code/SKILL.md has name="build-code" and non-empty description',       () => { assertSkillFrontmatter("build-code"); });
   test('workflows/verify-code/SKILL.md has name="verify-code" and non-empty description',     () => { assertSkillFrontmatter("verify-code"); });
-  test('skills/scope-triage/SKILL.md has name="scope-triage" and non-empty description',   () => { assertSkillFrontmatter("scope-triage", "skills"); });
+  test('scope-triage semantics remain in make-decision after absorption', () => {
+    assert.match(readFileSync(join(REPO_ROOT, "workflows", "make-decision", "SKILL.md"), "utf8"), /S0\.5 scope-triage 分档/);
+  });
   test('skills/decision-log/SKILL.md has name="decision-log" and non-empty description',   () => { assertSkillFrontmatter("decision-log", "skills"); });
 });
 
@@ -308,14 +312,14 @@ describe("AC5: registry contains all 7 component_ids (literal per-skill assertio
 // --- AC5 B2: make-decision SKILL.md path literal references (B2a) ---
 // Independent literal test — falsifiable: removing either path ref from make-decision/SKILL.md
 // makes this test fail.
-describe("AC5 B2a: make-decision SKILL.md references scope-triage and decision-log paths", () => {
+describe("AC5 B2a: make-decision keeps absorbed scope-triage and local decision-log", () => {
   const skillPath = join(REPO_ROOT, "workflows", "make-decision", "SKILL.md");
 
-  test("make-decision SKILL.md references skills/scope-triage/SKILL.md path literal", () => {
+  test("make-decision SKILL.md implements scope-triage inline", () => {
     const content = readFileSync(skillPath, "utf8");
     assert.ok(
-      content.includes("skills/scope-triage/SKILL.md"),
-      "make-decision/SKILL.md must include the literal string 'skills/scope-triage/SKILL.md'"
+      content.includes("S0.5 scope-triage 分档"),
+      "make-decision/SKILL.md must retain the absorbed scope-triage contract"
     );
   });
 

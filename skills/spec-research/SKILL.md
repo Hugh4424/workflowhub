@@ -102,3 +102,9 @@ const taskDir = parseTaskDir(); // final project task_tracking_root; env direct 
 ## 结论 / 建议
 ...
 ```
+
+## 来源纪律
+
+- 技术事实优先使用官方文档、标准、原始仓库和原始论文等 primary source。
+- 每条影响方案的外部事实记录来源 URL、访问日期、适用版本和对应结论；禁止只列搜索结果页。
+- 推断明确标为“推断”，与来源直接陈述分开。来源冲突时并列保留并升级为待决问题。
