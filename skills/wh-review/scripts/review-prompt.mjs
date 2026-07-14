@@ -58,9 +58,7 @@ function materialInstruction({ packet, intent, attachmentIds, continuation = fal
     `attachment_ids=${attachmentIds.join(",")}`,
     `stage=${packet.stage}`,
     `review_track=${packet.review_track ?? "default"}`,
-    `contract_hash=${intent.contract_hash}`,
-    `skill_bundle_hash=${intent.skill_bundle_hash}`,
-    "Read manifest.json first. Return only reviewer-output JSON.",
+    "Follow the provider adapter's attachment-root instruction to read the manifest and packet. Return only reviewer-output JSON.",
   ].join("\n");
 }
 

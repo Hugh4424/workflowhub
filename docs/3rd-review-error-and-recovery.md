@@ -31,7 +31,8 @@
 | `TIMEOUT` | 超过 provider/request deadline | kill process group，fallback |
 | `CANCELLED` | 用户或 Host 取消 | kill process group，不重试 |
 | `INPUT_TOO_LARGE` | prompt/material 超预算 | 不分块、不重投，交给 wh-review 裁剪 |
-| `OUTPUT_INVALID` | JSON/schema 无效 | 有 session 时 JSON repair 一次 |
+| `OUTPUT_FORMAT_INVALID` | 无唯一合法 JSON object | 有 session 时同冻结材料 JSON repair，最多两次 |
+| `OUTPUT_SCHEMA_INVALID` | JSON 可解析但 schema 无效 | 有 session 时同冻结材料 JSON repair，最多两次 |
 | `OUTPUT_TRUNCATED` | stdout/stderr 或 provider 输出截断 | 有 session 时 repair 一次 |
 | `MISSING` | `CONTINUATION_FAILED` 的 detail code；session ref 不存在 | 禁止 silent fresh |
 | `EXPIRED` | `CONTINUATION_FAILED` 的 detail code；session 已过期 | 禁止 silent fresh |
@@ -59,10 +60,10 @@ Continuation 对外只使用顶层 `CONTINUATION_FAILED`；`UNSUPPORTED`、`BIND
 
 1. 网络、429、5xx：在共享 request deadline 内有限重试。
 2. 已有 session 的暂态失败：同 session resume 一次。
-3. 已完成分析但 JSON 非法：同 session 只请求 canonical JSON 一次。
+3. 已完成分析但 JSON 格式或 schema 非法：同 runtime/provider/session、同冻结材料只请求 canonical JSON，最多两次；每次保存 raw/receipt。
 4. 任何 retry/resume 不得重新发送完整旧材料。
 5. 没有 session、session 过期或 provider 不支持：不能自动 fresh。
-6. fresh 必须由 wh-review 以明确 `start_fresh` reason 发起。
+6. fresh 必须由 wh-review 以明确 `start_fresh` reason 发起；provider 启动、cwd、附件和格式错误不是 fresh/reset 理由。
 7. provider 已成功但 persistence 失败：保留成功结果，只附 continuation warning。
 8. timeout、cancel、SIGTERM：终止整个 process group，等待子进程回收。
 

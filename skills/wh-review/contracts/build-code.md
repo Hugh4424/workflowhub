@@ -25,7 +25,7 @@
 
 ## Stage output
 
-输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding、五个 hash 回显和空数组 `skillResults: []`。
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding 和空数组 `skillResults: []`。host 负责绑定 hash。
 
 ## Checklist IDs
 

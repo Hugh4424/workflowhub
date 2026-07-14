@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, isDownstreamReviewStage, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
@@ -11,7 +11,7 @@ import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "./review-packet-integrity.mjs";
-import { buildTreeMaterial, captureWorktreeTree, capturedHead, deleteReviewTreeRef, headTree, readReviewTreeRef, updateReviewTreeRef } from "./source-tree.mjs";
+import { buildTreeMaterial, captureWorktreeTree, capturedHead, deleteReviewTreeRef, headTree, readReviewTreeRef, trustedBase, updateReviewTreeRef } from "./source-tree.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
@@ -31,10 +31,12 @@ function writeImmutable(path, value) {
   }
 }
 function parseOutput(value) {
-  let text = String(value ?? "").trim();
-  const fence = text.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);
-  if (fence) text = fence[1].trim();
-  try { return { ok: true, value: JSON.parse(text) }; } catch { return { ok: false }; }
+  const text = String(value ?? "").trim();
+  try { return { ok: true, value: JSON.parse(text) }; } catch {}
+  const fences = [...text.matchAll(/```json\s*\n([\s\S]*?)\n```/gi)];
+  if (fences.length !== 1) return { ok: false };
+  const fenced = fences[0][1].trim();
+  try { return { ok: true, value: JSON.parse(fenced) }; } catch { return { ok: false }; }
 }
 function privateFileHash(directory, ref, expectedHash) {
   if (typeof ref !== "string" || !ref || typeof expectedHash !== "string" || !/^[a-f0-9]{64}$/i.test(expectedHash)) return null;
@@ -210,7 +212,7 @@ function checkedCarryovers(value, previousFindings, { taskTrackingRoot, taskId, 
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, sourceRoot = taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
+  constructor({ taskTrackingRoot, sourceRoot = taskTrackingRoot, trustedBaseCommit = null, trustedBaseTree = null, trustedBaseSource = null, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
     if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(initialPromptMaxBytes) || initialPromptMaxBytes < 1) throw new TypeError("initialPromptMaxBytes must be a positive integer");
@@ -218,6 +220,7 @@ export class ReviewRoundFacade {
     if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.sourceRoot = resolve(sourceRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
+    this.trustedBase = trustedBaseCommit === null ? null : { ...trustedBase(this.sourceRoot, trustedBaseCommit, trustedBaseTree), source: trustedBaseSource ?? "worktree_creation" };
     this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.maxDispositionAttempts = maxDispositionAttempts; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
@@ -227,12 +230,17 @@ export class ReviewRoundFacade {
   #readSourceContext(taskId) {
     const path = this.#sourceContext(taskId); if (!existsSync(path)) return null;
     let context; try { context = JSON.parse(readFileSync(path, "utf8")); } catch { throw new Error("task source context is invalid"); }
-    if (!(context?.version === 1 && /^[a-f0-9]{40,64}$/.test(context.initial_tree ?? "") && (context.last_approved_tree === null || /^[a-f0-9]{40,64}$/.test(context.last_approved_tree ?? "")))) throw new Error("task source context is invalid");
+    const legacy = context?.version === 1 && /^[a-f0-9]{40,64}$/.test(context.initial_tree ?? "");
+    const current = context?.version === 2 && /^[a-f0-9]{40}$/.test(context.trusted_base_commit ?? "") && /^[a-f0-9]{40,64}$/.test(context.trusted_base_tree ?? "") && context.initial_tree === context.trusted_base_tree;
+    if (!(legacy || current) || (context.last_approved_tree !== null && !/^[a-f0-9]{40,64}$/.test(context.last_approved_tree ?? ""))) throw new Error("task source context is invalid");
+    if (this.trustedBase && (!current || context.trusted_base_commit !== this.trustedBase.commit || context.trusted_base_tree !== this.trustedBase.tree)) throw new Error("task source context conflicts with immutable trusted base");
     return context;
   }
   #recordInitialTree(taskId, initialTree) {
     const existing = this.#readSourceContext(taskId); if (existing) return existing;
-    const context = { version: 1, initial_tree: initialTree, last_approved_tree: null };
+    const context = this.trustedBase
+      ? { version: 2, trusted_base_commit: this.trustedBase.commit, trusted_base_tree: this.trustedBase.tree, trusted_base_source: this.trustedBase.source, initial_tree: this.trustedBase.tree, last_approved_tree: null }
+      : { version: 1, initial_tree: initialTree, last_approved_tree: null };
     this.faultInjector("before-source-context-write", context); atomic(this.#sourceContext(taskId), safeJson(context)); return context;
   }
   #recordLastApprovedTree(taskId, tree) {
@@ -415,6 +423,10 @@ export class ReviewRoundFacade {
     if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined) throw new Error("provider_capabilities are broker-owned; caller capability assertions are rejected");
     if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution; caller delivery assertions are rejected");
     if (input.allow_contract_hash_override !== undefined) throw new Error("contract hash override is rejected; packet hash must bind the frozen projected contract");
+    if (input.provider_allowlist !== undefined && (!Array.isArray(input.provider_allowlist) || input.provider_allowlist.length === 0
+      || input.provider_allowlist.some((provider) => typeof provider !== "string" || provider.length === 0)
+      || new Set(input.provider_allowlist).size !== input.provider_allowlist.length
+      || input.provider_allowlist.includes(input.host_provider))) throw new Error("provider_allowlist must contain unique non-host provider ids");
     const lock = this.#acquireLock({ task_id: input.task_id, stage: input.stage, review_track: input.review_track ?? null, idempotency_key: sha(`prepare\0${input.task_id}\0${input.stage}\0${input.review_track ?? "default"}\0${input.review_flow_id}`) });
     return this.#prepareUnderLock(input, lock);
   }
@@ -434,7 +446,8 @@ export class ReviewRoundFacade {
     let initialHostSource = null;
     if (input.continuation !== true) {
       const sourceContext = this.#readSourceContext(input.task_id);
-      initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
+      const initialBase = sourceContext?.last_approved_tree ?? sourceContext?.trusted_base_tree ?? this.trustedBase?.tree ?? headTree(this.sourceRoot);
+      initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: initialBase, excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
       this.#recordInitialTree(input.task_id, initialHostSource.source_revision.base_tree);
     }
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
@@ -451,7 +464,9 @@ export class ReviewRoundFacade {
     if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object" || !/^[a-f0-9]{64}$/.test(prior.initial_material_manifest_hash ?? "")
       || ((prior.continuation_sequence ?? 0) === 0 ? prior.last_delivery_manifest_hash !== null || prior.last_provider_delivery_manifest_hash !== null : !/^[a-f0-9]{64}$/.test(prior.last_delivery_manifest_hash ?? "") || !/^[a-f0-9]{64}$/.test(prior.last_provider_delivery_manifest_hash ?? "")))) throw new Error("blocked_by_human_confirmation: verified initial provider delivery is missing; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
-    const candidateProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : doctorCandidates;
+    const callerProviderAllowlist = input.provider_allowlist === undefined ? null : new Set(input.provider_allowlist);
+    const eligibleCandidates = continuation ? [...(prior.continuable_providers ?? [])].sort() : doctorCandidates;
+    const candidateProviders = callerProviderAllowlist === null ? eligibleCandidates : eligibleCandidates.filter((provider) => callerProviderAllowlist.has(provider));
     const continuableProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : [];
     if (continuation && (!prior.initial_provider_sessions || typeof prior.initial_provider_sessions !== "object" || continuableProviders.some((provider) => typeof prior.initial_provider_sessions[provider] !== "string" || !prior.initial_provider_sessions[provider]))) throw new Error("blocked_by_human_confirmation: initial provider sessions are missing; use reset with human approval");
     const packet = structuredClone(input.packet);
@@ -526,6 +541,7 @@ export class ReviewRoundFacade {
       const dir = this.#root(intent);
       const protocolPath = join(repositoryRoot, "skills", "wh-review", "contracts", "provider-protocol.md");
       const outputSchemaPath = join(repositoryRoot, "skills", "wh-review", "schemas", "reviewer-output.schema.json");
+      const correctionSchema = JSON.stringify(JSON.parse(readFileSync(outputSchemaPath, "utf8")));
       const snapshotDir = join(dir, "frozen-inputs"); const frozenAttachments = [];
       const freeze = (destination, bytes) => { const target = join(snapshotDir, ...destination.split("/")); atomic(target, bytes); frozenAttachments.push({ destination, path: target, sha256: sha(bytes), size: Buffer.byteLength(bytes) }); };
       if (!continuation) {
@@ -534,6 +550,23 @@ export class ReviewRoundFacade {
         freeze("schemas/reviewer-output.schema.json", readFileSync(outputSchemaPath));
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
+      const taskDirectory = taskRoot(this.taskTrackingRoot, input.task_id); const taskReal = realpathSync(taskDirectory);
+      const allowedEvidence = new Set(["test-strategy.md", "requirements-ledger.json", "requirements-coverage.json"]); const evidenceByDestination = new Map();
+      for (const item of packet.test_evidence ?? []) {
+        if (!item || typeof item !== "object" || !Object.hasOwn(item, "path")) continue;
+        const ref = item.path; const name = typeof ref === "string" ? basename(ref) : "";
+        if (!safeRelativePath(ref) || !allowedEvidence.has(name)) return this.#materialIncomplete(input, `declared review evidence path is invalid: ${String(ref)}`);
+        const source = resolve(taskReal, ref); let sourceReal;
+        try {
+          if (!source.startsWith(`${taskReal}/`) || !lstatSync(source).isFile()) throw new Error("not a regular file");
+          sourceReal = realpathSync(source);
+          if (!sourceReal.startsWith(`${taskReal}/`)) throw new Error("outside task root");
+        } catch { return this.#materialIncomplete(input, `declared review evidence is unreadable or unsafe: ${ref}`); }
+        const destination = `evidence/${name}`; const previous = evidenceByDestination.get(destination);
+        if (previous && previous !== sourceReal) return this.#materialIncomplete(input, `declared review evidence destination is ambiguous: ${destination}`);
+        evidenceByDestination.set(destination, sourceReal);
+      }
+      for (const [destination, source] of evidenceByDestination) freeze(destination, readFileSync(source));
       freeze("changes.diff", packet.unified_diff);
       if (continuation) freeze("continuation-delta.v1.json", safeJson(delta));
       const bundleId = `wh-review-${intent.idempotency_key}`;
@@ -569,8 +602,21 @@ export class ReviewRoundFacade {
         : initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash });
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, attachments: outerFiles, delta_manifest: continuation ? delta.delta_manifest : null }));
       const expectedDelivery = { delivery_mode: resolution.deliveryMode, raw_material_manifest_hash: materialManifestHash, previous_provider_delivery_manifest_hash: prior?.last_provider_delivery_manifest_hash ?? null };
-      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, initial_provider_sessions: prior?.initial_provider_sessions ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };
+      const providerVisibleDestinations = frozenAttachments.map(({ destination }) => destination).sort();
+      const correctionContractFacts = JSON.stringify({
+        stage: input.stage,
+        checklist_ids: stageContract.allIds,
+        hard_invariant_ids: stageContract.hardIds,
+        required_skills: resolution.definitions.map(({ name }) => name),
+        provider_visible_destinations: providerVisibleDestinations,
+        passed_item_rule: "Every passed checklist id requires exactly one pass_items entry with the same rule_id.",
+        artifact_anchor_rule: "artifact_anchor must equal one exact provider_visible_destination or start with one followed by : or #. Directory anchors, bundle/, and invented paths are forbidden.",
+        skill_results_rule: "skillResults must match required_skills exactly; when required_skills is empty, skillResults must be []. Never add a default skill.",
+      });
+      const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, initial_provider_sessions: prior?.initial_provider_sessions ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_destinations: providerVisibleDestinations, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
+      Object.defineProperty(prepared, "correction_schema", { value: correctionSchema, enumerable: false, writable: false, configurable: false });
+      Object.defineProperty(prepared, "correction_contract_facts", { value: correctionContractFacts, enumerable: false, writable: false, configurable: false });
       return prepared;
     } catch (error) { this.#releaseLock(lock); throw error; }
     finally { if (sourceLock) this.#releaseLock(sourceLock); }
@@ -588,17 +634,50 @@ export class ReviewRoundFacade {
         if (!state || (typeof state.expires_at_ms === "number" && state.expires_at_ms <= this.now())) throw new Error("blocked_by_human_confirmation: initial runtime expired; use reset with human approval");
       }
       attachmentPlan = this.#attachments(prepared);
+      const attemptsRoot = join(prepared.dir, "attempts");
+      const initialAttempt = existsSync(attemptsRoot) ? Math.max(0, ...readdirSync(attemptsRoot).map((name) => Number(name.match(/^attempt-(\d+)$/)?.[1] ?? 0))) + 1 : 1;
       const request = { version: 4, host_provider: input.host_provider, prompt: prepared.initial_prompt, continuation: intent.initial_runtime_id ? { runtime_id: intent.initial_runtime_id, ...prepared.provider_visible_manifest.continuation } : null, provider_allowlist: intent.candidate_providers, material_manifest_sha256: prepared.material_manifest_hash, attachment_ids: attachmentPlan.manifest.entries.map(({ destination, sha256 }) => ({ destination, sha256 })) };
       const attachments = attachmentPlan?.manifest;
-      const response = intent.candidate_providers.length === 0
+      let response = intent.candidate_providers.length === 0
         ? { providers: [], transport_error: { code: "NO_CAPABLE_PROVIDER", message: "doctor reported no ready heterologous provider with a supported attachment delivery" } }
-        : await this.broker.run({ request, attachments, attachmentDelivery: prepared.delivery_policy, privateRawDirectory: join(prepared.dir, "provider-raw") });
-      atomic(join(prepared.dir, "broker-run.json"), safeJson(response));
+        : await this.broker.run({ request, attachments, attachmentDelivery: prepared.delivery_policy, privateRawDirectory: join(prepared.dir, "attempts", `attempt-${initialAttempt}`, "provider-raw") });
+      atomic(join(prepared.dir, "broker-run.json"), safeJson(response)); atomic(join(prepared.dir, `broker-run-attempt-${initialAttempt}.json`), safeJson(response));
       const candidateSet = new Set(intent.candidate_providers);
       const capabilityByProvider = new Map(prepared.capability_snapshot.providers.map((item) => [item.provider, item.capabilities]));
-      const outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
-        ? this.#outcome(item, packet, intent, input, prepared.dir, capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.expected_delivery, prepared.stage_contract_rules)
+      let outcomes = (response.providers ?? []).map((item) => candidateSet.has(item?.provider)
+        ? this.#outcome(item, packet, intent, input, join(prepared.dir, "attempts", `attempt-${initialAttempt}`), capabilityByProvider.get(item.provider), prepared.initial_delivery_by_provider?.[item.provider], prepared.expected_delivery, prepared.stage_contract_rules, prepared.provider_visible_destinations)
         : { provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "UNKNOWN_PROVIDER" });
+      const attemptReceipts = [];
+      const writeAttempt = (attempt, runtimeId, attemptOutcomes) => {
+        const path = join(prepared.dir, "attempts", `attempt-${attempt}`, "attempt-receipt.json");
+        const semantic = attemptOutcomes.find((item) => item.business_valid && item.semantic_verdict)?.semantic_verdict ?? null;
+        atomic(path, safeJson({ version: 1, kind: "provider_attempt", attempt, runtime_id: runtimeId ?? null, provider_outcomes: attemptOutcomes, semantic_verdict: semantic, created_at_ms: this.now() }));
+        attemptReceipts.push(path); return path;
+      };
+      writeAttempt(initialAttempt, response.runtime_id, outcomes);
+      const initialRuntimeId = response.runtime_id;
+      const frozenReviewerSchema = prepared.correction_schema;
+      for (let retry = 1; retry <= 2; retry += 1) {
+        const invalid = outcomes.filter((item) => ["OUTPUT_FORMAT_INVALID", "OUTPUT_SCHEMA_INVALID"].includes(item.diagnostic) && typeof item.provider === "string" && typeof item.session_id === "string" && item.session_id && capabilityByProvider.get(item.provider)?.continuation === true);
+        if (!invalid.length || typeof initialRuntimeId !== "string" || !initialRuntimeId) break;
+        const retryOutcomes = [];
+        for (const failed of invalid) {
+          const attempt = initialAttempt + retry;
+          const failure = failed.diagnostic === "OUTPUT_SCHEMA_INVALID" ? `${failed.diagnostic} ${failed.diagnostic_detail}` : failed.diagnostic;
+          const retryRequest = { version: 4, host_provider: input.host_provider, prompt: `Your prior review output failed ${failure}. Keep the same semantic conclusion, findings, and review evidence. Resend only one canonical JSON object that validates against the frozen authoritative schema and contract facts below. Use only schema-allowed fields and exact enum values; remove fields the schema does not allow. Preserve the original checklist/pass evidence while making it satisfy every listed checklist id and pass-item rule. skillResults must match required_skills exactly; never invent a default skill. Do not re-review or change the conclusion. Output JSON only; no explanation or markdown.\n\nFROZEN_REVIEWER_OUTPUT_SCHEMA=${frozenReviewerSchema}\nFROZEN_CONTRACT_CORRECTION_FACTS=${prepared.correction_contract_facts}`, continuation: { runtime_id: initialRuntimeId, reuse_frozen_material: true }, provider_allowlist: [failed.provider], material_manifest_sha256: prepared.material_manifest_hash };
+          const retryResponse = await this.broker.run({ request: retryRequest, attachmentDelivery: prepared.delivery_policy, privateRawDirectory: join(prepared.dir, "attempts", `attempt-${attempt}`, "provider-raw") });
+          atomic(join(prepared.dir, `broker-run-attempt-${attempt}.json`), safeJson(retryResponse));
+          const item = (retryResponse.providers ?? []).find((candidate) => candidate?.provider === failed.provider);
+          let corrected = item
+            ? this.#outcome(item, packet, intent, input, join(prepared.dir, "attempts", `attempt-${attempt}`), capabilityByProvider.get(failed.provider), prepared.initial_delivery_by_provider?.[failed.provider], prepared.expected_delivery, prepared.stage_contract_rules, prepared.provider_visible_destinations)
+            : { ...failed, diagnostic: "PROVIDER_OUTCOME_MISSING" };
+          if (retryResponse.runtime_id !== initialRuntimeId) corrected = { ...corrected, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "CONTINUATION_RUNTIME_MISMATCH" };
+          else if (corrected.session_id !== failed.session_id) corrected = { ...corrected, packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: "CONTINUATION_SESSION_MISMATCH" };
+          outcomes = outcomes.map((candidate) => candidate.provider === failed.provider ? corrected : candidate);
+          retryOutcomes.push(corrected);
+        }
+        writeAttempt(initialAttempt + retry, initialRuntimeId, retryOutcomes);
+      }
       if (intent.initial_runtime_id) {
         for (let index = 0; index < outcomes.length; index += 1) {
           const item = outcomes[index];
@@ -651,10 +730,10 @@ export class ReviewRoundFacade {
       const initialProviderSessions = prepared.initial_provider_sessions ?? Object.fromEntries(outcomes.filter((item) => typeof item.provider === "string" && typeof item.session_id === "string" && item.session_id).map((item) => [item.provider, item.session_id]));
       // Any durable private review state has a public fail-closed companion.
       // Until dispositions complete its projection, CI must not trust an older pass.
-      const pending = this.#ensureProjectionGuard(outcomeIntent);
+      const pending = aggregate.length ? this.#ensureProjectionGuard(outcomeIntent) : null;
       const delivery = { delivery_mode: prepared.delivery_policy, raw_material_manifest_sha256: prepared.material_manifest_hash, delivery_manifest_hash: prepared.delivery_manifest_hash, material_total_bytes: prepared.material_total_bytes };
-      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, delivery, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, projection_pending: pending, created_at_ms: this.now() };
-      const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
+      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, delivery, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, ...(pending ? { projection_pending: pending } : {}), created_at_ms: this.now() };
+      const receiptPath = aggregate.length ? join(prepared.dir, "round-receipt.json") : attemptReceipts.at(-1); if (aggregate.length) atomic(receiptPath, safeJson(receipt));
       const result = { intent: outcomeIntent, round_kind: intent.round_kind, baseline_packet_hash: intent.baseline_packet_hash,
         previous_findings: prepared.delta?.previous_findings ?? [], closure_evidence: prepared.delta?.closure_evidence ?? [], delta_manifest: prepared.delta?.delta_manifest ?? null,
         affected_materials: prepared.delta?.affected_materials ?? {}, current_material_manifest: prepared.delta?.current_material_manifest ?? {},
@@ -670,10 +749,10 @@ export class ReviewRoundFacade {
       const verifiedProviderDelivery = [...new Set(outcomes.filter((item) => item.business_valid).map((item) => item.delivery?.derived_attestation?.delivery_manifest_hash).filter(Boolean))];
       if (aggregate.length && (verifiedInitialMaterial.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedInitialMaterial[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one initial material hash");
       if (aggregate.length && (verifiedProviderDelivery.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedProviderDelivery[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one derived delivery hash");
-      try { this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, initial_material_manifest_hash: priorFlow?.initial_material_manifest_hash ?? verifiedInitialMaterial[0] ?? null, last_delivery_manifest_hash: aggregate.length && intent.round_kind === "continuation" ? prepared.delivery_manifest_hash : priorFlow?.last_delivery_manifest_hash ?? null, continuation_sequence: aggregate.length ? (prepared.provider_visible_manifest.continuation?.sequence ?? priorFlow?.continuation_sequence ?? 0) : priorFlow?.continuation_sequence ?? 0, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
+      try { if (aggregate.length) this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, initial_material_manifest_hash: priorFlow?.initial_material_manifest_hash ?? verifiedInitialMaterial[0] ?? null, last_delivery_manifest_hash: intent.round_kind === "continuation" ? prepared.delivery_manifest_hash : priorFlow?.last_delivery_manifest_hash ?? null, continuation_sequence: prepared.provider_visible_manifest.continuation?.sequence ?? priorFlow?.continuation_sequence ?? 0, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: intent.business_round, packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
         previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)), last_provider_delivery_manifest_hash: aggregate.length && intent.round_kind === "continuation" ? verifiedProviderDelivery[0] : priorFlow?.last_provider_delivery_manifest_hash ?? null,
-        projection_pending: pending, ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) }); }
+        projection_pending: pending, last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef }); }
       catch (error) {
         if (aggregate.length) {
           if (oldReviewTree) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, oldReviewTree);
@@ -941,7 +1020,7 @@ export class ReviewRoundFacade {
     }
     return { stagingDir, manifest: { version: 1, bundle_id: `wh-review-${prepared.intent.idempotency_key}`, entries } };
   }
-  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, expectedDelivery, contractRules) {
+  #outcome(item, packet, intent, input, directory, capabilities, initialDelivery, expectedDelivery, contractRules, providerVisibleDestinations) {
     const transport_status = classifyTransport(item); const delivery_used = item?.delivery_used ?? null;
     const rawHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value) ? value.toLowerCase() : null;
     const raw_stdout_sha256 = rawHash(item?.raw_stdout_sha256); const raw_stderr_sha256 = rawHash(item?.raw_stderr_sha256);
@@ -975,6 +1054,9 @@ export class ReviewRoundFacade {
     const redaction = normalizedDelivery?.redaction; const derived = normalizedDelivery?.derived_attestation;
     const visible = normalizedDelivery?.provider_visible_attachment_manifest;
     const visibleByName = new Map(Array.isArray(visible) ? visible.map((entry) => [entry?.destination, entry]) : []);
+    const materialHashMismatch = /^[a-f0-9]{64}$/.test(derived?.diff_sha256 ?? "")
+      && /^[a-f0-9]{64}$/.test(visibleByName.get("changes.diff")?.sha256 ?? "")
+      && visibleByName.get("changes.diff").sha256 !== derived.diff_sha256;
     const attestationInvalid = !normalizedDelivery || normalizedDelivery.delivery_mode !== expectedDelivery.delivery_mode
       || normalizedDelivery.raw_material_manifest_hash !== expectedDelivery.raw_material_manifest_hash
       || !/^[a-f0-9]{64}$/.test(normalizedDelivery.material_manifest_hash ?? "") || !["raw", "sanitized"].includes(normalizedDelivery.material_representation)
@@ -984,25 +1066,27 @@ export class ReviewRoundFacade {
       || !Number.isSafeInteger(redaction.replacement_count) || redaction.replacement_count < 0 || redaction.residual_scan !== "passed"
       || redaction.raw_material_manifest_hash !== normalizedDelivery.raw_material_manifest_hash || redaction.derived_material_manifest_hash !== normalizedDelivery.material_manifest_hash
       || !derived || !/^[a-f0-9]{64}$/.test(derived.packet_hash ?? "") || derived.manifest_hash !== normalizedDelivery.material_manifest_hash || !/^[a-f0-9]{64}$/.test(derived.diff_sha256 ?? "") || !/^[a-f0-9]{64}$/.test(derived.delivery_manifest_hash ?? "");
+    if (materialHashMismatch) return { ...base, diagnostic: "MATERIAL_HASH_MISMATCH" };
     if (attestationInvalid) return { ...base, diagnostic: "DELIVERY_RECORD_MISMATCH" };
     if (intent.initial_runtime_id && (redaction.rule_version !== initialDelivery?.redaction?.rule_version || redaction.root_set_hash !== initialDelivery?.redaction?.root_set_hash
       || derived.continuation?.initial_material_manifest_hash !== initialDelivery?.material_manifest_hash
       || derived.continuation?.previous_delivery_manifest_hash !== expectedDelivery.previous_provider_delivery_manifest_hash)) return { ...base, diagnostic: "DELIVERY_ATTESTATION_CONTINUATION_MISMATCH", requires_human_confirmation: true };
     base.delivery = structuredClone(normalizedDelivery);
-    const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "NON_JSON_OUTPUT" };
+    const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "OUTPUT_FORMAT_INVALID" };
     const output = parsed.value;
     try { validateSchema("reviewer-output", output); }
     catch (error) {
-      if (error instanceof SchemaValidationError) return { ...base, packet_status: "material_incomplete", diagnostic: `${error.code}:${error.pointer || "/"}` };
+      if (error instanceof SchemaValidationError) return { ...base, packet_status: "material_incomplete", diagnostic: "OUTPUT_SCHEMA_INVALID", diagnostic_detail: `${error.code}:${error.pointer || "/"}` };
       throw error;
     }
-    if (output.packet_hash !== derived.packet_hash || output.manifest_hash !== derived.manifest_hash || output.diff_sha256 !== derived.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
     if (output.packet_status !== "complete") return { ...base, packet_status: output.packet_status ?? "material_incomplete", diagnostic: "PROVIDER_PACKET_INCOMPLETE" };
-    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet: { ...packet, packet_hash: derived.packet_hash, manifest_hash: derived.manifest_hash, diff_sha256: derived.diff_sha256 }, intent: { ...intent, material_manifest_hash: derived.manifest_hash }, contractRules });
-    if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "BUSINESS_INVALID" };
+    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet: { ...packet, packet_hash: derived.packet_hash, manifest_hash: derived.manifest_hash, diff_sha256: derived.diff_sha256 }, intent: { ...intent, material_manifest_hash: derived.manifest_hash }, contractRules, providerVisibleDestinations });
+    if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "REVIEW_CONTRACT_INVALID", diagnostic_detail: checked.errors };
     let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
     catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }
-    return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist, pass_items: output.pass_items, skillResults: output.skillResults };
+    const bundleBySkill = new Map(checked.resolution.definitions.map(({ name, bundle }) => [name, bundle.sha256]));
+    const skillResults = output.skillResults.map((result) => ({ ...result, bundle_hash: bundleBySkill.get(result.skill) }));
+    return { ...base, packet_status: "complete", semantic_verdict: output.verdict, business_valid: true, findings, summary: output.summary, checklist: output.checklist, pass_items: output.pass_items, skillResults };
   }
 
   publish(result, dispositions) {
@@ -1014,6 +1098,8 @@ export class ReviewRoundFacade {
     catch (error) { dispositionSchemaError = error; }
     try { validateSchema("round-run-result", result); }
     catch (error) { if (dispositionSchemaError) throw dispositionSchemaError; throw error; }
+    if (result.blocked_by_human_confirmation) throw new Error("blocked_by_human_confirmation: human confirmation is required before publication");
+    if (!result.provider_outcomes.some((item) => item.business_valid && item.semantic_verdict)) throw new Error("no business-valid provider outcome to publish");
     const lock = this.#acquireLock({ ...result.intent, idempotency_key: sha(`publish\0${result.intent.task_id}\0${result.intent.stage}\0${result.intent.review_track ?? "default"}\0${result.intent.review_flow_id}\0${result.receipt_draft_ref}`) });
     let taskLock = null;
     try {

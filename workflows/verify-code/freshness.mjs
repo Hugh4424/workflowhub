@@ -45,6 +45,8 @@ const FOUR_SEGMENT_KEYS = [
   { key: 'l2Report', segment: 4, defaultFile: 'l2-report.json' },
 ];
 
+const FRESHNESS_MODES = new Set(['phase_tdd', 'final_verification']);
+
 function normalizeSha(value) {
   return (value || '').toString();
 }
@@ -153,6 +155,67 @@ export function checkEvidenceSegment({ segment, file, report, expectedSha, expec
   return violations;
 }
 
+function checkEvidenceIntegrity({ segment, file, report, expectedContentHash }) {
+  if (!report) {
+    return [violation({ segment, file, reason: 'missing_report' })];
+  }
+
+  const violations = [];
+  const actualSha = reportSha(report);
+  if (!actualSha) {
+    violations.push(violation({ segment, file, reason: 'missing_git_sha', actualSha }));
+  }
+
+  const rawContentHash = rawReportHash(report);
+  const actualContentHash = reportHash(report);
+  if (rawContentHash == null || rawContentHash === '') {
+    violations.push(violation({
+      segment,
+      file,
+      reason: 'missing_content_hash',
+      actualSha,
+      expectedContentHash,
+      actualContentHash,
+    }));
+  } else if (
+    expectedContentHash !== undefined &&
+    actualContentHash !== String(expectedContentHash || '')
+  ) {
+    violations.push(violation({
+      segment,
+      file,
+      reason: 'content_hash_mismatch',
+      actualSha,
+      expectedContentHash,
+      actualContentHash,
+    }));
+  }
+  return violations;
+}
+
+function checkLineage({ redReport, greenReport, currentSha, isAncestor, files }) {
+  if (typeof isAncestor !== 'function') return [];
+  const checks = [
+    [reportSha(redReport), reportSha(greenReport), files[2] || 'RED-report.json'],
+    [reportSha(greenReport), currentSha, files[3] || 'GREEN-report.json'],
+  ];
+  const violations = [];
+  for (const [ancestor, descendant, file] of checks) {
+    if (!ancestor || !descendant) continue;
+    if (ancestor === descendant) continue;
+    if (!isAncestor(ancestor, descendant)) {
+      violations.push(violation({
+        segment: 'tdd-lineage',
+        file,
+        reason: 'git_lineage_mismatch',
+        expectedSha: descendant,
+        actualSha: ancestor,
+      }));
+    }
+  }
+  return violations;
+}
+
 /**
  * Validate the four verify-code freshness segments plus the L3 iron-law report.
  *
@@ -163,8 +226,15 @@ export function checkEvidenceSegment({ segment, file, report, expectedSha, expec
  * 4 = L2 report
  * "l3-iron" = l3-e2e-report.json git_sha iron-law
  *
+ * `phase_tdd` validates each report against its historical segment SHA and may
+ * validate RED -> GREEN ancestry. `final_verification` binds the final summary
+ * and fresh L2 report to the captured temporary-index tree while retaining
+ * RED/GREEN as hash-checked historical provenance.
+ *
  * @param {object} input
+ * @param {'phase_tdd'|'final_verification'} [input.mode]
  * @param {string} input.headSha
+ * @param {string} [input.currentTreeSha]
  * @param {object|null|undefined} input.phaseReport
  * @param {object|null|undefined} input.redReport
  * @param {object|null|undefined} input.greenReport
@@ -173,11 +243,15 @@ export function checkEvidenceSegment({ segment, file, report, expectedSha, expec
  * @param {boolean} [input.noBrowserTest]
  * @param {boolean} [input.skipL3]
  * @param {Record<string,string>} [input.expectedContentHashes]
+ * @param {Record<string,string>} [input.expectedSegmentShas]
+ * @param {(ancestor:string,descendant:string)=>boolean} [input.isAncestor]
  * @param {Record<string,string>} [input.files]
  * @returns {{mtime_violations: Array<{segment:number|string,file:string,reason:string,expected_sha:string,actual_sha:string}>, informational: Array<{segment:string,file:string,reason:string}>}}
  */
 export function checkEvidenceFreshness({
+  mode = 'phase_tdd',
   headSha,
+  currentTreeSha,
   phaseReport,
   redReport,
   greenReport,
@@ -186,22 +260,48 @@ export function checkEvidenceFreshness({
   noBrowserTest = false,
   skipL3 = false,
   expectedContentHashes = {},
+  expectedSegmentShas = {},
+  isAncestor,
   files = {},
 } = {}) {
-  const expectedSha = normalizeSha(headSha);
+  if (!FRESHNESS_MODES.has(mode)) {
+    throw new TypeError(`unsupported freshness mode: ${mode}`);
+  }
+  const expectedSha = normalizeSha(currentTreeSha || headSha);
   const input = { phaseReport, redReport, greenReport, l2Report };
   const mtime_violations = [];
   const informational = [];
 
   for (const config of FOUR_SEGMENT_KEYS) {
+    const file = files[config.segment] || config.defaultFile;
+    if (mode === 'final_verification' && (config.segment === 2 || config.segment === 3)) {
+      mtime_violations.push(...checkEvidenceIntegrity({
+        segment: config.segment,
+        file,
+        report: input[config.key],
+        expectedContentHash: expectedContentHashes[config.segment],
+      }));
+      continue;
+    }
+    const segmentSha = mode === 'phase_tdd'
+      ? normalizeSha(expectedSegmentShas[config.segment])
+      : expectedSha;
     mtime_violations.push(...checkEvidenceSegment({
       segment: config.segment,
-      file: files[config.segment] || config.defaultFile,
+      file,
       report: input[config.key],
-      expectedSha,
+      expectedSha: segmentSha,
       expectedContentHash: expectedContentHashes[config.segment],
     }));
   }
+
+  mtime_violations.push(...checkLineage({
+    redReport,
+    greenReport,
+    currentSha: mode === 'phase_tdd' ? reportSha(greenReport) : expectedSha,
+    isAncestor,
+    files,
+  }));
 
   const l3File = files.l3 || 'l3-e2e-report.json';
   if (noBrowserTest || skipL3) {

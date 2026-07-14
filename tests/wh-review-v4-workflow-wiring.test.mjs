@@ -83,12 +83,12 @@ function expectPrivateRawDirectory(path, taskRoot) {
   expect(path).not.toContain(join("reviews", "core-receipts"));
 }
 function reviewerOutput(packet) {
-  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [packet.stage === "build-plan" ? "/Users/reviewer/private/skill.md#L10" : "review-packet.v1#packet_hash"], evidence: packet.stage === "build-plan" ? "plan.md#L10 was checked with Bearer skill-secret-token" : "review-packet.v1#packet_hash binds the inspected packet", conclusion: packet.stage === "build-plan" ? "behavior evidence 123e4567-e89b-12d3-a456-426614174000 is complete" : "the lens found no contract violation in the packet" }));
+  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => { const anchor = `skills/${name}/${bundle.files[0].path}#L10`; return { skill: name, mode: "lens-only", checked_objects: [anchor], evidence: `${anchor} was checked against the frozen packet evidence`, conclusion: "the selected lens found no contract violation in the packet" }; });
   const contract = projectedContract(packet.stage, packet.review_track);
   const ids = [...new Set(contract.match(/\b(?:(?:DIR|DET)-)?[CH]\d+\b/g) ?? ["contract"])];
-  const checklist = ids.map((id) => ({ id, passed: true, evidence: `review-packet.v1#${id} has specific packet evidence` }));
-  const pass_items = ids.map((id) => ({ rule_id: id, artifact_anchor: `review-packet.v1#${id}`, evidence: `${id} is supported by the frozen packet contents` }));
-  return JSON.stringify({ packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, packet_status: "complete", verdict: "pass", summary: "packet marker reviewed against concrete contract evidence", findings: [], checklist, pass_items, skillResults });
+  const checklist = ids.map((id) => ({ id, passed: true, evidence: `review-packet.v1.json#${id} has specific packet evidence` }));
+  const pass_items = ids.map((id) => ({ rule_id: id, artifact_anchor: `review-packet.v1.json#${id}`, evidence: `${id} is supported by the frozen packet contents` }));
+  return JSON.stringify({ packet_status: "complete", verdict: "pass", summary: "packet marker reviewed against concrete contract evidence", findings: [], checklist, pass_items, skillResults });
 }
 function v4(stage) {
   const content = skill(stage);

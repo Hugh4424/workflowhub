@@ -48,6 +48,9 @@ it.runIf(Boolean(thirdRoot))("accepts real R1/R2 3rd-review derived bundles with
   expect(readFileSync(outcome.raw_output_ref, "utf8")).not.toContain("/Users/Hugh/private/review.md");
   writeFileSync(join(root, "a"), `second host path /Users/Hugh/private/round-two.md\n`);
   const preparedR2 = await facade.prepare({ task_id: "derived", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet, continuation: true });
+  expect(readdirSync(preparedR2.frozen_snapshot_dir)).not.toContain("schemas");
+  expect(JSON.parse(preparedR2.correction_schema)).toEqual(JSON.parse(readFileSync(resolve("skills/wh-review/schemas/reviewer-output.schema.json"), "utf8")));
+  expect(JSON.parse(preparedR2.correction_contract_facts).provider_visible_destinations).toEqual(["changes.diff", "continuation-delta.v1.json", "manifest.json", "review-packet.v1.json"]);
   expect(preparedR2.initial_prompt).not.toMatch(/(?:attachment_manifest_sha256|packet_hash|manifest_hash|diff_sha256|attachment_sha256)=/u);
   const resultR2 = await facade.run(preparedR2); const outcomeR2 = resultR2.provider_outcomes[0];
   expect(outcomeR2).toMatchObject({ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass", session_id: outcome.session_id });
@@ -56,6 +59,8 @@ it.runIf(Boolean(thirdRoot))("accepts real R1/R2 3rd-review derived bundles with
   expect(outcomeR2.delivery.derived_attestation.continuation).toEqual({ initial_material_manifest_hash: outcome.delivery.material_manifest_hash, sequence: 1, previous_delivery_manifest_hash: null });
   expect(outcomeR2.delivery.raw_material_manifest_hash).not.toBe(outcome.delivery.raw_material_manifest_hash);
   const runtimeId = JSON.parse(readFileSync(resultR2.receipt_draft_ref, "utf8")).runtime_id; const statePath = join(runtimeRoot, runtimeId, "state.json"); const originalState = readFileSync(statePath); const r2RunBinding = structuredClone(frozenRunBinding);
+  const correction = await brokerClient.run({ request: { version: 4, host_provider: "codex", prompt: "Return the same review as schema-valid JSON only.", continuation: { runtime_id: runtimeId, reuse_frozen_material: true }, provider_allowlist: ["opencode"], material_manifest_sha256: outcomeR2.delivery.raw_material_manifest_hash }, attachmentDelivery: "always_embed", privateRawDirectory: join(infra, "correction") });
+  expect(correction.providers[0]).toMatchObject({ status: "completed", session_id: outcomeR2.session_id, delivery: { derived_attestation: outcomeR2.delivery.derived_attestation } });
   const replay = async (state, label, binding = r2RunBinding) => {
     writeFileSync(statePath, JSON.stringify(state)); const publicProvider = structuredClone(state.providers.opencode);
     const replayClient = new BrokerClient({ command: [process.execPath, "unused.mjs"], config, attachmentRoot: resolve("."), spawnImpl(command, args) {

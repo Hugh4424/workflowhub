@@ -135,6 +135,69 @@ describe("BrokerClient", () => {
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
+  it("binds each continuation attempt to that attempt's public hashes and current private state", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-continuation-"));
+    try {
+      const runtimeRoot = join(root, "runtime"); const runtimeId = "19191919-1919-4919-8919-191919191919";
+      const runtime = join(runtimeRoot, runtimeId); const rawDir = join(runtime, "raw", "kimi"); mkdirSync(rawDir, { recursive: true });
+      const config = join(root, "config.json"); writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: runtimeRoot } }));
+      const attempts = [
+        { stdout: "initial stdout", stderr: "initial stderr" },
+        { stdout: "corrected stdout", stderr: "corrected stderr" },
+      ];
+      let call = 0;
+      const client = new BrokerClient({ command: brokerCommand(), config, spawnImpl() {
+        const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+        const attempt = attempts[call++];
+        queueMicrotask(() => {
+          const suffix = `attempt-${call}`;
+          writeFileSync(join(rawDir, `${suffix}.stdout`), attempt.stdout); writeFileSync(join(rawDir, `${suffix}.stderr`), attempt.stderr);
+          writeFileSync(join(runtime, "state.json"), JSON.stringify({ runtime_id: runtimeId, providers: { kimi: {
+            raw_stdout_ref: `raw/kimi/${suffix}.stdout`, raw_stdout_sha256: sha256(attempt.stdout),
+            raw_stderr_ref: `raw/kimi/${suffix}.stderr`, raw_stderr_sha256: sha256(attempt.stderr),
+          } } }));
+          child.stdout.emit("data", JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [{
+            provider: "kimi", status: "completed", raw_stdout_sha256: sha256(attempt.stdout), raw_stderr_sha256: sha256(attempt.stderr),
+          }] }));
+          child.emit("close", 0);
+        });
+        return child;
+      } });
+      const initial = await client.run({ request: { version: 4, host_provider: "codex", prompt: "review", continuation: null }, privateRawDirectory: join(root, "attempt-1") });
+      const correction = await client.run({ request: { version: 4, host_provider: "codex", prompt: "correct", continuation: { runtime_id: runtimeId, reuse_frozen_material: true } }, privateRawDirectory: join(root, "attempt-2") });
+      expect(readFileSync(initial.providers[0].raw_stdout_ref, "utf8")).toBe("initial stdout");
+      expect(readFileSync(correction.providers[0].raw_stdout_ref, "utf8")).toBe("corrected stdout");
+      expect(correction.providers[0].raw_stdout_sha256).toBe(sha256("corrected stdout"));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("does not attach prior raw evidence to a setup failure that announces no raw streams", async () => {
+    const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-setup-failure-"));
+    try {
+      const runtimeRoot = join(root, "runtime"); const runtimeId = "29292929-2929-4929-8929-292929292929";
+      const runtime = join(runtimeRoot, runtimeId); const rawDir = join(runtime, "raw", "kimi"); mkdirSync(rawDir, { recursive: true });
+      const stdout = "prior stdout"; const stderr = "prior stderr";
+      writeFileSync(join(rawDir, "prior.stdout"), stdout); writeFileSync(join(rawDir, "prior.stderr"), stderr);
+      writeFileSync(join(runtime, "state.json"), JSON.stringify({ runtime_id: runtimeId, providers: { kimi: {
+        status: "completed", raw_stdout_ref: "raw/kimi/prior.stdout", raw_stdout_sha256: sha256(stdout),
+        raw_stderr_ref: "raw/kimi/prior.stderr", raw_stderr_sha256: sha256(stderr),
+      } } }));
+      const config = join(root, "config.json"); writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: runtimeRoot } }));
+      const client = new BrokerClient({ command: brokerCommand(), config, spawnImpl() {
+        const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          child.stdout.emit("data", JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [{
+            provider: "kimi", status: "failed", error: { code: "MATERIAL_INCOMPLETE", message: "frozen material unavailable" },
+          }] }));
+          child.emit("close", 0);
+        });
+        return child;
+      } });
+      const result = await client.run({ request: { version: 4, host_provider: "codex", prompt: "correct", continuation: { runtime_id: runtimeId, reuse_frozen_material: true } }, privateRawDirectory: join(root, "attempt-2") });
+      expect(result.providers[0]).toEqual({ provider: "kimi", status: "failed", error: { code: "MATERIAL_INCOMPLETE", message: "frozen material unavailable" } });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   it("fails closed when private broker bytes do not match the advertised raw stdout hash", async () => {
     const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-bad-"));
     try {

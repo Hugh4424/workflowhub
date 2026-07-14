@@ -99,6 +99,7 @@ export class BrokerClient {
     this.attachmentRoot = attachmentRoot ?? null;
     this.capabilitySnapshot = null;
     this.capabilityDiscovery = null;
+    this.auditedMaterialBindings = new Map();
     this.spawnImpl = spawnImpl;
   }
 
@@ -129,7 +130,7 @@ export class BrokerClient {
       let parsed;
       try { parsed = JSON.parse(result.stdout); }
       catch { return { transport_error: { code: "BROKER_OUTPUT_INVALID", message: "3rd-review returned non-JSON" } }; }
-      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory, rawRequestBinding) : parsed;
+      return privateRawDirectory ? this.#materializePrivateRaw(parsed, privateRawDirectory, rawRequestBinding, request) : parsed;
     } finally { rmSync(temp, { recursive: true, force: true }); }
   }
 
@@ -179,7 +180,7 @@ export class BrokerClient {
     });
   }
 
-  #materializePrivateRaw(result, privateRawDirectory, rawRequestBinding) {
+  #materializePrivateRaw(result, privateRawDirectory, rawRequestBinding, request) {
     if (!result || typeof result !== "object" || !Array.isArray(result.providers) || typeof result.runtime_id !== "string") {
       throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker result has no runtime provider evidence");
     }
@@ -197,7 +198,7 @@ export class BrokerClient {
     if (state?.runtime_id !== result.runtime_id || !state.providers || typeof state.providers !== "object") throw new Error("BROKER_RAW_AUDIT_UNAVAILABLE: broker state does not bind the runtime");
     const destinationRoot = resolve(privateRawDirectory);
     mkdirSync(destinationRoot, { recursive: true, mode: 0o700 });
-    const materialAttestation = (provider, stateProvider, publicProvider) => {
+    const materialAttestation = (provider, stateProvider, publicProvider, requestBinding) => {
       const delivery = stateProvider?.delivery;
       if (!delivery || canonical(delivery) !== canonical(publicProvider?.delivery)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} delivery differs from private broker state`);
       const visible = delivery.provider_visible_attachment_manifest;
@@ -209,16 +210,16 @@ export class BrokerClient {
         || redaction.residual_scan !== "passed" || !Array.isArray(redaction.roots)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} delivery attestation is incomplete`);
       if (!Array.isArray(visible) || visible.length === 0 || visible.some((item) => !safeDestination(item?.destination) || !/^[a-f0-9]{64}$/i.test(item?.sha256 ?? "") || !Number.isSafeInteger(item?.size) || item.size < 0)
         || new Set(visible.map((item) => item.destination)).size !== visible.length) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} provider-visible manifest is unsafe`);
-      const hostRecords = rawRequestBinding?.records;
-      const hostIds = rawRequestBinding?.attachment_ids;
-      if (!rawRequestBinding || typeof rawRequestBinding.bundle_id !== "string" || !rawRequestBinding.bundle_id || rawRequestBinding.delivery_mode !== delivery.delivery_mode
+      const hostRecords = requestBinding?.records;
+      const hostIds = requestBinding?.attachment_ids;
+      if (!requestBinding || typeof requestBinding.bundle_id !== "string" || !requestBinding.bundle_id || requestBinding.delivery_mode !== delivery.delivery_mode
         || !Array.isArray(hostRecords) || hostRecords.length === 0 || !Array.isArray(hostIds) || hostIds.length !== hostRecords.length
         || hostRecords.some((item) => !safeDestination(item?.source) || !safeDestination(item?.destination) || !/^[a-f0-9]{64}$/i.test(item?.sha256 ?? "") || !Number.isSafeInteger(item?.size) || item.size < 0 || typeof item?.embed !== "boolean")
         || canonical(hostIds) !== canonical(hostRecords.map(({ destination, sha256: digest }) => ({ destination, sha256: digest })))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} host request attachment binding is incomplete`);
       const frozenRecords = hostRecords.map(({ destination, sha256: digest, size, embed }) => ({ destination, sha256: digest.toLowerCase(), size, embed }));
-      const frozenRawHash = materialManifestHash(rawRequestBinding.bundle_id, frozenRecords, rawRequestBinding.delivery_mode);
-      const frozenDeliveryHash = deliveryManifestHash(rawRequestBinding.bundle_id, frozenRecords, rawRequestBinding.delivery_mode);
-      if (rawRequestBinding.material_manifest_sha256 !== frozenRawHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} host request material hash is incomplete`);
+      const frozenRawHash = materialManifestHash(requestBinding.bundle_id, frozenRecords, requestBinding.delivery_mode);
+      const frozenDeliveryHash = deliveryManifestHash(requestBinding.bundle_id, frozenRecords, requestBinding.delivery_mode);
+      if (requestBinding.material_manifest_sha256 !== frozenRawHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} host request material hash is incomplete`);
       const workspace = join(runtime, "workspace");
       const workspaceRoot = realpathSync(workspace);
       const readOnce = (candidate, destination) => {
@@ -260,12 +261,12 @@ export class BrokerClient {
       if (rawDeclared.some((item) => item.embed !== (delivery.delivery_mode === "always_embed"))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace delivery mode is invalid`);
       const rawSnapshot = snapshotWorkspace(rawCandidate, rawDeclared, delivery.delivery_mode, rawInternalBytes);
       if (!rawSnapshot || rawSnapshot.bundle_id !== expectedBundleId) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace is incomplete`);
-      if (rawSnapshot.bundle_id !== rawRequestBinding.bundle_id || canonical(rawSnapshot.records) !== canonical(frozenRecords.map(({ destination, size, sha256: digest }) => ({ destination, size, sha256: digest })))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace differs from the frozen host request`);
+      if (rawSnapshot.bundle_id !== requestBinding.bundle_id || canonical(rawSnapshot.records) !== canonical(frozenRecords.map(({ destination, size, sha256: digest }) => ({ destination, size, sha256: digest })))) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw workspace differs from the frozen host request`);
       const expectedRawHash = current?.manifest_hash ?? state.attachments?.manifest_hash;
       if (expectedRawHash !== delivery.raw_material_manifest_hash || rawInternal.manifest_hash !== expectedRawHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} raw material hash is not bound to private broker state`);
       if (current) {
-        if (rawRequestBinding.continuation?.sequence !== current.sequence || current.bundle_id !== rawRequestBinding.bundle_id || current.manifest_hash !== frozenRawHash || current.delivery_manifest_hash !== frozenDeliveryHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} continuation raw delivery differs from the frozen host request`);
-      } else if (rawRequestBinding.continuation !== null || state.attachments?.bundle_id !== rawRequestBinding.bundle_id || state.attachments?.requested_delivery !== rawRequestBinding.delivery_mode
+        if (requestBinding.continuation?.sequence !== current.sequence || current.bundle_id !== requestBinding.bundle_id || current.manifest_hash !== frozenRawHash || current.delivery_manifest_hash !== frozenDeliveryHash) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} continuation raw delivery differs from the frozen host request`);
+      } else if (requestBinding.continuation !== null || state.attachments?.bundle_id !== requestBinding.bundle_id || state.attachments?.requested_delivery !== requestBinding.delivery_mode
         || state.attachments?.manifest_hash !== frozenRawHash || canonical(state.attachments?.files) !== canonical(frozenRecords.map(({ destination: target, sha256: digest, size, embed }) => ({ target, sha256: digest, size, embed })))) {
         throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} initial raw delivery differs from the frozen host request`);
       }
@@ -308,7 +309,7 @@ export class BrokerClient {
       const hasAny = ref !== undefined || expected !== undefined || announced !== undefined;
       if (!hasAny) return null;
       if (typeof ref !== "string" || !ref || isAbsolute(ref) || ref.split(/[\\/]/).some((part) => part === "..")) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} ref is unsafe`);
-      if (!/^[a-f0-9]{64}$/i.test(expected ?? "") || !/^[a-f0-9]{64}$/i.test(announced ?? "") || expected.toLowerCase() !== announced.toLowerCase()) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} hash is missing or mismatched`);
+      if (!/^[a-f0-9]{64}$/i.test(expected ?? "") || !/^[a-f0-9]{64}$/i.test(announced ?? "") || expected.toLowerCase() !== announced.toLowerCase()) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} hash is missing or mismatched (private=${expected ?? "missing"}, public=${announced ?? "missing"})`);
       const source = realpathSync(resolve(runtime, ref));
       if (relative(runtime, source).startsWith("..") || source === runtime) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${provider} ${stream} source escapes runtime`);
       const bytes = readFileSync(source);
@@ -324,14 +325,21 @@ export class BrokerClient {
       if (!item || typeof item !== "object" || !providerId.test(item.provider ?? "") || !providerIds.has(item.provider)) return item;
       const privateState = state.providers[item.provider];
       const expectsRaw = item.status === "completed" || item.raw_stdout_sha256 !== undefined || item.raw_stderr_sha256 !== undefined;
+      if (!expectsRaw) return item;
       if (!privateState || typeof privateState !== "object") {
-        if (expectsRaw) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
-        return item;
+        throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} has no private broker state`);
       }
       const raw_stdout_ref = copyStream(item.provider, "stdout", privateState, item);
       const raw_stderr_ref = copyStream(item.provider, "stderr", privateState, item);
       if (expectsRaw && (!raw_stdout_ref || !raw_stderr_ref)) throw new Error(`BROKER_RAW_AUDIT_UNAVAILABLE: ${item.provider} lacks raw stream evidence`);
-      const derived_attestation = item.status === "completed" && item.delivery ? materialAttestation(item.provider, privateState, item) : null;
+      const bindingKey = `${result.runtime_id}:${item.provider}:${item.session_id ?? ""}`;
+      const reusedBinding = !rawRequestBinding && request?.continuation?.reuse_frozen_material === true
+        && typeof item.session_id === "string" && item.session_id === privateState.session_id
+        ? this.auditedMaterialBindings.get(bindingKey)
+        : null;
+      const auditBinding = rawRequestBinding ?? reusedBinding;
+      const derived_attestation = item.status === "completed" && item.delivery ? materialAttestation(item.provider, privateState, item, auditBinding) : null;
+      if (derived_attestation && rawRequestBinding) this.auditedMaterialBindings.set(bindingKey, structuredClone(rawRequestBinding));
       return { ...item, ...(derived_attestation ? { delivery: { ...privateState.delivery, derived_attestation } } : {}), ...(raw_stdout_ref ? { raw_stdout_ref } : {}), ...(raw_stderr_ref ? { raw_stderr_ref } : {}) };
     });
     return { ...result, providers };

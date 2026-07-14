@@ -16,8 +16,7 @@ const broker = vi.hoisted(() => {
     const ids = ["C1", "C2", "C3", "H1", "H2", "H3"];
     const revised = verdict === "revise_required";
     return JSON.stringify({
-      packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256,
-      contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, packet_status: "complete", verdict,
+      packet_status: "complete", verdict,
       summary: "review completed against packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: "H1", severity: "blocking", issue: "publication must follow durable persistence", evidence: "changes.diff:a:1 shows publication before persistence", suggested_fix: "persist the state before publishing it" }] : [],
       checklist: ids.map((id) => ({ id, passed: !(revised && id === "H1"), evidence: `changes.diff:a:1 verifies ${id}` })),
       pass_items: ids.filter((id) => !(revised && id === "H1")).map((rule_id) => ({ rule_id, artifact_anchor: `changes.diff:a:1#${rule_id}`, evidence: `changes.diff:a:1 proves ${rule_id}` })),
@@ -127,7 +126,8 @@ describe("wh-review CLI continuation", () => {
     const { root: target } = repository(); const worktree = linkedWorktree(target, "workflowhub/trusted-state"); const { root: unrelated } = repository();
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-cli-tracking-")); roots.push(tracking); const taskId = "trusted-state";
     mkdirSync(join(tracking, taskId), { recursive: true });
-    const valid = { target_repo_root: target, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" };
+    const trustedCommit = git(worktree, ["rev-parse", "HEAD"]); const trustedTree = git(worktree, ["rev-parse", "HEAD^{tree}"]);
+    const valid = { target_repo_root: target, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active", trusted_base_commit: trustedCommit, trusted_base_tree: trustedTree };
     for (const state of [{ ...valid, status: "closed" }, (() => { const { status, ...missing } = valid; return missing; })(), { ...valid, target_repo_root: unrelated }, { ...valid, branch: "workflowhub/too-many-parts-here" }, { ...valid, branch: "workflowhub/UPPER" }]) {
       writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify(state));
       await expect(runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: reviewPacket(), task_tracking_root: tracking })).rejects.toThrow(/trusted task worktree/);
@@ -140,7 +140,7 @@ describe("wh-review CLI continuation", () => {
     const tracking = mkdtempSync(join(tmpdir(), "wh-review-cli-tracking-")); roots.push(tracking);
     const taskId = "cli-continuation";
     mkdirSync(join(tracking, taskId), { recursive: true });
-    writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify({ target_repo_root: target, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active" }));
+    writeFileSync(join(tracking, taskId, "worktree.json"), JSON.stringify({ target_repo_root: target, worktree_root: worktree, branch: git(worktree, ["branch", "--show-current"]), created_by_stage: "make-decision", push_policy: "verify-code-only", status: "active", trusted_base_commit: base, trusted_base_tree: git(worktree, ["rev-parse", `${base}^{tree}`]) }));
     const packetRoot = hostConfig(tracking);
     const firstPacket = reviewPacket();
     await runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: tracking });

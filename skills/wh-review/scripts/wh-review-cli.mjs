@@ -53,7 +53,10 @@ function trustedTaskWorktree(input) {
     if (!registered) throw new Error("worktree_root is not registered by target_repo_root");
     if (String(execFileSync("git", ["branch", "--show-current"], { cwd: sourceRoot, encoding: "utf8" })).trim() !== state.branch) throw new Error("worktree_root branch does not match trusted worktree.json");
   } catch (error) { throw new Error(`trusted task worktree_root is not a git worktree: ${error.message}`); }
-  return { taskTrackingRoot: trackingRoot, sourceRoot };
+  const trustedBaseCommit = state.trusted_base_commit;
+  const trustedBaseTree = state.trusted_base_tree;
+  if (!/^[a-f0-9]{40}$/.test(trustedBaseCommit ?? "") || !/^[a-f0-9]{40,64}$/.test(trustedBaseTree ?? "")) throw new Error("trusted worktree.json requires trusted_base_commit and trusted_base_tree");
+  return { taskTrackingRoot: trackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource: state.trusted_base_source ?? "worktree_creation" };
 }
 
 export async function runReviewRound(input) {
@@ -61,10 +64,10 @@ export async function runReviewRound(input) {
   if (input.provider_capabilities !== undefined || input.providerCapabilities !== undefined || input.third_review?.provider_capabilities !== undefined) throw new Error("provider_capabilities are broker-owned and cannot be supplied by callers");
   if (input.attachment_delivery !== undefined || input.attachmentDelivery !== undefined) throw new Error("attachment_delivery comes only from stage-skill-plan resolution and cannot be supplied by callers");
   if (input.third_review !== undefined || input.attachment_root !== undefined || input.attachmentRoot !== undefined) throw new Error("third_review and attachment_root are host-configured and cannot be supplied by callers");
-  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
+  const { taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource } = trustedTaskWorktree(input);
   const thirdReview = loadTrustedThirdReviewConfig();
   const client = new BrokerClient({ command: thirdReview.command, config: thirdReview.config, attachmentRoot: thirdReview.attachmentRoot });
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: client });
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource, broker: client });
   const prepared = await facade.prepare({
     task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack,
     review_flow_id: input.review_flow_id ?? input.reviewFlowId, host_provider: input.host_provider ?? input.hostProvider,
@@ -89,21 +92,21 @@ export async function runReviewRound(input) {
 
 export function verifyFinalReview(input) {
   rejectCallerSourceFields(input, "CLI input"); rejectCallerSourceFields(input.packet, "CLI packet");
-  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: { run() { throw new Error("verify-final does not run broker"); } } });
+  const { taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource } = trustedTaskWorktree(input);
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource, broker: { run() { throw new Error("verify-final does not run broker"); } } });
   return facade.verifyFinal({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId });
 }
 
 export function resetReviewFlow(input) {
   rejectCallerSourceFields(input, "CLI input"); rejectCallerSourceFields(input.packet, "CLI packet");
-  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: { run() { throw new Error("reset does not run broker"); } } });
+  const { taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource } = trustedTaskWorktree(input);
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource, broker: { run() { throw new Error("reset does not run broker"); } } });
   return facade.reset({ task_id: input.task_id ?? input.taskId, stage: input.stage, review_track: input.review_track ?? input.reviewTrack ?? null, review_flow_id: input.review_flow_id ?? input.reviewFlowId, new_review_flow_id: input.new_review_flow_id ?? input.newReviewFlowId, reason: input.reason, human_approval_ref: input.human_approval_ref ?? input.humanApprovalRef });
 }
 
 export function recoverReviewProjections(input) {
-  const { taskTrackingRoot, sourceRoot } = trustedTaskWorktree(input);
-  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, broker: { run() { throw new Error("recover does not run broker"); } } });
+  const { taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource } = trustedTaskWorktree(input);
+  const facade = new ReviewRoundFacade({ taskTrackingRoot, sourceRoot, trustedBaseCommit, trustedBaseTree, trustedBaseSource, broker: { run() { throw new Error("recover does not run broker"); } } });
   return facade.recover({ task_id: input.task_id ?? input.taskId });
 }
 

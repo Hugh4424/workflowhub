@@ -76,6 +76,18 @@ export function capturedHead(root) {
   return String(git(repository, ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
 }
 
+export function trustedBase(root, commit, expectedTree) {
+  const repository = repositoryRoot(root);
+  if (typeof commit !== "string" || !/^[a-f0-9]{40}$/.test(commit)) throw new TypeError("trusted base commit must be a full commit oid");
+  const resolvedCommit = String(git(repository, ["rev-parse", "--verify", `${commit}^{commit}`])).trim();
+  if (resolvedCommit !== commit) throw new Error("trusted base commit does not resolve exactly");
+  const tree = treeOid(repository, commit);
+  if (typeof expectedTree !== "string" || tree !== expectedTree) throw new Error("trusted base tree does not match trusted base commit");
+  try { git(repository, ["merge-base", "--is-ancestor", commit, "HEAD"]); }
+  catch { throw new Error("trusted base commit is not an ancestor of current HEAD"); }
+  return { commit, tree };
+}
+
 export function captureWorktreeTree(root, { baseTree, excludePaths = [] } = {}) {
   const repository = repositoryRoot(root);
   const base = treeOid(repository, baseTree ?? "HEAD");

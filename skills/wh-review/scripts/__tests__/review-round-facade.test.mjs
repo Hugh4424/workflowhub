@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -42,11 +42,10 @@ function refreshPacketHashes(value) {
 function output(input, verdict = "pass", severity = "blocking", ruleId = "H1") {
   const checkIds = ["C1", "C2", "C3", "H1", "H2", "H3"];
   const revised = verdict === "revise_required";
-  return JSON.stringify({ packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
-    contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
+  return JSON.stringify({ packet_status: "complete", verdict,
     summary: "review complete with packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: ruleId, severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }] : [],
     checklist: checkIds.map((id) => ({ id, passed: !(revised && id === ruleId), evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
-    pass_items: checkIds.filter((id) => !(revised && id === ruleId)).map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
+    pass_items: checkIds.filter((id) => !(revised && id === ruleId)).map((id) => ({ rule_id: id, artifact_anchor: `changes.diff#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "publication and persistence have separate boundaries", fixApproach: "move publication after the atomic persistence step" } : {}) });
 }
 function canonicalDeliveryMaterial(bundleId, entries) {
@@ -74,19 +73,39 @@ function completedProvider(request, { provider = "opencode", session_id = "s", o
   const packet = request.packet ?? packetFromTriad(request);
   return { provider, status: "completed", session_id, delivery_used: request.attachmentDelivery, delivery: deliveryForRequest({ ...request, packet }), raw_stdout_ref: stdoutRef, raw_stderr_ref: stderrRef, raw_stdout_sha256: hash(stdout), raw_stderr_sha256: hash(stderr), output: providerOutput, ...extra };
 }
-function fakeBroker(callback, attachmentRoot = process.cwd()) { return capabilityBroker(async (request) => {
-  const packet = packetFromTriad(request, attachmentRoot); const response = await callback({ ...request, packet });
-  const manifestEntry = request.attachments.entries.find((item) => item.destination === "manifest.json"); const manifest = JSON.parse(readFileSync(join(attachmentRoot, manifestEntry.source), "utf8"));
-  const expectedDelivery = deliveryForRequest({ ...request, packet, manifest });
+function fakeBroker(callback, attachmentRoot = process.cwd()) {
+  let frozenPacket = null; let frozenDelivery = null; let runtimeId = null; const providerSessions = new Map();
+  return capabilityBroker(async (request) => {
+  const reuse = request.request?.continuation?.reuse_frozen_material === true;
+  let packet; let expectedDelivery;
+  if (reuse) {
+    if (request.attachments !== undefined || !frozenPacket || !frozenDelivery) throw new Error("test broker reuse requires one frozen initial delivery and no new attachments");
+    if (request.request.continuation.runtime_id !== runtimeId) throw new Error("test broker reuse runtime mismatch");
+    if (!Array.isArray(request.request.provider_allowlist) || request.request.provider_allowlist.some((provider) => !providerSessions.has(provider))) throw new Error("test broker reuse provider allowlist mismatch");
+    packet = structuredClone(frozenPacket); expectedDelivery = structuredClone(frozenDelivery);
+  } else {
+    packet = packetFromTriad(request, attachmentRoot);
+    const manifestEntry = request.attachments.entries.find((item) => item.destination === "manifest.json"); const manifest = JSON.parse(readFileSync(join(attachmentRoot, manifestEntry.source), "utf8"));
+    expectedDelivery = deliveryForRequest({ ...request, packet, manifest });
+    frozenPacket = structuredClone(packet); frozenDelivery = structuredClone(expectedDelivery);
+  }
+  const response = await callback({ ...request, packet });
+  if (reuse && response.runtime_id !== undefined && response.runtime_id !== runtimeId) throw new Error("test broker reuse response runtime mismatch");
   mkdirSync(request.privateRawDirectory, { recursive: true });
-  return { ...response, providers: (response.providers ?? []).map((item) => {
+  const providers = (response.providers ?? []).map((item) => {
     if (item.status !== "completed") return item;
+    if (reuse && item.session_id !== providerSessions.get(item.provider)) throw new Error("test broker reuse provider session mismatch");
     const rawDeclared = ["raw_stdout_ref", "raw_stderr_ref", "raw_stdout_sha256", "raw_stderr_sha256"].some((field) => Object.hasOwn(item, field));
     if (rawDeclared) return { ...item, delivery_used: item.delivery_used ?? request.attachmentDelivery, delivery: item.delivery ?? expectedDelivery };
     const stdout = item.output ?? ""; const stderr = ""; const stdoutRef = join(request.privateRawDirectory, `${item.provider}.stdout.raw`); const stderrRef = join(request.privateRawDirectory, `${item.provider}.stderr.raw`);
     writeFileSync(stdoutRef, stdout); writeFileSync(stderrRef, stderr);
     return { ...item, delivery_used: item.delivery_used ?? request.attachmentDelivery, delivery: item.delivery ?? expectedDelivery, raw_stdout_ref: stdoutRef, raw_stderr_ref: stderrRef, raw_stdout_sha256: hash(stdout), raw_stderr_sha256: hash(stderr) };
-  }) };
+  });
+  if (!reuse) {
+    runtimeId = response.runtime_id ?? null;
+    for (const item of providers) if (typeof item.provider === "string" && typeof item.session_id === "string" && item.session_id) providerSessions.set(item.provider, item.session_id);
+  }
+  return { ...response, providers };
 }); }
 function capabilityBroker(callback, snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
   { provider: "claude-code", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } },
@@ -128,7 +147,7 @@ function uncommittedStagePacket(stage) {
 }
 function stageOutput(input, stage, verdict = "pass") {
   const value = JSON.parse(output(input, verdict)); const resolution = resolveRequiredSkills({ stage, reviewTrack: null });
-  value.skillResults = resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" }));
+  value.skillResults = resolution.definitions.map(({ name }) => ({ skill: name, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" }));
   return JSON.stringify(value);
 }
 function advancePacket(root, previous, content = "new\nline\nextra\nfixed\n") {
@@ -152,18 +171,113 @@ function makeDecisionOutput(input, reviewTrack, verdict = "pass") {
   const failed = verdict === "revise_required" ? `${prefix}-H1` : null;
   const resolution = resolveRequiredSkills({ stage: "make-decision", reviewTrack });
   return JSON.stringify({
-    packet_hash: input.packet_hash, manifest_hash: input.manifest_hash, diff_sha256: input.diff_sha256,
-    contract_hash: input.contract_hash, skill_bundle_hash: input.skill_bundle_hash, packet_status: "complete", verdict,
+    packet_status: "complete", verdict,
     summary: "unified_diff:a:1 and packet facts substantiate the selected decision review",
     findings: failed ? [{ file: "a", line: 1, rule_id: failed, severity: "blocking", issue: "selected decision violates the tested hard invariant", evidence: "unified_diff:a:1 shows the invariant breach", suggested_fix: "revise the decision to satisfy the hard invariant" }] : [],
     checklist: ids.map((id) => ({ id, passed: id !== failed, evidence: `unified_diff:a:1 provides concrete evidence for ${id}` })),
-    pass_items: ids.filter((id) => id !== failed).map((rule_id) => ({ rule_id, artifact_anchor: `unified_diff:a:1#${rule_id}`, evidence: `unified_diff:a:1 demonstrates the required ${rule_id} behavior` })),
-    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" })),
+    pass_items: ids.filter((id) => id !== failed).map((rule_id) => ({ rule_id, artifact_anchor: `changes.diff#${rule_id}`, evidence: `changes.diff demonstrates the required ${rule_id} behavior` })),
+    skillResults: resolution.definitions.map(({ name }) => ({ skill: name, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" })),
     ...(failed ? { rootCause: "the selected decision conflicts with a hard invariant", fixApproach: "change the decision before the next review round" } : {}),
   });
 }
 
 describe("ReviewRoundFacade", () => {
+  it("binds a hash-free provider verdict to host delivery and injects skill bundle hashes", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const value = JSON.parse(output(request.packet));
+      for (const key of ["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"]) delete value[key];
+      for (const result of value.skillResults) delete result.bundle_hash;
+      return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(value) }] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "host-owned-hashes", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.provider_outcomes[0]).toMatchObject({ business_valid: true, semantic_verdict: "pass", skillResults: [] });
+    expect(result.provider_outcomes[0].delivery.derived_attestation).toMatchObject({ packet_hash: expect.stringMatching(/^[a-f0-9]{64}$/), manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), diff_sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+  });
+
+  it("injects the frozen bundle hash after validating a required skill result", async () => {
+    const tracking = root(); const reviewPacket = stagePacket(tracking, "build-plan");
+    const resolution = resolveRequiredSkills({ stage: "build-plan", reviewTrack: null });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [{ provider: "opencode", status: "completed", session_id: "s", output: stageOutput(request.packet, "build-plan") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "host-skill-hash", stage: "build-plan", review_flow_id: "flow", packet: reviewPacket }));
+    expect(result.provider_outcomes[0].skillResults).toEqual(resolution.definitions.map(({ name, bundle }) => expect.objectContaining({ skill: name, bundle_hash: bundle.sha256 })));
+  });
+  it("pins a host trusted base across committed and uncommitted changes and reset", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    const trustedCommit = git(source, ["rev-parse", "HEAD~1"]); const trustedTree = git(source, ["rev-parse", `${trustedCommit}^{tree}`]);
+    writeFileSync(join(source, "uncommitted.txt"), "UNCOMMITTED_SCOPE_MARKER\n");
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, trustedBaseCommit: trustedCommit, trustedBaseTree: trustedTree, broker: fakeBroker(async () => ({ providers: [] })) });
+    const first = await facade.prepare({ task_id: "trusted-scope", stage: "build-code", review_flow_id: "old", packet: hostPacket() });
+    expect(first.packet.source_revision.base_tree).toBe(trustedTree);
+    expect(first.packet.unified_diff).toContain("UNCOMMITTED_SCOPE_MARKER");
+    expect(first.packet.changed_files.map(({ path }) => path)).toContain("uncommitted.txt");
+    rmSync(first.lock, { recursive: true, force: true });
+    facade.reset({ task_id: "trusted-scope", stage: "build-code", review_flow_id: "old", new_review_flow_id: "new", reason: "human approved reset", human_approval_ref: "approval" });
+    const second = await facade.prepare({ task_id: "trusted-scope", stage: "build-code", review_flow_id: "new", packet: hostPacket() });
+    expect(second.packet.source_revision.base_tree).toBe(trustedTree);
+    expect(JSON.parse(readFileSync(join(tracking, "trusted-scope", "reviews", "private", "source-context.json"), "utf8"))).toMatchObject({ version: 2, trusted_base_commit: trustedCommit, trusted_base_tree: trustedTree, last_approved_tree: null });
+    rmSync(second.lock, { recursive: true, force: true });
+  });
+
+  it("keeps merged-main commits in task scope instead of moving the baseline to current HEAD", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    const trustedCommit = git(source, ["rev-parse", "HEAD~1"]); const trustedTree = git(source, ["rev-parse", `${trustedCommit}^{tree}`]);
+    const taskBranch = git(source, ["branch", "--show-current"]); git(source, ["checkout", "-qb", "main-update", trustedCommit]); writeFileSync(join(source, "main-update.txt"), "MERGED_MAIN_MARKER\n"); git(source, ["add", "."]); git(source, ["commit", "-qm", "main update"]);
+    git(source, ["checkout", "-q", taskBranch]); git(source, ["merge", "--no-ff", "-qm", "merge main update", "main-update"]);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, trustedBaseCommit: trustedCommit, trustedBaseTree: trustedTree, broker: fakeBroker(async () => ({ providers: [] })) });
+    const prepared = await facade.prepare({ task_id: "merged-main-scope", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+    expect(prepared.packet.source_revision.base_tree).toBe(trustedTree);
+    expect(prepared.packet.unified_diff).toContain("MERGED_MAIN_MARKER");
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("freezes referenced canonical evidence as provider-visible hash-bound relative attachments", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const task = join(tracking, "evidence-attachments"); mkdirSync(join(task, "evidence", "attempt"), { recursive: true });
+    writeFileSync(join(task, "requirements-ledger.json"), "{\"requirements\":[]}\n"); writeFileSync(join(task, "requirements-coverage.json"), "{\"coverage\":[]}\n"); writeFileSync(join(task, "evidence", "attempt", "test-strategy.md"), "---\nac_routes: {}\n---\n");
+    const packet = hostPacket(); packet.acceptance_design_excerpt = "requirements-ledger.json and requirements-coverage.json"; packet.test_evidence = [
+      { name: "strategy", status: "passed", path: "evidence/attempt/test-strategy.md" },
+      { name: "ledger", status: "passed", path: "requirements-ledger.json" },
+      { name: "coverage", status: "passed", path: "requirements-coverage.json" },
+    ];
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async () => ({ providers: [] })) });
+    const prepared = await facade.prepare({ task_id: "evidence-attachments", stage: "build-code", review_flow_id: "flow", packet });
+    for (const name of ["test-strategy.md", "requirements-ledger.json", "requirements-coverage.json"]) {
+      const entry = prepared.frozen_attachments.find(({ destination }) => destination === `evidence/${name}`);
+      expect(entry).toMatchObject({ size: expect.any(Number), sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      expect(prepared.provider_visible_manifest.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ destination: `evidence/${name}`, sha256: entry.sha256, size: entry.size })]));
+    }
+    expect(prepared.initial_prompt).not.toContain("/Users/");
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("does not infer evidence attachments from narrative filenames", async () => {
+    const tracking = root(); const task = join(tracking, "narrative-evidence"); mkdirSync(task, { recursive: true }); writeFileSync(join(task, "requirements-ledger.json"), "{}\n");
+    const packet = hostPacket(); packet.acceptance_design_excerpt = "See requirements-ledger.json";
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    const prepared = await facade.prepare({ task_id: "narrative-evidence", stage: "build-code", review_flow_id: "flow", packet });
+    expect(prepared.frozen_attachments.some(({ destination }) => destination === "evidence/requirements-ledger.json")).toBe(false);
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("fails closed for ambiguous or non-regular declared evidence", async () => {
+    for (const mode of ["ambiguous", "symlink"]) {
+      const tracking = root(); const taskId = `unsafe-evidence-${mode}`; const task = join(tracking, taskId); mkdirSync(join(task, "one"), { recursive: true }); mkdirSync(join(task, "two"), { recursive: true });
+      writeFileSync(join(task, "one", "requirements-ledger.json"), "{}\n");
+      const packet = hostPacket();
+      if (mode === "ambiguous") { writeFileSync(join(task, "two", "requirements-ledger.json"), "{}\n"); packet.test_evidence = [{ path: "one/requirements-ledger.json" }, { path: "two/requirements-ledger.json" }]; }
+      else { symlinkSync(join(task, "one", "requirements-ledger.json"), join(task, "two", "requirements-ledger.json")); packet.test_evidence = [{ path: "two/requirements-ledger.json" }]; }
+      const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+      await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet })).rejects.toThrow(/MATERIAL_INCOMPLETE.*evidence/i);
+    }
+  });
+
+  it.each(["../requirements-ledger.json", "unknown.json", "evidence.txt"])("rejects unsafe or unsupported declared evidence path %s", async (path) => {
+    const tracking = root(); const taskId = `invalid-evidence-${hash(path).slice(0, 8)}`; mkdirSync(join(tracking, taskId), { recursive: true });
+    const packet = hostPacket(); packet.test_evidence = [{ path }];
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet })).rejects.toThrow(/MATERIAL_INCOMPLETE.*evidence path is invalid/i);
+  });
+
   it("rejects every caller-owned source field before preparing a packet", () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
@@ -346,13 +460,13 @@ describe("ReviewRoundFacade", () => {
     expect(() => facade.publish(result, { items: [] })).toThrow("no business-valid provider outcome to publish");
   });
 
-  it("accepts the real Kimi lower-case pass output when changes.diff is the complete frozen anchor", async () => {
+  it("accepts the real Kimi pass anchors for whole diff and provider-visible evidence", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
       const kimi = JSON.parse(output(request.packet));
       kimi.summary = "本次变更仅向 smoke.txt 追加 R1_DIFF_MARKER 一行，满足 packet 中 AC 要求，且不涉及状态流转、依赖或边界越界。所有 C/H 检查项通过。";
       kimi.checklist = kimi.checklist.map((item) => ({ ...item, evidence: `changes.diff:line 7 与 review-packet.v1.json:acceptance_design_excerpt 共同证明 ${item.id}。` }));
-      kimi.pass_items = kimi.pass_items.map((item) => ({ ...item, artifact_anchor: item.rule_id === "H2" ? "changes.diff" : item.artifact_anchor, evidence: `${item.rule_id} 的当前冻结材料证据具体且可复核。` }));
+      kimi.pass_items = kimi.pass_items.map((item) => ({ ...item, artifact_anchor: item.rule_id === "H2" ? "changes.diff" : item.rule_id === "H3" ? "review-packet.v1.json" : item.artifact_anchor, evidence: `${item.rule_id} 的当前冻结材料证据具体且可复核。` }));
       return { runtime_id: "12345678-1234-4234-8234-123456789abc", providers: [{ provider: "kimi", status: "completed", session_id: "kimi-real-shape", output: JSON.stringify(kimi) }] };
     }) });
 
@@ -905,7 +1019,128 @@ describe("ReviewRoundFacade", () => {
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(value) }] };
     }) });
     const result = await providerFacade.run(providerFacade.prepare({ task_id: "provider-schema", stage: "build-code", review_flow_id: "flow", packet: clean }));
-    expect(result.provider_outcomes.find((item) => item.provider === "opencode")).toMatchObject({ business_valid: false, diagnostic: "SCHEMA_VALIDATION_FAILED:/fenced" });
+    expect(result.provider_outcomes.find((item) => item.provider === "opencode")).toMatchObject({ business_valid: false, diagnostic: "OUTPUT_SCHEMA_INVALID", diagnostic_detail: "SCHEMA_VALIDATION_FAILED:/fenced" });
+  });
+
+  it("accepts pure JSON or exactly one json fence surrounded by explanation", async () => {
+    for (const [task, decorate] of [
+      ["pure-json-output", (value) => value],
+      ["single-fenced-output", (value) => `Review complete.\n\n\`\`\`json\n${value}\n\`\`\`\n\nEnd.`],
+    ]) {
+      const tracking = root();
+      const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({
+        runtime_id: "11111111-1111-4111-8111-111111111111",
+        providers: [{ provider: "opencode", status: "completed", session_id: "same-session", output: decorate(output(request.packet)) }],
+      })) });
+      const result = await facade.run(facade.prepare({ task_id: task, stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+      expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", business_valid: true, semantic_verdict: "pass" }));
+    }
+  });
+
+  it.each([
+    ["no-json-fence", "explanation only"],
+    ["bad-json-fence", "before\n```json\n{bad\n```\nafter"],
+    ["multiple-json-fences", "```json\n{}\n```\n```json\n{}\n```"],
+  ])("keeps %s as a retryable format attempt without semantic flow state", async (task, invalidOutput) => {
+    const tracking = root();
+    const broker = capabilityBroker(async (request) => {
+      const sealed = packetFromTriad(request); Object.defineProperty(request, "packet", { value: sealed, enumerable: false });
+      return { runtime_id: "22222222-2222-4222-8222-222222222222", providers: [completedProvider(request, { provider: "opencode", session_id: "same-session", output: invalidOutput })] };
+    }, { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: false, attachment_delivery: ["file_only"] } }] });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const input = { task_id: task, stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) };
+    const result = await facade.run(facade.prepare(input));
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", diagnostic: "OUTPUT_FORMAT_INVALID", semantic_verdict: null, business_valid: false }));
+    const reviews = join(tracking, task, "reviews");
+    expect(existsSync(join(reviews, "private", "flows", "build-code-flow.json"))).toBe(false);
+    expect(existsSync(join(reviews, "projection-pending-build-code-flow.json"))).toBe(false);
+    expect(existsSync(join(reviews, "private", "review-trees", "build-code-flow.json"))).toBe(false);
+    expect(JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"))).toMatchObject({ kind: "provider_attempt", semantic_verdict: null });
+    await facade.run(facade.prepare(input));
+    expect(readdirSync(join(dirname(result.receipt_draft_ref), "..")).sort()).toEqual(["attempt-1", "attempt-2"]);
+  });
+
+  it("corrects output format twice in the same runtime and provider session without resending attachments", async () => {
+    const tracking = root(); const calls = []; let initialItem;
+    const broker = capabilityBroker(async (request) => {
+      calls.push(request);
+      if (calls.length === 1) {
+        const sealed = packetFromTriad(request); Object.defineProperty(request, "packet", { value: sealed, enumerable: false });
+        initialItem = completedProvider(request, { provider: "opencode", session_id: "same-session", output: "not json" });
+        return { runtime_id: "33333333-3333-4333-8333-333333333333", providers: [initialItem] };
+      }
+      const providerOutput = calls.length === 2 ? "still not json" : output(calls[0].packet);
+      mkdirSync(request.privateRawDirectory, { recursive: true });
+      const stdout = join(request.privateRawDirectory, "opencode.stdout.raw"); const stderr = join(request.privateRawDirectory, "opencode.stderr.raw");
+      writeFileSync(stdout, providerOutput); writeFileSync(stderr, "");
+      return { runtime_id: "33333333-3333-4333-8333-333333333333", providers: [{ provider: "opencode", status: "completed", session_id: "same-session", delivery_used: "file_only", delivery: initialItem.delivery, output: providerOutput, raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: hash(providerOutput), raw_stderr_sha256: hash("") }] };
+    }, { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "format-correction", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", semantic_verdict: "pass", business_valid: true, session_id: "same-session" }));
+    expect(calls).toHaveLength(3);
+    for (const retry of calls.slice(1)) {
+      expect(retry.request).toMatchObject({ provider_allowlist: ["opencode"], continuation: { runtime_id: "33333333-3333-4333-8333-333333333333", reuse_frozen_material: true } });
+      expect(retry.attachments).toBeUndefined();
+    }
+    const attemptRoot = join(dirname(result.receipt_draft_ref), "attempts");
+    expect(readdirSync(attemptRoot).sort()).toEqual(["attempt-1", "attempt-2", "attempt-3"]);
+  });
+
+  it("corrects the real Kimi R2 schema shape twice with a stable pointer in the same session", async () => {
+    const tracking = root(); const calls = []; let initialItem;
+    const kimiShape = JSON.stringify({ status: "approved", stage: "build-code", track: "default", findings: [], conclusion: "R2 marker reviewed", checks_verified: [] });
+    const broker = capabilityBroker(async (request) => {
+      calls.push(request);
+      if (calls.length === 1) {
+        const sealed = packetFromTriad(request); Object.defineProperty(request, "packet", { value: sealed, enumerable: false });
+        initialItem = completedProvider(request, { provider: "kimi", session_id: "kimi-r2-session", output: kimiShape });
+        return { runtime_id: "34343434-3434-4434-8434-343434343434", providers: [initialItem] };
+      }
+      const providerOutput = calls.length === 2 ? kimiShape : output(calls[0].packet);
+      mkdirSync(request.privateRawDirectory, { recursive: true });
+      const stdout = join(request.privateRawDirectory, "kimi.stdout.raw"); const stderr = join(request.privateRawDirectory, "kimi.stderr.raw"); writeFileSync(stdout, providerOutput); writeFileSync(stderr, "");
+      return { runtime_id: "34343434-3434-4434-8434-343434343434", providers: [{ provider: "kimi", status: "completed", session_id: "kimi-r2-session", delivery_used: "file_only", delivery: initialItem.delivery, output: providerOutput, raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: hash(providerOutput), raw_stderr_sha256: hash("") }] };
+    }, { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const prepared = await facade.prepare({ task_id: "schema-correction", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) });
+    expect(Object.getOwnPropertyDescriptor(prepared, "correction_schema")).toMatchObject({ enumerable: false, writable: false, configurable: false });
+    expect(Object.getOwnPropertyDescriptor(prepared, "correction_contract_facts")).toMatchObject({ enumerable: false, writable: false, configurable: false });
+    const result = await facade.run(prepared);
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "kimi", semantic_verdict: "pass", business_valid: true, session_id: "kimi-r2-session" }));
+    expect(calls).toHaveLength(3);
+    for (const retry of calls.slice(1)) {
+      expect(retry.request.continuation).toEqual({ runtime_id: "34343434-3434-4434-8434-343434343434", reuse_frozen_material: true });
+      expect(retry.request.provider_allowlist).toEqual(["kimi"]); expect(retry.attachments).toBeUndefined();
+      expect(retry.request.prompt).toContain("OUTPUT_SCHEMA_INVALID"); expect(retry.request.prompt).toContain("SCHEMA_VALIDATION_FAILED:/status"); expect(retry.request.prompt).toContain("canonical JSON");
+      const frozenSchema = JSON.parse(retry.request.prompt.split("FROZEN_REVIEWER_OUTPUT_SCHEMA=")[1].split("\nFROZEN_CONTRACT_CORRECTION_FACTS=")[0]);
+      expect(frozenSchema).toEqual(JSON.parse(readFileSync(join(process.cwd(), "skills/wh-review/schemas/reviewer-output.schema.json"), "utf8")));
+      const contractFacts = JSON.parse(retry.request.prompt.split("FROZEN_CONTRACT_CORRECTION_FACTS=")[1]);
+      expect(contractFacts).toMatchObject({ checklist_ids: ["C1", "C2", "C3", "H1", "H2", "H3"], hard_invariant_ids: ["H1", "H2", "H3"], required_skills: [], provider_visible_destinations: expect.arrayContaining(["changes.diff", "manifest.json", "review-packet.v1.json"]), artifact_anchor_rule: expect.stringContaining("bundle/"), skill_results_rule: expect.stringContaining("Never add a default skill") });
+      expect(contractFacts.provider_visible_destinations).not.toContain("bundle/");
+      expect(retry.request.prompt).not.toContain("R2_DELTA_ONLY_MARKER");
+    }
+  });
+
+  it("exhausts two schema corrections without creating a verdict or locking the flow", async () => {
+    const tracking = root(); let calls = 0; let delivery;
+    const kimiShape = JSON.stringify({ status: "approved", stage: "build-code", track: "default", findings: [], conclusion: "reviewed", checks_verified: [] });
+    const broker = capabilityBroker(async (request) => {
+      calls += 1;
+      if (calls === 1) {
+        const sealed = packetFromTriad(request); Object.defineProperty(request, "packet", { value: sealed, enumerable: false });
+        const item = completedProvider(request, { provider: "kimi", session_id: "same-session", output: kimiShape }); delivery = item.delivery;
+        return { runtime_id: "35353535-3535-4535-8535-353535353535", providers: [item] };
+      }
+      mkdirSync(request.privateRawDirectory, { recursive: true }); const stdout = join(request.privateRawDirectory, "kimi.stdout.raw"); const stderr = join(request.privateRawDirectory, "kimi.stderr.raw"); writeFileSync(stdout, kimiShape); writeFileSync(stderr, "");
+      return { runtime_id: "35353535-3535-4535-8535-353535353535", providers: [{ provider: "kimi", status: "completed", session_id: "same-session", delivery_used: "file_only", delivery, output: kimiShape, raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: hash(kimiShape), raw_stderr_sha256: hash("") }] };
+    }, { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker }); const task = "schema-exhausted";
+    const result = await facade.run(facade.prepare({ task_id: task, stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(calls).toBe(3); expect(result.provider_outcomes).toEqual([expect.objectContaining({ diagnostic: "OUTPUT_SCHEMA_INVALID", semantic_verdict: null, business_valid: false })]);
+    expect(existsSync(join(tracking, task, "reviews", "private", "flows", "build-code-flow.json"))).toBe(false);
+    expect(readdirSync(join(dirname(result.receipt_draft_ref), "..")).sort()).toEqual(["attempt-1", "attempt-2", "attempt-3"]);
+    const prepared = await facade.prepare({ task_id: task, stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }); rmSync(prepared.lock, { recursive: true, force: true });
   });
 
   it("schema-validates dispositions before reading caller result fields", () => {
@@ -943,6 +1178,26 @@ describe("ReviewRoundFacade", () => {
     const unknown = result.provider_outcomes.find((item) => item.diagnostic === "UNKNOWN_PROVIDER");
     expect(unknown).toMatchObject({ provider: null, business_valid: false });
     expect(JSON.stringify(result)).not.toContain("/private/secret");
+  });
+
+  it("honors caller provider_allowlist across real prepare and broker request construction", async () => {
+    const tracking = root(); const seen = [];
+    const broker = capabilityBroker(async (request) => {
+      seen.push(request.request.provider_allowlist);
+      const sealed = packetFromTriad(request); Object.defineProperty(request, "packet", { value: sealed, enumerable: false });
+      return { runtime_id: "77777777-7777-4777-8777-777777777777", providers: [completedProvider(request, { provider: "kimi", session_id: "kimi-session", output: output(sealed) })] };
+    }, {
+      version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+        { provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      ],
+    });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const prepared = await facade.prepare({ task_id: "caller-allowlist", stage: "build-code", review_flow_id: "flow", host_provider: "codex", provider_allowlist: ["kimi"], packet: packet({ root: tracking }) });
+    expect(prepared.intent.candidate_providers).toEqual(["kimi"]);
+    const result = await facade.run(prepared);
+    expect(seen).toEqual([["kimi"]]);
+    expect(result.provider_outcomes.map((item) => item.provider)).toEqual(["kimi"]);
   });
   it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
@@ -1435,7 +1690,7 @@ describe("ReviewRoundFacade", () => {
     for (const item of mustRead) expect(dispatched.request.prompt).toContain(item);
     expect(dispatched.request.prompt).not.toContain(readFileSync(join(import.meta.dirname, "../../../review/SKILL.md"), "utf8"));
     expect(dispatched.request.prompt).not.toContain(prepared.packet.diff_sha256);
-    expect(dispatched.request.prompt).toContain("Read manifest.json first. Return only reviewer-output JSON.");
+    expect(dispatched.request.prompt).toContain("Follow the provider adapter's attachment-root instruction to read the manifest and packet. Return only reviewer-output JSON.");
     const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
     expect(manifest.attachments).toContainEqual({ target: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff), embed: false });
   });
@@ -1514,7 +1769,7 @@ describe("ReviewRoundFacade", () => {
     }) });
     const initial = trustedPacket(tracking);
     const first = await facade.run(facade.prepare({ task_id: "finding-allowlist", stage: "build-code", review_flow_id: "flow", packet: initial }));
-    expect(first.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "SCHEMA_VALIDATION_FAILED:/findings/0/session_id" });
+    expect(first.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "OUTPUT_SCHEMA_INVALID", diagnostic_detail: "SCHEMA_VALIDATION_FAILED:/findings/0/session_id" });
     expect(first.merged_findings).toEqual([]);
     expect(first.continuation_eligible).toBe(false);
   });
@@ -1526,7 +1781,7 @@ describe("ReviewRoundFacade", () => {
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(raw) }] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "absolute-finding", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
-    expect(result.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "BUSINESS_INVALID" });
+    expect(result.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "REVIEW_CONTRACT_INVALID" });
     expect(result.merged_findings).toEqual([]);
   });
 
@@ -1597,6 +1852,17 @@ describe("ReviewRoundFacade", () => {
     expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", diagnostic: "DELIVERY_RECORD_MISMATCH", business_valid: false, semantic_verdict: null }));
   });
 
+  it("reports a mismatched broker material digest without collapsing it into a business error", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const item = completedProvider(request, { output: output(request.packet) });
+      item.delivery.derived_attestation.diff_sha256 = "0".repeat(64);
+      return { providers: [item] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "delivery-hash-mismatch", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.provider_outcomes[0]).toMatchObject({ business_valid: false, semantic_verdict: null, diagnostic: "MATERIAL_HASH_MISMATCH" });
+  });
+
   it("uses the stage file_only policy as an exact provider filter and never falls back to embedding", async () => {
     const tracking = root(); let calls = 0;
     const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
@@ -1631,11 +1897,13 @@ describe("ReviewRoundFacade", () => {
     expect(privateReceipt.initial_delivery_by_provider).toEqual({ opencode: expect.objectContaining({ delivery_mode: "file_only", material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
     expect(privateReceipt.provider_outcomes[0].delivery_used).toBe("file_only");
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toMatch(/delivery_used|file_only/);
+    const flowPath = join(tracking, "delivery-freeze", "reviews", "private", "flows", "build-code-flow.json"); const successfulFlow = readFileSync(flowPath, "utf8");
     continuationPacket = input.packet; const second = await facade.run(facade.prepare({ ...input, continuation: true }));
     expect(second.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH" }]);
     expect(second.merged_findings).toEqual([]);
     expect(second.continuation_eligible).toBe(false);
     expect(second.blocked_by_human_confirmation).toBe(true);
+    expect(readFileSync(flowPath, "utf8")).toBe(successfulFlow);
     expect(() => facade.publish(second, { items: [] })).toThrow(/human confirmation/);
   });
 
@@ -1718,14 +1986,14 @@ describe("ReviewRoundFacade", () => {
     expect(JSON.parse(readFileSync(publication.stage_result_ref, "utf8"))).toMatchObject({ core_receipt_hash: publication.core_receipt_hash, verdict: "revise_required", needs_human: true });
   });
 
-  it.each(["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"])("rejects a completed provider response whose %s attestation is tampered", async (field) => {
+  it.each(["packet_hash", "manifest_hash", "diff_sha256", "contract_hash", "skill_bundle_hash"])("rejects legacy provider-owned %s instead of trusting it", async (field) => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
       const tampered = JSON.parse(output(request.packet)); tampered[field] = "0".repeat(64);
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(tampered) }] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "tampered-output", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
-    expect(result.provider_outcomes.find((item) => item.provider === "opencode")).toMatchObject({ provider: "opencode", transport_status: "completed", packet_status: "hash_mismatch", business_valid: false, semantic_verdict: null });
+    expect(result.provider_outcomes.find((item) => item.provider === "opencode")).toMatchObject({ provider: "opencode", transport_status: "completed", packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "OUTPUT_SCHEMA_INVALID" });
     expect(result.merged_findings).toEqual([]);
   });
 
@@ -1741,7 +2009,7 @@ describe("ReviewRoundFacade", () => {
       ] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "invalid-output", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }) }));
-    expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "SCHEMA_VALIDATION_FAILED:/pass_items" });
+    expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "OUTPUT_SCHEMA_INVALID", diagnostic_detail: "SCHEMA_VALIDATION_FAILED:/pass_items" });
     fenced = result.provider_outcomes.find(({ provider }) => provider === "kimi");
     expect(fenced).toMatchObject({ packet_status: "complete", business_valid: true, semantic_verdict: "pass" });
     expect(result.provider_outcomes.find(({ provider }) => provider === "claude-code")).toMatchObject({ packet_status: "material_incomplete", business_valid: false, semantic_verdict: null, diagnostic: "PROVIDER_PACKET_INCOMPLETE" });
@@ -1755,7 +2023,7 @@ describe("ReviewRoundFacade", () => {
       const raw = JSON.parse(output(request.packet, "revise_required", "important", "C1"));
       raw.summary = `src/a.mjs:12 checked session ${secretId}`;
       raw.checklist[1] = { id: "C2", passed: true, evidence: "src/a.mjs:12 used Bearer top-secret-token" };
-      raw.pass_items[0] = { rule_id: "C2", artifact_anchor: "src/a.mjs:12", evidence: `src/a.mjs:12 raw ref ${secretPath}` };
+      raw.pass_items[0] = { rule_id: "C2", artifact_anchor: "changes.diff:12", evidence: `changes.diff:12 raw ref ${secretPath}` };
       raw.findings[0].evidence = `src/a.mjs:12 session ${secretId} and runtime runtime-secret-42 expose token=must-not-publish`;
       return { runtime_id: "runtime-secret-42", providers: [{ provider: "opencode", status: "completed", session_id: secretId, output: JSON.stringify(raw) }] };
     }) });

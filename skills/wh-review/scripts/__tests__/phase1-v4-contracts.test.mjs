@@ -84,9 +84,9 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
   it("rejects empty skill results for stages with required packet lenses", () => {
     const hash = "a".repeat(64);
     const outcome = validateReviewerOutput({
+      providerVisibleDestinations: ["changes.diff"],
       stage: "build-plan",
-      output: { packet_hash: hash, manifest_hash: hash, diff_sha256: hash, contract_hash: hash, skill_bundle_hash: hash,
-        packet_status: "complete", verdict: "pass", summary: "具体检查结果来自 build-plan 合同材料", findings: [], checklist: [], pass_items: [], skillResults: [] },
+      output: { packet_status: "complete", verdict: "pass", summary: "具体检查结果来自 build-plan 合同材料", findings: [], checklist: [], pass_items: [], skillResults: [] },
     });
     expect(outcome.valid).toBe(false);
     expect(outcome.errors).toContain("missing required skill result: spec-analyze");

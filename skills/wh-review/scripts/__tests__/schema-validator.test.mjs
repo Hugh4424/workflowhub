@@ -71,11 +71,17 @@ describe("schema-validator", () => {
 
   it("rejects blank revise details before business validation", () => {
     const value = {
-      packet_hash: hash, manifest_hash: hash, diff_sha256: hash, contract_hash: hash, skill_bundle_hash: hash,
       packet_status: "complete", verdict: "revise_required", summary: "x", findings: [], checklist: [],
       pass_items: [], skillResults: [], rootCause: "", fixApproach: "   ",
     };
     expectSchemaError("reviewer-output", value, "/rootCause");
+  });
+
+  it("keeps host hashes out of the provider output contract", () => {
+    const value = { packet_status: "complete", verdict: "pass", summary: "reviewed", findings: [], checklist: [], pass_items: [], skillResults: [] };
+    expect(validateSchema("reviewer-output", value)).toBe(value);
+    value.packet_hash = hash;
+    expectSchemaError("reviewer-output", value, "/packet_hash");
   });
 
   it("rejects malformed dispositions and round results", () => {

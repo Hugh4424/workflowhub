@@ -42,8 +42,8 @@ describe("Phase 5B Must Read contracts", () => {
     const protocol = read("contracts/provider-protocol.md");
     const schema = JSON.parse(read("schemas/reviewer-output.schema.json"));
     expect(protocol).toContain("single bare JSON object");
-    expect(protocol).toMatch(/exactly one.*Markdown JSON fence/i);
-    expect(protocol).toMatch(/no text before or after/i);
+    expect(protocol).toMatch(/exactly one Markdown `json` fence/i);
+    expect(protocol).toMatch(/text before or after the fence is allowed/i);
     expect(protocol).toContain("checklist");
     expect(protocol).toContain("pass_items");
     expect(protocol).toContain("changes.diff:line <n>");

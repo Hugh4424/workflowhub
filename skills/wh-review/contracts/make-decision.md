@@ -34,7 +34,7 @@
 
 ### Stage output: Direction
 
-输出必须符合 `schemas/reviewer-output.schema.json`，并给出 DIR 全量 checklist、pass_items、finding、五个 hash 回显和所需 lens 的 skillResults。
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出 DIR 全量 checklist、pass_items、finding 和所需 lens 的 skillResults。host 负责绑定 hash。
 
 ### Checklist IDs: Direction
 
@@ -81,7 +81,7 @@ blocking：需求方向偏离原始诉求、解决虚构问题、关键前提被
 
 ### Stage output: Detail
 
-输出必须符合 `schemas/reviewer-output.schema.json`，并给出 DET 全量 checklist、pass_items、finding、五个 hash 回显和所需 lens 的 skillResults。
+输出必须符合 `schemas/reviewer-output.schema.json`，并给出 DET 全量 checklist、pass_items、finding 和所需 lens 的 skillResults。host 负责绑定 hash。
 
 ### Checklist IDs: Detail
 
