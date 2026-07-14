@@ -33,3 +33,13 @@ it("accepts declared local dependencies", () => {
   const value = fixture({ "SKILL.md": "[rules](references/rules.md)", "references/rules.md": "rules" });
   expect(findUndeclaredStaticDependencies({ skillDir: value.skillDir, fileEntries: value.entries })).toEqual([]);
 });
+
+it("finds shell source and direct exec dependencies", () => {
+  const value = fixture({ "run.sh": "source ./lib.sh\n./tool.sh --check\n", "lib.sh": "true", "tool.sh": "true" });
+  expect(findUndeclaredStaticDependencies({ skillDir: value.skillDir, fileEntries: [value.entries[0]] }).map(item => item.locator).sort()).toEqual(["./lib.sh", "./tool.sh"]);
+});
+
+it("finds relative Python imports", () => {
+  const value = fixture({ "main.py": "from .helper import run\n", "helper.py": "def run(): pass\n" });
+  expect(findUndeclaredStaticDependencies({ skillDir: value.skillDir, fileEntries: [value.entries[0]] })).toEqual([expect.objectContaining({ locator: "helper.py" })]);
+});

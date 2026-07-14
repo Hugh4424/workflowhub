@@ -39,11 +39,10 @@ describe("stage skill runtime", () => {
     expect(invoked).toBe(false);
   });
 
-  it("does not read conditional skill contents during stage preflight", () => {
+  it("validates conditional bundle assets during stage preflight", () => {
     const root = fixture();
-    fs.chmodSync(path.join(root, "skills/demo/SKILL.md"), 0o000);
-    expect(() => preflightStageSkills({ packageRoot: root, stage: "stage" })).not.toThrow();
-    fs.chmodSync(path.join(root, "skills/demo/SKILL.md"), 0o600);
+    fs.rmSync(path.join(root, "skills/demo/SKILL.md"));
+    expect(() => preflightStageSkills({ packageRoot: root, stage: "stage" })).toThrow();
   });
 
   it("fails loud when an independent context is unavailable", async () => {

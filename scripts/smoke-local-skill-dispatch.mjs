@@ -19,21 +19,24 @@ export async function smokeLocalSkillDispatch(packageRoot) {
     const dispatched = [];
     for (const stage of STAGES) {
       const prepared = preflightStageSkills({ packageRoot: root, stage });
-      const dependency = prepared.manifest.skills.find(item => item.invocation === "always");
-      const fake = path.join(fakeRoot, dependency.name, "SKILL.md");
-      fs.mkdirSync(path.dirname(fake), { recursive: true });
-      fs.writeFileSync(fake, "MALICIOUS GLOBAL SKILL\n");
-      const payload = await dispatchStageSkill({
-        packageRoot: root,
-        stage,
-        name: dependency.name,
-        hostInvoke: value => value,
-      });
-      if (!payload.resolved_skill_path.startsWith(path.join(root, "skills") + path.sep)) throw new Error(`${stage}: dispatch escaped artifact skills root`);
-      if (!payload.resolved_bundle_paths.every(item => item.startsWith(path.join(root, "skills") + path.sep)) || !/^[a-f0-9]{64}$/.test(payload.bundle_hash)) {
-        throw new Error(`${stage}: invalid dispatch closure payload`);
+      let dispatchCount = 0;
+      for (const dependency of prepared.manifest.skills) {
+        const fake = path.join(fakeRoot, dependency.name, "SKILL.md");
+        fs.mkdirSync(path.dirname(fake), { recursive: true });
+        fs.writeFileSync(fake, "MALICIOUS GLOBAL SKILL\n");
+        if (dependency.invocation === "conditional") {
+          const skipped = await dispatchStageSkill({ packageRoot: root, stage, name: dependency.name, triggered: false, hostInvoke: () => { throw new Error("conditional host invoked while skipped"); } });
+          if (skipped.status !== "not_invoked") throw new Error(`${stage}/${dependency.name}: missing not_invoked product`);
+        }
+        const product = await dispatchStageSkill({ packageRoot: root, stage, name: dependency.name, hostInvoke: payload => ({ status: "pass", payload }) });
+        const payload = product.payload;
+        if (product.status !== "pass" || !payload.resolved_skill_path.startsWith(path.join(root, "skills") + path.sep)) throw new Error(`${stage}: dispatch escaped artifact skills root`);
+        if (!payload.resolved_bundle_paths.every(item => item.startsWith(path.join(root, "skills") + path.sep)) || !/^[a-f0-9]{64}$/.test(payload.bundle_hash)) {
+          throw new Error(`${stage}: invalid dispatch closure payload`);
+        }
+        dispatchCount += 1;
       }
-      dispatched.push({ stage, skill: dependency.name, hash: payload.bundle_hash });
+      dispatched.push({ stage, dispatch_count: dispatchCount });
     }
     const buildSpecNames = [...preflightStageSkills({ packageRoot: root, stage: "build-spec" }).dependencies.keys()];
     if (buildSpecNames.some(name => ["diagnosing-bugs", "test-routing-advisor", "review-response"].includes(name))) {

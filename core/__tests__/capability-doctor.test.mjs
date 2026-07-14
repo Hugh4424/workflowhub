@@ -24,4 +24,19 @@ describe("capability doctor", () => {
     expect(results.map(item => [item.id, item.status])).toEqual([["node", "available"], ["host-subagent", "human_required"], ["optional-search", "diagnostic"]]);
     expect(() => assertRequiredCapabilities({ manifest, activeConditions: ["review"], run: () => ({ status: 0, stdout: "v24" }), probes: { "host-subagent": false } })).toThrow(/host-subagent:human_required/);
   });
+
+  it("uses the real target command argv and accepts browser alternatives", () => {
+    const custom = { runtime_capabilities: [
+      { id: "target-test-command", kind: "command", required_when: "always", doctor: ["placeholder"], absence_semantics: "blocked" },
+      { id: "browser-cli", kind: "cli", required_when: "ui", doctor_any: [["agent-browser", "--version"], ["browser-use", "doctor"]], absence_semantics: "blocked" },
+    ] };
+    const calls = [];
+    const results = doctorCapabilities({ manifest: custom, activeConditions: ["ui"], commands: { "target-test-command": ["npm", "test", "--", "--runInBand"] }, run: (command, args) => {
+      calls.push([command, ...args]);
+      return { status: command === "agent-browser" ? 1 : 0, stdout: "ok" };
+    } });
+    expect(calls[0]).toEqual(["npm", "test", "--", "--runInBand"]);
+    expect(calls).toContainEqual(["browser-use", "doctor"]);
+    expect(results.every(item => item.status === "available")).toBe(true);
+  });
 });

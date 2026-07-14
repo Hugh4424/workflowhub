@@ -12,7 +12,7 @@ function versionSatisfied(output, policy) {
   return !match || major(output) >= Number(match[1]);
 }
 
-export function doctorCapabilities({ manifest, activeConditions = [], probes = {}, run = spawnSync } = {}) {
+export function doctorCapabilities({ manifest, activeConditions = [], probes = {}, commands = {}, run = spawnSync } = {}) {
   const conditions = new Set(activeConditions);
   const capabilities = [...(manifest?.runtime_capabilities || []), ...(manifest?.external_capabilities || [])];
   return capabilities.map(capability => {
@@ -20,10 +20,16 @@ export function doctorCapabilities({ manifest, activeConditions = [], probes = {
     let available = false;
     let detail = "";
     if (capability.kind === "cli" || capability.kind === "command") {
-      const [command, ...args] = capability.doctor;
-      const result = run(command, args, { encoding: "utf8", shell: false });
-      detail = `${result.stdout || ""}${result.stderr || ""}`.trim();
-      available = !result.error && result.status === 0 && versionSatisfied(detail, capability.version_policy);
+      const candidates = capability.kind === "command" && commands[capability.id]
+        ? [commands[capability.id]] : (capability.doctor_any || [capability.doctor]);
+      const attempts = candidates.map(argv => {
+        const [command, ...args] = argv;
+        const result = run(command, args, { encoding: "utf8", shell: false });
+        return { result, output: `${result.stdout || ""}${result.stderr || ""}`.trim() };
+      });
+      const passed = attempts.find(({ result, output }) => !result.error && result.status === 0 && versionSatisfied(output, capability.version_policy));
+      detail = passed?.output || attempts.map(item => item.output).filter(Boolean).join(" | ");
+      available = Boolean(passed);
     } else {
       const probe = probes[capability.id];
       const result = typeof probe === "function" ? probe(capability) : probe;

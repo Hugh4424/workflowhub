@@ -11,8 +11,11 @@ skills:
   - { name: review, path: skills/review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_detail_lens, bundle: skills/review/skill-bundle.json }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
+  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }
+  - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: research_or_review, absence_semantics: blocked }
   - { id: git, kind: cli, doctor: [git, --version], required_when: implementation_selected, absence_semantics: blocked }
 external_capabilities:
   - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: research_or_review, absence_semantics: human_required }
   - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }
   - { id: muyu-search-mcp, kind: mcp, doctor: [host-capability, muyu-search-mcp], required_when: external_research_approved, absence_semantics: diagnostic }
+  - { id: anysearch-api, kind: host, doctor: [workflowhub-capability, anysearch-api], required_when: external_research_approved, absence_semantics: diagnostic }

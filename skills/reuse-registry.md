@@ -75,6 +75,24 @@
 
 ## 拒绝与观察
 
+机器 catalog capability ID 投影（用于闭包校验）：
+
+- `superpowers-test-driven-development`
+- `superpowers-subagent-driven-development`
+- `superpowers-requesting-code-review`
+- `superpowers-verification-before-completion`
+- `superpowers-finishing-a-development-branch`
+- `superpowers-writing-plans`
+- `workflow-friction`
+- `agenthub-testing-executor-framework`
+- `agenthub-skill-discovery-symlinks`
+- `agenthub-handoff-session-pair`
+- `superpowers-using-superpowers`
+- `gstack-runtime`
+- `matt-domain-modeling`
+- `matt-codebase-design`
+- `matt-research`
+
 - rejected：`intake-review-orchestrator`。上游已删除；由 `intake-decision-review + wh-review` 承接。
 - rejected：AgentHub `testing-system-blueprint`、backend/frontend/full-chain 执行器。只保留纯路由 advisor。
 - rejected：Superpowers `using-superpowers`。全局发现/bootstrap 与 repo-relative 按需加载冲突。

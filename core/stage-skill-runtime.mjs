@@ -16,6 +16,7 @@ export function loadStageSkillManifest(packageRoot, stage) {
 export function preflightStageSkills({ packageRoot, stage }) {
   const loaded = loadStageSkillManifest(packageRoot, stage);
   const dependencies = new Map();
+  const payloads = new Map();
   for (const dependency of loaded.manifest.skills) {
     for (const locator of [dependency.path, dependency.bundle]) {
       const candidate = path.resolve(loaded.root, locator);
@@ -23,8 +24,9 @@ export function preflightStageSkills({ packageRoot, stage }) {
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${stage}/${dependency.name}: invalid installation file ${locator}`);
     }
     dependencies.set(dependency.name, dependency);
+    payloads.set(dependency.name, resolveSkillDispatch({ packageRoot: loaded.root, manifestPath: loaded.relative, dependency }));
   }
-  return { ...loaded, dependencies };
+  return { ...loaded, dependencies, payloads };
 }
 
 export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, hostInvoke, independentContextAvailable = true }) {
@@ -39,6 +41,5 @@ export async function dispatchStageSkill({ packageRoot, stage, name, triggered =
     throw new Error(`${stage}/${name}: independent context capability unavailable; human decision required`);
   }
   if (typeof hostInvoke !== "function") throw new Error(`${stage}/${name}: hostInvoke is required`);
-  const payload = resolveSkillDispatch({ packageRoot: prepared.root, manifestPath: prepared.relative, dependency });
-  return hostInvoke(payload);
+  return hostInvoke(prepared.payloads.get(name));
 }

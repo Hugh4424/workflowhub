@@ -129,6 +129,20 @@ export function checkSkillClosure(packageRoot) {
       }
     } catch (error) { pushError(errors, `${entry.name}: ${error.message}`); }
   }
+  const registryText = fs.readFileSync(path.join(root, "skills/reuse-registry.md"), "utf8");
+  const noticeText = fs.readFileSync(path.join(root, "THIRD_PARTY_NOTICES.md"), "utf8");
+  for (const entry of [...entries, ...(catalog.capability_decisions || [])]) {
+    if (!registryText.includes(`\`${entry.name}\``) && !registryText.includes(`| ${entry.name} |`)) {
+      pushError(errors, `registry projection missing catalog entry: ${entry.name}`);
+    }
+    for (const source of entry.upstream || []) {
+      if (source.github_url) {
+        const repository = source.github_url.replace(/^https:\/\/github\.com\//, "");
+        if (!noticeText.toLowerCase().includes(repository.toLowerCase())) pushError(errors, `THIRD_PARTY_NOTICES missing upstream source: ${repository}`);
+        if (!noticeText.includes(source.license)) pushError(errors, `THIRD_PARTY_NOTICES missing license ${source.license} for ${entry.name}`);
+      }
+    }
+  }
   return { ok: errors.length === 0, errors };
 }
 
