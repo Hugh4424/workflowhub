@@ -64,40 +64,60 @@ AgentHub 基线：
 
 ### 4.3 需要恢复或补强
 
-1. `test-routing-advisor`
+1. `isolated-browser-qa`
+   - AgentHub 把它作为 UI 验收能力；workflowhub 当前只有 `workflows/verify-code/isolated-browser-qa.md`，不是完整、可独立调用的 skill。
+   - 搬入用户提供的完整 skill、references 和 scripts，去掉个人绝对路径；verify-code 继续只在 UI 条件成立时调用。
+
+2. `test-routing-advisor`
    - 当前 build-code 跨仓锁定 AgentHub commit，仓内缺失。
    - 搬为 workflowhub 专用纯路由组件，固定输出 stage 当前需要的 JSON schema。
    - 不要求 backend/frontend/full-chain 执行器存在。
 
-2. 根因调试
+3. 根因调试
    - 新建 `skills/diagnosing-bugs/`，以 Matt Pocock `diagnosing-bugs` 为主来源，吸收 Superpowers `systematic-debugging` 与 gstack `investigate` 的有效规则。
    - 条件触发：测试异常、实现异常、finding 根因未知、同类修复重复失败。
    - 输出：`root_cause`、`hypothesis`、`evidence_ref`、`fix_scope`、`verification_ref`。
    - 三个独立假设失败后停止补丁循环，转架构检查或人工决策。
 
-3. review finding 消费纪律
+4. review finding 消费纪律
    - 新建 `skills/review-response/`。
    - 逐条复述 finding、核实事实、按根因聚类、检查同类调用方、做最小修复、补针对性测试、通过同一 continuation flow 重审。
    - reviewer 意见不是自动命令；技术上错误的建议必须用证据拒绝。
 
-4. planning 质量
+5. planning 质量
    - 不复制 `superpowers-writing-plans`。
    - 在现有 `spec-plan/spec-tasks` 中补 Task Right-Sizing、Global Constraints、Interfaces，以及 `Goal / Files / Tasks / Verify / Knowledge / STOP` 的明确映射。
 
-5. TDD 质量
+6. TDD 质量
    - 不复制第二套 TDD 编排器。
    - 吸收 Matt Pocock `tdd` 与 Superpowers `testing-anti-patterns.md` 中的测试设计、mock、test-only production API 等规则，作为 build-code/test-strategy reference。
 
-6. `grill-with-docs`
+7. `grill-with-docs`
    - 保留 workflowhub 的四项退出合同。
    - 吸收最新 `grilling + domain-modeling` 的组件思路。
    - skill 失败时转人工；只有用户明确跳过才能继续。
 
-7. workflow friction
+8. workflow friction
    - 不恢复旧 skill。
    - 五个 stage 统一内联 `[FRICTION]` 记录合同，写入现有 task execution record。
 
 ## 5. 首批技能闭包
+
+恢复项到本地承接点必须一一对应：
+
+| 恢复或补强项 | 状态 | 本地承接点 | 触发与验证 |
+|---|---|---|---|
+| 浏览器 QA | adopted | `skills/isolated-browser-qa/` | verify-code UI 条件；截图、console、L3 报告 |
+| 测试路由 | adapted | `skills/test-routing-advisor/` | build-code L2；固定 JSON schema |
+| 根因调试 | adapted | `skills/diagnosing-bugs/` | 异常/未知根因；结构化根因证据 |
+| review 消费 | adapted | `skills/review-response/` | revise_required；同 flow 重审 |
+| planning 质量 | absorbed | `skills/spec-plan/`、`skills/spec-tasks/` | 模板字段与行为测试 |
+| TDD 质量 | absorbed | build-code/test-strategy references | anti-pattern checklist |
+| grill 质量 | adapted-existing | `skills/grill-with-docs/` | make-decision；失败转人工 |
+| workflow friction | absorbed | 五个 stage execution record | `[FRICTION]` 写入测试 |
+| debate | optional-adopted | `skills/debate/` | 争议增强；失败记录后继续 |
+| domain modeling | optional-adapted | `skills/domain-modeling/` | 术语或不可逆模型变化 |
+| codebase design | optional-adapted | `skills/codebase-design/` | 新模块、公共接口、复杂重构 |
 
 ### 5.1 Required
 
@@ -108,6 +128,13 @@ skills/
 ├── diagnosing-bugs/
 └── review-response/
 ```
+
+已有 required 组件继续保留并补强，不重复出现在新增目录树中：
+
+- `skills/grill-with-docs/`
+- `skills/spec-plan/`
+- `skills/spec-tasks/`
+- build-code/test-strategy 的 TDD references
 
 ### 5.2 Optional
 
