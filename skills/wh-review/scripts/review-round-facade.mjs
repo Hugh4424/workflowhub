@@ -47,6 +47,12 @@ function privateFileHash(directory, ref, expectedHash) {
 }
 function packetHash(packet) { return reviewPacketHash(packet); }
 function attachmentRecords(entries) { return entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed })); }
+function embeddedMaterialBytes(instruction, attachments) {
+  // This is the canonical one-shot rendering budget for always_embed. It is
+  // deliberately never used for file_only: that mode passes attachment IDs
+  // only and must not materialize packet/diff text in the broker request.
+  return Buffer.byteLength([instruction, ...attachments.map(({ destination, path }) => `\n--- ${destination} ---\n${readFileSync(path, "utf8")}\n--- end ${destination} ---`)].join("\n"));
+}
 function canonicalInnerManifestHash(manifest) { const { inner_manifest_hash: ignored, ...value } = manifest; return sha(canonical(value)); }
 function canonicalDeliveryManifestHash(bundleId, files, deliveryMode) { return sha(canonical({ version: 1, bundle_id: bundleId, delivery_mode: deliveryMode, files: files.filter((item) => item.target !== "manifest.json").map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
 function canonicalMaterialManifestHash(bundleId, files) { return sha(canonical({ version: 1, bundle_id: bundleId, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
@@ -128,10 +134,25 @@ function buildHostWorktreeSource(root, { baseTree, excludePaths } = {}) {
   return { ...material, source_revision: { ...material.source_revision, captured_head: capturedHead(root) } };
 }
 function internalLedgerExclusion(sourceRoot, taskTrackingRoot, taskId) {
-  const candidate = relative(resolve(sourceRoot), taskRoot(taskTrackingRoot, taskId));
-  // A task directory can also contain user-owned source. Exclude only the
-  // facade's ledger beneath it, never the whole task directory.
-  return safeRelativePath(candidate) ? [join(candidate, "reviews")] : [];
+  const source = resolve(sourceRoot); const tracking = resolve(taskTrackingRoot);
+  const excluded = new Set();
+  const addIfVisible = (ledger) => {
+    const candidate = relative(source, ledger);
+    if (candidate === "reviews" || safeRelativePath(candidate)) excluded.add(candidate);
+  };
+  // The active task id is the host contract: its reviews directory always
+  // belongs to this facade, including before the first private artifact exists.
+  addIfVisible(join(taskRoot(tracking, taskId), "reviews"));
+  // When the source and tracking trees overlap, earlier tasks' private
+  // packets/receipts are source material only by accident. Identify those
+  // ledgers by the host-only private layout; do not blanket-exclude arbitrary
+  // project directories named "reviews".
+  for (const entry of readdirSync(tracking, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !safeRelativePath(entry.name) || entry.name === taskId) continue;
+    const ledger = join(taskRoot(tracking, entry.name), "reviews");
+    if (existsSync(join(ledger, "private", "flows")) || existsSync(join(ledger, "private", "source-context.json"))) addIfVisible(ledger);
+  }
+  return [...excluded];
 }
 function processStartIdentity(pid) {
   try {
@@ -573,6 +594,9 @@ export class ReviewRoundFacade {
       const prompt = continuation
         ? continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash })
         : initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash });
+      if (attachmentEmbed && embeddedMaterialBytes(prompt, frozenAttachments) > 512 * 1024) {
+        return this.#materialIncomplete(input, "always_embed rendered provider material exceeds 524288 bytes", "MATERIAL_TOO_LARGE");
+      }
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, attachments: outerFiles, delta_manifest: continuation ? delta.delta_manifest : null }));
       const expectedDelivery = { delivery_mode: resolution.deliveryMode, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, provider_visible_attachment_manifest: outerFiles.map(({ target: destination, sha256, size }) => ({ destination, sha256, size })) };
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };

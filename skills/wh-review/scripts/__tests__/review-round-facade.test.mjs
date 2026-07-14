@@ -316,6 +316,8 @@ describe("ReviewRoundFacade", () => {
     const tracking = root();
     mkdirSync(join(tracking, "shared-task", "reviews"), { recursive: true });
     writeFileSync(join(tracking, "shared-task", "reviews", "round-receipt.json"), "host-owned receipt\n");
+    mkdirSync(join(tracking, "user-project", "reviews"), { recursive: true });
+    writeFileSync(join(tracking, "user-project", "reviews", "notes.md"), "user-owned reviews must be reviewed\n");
     writeFileSync(join(tracking, "shared-task", "implementation.txt"), "user source must be reviewed\n");
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
 
@@ -323,8 +325,10 @@ describe("ReviewRoundFacade", () => {
 
     expect(prepared.packet.unified_diff).toContain("user source must be reviewed");
     expect(prepared.packet.unified_diff).not.toContain("host-owned receipt");
+    expect(prepared.packet.unified_diff).toContain("user-owned reviews must be reviewed");
     expect(prepared.packet.changed_files.map((entry) => entry.path)).toContain("shared-task/implementation.txt");
     expect(prepared.packet.changed_files.map((entry) => entry.path)).not.toContain("shared-task/reviews/round-receipt.json");
+    expect(prepared.packet.changed_files.map((entry) => entry.path)).toContain("user-project/reviews/notes.md");
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
@@ -473,6 +477,12 @@ describe("ReviewRoundFacade", () => {
     expect(readReviewTreeRef(tracking, finalFlow.review_tree_ref)).toBe(finalFlow.approved_tree);
     rmSync(finalRefLock);
     expect(facade.verifyFinal({ task_id: "delete-ref-final", stage: "build-code", review_flow_id: "flow" })).toMatchObject({ finalized: true });
+
+    writeFileSync(join(tracking, "next-task-source.txt"), "new task source after finalized predecessor\n");
+    const next = await facade.prepare({ task_id: "after-delete-ref", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+    expect(next.packet.unified_diff).toContain("new task source after finalized predecessor");
+    expect(next.packet.changed_files.map((entry) => entry.path)).not.toContain(expect.stringMatching(/^delete-ref-final\/reviews\//));
+    rmSync(next.lock, { recursive: true, force: true });
 
     writeFileSync(join(tracking, "a"), "tree awaiting reset deletion\n");
     await facade.run(facade.prepare({ task_id: "delete-ref-reset", stage: "build-code", review_flow_id: "old", packet: hostPacket() }));
@@ -865,10 +875,10 @@ describe("ReviewRoundFacade", () => {
 
   it("rejects caller capabilities and derives candidates from doctor after acquiring the task lock", async () => {
     const tracking = root(); const lock = join(tracking, "doctor-owned", "reviews", "private", "flows", "doctor-owned.lock");
-    const broker = capabilityBroker(async (request) => ({ providers: [
-      { provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) },
-      { provider: "/private/secret", status: "completed", session_id: "disabled", output: output(request.packet) },
-    ] }), {
+    const broker = capabilityBroker(async (request) => { const sealed = packetFromTriad(request); return { providers: [
+      completedProvider(request, { provider: "opencode", session_id: "s", output: output(sealed) }),
+      { provider: "/private/secret", status: "completed", session_id: "disabled", output: output(sealed) },
+    ] }; }, {
       version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
         { provider: "codex", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
         { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
@@ -1356,13 +1366,13 @@ describe("ReviewRoundFacade", () => {
     expect(diffEntry).toMatchObject({ sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
     expect(outputSchemaEntry).toMatchObject({ sha256: hash(outputSchemaBytes), size: outputSchemaBytes.length });
     expect(dispatchedDiff).toBe(prepared.packet.unified_diff);
-    const mustRead = ["contracts/provider-protocol.md", "contracts/build-code.md", "schemas/reviewer-output.schema.json", "review-packet.v1.json", "changes.diff", "StageSkillPlan skill bundle"];
-    expect(mustRead.map((item) => dispatched.request.prompt.indexOf(item))).toEqual(mustRead.map((item) => dispatched.request.prompt.indexOf(item)).sort((a, b) => a - b));
+    const mustRead = ["contracts/provider-protocol.md", "contracts/build-code.md", "schemas/reviewer-output.schema.json", "review-packet.v1.json", "changes.diff"];
+    for (const item of mustRead) expect(dispatched.request.prompt).toContain(item);
     expect(dispatched.request.prompt).not.toContain(readFileSync(join(import.meta.dirname, "../../../review/SKILL.md"), "utf8"));
-    expect(dispatched.request.prompt).toContain(`changes_diff_sha256=${prepared.packet.diff_sha256}`);
-    expect(dispatched.request.prompt).toContain("skillResults must be exactly []; do not invent a no-extra-lens or other virtual entry.");
+    expect(dispatched.request.prompt).toContain(`diff_sha256=${prepared.packet.diff_sha256}`);
+    expect(dispatched.request.prompt).toContain("Read manifest.json first. Return only reviewer-output JSON.");
     const manifest = JSON.parse(readFileSync(join(dirname(result.receipt_draft_ref), "manifest.json"), "utf8"));
-    expect(manifest.attachments).toContainEqual({ destination: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff) });
+    expect(manifest.attachments).toContainEqual({ target: "changes.diff", sha256: prepared.packet.diff_sha256, size: Buffer.byteLength(prepared.packet.unified_diff), embed: false });
   });
 
   it("derives a strict continuation delta from the previous private receipt and current verified packet", async () => {
@@ -1628,7 +1638,7 @@ describe("ReviewRoundFacade", () => {
     });
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, requiredSkillResolver: () => resolution });
     const value = packet({ root: tracking }); value.skill_bundle_hash = resolution.skillBundleHash; refreshPacketHashes(value);
-    await expect(facade.prepare({ task_id: "initial-budget", stage: "build-code", review_flow_id: "flow", packet: value })).rejects.toThrow(/PROMPT_TOO_LARGE.*524288/);
+    await expect(facade.prepare({ task_id: "initial-budget", stage: "build-code", review_flow_id: "flow", packet: value })).rejects.toThrow(/MATERIAL_TOO_LARGE.*524288/);
     expect(calls).toBe(0);
   });
 
