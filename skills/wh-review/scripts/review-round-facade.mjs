@@ -56,10 +56,10 @@ function findAbsolutePathLiteral(value, trail = "packet") {
     // A slash is not sufficient: diffs and markdown legitimately contain
     // relative paths. These forms are unambiguously host/Windows paths.
     const raw = value.replace(/^(?:---|\+\+\+) \/dev\/null$/gm, "");
-    // Only http(s) URLs are safe to expose as references. file:// is a host
-    // path in URI notation (including localhost and Windows forms).
-    const fileUri = raw.match(/\bfile:\/\//i);
-    if (fileUri) return { trail, literal: fileUri[0] };
+    // Provider material may reference only http(s). Any other URI scheme can
+    // encode a local path (file://, vscode://file/…, and Windows variants).
+    const uri = raw.match(/\b([A-Za-z][A-Za-z0-9+.-]*):(?=\/\/|\/)/);
+    if (uri && !["http", "https"].includes(uri[1].toLowerCase())) return { trail, literal: uri[0] };
     const match = raw.match(/(?:^|[\s"'`=:(+])(?:\/[A-Za-z0-9._-]+){2,}|(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._-]+[\\/]/m);
     return match ? { trail, literal: match[0].trim() } : null;
   }

@@ -239,9 +239,9 @@ describe("ReviewRoundFacade", () => {
     expect(calls).toBe(0);
   });
 
-  it("fails closed on a file URI in a provider-visible packet supplement", async () => {
+  it.each(["file:///Users/Hugh/private-plan.md", "vscode://file/Users/Hugh/private-plan.md"])("fails closed on a non-HTTP URI in a provider-visible packet supplement: %s", async (path) => {
     const tracking = root();
-    const supplemental = { ...hostPacket(), planning_artifacts: [{ path: "file:///Users/Hugh/private-plan.md", summary: "must not be delivered" }] };
+    const supplemental = { ...hostPacket(), planning_artifacts: [{ path, summary: "must not be delivered" }] };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     await expect(facade.prepare({ task_id: "file-uri-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
   });
@@ -258,17 +258,22 @@ describe("ReviewRoundFacade", () => {
     ["file:///Users/Hugh/private"],
     ["file://localhost/Users/Hugh/private"],
     ["file:///C:/Users/Hugh/private"],
-  ])("fails closed for file URI absolute paths in source material: %s", async (literal) => {
+    ["file:/Users/Hugh/private"],
+    ["vscode://file/Users/Hugh/private"],
+    ["vscode://file/C:/Users/Hugh/private"],
+    ["vscode:/file/Users/Hugh/private"],
+    ["ftp://example.test/Users/Hugh/private"],
+  ])("fails closed for non-HTTP URI paths in source material: %s", async (literal) => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     await expect(facade.prepare({ task_id: `file-uri-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `open ${literal}` } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
   });
 
-  it("fails closed for a file URI in the R2 delta after an initial valid review", async () => {
+  it("fails closed for a non-HTTP URI in the R2 delta after an initial valid review", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "file-uri-session", output: output(request.packet) }] })) });
     await facade.run(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
-    writeFileSync(join(tracking, "a"), "file:///Users/Hugh/private\n");
+    writeFileSync(join(tracking, "a"), "vscode://file/Users/Hugh/private\n");
     await expect(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
   });
 
@@ -1752,17 +1757,18 @@ describe("ReviewRoundFacade", () => {
   });
 
   it("freezes continuable providers from completed business-valid sessions instead of doctor candidates", async () => {
-    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: capabilityBroker(async (request) => ({ runtime_id: "44444444-4444-4444-8444-444444444444", providers: [{ provider: "opencode", status: "completed", session_id: "s", output: output(request.packet) }] }), { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+    const tracking = root(); const broker = capabilityBroker(async (request) => ({ runtime_id: "44444444-4444-4444-8444-444444444444", providers: [completedProvider(request, { session_id: "s", output: output(packetFromTriad(request)) })] }), { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
       { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
       { provider: "kimi", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
-    ] }) });
+    ] }); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const first = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
     expect(first.continuation_eligible).toBe(true);
     const continuation = await facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }), continuation: true });
     expect(continuation.intent.candidate_providers).toEqual(["opencode"]);
     rmSync(continuation.lock, { recursive: true, force: true });
-    const held = await facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "one", packet: packet({ root: tracking }) });
-    expect(() => facade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "two", packet: packet({ root: tracking }) })).toThrow(/review-already-running/);
+    const lockRoot = root(); const lockFacade = new ReviewRoundFacade({ taskTrackingRoot: lockRoot, broker });
+    const held = await lockFacade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "one", packet: packet({ root: lockRoot }) });
+    expect(() => lockFacade.prepare({ task_id: "u", stage: "build-code", review_flow_id: "two", packet: packet({ root: lockRoot }) })).toThrow(/review-already-running/);
     rmSync(held.lock, { recursive: true, force: true });
   });
 

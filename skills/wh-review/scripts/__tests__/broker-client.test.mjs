@@ -106,6 +106,7 @@ describe("BrokerClient", () => {
   it.each(["opencode", "kimi"])("copies %s original stdout/stderr from private broker state and preserves its hashes", async (provider) => {
     const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-"));
     try {
+      const seenRequests = [];
       const runtimeRoot = join(root, "runtime"); const runtimeId = "11111111-1111-4111-8111-111111111111";
       const runtime = join(runtimeRoot, runtimeId); const rawDir = join(runtime, "raw", provider); mkdirSync(rawDir, { recursive: true });
       const stdout = `wire ${provider} stdout\\n{\"verdict\":\"pass\"}\\n`; const stderr = `${provider} stderr\\n`;
@@ -114,13 +115,16 @@ describe("BrokerClient", () => {
         raw_stdout_ref: `raw/${provider}/stdout`, raw_stdout_sha256: sha256(stdout), raw_stderr_ref: `raw/${provider}/stderr`, raw_stderr_sha256: sha256(stderr),
       } } }));
       const config = join(root, "config.json"); writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: runtimeRoot } }));
-      const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config, spawnImpl() {
+      const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config, spawnImpl(command, args) {
         const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+        const requestPath = args.find((arg) => arg.startsWith("--request=")).slice("--request=".length);
+        seenRequests.push(JSON.parse(readFileSync(requestPath, "utf8")));
         queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [{ provider, status: "completed", raw_stdout_sha256: sha256(stdout), raw_stderr_sha256: sha256(stderr), output: "parsed provider output" }] })); child.emit("close", 0); }); return child;
       } });
       const privateRawDirectory = join(root, "task", "reviews", "private", "round-1", "provider-raw");
-      const result = await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, privateRawDirectory });
+      const result = await client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null, provider_allowlist: [provider] }, privateRawDirectory });
       const outcome = result.providers[0];
+      expect(seenRequests).toEqual([expect.objectContaining({ provider_allowlist: [provider] })]);
       expect(readFileSync(outcome.raw_stdout_ref, "utf8")).toBe(stdout); expect(readFileSync(outcome.raw_stderr_ref, "utf8")).toBe(stderr);
       expect(sha256(readFileSync(outcome.raw_stdout_ref))).toBe(outcome.raw_stdout_sha256);
       expect(sha256(readFileSync(outcome.raw_stderr_ref))).toBe(outcome.raw_stderr_sha256);
