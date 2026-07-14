@@ -18,7 +18,7 @@ function fixture({ prompt = "Use `skills/demo/SKILL.md`.", manifestSkill = true 
   for (const name of ["skill-catalog", "stage-skill-deps", "skill-bundle", "review-bundle"]) {
     fs.copyFileSync(new URL(`../../schemas/${name}.schema.json`, import.meta.url), path.join(root, `schemas/${name}.schema.json`));
   }
-  fs.writeFileSync(path.join(root, "skills/catalog.yaml"), "schema_version: 2\nlast_reviewed_at: '2026-07-14'\nprojects: {}\nskills:\n  - { name: demo, path: skills/demo/SKILL.md, status: native, purpose: test, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/demo], update_policy: manual }\ncapability_decisions: [{ name: fixture, status: rejected }]\n");
+  fs.writeFileSync(path.join(root, "skills/catalog.yaml"), "schema_version: 2\nlast_reviewed_at: '2026-07-14'\nprojects: {}\nskills:\n  - { name: demo, path: skills/demo/SKILL.md, status: native, purpose: test, design_idea: fixture, used_by_stages: [stage], upstream: [], local_changes: local, dependency_closure: [skills/demo], update_policy: manual }\ncapability_decisions:\n  - { name: fixture, status: rejected, purpose: fixture, design_idea: fixture, used_by_stages: [], local_path: null, upstream: [], local_changes: rejected, dependency_closure: [], update_policy: none }\n");
   fs.writeFileSync(path.join(root, "skills/demo/SKILL.md"), "# demo\n");
   fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md"] }));
   fs.writeFileSync(path.join(root, "workflows/stage/SKILL.md"), prompt);
