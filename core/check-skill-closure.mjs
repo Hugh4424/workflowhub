@@ -108,6 +108,17 @@ export function checkSkillClosure(packageRoot) {
     try {
       const checked = validateSkillBundle(root, `skills/${entry.name}/skill-bundle.json`, entry.path);
       validateSchema(validateBundle, checked.bundle, `${entry.name}: bundle`, errors);
+      const catalogSources = (entry.upstream || []).filter(source => source.github_url);
+      const bundleSources = checked.bundle.sources || [];
+      for (const source of catalogSources) {
+        const match = bundleSources.find(candidate => candidate.url === source.github_url && candidate.commit === source.commit && candidate.path === source.path);
+        if (!match) pushError(errors, `${entry.name}: catalog source missing from bundle: ${source.github_url}@${source.commit}:${source.path}`);
+        else if (match.license !== source.license) pushError(errors, `${entry.name}: catalog/bundle source license mismatch for ${source.github_url}`);
+      }
+      for (const source of bundleSources.filter(source => source.url)) {
+        const match = catalogSources.find(candidate => candidate.github_url === source.url && candidate.commit === source.commit && candidate.path === source.path);
+        if (!match) pushError(errors, `${entry.name}: bundle source missing from catalog: ${source.url}@${source.commit}:${source.path}`);
+      }
       for (const missing of findUndeclaredStaticDependencies({ skillDir: path.join(root, "skills", entry.name), fileEntries: checked.fileEntries })) {
         pushError(errors, `${entry.name}: ${missing.source} references ${missing.locator}: ${missing.reason}`);
       }

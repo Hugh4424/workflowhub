@@ -12,7 +12,11 @@
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "dc3cf129096e1849038d38515f5abe62d91a2be5be04e12da7f580583d9bcf3e"
+      "sha256": "e324baeeec2dbc343db0b8b3e0f2346eb95f849d9c474a7d96294168a4a45242"
+    },
+    {
+      "path": "scripts/validate-response.mjs",
+      "sha256": "d83e9214e585f388d094264539811cb42cbd0a7c5669ab45083ad22c2c50da0b"
     }
   ],
   "sources": [

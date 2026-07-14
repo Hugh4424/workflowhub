@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { validateReviewResponse } from "../scripts/validate-response.mjs";
 
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
 
@@ -16,3 +17,7 @@ describe("review-response contract", () => {
   });
 });
 
+it("rejects resolved claims without evidence and same-flow rereview", () => {
+  expect(validateReviewResponse({ finding_id: "F1", decision: "accept" }).valid).toBe(false);
+  expect(validateReviewResponse({ finding_id: "F1", decision: "accept", verification: "reproduced", root_cause: "bad branch", evidence: "test passes", rereview_flow_id: "flow-1" }).valid).toBe(true);
+});

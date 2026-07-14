@@ -9,7 +9,7 @@ workflowhub 包含或改编下列第三方项目的部分技能文字、规则�
 - **gstack**, copyright © 2026 Garry Tan. Source: [garrytan/gstack@7c9df1c](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063).
 - **debate**, copyright © 2026 Zhipeng. Source: [Hugh4424/debate@af121a1](https://github.com/Hugh4424/debate/tree/af121a1e24ae3af48f5e132d3de1342d16eccf31).
 - **AgentHub**, source: [Hugh4424/AgentHub@258f5a2](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9).
-- **Spec Kit**, source: [github/spec-kit](https://github.com/github/spec-kit). 历史导入未保存固定 commit；在同步上游前必须先补齐 provenance。
+- **Spec Kit**, source: [github/spec-kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a). 该固定版本是首次 workflowhub 改造提交之前可验证的上游版本。
 
 MIT License
 
@@ -33,6 +33,6 @@ SOFTWARE.
 
 ## Apache-2.0 source
 
-- **AnySearch Skill**, copyright © 2026 AnySearch. Source: [anysearch-ai/anysearch-skill](https://github.com/anysearch-ai/anysearch-skill). 历史导入未保存固定 commit；更新前必须先补齐。完整许可见 [`skills/anysearch/LICENSE`](skills/anysearch/LICENSE)，notice 见 [`skills/anysearch/NOTICE`](skills/anysearch/NOTICE)。
+- **AnySearch Skill**, copyright © 2026 AnySearch. Source: [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87). 仓内首次导入的 `SKILL.md` 与运行脚本已逐 blob 对上该版本；随后补入上游许可证文件。完整许可见 [`skills/anysearch/LICENSE`](skills/anysearch/LICENSE)，notice 见 [`skills/anysearch/NOTICE`](skills/anysearch/NOTICE)。
 
 本 notice 不表示 workflowhub 引入了上述完整框架。gstack runtime、Superpowers bootstrap 等明确拒绝项不在发布闭包中；列出它们是为了记录被吸收的思想和后续更新裁决。

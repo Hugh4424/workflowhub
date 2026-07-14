@@ -1,14 +1,14 @@
 schema_version: 2
 last_reviewed_at: "2026-07-14"
 projects:
-  workflowhub: &workflowhub { github_url: "https://github.com/Hugh4424/workflowhub", commit: "local", license: "project license" }
-  agenthub: &agenthub { github_url: "https://github.com/Hugh4424/AgentHub", commit: "258f5a2548fa8cc15325c6aa18dd107c1fc497b9", license: "MIT" }
-  superpowers: &superpowers { github_url: "https://github.com/obra/superpowers", commit: "d884ae04edebef577e82ff7c4e143debd0bbec99", license: "MIT" }
-  matt-skills: &matt { github_url: "https://github.com/mattpocock/skills", commit: "66898f60e8c744e269f8ce06c2b2b99ce7660d5f", license: "MIT" }
-  gstack: &gstack { github_url: "https://github.com/garrytan/gstack", commit: "7c9df1c568a9ea745508f679a329332b2c338063", license: "MIT" }
-  debate: &debate { github_url: "https://github.com/Hugh4424/debate", commit: "af121a1e24ae3af48f5e132d3de1342d16eccf31", license: "MIT" }
-  anysearch: &anysearch { github_url: "https://github.com/anysearch-ai/anysearch-skill", commit: "unresolved-import-snapshot", license: "Apache-2.0" }
-  spec-kit: &speckit { github_url: "https://github.com/github/spec-kit", commit: "unresolved-agenthub-import-snapshot", license: "MIT" }
+  workflowhub: &workflowhub { github_url: "https://github.com/Hugh4424/workflowhub", commit: "local", commit_url: "https://github.com/Hugh4424/workflowhub", license: "project license", reviewed_at: "2026-07-14", review_outcome: accepted }
+  agenthub: &agenthub { github_url: "https://github.com/Hugh4424/AgentHub", commit: "258f5a2548fa8cc15325c6aa18dd107c1fc497b9", commit_url: "https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
+  superpowers: &superpowers { github_url: "https://github.com/obra/superpowers", commit: "d884ae04edebef577e82ff7c4e143debd0bbec99", commit_url: "https://github.com/obra/superpowers/commit/d884ae04edebef577e82ff7c4e143debd0bbec99", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
+  matt-skills: &matt { github_url: "https://github.com/mattpocock/skills", commit: "66898f60e8c744e269f8ce06c2b2b99ce7660d5f", commit_url: "https://github.com/mattpocock/skills/commit/66898f60e8c744e269f8ce06c2b2b99ce7660d5f", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
+  gstack: &gstack { github_url: "https://github.com/garrytan/gstack", commit: "7c9df1c568a9ea745508f679a329332b2c338063", commit_url: "https://github.com/garrytan/gstack/commit/7c9df1c568a9ea745508f679a329332b2c338063", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
+  debate: &debate { github_url: "https://github.com/Hugh4424/debate", commit: "af121a1e24ae3af48f5e132d3de1342d16eccf31", commit_url: "https://github.com/Hugh4424/debate/commit/af121a1e24ae3af48f5e132d3de1342d16eccf31", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
+  anysearch: &anysearch { github_url: "https://github.com/anysearch-ai/anysearch-skill", commit: "db3d76e5597aec7261257be5322dd211c9d9bb87", commit_url: "https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87", license: "Apache-2.0", reviewed_at: "2026-07-14", review_outcome: accepted }
+  spec-kit: &speckit { github_url: "https://github.com/github/spec-kit", commit: "b7e67f55bf7a937aaa57dbe0a8198774e285de3a", commit_url: "https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a", license: "MIT", reviewed_at: "2026-07-14", review_outcome: accepted }
 
 skills:
   - name: anysearch
@@ -17,10 +17,10 @@ skills:
     purpose: 经用户批准的外部实时检索
     design_idea: 统一搜索、垂直搜索和 URL 抽取入口
     used_by_stages: [make-decision]
-    upstream: [{ <<: *anysearch, path: "SKILL.md", skill_url: "https://github.com/anysearch-ai/anysearch-skill/blob/main/SKILL.md" }]
+    upstream: [{ <<: *anysearch, path: "SKILL.md", skill_url: "https://github.com/anysearch-ai/anysearch-skill/blob/db3d76e5597aec7261257be5322dd211c9d9bb87/SKILL.md" }]
     local_changes: 仓内打包；通过 stage manifest 按需加载；不做全局安装
     dependency_closure: [skills/anysearch]
-    update_policy: 先解析并固定上游 import commit，再人工比较安全边界和 bundle
+    update_policy: 比较固定 commit 后的安全边界和 bundle，再人工升级
   - name: decision-log
     path: skills/decision-log/SKILL.md
     status: native
@@ -38,8 +38,9 @@ skills:
     design_idea: 边追问边沉淀 CONTEXT 和 ADR
     used_by_stages: [make-decision]
     upstream:
-      - { <<: *matt, path: "skills/grilling", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/grilling" }
-      - { <<: *matt, path: "skills/domain-modeling", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling" }
+      - { <<: *matt, path: "skills/engineering/grill-with-docs/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md" }
+      - { <<: *matt, path: "skills/engineering/domain-modeling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md" }
+      - { <<: *matt, path: "skills/productivity/grilling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md" }
     local_changes: 保留四项退出合同；失败转人工，只有明确跳过才能继续
     dependency_closure: [skills/grill-with-docs]
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
@@ -100,17 +101,17 @@ skills:
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
     used_by_stages: [build-spec]
-    upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/main/templates/commands/specify.md" }]
+    upstream: [{ <<: *speckit, path: "templates/commands/specify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md" }]
     local_changes: task-id 定位；内置模板；接 workflowhub metrics
     dependency_closure: [skills/spec-specify]
-    update_policy: 先解析固定导入 commit；上游更新时人工比较规格质量规则
+    update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、最多五题、逐题写回
     used_by_stages: [build-spec]
-    upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/main/templates/commands/clarify.md" }]
+    upstream: [{ <<: *speckit, path: "templates/commands/clarify.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md" }]
     local_changes: 去 .specify/git 耦合；task-id 参数化
     dependency_closure: [skills/spec-clarify]
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
@@ -121,8 +122,8 @@ skills:
     design_idea: 技术上下文、宪法检查、接口和验证映射
     used_by_stages: [build-plan]
     upstream:
-      - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/main/templates/commands/plan.md" }
-      - { <<: *superpowers, path: "skills/writing-plans", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans" }
+      - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
+      - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
     local_changes: 去分支耦合；内置模板；吸收 right-sizing/global constraints/interfaces
     dependency_closure: [skills/spec-plan]
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
@@ -133,8 +134,8 @@ skills:
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
     used_by_stages: [build-plan]
     upstream:
-      - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/main/templates/commands/tasks.md" }
-      - { <<: *superpowers, path: "skills/writing-plans", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans" }
+      - { <<: *speckit, path: "templates/commands/tasks.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/tasks.md" }
+      - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
     local_changes: 去 .specify/git 耦合；内置模板；适配 workflowhub phase 合同
     dependency_closure: [skills/spec-tasks]
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
@@ -224,7 +225,9 @@ skills:
     purpose: 从 AC、UI impact 和风险生成测试路由
     design_idea: 独立上下文产出 AC-to-test-route strategy
     used_by_stages: [verify-code]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-strategy", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-strategy" }]
+    upstream:
+      - { <<: *matt, path: "skills/engineering/tdd/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md" }
+      - { <<: *superpowers, path: "skills/test-driven-development/testing-anti-patterns.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md" }
     local_changes: 适配 workflowhub L2/L3 证据合同
     dependency_closure: [skills/test-strategy]
     update_policy: 人工比较路由和风险规则
@@ -245,7 +248,7 @@ skills:
     design_idea: 快反馈、缩小复现、竞争假设、探针验证、三次失败停止
     used_by_stages: [build-code]
     upstream:
-      - { <<: *matt, path: "skills/diagnosing-bugs", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/diagnosing-bugs" }
+      - { <<: *matt, path: "skills/engineering/diagnosing-bugs", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/diagnosing-bugs" }
       - { <<: *superpowers, path: "skills/systematic-debugging", skill_url: "https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging" }
       - { <<: *gstack, path: "investigate", skill_url: "https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate" }
     local_changes: 合并为 workflowhub 结构化根因证据合同；去框架 runtime
@@ -267,7 +270,7 @@ skills:
     purpose: 为 build-code 判定 simple/feature/fullstack 测试层级
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
     used_by_stages: [build-code]
-    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor", skill_url: "https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor" }]
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/test-routing-advisor/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor/SKILL.md" }]
     local_changes: 删除固定外仓执行器；改成 workflowhub 三档 JSON 合同
     dependency_closure: [skills/test-routing-advisor]
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
@@ -277,7 +280,7 @@ skills:
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     used_by_stages: [verify-code]
-    upstream: [{ <<: *agenthub, path: "external user skill snapshot: isolated-browser-qa", skill_url: "https://github.com/Hugh4424/AgentHub" }]
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned" }]
     local_changes: 搬入完整闭包；去个人绝对路径；按 repo-relative manifest 调用
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
@@ -361,7 +364,7 @@ capability_decisions:
     design_idea: 统一 [FRICTION] 事件进入 task execution record
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     local_path: workflows
-    upstream: [{ <<: *agenthub, path: "capture-workflow-feedback", skill_url: "https://github.com/Hugh4424/AgentHub" }]
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/capture-workflow-feedback/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/capture-workflow-feedback/SKILL.md" }]
     local_changes: 去 BrainInbox/host journal 绑定；内联事件合同
     dependency_closure: []
     update_policy: 不恢复旧 skill；随 execution record schema 审查
@@ -371,7 +374,7 @@ capability_decisions:
     design_idea: 多角度 intake review
     used_by_stages: []
     local_path: "skills/intake-decision-review; skills/wh-review"
-    upstream: [{ <<: *agenthub, path: "deleted skill", skill_url: "https://github.com/Hugh4424/AgentHub" }]
+    upstream: [{ <<: *agenthub, path: "deleted skill", skill_url: "https://github.com/Hugh4424/AgentHub/commit/258f5a2548fa8cc15325c6aa18dd107c1fc497b9" }]
     local_changes: 上游已删除；陈旧引用清除
     dependency_closure: []
     update_policy: 不恢复；现有双组件是唯一承接点
@@ -385,6 +388,26 @@ capability_decisions:
     local_changes: 只保留纯路由 advisor
     dependency_closure: []
     update_policy: rejected；除非 workflowhub 出现真实执行器合同才重评
+  - name: agenthub-skill-discovery-symlinks
+    status: rejected
+    purpose: 把 AgentHub 或宿主技能软链进 .claude/skills
+    design_idea: 依赖宿主自动发现全局技能
+    used_by_stages: []
+    local_path: core/local-skill-resolver.mjs
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/contract.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/contract.md" }]
+    local_changes: 由 repo-relative manifest、bundle 和 resolved path payload 取代
+    dependency_closure: []
+    update_policy: permanently rejected；不得恢复宿主自动发现依赖
+  - name: agenthub-handoff-session-pair
+    status: rejected
+    purpose: Apply 开工时强制 handoff/receive-handoff 换会话
+    design_idea: 用宿主全局状态传递实现上下文切换
+    used_by_stages: []
+    local_path: workflows/build-code/SKILL.md
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/workflows/vibecoding/stages/apply.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/workflows/vibecoding/stages/apply.md" }]
+    local_changes: 保持 workflowhub 当前 phase 独立上下文和结构化 PHASE_RESULT，不恢复宿主 HOME handoff
+    dependency_closure: []
+    update_policy: rejected；只有明确跨会话产品合同后才重评
   - name: superpowers-using-superpowers
     status: rejected
     purpose: 全局技能发现和框架 bootstrap

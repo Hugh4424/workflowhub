@@ -4,5 +4,6 @@
   "files": [
     "SKILL.md",
     "review-bundle.json"
-  ]
+  ],
+  "sources": [{ "url": "https://github.com/Hugh4424/AgentHub", "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9", "path": "packages/core/agenthub/skills/verify-change", "license": "MIT" }]
 }

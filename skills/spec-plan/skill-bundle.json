@@ -7,6 +7,12 @@
   ],
   "sources": [
     {
+      "url": "https://github.com/github/spec-kit",
+      "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+      "path": "templates/commands/plan.md",
+      "license": "MIT"
+    },
+    {
       "url": "https://github.com/obra/superpowers",
       "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
       "path": "skills/writing-plans/SKILL.md",

@@ -8,7 +8,7 @@
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "2f7abe678d2c959c0bfc8d27293b5751848b52868b2b49a738d87656f1579d1b"
+      "sha256": "5ac6fbbab1c45fb619c9744d01b7cd9553aa5ff6124116d7436800fadec8e434"
     },
     {
       "path": "references/agent-browser.md",

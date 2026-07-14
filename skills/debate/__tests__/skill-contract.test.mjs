@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { classifyByMr2, shouldExitPK, shouldTriggerPK } from "../pk-rules.ts";
 
 const skill = readFileSync(new URL("../SKILL.md", import.meta.url), "utf8");
 
@@ -16,3 +17,14 @@ describe("debate optional contract", () => {
   });
 });
 
+describe("debate executable rules", () => {
+  it("triggers only for direction-level disputes", () => {
+    const direction = classifyByMr2("双方对需求的理解不同");
+    expect(shouldTriggerPK([{ id: "F1", description: "理解不同", category: direction }]).triggered).toBe(true);
+    expect(shouldTriggerPK([{ id: "F2", description: "rename", category: "implementation_only" }]).triggered).toBe(false);
+  });
+
+  it("escalates unresolved disputes at the two-round cap", () => {
+    expect(shouldExitPK(2, false, false)).toMatchObject({ exit: true, requiresHumanArbitration: true });
+  });
+});

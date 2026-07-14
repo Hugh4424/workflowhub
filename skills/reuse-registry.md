@@ -33,7 +33,7 @@
 
 共同规则：所有路径都在 `skills/`；通过 stage 的 `skill-deps.yaml` 显式加载；不注册到 Claude/Codex 全局目录；闭包由各目录 `skill-bundle.json` 定义。
 
-- `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill](https://github.com/anysearch-ai/anysearch-skill)，Apache-2.0。历史 import commit 未记录，更新前先解析固定 commit。仓内打包，不做全局安装。
+- `anysearch` — adopted；make-decision 条件检索。来源 [anysearch-ai/anysearch-skill@db3d76e](https://github.com/anysearch-ai/anysearch-skill/commit/db3d76e5597aec7261257be5322dd211c9d9bb87)，Apache-2.0。首次导入的核心文件已逐 blob 对上该 commit；仓内打包，不做全局安装。
 - `decision-log` — native；make-decision。结构化唯一权威需求记录。`upstream=[]`；随 stage 合同更新。
 - `grill-with-docs` — `skills/grill-with-docs/`；adapted；make-decision。来源 Matt Pocock [`grilling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/grilling) 与 [`domain-modeling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling)，MIT。保留四项退出合同；失败转人工。
 - `intake-decision-review` — `skills/intake-decision-review/`；native；make-decision。单入口 intake packet 与人工确认。`upstream=[]`；随 wh-review 合同更新。
@@ -41,10 +41,10 @@
 - `scope-triage` — native standalone。scope verdict。`upstream=[]`；历史由 AgentHub 迁入，但当前机器 provenance 按 native 管理。
 - `talk-with-zhipeng` — `skills/talk-with-zhipeng/`；native；make-decision。一次一问、动态重排、阈值收敛。`upstream=[]`。
 - `spec-research` — native；build-plan。fail-loud、可明确跳过、证据可追踪。`upstream=[]`。
-- `spec-specify` — adapted；build-spec。来源 [github/spec-kit specify](https://github.com/github/spec-kit/blob/main/templates/commands/specify.md)，MIT；历史 import commit 未记录。去 git/.specify 耦合，改为 task-id、内置模板和 metrics。
-- `spec-clarify` — adapted；build-spec。来源 [github/spec-kit clarify](https://github.com/github/spec-kit/blob/main/templates/commands/clarify.md)，MIT；历史 import commit 未记录。保留十维扫描，去宿主耦合。
-- `spec-plan` — adapted；build-plan。来源 Spec Kit plan 与 Superpowers [`writing-plans`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans)，MIT。保持 workflowhub 唯一 plan 格式。
-- `spec-tasks` — adapted；build-plan。来源 Spec Kit tasks 与 Superpowers `writing-plans`，MIT。补 Goal/Files/Tasks/Verify/Knowledge/STOP 映射。
+- `spec-specify` — adapted；build-spec。来源 [github/spec-kit@b7e67f5 specify](https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md)，MIT。去 git/.specify 耦合，改为 task-id、内置模板和 metrics。
+- `spec-clarify` — adapted；build-spec。来源 [github/spec-kit@b7e67f5 clarify](https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/clarify.md)，MIT。保留十维扫描，去宿主耦合。
+- `spec-plan` — adapted；build-plan。来源 [Spec Kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a) plan 与 Superpowers [`writing-plans`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans)，MIT。保持 workflowhub 唯一 plan 格式。
+- `spec-tasks` — adapted；build-plan。来源 [Spec Kit@b7e67f5](https://github.com/github/spec-kit/commit/b7e67f55bf7a937aaa57dbe0a8198774e285de3a) tasks 与 Superpowers `writing-plans`，MIT。补 Goal/Files/Tasks/Verify/Knowledge/STOP 映射。
 - `spec-analyze` — native；build-plan。report-only 一致性 lens。`upstream=[]`；历史吸收 Spec Kit analyze 思路。
 - `wh-review` — native；全部五阶段。唯一异源审查调度层。`upstream=[]`；禁止第二 review flow。
 - `plan-ceo-review` — adapted；make-decision/build-spec。来源 gstack [`plan-ceo-review`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/plan-ceo-review)，MIT。裁为 report-only lens，去 runtime/gbrain/telemetry。

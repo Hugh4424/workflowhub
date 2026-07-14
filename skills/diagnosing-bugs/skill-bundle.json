@@ -12,11 +12,15 @@
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "0d8a56d54d5942569451ce820a072ec9bf71d2d24d95b7ad23e98788e506f08a"
+      "sha256": "7ee7a430da8570c4179e2deaaeb6c95c5ed721a66e9792e80d71136d218d5adb"
     },
     {
       "path": "hitl-loop.template.sh",
       "sha256": "b2932630950e5210075bcd6f850e5accf30c101c5367b29eac3a29b4dd8084c8"
+    },
+    {
+      "path": "scripts/validate-diagnosis.mjs",
+      "sha256": "5ea8414191daff44617fc3fee21d859003605c495c3d5d546b30e093d530d8da"
     }
   ],
   "sources": [

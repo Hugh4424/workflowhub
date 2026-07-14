@@ -8,15 +8,19 @@
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "6a3009ded4d8fc86cd4ec44c0043511f95c57942846daf56fb434e70d7bca01c"
+      "sha256": "040171e07a101414a8b5950a389816261ed3eb762ffa92be033a93ef81cc32ac"
+    },
+    {
+      "path": "scripts/route.mjs",
+      "sha256": "96721bf5d38aea1edf0d7a9b607a23a52da25f19437f246a7c1529a361445523"
     }
   ],
   "sources": [
     {
       "url": "https://github.com/Hugh4424/AgentHub",
-      "commit": "f59b4b471df3522fcf46ec4f01c78874c90ded3c",
+      "commit": "258f5a2548fa8cc15325c6aa18dd107c1fc497b9",
       "path": "packages/core/agenthub/skills/test-routing-advisor/SKILL.md",
-      "license": "project-origin; independently adapted"
+      "license": "MIT"
     }
   ]
 }

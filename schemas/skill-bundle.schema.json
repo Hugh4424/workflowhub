@@ -23,6 +23,32 @@
           }
         ]
       }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "oneOf": [
+        {
+          "type": "object",
+          "required": ["url", "commit", "path", "license"],
+          "properties": {
+            "url": { "type": "string", "pattern": "^https://github\\.com/" },
+            "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+            "path": { "type": "string", "minLength": 1 },
+            "license": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind", "path", "license"],
+          "properties": {
+            "kind": { "const": "user-provided-local-source" },
+            "path": { "type": "string", "minLength": 1 },
+            "license": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ] }
     }
   },
   "additionalProperties": true
