@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 import { resolveSkillDispatch } from "./local-skill-resolver.mjs";
+import { doctorCapabilities } from "./capability-doctor.mjs";
 
 export function loadStageSkillManifest(packageRoot, stage) {
   if (!/^[a-z][a-z0-9-]*$/.test(stage)) throw new Error(`invalid stage: ${stage}`);
@@ -13,7 +14,7 @@ export function loadStageSkillManifest(packageRoot, stage) {
   return { root, relative, source, manifest };
 }
 
-export function preflightStageSkills({ packageRoot, stage }) {
+export function preflightStageSkills({ packageRoot, stage, activeConditions = [], probes = {}, commands = {}, run } = {}) {
   const loaded = loadStageSkillManifest(packageRoot, stage);
   const dependencies = new Map();
   const payloads = new Map();
@@ -26,11 +27,14 @@ export function preflightStageSkills({ packageRoot, stage }) {
     dependencies.set(dependency.name, dependency);
     payloads.set(dependency.name, resolveSkillDispatch({ packageRoot: loaded.root, manifestPath: loaded.relative, dependency }));
   }
-  return { ...loaded, dependencies, payloads };
+  const capabilityResults = doctorCapabilities({ manifest: loaded.manifest, activeConditions, probes, commands, ...(run ? { run } : {}) });
+  const blocking = capabilityResults.filter(result => ["blocked", "human_required"].includes(result.status));
+  if (blocking.length) throw new Error(`${stage}: capability preflight failed: ${blocking.map(item => `${item.id}:${item.status}`).join(", ")}`);
+  return { ...loaded, dependencies, payloads, capabilityResults };
 }
 
-export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, hostInvoke, independentContextAvailable = true }) {
-  const prepared = preflightStageSkills({ packageRoot, stage });
+export async function dispatchStageSkill({ packageRoot, stage, name, triggered = true, hostInvoke, independentContextAvailable = true, activeConditions = [], probes = {}, commands = {}, run }) {
+  const prepared = preflightStageSkills({ packageRoot, stage, activeConditions, probes, commands, run });
   const dependency = prepared.manifest.skills.find(item => item.name === name);
   if (!dependency) throw new Error(`${stage}: undeclared skill ${name}`);
   if (!triggered) {

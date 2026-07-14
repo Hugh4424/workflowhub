@@ -79,20 +79,6 @@ skills:
     local_changes: workflowhub 原生实现
     dependency_closure: [skills/simplicity-guard]
     update_policy: 随宪法复用条款变更审查
-  - name: scope-triage
-    path: skills/scope-triage/SKILL.md
-    local_version: 1.0.0
-    local_bundle_hash: 8a59454d334c899dae5de8f82465813452a7dcbdb691b2a817130780b8642386
-    last_reviewed_at: "2026-07-14"
-    status: native
-    standalone: true
-    purpose: 将需求拆成 scope verdict
-    design_idea: in-scope/out-of-scope 明确分类
-    used_by_stages: []
-    upstream: []
-    local_changes: workflowhub 原生独立组件；历史上由 AgentHub 迁入
-    dependency_closure: [skills/scope-triage]
-    update_policy: 保持 standalone；有 stage 消费合同后再入 manifest
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
@@ -364,6 +350,16 @@ skills:
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
 
 capability_decisions:
+  - name: scope-triage
+    status: absorbed
+    purpose: 将需求拆成 scope verdict
+    design_idea: in-scope/out-of-scope 与风险词分档内联到现有 stage
+    used_by_stages: [make-decision, build-spec]
+    local_path: "workflows/make-decision/SKILL.md; workflows/build-spec/SKILL.md"
+    upstream: [{ <<: *agenthub, path: "packages/core/agenthub/skills/scope-triage/SKILL.md", skill_url: "https://github.com/Hugh4424/AgentHub/blob/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/scope-triage/SKILL.md" }]
+    local_changes: 语义已由 make-decision S0.5 和 build-spec 高危词浮现承接，不保留重复 runtime skill
+    dependency_closure: []
+    update_policy: 只比较分档规则，不恢复独立 skill
   - name: superpowers-test-driven-development
     status: absorbed
     purpose: RED/GREEN 和测试反模式

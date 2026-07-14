@@ -57,6 +57,7 @@ export function checkSkillClosure(packageRoot) {
     validateSchema(validateManifest, manifest, `${stage}: manifest`, errors);
     if (manifest.stage !== stage) pushError(errors, `${stage}: manifest stage is ${manifest.stage}`);
     const manifestNames = new Set((manifest.skills || []).map(dep => dep.name));
+    const reviewPlanNames = new Set();
     if (manifestNames.size !== (manifest.skills || []).length) pushError(errors, `${stage}: duplicate skill dependency`);
     for (const dep of manifest.skills || []) {
       const pathName = dep.path?.split("/").at(-2);
@@ -80,10 +81,20 @@ export function checkSkillClosure(packageRoot) {
       const variants = stagePlan?.tracks ? Object.values(stagePlan.tracks) : [stagePlan];
       for (const variant of variants.filter(Boolean)) {
         const lensNames = [...(variant.required_skills || []), ...(variant.optional_skills || []).map(item => typeof item === "string" ? item : item.name)];
-        for (const name of lensNames) if (!manifestNames.has(name)) pushError(errors, `${stage}: wh-review lens missing from manifest: ${name}`);
+        for (const name of lensNames) {
+          reviewPlanNames.add(name);
+          if (!manifestNames.has(name)) pushError(errors, `${stage}: wh-review lens missing from manifest: ${name}`);
+        }
       }
     }
     const prompt = fs.readFileSync(path.join(root, `workflows/${stage}/SKILL.md`), "utf8");
+    for (const dep of manifest.skills || []) {
+      if (reviewPlanNames.has(dep.name)) continue;
+      const escaped = dep.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (!prompt.includes(dep.path) && !new RegExp(`(?:^|[^a-z0-9-])${escaped}(?:$|[^a-z0-9-])`, "im").test(prompt)) {
+        pushError(errors, `${stage}: manifest skill has no runtime prompt reference: ${dep.name}`);
+      }
+    }
     for (const line of prompt.split("\n")) {
       if (line.includes("原组件路径")) continue;
       for (const match of line.matchAll(/skills\/([a-z][a-z0-9-]*)\/SKILL\.md/g)) {
@@ -93,6 +104,9 @@ export function checkSkillClosure(packageRoot) {
     const formerHostRepo = new RegExp(`multica-${"agenthub"}`);
     if (/\/Users\/[^\n]*(?:SKILL|skill|debate|gstack|superpowers)|\.claude\/skills|\.codex\/skills/.test(prompt) || formerHostRepo.test(prompt)) {
       pushError(errors, `${stage}: forbidden external or user-local skill locator in prompt`);
+    }
+    if (/skills\s*\/\s*\$\{|skills\s*\+|(?:HOME|homedir|cwd)\s*[^\n]{0,40}skills/i.test(prompt)) {
+      pushError(errors, `${stage}: dynamic or host-discovered skill locator is forbidden`);
     }
   }
 

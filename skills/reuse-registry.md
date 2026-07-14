@@ -13,7 +13,7 @@
 | build-plan | 自研 | none | stage orchestrator |
 | build-code | 自研 | none | stage orchestrator |
 | verify-code | 自研 | none | stage orchestrator |
-| scope-triage | 外部改造适配 | AgentHub historical import | 现为 standalone native |
+| scope-triage | 外部改造适配 | AgentHub historical import | 已内联吸收，不保留 runtime skill |
 | decision-log | 外部改造适配 | AgentHub historical import | 现为 workflowhub native |
 | Worker-Mode | 外部依赖 | host subagent capability | 不属于 skill 闭包 |
 | 3rd-review | 外部依赖 | skills/wh-review | 已由 wh-review V4 替代 |
@@ -38,7 +38,6 @@
 - `grill-with-docs` — `skills/grill-with-docs/`；adapted；make-decision。来源 Matt Pocock [`grilling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/grilling) 与 [`domain-modeling`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling)，MIT。保留四项退出合同；失败转人工。
 - `intake-decision-review` — `skills/intake-decision-review/`；native；make-decision。单入口 intake packet 与人工确认。`upstream=[]`；随 wh-review 合同更新。
 - `simplicity-guard` — native；build-spec/build-plan。四阶梯复用判断。`upstream=[]`；随宪法更新。
-- `scope-triage` — native standalone。scope verdict。`upstream=[]`；历史由 AgentHub 迁入，但当前机器 provenance 按 native 管理。
 - `talk-with-zhipeng` — `skills/talk-with-zhipeng/`；native；make-decision。一次一问、动态重排、阈值收敛。`upstream=[]`。
 - `spec-research` — native；build-plan。fail-loud、可明确跳过、证据可追踪。`upstream=[]`。
 - `spec-specify` — adapted；build-spec。来源 [github/spec-kit@b7e67f5 specify](https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/specify.md)，MIT。去 git/.specify 耦合，改为 task-id、内置模板和 metrics。
@@ -62,6 +61,7 @@
 
 ## 已吸收
 
+- AgentHub `scope-triage` → make-decision S0.5 与 build-spec 高危词浮现。只保留内联分档语义，不保留独立 runtime skill。
 - Superpowers `test-driven-development` + Matt `tdd` → `workflows/build-code/SKILL.md`、`capture.mjs`、`test-strategy`。只吸收 RED/GREEN、fresh evidence、anti-pattern；不复制重复 TDD 编排器。
 - Superpowers `subagent-driven-development` → build-code phase executor、独立上下文、`PHASE_RESULT`。宿主 subagent 是 capability，不是 skill。
 - Superpowers `requesting-code-review` → `wh-review` V4。sealed packet、provider receipt、continuation flow 已承接。

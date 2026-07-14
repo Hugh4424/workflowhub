@@ -49,4 +49,12 @@ describe("stage skill runtime", () => {
     const root = fixture();
     await expect(dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", independentContextAvailable: false, hostInvoke: () => null })).rejects.toThrow(/human decision required/);
   });
+
+  it("blocks preflight according to required_when and absence_semantics", () => {
+    const root = fixture();
+    fs.appendFileSync(path.join(root, "workflows/stage/skill-deps.yaml"), "");
+    const manifestPath = path.join(root, "workflows/stage/skill-deps.yaml");
+    fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace("runtime_capabilities: []", "runtime_capabilities:\n  - { id: missing, kind: cli, required_when: always, doctor: [missing-cli], absence_semantics: blocked }"));
+    expect(() => preflightStageSkills({ packageRoot: root, stage: "stage", run: () => ({ status: 127, error: new Error("missing") }) })).toThrow(/missing:blocked/);
+  });
 });
