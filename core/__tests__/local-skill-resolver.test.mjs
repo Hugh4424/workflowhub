@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveLocalSkill, validateSkillBundle } from "../local-skill-resolver.mjs";
+import { resolveLocalSkill, validateReviewBundleProjection, validateSkillBundle } from "../local-skill-resolver.mjs";
 
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -51,5 +51,14 @@ describe("local skill resolver", () => {
     fs.renameSync(path.join(root, "skills"), path.join(external, "skills"));
     fs.symlinkSync(path.join(external, "skills"), path.join(root, "skills"));
     expect(() => resolveLocalSkill(root, "skills/demo/SKILL.md")).toThrow(/skills root must be a real directory/);
+  });
+
+  it("accepts only a review projection contained by the common bundle", () => {
+    const root = fixture();
+    fs.writeFileSync(path.join(root, "skills/demo/review-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", mode: "lens-only", delivery_mode: "file_only", entrypoint: "SKILL.md", files: ["SKILL.md"] }));
+    fs.writeFileSync(path.join(root, "skills/demo/skill-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", files: ["SKILL.md", "review-bundle.json"] }));
+    expect(validateReviewBundleProjection(root, "skills/demo/review-bundle.json", "skills/demo/SKILL.md").projectionHash).toMatch(/^[a-f0-9]{64}$/);
+    fs.writeFileSync(path.join(root, "skills/demo/review-bundle.json"), JSON.stringify({ schema_version: 1, skill: "demo", mode: "lens-only", delivery_mode: "file_only", entrypoint: "missing.md", files: ["missing.md"] }));
+    expect(() => validateReviewBundleProjection(root, "skills/demo/review-bundle.json", "skills/demo/SKILL.md")).toThrow(/not in skill-bundle/);
   });
 });

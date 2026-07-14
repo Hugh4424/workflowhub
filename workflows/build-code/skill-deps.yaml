@@ -5,10 +5,9 @@ skills:
   - { name: diagnosing-bugs, path: skills/diagnosing-bugs/SKILL.md, execution: independent, invocation: conditional, trigger: unexpected_failure, bundle: skills/diagnosing-bugs/skill-bundle.json }
   - { name: review-response, path: skills/review-response/SKILL.md, execution: independent, invocation: conditional, trigger: revise_required, bundle: skills/review-response/skill-bundle.json }
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", required_when: always }
-  - { id: git, kind: cli, required_when: always }
-  - { id: target-test-command, kind: cli, required_when: always }
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
+  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
+  - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }
 external_capabilities:
-  - { id: host-subagent, kind: host, required_when: phase_execution }
-  - { id: wh-review-provider, kind: review, required_when: review }
-
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: phase_execution, absence_semantics: human_required }
+  - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }

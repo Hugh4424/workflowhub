@@ -11,6 +11,14 @@ function inside(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
 }
 
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
+
 function assertDirectory(root, relative, label) {
   const candidate = path.join(root, relative);
   const stat = fs.lstatSync(candidate);
@@ -57,18 +65,69 @@ export function validateSkillBundle(packageRoot, bundlePath, expectedSkillPath) 
   const bundleDir = path.dirname(absoluteBundle);
   const realBundleDir = fs.realpathSync(bundleDir);
   if (realBundleDir !== realExpectedDir) throw new Error(`bundle must be directly inside skill directory: ${bundlePath}`);
-  const files = bundle.files.map(entry => {
+  const seen = new Set();
+  const fileEntries = bundle.files.map(entry => {
     const locator = typeof entry === "string" ? entry : entry.path;
     assertRelative(locator);
+    if (seen.has(locator)) throw new Error(`duplicate bundle asset: ${locator}`);
+    seen.add(locator);
     const absolute = path.resolve(bundleDir, locator);
     const resolved = assertRegularContainedFile(bundleDir, realBundleDir, absolute, `bundle asset ${locator}`);
+    const actual = sha256(fs.readFileSync(absolute));
     if (typeof entry === "object" && entry.sha256) {
-      const actual = crypto.createHash("sha256").update(fs.readFileSync(absolute)).digest("hex");
       if (entry.sha256 !== actual) throw new Error(`bundle sha256 mismatch: ${locator}`);
     }
-    return resolved;
+    return { path: locator, resolved, sha256: actual };
   });
   const skill = resolveLocalSkill(root, expectedSkillPath);
-  if (!files.includes(skill)) throw new Error(`bundle does not include declared SKILL.md: ${expectedSkillPath}`);
-  return { bundle, bundlePath: absoluteBundle, files };
+  if (!fileEntries.some(entry => entry.resolved === skill)) throw new Error(`bundle does not include declared SKILL.md: ${expectedSkillPath}`);
+  const bundleHash = sha256(canonical(fileEntries.map(({ path: locator, sha256: hash }) => ({ path: locator, sha256: hash })).sort((a, b) => a.path.localeCompare(b.path))));
+  return { bundle, bundlePath: absoluteBundle, files: fileEntries.map(entry => entry.resolved), fileEntries, bundleHash };
+}
+
+export function validateReviewBundleProjection(packageRoot, reviewBundlePath, expectedSkillPath) {
+  assertRelative(reviewBundlePath);
+  const root = fs.realpathSync(packageRoot);
+  const skillName = expectedSkillPath.split("/").at(-2);
+  const checked = validateSkillBundle(root, `skills/${skillName}/skill-bundle.json`, expectedSkillPath);
+  const skillDir = path.join(root, "skills", skillName);
+  const projectionPath = path.resolve(root, reviewBundlePath);
+  assertRegularContainedFile(skillDir, fs.realpathSync(skillDir), projectionPath, `review bundle ${reviewBundlePath}`);
+  const projection = JSON.parse(fs.readFileSync(projectionPath, "utf8"));
+  if (projection.schema_version !== 1 || projection.skill !== skillName || !Array.isArray(projection.files) || projection.files.length === 0) {
+    throw new Error(`invalid review bundle projection: ${reviewBundlePath}`);
+  }
+  if (projection.mode !== "lens-only" || !["file_only", "always_embed"].includes(projection.delivery_mode)) {
+    throw new Error(`review bundle must be a lens-only delivery projection: ${reviewBundlePath}`);
+  }
+  const entrypoint = projection.entrypoint || "SKILL.md";
+  const allowed = new Map(checked.fileEntries.map(entry => [entry.path, entry]));
+  const selected = [];
+  for (const locator of projection.files) {
+    assertRelative(locator);
+    const entry = allowed.get(locator);
+    if (!entry) throw new Error(`review bundle asset is not in skill-bundle.json: ${locator}`);
+    selected.push(entry);
+  }
+  if (!selected.some(entry => entry.path === entrypoint)) throw new Error(`review bundle omits entrypoint: ${entrypoint}`);
+  const projectionHash = sha256(canonical(selected.map(({ path: locator, sha256: hash }) => ({ path: locator, sha256: hash })).sort((a, b) => a.path.localeCompare(b.path))));
+  return { projection, projectionPath, entrypoint, files: selected, bundleHash: checked.bundleHash, projectionHash };
+}
+
+export function resolveSkillDispatch({ packageRoot, manifestPath, dependency }) {
+  if (!dependency?.name || !dependency.path || !dependency.bundle) throw new Error("skill dependency is incomplete");
+  const root = fs.realpathSync(packageRoot);
+  assertRelative(manifestPath);
+  const manifest = path.resolve(root, manifestPath);
+  assertRegularContainedFile(root, root, manifest, `source manifest ${manifestPath}`);
+  const skillPath = resolveLocalSkill(root, dependency.path);
+  const checked = validateSkillBundle(root, dependency.bundle, dependency.path);
+  return {
+    name: dependency.name,
+    resolved_skill_path: skillPath,
+    resolved_bundle_paths: checked.fileEntries.map(entry => entry.resolved),
+    bundle_hash: checked.bundleHash,
+    source_manifest: manifest,
+    package_root: root,
+  };
 }

@@ -3,13 +3,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
-import { resolveLocalSkill, validateSkillBundle } from "./local-skill-resolver.mjs";
+import { resolveLocalSkill, validateReviewBundleProjection, validateSkillBundle } from "./local-skill-resolver.mjs";
+import { findUndeclaredStaticDependencies } from "./skill-static-deps.mjs";
 
 function readYaml(file) { return yaml.load(fs.readFileSync(file, "utf8")); }
 function pushError(errors, message) { errors.push(message); }
 function schemaValidator(root, name) {
   const schema = JSON.parse(fs.readFileSync(path.join(root, `schemas/${name}.schema.json`), "utf8"));
-  return new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  ajv.addFormat("date", /^\d{4}-\d{2}-\d{2}$/);
+  return ajv.compile(schema);
 }
 function validateSchema(validate, value, label, errors) {
   if (!validate(value)) pushError(errors, `${label}: schema invalid: ${validate.errors.map(e => `${e.instancePath || "/"} ${e.message}`).join("; ")}`);
@@ -21,6 +24,7 @@ export function checkSkillClosure(packageRoot) {
   const validateCatalog = schemaValidator(root, "skill-catalog");
   const validateManifest = schemaValidator(root, "stage-skill-deps");
   const validateBundle = schemaValidator(root, "skill-bundle");
+  const validateReviewBundle = schemaValidator(root, "review-bundle");
   const catalogPath = path.join(root, "skills/catalog.yaml");
   let catalog;
   try { catalog = readYaml(catalogPath); } catch (error) { return { ok: false, errors: [`catalog: ${error.message}`] }; }
@@ -101,6 +105,18 @@ export function checkSkillClosure(packageRoot) {
   for (const name of catalogNames.filter(name => !diskNames.includes(name))) pushError(errors, `catalog runtime skill missing from disk: ${name}`);
   for (const entry of runtimeEntries) {
     if (!declared.has(entry.name) && entry.standalone !== true) pushError(errors, `catalog orphan skill must set standalone: true: ${entry.name}`);
+    try {
+      const checked = validateSkillBundle(root, `skills/${entry.name}/skill-bundle.json`, entry.path);
+      validateSchema(validateBundle, checked.bundle, `${entry.name}: bundle`, errors);
+      for (const missing of findUndeclaredStaticDependencies({ skillDir: path.join(root, "skills", entry.name), fileEntries: checked.fileEntries })) {
+        pushError(errors, `${entry.name}: ${missing.source} references ${missing.locator}: ${missing.reason}`);
+      }
+      const reviewPath = `skills/${entry.name}/review-bundle.json`;
+      if (fs.existsSync(path.join(root, reviewPath))) {
+        const review = validateReviewBundleProjection(root, reviewPath, entry.path);
+        validateSchema(validateReviewBundle, review.projection, `${entry.name}: review bundle`, errors);
+      }
+    } catch (error) { pushError(errors, `${entry.name}: ${error.message}`); }
   }
   return { ok: errors.length === 0, errors };
 }

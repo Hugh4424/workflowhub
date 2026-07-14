@@ -6,10 +6,10 @@ skills:
   - { name: qa-only, path: skills/qa-only/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_qa_lens, bundle: skills/qa-only/skill-bundle.json }
   - { name: verify-change, path: skills/verify-change/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_diff_lens, bundle: skills/verify-change/skill-bundle.json }
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", required_when: always }
-  - { id: git, kind: cli, required_when: always }
-  - { id: target-test-command, kind: cli, required_when: always }
-  - { id: browser-cli, kind: cli, required_when: ui_acceptance }
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
+  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
+  - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }
+  - { id: browser-cli, kind: cli, doctor: [agent-browser, --version], required_when: ui_acceptance, absence_semantics: blocked }
 external_capabilities:
-  - { id: host-subagent, kind: host, required_when: test_strategy_or_ui }
-  - { id: wh-review-provider, kind: review, required_when: review }
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: test_strategy_or_ui, absence_semantics: human_required }
+  - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }

@@ -8,8 +8,7 @@ skills:
   - { name: review, path: skills/review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_detail_lens, bundle: skills/review/skill-bundle.json }
   - { name: plan-design-review, path: skills/plan-design-review/SKILL.md, execution: independent, invocation: conditional, trigger: ui_scope, bundle: skills/plan-design-review/skill-bundle.json }
 runtime_capabilities:
-  - { id: node, kind: cli, version_policy: ">=24", required_when: always }
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
 external_capabilities:
-  - { id: host-subagent, kind: host, required_when: review }
-  - { id: wh-review-provider, kind: review, required_when: review }
-
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: review, absence_semantics: human_required }
+  - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }

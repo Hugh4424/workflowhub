@@ -1,6 +1,1 @@
-{
-  "version": 1,
-  "mode": "lens-only",
-  "delivery_mode": "file_only",
-  "files": ["SKILL.md"]
-}
+{"schema_version":1,"skill":"verify-change","mode":"lens-only","delivery_mode":"file_only","entrypoint":"SKILL.md","files":["SKILL.md"]}
