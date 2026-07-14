@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -24,6 +24,17 @@ const sha = (value) => createHash("sha256").update(value).digest("hex");
 const canonical = (value) => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function git(cwd, args, encoding = "utf8") { return execFileSync("git", args, { cwd, encoding }).trim(); }
 function bundleHash(stage, reviewTrack) { return sha(canonical(resolveRequiredSkills({ stage, reviewTrack }).definitions.map(({ name, bundle }) => ({ name, sha256: bundle.sha256 })))); }
+function deliveryForInput(input) {
+  const files = input.attachments.entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
+  const material_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) }));
+  return { delivery_mode: input.attachmentDelivery, material_manifest_hash, total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), provider_visible_attachment_manifest: input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
+}
+function completedProvider(input, packet) {
+  const output = reviewerOutput(packet); const stdout = join(input.privateRawDirectory, "opencode.stdout.raw"); const stderr = join(input.privateRawDirectory, "opencode.stderr.raw");
+  mkdirSync(input.privateRawDirectory, { recursive: true });
+  writeFileSync(stdout, output); writeFileSync(stderr, "");
+  return { provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery, delivery: deliveryForInput(input), raw_stdout_ref: stdout, raw_stderr_ref: stderr, raw_stdout_sha256: sha(output), raw_stderr_sha256: sha(""), output };
+}
 function projectedContract(stage, reviewTrack) {
   const source = readFileSync(contractPathAndHash(stage).contractPath, "utf8");
   if (stage !== "make-decision") return source;
@@ -166,7 +177,7 @@ describe("wh-review v4 workflow wiring", () => {
       writeFileSync(join(sourceRoot, "a.txt"), "before\nWIRING_R1_UNCOMMITTED_MARKER\n");
       const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot, broker: {
         async discoverCapabilities() { return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] }; },
-        async run(input) { calls.push(input); const contractEntry = input.attachments?.entries.find(({ destination }) => destination === `contracts/${stage}.md`); if (contractEntry) frozenStageContract = readFileSync(join(root, contractEntry.source), "utf8"); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: reviewerOutput(input.packet ?? currentPacket) }] }; },
+        async run(input) { calls.push(input); const contractEntry = input.attachments?.entries.find(({ destination }) => destination === `contracts/${stage}.md`); if (contractEntry) frozenStageContract = readFileSync(join(root, contractEntry.source), "utf8"); return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [completedProvider(input, currentPacket)] }; },
         async status() { return { expires_at_ms: Date.now() + 60_000 }; },
       } });
       const input = { task_id: `task-${stage}-${reviewTrack ?? "main"}`, stage, review_track: reviewTrack, review_flow_id: "first-runtime", packet: materialPacket(stage, reviewTrack) };
@@ -199,7 +210,7 @@ describe("wh-review v4 workflow wiring", () => {
       expect(secondPrepared.packet.source_revision.base_tree).toBe(firstPrepared.packet.source_revision.snapshot_tree);
       expect(secondPrepared.packet.unified_diff).toContain("WIRING_R2_DELTA_ONLY_MARKER");
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
-      expect(calls[1].request.continuation).toEqual({ runtime_id: "11111111-1111-4111-8111-111111111111" });
+      expect(calls[1].request.continuation).toMatchObject({ runtime_id: "11111111-1111-4111-8111-111111111111", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
       expect(Object.keys(calls[1]).sort()).toEqual(["attachmentDelivery", "attachments", "privateRawDirectory", "request"]);
       expectPrivateRawDirectory(calls[1].privateRawDirectory, join(tracking, input.task_id));
       expect(calls[1].request).not.toHaveProperty("packet");

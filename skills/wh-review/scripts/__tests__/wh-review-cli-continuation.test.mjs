@@ -25,12 +25,19 @@ const broker = vi.hoisted(() => {
       ...(revised ? { rootCause: "publication happens before the durable write", fixApproach: "make persistence complete before publication" } : {}),
     });
   };
-  return { calls: [], clientOptions: [], currentPacket: null, output, reset() { this.calls.length = 0; this.clientOptions.length = 0; this.currentPacket = null; } };
+  const materialManifestHash = async (attachments) => {
+    const { createHash } = await import("node:crypto");
+    const files = attachments.entries
+      .filter(({ destination }) => !["review-packet.v1.json", "manifest.json"].includes(destination))
+      .map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
+    return createHash("sha256").update(canonical({ version: 1, bundle_id: attachments.bundle_id, files })).digest("hex");
+  };
+  return { calls: [], clientOptions: [], output, materialManifestHash, reset() { this.calls.length = 0; this.clientOptions.length = 0; } };
 });
 
 vi.mock("../broker-client.mjs", () => ({
   BrokerClient: class {
-    constructor(options) { broker.clientOptions.push(options); }
+    constructor(options) { this.attachmentRoot = options.attachmentRoot; broker.clientOptions.push(options); }
     async discoverCapabilities() {
       return { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
         { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
@@ -39,13 +46,28 @@ vi.mock("../broker-client.mjs", () => ({
     async status() { return { expires_at_ms: Date.now() + 60_000 }; }
     async run(input) {
       broker.calls.push(input);
-      const packet = input.packet ?? {
-        ...broker.currentPacket,
-        packet_hash: input.request.prompt.match(/current_packet_hash=([a-f0-9]{64})/)?.[1],
-        manifest_hash: input.request.prompt.match(/current_manifest_hash=([a-f0-9]{64})/)?.[1],
-        diff_sha256: input.request.prompt.match(/current_diff_sha256=([a-f0-9]{64})/)?.[1],
+      const packetEntry = input.attachments?.entries?.find((entry) => entry.destination === "review-packet.v1.json");
+      if (!packetEntry) throw new Error("test broker requires review-packet.v1.json attachment");
+      const packet = JSON.parse(readFileSync(join(this.attachmentRoot, packetEntry.source), "utf8"));
+      const stdout = Buffer.from(broker.output(packet, input.request.continuation ? "pass" : "revise_required"));
+      const stderr = Buffer.from("");
+      const stdoutHash = sha(stdout); const stderrHash = sha(stderr);
+      mkdirSync(input.privateRawDirectory, { recursive: true });
+      const stdoutRef = join(input.privateRawDirectory, `opencode.stdout.${stdoutHash}.raw`);
+      const stderrRef = join(input.privateRawDirectory, `opencode.stderr.${stderrHash}.raw`);
+      writeFileSync(stdoutRef, stdout); writeFileSync(stderrRef, stderr);
+      const materialManifestHash = await broker.materialManifestHash(input.attachments);
+      if (materialManifestHash !== input.request.material_manifest_sha256) throw new Error(`test broker material hash mismatch: expected ${input.request.material_manifest_sha256}, got ${materialManifestHash}`);
+      const entries = input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size }));
+      return {
+        runtime_id: "11111111-1111-4111-8111-111111111111",
+        providers: [{
+          provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery,
+          delivery: { delivery_mode: input.attachmentDelivery, material_manifest_hash: materialManifestHash, total_bytes: input.attachments.entries.reduce((total, entry) => total + entry.size, 0), provider_visible_attachment_manifest: entries },
+          raw_stdout_ref: stdoutRef, raw_stdout_sha256: stdoutHash, raw_stderr_ref: stderrRef, raw_stderr_sha256: stderrHash,
+          output: stdout.toString("utf8"),
+        }],
       };
-      return { runtime_id: "11111111-1111-4111-8111-111111111111", providers: [{ provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: "file_only", output: broker.output(packet, input.request.continuation ? "pass" : "revise_required") }] };
     }
   },
 }));
@@ -120,10 +142,11 @@ describe("wh-review CLI continuation", () => {
     const firstPacket = reviewPacket();
     await runReviewRound({ task_id: taskId, stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: firstPacket, task_tracking_root: tracking });
     const firstReceipt = JSON.parse(readFileSync(join(tracking, taskId, "reviews", "private", "round-build-code-flow-1", "round-receipt.json"), "utf8"));
+    expect(firstReceipt.provider_outcomes).toEqual(expect.arrayContaining([expect.objectContaining({ business_valid: true })]));
     const findingId = firstReceipt.merged_findings[0].finding_id;
 
     writeFileSync(join(worktree, "a"), "first change\nfixed\n");
-    const secondPacket = reviewPacket(); broker.currentPacket = secondPacket;
+    const secondPacket = reviewPacket();
     const closure_evidence = [{ finding_id: findingId, evidence: "changes.diff:a:2 records the persistence fix" }];
     const upstream = { intent: { stage: "build-plan" }, semantic_verdict: "revise_required", needs_human: true, merged_findings: [{ finding_id: "verify-later" }], dispositions: [{ finding_id: "verify-later", action: "defer", evidence: "verification is scheduled after the build" }] };
     const upstreamBytes = Buffer.from(JSON.stringify(upstream)); const upstreamHash = sha(upstreamBytes); const upstreamPath = join(tracking, taskId, "reviews", "core-receipts", `${upstreamHash}.json`); mkdirSync(join(upstreamPath, ".."), { recursive: true }); writeFileSync(upstreamPath, upstreamBytes);
@@ -133,10 +156,11 @@ describe("wh-review CLI continuation", () => {
     expect(result.transport.continuation_eligible).toBe(true);
     expect(broker.clientOptions.map(({ attachmentRoot }) => attachmentRoot)).toEqual([packetRoot, packetRoot]);
     expect(broker.calls).toHaveLength(2);
-    expect(broker.calls[1]).toMatchObject({ request: expect.objectContaining({ continuation: { runtime_id: "11111111-1111-4111-8111-111111111111" } }) });
-    expect(Object.keys(broker.calls[1]).sort()).toEqual(["privateRawDirectory", "request"]);
+    expect(broker.calls[1]).toMatchObject({ request: expect.objectContaining({ continuation: expect.objectContaining({ runtime_id: "11111111-1111-4111-8111-111111111111", sequence: 1 }) }), attachmentDelivery: "file_only" });
+    expect(Object.keys(broker.calls[1]).sort()).toEqual(["attachmentDelivery", "attachments", "privateRawDirectory", "request"]);
     expectPrivateRawDirectory(broker.calls[1].privateRawDirectory, join(realpathSync(tracking), taskId));
-    expect(broker.calls[1].request.prompt).toContain(JSON.stringify(closure_evidence, null, 2));
-    expect(broker.calls[1].request.prompt).toContain(JSON.stringify(cross_stage_carryovers, null, 2));
+    expect(broker.calls[1].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
+    expect(broker.calls[1].request.prompt).not.toContain(JSON.stringify(closure_evidence, null, 2));
+    expect(broker.calls[1].request.prompt).not.toContain(JSON.stringify(cross_stage_carryovers, null, 2));
   });
 });

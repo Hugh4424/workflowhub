@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,6 +10,7 @@ import { loadTrustedThirdReviewConfig } from "../../skills/wh-review/scripts/thi
 import { reviewPacketHash } from "../../skills/wh-review/scripts/review-packet-integrity.mjs";
 
 const script = fileURLToPath(new URL("../run-wh-review-provider-smoke.mjs", import.meta.url));
+const sha = (value) => createHash("sha256").update(value).digest("hex");
 
 describe("run-wh-review-provider-smoke", () => {
   it("reports an explicit SKIP before reading host config unless real-provider opt-in is set", () => {
@@ -47,12 +49,17 @@ describe("run-wh-review-provider-smoke", () => {
     expect(reviewPacketHash({ ...packet, manifest_hash: "e".repeat(64) })).not.toBe(hash);
   });
 
-  it("keeps the R2 smoke prompt limited to the delta marker", () => {
+  it("keeps R2 smoke material in its attachment workspace, not the prompt", () => {
     const hash = (character) => character.repeat(64);
     const previous = { version: "review-packet.v1", stage: "build-code", review_track: null, round_kind: "initial", baseline_packet_hash: null, packet_hash: hash("a"), manifest_hash: hash("b"), diff_sha256: hash("c"), unified_diff: "R1_DIFF_MARKER", changed_files: [], raw_requirement: "x", acceptance_design_excerpt: "R1_DIFF_MARKER", test_evidence: [], host_verified_facts: [], contract_hash: hash("d"), skill_bundle_hash: hash("e"), source_revision: { base: "f".repeat(40), head: "g".repeat(40) } };
     const current = { ...previous, round_kind: "continuation", baseline_packet_hash: previous.packet_hash, packet_hash: hash("h"), manifest_hash: hash("i"), diff_sha256: hash("j"), acceptance_design_excerpt: "R2_DELTA_ONLY_MARKER", source_revision: { base: previous.source_revision.base, head: "k".repeat(40) }, previous_packet: previous, delta_diff: "+R2_DELTA_ONLY_MARKER", delta_changed_files: [] };
-    const prompt = directPrompt(current, 2);
-    expect(prompt).toContain("R2_DELTA_ONLY_MARKER");
+    const prompt = directPrompt(current, 2, {
+      attachmentIds: ["review-packet.v1.json", "changes.diff", "manifest.json"],
+      providerVisibleManifestHash: hash("f"),
+    });
+    expect(prompt).toContain("attachment_ids=review-packet.v1.json,changes.diff,manifest.json");
+    expect(prompt).toContain(`attachment_manifest_sha256=${hash("f")}`);
+    expect(prompt).not.toContain("R2_DELTA_ONLY_MARKER");
     expect(prompt).not.toContain("R1_DIFF_MARKER");
   });
 
@@ -90,12 +97,24 @@ describe("run-wh-review-provider-smoke", () => {
       const brokerConfig = join(root, "3rd-review.json"); writeFileSync(brokerConfig, JSON.stringify({ attachment_roots: [{ root: packetRoot, sources: [".wh-review-packets"] }] }));
       const hostConfig = join(root, "workflowhub.json"); writeFileSync(hostConfig, JSON.stringify({ third_review: { command: [process.execPath, "/broker/3rd-review.mjs"], config: brokerConfig, attachment_root: packetRoot } }));
       const trusted = loadTrustedThirdReviewConfig({ hostConfigPath: hostConfig });
-      const bundle = createPersistentAttachmentBundle(trusted, { unified_diff: "diff --git a/a b/a\n" }, "bundle");
+      const diff = "diff --git a/a b/a\n";
+      const bundle = createPersistentAttachmentBundle(trusted, {
+        version: "review-packet.v1", stage: "build-code", review_track: null, round_kind: "initial", baseline_packet_hash: null,
+        packet_hash: "0".repeat(64), manifest_hash: "1".repeat(64), diff_sha256: sha(diff), unified_diff: diff, changed_files: [],
+        raw_requirement: "smoke", acceptance_design_excerpt: "smoke", test_evidence: [], host_verified_facts: [],
+        contract_hash: "2".repeat(64), skill_bundle_hash: "3".repeat(64), source_revision: { base_tree: "4".repeat(40), snapshot_tree: "5".repeat(40), captured_head: "6".repeat(40) },
+      }, "bundle");
       const allowedRoot = trusted.attachmentRoot;
 
       expect(bundle.attachmentRoot).toBe(allowedRoot);
       expect(bundle.staging.startsWith(`${allowedRoot}/`)).toBe(true);
       for (const entry of bundle.manifest.entries) expect(existsSync(join(bundle.attachmentRoot, entry.source))).toBe(true);
+      expect(bundle.manifest.entries.every((entry) => entry.embed === false)).toBe(true);
+      const visible = JSON.parse(readFileSync(join(bundle.attachmentRoot, bundle.manifest.entries.find((entry) => entry.destination === "manifest.json").source), "utf8"));
+      expect(visible.version).toBe("review-attachment-manifest.v1");
+      expect(visible.manifest_hash).toBe(bundle.materialManifestHash);
+      expect(bundle.packet.manifest_hash).toBe(bundle.materialManifestHash);
+      expect(visible.attachments).toEqual(bundle.manifest.entries.filter((entry) => entry.destination !== "manifest.json").map(({ destination, sha256, size }) => ({ destination, sha256, size })));
       expect(buildThirdReviewRunArgs(trusted, { requestPath: "/tmp/request.json", attachments: "/tmp/attachments.json", delivery: "always_embed" }).args).toContain(`--attachments-root=${allowedRoot}`);
     } finally {
       rmSync(root, { recursive: true, force: true });

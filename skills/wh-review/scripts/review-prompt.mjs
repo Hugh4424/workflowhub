@@ -22,10 +22,14 @@ export function buildContinuationDelta({ previousPacket, currentPacket, deltaSou
   const deltaManifest = {
     baseline_packet_hash: currentPacket.baseline_packet_hash,
     previous_packet_hash: previousPacket.packet_hash,
-    current_packet_hash: currentPacket.packet_hash,
+    // continuation-delta.v1.json is itself provider-visible material. A
+    // final current packet hash would therefore create a circular binding:
+    // packet -> material manifest -> delta -> packet. The final packet and
+    // inner attachment manifest bind each other; this delta records the
+    // stable source-material binding instead.
+    current_source_manifest_hash: currentPacket.source_manifest_hash ?? currentPacket.manifest_hash,
     previous_material_manifest_sha256: sha(canonical(previousManifest)),
     current_material_manifest_sha256: sha(canonical(currentManifest)),
-    current_packet_manifest_hash: currentPacket.manifest_hash,
     current_packet_diff_sha256: currentPacket.diff_sha256,
     contract_hash: currentPacket.contract_hash,
     skill_bundle_hash: currentPacket.skill_bundle_hash,

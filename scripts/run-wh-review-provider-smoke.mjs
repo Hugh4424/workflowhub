@@ -118,30 +118,51 @@ export function writePassEvidence(path, evidence, providerEvidence) {
   write(path, finalizePassEvidence(evidence, providerEvidence));
   return JSON.parse(readFileSync(path, "utf8"));
 }
-function attachmentsFor(packet, attachmentRoot, bundleId) {
+function canonicalInnerManifestHash(manifest) { const { inner_manifest_hash: ignored, ...value } = manifest; return sha(canonical(value)); }
+function canonicalDeliveryManifestHash(bundleId, files, deliveryMode) { return sha(canonical({ version: 1, bundle_id: bundleId, delivery_mode: deliveryMode, files: files.filter((item) => item.target !== "manifest.json").map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
+function canonicalMaterialManifestHash(bundleId, files) { return sha(canonical({ version: 1, bundle_id: bundleId, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
+function attachmentRecord(destination, content, staging) {
+  const source = join(staging, destination); write(source, content);
+  return { source: `.wh-review-packets/${staging.split("/").at(-1)}/${destination}`, destination, size: Buffer.byteLength(content), sha256: sha(content), embed: false };
+}
+function attachmentsFor(packet, attachmentRoot, bundleId, { continuation = null, continuationDelta = null } = {}) {
   const staging = join(attachmentRoot, ".wh-review-packets", bundleId);
   const entries = [
-    ["review-packet.v1.json", safeJson(packet)], ["changes.diff", packet.unified_diff],
+    ["changes.diff", packet.unified_diff],
     ["contracts/provider-protocol.md", readFileSync(join(repository, "skills/wh-review/contracts/provider-protocol.md"), "utf8")],
     ["contracts/build-code.md", readFileSync(join(repository, "skills/wh-review/contracts/build-code.md"), "utf8")],
     ["schemas/reviewer-output.schema.json", readFileSync(join(repository, "skills/wh-review/schemas/reviewer-output.schema.json"), "utf8")],
   ];
-  const manifestEntries = entries.map(([destination, content]) => {
-    const source = join(staging, destination); write(source, content);
-    return { source: `.wh-review-packets/${bundleId}/${destination}`, destination, size: Buffer.byteLength(content), sha256: sha(content), embed: true };
-  });
-  return { staging, manifest: { version: 1, bundle_id: bundleId, entries: manifestEntries } };
+  if (continuationDelta) entries.push(["continuation-delta.v1.json", safeJson(continuationDelta)]);
+  const materialEntries = entries.map(([destination, content]) => attachmentRecord(destination, content, staging));
+  const materialManifestHash = canonicalMaterialManifestHash(bundleId, materialEntries);
+  const { previous_packet: ignoredPreviousPacket, delta_diff: ignoredDeltaDiff, delta_changed_files: ignoredDeltaChangedFiles, ...providerPacket } = packet;
+  const boundPacket = { ...providerPacket, source_manifest_hash: providerPacket.manifest_hash, manifest_hash: materialManifestHash };
+  boundPacket.packet_hash = reviewPacketHash(boundPacket);
+  const packetEntry = attachmentRecord("review-packet.v1.json", safeJson(boundPacket), staging);
+  const delivered = [packetEntry, ...materialEntries];
+  const visible = {
+    version: "review-attachment-manifest.v1", delivery_mode: "file_only", packet_hash: boundPacket.packet_hash,
+    manifest_hash: boundPacket.manifest_hash, diff_sha256: boundPacket.diff_sha256,
+    attachments: delivered.map(({ destination, sha256, size }) => ({ destination, sha256, size })),
+    delivery_manifest_hash: canonicalDeliveryManifestHash(bundleId, delivered, "file_only"),
+    ...(continuation ? { continuation } : {}),
+  };
+  visible.inner_manifest_hash = canonicalInnerManifestHash(visible);
+  const innerEntry = attachmentRecord("manifest.json", safeJson(visible), staging);
+  const manifestEntries = [...delivered, innerEntry];
+  return { staging, packet: boundPacket, materialManifestHash, providerVisibleManifestHash: sha(safeJson(visible)), attachmentIds: manifestEntries.map(({ destination }) => destination), deliveryManifestHash: visible.delivery_manifest_hash, continuation: visible.continuation ?? null, manifest: { version: 1, bundle_id: bundleId, entries: manifestEntries } };
 }
-export function createPersistentAttachmentBundle(thirdReview, packet, bundleId) {
+export function createPersistentAttachmentBundle(thirdReview, packet, bundleId, options = {}) {
   if (typeof thirdReview?.attachmentRoot !== "string" || !thirdReview.attachmentRoot) throw new TypeError("trusted third-review attachmentRoot is required");
-  return { ...attachmentsFor(packet, thirdReview.attachmentRoot, bundleId), attachmentRoot: thirdReview.attachmentRoot };
+  return { ...attachmentsFor(packet, thirdReview.attachmentRoot, bundleId, options), attachmentRoot: thirdReview.attachmentRoot };
 }
-export function directPrompt(packet, round) {
+export function directPrompt(packet, round, { attachmentIds, providerVisibleManifestHash } = {}) {
   const contract = readFileSync(join(repository, "skills/wh-review/contracts/build-code.md"), "utf8");
   const intent = { contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash };
-  if (round === 1) return initialPrompt({ packet, intent, stageContract: contract, deliveryMode: "always_embed", requiredSkills: [] }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, and quote R1_DIFF_MARKER exactly in evidence.";
+  if (round === 1) return initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, and quote the exact R1 diff marker discovered in changes.diff.";
   const delta = buildContinuationDelta({ previousPacket: packet.previous_packet, currentPacket: packet, deltaSource: { unified_diff: packet.delta_diff, changed_files: packet.delta_changed_files }, previousFindings: [], closureEvidence: [], crossStageCarryovers: [], requiredSkills: [] });
-  return continuationPrompt(delta, { stage: "build-code" }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, quote R2_DELTA_ONLY_MARKER exactly in evidence, and must not reopen prior-round findings.";
+  return continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash }) + "\nSmoke acceptance requirement: your reviewer-output JSON must re-attest packet_hash and diff_sha256 exactly, quote the exact R2 delta marker discovered in changes.diff, and must not reopen prior-round findings.";
 }
 export function buildThirdReviewRunArgs(thirdReview, { requestPath, attachments = null, delivery = null } = {}) {
   const [command, ...prefix] = commandParts(thirdReview.command);
@@ -212,24 +233,29 @@ async function main() {
     requireValue(git(kimiSource, ["rev-parse", "HEAD"]) === kimiHead, "SMOKE_KIMI_FAIL: R1/R2 review created a commit");
     const kimiEvidence = { runtime_id: kimiR1.value.runtime_id, session_id: kimiOutcome1.session_id, raw_stdout_sha256: [kimiOutcome1.raw_stdout_sha256, kimiOutcome2.raw_stdout_sha256], receipts: [kimiR1.path, kimiR2.path], requests: [kimiFirstInputPath, kimiSecondInputPath], executions: [kimiR1ResponsePath, kimiR2ResponsePath] };
 
-    const opencodeR1Prompt = directPrompt(r1Packet, 1); const opencodeBundle = createPersistentAttachmentBundle(thirdReview, r1Packet, `smoke-${randomUUID()}`);
-    const opencodeR1Request = { version: 4, host_provider: "codex", prompt: opencodeR1Prompt, continuation: null, provider_allowlist: ["opencode"] };
+    const opencodeBundle = createPersistentAttachmentBundle(thirdReview, r1Packet, `smoke-${randomUUID()}`);
+    const opencodeR1Prompt = directPrompt(opencodeBundle.packet, 1, opencodeBundle);
+    const opencodeR1Request = { version: 4, host_provider: "codex", prompt: opencodeR1Prompt, continuation: null, provider_allowlist: ["opencode"], material_manifest_sha256: opencodeBundle.materialManifestHash, attachment_ids: opencodeBundle.manifest.entries.map(({ destination, sha256 }) => ({ destination, sha256 })) };
     const opencodeR1RequestPath = join(outputRoot, "opencode-r1-request.json"); const opencodeR1ManifestPath = join(outputRoot, "opencode-r1-attachments.json"); write(opencodeR1RequestPath, opencodeR1Request); write(opencodeR1ManifestPath, opencodeBundle.manifest);
-    const opencodeR1ResponsePath = join(outputRoot, "opencode-r1-response.json"); const opencodeR1 = await runThirdReview({ thirdReview, requestPath: opencodeR1RequestPath, responsePath: opencodeR1ResponsePath, attachments: opencodeR1ManifestPath, delivery: "always_embed" });
-    const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: r1Packet.packet_hash, expectedDiffSha256: r1Packet.diff_sha256 });
-    requireValue(opencodeOutcome1.delivery_used === "always_embed", "SMOKE_OPENCODE_R1_FAIL: expected always_embed delivery");
+    const opencodeR1ResponsePath = join(outputRoot, "opencode-r1-response.json"); const opencodeR1 = await runThirdReview({ thirdReview, requestPath: opencodeR1RequestPath, responsePath: opencodeR1ResponsePath, attachments: opencodeR1ManifestPath, delivery: "file_only" });
+    const opencodeOutcome1 = assertProviderRound({ providerId: "opencode", round: 1, response: opencodeR1, expectedMarker: "R1_DIFF_MARKER", expectedPacketHash: opencodeBundle.packet.packet_hash, expectedDiffSha256: opencodeBundle.packet.diff_sha256 });
+    requireValue(opencodeOutcome1.delivery_used === "file_only", "SMOKE_OPENCODE_R1_FAIL: expected file_only delivery");
 
     const deltaDiff = stripHunkSectionHeaders(execFileSync("git", ["diff", "--no-ext-diff", "--binary", "--find-renames", "--full-index", "-U0", r1Tree, r2Tree], { cwd: source, encoding: "utf8" }));
-    r2Packet.previous_packet = r1Packet; r2Packet.delta_diff = deltaDiff; r2Packet.delta_changed_files = r2Packet.changed_files;
-    const opencodeR2Prompt = directPrompt(r2Packet, 2); write(join(outputRoot, "opencode-r2-prompt.txt"), opencodeR2Prompt); requireValue(opencodeR2Prompt.includes("R2_DELTA_ONLY_MARKER") && !opencodeR2Prompt.includes("R1_DIFF_MARKER"), "SMOKE_OPENCODE_R2_FAIL: continuation prompt is not delta-only");
-    const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id }, provider_allowlist: ["opencode"] };
+    r2Packet.baseline_packet_hash = opencodeBundle.packet.packet_hash; r2Packet.manifest_hash = reviewManifestHash(r2Packet); r2Packet.packet_hash = reviewPacketHash(r2Packet);
+    r2Packet.previous_packet = opencodeBundle.packet; r2Packet.delta_diff = deltaDiff; r2Packet.delta_changed_files = r2Packet.changed_files;
+    const continuationDelta = buildContinuationDelta({ previousPacket: opencodeBundle.packet, currentPacket: r2Packet, deltaSource: { unified_diff: deltaDiff, changed_files: r2Packet.changed_files }, previousFindings: [], closureEvidence: [], crossStageCarryovers: [], requiredSkills: [] });
+    const opencodeR2Bundle = createPersistentAttachmentBundle(thirdReview, r2Packet, `smoke-${randomUUID()}`, { continuation: { initial_material_manifest_hash: opencodeBundle.materialManifestHash, sequence: 1, previous_delivery_manifest_hash: opencodeBundle.deliveryManifestHash }, continuationDelta });
+    const opencodeR2Prompt = directPrompt({ ...opencodeR2Bundle.packet, previous_packet: opencodeBundle.packet, delta_diff: deltaDiff, delta_changed_files: r2Packet.changed_files }, 2, opencodeR2Bundle); write(join(outputRoot, "opencode-r2-prompt.txt"), opencodeR2Prompt); requireValue(!opencodeR2Prompt.includes("R2_DELTA_ONLY_MARKER") && !opencodeR2Prompt.includes("R1_DIFF_MARKER"), "SMOKE_OPENCODE_R2_FAIL: continuation material leaked into prompt");
+    const opencodeR2Request = { version: 4, host_provider: "codex", prompt: opencodeR2Prompt, continuation: { runtime_id: opencodeR1.runtime_id, ...opencodeR2Bundle.continuation }, provider_allowlist: ["opencode"], material_manifest_sha256: opencodeR2Bundle.materialManifestHash, attachment_ids: opencodeR2Bundle.manifest.entries.map(({ destination, sha256 }) => ({ destination, sha256 })) };
     const opencodeR2RequestPath = join(outputRoot, "opencode-r2-request.json"); write(opencodeR2RequestPath, opencodeR2Request);
-    const opencodeR2ResponsePath = join(outputRoot, "opencode-r2-response.json"); const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: opencodeR2ResponsePath });
+    const opencodeR2ManifestPath = join(outputRoot, "opencode-r2-attachments.json"); write(opencodeR2ManifestPath, opencodeR2Bundle.manifest);
+    const opencodeR2ResponsePath = join(outputRoot, "opencode-r2-response.json"); const opencodeR2 = await runThirdReview({ thirdReview, requestPath: opencodeR2RequestPath, responsePath: opencodeR2ResponsePath, attachments: opencodeR2ManifestPath, delivery: "file_only" });
     requireValue(git(source, ["rev-parse", "HEAD"]) === sourceHead, "SMOKE_OPENCODE_FAIL: R1/R2 review created a commit");
-    const opencodeOutcome2 = assertProviderRound({ providerId: "opencode", round: 2, response: opencodeR2, expectedMarker: "R2_DELTA_ONLY_MARKER", expectedPacketHash: r2Packet.packet_hash, expectedDiffSha256: r2Packet.diff_sha256, expectedRuntimeId: opencodeR1.runtime_id });
+    const opencodeOutcome2 = assertProviderRound({ providerId: "opencode", round: 2, response: opencodeR2, expectedMarker: "R2_DELTA_ONLY_MARKER", expectedPacketHash: opencodeR2Bundle.packet.packet_hash, expectedDiffSha256: opencodeR2Bundle.packet.diff_sha256, expectedRuntimeId: opencodeR1.runtime_id });
     requireValue(opencodeOutcome2.session_id === opencodeOutcome1.session_id, "SMOKE_OPENCODE_R2_FAIL: provider session_id changed instead of continuing");
 
-    writePassEvidence(evidencePath, evidence, { kimiEvidence, opencodeEvidence: { runtime_id: opencodeR1.runtime_id, session_id: opencodeOutcome1.session_id, raw_stdout_sha256: [opencodeOutcome1.raw_stdout_sha256, opencodeOutcome2.raw_stdout_sha256], requests: [opencodeR1RequestPath, opencodeR2RequestPath], executions: [opencodeR1ResponsePath, opencodeR2ResponsePath], attachments: { root: opencodeBundle.attachmentRoot, bundle: opencodeBundle.staging, manifests: [opencodeR1ManifestPath] } } });
+    writePassEvidence(evidencePath, evidence, { kimiEvidence, opencodeEvidence: { runtime_id: opencodeR1.runtime_id, session_id: opencodeOutcome1.session_id, raw_stdout_sha256: [opencodeOutcome1.raw_stdout_sha256, opencodeOutcome2.raw_stdout_sha256], requests: [opencodeR1RequestPath, opencodeR2RequestPath], executions: [opencodeR1ResponsePath, opencodeR2ResponsePath], attachments: { root: opencodeBundle.attachmentRoot, bundle: opencodeBundle.staging, manifests: [opencodeR1ManifestPath, opencodeR2ManifestPath] } } });
     process.stdout.write(`${JSON.stringify({ status: "PASS", evidence: evidencePath })}\n`);
   } catch (error) {
     evidence.status = "FAIL"; evidence.error = String(error?.message ?? error); write(evidencePath, evidence);

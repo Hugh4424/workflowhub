@@ -10,6 +10,7 @@
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "review_track": { "enum": ["direction", "detail", null] },
     "packet_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "unified_diff": { "type": "string" },
