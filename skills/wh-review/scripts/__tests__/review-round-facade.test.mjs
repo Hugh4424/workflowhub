@@ -296,6 +296,7 @@ describe("ReviewRoundFacade", () => {
     expect(result.provider_outcomes).toEqual([expect.objectContaining({ provider: "opencode", diagnostic: "MATERIAL_TOO_LARGE", semantic_verdict: null, business_valid: false })]);
     expect(result.merged_findings).toEqual([]);
     expect(result.continuation_eligible).toBe(false);
+    expect(() => facade.publish(result, { items: [] })).toThrow("no business-valid provider outcome to publish");
   });
 
   it("accepts the real Kimi lower-case pass output when changes.diff is the complete frozen anchor", async () => {
@@ -1618,28 +1619,6 @@ describe("ReviewRoundFacade", () => {
       expect(result.provider_outcomes.find(({ provider }) => provider === "opencode")).toMatchObject({ business_valid: true, packet_status: "complete", semantic_verdict: "pass" });
     }
     finally { writeFileSync(contract, original); }
-  });
-
-  it("rejects an oversized initial always_embed prompt before provider dispatch", async () => {
-    const tracking = root(); let calls = 0;
-    const bundleBytes = "x".repeat(524288);
-    const bundleHash = hash("embedded-lens");
-    const resolution = {
-      ...resolveRequiredSkills({ stage: "build-code" }),
-      deliveryMode: "always_embed",
-      definitions: [{ name: "embedded-lens", source: "skills/embedded-lens/SKILL.md", bundle: { sha256: bundleHash, files: [{ path: "SKILL.md", sha256: bundleHash, content: bundleBytes }] } }],
-    };
-    resolution.skillBundleHash = hash(canonical([{ name: "embedded-lens", sha256: bundleHash }]));
-    resolution.bundleClosureFiles = [{ skill: "embedded-lens", path: "SKILL.md", sha256: bundleHash }];
-    const broker = capabilityBroker(async () => { calls += 1; return { providers: [] }; }, {
-      version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
-        { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
-      ],
-    });
-    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker, requiredSkillResolver: () => resolution });
-    const value = packet({ root: tracking }); value.skill_bundle_hash = resolution.skillBundleHash; refreshPacketHashes(value);
-    await expect(facade.prepare({ task_id: "initial-budget", stage: "build-code", review_flow_id: "flow", packet: value })).rejects.toThrow(/MATERIAL_TOO_LARGE.*524288/);
-    expect(calls).toBe(0);
   });
 
   it("keeps a minor finding outside the selected contract out of hard gates", async () => {
