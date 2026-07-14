@@ -63,7 +63,7 @@ vi.mock("../broker-client.mjs", () => ({
         runtime_id: "11111111-1111-4111-8111-111111111111",
         providers: [{
           provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery,
-          delivery: { delivery_mode: input.attachmentDelivery, material_manifest_hash: materialManifestHash, total_bytes: input.attachments.entries.reduce((total, entry) => total + entry.size, 0), provider_visible_attachment_manifest: entries },
+          delivery: { delivery_mode: input.attachmentDelivery, material_manifest_hash: materialManifestHash, material_total_bytes: input.attachments.entries.reduce((total, entry) => total + entry.size, 0), provider_visible_attachment_manifest: entries },
           raw_stdout_ref: stdoutRef, raw_stdout_sha256: stdoutHash, raw_stderr_ref: stderrRef, raw_stderr_sha256: stderrHash,
           output: stdout.toString("utf8"),
         }],

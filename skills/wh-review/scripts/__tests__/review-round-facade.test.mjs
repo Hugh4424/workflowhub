@@ -54,7 +54,7 @@ function packetFromTriad(request, attachmentRoot = process.cwd()) {
   return JSON.parse(readFileSync(join(attachmentRoot, entry.source), "utf8"));
 }
 function deliveryForRequest(request) {
-  return { delivery_mode: request.attachmentDelivery, material_manifest_hash: canonicalDeliveryMaterial(request.attachments.bundle_id, request.attachments.entries), total_bytes: request.attachments.entries.reduce((total, item) => total + item.size, 0), provider_visible_attachment_manifest: request.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
+  return { delivery_mode: request.attachmentDelivery, material_manifest_hash: canonicalDeliveryMaterial(request.attachments.bundle_id, request.attachments.entries), material_total_bytes: request.attachments.entries.reduce((total, item) => total + item.size, 0), ...(request.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: request.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
 }
 function completedProvider(request, { provider = "opencode", session_id = "s", output: providerOutput, ...extra } = {}) {
   const stdout = providerOutput ?? ""; const stderr = ""; mkdirSync(request.privateRawDirectory, { recursive: true });
@@ -67,6 +67,8 @@ function fakeBroker(callback, attachmentRoot = process.cwd()) { return capabilit
   mkdirSync(request.privateRawDirectory, { recursive: true });
   return { ...response, providers: (response.providers ?? []).map((item) => {
     if (item.status !== "completed") return item;
+    const rawDeclared = ["raw_stdout_ref", "raw_stderr_ref", "raw_stdout_sha256", "raw_stderr_sha256"].some((field) => Object.hasOwn(item, field));
+    if (rawDeclared) return { ...item, delivery_used: item.delivery_used ?? request.attachmentDelivery, delivery: item.delivery ?? expectedDelivery };
     const stdout = item.output ?? ""; const stderr = ""; const stdoutRef = join(request.privateRawDirectory, `${item.provider}.stdout.raw`); const stderrRef = join(request.privateRawDirectory, `${item.provider}.stderr.raw`);
     writeFileSync(stdoutRef, stdout); writeFileSync(stderrRef, stderr);
     return { ...item, delivery_used: item.delivery_used ?? request.attachmentDelivery, delivery: item.delivery ?? expectedDelivery, raw_stdout_ref: stdoutRef, raw_stderr_ref: stderrRef, raw_stdout_sha256: hash(stdout), raw_stderr_sha256: hash(stderr) };
@@ -237,12 +239,37 @@ describe("ReviewRoundFacade", () => {
     expect(calls).toBe(0);
   });
 
+  it("fails closed on a file URI in a provider-visible packet supplement", async () => {
+    const tracking = root();
+    const supplemental = { ...hostPacket(), planning_artifacts: [{ path: "file:///Users/Hugh/private-plan.md", summary: "must not be delivered" }] };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    await expect(facade.prepare({ task_id: "file-uri-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+  });
+
   it("rejects Windows absolute paths but permits HTTPS URLs in raw source material", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     await expect(facade.prepare({ task_id: "windows-source", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: "read C:\\Users\\Hugh\\secret" } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
     const prepared = await facade.prepare({ task_id: "https-source", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: "see https://example.test/review" } });
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it.each([
+    ["file:///Users/Hugh/private"],
+    ["file://localhost/Users/Hugh/private"],
+    ["file:///C:/Users/Hugh/private"],
+  ])("fails closed for file URI absolute paths in source material: %s", async (literal) => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+    await expect(facade.prepare({ task_id: `file-uri-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `open ${literal}` } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+  });
+
+  it("fails closed for a file URI in the R2 delta after an initial valid review", async () => {
+    const tracking = root();
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "file-uri-session", output: output(request.packet) }] })) });
+    await facade.run(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
+    writeFileSync(join(tracking, "a"), "file:///Users/Hugh/private\n");
+    await expect(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
   });
 
   it("fails closed when the frozen provider-visible manifest is forged before delivery", async () => {
@@ -302,11 +329,7 @@ describe("ReviewRoundFacade", () => {
       taskTrackingRoot: tracking,
       broker: fakeBroker(async (request) => {
         calls.push(request);
-        const current = request.packet ?? {
-          packet_hash: request.request.prompt.match(/current_packet_hash=([a-f0-9]{64})/)?.[1], manifest_hash: request.request.prompt.match(/current_manifest_hash=([a-f0-9]{64})/)?.[1], diff_sha256: request.request.prompt.match(/current_diff_sha256=([a-f0-9]{64})/)?.[1],
-          contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
-        };
-        return { runtime_id: "80808080-8080-4080-8080-808080808080", providers: [{ provider: "opencode", status: "completed", session_id: "continued", output: output(current) }] };
+        return { runtime_id: "80808080-8080-4080-8080-808080808080", providers: [{ provider: "opencode", status: "completed", session_id: "continued", output: output(request.packet) }] };
       }),
     });
 
@@ -325,7 +348,7 @@ describe("ReviewRoundFacade", () => {
     expect(second.delta_manifest.changed_files.map((item) => item.path)).toContain("a");
     expect(secondFlow.last_reviewed_tree).not.toBe(firstTree);
     expect(secondFlow.review_tree_ref).toBe(firstFlow.review_tree_ref);
-    expect(calls[1].request.continuation).toEqual({ runtime_id: "80808080-8080-4080-8080-808080808080" });
+    expect(calls[1].request.continuation).toMatchObject({ runtime_id: "80808080-8080-4080-8080-808080808080", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
   });
 
   it("restores the prior protected tree when a continuation flow write fails, then permits retry preparation", async () => {
@@ -333,12 +356,7 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({
       taskTrackingRoot: tracking,
       broker: fakeBroker(async (input) => {
-        const fromPrompt = (name) => input.request.prompt.match(new RegExp(`${name}=([a-f0-9]{64})`))?.[1];
-        const current = input.packet ?? {
-          packet_hash: fromPrompt("current_packet_hash"), manifest_hash: fromPrompt("current_manifest_hash"), diff_sha256: fromPrompt("current_diff_sha256"),
-          contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
-        };
-        return { runtime_id: "71717171-7171-4171-8171-717171717171", providers: [{ provider: "opencode", status: "completed", session_id: "retry", output: output(current) }] };
+        return { runtime_id: "71717171-7171-4171-8171-717171717171", providers: [{ provider: "opencode", status: "completed", session_id: "retry", output: output(input.packet) }] };
       }),
       faultInjector(point, value) { if (failFlowWrite && point === "before-flow-write" && value?.business_round === 2) throw new Error("flow persistence failed"); },
     });
@@ -1483,6 +1501,20 @@ describe("ReviewRoundFacade", () => {
     expect(result.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic }]);
     expect(result.merged_findings).toEqual([]);
     expect(result.continuation_eligible).toBe(false);
+  });
+
+  it("rejects a legacy ambiguous total_bytes delivery record", async () => {
+    const tracking = root();
+    const snapshot = { version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [{ provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } }] };
+    const broker = { async discoverCapabilities() { return snapshot; }, async run(request) {
+      const item = completedProvider(request, { output: output(packetFromTriad(request)) });
+      item.delivery = { ...item.delivery, total_bytes: item.delivery.material_total_bytes };
+      delete item.delivery.material_total_bytes;
+      return { runtime_id: "abababab-abab-4bab-8bab-abababababab", providers: [item] };
+    } };
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(facade.prepare({ task_id: "legacy-total-bytes", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.provider_outcomes).toContainEqual(expect.objectContaining({ provider: "opencode", diagnostic: "DELIVERY_RECORD_MISMATCH", business_valid: false, semantic_verdict: null }));
   });
 
   it("uses the stage file_only policy as an exact provider filter and never falls back to embedding", async () => {

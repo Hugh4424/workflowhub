@@ -87,6 +87,22 @@ describe("BrokerClient", () => {
     expect(calls[0].args.join(" ")).not.toMatch(/run-heterologous|--diff=|--output=|timeout/i);
   });
 
+  it("writes provider_allowlist only in the V4 request JSON passed to the broker", async () => {
+    const seen = [];
+    const client = new BrokerClient({ command: ["node", "/broker/scripts/3rd-review.mjs"], config: "/cfg.json", spawnImpl(command, args) {
+      const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      if (args.includes("doctor")) queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [] })); child.emit("close", 0); });
+      else {
+        const requestPath = args.find((arg) => arg.startsWith("--request=")).slice("--request=".length);
+        seen.push(JSON.parse(readFileSync(requestPath, "utf8")));
+        queueMicrotask(() => { child.stdout.emit("data", '{"version":4,"runtime_id":"r","providers":[]}'); child.emit("close", 0); });
+      }
+      return child;
+    } });
+    await client.run({ request: { version: 4, host_provider: "codex", prompt: "short instruction", continuation: null, provider_allowlist: ["kimi", "opencode"], material_manifest_sha256: "a".repeat(64), attachment_ids: [{ destination: "changes.diff", sha256: "b".repeat(64) }] } });
+    expect(seen).toEqual([expect.objectContaining({ provider_allowlist: ["kimi", "opencode"], prompt: "short instruction", attachment_ids: [{ destination: "changes.diff", sha256: "b".repeat(64) }] })]);
+  });
+
   it.each(["opencode", "kimi"])("copies %s original stdout/stderr from private broker state and preserves its hashes", async (provider) => {
     const root = mkdtempSync(join(tmpdir(), "wh-review-raw-audit-"));
     try {

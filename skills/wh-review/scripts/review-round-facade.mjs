@@ -56,6 +56,10 @@ function findAbsolutePathLiteral(value, trail = "packet") {
     // A slash is not sufficient: diffs and markdown legitimately contain
     // relative paths. These forms are unambiguously host/Windows paths.
     const raw = value.replace(/^(?:---|\+\+\+) \/dev\/null$/gm, "");
+    // Only http(s) URLs are safe to expose as references. file:// is a host
+    // path in URI notation (including localhost and Windows forms).
+    const fileUri = raw.match(/\bfile:\/\//i);
+    if (fileUri) return { trail, literal: fileUri[0] };
     const match = raw.match(/(?:^|[\s"'`=:(+])(?:\/[A-Za-z0-9._-]+){2,}|(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]|\\\\[A-Za-z0-9._-]+[\\/]/m);
     return match ? { trail, literal: match[0].trim() } : null;
   }
@@ -570,7 +574,7 @@ export class ReviewRoundFacade {
         ? continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash })
         : initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash });
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, attachments: outerFiles, delta_manifest: continuation ? delta.delta_manifest : null }));
-      const expectedDelivery = { delivery_mode: resolution.deliveryMode, material_manifest_hash: materialManifestHash, total_bytes: materialBytes, provider_visible_attachment_manifest: outerFiles.map(({ target: destination, sha256, size }) => ({ destination, sha256, size })) };
+      const expectedDelivery = { delivery_mode: resolution.deliveryMode, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, provider_visible_attachment_manifest: outerFiles.map(({ target: destination, sha256, size }) => ({ destination, sha256, size })) };
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
@@ -957,8 +961,11 @@ export class ReviewRoundFacade {
     if (item.delivery_used !== "file_only" && item.delivery_used !== "always_embed") return { ...base, diagnostic: "DELIVERY_USED_INVALID" };
     if (!capabilities?.attachment_delivery?.includes(item.delivery_used)) return { ...base, diagnostic: "DELIVERY_USED_CAPABILITY_MISMATCH" };
     const delivery = item?.delivery;
-    const normalizedDelivery = delivery && typeof delivery === "object" && !Array.isArray(delivery) ? { delivery_mode: delivery.delivery_mode, material_manifest_hash: delivery.material_manifest_hash, total_bytes: delivery.total_bytes, provider_visible_attachment_manifest: delivery.provider_visible_attachment_manifest } : null;
-    if (!normalizedDelivery || normalizedDelivery.delivery_mode !== expectedDelivery.delivery_mode || normalizedDelivery.material_manifest_hash !== expectedDelivery.material_manifest_hash || normalizedDelivery.total_bytes !== expectedDelivery.total_bytes || canonical(normalizedDelivery.provider_visible_attachment_manifest) !== canonical(expectedDelivery.provider_visible_attachment_manifest)) return { ...base, diagnostic: "DELIVERY_RECORD_MISMATCH" };
+    const normalizedDelivery = delivery && typeof delivery === "object" && !Array.isArray(delivery) ? { delivery_mode: delivery.delivery_mode, material_manifest_hash: delivery.material_manifest_hash, material_total_bytes: delivery.material_total_bytes, ...(delivery.rendered_prompt_bytes !== undefined ? { rendered_prompt_bytes: delivery.rendered_prompt_bytes } : {}), provider_visible_attachment_manifest: delivery.provider_visible_attachment_manifest } : null;
+    const renderedPromptInvalid = expectedDelivery.delivery_mode === "file_only"
+      ? normalizedDelivery?.rendered_prompt_bytes !== undefined
+      : !Number.isSafeInteger(normalizedDelivery?.rendered_prompt_bytes) || normalizedDelivery.rendered_prompt_bytes < 0 || normalizedDelivery.rendered_prompt_bytes > 512 * 1024;
+    if (!normalizedDelivery || normalizedDelivery.delivery_mode !== expectedDelivery.delivery_mode || normalizedDelivery.material_manifest_hash !== expectedDelivery.material_manifest_hash || normalizedDelivery.material_total_bytes !== expectedDelivery.material_total_bytes || renderedPromptInvalid || canonical(normalizedDelivery.provider_visible_attachment_manifest) !== canonical(expectedDelivery.provider_visible_attachment_manifest)) return { ...base, diagnostic: "DELIVERY_RECORD_MISMATCH" };
     if (intent.initial_runtime_id && item.delivery_used !== initialDelivery?.delivery_mode) return { ...base, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH", requires_human_confirmation: true };
     if (item.delivery_used !== expectedDelivery.delivery_mode) return { ...base, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" };
     base.delivery = structuredClone(normalizedDelivery);

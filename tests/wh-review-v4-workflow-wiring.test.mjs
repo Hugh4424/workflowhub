@@ -27,7 +27,7 @@ function bundleHash(stage, reviewTrack) { return sha(canonical(resolveRequiredSk
 function deliveryForInput(input) {
   const files = input.attachments.entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
   const material_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) }));
-  return { delivery_mode: input.attachmentDelivery, material_manifest_hash, total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), provider_visible_attachment_manifest: input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
+  return { delivery_mode: input.attachmentDelivery, material_manifest_hash, material_total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), ...(input.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size })) };
 }
 function completedProvider(input, packet) {
   const output = reviewerOutput(packet); const stdout = join(input.privateRawDirectory, "opencode.stdout.raw"); const stderr = join(input.privateRawDirectory, "opencode.stderr.raw");
