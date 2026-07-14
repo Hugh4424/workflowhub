@@ -58,7 +58,7 @@
 - `diagnosing-bugs` — adapted；build-code。来源 Matt Pocock [`diagnosing-bugs`](https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/diagnosing-bugs)、Superpowers [`systematic-debugging`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/systematic-debugging)、gstack [`investigate`](https://github.com/garrytan/gstack/tree/7c9df1c568a9ea745508f679a329332b2c338063/investigate)，MIT。合并为结构化根因证据合同。
 - `review-response` — adapted；build-code revise_required。来源 Superpowers [`receiving-code-review`](https://github.com/obra/superpowers/tree/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/receiving-code-review)，MIT。适配 wh-review continuation flow。
 - `test-routing-advisor` — adapted；build-code。来源 [AgentHub 固定快照](https://github.com/Hugh4424/AgentHub/tree/258f5a2548fa8cc15325c6aa18dd107c1fc497b9/packages/core/agenthub/skills/test-routing-advisor)，MIT。删除跨仓执行器，输出三档 JSON。
-- `isolated-browser-qa` — adopted；verify-code UI 条件。来源为用户提供的本机 skill snapshot，尚无公开 canonical URL。搬完整资产、去绝对路径；有公开上游后补固定 URL/commit。
+- `isolated-browser-qa` — adopted；verify-code UI 条件。来源为用户明确提供并授权迁入的本机 skill snapshot，审查快照 hash `ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef`；尚无公开 canonical URL。搬完整资产、去绝对路径；有公开上游后补固定 URL/commit。
 
 ## 已吸收
 
@@ -92,12 +92,25 @@
 - `matt-domain-modeling`
 - `matt-codebase-design`
 - `matt-research`
+- `matt-code-review`
+- `matt-to-tickets`
+- `matt-prototype`
+- `matt-implement`
+- `matt-setup-and-experimental`
+- `gstack-evidence-visibility`
+- `gstack-state-data-flow`
+- `gstack-ship-release-discipline`
+- `gstack-canary`
 
 - rejected：`intake-review-orchestrator`。上游已删除；由 `intake-decision-review + wh-review` 承接。
 - rejected：AgentHub `testing-system-blueprint`、backend/frontend/full-chain 执行器。只保留纯路由 advisor。
 - rejected：Superpowers `using-superpowers`。全局发现/bootstrap 与 repo-relative 按需加载冲突。
 - rejected：gstack runtime。Bun、browser daemon、gbrain、telemetry、自动更新均不进入闭包；只人工吸收局部 review/QA 方法。
-- watch：Matt `domain-modeling`、`codebase-design`、`research`。没有独立 stage 触发、消费点、验证合同前不进入运行闭包。
+- absorbed：Matt `code-review` 双轴进入 `review`；`research` primary-source/citation 进入 `spec-research`；`to-tickets` 阻塞边/tracer bullet 进入 `spec-tasks`。
+- watch：Matt `domain-modeling`、`codebase-design`、`prototype`。没有独立 stage 触发、消费点、验证合同前不进入运行闭包。
+- rejected：Matt `implement`、setup、deprecated、in-progress、personal skills。与现有 stage 编排重复或不稳定。
+- absorbed：gstack review 证据可见性进入 `review`；state/data-flow 进入 `spec-plan`；Ship release discipline 进入 verify-code。
+- watch：gstack Canary。等待独立 deploy-observe workflow。
 
 ## 更新流程
 

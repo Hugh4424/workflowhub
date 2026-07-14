@@ -54,6 +54,8 @@ description: Generate an implementation plan from a feature specification. Adapt
 
    3. **提取 Global Constraints 与 Project Structure**：把 spec 中的版本下限、依赖限制、命名/文案、平台和范围红线按原值写入 `## Global Constraints`，不得改写或分散。再推导文件树，标注 NEW/MODIFY/UNCHANGED。每个文件一个主要职责；不借计划无关重构。
 
+      涉及异步、跨进程、跨 API、持久化或三种以上状态转换时，必须附最小 state/data-flow 图或等价文字图，标出输入、状态所有者、转换条件、失败/回滚边、输出和验证锚点。简单单函数改动可写 `not_applicable` 及理由。
+
    4. **生成 Implementation Steps**：将 spec 中的 User Scenarios 和 FR 转化为有序的实施步骤，按 Phase 分组填入模板 `## Implementation Steps`：
       - **Phase 1: Setup / Foundation** — 基础设施、依赖安装、配置、项目骨架
       - **Phase 2: Core Implementation** — 按 User Story 或 FR 优先级排列的核心功能实现

@@ -15,6 +15,12 @@ describe("debate optional contract", () => {
     expect(skill).toContain("不替代独立审查");
     expect(skill).toContain("不得用 `debate` 的子代理去**生成审查发现本身**");
   });
+
+  it("uses a host-neutral parallel capability", () => {
+    expect(skill).toContain("parallel_agent_capability");
+    expect(skill).not.toContain("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS");
+    expect(skill).not.toContain("CLAUDE.md");
+  });
 });
 
 describe("debate executable rules", () => {

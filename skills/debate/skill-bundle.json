@@ -8,11 +8,11 @@
     },
     {
       "path": "SKILL.md",
-      "sha256": "ac997c7bf79f1b5770584a652073862418e0eaa129916a853af3eca926ae9278"
+      "sha256": "3b49b6d0a33be19c75c9ab1806f04adb7bfbe21a4fdce7a325677f3a89994a57"
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
-      "sha256": "491b4da2fd1c956358094d7bf958a8f2de0e25f9c956b32bb9cb86a2657ab08a"
+      "sha256": "7759fda198cdb3887a501c3ca532a4fa562f798bd7819e1634a724ab7617e56a"
     },
     {
       "path": "examples/sample-input.md",
@@ -36,7 +36,7 @@
     },
     {
       "path": "references/arbitration-protocol.md",
-      "sha256": "e9e1486037c4b88fc6aa1508eccfa945340bec37653dfe20d731ecdd167d748b"
+      "sha256": "9006295ca2c7d1feea5463002dfd28b273dbe51a01de43508bafb9caa97ced55"
     },
     {
       "path": "references/output-template.md",
@@ -44,7 +44,7 @@
     },
     {
       "path": "references/role-spawn-templates.md",
-      "sha256": "08f5b1f7b7fbc073e2fff7bac04be6b1045bea24db9a1c3e5c5b053412698076"
+      "sha256": "2cc6f4dc1f090948028933d54db2613c7d392ff04d9c6d96f5fc30aa9f2255c2"
     }
   ],
   "sources": [

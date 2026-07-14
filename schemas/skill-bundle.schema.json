@@ -40,11 +40,15 @@
         },
         {
           "type": "object",
-          "required": ["kind", "path", "license"],
+          "required": ["kind", "path", "license", "snapshot_sha256", "authorization_basis", "reviewed_at", "review_outcome"],
           "properties": {
             "kind": { "const": "user-provided-local-source" },
             "path": { "type": "string", "minLength": 1 },
-            "license": { "type": "string", "minLength": 1 }
+            "license": { "type": "string", "minLength": 1 },
+            "snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "authorization_basis": { "type": "string", "minLength": 1 },
+            "reviewed_at": { "type": "string", "format": "date" },
+            "review_outcome": { "enum": ["accepted", "rejected", "watch"] }
           },
           "additionalProperties": false
         }

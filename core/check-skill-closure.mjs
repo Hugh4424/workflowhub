@@ -108,6 +108,8 @@ export function checkSkillClosure(packageRoot) {
     try {
       const checked = validateSkillBundle(root, `skills/${entry.name}/skill-bundle.json`, entry.path);
       validateSchema(validateBundle, checked.bundle, `${entry.name}: bundle`, errors);
+      if (entry.local_bundle_hash !== checked.bundleHash) pushError(errors, `${entry.name}: catalog local_bundle_hash does not match resolved bundle`);
+      if (entry.last_reviewed_at !== catalog.last_reviewed_at) pushError(errors, `${entry.name}: provenance review date must match catalog review date after bundle changes`);
       const catalogSources = (entry.upstream || []).filter(source => source.github_url);
       const bundleSources = checked.bundle.sources || [];
       for (const source of catalogSources) {
@@ -119,6 +121,10 @@ export function checkSkillClosure(packageRoot) {
         const match = catalogSources.find(candidate => candidate.github_url === source.url && candidate.commit === source.commit && candidate.path === source.path);
         if (!match) pushError(errors, `${entry.name}: bundle source missing from catalog: ${source.url}@${source.commit}:${source.path}`);
       }
+      const catalogLocalSources = (entry.upstream || []).filter(source => source.kind === "user-provided-local-source");
+      const bundleLocalSources = bundleSources.filter(source => source.kind === "user-provided-local-source");
+      if (JSON.stringify(catalogLocalSources) !== JSON.stringify(bundleLocalSources)) pushError(errors, `${entry.name}: local source authorization/snapshot differs between catalog and bundle`);
+      for (const source of catalogLocalSources) if (source.snapshot_sha256 !== checked.bundleHash) pushError(errors, `${entry.name}: local source snapshot_sha256 must equal resolved bundle hash`);
       for (const missing of findUndeclaredStaticDependencies({ skillDir: path.join(root, "skills", entry.name), fileEntries: checked.fileEntries })) {
         pushError(errors, `${entry.name}: ${missing.source} references ${missing.locator}: ${missing.reason}`);
       }

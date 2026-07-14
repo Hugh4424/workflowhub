@@ -1,6 +1,6 @@
 ---
 name: debate
-description: 用于审查发现裁决、多方案对比或决策对抗时，当需要避免 Claude 自身 self-preference bias、存在方向级分歧（问题定义/范围/需求解释）、或需要对立方案对等上庭受审。
+description: 用于审查发现裁决、多方案对比或决策对抗时，当需要避免方案作者自身 self-preference bias、存在方向级分歧（问题定义/范围/需求解释）、或需要对立方案对等上庭受审。
 recommended: true
 ---
 <!-- markdownlint-disable MD040 -->
@@ -11,7 +11,7 @@ recommended: true
 
 本技能 `debate` 是**可选便利层**，非质量地基：
 
-- **依赖 Agent Teams** 多角色协作能力（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`），不是每个环境都可用的核心能力
+- 五方模式依赖调用方显式传入 `parallel_agent_capability: available`；这是宿主中立 capability，不绑定任何环境变量或产品名
 - **缺它 intake 仍能完整走完** — quality gate 押在与 AI 宿主无关的关卡（决策记录落盘 + 用户批准）上
 - **本技能不阻塞工作流** — 环境不具备时自动降级，用户不必手选
 
@@ -21,8 +21,8 @@ recommended: true
 
 | 环境条件 | 执行路径 |
 |---------|---------|
-| 有 Agent Teams（`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`） | 自动启用五方法庭式对抗辩论（见下方完整流程） |
-| 无 Agent Teams（单 agent CLI 等环境） | 自动降级单人三档（见降级路径段） |
+| `parallel_agent_capability: available` | 自动启用五方法庭式对抗辩论（见下方完整流程） |
+| `parallel_agent_capability: unavailable` 或未传 | 自动降级单人三档（见降级路径段） |
 
 ## 降级路径：单人三档
 
@@ -152,11 +152,12 @@ debate 触发标准按 **MR-2 四分类**判定：
 
 记录写入输出根下的 `debate/trigger-decision.md`。缺此记录 → 视为 debate 触发未执行。
 
-### Step 2：确认前置 + 启用 Agent Teams
+### Step 2：确认前置 + 检查并行代理 capability
 
-- **环境自动判定**：检查 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 是否启用
-  - 已启用 → 继续五方辩论流程
-  - 未启用 → 走降级路径（单人三档，见降级路径段）
+- **能力判定**：只读取调用 payload 的 `parallel_agent_capability`
+  - `available` → 继续五方辩论流程
+  - `unavailable` 或缺失 → 走降级路径（单人三档，见降级路径段）
+- 宿主 adapter 可以把自身 teams/subagent 能力映射成这个字段；skill 禁止读取 Claude、Codex 或其他宿主专属环境变量。
 - 准备好案卷：本轮审查发现清单、Claude 对应决策、decision-log 当前版本号（方案版本锚点）
 
 ### Step 3：Phase 0 立案分派

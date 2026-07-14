@@ -15,7 +15,7 @@
 ## 必读
 - 案卷：{output-root}/debate/round-{N}/00-案卷.md（读兼容旧版 `pk/` 轮次目录；输出根规则见 SKILL.md）
 - decision-log v{X.Y}（方案版本锚点）
-- 标准上下文（CLAUDE.md 原则、forbidden files）
+- 标准上下文（调用方显式传入的 project rules、forbidden files）
 
 ## 立场
 你**完全相信**甲组每条决策都是当前最优解。除非法官判决，否则不退让。

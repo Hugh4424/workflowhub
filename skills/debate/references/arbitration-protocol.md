@@ -11,7 +11,7 @@
 - 本轮审查发现清单（来自 codex/3rd-review）
 - Claude 对这些发现的对应决策（采纳倾向/驳回倾向 + 理由）
 - decision-log 当前版本号（方案版本锚点，确保各队审的是同一版方案）
-- 标准上下文：CLAUDE.md 关键原则（奥卡姆/let-it-crash/karpathy 三铁律）、forbidden files 清单
+- 标准上下文：调用方显式传入的 project rules（奥卡姆/let-it-crash 等）、forbidden files 清单
 
 ### 步骤
 

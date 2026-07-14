@@ -58,6 +58,8 @@ description: 将已验证的 spec.md 和 plan.md 转换为依赖排序的、可�
      - 包含至少一个 FR 映射引用（`FR: FR-XXX-XXX`）；
      - 包含精确的文件路径。
      - 是可独立验收的纵向切片：同一任务内包含 test → minimal implementation → verification，不得拆成“先所有测试、后所有实现”。
+     - 显式写出阻塞边 `blocked_by`，不得只靠任务顺序暗示依赖。
+     - 附一条 tracer bullet：指出从输入/接口到可观察结果的最短验证链。
      - 包含 `Interfaces: Consumes / Produces`，精确列出相邻任务交换的签名、参数/返回类型或文件 schema。
      - 自动继承 plan.md 的 `Global Constraints`，不在任务中改写或弱化。
    - **Task Right-Sizing**：脚手架、配置、文档并入需要它们的交付任务。只有 reviewer 可以合理地独立拒绝一边时才分拆相邻任务。

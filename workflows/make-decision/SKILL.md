@@ -12,7 +12,6 @@ description: Clarify requirements with the user via structured debate/review护�
 | 变量名 | 默认值 | 说明 | override 方式 |
 |---|---|---|---|
 | `MAKE_DECISION_SKIP_DEBATE` | `0` | `=1` 时强制跳过所有 debate 轮次，直接记录 `debate_1: skipped` / `debate_2: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_DEBATE=1` |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
 | `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量（直接 task root）→ `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器会基于当前 git remote / `repo_root_map` 返回项目级 task root；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
 
 ## Metrics — Stage Start（最前置步骤）
@@ -346,7 +345,7 @@ evidence: <对应 S4 内容或调研依据>
 
 ### 4. Debate 门控（第一次 debate）
 
-**入口检测（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）**：调用 debate 技能前，记录 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 的当前状态——已设置（`=1`）还是未设置/`=0`——写 journal 事件 `event: "debate_env_checked", agent_teams: "<当前值>"`，并透传给 debate 技能，由 debate 技能决定启用五方法庭模式（`=1`）或自动降级单人三档（`=0`）。make-decision 本身不读此变量控制 debate 是否触发。
+**入口检测（宿主中立）**：调用 debate 技能前，通过 manifest 声明的 `host-subagent` capability probe 判断能否并行启动独立代理，写 journal 事件 `event: "debate_capability_checked", parallel_agent_capability: "available|unavailable"`，并把该字段透传给 debate。禁止读取 Claude/Codex 等宿主专属环境变量。
 
 make-decision **委托 debate 技能自己判断是否触发**（debate 技能内部执行 Step 1 触发判定 + 环境自动判定五方法庭/单人三档）。make-decision 在**主调用层**执行 debate，不下派子代理。
 
@@ -431,7 +430,7 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能�
 
 **审查实现**：本步骤先调用仓内 `skills/intake-decision-review/SKILL.md` 检查方向、框架、边界和可行性，再把 draft、S4 baseline、权威定义与 S5 findings 组装成 sealed packet，通过唯一 `wh-review/ReviewRoundFacade` flow 审查。两者均使用 manifest resolved-path payload；不得新增第二条 review 路径。
 
-**入口检测（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）**：调用 debate 技能前，记录 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 的当前状态——已设置（`=1`）还是未设置/`=0`——写 journal 事件 `event: "debate_env_checked", agent_teams: "<当前值>"`，并透传给 debate 技能，由 debate 技能决定启用五方法庭模式（`=1`）或自动降级单人三档（`=0`）。make-decision 本身不读此变量控制 debate 是否触发。
+**入口检测（宿主中立）**：复用第一次 debate 的 `host-subagent` capability probe；记录 `debate_capability_checked`，透传 `parallel_agent_capability: available|unavailable`。不得读取宿主专属环境变量。
 
 make-decision **委托 debate 技能自己判断是否触发**（与 S5 相同，debate 技能在主调用层执行，不下派子代理）。
 
@@ -556,7 +555,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 6. **开放问题**——仍存在歧义或待人确认的事项
 7. **验收标准**——可验证的验收标准
 
-**执行环境**字段（小节，写在 7 节之后）：记录本次执行中 7 个 env var 的检测结果，包含：
+**执行环境**字段（小节，写在 7 节之后）：记录本次执行所声明 env var 与 host capability probe 的检测结果，包含：
 
 - 每个 env var 是否已设置、实际值（未设置时标注"使用默认值"）
 - 检测过程中触发的降级事件（如 `dispatch_config_invalid`、`debate_execution_failed`、`runner_invalid`）及对应 capability/config 名称

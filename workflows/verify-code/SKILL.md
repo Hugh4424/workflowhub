@@ -222,6 +222,8 @@ present, classify the result as yellow.
 
 ## Close 章节：5 步骤序列总览（严格顺序）
 
+若交付物是 standalone distributable（CLI、包、镜像或可部署应用），进入 close 前额外核对 release pipeline：产物可从干净 checkout 重建、版本与入口正确、运行时依赖已声明、最小安装 smoke 通过、回滚或撤回路径明确。这里只吸收 gstack Ship 的发布纪律，不调用 gstack runtime，也不自动发布。
+
 verify-code 阶段的收尾（close）流程严格按以下 5 个步骤顺序执行，任一步骤失败均按其自身契约处理，不得跳步或乱序：
 
 ① **入口校验**（对应 §8 common + active-only）：进入 close 流程前，先执行 common 校验（worktree.json 六字段全非空、路径为绝对路径、值域校验，其中 `branch` 须匹配 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`，与 build-code §17 common 校验口径一致）。**`status` 前置约束**：close 流程仅允许 `status="active"` 的任务继续；`status="cleaned"` 视为已归档任务重入，直接 fail-loud，不得进入步骤②-④。`status="active"` 时须额外执行 active-only 校验，与 §17 build-code 消费 6 字段前的 active-only 校验口径一致（不得弱化）：worktree 目录存在性、以 `target_repo_root` 为准执行的 `git worktree list --porcelain` 注册、分支名匹配、同仓校验（该 worktree 的 commondir 须与 `target_repo_root` 同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）。以上任一校验失败（含 common 校验失败、`status="cleaned"` 重入、active-only 校验失败）即 fail-loud，跳过步骤②-④（不执行质量记录、3rd-review、任何不可逆动作），仅进入步骤⑤ 落盘（stage-result 的 `verdict` 字段固定写 `escalate_to_human`，并记录 `needs_human=true` 与该失败事实），不得继续执行 merge 等后续动作。

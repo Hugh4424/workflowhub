@@ -21,9 +21,19 @@ describe("local planning quality absorption", () => {
       expect(skill).toContain(`\`${label}\``);
     }
     expect(skill).toContain("纵向切片");
+    expect(skill).toContain("blocked_by");
+    expect(skill).toContain("tracer bullet");
     expect(template).toContain("## Global Constraints");
     expect(template).toContain("**Knowledge**:");
     expect(template).toContain("**STOP**:");
+  });
+
+  test("research, review, planning and release rules cover adopted upstream ideas", () => {
+    expect(read("skills/spec-research/SKILL.md")).toContain("primary source");
+    const review = read("skills/review/SKILL.md");
+    for (const value of ["Standards", "Spec", "DIFF-VERIFIABLE", "CROSS-REPO", "EXTERNAL-STATE", "CONTENT-SHAPE"]) expect(review).toContain(value);
+    expect(read("skills/spec-plan/SKILL.md")).toContain("state/data-flow");
+    expect(read("workflows/verify-code/SKILL.md")).toContain("standalone distributable");
   });
 });
 

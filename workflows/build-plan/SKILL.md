@@ -86,7 +86,7 @@ Before decomposing the spec into implementation steps, capture the data contract
 - Call the `simplicity-guard` skill located at `skills/simplicity-guard/SKILL.md`
 - Pass the explicit `task-id` parameter and the path to `specs/{task-id}/spec.md`
 - simplicity-guard evaluates reuse opportunities against existing skills/workflows and outputs a `minimal-path` field describing the smallest valid implementation path
-- If simplicity-guard is unavailable, record `minimal-path: unavailable` and continue
+- If simplicity-guard cannot be dispatched or its independent context capability is unavailable, fail loud and set `needs_human=true`; do not continue to spec-plan until a human repairs the capability or explicitly changes the stage contract. It is an `always` dependency, not an optional hint.
 - Use the `minimal-path` conclusion as a gating input to spec-plan: spec-plan must not introduce new files or mechanisms that contradict the minimal path without documenting the override rationale
 
 **Call spec-plan sub-skill**:

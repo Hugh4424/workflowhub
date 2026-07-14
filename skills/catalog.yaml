@@ -13,6 +13,9 @@ projects:
 skills:
   - name: anysearch
     path: skills/anysearch/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 266d24d43ecc01b8a0aef9502ac79bb8e2b0fb3580b77361576f5bb23fea0bbf
+    last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 经用户批准的外部实时检索
     design_idea: 统一搜索、垂直搜索和 URL 抽取入口
@@ -23,6 +26,9 @@ skills:
     update_policy: 比较固定 commit 后的安全边界和 bundle，再人工升级
   - name: decision-log
     path: skills/decision-log/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: d9e9db6e8ad923f51ae0269ae0fde777e61c0a185eda3108f55dee9b4d055c64
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: 生成下游唯一权威需求记录
     design_idea: 将已收敛输入固化为结构化 decision log
@@ -33,6 +39,9 @@ skills:
     update_policy: 随 stage 合同变更审查
   - name: grill-with-docs
     path: skills/grill-with-docs/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 5d764d44e548091636cd8e9a0a2e44b0dce34e030aec0bb4114879409c311792
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用领域模型和现有文档压力测试方案
     design_idea: 边追问边沉淀 CONTEXT 和 ADR
@@ -46,6 +55,9 @@ skills:
     update_policy: 上游 grilling/domain-modeling 更新时人工比较问题协议
   - name: intake-decision-review
     path: skills/intake-decision-review/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: f7d38270318313953983b8874b7fcdeed3d5b4569101b324651af8095db9159a
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: 汇总 intake 四个审查角度并请求异源审查
     design_idea: 单入口、结构化 packet、人工确认关键选择
@@ -56,6 +68,9 @@ skills:
     update_policy: 随 wh-review 和 make-decision 合同变更审查
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: ee379c3bc86a073b14bf000867058106500ad25efac99aa431dceff3d943c90b
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: 写代码前执行四阶梯复用判断
     design_idea: 优先已有能力，最后才做最小新实现
@@ -66,6 +81,9 @@ skills:
     update_policy: 随宪法复用条款变更审查
   - name: scope-triage
     path: skills/scope-triage/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 8a59454d334c899dae5de8f82465813452a7dcbdb691b2a817130780b8642386
+    last_reviewed_at: "2026-07-14"
     status: native
     standalone: true
     purpose: 将需求拆成 scope verdict
@@ -77,6 +95,9 @@ skills:
     update_policy: 保持 standalone；有 stage 消费合同后再入 manifest
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: c20b3417e9b560594e3d25188c7f394db3e32b3499e6363e3c603afc12e9ac72
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
     design_idea: 一次一问，按影响重排，达到阈值即收敛
@@ -87,6 +108,9 @@ skills:
     update_policy: 随 make-decision 交互合同变更审查
   - name: spec-research
     path: skills/spec-research/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 3f4a1f155c6bb05bf5f11af6b85f3ae3a11647efe4df120a8ba20bc857e601c8
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: 规划前形成可追踪研究结论
     design_idea: fail-loud、可明确跳过、证据可追踪
@@ -97,6 +121,9 @@ skills:
     update_policy: 随 research 产物合同变更审查
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: abddb296b768b00482ed83076f31a0e3a4c4365944999ea2f3435b9f5c38e142
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从自然语言生成可测试 spec
     design_idea: 保留 Spec Kit 规格质量机制，去宿主和分支耦合
@@ -107,6 +134,9 @@ skills:
     update_policy: 上游更新时从固定 commit 人工比较规格质量规则
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 386fa8d05e573f337db199bc9d931444b3da7e1f7eb5ef2cd47934f9a161c3a5
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
     design_idea: 10 维扫描、最多五题、逐题写回
@@ -117,6 +147,9 @@ skills:
     update_policy: 先解析固定导入 commit；人工比较扫描维度和问答合同
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 3ec4723dcf5853df5b1c30da9268dd35c8ea1192ac77e948ad3ad62f3b2c7692
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
     design_idea: 技术上下文、宪法检查、接口和验证映射
@@ -129,6 +162,9 @@ skills:
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 3ea3b35b1ad4ff28d7e38b82abbbaea685c799e66a136fd379c3196748543a01
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
     design_idea: Goal/Files/Tasks/Verify/Knowledge/STOP 显式映射
@@ -141,6 +177,9 @@ skills:
     update_policy: 比较任务粒度和验证映射规则，拒绝引入第二计划格式
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 4241fc7bdf7217ac29cc80f95d0edda195de734ba19f21db89fc7293904dce5e
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: 独立检查 spec、plan、tasks 一致性
     design_idea: report-only packet lens
@@ -151,6 +190,9 @@ skills:
     update_policy: 随 review packet schema 变更审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: fd89606602a5280270e09919571d53db08a046a9d6c2f9f1f32fd979a4d8763d
+    last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
     design_idea: sealed packet、provider receipt、continuation flow、人工 gate
@@ -161,6 +203,9 @@ skills:
     update_policy: 只通过本地合同和异源审查演进，禁止第二 review 路径
   - name: plan-ceo-review
     path: skills/plan-ceo-review/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 9d37db905836fb9d1d1fe418a7604299856af761e0bc3f53d96bdefed4964b2e
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 产品方向审查 lens
     design_idea: premise、scope、leverage、alternatives、delivery risk
@@ -171,6 +216,9 @@ skills:
     update_policy: 人工吸收审查问题，不引入 gstack runtime
   - name: plan-design-review
     path: skills/plan-design-review/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 9547fcb2243bc2595a64dc67c80dec067dc0cb55fb1b978849732d3b5f127b94
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: UI 信息架构、状态、可访问性和响应式审查 lens
     design_idea: 只在 UI scope 时审查设计风险
@@ -181,6 +229,9 @@ skills:
     update_policy: 人工吸收 design checklist，不引入 gstack runtime
   - name: plan-eng-review
     path: skills/plan-eng-review/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: ae1d4863de9398b422fc4049d6736bd8ec1bdaa305220ee116d930ea1c8876c6
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 工程计划顺序、边界、失败模式和验证审查 lens
     design_idea: report-only engineering plan review
@@ -191,6 +242,9 @@ skills:
     update_policy: 人工吸收工程审查条款，不引入 gstack runtime
   - name: review
     path: skills/review/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: f5021ac90100b8a9fe279746392f230124ae947c845379398dd1537af2c04a5a
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 正确性、范围、证据和未决风险通用 lens
     design_idea: 独立 report-only review
@@ -201,6 +255,9 @@ skills:
     update_policy: 人工比较 review checklist，只保留 lens 规则
   - name: qa-only
     path: skills/qa-only/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 3156025abdaf245f7e2a3ee46a3a1e2237707735a334b294a38ae9fce6e25902
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用户结果、复现证据和遗漏场景验收 lens
     design_idea: report-only acceptance review
@@ -211,6 +268,9 @@ skills:
     update_policy: 人工吸收 QA checklist，不引入 gstack runtime
   - name: verify-change
     path: skills/verify-change/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: a65b96058474ec76535396ef885d1b2edddb94421354f9a02a2e5dc7a9cc45e1
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 验收闭环和验证证据 lens
     design_idea: 对 supplied evidence 做 report-only 检查
@@ -221,6 +281,9 @@ skills:
     update_policy: 仅同步验收检查规则，不恢复旧 lifecycle
   - name: test-strategy
     path: skills/test-strategy/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 46dc51676f159e20c95991868dd5365c7063c09e94bbf50d6825e5dabeaee629
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 AC、UI impact 和风险生成测试路由
     design_idea: 独立上下文产出 AC-to-test-route strategy
@@ -233,6 +296,9 @@ skills:
     update_policy: 人工比较路由和风险规则
   - name: debate
     path: skills/debate/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 547934e644d88b1cdce4e43c6de321fbddf7381860d5b1ba14677fb7838fe18b
+    last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 对方向级分歧执行可选对抗审查
     design_idea: 双方对等陈述，judge 不参与倡议，最多两轮
@@ -243,6 +309,9 @@ skills:
     update_policy: 比较固定 commit；只同步协议和规则，不依赖全局安装
   - name: diagnosing-bugs
     path: skills/diagnosing-bugs/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 752d6895cdb0efbd23516af5848c23eb1990969fbfd7629ae5d157be5e7fe49a
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 用可重复证据定位根因后单点修复
     design_idea: 快反馈、缩小复现、竞争假设、探针验证、三次失败停止
@@ -256,6 +325,9 @@ skills:
     update_policy: 三方更新时比较诊断方法；禁止引入自动补丁循环
   - name: review-response
     path: skills/review-response/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 2d428c67ca51544eda3f82a1e2453f7fe9e777a72ab89515e3331e235a66188b
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 严格消费 revise_required finding
     design_idea: 核实、根因聚类、同类扫描、最小修复、补证据、同 flow 重审
@@ -266,6 +338,9 @@ skills:
     update_policy: 人工比较 finding 消费纪律，不引入宿主专属命令
   - name: test-routing-advisor
     path: skills/test-routing-advisor/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: c2bbffec606f340d51d7aab855d6bbda5c7fa3397c18c9aea6219730ee10d190
+    last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 为 build-code 判定 simple/feature/fullstack 测试层级
     design_idea: 纯判类、固定 JSON、执行权仍归 stage
@@ -276,11 +351,14 @@ skills:
     update_policy: 只同步有证据的路由启发式，不恢复多执行器框架
   - name: isolated-browser-qa
     path: skills/isolated-browser-qa/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef
+    last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 隔离 profile 执行 UI 验收并清理
     design_idea: session/profile/cleanup 全部封装，保留证据
     used_by_stages: [verify-code]
-    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned" }]
+    upstream: [{ kind: user-provided-local-source, path: "isolated-browser-qa", license: "user-owned", snapshot_sha256: "ccfcbefcde46da585f1d627218965c573575f8e4d8ecd59fec2b028e22a981ef", authorization_basis: "user explicitly supplied local source and authorized migration into workflowhub", reviewed_at: "2026-07-14", review_outcome: accepted }]
     local_changes: 搬入完整闭包；去个人绝对路径；按 repo-relative manifest 调用
     dependency_closure: [skills/isolated-browser-qa]
     update_policy: 上游暂无公开 canonical skill URL；维护本地快照并人工比较来源目录
@@ -434,7 +512,7 @@ capability_decisions:
     design_idea: 从代码和讨论提炼领域模型
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *matt, path: "skills/domain-modeling", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/domain-modeling" }]
+    upstream: [{ <<: *matt, path: "skills/engineering/domain-modeling/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md" }]
     local_changes: 部分思路已进入 grill-with-docs；暂无独立触发合同
     dependency_closure: []
     update_policy: 有 stage 触发、消费点和验证合同后再升级
@@ -444,17 +522,107 @@ capability_decisions:
     design_idea: 用边界和依赖关系指导结构演进
     used_by_stages: []
     local_path: null
-    upstream: [{ <<: *matt, path: "skills/codebase-design", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/codebase-design" }]
+    upstream: [{ <<: *matt, path: "skills/engineering/codebase-design/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/codebase-design/SKILL.md" }]
     local_changes: 未进入运行闭包
     dependency_closure: []
     update_policy: 有明确 stage 合同后再评估
   - name: matt-research
-    status: watch
+    status: absorbed
     purpose: 结构化技术研究
     design_idea: 先问题分解，再证据收集和结论
-    used_by_stages: []
+    used_by_stages: [build-plan]
     local_path: skills/spec-research
-    upstream: [{ <<: *matt, path: "skills/research", skill_url: "https://github.com/mattpocock/skills/tree/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/research" }]
-    local_changes: 当前不替换 workflowhub 原生 research 合同
+    upstream: [{ <<: *matt, path: "skills/engineering/research/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/research/SKILL.md" }]
+    local_changes: 吸收 primary-source、逐事实 citation 和推断分离纪律，不替换 workflowhub 原生产物合同
     dependency_closure: []
-    update_policy: 比较新增研究纪律；有净收益才吸收
+    update_policy: 人工比较来源纪律，不引入其宿主编排
+  - name: matt-code-review
+    status: absorbed
+    purpose: Standards 与 Spec 双轴代码审查
+    design_idea: 工程规范合规和需求实现完整性必须分别裁决
+    used_by_stages: [make-decision, build-spec, build-plan]
+    local_path: skills/review/SKILL.md
+    upstream: [{ <<: *matt, path: "skills/engineering/code-review/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/code-review/SKILL.md" }]
+    local_changes: 只吸收双轴 lens，保持 wh-review 唯一调度路径
+    dependency_closure: []
+    update_policy: 人工比较 review 维度，不复制执行编排
+  - name: matt-to-tickets
+    status: absorbed
+    purpose: 显式任务阻塞边与 tracer bullet
+    design_idea: 任务依赖不能只靠顺序暗示，纵向验证链必须可追踪
+    used_by_stages: [build-plan]
+    local_path: skills/spec-tasks/SKILL.md
+    upstream: [{ <<: *matt, path: "skills/engineering/to-tickets/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/to-tickets/SKILL.md" }]
+    local_changes: 吸收 blocked_by 和 tracer bullet，不引入 issue tracker
+    dependency_closure: []
+    update_policy: 人工比较任务图规则
+  - name: matt-prototype
+    status: watch
+    purpose: 高不确定问题的快速原型
+    design_idea: 用可丢弃原型验证关键未知
+    used_by_stages: []
+    local_path: null
+    upstream: [{ <<: *matt, path: "skills/engineering/prototype/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/prototype/SKILL.md" }]
+    local_changes: 当前五阶段没有独立触发和消费合同
+    dependency_closure: []
+    update_policy: 出现真实高不确定触发合同后再评估
+  - name: matt-implement
+    status: rejected
+    purpose: 通用实现编排器
+    design_idea: 从计划直接驱动实现循环
+    used_by_stages: []
+    local_path: workflows/build-code/SKILL.md
+    upstream: [{ <<: *matt, path: "skills/engineering/implement/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/implement/SKILL.md" }]
+    local_changes: 与 build-code 唯一 phase/TDD/review 生命周期重复
+    dependency_closure: []
+    update_policy: permanently rejected as runtime skill
+  - name: matt-setup-and-experimental
+    status: rejected
+    purpose: 上游 setup、deprecated、in-progress 和个人环境技能
+    design_idea: 安装宿主配置或未稳定技能集
+    used_by_stages: []
+    local_path: null
+    upstream: [{ <<: *matt, path: "skills/engineering/setup-matt-pocock-skills/SKILL.md", skill_url: "https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/setup-matt-pocock-skills/SKILL.md" }]
+    local_changes: 不安装上游框架，不迁入 deprecated/in-progress/personal skills
+    dependency_closure: []
+    update_policy: permanently rejected；只在稳定技能成为明确 stage 候选时单独重评
+  - name: gstack-evidence-visibility
+    status: absorbed
+    purpose: 审查证据可见性分类
+    design_idea: 区分 DIFF-VERIFIABLE、CROSS-REPO、EXTERNAL-STATE、CONTENT-SHAPE
+    used_by_stages: [make-decision, build-spec, build-plan]
+    local_path: skills/review/SKILL.md
+    upstream: [{ <<: *gstack, path: "review/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/review/SKILL.md" }]
+    local_changes: 裁为 sealed-packet lens，不引入 gstack runtime
+    dependency_closure: []
+    update_policy: 人工比较 evidence taxonomy
+  - name: gstack-state-data-flow
+    status: absorbed
+    purpose: 异步和跨边界计划的最小状态数据流
+    design_idea: 状态所有者、转换、失败边和验证锚点显式化
+    used_by_stages: [build-plan]
+    local_path: skills/spec-plan/SKILL.md
+    upstream: [{ <<: *gstack, path: "plan-eng-review/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/plan-eng-review/SKILL.md" }]
+    local_changes: 只要求最小图，不复制 plan 编排
+    dependency_closure: []
+    update_policy: 人工比较异步/跨边界规则
+  - name: gstack-ship-release-discipline
+    status: absorbed
+    purpose: standalone distributable 发布前检查
+    design_idea: clean build、入口、依赖、安装 smoke、撤回路径
+    used_by_stages: [verify-code]
+    local_path: workflows/verify-code/SKILL.md
+    upstream: [{ <<: *gstack, path: "ship/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/ship/SKILL.md" }]
+    local_changes: 只吸收检查条款，不自动发布
+    dependency_closure: []
+    update_policy: 人工比较 release checklist
+  - name: gstack-canary
+    status: watch
+    purpose: 部署后 canary 观察
+    design_idea: 发布后按信号观测并决定推进或回滚
+    used_by_stages: []
+    local_path: null
+    upstream: [{ <<: *gstack, path: "canary/SKILL.md", skill_url: "https://github.com/garrytan/gstack/blob/7c9df1c568a9ea745508f679a329332b2c338063/canary/SKILL.md" }]
+    local_changes: 当前五阶段没有 deploy-observe workflow
+    dependency_closure: []
+    update_policy: 未来独立 deploy-observe workflow 建立后重评

@@ -7,6 +7,20 @@ const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const catalog = yaml.load(fs.readFileSync(path.join(root, "skills/catalog.yaml"), "utf8"));
 
 describe("strict skill provenance", () => {
+  it("binds every runtime skill review to its current local bundle", () => {
+    for (const entry of catalog.skills) {
+      expect(entry.local_version, entry.name).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(entry.local_bundle_hash, entry.name).toMatch(/^[a-f0-9]{64}$/);
+      expect(entry.last_reviewed_at, entry.name).toBe(catalog.last_reviewed_at);
+    }
+    const browser = catalog.skills.find(entry => entry.name === "isolated-browser-qa");
+    expect(browser.upstream[0]).toMatchObject({
+      kind: "user-provided-local-source",
+      snapshot_sha256: browser.local_bundle_hash,
+      review_outcome: "accepted",
+    });
+    expect(browser.upstream[0].authorization_basis).toContain("user explicitly supplied");
+  });
   it("pins every public upstream source to a real commit URL and review", () => {
     for (const entry of [...catalog.skills, ...catalog.capability_decisions]) {
       for (const source of entry.upstream || []) {
@@ -32,5 +46,13 @@ describe("strict skill provenance", () => {
     const names = new Set(catalog.capability_decisions.map(item => item.name));
     expect(names).toContain("agenthub-skill-discovery-symlinks");
     expect(names).toContain("agenthub-handoff-session-pair");
+  });
+
+  it("records every selected Matt and gstack adoption decision", () => {
+    const names = new Set(catalog.capability_decisions.map(item => item.name));
+    for (const name of [
+      "matt-code-review", "matt-research", "matt-to-tickets", "matt-prototype", "matt-implement", "matt-setup-and-experimental",
+      "gstack-evidence-visibility", "gstack-state-data-flow", "gstack-ship-release-discipline", "gstack-canary",
+    ]) expect(names, name).toContain(name);
   });
 });
