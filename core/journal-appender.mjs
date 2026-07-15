@@ -49,6 +49,9 @@ export function journalPathForTaskDir(taskSpecDir) {
  *   For STEP_ENTRY events, the returned object includes a `journal_entry_id` field.
  */
 export function buildJournalEvent(eventType, payload) {
+  if (!Object.values(JOURNAL_EVENT_TYPES).includes(eventType)) {
+    throw new TypeError(`unknown journal event type: ${eventType}`);
+  }
   const journal_entry_id =
     eventType === JOURNAL_EVENT_TYPES.STEP_ENTRY ? randomUUID() : null;
 
@@ -57,6 +60,9 @@ export function buildJournalEvent(eventType, payload) {
     ...payload,
     schema_version: JOURNAL_SCHEMA_VERSION,
     event_type: eventType,
+    // Canonical receipts supply timestamp.  Legacy writers retain a generated
+    // observed timestamp during migration; neither path invents topology.
+    timestamp: payload.timestamp ?? new Date().toISOString(),
     ts: new Date().toISOString(),
   };
 }

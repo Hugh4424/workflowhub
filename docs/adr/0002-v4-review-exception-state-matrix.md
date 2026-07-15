@@ -22,7 +22,7 @@ V4 不把异常伪装成 `pass`、空 finding 或可继续的 session。每个�
 
 ## 实现与测试绑定
 
-- attachment copy/hash：`skills/wh-review/scripts/review-round-facade.mjs` 的 `#attachments()` 只从 private prepare snapshot 复制；3rd-review 的 `lib/attachments.mjs` 对 source size/hash、冻结副本和 continuation 逐次验证。覆盖：`skills/wh-review/scripts/__tests__/review-round-facade.test.mjs` 的 “reads attachments only from the private prepare snapshot”；`/Users/Hugh/Hugh/Project/3rd-review/test/attachments-protocol.test.mjs`。
+- attachment copy/hash：`skills/wh-review/scripts/review-round-facade.mjs` 的 `#attachments()` 只从 private prepare snapshot 复制；3rd-review 的 `lib/attachments.mjs` 对 source size/hash、冻结副本和 continuation 逐次验证。覆盖：`skills/wh-review/scripts/__tests__/review-round-facade.test.mjs` 的 “reads attachments only from the private prepare snapshot”；3rd-review 仓内 `test/attachments-protocol.test.mjs`。
 - 无可用 provider：`ReviewRoundFacade.run()` 生成显式 `NO_CAPABLE_PROVIDER`，不会把调用者提供的 capability 当授权。覆盖：`review-round-facade.test.mjs` 的 “reports every missing candidate...”。
 - 格式/schema/合同错误：分别投影稳定错误码；格式修正只复用相同 runtime/provider/session 和冻结材料，最多两次。失败 attempt 不写 semantic flow、business round 或 projection guard。
 - raw audit chain：`BrokerClient` 只从 3rd-review runtime private state 读取相对 raw stdout/stderr ref，复制到当前 round 的 private directory 后复算 SHA-256；`#outcome()` 只接受该私有副本，并将 parsed provider text 写入独立的 `parsed_output_ref`。复制、state hash 或副本 hash 不一致时不能进入 aggregate。覆盖：`broker-client.test.mjs` 和 `review-round-facade.test.mjs` 的 raw audit cases。

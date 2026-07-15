@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "skill": "audit-summary-carrier",
+  "files": [
+    "SKILL.md",
+    "agents/openai.yaml"
+  ]
+}

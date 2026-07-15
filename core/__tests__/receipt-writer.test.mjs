@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { computeLedgerHash, computeRequirementContentHash } from "../requirement-ledger.mjs";
 
 const TASK_ID = "receipt-writer-test";
+const RUN_ID = "run-123";
+const ENTRY_TIMESTAMP = "2026-07-13T00:00:00.000Z";
+const EXIT_TIMESTAMP = "2026-07-13T00:01:00.000Z";
 
 function makeTaskDir() {
   return mkdtempSync(join(tmpdir(), "workflowhub-receipts-"));
@@ -11,52 +15,60 @@ function makeTaskDir() {
 
 async function importWriter(taskDir, fsMock) {
   vi.resetModules();
-  vi.doMock("../task-dir-parser.mjs", () => ({
-    parseTaskDir: () => taskDir,
-  }));
-  if (fsMock) {
-    vi.doMock("node:fs/promises", () => fsMock);
-  }
+  vi.doMock("../task-dir-parser.mjs", () => ({ parseTaskDir: () => taskDir }));
+  if (fsMock) vi.doMock("node:fs/promises", () => fsMock);
   return import("../receipt-writer.mjs");
 }
 
-function validEntryPayload(overrides = {}) {
+function entryPayload(overrides = {}) {
   return {
-    step_id: "bc.work.ph1",
-    stage_slug: "bc",
-    step_type: "work",
-    step_seq: 1,
-    check_status: "ok",
-    prev_step_id: null,
-    next_step_id: null,
-    writer_namespace: "build-code",
-    workflow_run_id: "run-123",
+    workflow_run_id: RUN_ID,
+    stage_slug: "build-code",
+    step_id: 1,
+    manifest_schema_version: "2.0.0",
+    attempt_id: "attempt-1",
+    event_type: "step_entry",
+    timestamp: ENTRY_TIMESTAMP,
+    entry_evidence: { kind: "command", uri_or_path: "evidence/entry.log" },
     ...overrides,
   };
 }
 
-function validExitPayload(overrides = {}) {
+function exitPayload(overrides = {}) {
   return {
-    step_id: "bc.work.ph1",
-    workflow_run_id: "run-123",
-    verdict: "passed",
-    executor_namespace: "coder",
-    prev_step_id: null,
-    next_step_id: null,
-    review: {
-      skill: "3rd-review",
-      executed: true,
-      source: "third_party",
-      provider: "codex",
-      true_cross_engine: true,
-      verdict: "passed",
-      round: 1,
-      report_path: "/tmp/report.md",
-      raw_result_path: "/tmp/raw.json",
-      fix_status: "not_required",
-    },
+    workflow_run_id: RUN_ID,
+    stage_slug: "build-code",
+    step_id: 1,
+    manifest_schema_version: "2.0.0",
+    attempt_id: "attempt-1",
+    event_type: "step_exit",
+    timestamp: EXIT_TIMESTAMP,
+    terminal_status: "success",
+    completion_evidence: { kind: "command", uri_or_path: "evidence/exit.log" },
     ...overrides,
   };
+}
+
+function readJournal(taskDir) {
+  return readFileSync(join(taskDir, TASK_ID, "journal.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+}
+
+function auditContext() {
+  const record = {
+    requirement_id: "R1", status: "accepted",
+    source_ref: { kind: "source", uri_or_path: "source://R1", content_hash: "a".repeat(64) },
+    decision_ref: { kind: "decision", uri_or_path: "decision://R1", content_hash: "b".repeat(64) },
+    artifact_refs: [{ kind: "artifact", uri_or_path: "artifact://R1", content_hash: "c".repeat(64) }],
+    acceptance_criteria_refs: [{ kind: "ac", uri_or_path: "ac://R1", content_hash: "d".repeat(64) }],
+    upstream_hashes: ["a".repeat(64)], stale: false,
+  };
+  record.content_hash = computeRequirementContentHash(record);
+  const ledger = { schema_version: "v1", source_manifest_hash: "e".repeat(64), requirements: [record] };
+  ledger.ledger_hash = computeLedgerHash(ledger);
+  return { manifest: { schema_version: "2.0.0", stage_slug: "build-code", manifest_hash: "f".repeat(64), steps: [{ step_id: 1, order: 1, attempt_id: "attempt-1", depends_on: [] }] }, ledger };
 }
 
 afterEach(() => {
@@ -67,1281 +79,185 @@ afterEach(() => {
 });
 
 describe("journal schema", () => {
-  it("defines v1 journal event types including step and existing stage events", async () => {
-    const { AUDIT_SUMMARY_FIELDS, JOURNAL_SCHEMA_VERSION, JOURNAL_EVENT_TYPES, STEP_AUTO_ROLLBACK_REQUIRED_FIELDS } =
+  it("defines canonical receipt identity and terminal status enums", async () => {
+    const { JOURNAL_SCHEMA_VERSION, JOURNAL_EVENT_TYPES, RECEIPT_IDENTITY_FIELDS, TERMINAL_STATUSES } =
       await import("../journal-schema.mjs");
 
     expect(JOURNAL_SCHEMA_VERSION).toBe("v1");
-    expect(JOURNAL_EVENT_TYPES.STEP_ENTRY).toBe("step_entry");
-    expect(JOURNAL_EVENT_TYPES.STEP_EXIT).toBe("step_exit");
-    expect(JOURNAL_EVENT_TYPES.STEP_AUTO_ROLLBACK).toBe("step_auto_rollback");
-    expect(JOURNAL_EVENT_TYPES.STAGE_ENTER).toBe("stage_enter");
-    expect(JOURNAL_EVENT_TYPES.STAGE_EXIT).toBe("stage_exit");
-    expect(STEP_AUTO_ROLLBACK_REQUIRED_FIELDS).toEqual([
-      "workflow_run_id",
-      "affected_step_id",
-      "rollback_from_step_id",
-      "rollback_to_step_id",
-      "attempt_seq",
-      "ineffective",
-      "reason",
+    expect(JOURNAL_EVENT_TYPES).toMatchObject({ STEP_ENTRY: "step_entry", STEP_EXIT: "step_exit" });
+    expect(RECEIPT_IDENTITY_FIELDS).toEqual([
+      "workflow_run_id", "stage_slug", "step_id", "attempt_id", "event_type", "timestamp",
     ]);
-    expect(AUDIT_SUMMARY_FIELDS).toEqual([
-      "total_step_count",
-      "passed_step_count",
-      "blocked_step_count",
-      "skipped_step_count",
-      "rollback_count",
-    ]);
+    expect(TERMINAL_STATUSES).toEqual(["success", "failure", "blocked", "skipped", "needs_human"]);
   });
 });
 
-describe("receipt writer", () => {
-  it("writeEntryReceipt appends a step_entry event to the task journal", async () => {
+describe("canonical receipt writer", () => {
+  it("persists a canonical STEP_ENTRY receipt with a generated journal entry id", async () => {
     const taskDir = makeTaskDir();
     const { writeEntryReceipt } = await importWriter(taskDir);
 
-    await writeEntryReceipt(TASK_ID, validEntryPayload());
+    await expect(writeEntryReceipt(TASK_ID, entryPayload())).resolves.toEqual({ journal_entry_id: expect.any(String) });
 
-    const journal = readFileSync(join(taskDir, TASK_ID, "journal.jsonl"), "utf8")
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-
-    expect(journal).toHaveLength(1);
-    expect(journal[0]).toMatchObject({
-      schema_version: "v1",
-      event_type: "step_entry",
-      step_id: "bc.work.ph1",
-      check_status: "ok",
-      workflow_run_id: "run-123",
-    });
+    expect(readJournal(taskDir)).toEqual([
+      expect.objectContaining({
+        schema_version: "v1",
+        event_type: "step_entry",
+        workflow_run_id: RUN_ID,
+        stage_slug: "build-code",
+        step_id: 1,
+        attempt_id: "attempt-1",
+        timestamp: ENTRY_TIMESTAMP,
+        entry_evidence: { kind: "command", uri_or_path: "evidence/entry.log" },
+        journal_entry_id: expect.any(String),
+      }),
+    ]);
   });
 
-  it("writeEntryReceipt is fail-closed when the journal append fails", async () => {
-    const appendFile = vi.fn(async () => {
-      throw new Error("append failed");
-    });
-    const mkdir = vi.fn(async () => {});
-    const { writeEntryReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir });
+  it("is fail-closed when a STEP_ENTRY append fails", async () => {
+    const appendFile = vi.fn(async () => { throw new Error("append failed"); });
+    const { writeEntryReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir: vi.fn(async () => {}) });
 
-    await expect(writeEntryReceipt(TASK_ID, validEntryPayload())).rejects.toThrow("append failed");
+    await expect(writeEntryReceipt(TASK_ID, entryPayload())).rejects.toThrow("append failed");
   });
 
-  it("writeExitReceipt is warn-only when the step_exit append fails", async () => {
-    const appendFile = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("exit append failed"))
-      .mockResolvedValueOnce(undefined);
-    const mkdir = vi.fn(async () => {});
-    const { writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir });
+  it("is warn-only when a STEP_EXIT append fails and preserves the canonical original payload", async () => {
+    const appendFile = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("exit append failed")).mockResolvedValueOnce(undefined);
+    const { writeEntryReceipt, writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir: vi.fn(async () => {}) });
+    const entry = await writeEntryReceipt(TASK_ID, entryPayload());
+    const payload = exitPayload({ terminal_status: "failure", entry_journal_entry_id: entry.journal_entry_id });
 
-    await expect(writeExitReceipt(TASK_ID, validExitPayload())).resolves.toBeUndefined();
-    expect(appendFile).toHaveBeenCalledTimes(2);
-    expect(appendFile.mock.calls[1][1]).toContain('"event":"receipt_write_warn"');
-    expect(appendFile.mock.calls[1][1]).toContain("exit append failed");
-  });
-
-  it("writeExitReceipt warn event contains original_exit_payload when step_exit append fails", async () => {
-    const appendFile = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("disk error"))
-      .mockResolvedValueOnce(undefined);
-    const mkdir = vi.fn(async () => {});
-    const { writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir });
-
-    const payload = validExitPayload({ step_id: "bc.check.ph1", verdict: "blocked" });
     await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
-
-    const warnLine = JSON.parse(appendFile.mock.calls[1][1]);
-    expect(warnLine.event).toBe("receipt_write_warn");
-    expect(warnLine.original_exit_payload).toMatchObject({
-      step_id: "bc.check.ph1",
-      verdict: "blocked",
+    expect(appendFile).toHaveBeenCalledTimes(3);
+    const warn = JSON.parse(appendFile.mock.calls[2][1]);
+    expect(warn).toMatchObject({
+      event: "receipt_write_warn",
+      original_exit_payload: {
+        event_type: "step_exit",
+        step_id: 1,
+        terminal_status: "failure",
+        completion_evidence: { kind: "command", uri_or_path: "evidence/exit.log" },
+      },
     });
   });
 
-  it("rejects invalid step_id values", async () => {
+  it.each([
+    ["step id", entryPayload({ step_id: "bad.step" }), "step_id"],
+    ["stage mismatch", entryPayload({ stage_slug: "bp" }), "stage_slug"],
+    ["missing attempt", entryPayload({ attempt_id: "" }), "attempt_id"],
+    ["wrong entry event", entryPayload({ event_type: "step_exit" }), "event_type"],
+    ["invalid entry evidence", entryPayload({ entry_evidence: { kind: "command" } }), "entry_evidence.uri_or_path"],
+  ])("rejects canonical entry with invalid %s", async (_label, payload, error) => {
     const { writeEntryReceipt } = await importWriter(makeTaskDir());
-
-    await expect(
-      writeEntryReceipt(TASK_ID, validEntryPayload({ step_id: "bad.step" })),
-    ).rejects.toThrow("step_id");
+    await expect(writeEntryReceipt(TASK_ID, payload)).rejects.toThrow(error);
   });
 
-  it("rejects entry receipts whose stage_slug or step_type disagree with step_id", async () => {
-    const { writeEntryReceipt } = await importWriter(makeTaskDir());
-
-    await expect(writeEntryReceipt(TASK_ID, validEntryPayload({ stage_slug: "bp" }))).rejects.toThrow("stage_slug");
-    await expect(writeEntryReceipt(TASK_ID, validEntryPayload({ step_type: "check" }))).rejects.toThrow("step_type");
-  });
-
-  it("rejects invalid check_status values", async () => {
-    const { writeEntryReceipt } = await importWriter(makeTaskDir());
-
-    await expect(
-      writeEntryReceipt(TASK_ID, validEntryPayload({ check_status: "maybe" })),
-    ).rejects.toThrow("check_status");
-  });
-
-  it("requires authorized_by when entry check_status is skipped", async () => {
-    const { writeEntryReceipt } = await importWriter(makeTaskDir());
-
-    await expect(
-      writeEntryReceipt(
-        TASK_ID,
-        validEntryPayload({
-          check_status: "skipped",
-          skip_reason: "human approved skip",
-        }),
-      ),
-    ).rejects.toThrow("authorized_by");
-  });
-
-  it("validates optional blocked entry judgement payloads", async () => {
-    const { writeEntryReceipt } = await importWriter(makeTaskDir());
-
-    await expect(
-      writeEntryReceipt(
-        TASK_ID,
-        validEntryPayload({
-          check_status: "blocked",
-          judgement: {
-            status: "blocked",
-            reason: "missing upstream",
-            retry_eligible: true,
-          },
-        }),
-      ),
-    ).resolves.toEqual({ journal_entry_id: expect.any(String) });
-
-    await expect(
-      writeEntryReceipt(
-        TASK_ID,
-        validEntryPayload({
-          check_status: "blocked",
-          judgement: {
-            status: "blocked",
-            reason: "missing upstream",
-          },
-        }),
-      ),
-    ).rejects.toThrow("judgement.retry_eligible");
-  });
-
-  it("requires workflow_run_id on exit receipts", async () => {
+  it.each([
+    ["missing run id", exitPayload({ workflow_run_id: "" }), "workflow_run_id"],
+    ["wrong exit event", exitPayload({ event_type: "step_entry" }), "event_type"],
+    ["invalid terminal status", exitPayload({ terminal_status: "passed" }), "terminal_status"],
+    ["invalid completion evidence", exitPayload({ completion_evidence: { kind: "command" } }), "completion_evidence.uri_or_path"],
+  ])("rejects canonical exit with %s", async (_label, payload, error) => {
     const { writeExitReceipt } = await importWriter(makeTaskDir());
-    const { workflow_run_id, ...payloadWithoutRunId } = validExitPayload();
-
-    await expect(writeExitReceipt(TASK_ID, payloadWithoutRunId)).rejects.toThrow("workflow_run_id");
+    await expect(writeExitReceipt(TASK_ID, payload)).rejects.toThrow(error);
   });
 
-  it("writeStepAutoRollback validates and appends runner-owned rollback events", async () => {
+  it("validates and appends runner-owned rollback facts without treating them as receipts", async () => {
     const taskDir = makeTaskDir();
     const { writeStepAutoRollback } = await importWriter(taskDir);
 
     await writeStepAutoRollback(TASK_ID, {
-      workflow_run_id: "run-123",
-      affected_step_id: "bc.check.ph1",
-      rollback_from_step_id: "bc.check.ph1",
-      rollback_to_step_id: "bc.work.ph1",
+      workflow_run_id: RUN_ID,
+      affected_step_id: 1,
+      rollback_from_step_id: 1,
+      rollback_to_step_id: 1,
       attempt_seq: 1,
       ineffective: true,
       reason: "check blocked",
     });
 
-    const journal = readFileSync(join(taskDir, TASK_ID, "journal.jsonl"), "utf8")
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-
-    expect(journal[0]).toMatchObject({
-      event_type: "step_auto_rollback",
-      workflow_run_id: "run-123",
-      affected_step_id: "bc.check.ph1",
-      rollback_from_step_id: "bc.check.ph1",
-      rollback_to_step_id: "bc.work.ph1",
-      attempt_seq: 1,
-      ineffective: true,
-    });
+    expect(readJournal(taskDir)[0]).toMatchObject({ event_type: "step_auto_rollback", workflow_run_id: RUN_ID });
   });
+});
 
-  it("rejects incomplete step_auto_rollback payloads", async () => {
-    const { writeStepAutoRollback } = await importWriter(makeTaskDir());
-
-    await expect(
-      writeStepAutoRollback(TASK_ID, {
-        workflow_run_id: "run-123",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bc.check.ph1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "check blocked",
-      }),
-    ).rejects.toThrow("rollback_to_step_id");
-  });
-
-  it("accepts extended build-code phase step ids across receipts and audit summary", async () => {
+describe("canonical audit aggregation", () => {
+  it("reports a complete paired entry and exit as a passing observed-fact audit", async () => {
     const taskDir = makeTaskDir();
-    const { buildAuditSummaryFromJournalEvents, writeEntryReceipt, writeExitReceipt, writeStepAutoRollback } =
-      await importWriter(taskDir);
+    const { buildAuditSummaryFromJournalEvents, writeEntryReceipt, writeExitReceipt } = await importWriter(taskDir);
+    const entry = await writeEntryReceipt(TASK_ID, entryPayload());
+    await writeExitReceipt(TASK_ID, exitPayload({ entry_journal_entry_id: entry.journal_entry_id }));
 
-    await writeEntryReceipt(
-      TASK_ID,
-      validEntryPayload({
-        step_id: "bc.work.ph3.2",
-        step_seq: 2,
-        prev_step_id: null,
-        next_step_id: "bc.check.ph3.2",
-      }),
-    );
-    await writeExitReceipt(
-      TASK_ID,
-      validExitPayload({
-        step_id: "bc.work.ph3.2",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph3.2",
-      }),
-    );
-    await writeEntryReceipt(
-      TASK_ID,
-      validEntryPayload({
-        step_id: "bc.check.ph3.2",
-        step_type: "check",
-        step_seq: 3,
-        check_status: "blocked",
-        prev_step_id: "bc.work.ph3.2",
-        next_step_id: null,
-      }),
-    );
-    await writeStepAutoRollback(TASK_ID, {
-      workflow_run_id: "run-123",
-      affected_step_id: "bc.check.ph3.2",
-      rollback_from_step_id: "bc.check.ph3.2",
-      rollback_to_step_id: "bc.work.ph3.2",
-      attempt_seq: 1,
-      ineffective: true,
-      reason: "check blocked",
-    });
-
-    const journal = readFileSync(join(taskDir, TASK_ID, "journal.jsonl"), "utf8")
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-
-    expect(buildAuditSummaryFromJournalEvents(journal, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 1,
-        blocked_step_count: 1,
-        skipped_step_count: 0,
-        rollback_count: 1,
-      },
-      warnings: [],
-    });
-  });
-
-  it("buildAuditSummaryFromJournalEvents merges entries, exits, and stage-local rollback events deterministically", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "passed",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "blocked",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-      {
-        event_type: "step_auto_rollback",
-        workflow_run_id: "run-123",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bc.check.ph1",
-        rollback_to_step_id: "bc.work.ph1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "check blocked",
-      },
-      {
-        event_type: "step_auto_rollback",
-        workflow_run_id: "run-123",
-        affected_step_id: "bp.check.1",
-        rollback_from_step_id: "bp.check.1",
-        rollback_to_step_id: "bp.work.1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "other stage",
-      },
-      {
-        event_type: "step_auto_rollback",
-        workflow_run_id: "run-123",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bp.check.1",
-        rollback_to_step_id: "bc.work.ph1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "cross-stage rollback_from",
-      },
-      {
-        event_type: "step_auto_rollback",
-        workflow_run_id: "run-123",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bc.check.ph1",
-        rollback_to_step_id: "bp.work.1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "cross-stage rollback_to",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-456",
-        step_id: "bc.work.ph1",
-        check_status: "skipped",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 1,
-        blocked_step_count: 1,
-        skipped_step_count: 0,
-        rollback_count: 3,
-      },
-      warnings: [
-        "rollback_pointer_outside_chain:bc.check.ph1",
-        "rollback_pointer_outside_chain:bc.check.ph1",
+    const result = buildAuditSummaryFromJournalEvents(readJournal(taskDir), { stageSlug: "build-code", workflowRunId: RUN_ID, ...auditContext() });
+    expect(result.warnings).toEqual([]);
+    expect(result.audit_summary).toMatchObject({
+      schema_version: "v1",
+      workflow_run_id: RUN_ID,
+      verdict: "pass",
+      requirement_coverage: { covered: 1, total: 1, withdrawn: 0, missing_ids: [] },
+      facts: { missing: [], unexpected: [], duplicate: [], out_of_order: [], unknown: [], stale: [], tampered_hash: [], terminal_non_success: [], retry: [], cross_attempt: [], dependency: [] },
+      evidence_refs: [
+        { kind: "command", uri_or_path: "evidence/entry.log" },
+        { kind: "command", uri_or_path: "evidence/exit.log" },
       ],
     });
+    expect(result.audit_summary.summary_hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("uses the latest reachable entry for final skipped counts across retries", async () => {
+  it("records a missing terminal exit as a failed audit fact", async () => {
     const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "skipped",
-        authorized_by: "lead",
-        skip_reason: "initial skip",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-    ];
+    const result = buildAuditSummaryFromJournalEvents([{ ...entryPayload(), journal_entry_id: "entry" }], { stageSlug: "build-code", workflowRunId: RUN_ID, ...auditContext() });
 
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["duplicate_chain_heads"],
+    expect(result.audit_summary).toMatchObject({
+      verdict: "fail",
+      requirement_coverage: { covered: 1, total: 1, missing_ids: [] },
+      facts: { missing: [{ type: "terminal_exit_missing", step_id: 1 }] },
     });
   });
 
-  it("uses journal-order topology instead of retry-updated pointers", async () => {
+  it("records invalid legacy-shaped receipts as unknown rather than reviving legacy count semantics", async () => {
     const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.review.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "blocked",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.review.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
+    const legacyEntry = {
+      event_type: "step_entry", workflow_run_id: RUN_ID, stage_slug: "build-code", step_id: 1, check_status: "ok",
+    };
+    const result = buildAuditSummaryFromJournalEvents([legacyEntry], { stageSlug: "build-code", workflowRunId: RUN_ID, ...auditContext() });
 
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 0,
-        blocked_step_count: 1,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["duplicate_chain_heads"],
+    expect(result.audit_summary).toMatchObject({
+      verdict: "fail",
+      facts: { unknown: [{ type: "invalid_receipt", step_id: 1 }] },
     });
   });
 
-  it("uses the selected journal occurrence when an earlier duplicate was not the head", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "blocked",
-        prev_step_id: "bc.review.ph1",
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
+  it("uses manifest expectations to detect an unexpected observed attempt", async () => {
+    const { buildAuditSummaryFromJournalEvents } = await import("../audit-aggregator.mjs");
+    const entry = { ...entryPayload(), journal_entry_id: "entry-attempt-1" };
+    const exit = { ...exitPayload(), entry_journal_entry_id: entry.journal_entry_id };
+    const result = buildAuditSummaryFromJournalEvents(
+      [entry, exit],
+      "build-code",
+      RUN_ID,
+      { manifest: { stage_slug: "build-code", steps: [{ step_id: 2, order: 1, attempt_id: "attempt-2", depends_on: [] }] }, ledger: auditContext().ledger },
+    );
 
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
+    expect(result.audit_summary).toMatchObject({
+      verdict: "fail",
+      facts: {
+        unexpected: expect.arrayContaining([{ type: "unexpected_observed_step", step_id: 1, attempt_id: "attempt-1" }]),
+        missing: expect.arrayContaining([{ type: "expected_step_missing", step_id: 2, attempt_id: "attempt-2" }]),
       },
-      warnings: [],
-    });
-  });
-
-  it("warns when duplicate head occurrences reuse the same step_id", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "blocked",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["duplicate_chain_heads"],
-    });
-  });
-
-  it("ignores rollback events whose affected step is outside the discovered local pointer chain", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_auto_rollback",
-        workflow_run_id: "run-123",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bc.check.ph1",
-        rollback_to_step_id: "bc.work.ph1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "blocked check",
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: [],
-    });
-  });
-
-  it("stops with a warning when an exit receipt omits next_step_id", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "passed",
-        prev_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 1,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["missing_exit_next_step_id:bc.work.ph1"],
-    });
-  });
-
-  it("stops with a warning when an entry receipt omits next_step_id", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["missing_entry_next_step_id:bc.work.ph1"],
-    });
-  });
-
-  it("deduplicates retried next entries by step_id during chain traversal", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "blocked",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-      {
-        event_type: "step_auto_rollback",
-        workflow_run_id: "run-123",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bc.check.ph1",
-        rollback_to_step_id: "bc.work.ph1",
-        attempt_seq: 1,
-        ineffective: true,
-        reason: "retry check",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: "bc.review.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.review.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.check.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 3,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 1,
-      },
-      warnings: [],
-    });
-  });
-
-  it("uses the first journal-order head and warns on distinct duplicate heads", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph2",
-        check_status: "blocked",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["duplicate_chain_heads"],
-    });
-  });
-
-  it("warns on multiple distinct fallback next candidates without treating retries as duplicates", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "blocked",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.review.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["duplicate_next:bc.work.ph1"],
-    });
-  });
-
-  it("treats exit next_step_id null as authoritative over stale entry next_step_id", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "passed",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 1,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: ["pointer_mismatch:bc.work.ph1"],
-    });
-  });
-
-  it("regression fix-1: same step_id two exits different next_step_id uses first exit for topology, not latest", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "passed",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "passed",
-        prev_step_id: null,
-        next_step_id: "bc.review.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 1,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: [],
-    });
-  });
-
-  it("regression round3-fix1: retried step uses LATEST exit verdict for count, first exit for topology", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "blocked",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "passed",
-        prev_step_id: null,
-        next_step_id: "bc.check.ph1",
-      },
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.check.ph1",
-        check_status: "ok",
-        prev_step_id: "bc.work.ph1",
-        next_step_id: null,
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 2,
-        passed_step_count: 1,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: [],
-    });
-  });
-
-  it("regression fix-4: writeExitReceipt accepts review verdict escalate_to_human", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    const payload = validExitPayload({
-      review: {
-        skill: "3rd-review",
-        executed: true,
-        source: "third_party",
-        provider: "codex",
-        true_cross_engine: true,
-        verdict: "escalate_to_human",
-        round: 1,
-        report_path: "/tmp/report.md",
-        raw_result_path: "/tmp/raw.json",
-        fix_status: "pending",
-      },
-    });
-    await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
-  });
-
-  it("regression fix-5: writeExitReceipt is non-blocking when both exit append and warn append fail", async () => {
-    const appendFile = vi.fn(async () => {
-      throw new Error("disk full");
-    });
-    const mkdir = vi.fn(async () => {});
-    const { writeExitReceipt } = await importWriter(makeTaskDir(), { appendFile, mkdir });
-
-    await expect(writeExitReceipt(TASK_ID, validExitPayload())).resolves.toBeUndefined();
-  });
-
-  it("regression fix-6: writeExitReceipt accepts review with executed=false (provider/source optional)", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    const payload = validExitPayload({
-      review: {
-        skill: "3rd-review",
-        executed: false,
-        verdict: "passed",
-        round: 1,
-      },
-    });
-    await expect(writeExitReceipt(TASK_ID, payload)).resolves.toBeUndefined();
-  });
-
-  it("regression fix-7: writeExitReceipt rejects malformed source when executed=false but source is supplied", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, source: 123 },
-        }),
-      ),
-    ).rejects.toThrow("review.source");
-  });
-
-  it("regression fix-7: writeExitReceipt rejects empty provider when executed=false but provider is supplied", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, provider: "" },
-        }),
-      ),
-    ).rejects.toThrow("review.provider");
-  });
-
-  it("regression fix-7: writeExitReceipt rejects invalid fix_status when executed=false but fix_status is supplied", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, fix_status: "bad_value" },
-        }),
-      ),
-    ).rejects.toThrow("review.fix_status");
-  });
-
-  it("regression fix-7: writeExitReceipt rejects non-boolean true_cross_engine when executed=false but field is supplied", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, true_cross_engine: "yes" },
-        }),
-      ),
-    ).rejects.toThrow("review.true_cross_engine");
-  });
-
-  it("regression fix-7: writeExitReceipt accepts valid optional fields when executed=false", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: {
-            skill: "3rd-review",
-            executed: false,
-            verdict: "passed",
-            round: 1,
-            source: "third_party",
-            provider: "codex",
-            fix_status: "not_required",
-            true_cross_engine: false,
-          },
-        }),
-      ),
-    ).resolves.toBeUndefined();
-  });
-
-  it("regression fix-7: writeExitReceipt rejects malformed report_path when executed=false but supplied", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, report_path: 123 },
-        }),
-      ),
-    ).rejects.toThrow("review.report_path");
-  });
-
-  it("regression fix-7: writeExitReceipt rejects malformed raw_result_path when executed=false but supplied", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1, raw_result_path: "" },
-        }),
-      ),
-    ).rejects.toThrow("review.raw_result_path");
-  });
-
-  it("regression fix-7: writeExitReceipt accepts valid report_path and raw_result_path when executed=false", async () => {
-    const { writeExitReceipt } = await importWriter(makeTaskDir());
-    await expect(
-      writeExitReceipt(
-        TASK_ID,
-        validExitPayload({
-          review: {
-            skill: "3rd-review",
-            executed: false,
-            verdict: "passed",
-            round: 1,
-            report_path: "reviews/report.md",
-            raw_result_path: "reviews/raw.json",
-          },
-        }),
-      ),
-    ).resolves.toBeUndefined();
-  });
-});
-
-describe("audit-aggregator: warn payload recovery", () => {
-  it("receipt_write_warn with original_exit_payload is counted as virtual STEP_EXIT when no real exit exists", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event: "receipt_write_warn",
-        workflow_run_id: "run-123",
-        reason: "disk error",
-        original_exit_payload: {
-          event_type: "step_exit",
-          workflow_run_id: "run-123",
-          step_id: "bc.work.ph1",
-          verdict: "passed",
-          prev_step_id: null,
-          next_step_id: null,
-        },
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 1,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: [],
-    });
-  });
-
-  it("real STEP_EXIT takes priority over receipt_write_warn original_exit_payload for same step", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event_type: "step_exit",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        verdict: "blocked",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event: "receipt_write_warn",
-        workflow_run_id: "run-123",
-        reason: "stale warn",
-        original_exit_payload: {
-          event_type: "step_exit",
-          workflow_run_id: "run-123",
-          step_id: "bc.work.ph1",
-          verdict: "passed",
-          prev_step_id: null,
-          next_step_id: null,
-        },
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 0,
-        blocked_step_count: 1,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: [],
-    });
-  });
-
-  it("receipt_write_warn without original_exit_payload is ignored (no count impact)", async () => {
-    const { buildAuditSummaryFromJournalEvents } = await importWriter(makeTaskDir());
-    const events = [
-      {
-        event_type: "step_entry",
-        workflow_run_id: "run-123",
-        step_id: "bc.work.ph1",
-        check_status: "ok",
-        prev_step_id: null,
-        next_step_id: null,
-      },
-      {
-        event: "receipt_write_warn",
-        workflow_run_id: "run-123",
-        reason: "some error",
-      },
-    ];
-
-    expect(buildAuditSummaryFromJournalEvents(events, { stageSlug: "bc", workflowRunId: "run-123" })).toEqual({
-      audit_summary: {
-        total_step_count: 1,
-        passed_step_count: 0,
-        blocked_step_count: 0,
-        skipped_step_count: 0,
-        rollback_count: 0,
-      },
-      warnings: [],
     });
   });
 });
 
-describe("chain-topology module (direct)", () => {
-  it("firstByStepId returns only first occurrence per step_id", async () => {
-    vi.resetModules();
-    const { firstByStepId } = await import("../chain-topology.mjs");
-    const events = [
-      { step_id: "bc.work.ph1", verdict: "blocked", next_step_id: "bc.check.ph1" },
-      { step_id: "bc.work.ph1", verdict: "passed", next_step_id: "bc.check.ph1" },
-      { step_id: "bc.check.ph1", verdict: "passed", next_step_id: null },
-    ];
-    const map = firstByStepId(events);
-    expect(map.get("bc.work.ph1").verdict).toBe("blocked");
-    expect(map.get("bc.check.ph1").verdict).toBe("passed");
-    expect(map.size).toBe(2);
-  });
-
-  it("discoverChainStepIds returns missing_chain_head when no entry events", async () => {
-    vi.resetModules();
-    const { discoverChainStepIds } = await import("../chain-topology.mjs");
-    const result = discoverChainStepIds([], new Map(), "bc");
-    expect(result.stepIds).toEqual([]);
-    expect(result.warnings).toContain("missing_chain_head");
-  });
-});
-
-describe("receipt-schema module (direct)", () => {
-  it("validateEntryPayload throws TypeError on missing step_id", async () => {
-    vi.resetModules();
-    const { validateEntryPayload } = await import("../receipt-schema.mjs");
-    expect(() => validateEntryPayload({ stage_slug: "bc" })).toThrow(TypeError);
-  });
-
-  it("validateExitPayload throws TypeError on invalid verdict", async () => {
-    vi.resetModules();
+describe("receipt schema and appender seams", () => {
+  it("rejects a canonical exit whose identity is incomplete", async () => {
     const { validateExitPayload } = await import("../receipt-schema.mjs");
-    expect(() =>
-      validateExitPayload({
-        step_id: "bc.work.ph1",
-        workflow_run_id: "run-1",
-        verdict: "nope",
-        executor_namespace: "x",
-        prev_step_id: null,
-        next_step_id: null,
-        review: { skill: "3rd-review", executed: false, verdict: "passed", round: 1 },
-      }),
-    ).toThrow("verdict");
+    expect(() => validateExitPayload(exitPayload({ timestamp: "not-a-timestamp" }))).toThrow("timestamp");
   });
 
-  it("validateStepAutoRollbackPayload throws on missing rollback_to_step_id", async () => {
-    vi.resetModules();
-    const { validateStepAutoRollbackPayload } = await import("../receipt-schema.mjs");
-    expect(() =>
-      validateStepAutoRollbackPayload({
-        workflow_run_id: "run-1",
-        affected_step_id: "bc.check.ph1",
-        rollback_from_step_id: "bc.check.ph1",
-        attempt_seq: 1,
-        ineffective: false,
-        reason: "ok",
-      }),
-    ).toThrow("rollback_to_step_id");
-  });
-});
-
-describe("journal-appender module (direct)", () => {
-  it("journalPathForTaskDir returns correct path", async () => {
-    vi.resetModules();
-    const { journalPathForTaskDir } = await import("../journal-appender.mjs");
-    expect(journalPathForTaskDir("/tasks/abc")).toBe("/tasks/abc/journal.jsonl");
-  });
-
-  it("buildJournalEvent merges payload with schema_version and event_type", async () => {
-    vi.resetModules();
+  it("buildJournalEvent retains canonical timestamps and overwrites the event type", async () => {
     const { buildJournalEvent } = await import("../journal-appender.mjs");
-    const event = buildJournalEvent("step_entry", { step_id: "bc.work.ph1", workflow_run_id: "run-1" });
-    expect(event.schema_version).toBe("v1");
-    expect(event.event_type).toBe("step_entry");
-    expect(event.step_id).toBe("bc.work.ph1");
-    expect(typeof event.ts).toBe("string");
+    const event = buildJournalEvent("step_entry", entryPayload({ event_type: "step_exit" }));
+    expect(event).toMatchObject({ schema_version: "v1", event_type: "step_entry", timestamp: ENTRY_TIMESTAMP });
+    expect(event.journal_entry_id).toEqual(expect.any(String));
   });
 });

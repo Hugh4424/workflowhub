@@ -1,76 +1,12 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-
-import { AUDIT_SUMMARY_FIELDS } from '../../core/journal-schema.mjs';
-import { buildAuditSummaryFromJournalEvents, journalPathForTaskDir } from '../../core/receipt-writer.mjs';
+import { carryAuditSummary, verifyAuditCarrier } from '../../core/audit-summary-carrier.mjs';
 
 const METRIC_KEYS = [
   'execution_id', 'skill_or_stage', 'stage', 'skill_version',
   'executed', 'tokens', 'duration_ms', 'rework_rounds',
   'human_intervention', 'friction_ref',
 ];
-
-function emptyAuditSummary() {
-  return Object.fromEntries(AUDIT_SUMMARY_FIELDS.map((field) => [field, 0]));
-}
-
-function parseJournalJsonl(journalPath) {
-  const raw = readFileSync(journalPath, 'utf-8').trim();
-  if (!raw) return [];
-  return raw.split('\n').map((line, index) => {
-    try {
-      return JSON.parse(line);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`journal.jsonl line ${index + 1} is malformed: ${message}`);
-    }
-  });
-}
-
-function appendAuditWarnings(result, warnings) {
-  if (warnings.length === 0) return result;
-  const suffix = `audit_summary warnings: ${warnings.join(', ')}`;
-
-  if (typeof result.notes === 'string' && result.notes.trim() !== '') {
-    return { ...result, notes: `${result.notes}; ${suffix}` };
-  }
-  if (typeof result.notes === 'string') {
-    return { ...result, notes: suffix };
-  }
-  if (typeof result.reason === 'string' && result.reason.trim() !== '') {
-    return { ...result, reason: `${result.reason}; ${suffix}` };
-  }
-  return { ...result, reason: suffix };
-}
-
-function withAuditSummary(taskSpecDir, result, { workflowRunId, stageSlug = 'vc' } = {}) {
-  const warnings = [];
-  let auditSummary = emptyAuditSummary();
-  // Use the shared path helper from receipt-writer so both sides always
-  // point to the same file (fix #1 / round-2 finding — path unification).
-  const journalPath = journalPathForTaskDir(taskSpecDir);
-  const resolvedWorkflowRunId = workflowRunId ?? result.workflow_run_id ?? result.workflowRunId;
-
-  if (!resolvedWorkflowRunId) {
-    warnings.push('audit_summary_omitted:missing_workflow_run_id');
-  } else if (!existsSync(journalPath)) {
-    warnings.push('audit_summary_omitted:missing_journal');
-  } else {
-    // A malformed journal must not interrupt writeStageResult — catch parse
-    // errors, record the warning, and continue with an empty audit_summary
-    // (SKILL.md fault-tolerance contract / round-3 finding).
-    try {
-      const events = parseJournalJsonl(journalPath);
-      const summary = buildAuditSummaryFromJournalEvents(events, { stageSlug, workflowRunId: resolvedWorkflowRunId });
-      auditSummary = summary.audit_summary;
-      warnings.push(...summary.warnings);
-    } catch (err) {
-      warnings.push('audit_summary_omitted:malformed_journal');
-    }
-  }
-
-  return appendAuditWarnings({ ...result, audit_summary: auditSummary }, warnings);
-}
 
 export function readCommand(buildResult) {
   if (!buildResult.facts || !buildResult.facts.tests) {
@@ -92,7 +28,7 @@ export function readCommand(buildResult) {
   return cmd;
 }
 
-export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable, workflowRunId }) {
+export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable, workflowRunId, auditSummaryRef, auditVerdict, auditSummaryHash, auditSummary }) {
   // FR-PATH-003: evidence_ref must be relative path WITHOUT specs/{task-id}/ prefix
   if (evidenceRef.startsWith('/')) {
     throw new Error(`evidence_ref must be a relative path, absolute paths are not allowed, got: ${evidenceRef}`);
@@ -103,12 +39,20 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
   if (evidenceRef.startsWith('specs/')) {
     throw new Error(`evidence_ref must be a relative path without 'specs/{task-id}/' prefix, got: ${evidenceRef}`);
   }
+  const auditFacts = auditSummary
+    ? carryAuditSummary(auditSummaryRef, auditSummary)
+    : auditSummaryRef != null || auditVerdict != null || auditSummaryHash != null
+      ? { audit_contract_version: 'v1', audit_summary_ref: auditSummaryRef, audit_verdict: auditVerdict, audit_summary_hash: auditSummaryHash }
+      : {};
+  const carrier = verifyAuditCarrier(auditFacts);
+  if (!carrier.ok) throw new Error(carrier.errors.join('; '));
   return {
     status: verdict,
     retryable: retryable ?? false,
     facts: {
       evidence_ref: evidenceRef,
       anomaly_flags: anomalyFlags,
+      ...auditFacts,
     },
     missing_items: missingItems,
     user_decision: userDecision,
@@ -121,7 +65,10 @@ export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missin
 export function writeStageResult(taskSpecDir, result, auditOptions = {}) {
   mkdirSync(taskSpecDir, { recursive: true });
   const path = join(taskSpecDir, 'stage-result-verify-code.json');
-  writeFileSync(path, JSON.stringify(withAuditSummary(taskSpecDir, result, auditOptions), null, 2), 'utf-8');
+  // Consumer-only boundary: aggregator owns verdict construction.  This
+  // function persists the already verified reference/hash without reading a
+  // journal or deriving another quality conclusion.
+  writeFileSync(path, JSON.stringify(result, null, 2), 'utf-8');
 }
 
 export function validateMetricRecord(record) {

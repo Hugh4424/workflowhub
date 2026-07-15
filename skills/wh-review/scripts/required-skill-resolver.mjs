@@ -160,6 +160,7 @@ export function resolveRequiredSkills({ stage, reviewTrack, ui = false, roots, s
     outputSchema: profile.output_schema,
     checkpoints: [...profile.checkpoints],
     expectedEvidence: [...profile.expected_evidence],
+    checkedObjects: profile.expected_evidence.map((name) => `review-packet.v1.json:${name}`),
     reviewMode: profile.review_mode,
     minimumBusinessValidSources: profile.minimum_business_valid_sources,
     recommendedBusinessValidSources: profile.recommended_business_valid_sources,

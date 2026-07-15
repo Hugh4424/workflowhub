@@ -19,6 +19,8 @@
 
 `acceptance_design_excerpt`、`test_evidence`、`verification_closure`、`changed_files`、`host_verified_facts`。
 
+`acceptance_evidence` 必须逐条覆盖 authoritative `AC-*`，每条包含状态以及测试名/结果/代码或 trace 对象。缺少直接证据时 packet 必须 fail closed，不能用测试总数或概括性文字代替。`verification_closure` 必须非空，并为每个 finding/例外给出 `subject`、`state` 与具体 evidence；空数组不表示闭环。
+
 ## Required skills
 
 `qa-only`、`verify-change`（light profile）。UI scope 时 host 优先使用 `isolated-browser-qa` 采集事实；它不是 report-only lens，不得伪造为 `skillResults`。
@@ -26,6 +28,10 @@
 ## Stage output
 
 输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding 和所需 lens 的 skillResults。host 负责绑定 hash。
+
+`checklist` 必须恰好逐项覆盖 `C1`–`C6` 与 `H1`–`H3`；hard invariant 不能只写入 `pass_items`。每个 `skillResults[].bundle_hash` 必须使用 `stage-skill-plan.json` 中该 lens 自己的 bundle hash，不能使用 packet 顶层的组合 `skill_bundle_hash`。`checked_objects` 必须覆盖该 lens 在 stage skill plan 声明的全部对象。
+
+host 必须把解析后的 lens 合同作为 `review_lenses` 封入 packet/manifest。provider 只按该 sealed 合同输出非空 `skillResults`：每个 lens 恰好一项，hash 与 `checked_objects` 均须精确匹配；不得读取 host-only `stage-skill-plan.json`，也不得因无法访问该 host 文件判定材料缺失。
 
 ## Checklist IDs
 

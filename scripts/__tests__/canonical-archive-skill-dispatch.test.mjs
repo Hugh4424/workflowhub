@@ -15,8 +15,13 @@ it("dispatches the canonical git archive under a clean HOME", async () => {
   roots.push(temporary);
   const archive = path.join(temporary, "workflowhub.tar");
   const artifact = path.join(temporary, "artifact");
+  const temporaryIndex = path.join(temporary, "candidate.index");
   fs.mkdirSync(artifact);
-  execFileSync("git", ["archive", "--format=tar", "-o", archive, "HEAD"], { cwd: repository });
+  const env = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
+  execFileSync("git", ["read-tree", "HEAD"], { cwd: repository, env });
+  execFileSync("git", ["add", "-A"], { cwd: repository, env });
+  const candidateTree = execFileSync("git", ["write-tree"], { cwd: repository, env, encoding: "utf8" }).trim();
+  execFileSync("git", ["archive", "--format=tar", "-o", archive, candidateTree], { cwd: repository });
   execFileSync("tar", ["-xf", archive, "-C", artifact]);
   const result = await smokeLocalSkillDispatch(artifact);
   expect(result).toHaveLength(5);

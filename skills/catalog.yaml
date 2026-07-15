@@ -174,10 +174,52 @@ skills:
     local_changes: workflowhub 原生 lens；历史吸收 Spec Kit analyze 思路
     dependency_closure: [skills/spec-analyze]
     update_policy: 随 review packet schema 变更审查
+  - name: stage-step-receipts
+    path: skills/stage-step-receipts/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 22512da6779c471471905f54a7ae4479d43da596a61cecdec6cc757518bb37db
+    last_reviewed_at: "2026-07-14"
+    status: native
+    standalone: true
+    purpose: 为 canonical workflow step 生成或校验 typed receipt
+    design_idea: 只承载步骤证据，不引入第二 verdict engine
+    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    upstream: []
+    local_changes: make-decision audit P0 原生证据合同；由各 stage Receipt wiring 直接消费
+    dependency_closure: [skills/stage-step-receipts]
+    update_policy: 随 canonical step 与 receipt schema 变更审查
+  - name: audit-summary-carrier
+    path: skills/audit-summary-carrier/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: c4e736fb8b55e3a0996caeead7368a77b2cbd31becc98af5eb4c70c47b513621
+    last_reviewed_at: "2026-07-14"
+    status: native
+    standalone: true
+    purpose: 在阶段间传递有界审计摘要
+    design_idea: 保留可验证引用，不复制第二份事实源
+    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    upstream: []
+    local_changes: make-decision audit P0 原生合同；由 stage-result audit_summary 字段消费
+    dependency_closure: [skills/audit-summary-carrier]
+    update_policy: 随 stage-result audit schema 变更审查
+  - name: requirement-lineage
+    path: skills/requirement-lineage/SKILL.md
+    local_version: 1.0.0
+    local_bundle_hash: 92655a6403eb6e444ada2c785b685c2c7cb5aec3abf8b2106469d631df9425f2
+    last_reviewed_at: "2026-07-14"
+    status: native
+    standalone: true
+    purpose: 关联原始需求、AC、实现和验证证据
+    design_idea: 以 manifest/hash 绑定的 ledger 与 coverage 保持需求谱系
+    used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
+    upstream: []
+    local_changes: make-decision audit P0 原生合同；由 canonical requirements artifacts 消费
+    dependency_closure: [skills/requirement-lineage]
+    update_policy: 随 requirement ledger/coverage schema 变更审查
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 024dcbce69a9d288c7287923a48eea70c2910f751a3d836213b495b3b2689999
+    local_bundle_hash: 4209ffb879d4e4b470dbe4055a7d699e7be11e55304afc055b629ed89576e71a
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

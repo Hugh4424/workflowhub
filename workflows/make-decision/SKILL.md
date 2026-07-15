@@ -39,6 +39,44 @@ recordSkeleton({
 
 # make-decision
 
+## Receipt wiring
+
+Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. Never emit the exit receipt before the durable result.
+
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "make-decision"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — load-context
+
+Load task context.
+
+### Step 2 — triage-scope
+
+Record scope profile.
+
+### Step 3 — research-inputs
+
+Collect decision evidence.
+
+### Step 4 — clarify-direction
+
+Clarify the proposed direction.
+
+### Step 5 — review-decision
+
+Obtain independent decision review evidence.
+
+### Step 6 — approve-decision
+
+Obtain explicit user approval.
+
+### Step 7 — write-decision-log
+
+Persist the canonical decision log and stage result.
+
+## Legacy reference
+
 ## Goal
 
 Work with the user to surface the real problem, agree on the narrowest viable scope, and capture every significant choice in the decision log. The output is the single authoritative source for what the change is trying to do and why.
@@ -243,6 +281,8 @@ Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.m
 
 ## Produce stage-result
 
+<!-- Receipt-wiring compatibility marker: ## Produce a stage-result -->
+
 When the stage is complete, write a `stage-result` record with:
 
 ```json
@@ -259,6 +299,21 @@ When the stage is complete, write a `stage-result` record with:
   "missing_items": [],
   "user_decision": true,
   "reason": "User confirmed direction and scope."
+}
+```
+
+After the durable Stage Result is written, call `writeExitReceipt` with the same `workflow_run_id`, `run_id`, `attempt_id`, and `step_id`.
+
+### Receipt verification
+
+After writing the stage-result and exit receipt, call:
+
+```js
+const { verifyReceipts } = await import("../../scripts/validate-stage-result.mjs");
+const receiptResult = verifyReceipts("make-decision", "<stageResultPath>", "<worktreeRoot>");
+if (!receiptResult.ok) {
+  process.stderr.write(`[receipt] FAIL: ${receiptResult.errors.join("; ")}\n`);
+  process.exit(1);
 }
 ```
 
@@ -611,7 +666,7 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 - R3 分支命名 `workflowhub/{task-id}`：task-id 先执行归一化（见上文步骤①-④）完成后才继续。
   分支命名正则校验分两层：① 归一化产物本身（task-id slug，不含 `workflowhub/` 前缀）须满足正则 `^[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，不允许数字，与 decision-log D3 及 spec.md §274/321 保持一致）；② 拼接 `workflowhub/` 前缀后得到的最终分支名须满足正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`。下游（build-code §17 / verify-code）对 `branch` 字段的校验统一引用②的最终分支名正则，不引用①的裸 slug 正则。校验顺序须在归一化之后，不得颠倒。
 - R4 worktree 创建时机：仅在 make-decision 阶段首次决定进入实现流程时创建 worktree（`git worktree add`），不得在其余阶段重复创建。**触发条件覆盖 debate 中途临时实现场景**：用户在 S5/S7 debate 等中途环节临时要求当场实现代码改动，同样视为"决定进入实现流程"——不因为这个决定发生在 S10 落盘之前、发生在 debate 环节中途、或用户措辞不是"进入实现阶段"而免于本规则。触发后必须先完整走完 R2-R5（探测并固化 target_repo_root → 建分支 → `git worktree add` 建 worktree → 首次写入 worktree.json）再动代码，不得在决策阶段用来跑 debate/审查的临时或复用 worktree 里直接改代码；已经违规改动的，须先按本节流程补建专属 worktree/分支/worktree.json，再把改动迁移过去。
-- **worktree_root 路径公式（R4 创建与 R5 首次写入之间的强制约束）**：`worktree_root = path.dirname(target_repo_root) + '/' + {repo目录名}-{task-id}`（`{repo目录名}` 取 target_repo_root 的 basename，`{task-id}` 用 R3 已归一化的 slug）。即 worktree 必须建在 target_repo_root 的平行兄弟目录下，单层目录名，不得嵌套多层子目录（不得出现类似 `{task-id}/worktree/{repo名}` 这种3层结构），也不得建在 task_tracking_root（task_dir）下面。R4 执行 `git worktree add` 与 R5 首次写入 `worktree.json` 的 `worktree_root` 字段均须遵循本公式，不得各写各的。
+- **worktree_root 路径公式（R4 创建与 R5 首次写入之间的强制约束）**：`worktree_root = path.dirname(target_repo_root) + '/' + {repo目录名}-{task-id}`（`{repo目录名}` 取 target_repo_root 的 basename，`{task-id}` 用 R3 已归一化的 slug）。即 worktree 必须建在 target_repo_root 的平行兄弟目录下，单层目录名，不得嵌套多层子目录（不得出现类似 `{task-id}/worktree/{repo名}` 这种3层结构），也不得建在 task_tracking_root（task_dir）下面。参考先例：agenthub apply 阶段的 worktree 隔离修复（`../{repo-name}-{feature}` 平行目录规则）。R4 执行 `git worktree add` 与 R5 首次写入 `worktree.json` 的 `worktree_root` 字段均须遵循本公式，不得各写各的。
 - R5 worktree.json 首次写入：worktree.json 首次写入须包含原 6 个字段，并在创建 worktree 的同一原子写入中固化 `trusted_base_commit`（创建时完整 40 位 commit OID）、`trusted_base_tree`（该 commit 的 tree OID）与 `trusted_base_source="worktree_creation"`。下游（build-code §17 / verify-code close①）不得覆盖这三个字段。其余字段须一次性满足 common 校验：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径，须满足上方 worktree_root 路径公式）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（固定值 `"verify-code-only"`，其他值 fail-loud，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
 - R6 存在性/冲突检测：使用 `git worktree list --porcelain` 检测 worktree 是否已存在或冲突；发现僵尸 worktree（目录不存在但仍在 git 记录中）须 fail-loud 报错退出；发现路径/分支被其他 worktree 占用同样须 fail-loud，不得静默覆盖。
 - R7 提交边界：在审查修复完成、`verify-final` 成功、当前 final flow 已获得 published semantic `pass` 且人工明确确认继续之前，make-decision 不得在 `target_repo_root` 或 `worktree_root` 执行 `git add`、`git commit` 或 `git merge`。decision-log 等目标仓库改动保留在同一 task worktree，供后续完整未提交 diff 和 R2 续跑使用；不得为本阶段结束制造中间提交或提前合并。唯一的普通实现提交由 `verify-code` 统一执行：满足上述条件后，才在该 task worktree 执行一次 `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）照常落盘，不构成提交理由。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"。
@@ -655,6 +710,10 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 | `s8_context_no_change` | S8 | — | CONTEXT 无变化 |
 | `s9_user_approved` | S9 | `s9_user_approved: true` | 用户明确批准 |
 | `s10_decision_log_complete` | S10 | — | decision-log 落盘完成 |
+
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed S0–S10 material above is legacy reference only; its identifiers map to this continuous, one-action sequence: 1 load-context, 2 triage-scope, 3 research-inputs, 4 clarify-direction, 5 review-decision, 6 approve-decision, 7 write-decision-log. Each canonical step has one primary action, explicit entry evidence, terminal evidence, and a declared dependency. Every declared dependency must be represented by entry evidence `step://<dependency-step-id>`; therefore `review-decision` enters from `step://clarify-direction`, not unproduced `task://decision-draft`. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
 
 ## V4 Review Round
 

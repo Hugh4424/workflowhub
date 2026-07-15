@@ -28,6 +28,9 @@
 | grill-with-docs | 外部改造适配 | mattpocock/skills | 吸收 grilling/domain-modeling |
 | intake-decision-review | 外部改造适配 | AgentHub historical import | 现为 workflowhub native |
 | test-routing-advisor | 外部改造适配 | Hugh4424/AgentHub | 裁为纯路由 JSON |
+| stage-step-receipts | 自研 | skills/stage-step-receipts/SKILL.md | P0 canonical receipt contract；审计任务保留 |
+| audit-summary-carrier | 自研 | skills/audit-summary-carrier/SKILL.md | P0 bounded audit-summary contract；审计任务保留 |
+| requirement-lineage | 自研 | skills/requirement-lineage/SKILL.md | P0 requirement evidence contract；审计任务保留 |
 
 ## 仓内运行技能
 

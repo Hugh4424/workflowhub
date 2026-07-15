@@ -1,46 +1,90 @@
-// Phase 4: reuse-registry.md well-formedness + CONTEXT.md component-skill concept.
-import { test, describe } from "vitest";
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const REGISTRY_PATH = join(REPO_ROOT, "skills", "reuse-registry.md");
-const ENUM = ["外部改造适配", "自研", "其他平台原生", "外部依赖"];
-const EXPECTED = [
-  ["make-decision", "自研", "none"],
-  ["build-spec", "自研", "none"],
-  ["build-plan", "自研", "none"],
-  ["build-code", "自研", "none"],
-  ["verify-code", "自研", "none"],
-  ["scope-triage", "外部改造适配"],
-  ["decision-log", "外部改造适配"],
-  ["Worker-Mode", "外部依赖"],
-  ["3rd-review", "外部依赖"],
-  ["TDD 件（capture.mjs）", "外部改造适配"],
+const REGISTRY_PATH = join(REPO_ROOT, "docs", "reuse-registry.md");
+const CONSUMERS = [
+  "make-decision",
+  "build-spec",
+  "build-plan",
+  "build-code",
+  "verify-code",
+  "stage-result",
+  "validator",
+  "facts-assembly",
+];
+const REQUIRED_FIELDS = [
+  "Typed inputs",
+  "Typed outputs",
+  "Failure",
+  "Skip",
+  "Retry",
+  "Human",
+  "Decision",
+  "Rationale",
+  "Evidence",
+  "Semantic contract",
+  "Mechanism",
 ];
 
-describe("reuse-registry.md (FR-REG-001/002)", () => {
-  test("reuse-registry.md exists under skills", () => {
-    assert.ok(existsSync(REGISTRY_PATH), "Missing skills/reuse-registry.md");
+function registryBody() {
+  assert.ok(existsSync(REGISTRY_PATH), "Missing docs/reuse-registry.md");
+  const content = readFileSync(REGISTRY_PATH, "utf8");
+  const marker = "## 8-consumer typed I/O registry";
+  const start = content.indexOf(marker);
+  assert.notEqual(start, -1, `Missing registry section: ${marker}`);
+  return content.slice(start + marker.length);
+}
+
+function parseConsumers() {
+  const blocks = new Map();
+  const matches = [...registryBody().matchAll(/^### ([a-z][a-z-]*)\s*$/gm)];
+  for (const [index, match] of matches.entries()) {
+    const end = matches[index + 1]?.index ?? registryBody().length;
+    blocks.set(match[1], registryBody().slice(match.index + match[0].length, end));
+  }
+  return blocks;
+}
+
+function field(block, label) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = block.match(
+    new RegExp(`^-\\s+(?:\\*\\*)?${escaped}:(?:\\*\\*)?\\s*(.+)$`, "mi"),
+  );
+  return match?.[1]?.trim() ?? "";
+}
+
+describe("docs/reuse-registry.md typed consumer registry", () => {
+  test("declares exactly the five stages plus stage-result, validator, and facts assembly", () => {
+    const consumers = parseConsumers();
+    assert.deepEqual(
+      [...consumers.keys()].sort(),
+      [...CONSUMERS].sort(),
+      "registry must declare exactly 8 consumers: five stages + stage-result + validator + facts-assembly",
+    );
   });
-  test("registry has all 7 skills with valid 复用类别 enum + non-empty source for external", () => {
-    const content = readFileSync(REGISTRY_PATH, "utf-8");
-    for (const [name, category] of EXPECTED) {
-      const row = content.split("\n").find((l) => l.includes(`| ${name} `) || l.includes(`|${name}|`) || l.includes(`| ${name}|`));
-      assert.ok(row, `Missing registry row for ${name}`);
-      assert.ok(ENUM.includes(category), `${name} category not in enum`);
-      assert.ok(row.includes(category), `${name} row missing category ${category}`);
-      if (category === "外部改造适配") {
-        // external skill must have a non-empty source path (not 'none')
-        const cells = row.split("|").map((c) => c.trim()).filter(Boolean);
-        const src = cells[2] || "";
-        assert.ok(src.length > 0 && src !== "none", `${name} external skill must have non-empty source path`);
+
+  test("gives every consumer typed I/O and the required operational/decision evidence", () => {
+    for (const [consumer, block] of parseConsumers()) {
+      for (const label of REQUIRED_FIELDS) {
+        assert.ok(field(block, label), `${consumer} missing non-empty ${label}`);
       }
+
+      for (const label of ["Typed inputs", "Typed outputs"]) {
+        assert.match(
+          field(block, label),
+          /`[^`]+`/,
+          `${consumer} ${label} must name at least one explicit type in backticks`,
+        );
+      }
+
+      assert.match(
+        field(block, "Decision"),
+        /^(reuse|local|extract)(?:\b|\s|—|-)/i,
+        `${consumer} Decision must start with reuse, local, or extract`,
+      );
     }
-  });
-  test("CONTEXT.md defines 组件 skill concept", () => {
-    const ctx = readFileSync(join(REPO_ROOT, "CONTEXT.md"), "utf-8");
-    assert.ok(ctx.includes("组件 skill"), "CONTEXT.md missing 组件 skill concept");
   });
 });

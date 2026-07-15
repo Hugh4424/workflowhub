@@ -6,6 +6,44 @@ description: Break the spec into an ordered implementation plan and a task list 
 
 # build-plan
 
+## Receipt wiring
+
+Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. After the durable stage-result is written, call `writeExitReceipt` with the same IDs. Never emit the exit receipt before the durable result.
+
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "build-plan"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — read-spec
+
+Load the approved specification.
+
+### Step 2 — research-plan
+
+Collect planning research.
+
+### Step 3 — define-contracts
+
+Define data contracts.
+
+### Step 4 — write-plan
+
+Write the implementation plan.
+
+### Step 5 — review-plan
+
+Obtain independent plan review evidence.
+
+### Step 6 — approve-plan
+
+Obtain explicit human approval.
+
+### Step 7 — publish-plan-result
+
+Persist the plan handoff.
+
+## Legacy reference
+
 ## Goal
 
 Take the spec from `build-spec` and decompose it into a concrete plan (`plan.md`) and a sequenced task list (`tasks.md`). The plan is the bridge between requirements and code.
@@ -374,6 +412,10 @@ if (!receiptResult.ok) {
 七要素摘要 + 请确认块的完整定义已并入 Step 9（人审检查点）——那是人工拍板前看到的唯一界面，本节不重复内容，避免两份摘要打架。摘要落盘位置：写入 stage-result comment 或独立文件 `{taskDir}/{task-id}/plan-summary.md`（路径通过 `parseTaskDir` 解析，见 Step 0 AC-16 块）。
 
 摘要展示本身以及等待人工确认，是 Step 9 的硬门，无条件阻断，不接受任何旁路。
+
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-spec, 2 research-plan, 3 define-contracts, 4 write-plan, 5 review-plan, 6 approve-plan, 7 publish-plan-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
 
 ## V4 Review Round
 

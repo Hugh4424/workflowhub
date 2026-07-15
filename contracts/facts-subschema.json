@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "Per-stage facts sub-schema (FR-CONTRACT-002 / D11). Each stage must have the listed required_keys present and non-empty in facts.",
+  "description": "Per-stage facts sub-schema (FR-CONTRACT-002 / D11). Each stage must have the listed required_keys present and non-empty in facts. New producers also carry the v1 audit tuple (audit_contract_version, audit_summary_ref, audit_summary_hash, audit_verdict); unversioned historical artifacts are explicit legacy migration input.",
   "stages": {
     "make-decision": {
       "required_keys": ["decision", "scope", "decision_log_path", "flow_profile"],
@@ -30,10 +30,10 @@
       "semantics": {
         "changed": "List of changed artifacts from this stage",
         "tests": "Test execution conclusion (pass/fail counts)",
-        "review": "Published wh-review tuple only: core_receipt_hash, semantic_verdict, needs_human; never a private/raw artifact path",
+        "review": "Published wh-review tuple, or fail-closed pending_legacy_review migration diagnostic bound to the preserved original; pending migration never authorizes merge",
         "worktree_root": "Absolute path to the task implementation worktree consumed by downstream stages",
         "task_tracking_root": "Absolute path to the task execution-record root consumed by downstream stages",
-        "phase_completion": "Phase completion facts copied from accepted PHASE_RESULT records: phase_records[] with phase_id and changed boolean; no commit SHA or private review ref"
+        "phase_completion": "Phase completion facts copied from accepted PHASE_RESULT records, or provenance-bound legacy commit migration records that visibly mark missing canonical phase reports"
       }
     },
     "verify-code": {

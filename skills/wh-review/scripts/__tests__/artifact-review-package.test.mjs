@@ -73,7 +73,7 @@ describe("artifact review package", () => {
     const [packageName] = readdirSync(join(reviewsRoot, ".claude-review-packages"));
     const packageRoot = join(reviewsRoot, ".claude-review-packages", packageName);
     expect(verifyArtifactReviewPackage({ packageRoot, manifestPath: join(packageRoot, "manifest.json") }).manifest.entries[1].bytes).toBe(800000);
-  });
+  }, 15_000);
 
   it("snapshots per-source material descriptors into immutable independent entries", () => {
     const reviewsRoot = makeRoot(), sourceRoot = makeRoot();

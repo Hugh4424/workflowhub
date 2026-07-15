@@ -23,7 +23,7 @@
 
 ## Phase 1 — 3rd-review: explicit delivery plan and file-only triad
 
-**Repository:** `/Users/Hugh/Hugh/Project/3rd-review-delivery-mode`
+**Repository:** `${HOME}/Projects/3rd-review-delivery-mode`
 
 **Files:**
 
@@ -111,7 +111,7 @@ git commit -m "feat: plan provider review material delivery"
 
 ## Phase 2 — workflowhub: seal provider-visible material and fail closed on paths
 
-**Repository:** `/Users/Hugh/Hugh/Project/workflowhub-delivery-mode`
+**Repository:** `${HOME}/Projects/workflowhub-delivery-mode`
 
 **Files:**
 
