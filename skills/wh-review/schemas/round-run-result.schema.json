@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "wh-review round run result",
   "type": "object",
-  "required": ["intent", "round_kind", "baseline_packet_hash", "previous_findings", "closure_evidence", "delta_manifest", "affected_materials", "current_material_manifest", "cross_stage_carryovers", "required_skill_lens_hashes", "provider_outcomes", "merged_findings", "hard_gates", "human_gates", "blocked_by_human_confirmation", "continuation_eligible", "receipt_draft_ref"],
+  "required": ["intent", "round_kind", "baseline_packet_hash", "previous_findings", "closure_evidence", "delta_manifest", "affected_materials", "current_material_manifest", "cross_stage_carryovers", "required_skill_lens_hashes", "provider_outcomes", "source_coverage", "merged_findings", "hard_gates", "human_gates", "blocked_by_human_confirmation", "continuation_eligible", "receipt_draft_ref"],
   "properties": {
     "intent": { "$ref": "review-intent.schema.json" },
     "round_kind": { "enum": ["initial", "continuation"] },
@@ -15,6 +15,7 @@
     "cross_stage_carryovers": { "type": "array", "items": { "type": "object", "required": ["carryover_id", "source_stage", "source_core_receipt_hash", "status", "evidence"], "properties": { "carryover_id": { "type": "string", "minLength": 1 }, "source_stage": { "type": "string", "minLength": 1 }, "source_core_receipt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "closure_core_receipt_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "status": { "enum": ["open", "closed", "deferred"] }, "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" } }, "additionalProperties": false } },
     "required_skill_lens_hashes": { "type": "array", "items": { "type": "object", "required": ["skill", "bundle_hash"], "properties": { "skill": { "type": "string", "minLength": 1 }, "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } },
     "provider_outcomes": { "type": "array" },
+    "source_coverage": { "type": "object", "required": ["requested", "completed", "business_valid", "failed", "minimum_business_valid", "recommended_business_valid", "below_recommended"], "properties": { "requested": { "type": "integer", "minimum": 0 }, "completed": { "type": "integer", "minimum": 0 }, "business_valid": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 }, "minimum_business_valid": { "type": "integer", "minimum": 1 }, "recommended_business_valid": { "type": "integer", "minimum": 1 }, "below_recommended": { "type": "boolean" } }, "additionalProperties": false },
     "merged_findings": { "type": "array" },
     "hard_gates": { "type": "array" },
     "human_gates": { "type": "array" },

@@ -43,6 +43,14 @@ describe("required skill bundles", () => {
     expect([...plan.definitions, ...verify.definitions].every((definition) => definition.deliveryMode !== "always_embed")).toBe(true);
   });
 
+  it("keeps one source sufficient while recommending two for code and verification", () => {
+    expect(resolveRequiredSkills({ stage: "build-code" })).toMatchObject({ minimumBusinessValidSources: 1, recommendedBusinessValidSources: 2 });
+    expect(resolveRequiredSkills({ stage: "verify-code" })).toMatchObject({ minimumBusinessValidSources: 1, recommendedBusinessValidSources: 2 });
+    expect(resolveRequiredSkills({ stage: "build-spec" }).minimumBusinessValidSources).toBe(1);
+    expect(resolveRequiredSkills({ stage: "build-plan" }).minimumBusinessValidSources).toBe(1);
+    expect(resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction" })).toMatchObject({ minimumBusinessValidSources: 1, recommendedBusinessValidSources: 1 });
+  });
+
   it("does not inject file-only bundles into the provider prompt", () => {
     const resolution = resolveRequiredSkills({ stage: "build-plan" });
     const augmented = appendRequiredSkillDefinitions({ contract: "CONTRACT", materials: "M", resolution });

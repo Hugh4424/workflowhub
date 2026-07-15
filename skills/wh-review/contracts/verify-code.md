@@ -21,7 +21,7 @@
 
 ## Required skills
 
-`qa-only`、`verify-change`（light profile）。
+`qa-only`、`verify-change`（light profile）。UI scope 时 host 优先使用 `isolated-browser-qa` 采集事实；它不是 report-only lens，不得伪造为 `skillResults`。
 
 ## Stage output
 
@@ -37,6 +37,14 @@
 - C6: 交付边界：交付内容与批准范围一致。
 
 必需 lens：`qa-only` 检查用户结果；`verify-change` 使用 `light` profile 检查 packet 内闭环与证据。
+
+## Acceptance quality questions
+
+- 逐条验收：每条验收标准和原始用户问题都必须分别绑定 packet 内客观证据，不得抽样或用总括结论替代。
+- 证据新鲜度：证据必须针对当前被审变更生成，来源、时间、对象和结果可定位；历史通过或无来源转述无效。
+- 正反证明：关键行为既要有成功结果，也要有能证伪错误实现的失败或边界结果；不适用时必须给出 packet 内理由。
+- 闭环一致：测试、finding disposition、例外和交付范围不得互相冲突，未知信息不得伪装成通过。
+- UI scope：host 优先使用 `isolated-browser-qa` 检查真实页面流程、关键状态和可定位视觉证据；截图、trace 等文件使用 task-relative `artifact` evidence 冻结，是否复用登录态及 cleanup 结果写入 `host_verified_facts`。采集缺失或失败必须记为 `unknown` 并 `escalate_to_human`；不得仅因未使用该工具产生 `blocking` finding。已冻结证据证明的真实业务缺陷仍可按 H1-H3 blocking。非 UI scope 不要求浏览器证据。
 
 ## Hard invariants
 
@@ -58,7 +66,7 @@
 
 ## 分类
 
-先关闭上轮 blocking；后续轮只检查 delta、closure evidence 与受影响 artifact。新 blocking 必须由本轮材料引入或前轮不可能发现，否则标 `late_finding:true` 且最高 `minor`。
+先关闭上轮 blocking；后续轮只检查 delta、closure evidence 与受影响 artifact。新 blocking 必须由本轮材料引入，或由冻结的结构化 host fact 证明前轮不可能发现；没有该 fact 时不得仅凭 provider 叙述使用后一条件。否则标 `late_finding:true` 且最高 `minor`。
 
 blocking：验收标准没有证据、关键证据失败或自相矛盾、用户问题未闭环、闭环状态伪造、host-verified facts 冲突。
 

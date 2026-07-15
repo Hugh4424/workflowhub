@@ -55,93 +55,93 @@ Sources: `base-verifier.md`, `intake-reviewer-contract.md`,
 | `AGH-INTAKE-21` | blindspot blocking/nonblocking list | lens | `skills/wh-review/contracts/make-decision.md` §review_track: direction/detail; detail review lens |
 | `AGH-INTAKE-22` | drift blocking/nonblocking list | keep | `skills/wh-review/contracts/make-decision.md` §review_track: direction/detail; detail source/delta rules |
 | `AGH-INTAKE-23` | scope four dimensions and verdict consistency | keep | `skills/wh-review/contracts/make-decision.md` §review_track: direction/detail; direction/detail contract evidence |
-| `AGH-DESIGN-01` | three axes: problem/spec/boundary | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; `build-spec.md` C/H rules |
-| `AGH-DESIGN-02` | plan-ceo-review requirement | lens | `skills/wh-review/contracts/build-spec.md` §Hard invariants; selected design skill bundle |
-| `AGH-DESIGN-03` | review requirement | lens | `skills/wh-review/contracts/build-spec.md` §Hard invariants; selected design skill bundle |
-| `AGH-DESIGN-04` | UI plan-design-review requirement | lens | `skills/wh-review/contracts/build-spec.md` §Hard invariants; UI-only stage skill plan profile |
-| `AGH-DESIGN-05` | unavailable skill escalates | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; `skillResults` validation/human verdict |
+| `AGH-DESIGN-01` | three axes: problem/spec/boundary | keep | `skills/wh-review/contracts/build-spec.md` C1/C2/C3 and H1/H2/H3 |
+| `AGH-DESIGN-02` | plan-ceo-review requirement | lens | `skills/wh-review/contracts/build-spec.md#Required skills`; selected design skill bundle owns the judgment |
+| `AGH-DESIGN-03` | review requirement | lens | `skills/wh-review/contracts/build-spec.md#Required skills`; selected review skill bundle owns the judgment |
+| `AGH-DESIGN-04` | UI plan-design-review requirement | lens | `skills/wh-review/stage-skill-plan.json#stages.build-spec` UI-only profile; selected UI design lens |
+| `AGH-DESIGN-05` | unavailable skill escalates | keep | `skills/wh-review/scripts/reviewer-output-validator.mjs#validateSkillResults`; missing required `skillResults` makes provider output business-invalid |
 | `AGH-DESIGN-06` | skill-file fallback | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#attachments`; provider receives frozen skill files, no host fallback |
-| `AGH-DESIGN-07` | three-part skill evidence | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; reviewer-output `skillResults` validator |
-| `AGH-DESIGN-08` | hollow skill evidence rejection | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; reviewer-output validator |
-| `AGH-DESIGN-09` | goal/boundary/decision/AC/source questions | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; build-spec C/H rules |
-| `AGH-DESIGN-10` | SPEC deviation decision tree | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; build-spec contract and human escalation |
-| `AGH-DESIGN-11` | incremental full-boundary rescan | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; delta manifest affected-material policy |
-| `AGH-DESIGN-12` | source trace and bidirectional impact trace | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; build-spec C/H rules |
-| `AGH-DESIGN-13` | scope drift/approved scope risk classification | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; contract severity rules |
-| `AGH-DESIGN-14` | objective AC and user-story completeness | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; acceptance/design packet and contract |
-| `AGH-DESIGN-15` | AgentHub RuntimeAdapter/Knowledge boundary | removed (evidence) | `skills/wh-review/contracts/build-spec.md#Hard invariants`; AgentHub-only architecture is outside V4 stage boundary |
+| `AGH-DESIGN-07` | three-part skill evidence | keep | `skills/wh-review/schemas/reviewer-output.schema.json#skillResults`; checked objects, evidence and conclusion are mandatory |
+| `AGH-DESIGN-08` | hollow skill evidence rejection | keep | `skills/wh-review/scripts/reviewer-output-validator.mjs#validateSkillResults`; empty/unbound lens evidence is business-invalid |
+| `AGH-DESIGN-09` | goal/boundary/decision/AC/source questions | keep | `skills/wh-review/contracts/build-spec.md` C1/C2/C3, H1/H2/H3 and Specification quality questions 1-4 |
+| `AGH-DESIGN-10` | SPEC deviation decision tree | keep | `skills/wh-review/contracts/build-spec.md` H1/H2 plus classification rule: unresolved product ambiguity uses `escalate_to_human` |
+| `AGH-DESIGN-11` | incremental full-boundary rescan | keep | `skills/wh-review/scripts/review-round-facade.mjs#prepare`; host-built continuation delta carries affected materials; `skills/wh-review/contracts/build-spec.md#Continuation closure` |
+| `AGH-DESIGN-12` | source trace and bidirectional impact trace | keep | `skills/wh-review/contracts/build-spec.md#Specification quality questions`; C1 requires bidirectional source trace |
+| `AGH-DESIGN-13` | scope drift/approved scope risk classification | keep | `skills/wh-review/contracts/build-spec.md` C1/C3, H2/H3 and classification rules |
+| `AGH-DESIGN-14` | objective AC and user-story completeness | keep | `skills/wh-review/contracts/build-spec.md#Specification quality questions`; C2 requires success, failure, boundary and decidable acceptance |
+| `AGH-DESIGN-15` | AgentHub RuntimeAdapter/Knowledge boundary | removed (evidence) | `skills/wh-review/contracts/build-spec.md#Reviewer role`; AgentHub-only RuntimeAdapter/Knowledge architecture is outside V4 stage boundary |
 | `AGH-DESIGN-16` | AgentHub file placement/Knowledge task path | removed (evidence) | `skills/wh-review/scripts/lib/safe-id.mjs#taskRoot`; AgentHub-only path/runtime assumption |
-| `AGH-DESIGN-17` | Spec-Purity absolute/hook/TS/shell blacklist | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; build-spec contract packet validation |
-| `AGH-DESIGN-18` | UI authorization/state/interaction gate | lens | `skills/wh-review/contracts/build-spec.md` §Hard invariants; UI design skill profile |
-| `AGH-DESIGN-19` | impact-range exhaustive check and grandfather rule | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; build-spec impact C/H rules |
-| `AGH-DESIGN-20` | ORACLE denominator/paired/source checks | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; build-spec C/H rules |
-| `AGH-DESIGN-21` | nonblocking scope/wording/numbering advice | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; minor finding policy |
+| `AGH-DESIGN-17` | Spec-Purity absolute/hook/TS/shell blacklist | removed (evidence) | `skills/wh-review/contracts/build-spec.md#Specification quality questions`; portable outcome/boundary checks replace AgentHub-specific implementation-token blacklist |
+| `AGH-DESIGN-18` | UI authorization/state/interaction gate | lens | `skills/wh-review/stage-skill-plan.json#stages.build-spec` UI-only profile; selected UI design lens owns UI semantics |
+| `AGH-DESIGN-19` | impact-range exhaustive check and grandfather rule | keep | `skills/wh-review/contracts/build-spec.md` C1/C3 and Specification quality questions 1/3; no legacy grandfather exemption retained |
+| `AGH-DESIGN-20` | ORACLE denominator/paired/source checks | keep | `skills/wh-review/contracts/build-spec.md#Specification quality questions`; C1/C2 require source, complete scenario denominator and decidable evidence |
+| `AGH-DESIGN-21` | nonblocking scope/wording/numbering advice | keep | `skills/wh-review/contracts/build-spec.md#分类`; non-correctness wording/organization advice is `minor` |
 | `AGH-DESIGN-22` | checkpoint package/file-listening rule | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#prepare`; AgentHub checkpoint mechanism has no V4 target |
-| `AGH-DESIGN-23` | design contract/UI component extraction detail | lens | `skills/wh-review/contracts/build-spec.md` §Hard invariants; UI skill profile only when selected |
-| `AGH-DESIGN-24` | revision record and repeated-finding rule | keep | `skills/wh-review/contracts/build-spec.md` §Hard invariants; receipt history and structured closure bundle |
-| `AGH-PLAN-01` | three axes: traceability/executability/verification | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; `build-plan.md` C/H rules |
-| `AGH-PLAN-02` | `speckit-analyze` requirement | lens | `skills/wh-review/contracts/build-plan.md` §Hard invariants; repository `spec-analyze` skill bundle |
-| `AGH-PLAN-03` | `plan-eng-review` requirement | lens | `skills/wh-review/contracts/build-plan.md` §Hard invariants; selected plan engineering lens |
-| `AGH-PLAN-04` | independent review requirement | lens | `skills/wh-review/contracts/build-plan.md` §Hard invariants; selected review lens |
-| `AGH-PLAN-05` | unavailable/hollow skill evidence | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; `skillResults` validator/human verdict |
+| `AGH-DESIGN-23` | design contract/UI component extraction detail | lens | `skills/wh-review/stage-skill-plan.json#stages.build-spec` UI-only profile; absent UI profile means the legacy extraction detail is not applied |
+| `AGH-DESIGN-24` | revision record and repeated-finding rule | keep | `skills/wh-review/scripts/finding-state.mjs#reconcileFindingState` and `#validateClosureBundle`; receipt finding state plus structured closure evidence |
+| `AGH-PLAN-01` | three axes: traceability/executability/verification | keep | `skills/wh-review/contracts/build-plan.md` C1/C2/C3 and H1/H2/H3 |
+| `AGH-PLAN-02` | `speckit-analyze` requirement | lens | `skills/wh-review/contracts/build-plan.md#Required skills`; repository `spec-analyze` bundle, when selected |
+| `AGH-PLAN-03` | `plan-eng-review` requirement | lens | `skills/wh-review/contracts/build-plan.md#Required skills`; selected plan engineering lens |
+| `AGH-PLAN-04` | independent review requirement | lens | `skills/wh-review/contracts/build-plan.md#Required skills`; selected review lens supplies `skillResults` |
+| `AGH-PLAN-05` | unavailable/hollow skill evidence | keep | `skills/wh-review/scripts/reviewer-output-validator.mjs#validateSkillResults`; missing or unbound required lens evidence is business-invalid |
 | `AGH-PLAN-06` | skill-file fallback | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#attachments`; frozen bundle is delivered, not host fallback |
-| `AGH-PLAN-07` | phase/depends/files/risk/verify/FR principles | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan contract |
-| `AGH-PLAN-08` | continuation resolution summary per prior finding | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; closure evidence and receipt finding state |
-| `AGH-PLAN-09` | constitution and FR-task-verify trace | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan C/H rules |
-| `AGH-PLAN-10` | phase size/order/dependency/[P] constraints | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan C/H rules |
-| `AGH-PLAN-11` | objective verify and fake-command checks | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan C/H rules |
-| `AGH-PLAN-12` | existing interface signature anchors | host | `skills/wh-review/contracts/build-plan.md` §Hard invariants; host-verified facts in immutable packet |
-| `AGH-PLAN-13` | forbidden file/upstream merge safety | host | `skills/wh-review/contracts/build-plan.md` §Hard invariants; host source/diff and manifest evidence |
-| `AGH-PLAN-14` | governance seven-category matrix | host | `skills/wh-review/contracts/build-plan.md` §Hard invariants; host-verified facts, not provider filesystem |
-| `AGH-PLAN-15` | UI contract/visual six-dimension rules | lens | `skills/wh-review/contracts/build-plan.md` §Hard invariants; UI plan-review skill profile |
-| `AGH-PLAN-16` | no unapproved fallback/legacy/platform coupling | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan scope C/H rules |
-| `AGH-PLAN-17` | behavior, not existence-only acceptance | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan contract |
-| `AGH-PLAN-18` | pass is not human approval/STOP | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; disposition and human-gate protocol |
-| `AGH-PLAN-19` | concept drift, impact coverage, YAGNI/KISS | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; build-plan C/H rules |
-| `AGH-PLAN-20` | nonblocking phase/file/UI suggestions | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; minor finding policy |
-| `AGH-PLAN-21` | knowledge/checkpoint artifact planning | removed (evidence) | `skills/wh-review/contracts/build-plan.md#Hard invariants`; AgentHub lifecycle artifact model has no V4 target |
-| `AGH-PLAN-22` | repeated finding/revision record | keep | `skills/wh-review/contracts/build-plan.md` §Hard invariants; closure bundle and immutable receipt history |
-| `AGH-CODE-01` | three axes: spec/standards/structural quality | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; `build-code.md` C/H rules |
-| `AGH-CODE-02` | six behavior/scope/test/evidence/side-effect questions | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; build-code contract |
+| `AGH-PLAN-07` | phase/depends/files/risk/verify/FR principles | keep | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; C1-C3 cover consumption, order, failure and verification |
+| `AGH-PLAN-08` | continuation resolution summary per prior finding | keep | `skills/wh-review/contracts/build-plan.md#Continuation closure`; `skills/wh-review/scripts/finding-state.mjs#validateClosureBundle` validates per-finding closure evidence |
+| `AGH-PLAN-09` | constitution and FR-task-verify trace | keep | `skills/wh-review/contracts/build-plan.md` C1/H1 and Plan quality questions 1/5; frozen constitution is a required material |
+| `AGH-PLAN-10` | phase size/order/dependency/[P] constraints | keep | `skills/wh-review/contracts/build-plan.md` C2, H2 and Plan quality questions 2/4; no fixed legacy phase-size threshold retained |
+| `AGH-PLAN-11` | objective verify and fake-command checks | keep | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; verification must be executable and falsifiable |
+| `AGH-PLAN-12` | existing interface signature anchors | keep | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; provider checks interfaces only when frozen planning materials contain anchors |
+| `AGH-PLAN-13` | forbidden file/upstream merge safety | keep | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; provider checks frozen scope and changed-files evidence, not an unverified host claim |
+| `AGH-PLAN-14` | governance seven-category matrix | removed (evidence) | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; portable consumer/boundary/verification checks replace AgentHub-specific fixed governance matrix |
+| `AGH-PLAN-15` | UI contract/visual six-dimension rules | removed (evidence) | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; build-plan has no UI lens, while portable boundary and verification checks remain |
+| `AGH-PLAN-16` | no unapproved fallback/legacy/platform coupling | keep | `skills/wh-review/contracts/build-plan.md` C2, H3 and Plan quality questions 3/5 |
+| `AGH-PLAN-17` | behavior, not existence-only acceptance | keep | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; existence-only verification is explicitly invalid |
+| `AGH-PLAN-18` | pass is not human approval/STOP | keep | `skills/wh-review/contracts/provider-protocol.md#Verdict`; `skills/wh-review/scripts/review-round-facade.mjs#publish` keeps provider verdict separate from host disposition/human gate |
+| `AGH-PLAN-19` | concept drift, impact coverage, YAGNI/KISS | keep | `skills/wh-review/contracts/build-plan.md#Plan quality questions`; minimum implementation and consumer coverage are explicit |
+| `AGH-PLAN-20` | nonblocking phase/file/UI suggestions | keep | `skills/wh-review/contracts/build-plan.md#分类`; optional organization/readability advice is `minor` |
+| `AGH-PLAN-21` | knowledge/checkpoint artifact planning | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#prepare`; AgentHub lifecycle artifact model has no V4 target |
+| `AGH-PLAN-22` | repeated finding/revision record | keep | `skills/wh-review/scripts/finding-state.mjs#reconcileFindingState` and `#validateClosureBundle`; hash-bound receipts retain round history |
+| `AGH-CODE-01` | three axes: spec/standards/structural quality | keep | `skills/wh-review/contracts/build-code.md` C1/C2/C3 and H1/H2/H3 |
+| `AGH-CODE-02` | six behavior/scope/test/evidence/side-effect questions | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; behavior, boundary, side effect and evidence questions are explicit |
 | `AGH-CODE-03` | AgentHub gate.sh/guard.sh automation split | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#sealPacket`; AgentHub hooks absent, V4 host verifies packet evidence |
-| `AGH-CODE-04` | continuation prior finding/delta/boundary rescan | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; continuation delta and affected materials |
-| `AGH-CODE-05` | new blocking restriction | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; late-finding state reconciliation |
+| `AGH-CODE-04` | continuation prior finding/delta/boundary rescan | keep | `skills/wh-review/contracts/build-code.md#Continuation closure`; host-built delta includes prior findings and affected materials |
+| `AGH-CODE-05` | new blocking restriction | keep | `skills/wh-review/scripts/finding-state.mjs#reconcileFindingState`; only host-proven introduced/previously-impossible roots retain late blocking severity |
 | `AGH-CODE-06` | independent session each round | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#run`; V4 broker continuation is mandatory |
-| `AGH-CODE-07` | functional/test/scope/evidence/FR blocking list | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; build-code C/H rules |
+| `AGH-CODE-07` | functional/test/scope/evidence/FR blocking list | keep | `skills/wh-review/contracts/build-code.md` C1/C2/C3, H1/H2/H3 and Structural quality questions 1-6 |
 | `AGH-CODE-08` | report/readability/index/summary minor list | removed (evidence) | `skills/wh-review/scripts/public-review-projection.mjs#projectPublicReviewCore`; AgentHub report lifecycle artifact semantics removed |
-| `AGH-CODE-09` | design/standards/task/diff review matrix | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; packet material and build-code contract |
-| `AGH-CODE-10` | test command/shell diagnostic execution | host | `skills/wh-review/contracts/build-code.md` §Hard invariants; host test evidence and manifest/hash |
-| `AGH-CODE-11` | structural quality gate branches/leaks/duplication | lens | `skills/wh-review/contracts/build-code.md` §Hard invariants; code review skill lens |
-| `AGH-CODE-12` | absolute path/cast/atomicity/file-size/wrapper gate | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; build-code C/H rules |
-| `AGH-CODE-13` | RED/GREEN provenance and no placeholders | host | `skills/wh-review/contracts/build-code.md` §Hard invariants; packet test evidence and host facts |
-| `AGH-CODE-14` | Host-Verified Facts conflict escalates | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; validator/human verdict policy |
+| `AGH-CODE-09` | design/standards/task/diff review matrix | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; C1-C3 bind approved design, boundary and diff evidence |
+| `AGH-CODE-10` | test command/shell diagnostic execution | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; provider reviews frozen test evidence while non-artifact assertions remain producer attestations |
+| `AGH-CODE-11` | structural quality gate branches/leaks/duplication | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; contract directly checks behavior, state, concurrency and consumers |
+| `AGH-CODE-12` | absolute path/cast/atomicity/file-size/wrapper gate | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; portable atomicity/boundary checks retained, fixed token and size bans removed |
+| `AGH-CODE-13` | RED/GREEN provenance and no placeholders | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; provider checks frozen provenance and placeholder evidence without claiming host execution proof |
+| `AGH-CODE-14` | Host-Verified Facts conflict escalates | keep | `skills/wh-review/contracts/provider-protocol.md#Evidence rules`; reviewer-output `escalate_to_human` handles unresolved conflict with typed host facts |
 | `AGH-CODE-15` | FR consumption scan/revise-plan artifact | removed (evidence) | `skills/wh-review/scripts/finding-state.mjs#validateClosureBundle`; current-delta closure replaces AgentHub revision artifact |
-| `AGH-CODE-16` | repeated finding closure requirements | keep | `skills/wh-review/contracts/build-code.md` §Hard invariants; structured closure bundle hard gate |
-| `AGH-CODE-17` | substantive review four questions | lens | `skills/wh-review/contracts/build-code.md` §Hard invariants; code review skill lens |
+| `AGH-CODE-16` | repeated finding closure requirements | keep | `skills/wh-review/contracts/build-code.md#Continuation closure`; `skills/wh-review/scripts/finding-state.mjs#validateClosureBundle` enforces structured evidence |
+| `AGH-CODE-17` | substantive review four questions | keep | `skills/wh-review/contracts/build-code.md#Structural quality questions`; contract directly owns substantive review with no code lens |
 | `AGH-CODE-18` | append-only report revision triple | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#updateReceiptAndFlow`; AgentHub request identifiers are not exposed in V4 |
-| `AGH-ACCEPT-01` | three axes: AC/evidence/workflow closure | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; `verify-code.md` C/H rules |
-| `AGH-ACCEPT-02` | `qa-only` must be used, not `qa` | lens | `skills/wh-review/contracts/verify-code.md` §Hard invariants; selected acceptance skill bundle |
-| `AGH-ACCEPT-03` | `verify-change --light` requirement | lens | `skills/wh-review/contracts/verify-code.md` §Hard invariants; selected verification skill bundle |
-| `AGH-ACCEPT-04` | unavailable/hollow skill evidence | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; `skillResults` validator/human verdict |
+| `AGH-ACCEPT-01` | three axes: AC/evidence/workflow closure | keep | `skills/wh-review/contracts/verify-code.md` C1-C6 and H1/H2/H3 |
+| `AGH-ACCEPT-02` | `qa-only` must be used, not `qa` | lens | `skills/wh-review/contracts/verify-code.md#Required skills`; selected acceptance lens replaces the AgentHub command name |
+| `AGH-ACCEPT-03` | `verify-change --light` requirement | lens | `skills/wh-review/contracts/verify-code.md#Required skills`; selected verification lens replaces the AgentHub command flag |
+| `AGH-ACCEPT-04` | unavailable/hollow skill evidence | keep | `skills/wh-review/scripts/reviewer-output-validator.mjs#validateSkillResults`; missing or unbound required lens evidence is business-invalid |
 | `AGH-ACCEPT-05` | skill-file fallback and openspec ban | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#attachments`; frozen bundle replaces AgentHub command naming |
-| `AGH-ACCEPT-06` | AC/fresh/verdict/Knowledge/delivery questions | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; verify-code contract |
-| `AGH-ACCEPT-07` | continuation prior finding/delta/new-blocking limit | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; continuation delta and late-finding policy |
+| `AGH-ACCEPT-06` | AC/fresh/verdict/Knowledge/delivery questions | keep | `skills/wh-review/contracts/verify-code.md` C1-C6, H1-H3 and Acceptance quality questions 1-6; AgentHub Knowledge procedure is separately removed in ACCEPT-23 |
+| `AGH-ACCEPT-07` | continuation prior finding/delta/new-blocking limit | keep | `skills/wh-review/contracts/verify-code.md#Continuation closure`; `skills/wh-review/scripts/finding-state.mjs#reconcileFindingState` enforces late-blocking policy |
 | `AGH-ACCEPT-08` | first-round `workflow-issues.jsonl` record | removed (evidence) | `skills/wh-review/scripts/review-round-facade.mjs#checkedCarryovers`; V4 carryovers replace lifecycle artifact |
 | `AGH-ACCEPT-09` | report-index open status list | removed (evidence) | `skills/wh-review/scripts/public-review-projection.mjs#projectPublicReviewCore`; V4 core receipt findings replace index model |
-| `AGH-ACCEPT-10` | AC/plan-test/user-problem coverage | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; verify-code C/H rules and packet evidence |
-| `AGH-ACCEPT-11` | fresh round raw output/no historical citation | host | `skills/wh-review/contracts/verify-code.md` §Hard invariants; host test evidence and manifest/hash |
-| `AGH-ACCEPT-12` | test/typecheck/build/no skipped tests | host | `skills/wh-review/contracts/verify-code.md` §Hard invariants; host test evidence |
-| `AGH-ACCEPT-13` | evidence JSON/provenance/no placeholders | host | `skills/wh-review/contracts/verify-code.md` §Hard invariants; host verified facts and packet manifest |
-| `AGH-ACCEPT-14` | latest earlier review/revision closure | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; prior core receipt and continuation finding state |
-| `AGH-ACCEPT-15` | browser QA/screenshots/trace/hash/tool consistency | lens | `skills/wh-review/contracts/verify-code.md` §Hard invariants; `isolated-browser-qa` UI-only skill profile |
-| `AGH-ACCEPT-16` | visual comparison/design contract latest | lens | `skills/wh-review/contracts/verify-code.md` §Hard invariants; UI acceptance skill profile |
-| `AGH-ACCEPT-17` | scope/target/self-consistency | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; verify-code contract |
-| `AGH-ACCEPT-18` | ORACLE denominator/paired/source rules | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; verify-code C/H rules |
-| `AGH-ACCEPT-19` | minor screenshot/report/config/fixture suggestions | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; minor finding policy |
-| `AGH-ACCEPT-20` | every FR and original request no sampling | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; verify-code C/H rules |
-| `AGH-ACCEPT-21` | dogfood exemption reason | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; verify-code packet/contract rule |
-| `AGH-ACCEPT-22` | repeated verification evidence escalation | keep | `skills/wh-review/contracts/verify-code.md` §Hard invariants; structured closure bundle and human gate |
-| `AGH-ACCEPT-23` | Knowledge close/archive/BrainInbox procedure | removed (evidence) | `skills/wh-review/contracts/verify-code.md#Hard invariants`; AgentHub lifecycle/absolute path assumption has no V4 target |
+| `AGH-ACCEPT-10` | AC/plan-test/user-problem coverage | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; every AC and original problem requires separate evidence |
+| `AGH-ACCEPT-11` | fresh round raw output/no historical citation | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; provider checks freshness from frozen evidence metadata |
+| `AGH-ACCEPT-12` | test/typecheck/build/no skipped tests | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; provider judges available test evidence without claiming host execution |
+| `AGH-ACCEPT-13` | evidence JSON/provenance/no placeholders | keep | `skills/wh-review/contracts/provider-protocol.md#Provider Protocol`; artifact bytes are host-verified, non-artifact assertions remain explicitly unverified |
+| `AGH-ACCEPT-14` | latest earlier review/revision closure | keep | `skills/wh-review/contracts/verify-code.md` C5/H3; host-bound previous receipt and `verification_closure` supply closure state |
+| `AGH-ACCEPT-15` | browser QA/screenshots/trace/hash/tool consistency | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; UI evidence is reviewed when present, missing collection becomes unknown/human escalation |
+| `AGH-ACCEPT-16` | visual comparison/design contract latest | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; provider judges frozen current visual evidence without claiming host proof |
+| `AGH-ACCEPT-17` | scope/target/self-consistency | keep | `skills/wh-review/contracts/verify-code.md` C1/C2/C6, H1/H3 and Acceptance quality questions 1/6 |
+| `AGH-ACCEPT-18` | ORACLE denominator/paired/source rules | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; full denominator, source, freshness and positive/negative evidence are explicit |
+| `AGH-ACCEPT-19` | minor screenshot/report/config/fixture suggestions | keep | `skills/wh-review/contracts/verify-code.md#分类`; non-correctness presentation/organization advice is `minor` |
+| `AGH-ACCEPT-20` | every FR and original request no sampling | keep | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; per-item evidence and no sampling are explicit |
+| `AGH-ACCEPT-21` | dogfood exemption reason | removed (evidence) | `skills/wh-review/contracts/verify-code.md#Acceptance quality questions`; universal dogfood is not portable, while any omitted counterexample requires packet evidence |
+| `AGH-ACCEPT-22` | repeated verification evidence escalation | keep | `skills/wh-review/contracts/verify-code.md#Continuation closure`; `skills/wh-review/scripts/finding-state.mjs#validateClosureBundle` and three-round human gate |
+| `AGH-ACCEPT-23` | Knowledge close/archive/BrainInbox procedure | removed (evidence) | `skills/wh-review/contracts/verify-code.md#Reviewer role`; AgentHub lifecycle/absolute path assumption has no V4 target |
 
 ## Closure bundle evidence
 

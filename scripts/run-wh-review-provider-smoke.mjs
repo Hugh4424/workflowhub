@@ -60,7 +60,7 @@ function reviewPacket(root, baseTree, snapshotTree, { roundKind = "initial", bas
     acceptance_design_excerpt: roundKind === "initial"
       ? "AC: R1_DIFF_MARKER is present in round 1."
       : "AC: R2_DELTA_ONLY_MARKER is introduced in this continuation delta.",
-    test_evidence: [{ name: "smoke-fixture", status: "passed", evidence: "temporary-index capture preserved the fixture HEAD" }], host_verified_facts: [{ fact: "The host generated packet material from a disposable local worktree tree." }],
+    test_evidence: [{ fact_id: "smoke-fixture", kind: "command", source: "temporary-index capture", captured_at: new Date().toISOString(), sha256: sha("temporary-index capture preserved the fixture HEAD"), status: "passed", exit_code: 0 }], host_verified_facts: [{ fact_id: "source-tree", kind: "source-tree", source: "disposable local worktree", captured_at: new Date().toISOString(), sha256: sha(snapshotTree), value: "packet material generated" }],
     contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])),
   };
   packet.diff_sha256 = sha(packet.unified_diff); packet.manifest_hash = reviewManifestHash(packet); packet.packet_hash = reviewPacketHash(packet);

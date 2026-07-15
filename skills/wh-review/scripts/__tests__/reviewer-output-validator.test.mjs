@@ -68,18 +68,38 @@ describe("reviewer-output validator", () => {
     const revise = fixture({ verdict: "revise_required" });
     revise.output.checklist.find(({ id }) => id === "H1").passed = false;
     revise.output.pass_items = revise.output.pass_items.filter(({ rule_id }) => rule_id !== "H1");
-    revise.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "H1", severity: "blocking", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后", late_finding: true }];
+    revise.output.findings = [{ root_cause_key: "partial-state-publish", file: "src/a.mjs", line: 12, rule_id: "H1", severity: "blocking", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后", late_finding: true }];
     expect(validate(revise).errors).toEqual([expect.stringMatching(/rootCause/)]);
     revise.output.rootCause = "状态发布和持久化没有共享提交边界";
     expect(validate(revise).errors).toEqual([expect.stringMatching(/fixApproach/)]);
     revise.output.fixApproach = "先完成原子持久化，再发布成功状态";
     expect(validate(revise).errors).toEqual([]);
 
+    const missingRootKey = structuredClone(revise); delete missingRootKey.output.findings[0].root_cause_key;
+    expect(validate(missingRootKey).errors).toEqual(["SCHEMA_VALIDATION_FAILED:/findings/0/root_cause_key"]);
+    const proseRootKey = structuredClone(revise); proseRootKey.output.findings[0].root_cause_key = "State publishes too early";
+    expect(validate(proseRootKey).errors).toEqual(["SCHEMA_VALIDATION_FAILED:/findings/0/root_cause_key"]);
+
     const passBlocking = fixture(); passBlocking.output.findings = revise.output.findings;
     expect(validate(passBlocking).errors).toContain("pass verdict cannot contain a blocking finding");
     for (const field of ["artifact_anchor", "evidence"]) {
       const hollow = fixture(); hollow.output.pass_items[0][field] = "已检查通过"; expect(validate(hollow).valid).toBe(false);
     }
+  });
+
+  it("allows one root cause to carry multiple locations inside one provider output", () => {
+    const revise = fixture({ verdict: "revise_required" });
+    revise.output.rootCause = "两个问题错误复用了同一个 provider root-cause key";
+    revise.output.fixApproach = "为不同根因生成不同稳定 key，并在 provider 内先合并同一根因";
+    revise.output.checklist.find(({ id }) => id === "H1").passed = false;
+    revise.output.pass_items = revise.output.pass_items.filter(({ rule_id }) => rule_id !== "H1");
+    revise.output.findings = [
+      { root_cause_key: "missing-validation", file: "src/a.mjs", line: 12, rule_id: "H1", severity: "blocking", issue: "入口 A 缺少验证", evidence: "src/a.mjs:12 直接消费输入", suggested_fix: "在入口 A 验证输入" },
+      { root_cause_key: "missing-validation", file: "src/b.mjs", line: 30, rule_id: "H1", severity: "blocking", issue: "无关入口 B 缺少另一类验证", evidence: "src/b.mjs:30 直接消费配置", suggested_fix: "在入口 B 验证配置" },
+    ];
+    revise.output.findings[1].issue = "入口 A 的另一条路径缺少相同验证";
+    revise.output.findings[1].suggested_fix = "复用入口 A 的统一验证边界";
+    expect(validate(revise).errors).toEqual([]);
   });
 
   it("accepts the real Kimi pass shape when it anchors a whole frozen changes.diff artifact", () => {
@@ -150,7 +170,7 @@ describe("reviewer-output validator", () => {
     const failedHard = fixture(); failedHard.output.checklist.find(({ id }) => id === "H1").passed = false;
     failedHard.output.pass_items = failedHard.output.pass_items.filter(({ rule_id }) => rule_id !== "H1");
     expect(validate(failedHard).errors).toContain("failed hard invariant requires blocking finding: H1");
-    failedHard.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "H1", severity: "important", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后" }];
+    failedHard.output.findings = [{ root_cause_key: "partial-state-publish", file: "src/a.mjs", line: 12, rule_id: "H1", severity: "important", issue: "错误分支会提交不完整状态", evidence: "src/a.mjs:12 在写入完成前发布状态", suggested_fix: "把发布移动到原子写入成功之后" }];
     expect(validate(failedHard).errors).toContain("failed hard invariant requires blocking finding: H1");
     failedHard.output.findings[0].severity = "blocking";
     failedHard.output.verdict = "revise_required";
@@ -160,7 +180,7 @@ describe("reviewer-output validator", () => {
   });
 
   it("allows an isolated minor external finding but rejects an external hard severity", () => {
-    const finding = fixture(); finding.output.findings = [{ file: "src/a.mjs", line: 12, rule_id: "external:scope-drift", severity: "minor", issue: "存在合同之外但可供主 Agent 参考的审查意见", evidence: "src/a.mjs:12 展示未纳入本阶段合同的范围漂移", suggested_fix: "将该意见记录为后续范围讨论，不改变本轮合同判定" }];
+    const finding = fixture(); finding.output.findings = [{ root_cause_key: "scope-drift", file: "src/a.mjs", line: 12, rule_id: "external:scope-drift", severity: "minor", issue: "存在合同之外但可供主 Agent 参考的审查意见", evidence: "src/a.mjs:12 展示未纳入本阶段合同的范围漂移", suggested_fix: "将该意见记录为后续范围讨论，不改变本轮合同判定" }];
     expect(validate(finding).errors).toEqual([]);
     finding.output.findings[0].severity = "important";
     expect(validate(finding).errors).toContain("external finding must be minor: external:scope-drift");

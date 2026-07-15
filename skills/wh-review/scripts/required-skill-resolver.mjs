@@ -92,7 +92,7 @@ function readStageSkillPlan(stageSkillPlan) {
 }
 
 function assertCompleteProfile(profile, stage) {
-  const required = ["logical_skill_id", "material_profile", "output_schema", "checkpoints", "expected_evidence", "bundle_hash", "bundle_closure_files", "review_mode", "delivery_mode", "continuation_policy", "pass_finding_policy"];
+  const required = ["logical_skill_id", "material_profile", "output_schema", "checkpoints", "expected_evidence", "bundle_hash", "bundle_closure_files", "review_mode", "delivery_mode", "continuation_policy", "pass_finding_policy", "minimum_business_valid_sources", "recommended_business_valid_sources"];
   for (const field of required) if (profile?.[field] === undefined) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: missing ${field}`);
   if (typeof profile.logical_skill_id !== "string" || !profile.logical_skill_id.startsWith("wh-review/")) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid logical_skill_id`);
   if (profile.output_schema !== "schemas/reviewer-output.schema.json") throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid output_schema`);
@@ -100,6 +100,8 @@ function assertCompleteProfile(profile, stage) {
   if (!Array.isArray(profile.expected_evidence) || !profile.expected_evidence.length || profile.expected_evidence.some((item) => typeof item !== "string" || !item)) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid expected_evidence`);
   if (profile.bundle_hash !== "resolved-at-prepare" || profile.bundle_closure_files !== "resolved-at-prepare") throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: bundle metadata must resolve at prepare`);
   if (profile.review_mode !== "lens-only") throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid review_mode`);
+  if (!Number.isSafeInteger(profile.minimum_business_valid_sources) || profile.minimum_business_valid_sources < 1) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid minimum_business_valid_sources`);
+  if (!Number.isSafeInteger(profile.recommended_business_valid_sources) || profile.recommended_business_valid_sources < profile.minimum_business_valid_sources) throw new RequiredSkillResolutionError("required-skill-unavailable", `incomplete stage skill plan for ${stage}: invalid recommended_business_valid_sources`);
 }
 
 function profileFor({ stage, reviewTrack, ui, stageSkillPlan }) {
@@ -159,6 +161,8 @@ export function resolveRequiredSkills({ stage, reviewTrack, ui = false, roots, s
     checkpoints: [...profile.checkpoints],
     expectedEvidence: [...profile.expected_evidence],
     reviewMode: profile.review_mode,
+    minimumBusinessValidSources: profile.minimum_business_valid_sources,
+    recommendedBusinessValidSources: profile.recommended_business_valid_sources,
     deliveryMode,
     skillBundleHash,
     bundleClosureFiles,

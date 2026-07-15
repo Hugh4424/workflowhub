@@ -38,7 +38,7 @@ it.runIf(Boolean(thirdRoot))("accepts real R1/R2 3rd-review derived bundles with
   };
   const resolver = (input) => ({ ...resolveRequiredSkills(input), deliveryMode: "always_embed" });
   const facade = new ReviewRoundFacade({ taskTrackingRoot: root, sourceRoot: root, broker, requiredSkillResolver: resolver });
-  const packet = { version: "review-packet.v1", stage: "build-code", review_track: null, raw_requirement: "review", acceptance_design_excerpt: "AC: works", test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha("[]") };
+  const packet = { version: "review-packet.v1", stage: "build-code", review_track: null, raw_requirement: "review", acceptance_design_excerpt: "AC: works", test_evidence: [{ fact_id: "unit", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: sha("unit passed"), status: "passed", exit_code: 0 }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha("[]") };
   const prepared = await facade.prepare({ task_id: "derived", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet });
   expect(prepared.initial_prompt).not.toMatch(/(?:packet_hash|manifest_hash|diff_sha256)=/u);
   const result = await facade.run(prepared); const outcome = result.provider_outcomes[0];

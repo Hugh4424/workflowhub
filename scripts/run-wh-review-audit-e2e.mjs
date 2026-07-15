@@ -96,10 +96,10 @@ async function main() {
     for (const name of ["requirements-ledger.json", "requirements-coverage.json"]) copyFileSync(join(options.task, name), join(tracking, taskId, name));
     const resolution = resolveRequiredSkills({ stage: "build-code", reviewTrack: null });
     const input = { task_id: taskId, stage: "build-code", review_flow_id: "full-scope", host_provider: "codex", provider_allowlist: ["kimi", "opencode"], task_tracking_root: tracking, packet: { version: "review-packet.v1", stage: "build-code", review_track: null, round_kind: "initial", baseline_packet_hash: null, raw_requirement: `Review the complete audit scope and quote ${markers.join(", ")} from changes.diff.`, acceptance_design_excerpt: "The complete host-captured audit diff and all three marker positions must be reviewed.", test_evidence: [
-      { name: "audit-e2e-preflight", status: "passed", path: "test-strategy.md", evidence: "temporary mirror tree exactly matched the live audit captured tree before marker injection" },
-      { name: "requirements-ledger", status: "passed", path: "requirements-ledger.json" },
-      { name: "requirements-coverage", status: "passed", path: "requirements-coverage.json" },
-    ], host_verified_facts: [{ fact: `Host reconciled ${auditMaterial.changed_files.length} audit files before adding three marker files.` }], contract_hash: projectStageContract("build-code").contractHash, skill_bundle_hash: resolution.skillBundleHash } };
+      { fact_id: "audit-e2e-preflight", kind: "artifact", source: "test-strategy.md", captured_at: new Date().toISOString(), sha256: hash(readFileSync(join(tracking, taskId, "test-strategy.md"))), status: "passed" },
+      { fact_id: "requirements-ledger", kind: "artifact", source: "requirements-ledger.json", captured_at: new Date().toISOString(), sha256: hash(readFileSync(join(tracking, taskId, "requirements-ledger.json"))), status: "passed" },
+      { fact_id: "requirements-coverage", kind: "artifact", source: "requirements-coverage.json", captured_at: new Date().toISOString(), sha256: hash(readFileSync(join(tracking, taskId, "requirements-coverage.json"))), status: "passed" },
+    ], host_verified_facts: [{ fact_id: "audit-scope", kind: "source-tree", source: "host reconciliation", captured_at: new Date().toISOString(), sha256: hash(auditTree), value: { reconciled_files: auditMaterial.changed_files.length } }], contract_hash: projectStageContract("build-code").contractHash, skill_bundle_hash: resolution.skillBundleHash } };
     const inputPath = join(options.output, "input.json"); writeJson(inputPath, input);
     const cli = spawnSync(process.execPath, [join(repository, "skills/wh-review/scripts/wh-review-cli.mjs"), "run", inputPath], { encoding: "utf8", env: hostOverride.env ?? process.env });
     writeJson(join(options.output, "execution.json"), { status: cli.status, stdout: cli.stdout, stderr: cli.stderr });

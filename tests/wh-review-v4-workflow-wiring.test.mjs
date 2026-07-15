@@ -55,7 +55,7 @@ function materialPacket(stage, reviewTrack = null) {
     decision_log_excerpt: "decision",
     planning_artifacts: [],
     verification_closure: [],
-    test_evidence: [{ name: "unit", status: "passed" }],
+    test_evidence: [{ fact_id: "unit", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: sha("unit passed"), status: "passed", exit_code: 0 }],
     host_verified_facts: [],
     contract_hash: sha(projectedContract(stage, reviewTrack)),
     skill_bundle_hash: bundleHash(stage, reviewTrack),

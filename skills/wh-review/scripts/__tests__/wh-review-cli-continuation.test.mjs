@@ -17,7 +17,7 @@ const broker = vi.hoisted(() => {
     const revised = verdict === "revise_required";
     return JSON.stringify({
       packet_status: "complete", verdict,
-      summary: "review completed against packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: "H1", severity: "blocking", issue: "publication must follow durable persistence", evidence: "changes.diff:a:1 shows publication before persistence", suggested_fix: "persist the state before publishing it" }] : [],
+      summary: "review completed against packet evidence", findings: revised ? [{ root_cause_key: "publication-before-persistence", file: "a", line: 1, rule_id: "H1", severity: "blocking", issue: "publication must follow durable persistence", evidence: "changes.diff:a:1 shows publication before persistence", suggested_fix: "persist the state before publishing it" }] : [],
       checklist: ids.map((id) => ({ id, passed: !(revised && id === "H1"), evidence: `changes.diff:a:1 verifies ${id}` })),
       pass_items: ids.filter((id) => !(revised && id === "H1")).map((rule_id) => ({ rule_id, artifact_anchor: `changes.diff:a:1#${rule_id}`, evidence: `changes.diff:a:1 proves ${rule_id}` })),
       skillResults: [],
@@ -31,7 +31,7 @@ const broker = vi.hoisted(() => {
       .map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
     return createHash("sha256").update(canonical({ version: 1, bundle_id: attachments.bundle_id, files })).digest("hex");
   };
-  return { calls: [], clientOptions: [], output, materialManifestHash, reset() { this.calls.length = 0; this.clientOptions.length = 0; } };
+  return { calls: [], clientOptions: [], lastAttachments: null, output, materialManifestHash, reset() { this.calls.length = 0; this.clientOptions.length = 0; this.lastAttachments = null; } };
 });
 
 vi.mock("../broker-client.mjs", () => ({
@@ -45,6 +45,10 @@ vi.mock("../broker-client.mjs", () => ({
     async status() { return { expires_at_ms: Date.now() + 60_000 }; }
     async run(input) {
       broker.calls.push(input);
+      // Schema-correction calls reuse the already frozen provider material and
+      // intentionally omit attachments. Model that broker-owned reuse here.
+      if (input.attachments) broker.lastAttachments = input.attachments;
+      else input = { ...input, attachments: broker.lastAttachments };
       const packetEntry = input.attachments?.entries?.find((entry) => entry.destination === "review-packet.v1.json");
       if (!packetEntry) throw new Error("test broker requires review-packet.v1.json attachment");
       const packet = JSON.parse(readFileSync(join(this.attachmentRoot, packetEntry.source), "utf8"));
@@ -90,7 +94,7 @@ function manifest(packet) {
   return sha(canonical({ diff_sha256: packet.diff_sha256, changed_files: packet.changed_files.map(({ path, old_path, status, sha256, size, old_sha256, old_size }) => ({ path, old_path: old_path ?? null, status, sha256: sha256 ?? null, size: size ?? null, old_sha256: old_sha256 ?? null, old_size: old_size ?? null })), raw_requirement: packet.raw_requirement, decision_log_excerpt: null, acceptance_design_excerpt: packet.acceptance_design_excerpt, planning_artifacts: [], verification_closure: [], test_evidence: packet.test_evidence, host_verified_facts: packet.host_verified_facts, contract_hash: packet.contract_hash, skill_bundle_hash: packet.skill_bundle_hash, source_revision: packet.source_revision }));
 }
 function reviewPacket() {
-  return { version: "review-packet.v1", stage: "build-code", review_track: null, raw_requirement: "make state publication durable", acceptance_design_excerpt: "AC: publication happens after persistence", test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])) };
+  return { version: "review-packet.v1", stage: "build-code", review_track: null, raw_requirement: "make state publication durable", acceptance_design_excerpt: "AC: publication happens after persistence", test_evidence: [{ fact_id: "unit", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: sha("unit passed"), status: "passed", exit_code: 0 }], host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: sha(canonical([])) };
 }
 function repository() {
   const root = mkdtempSync(join(tmpdir(), "wh-review-cli-continuation-")); roots.push(root);

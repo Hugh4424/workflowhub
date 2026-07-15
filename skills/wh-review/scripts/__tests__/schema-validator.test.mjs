@@ -57,6 +57,49 @@ describe("schema-validator", () => {
     expectSchemaError("review-packet", packet, "/source_revision/base");
   });
 
+  it("requires typed evidence records while allowing empty evidence arrays", () => {
+    const packet = {
+      version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
+      stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
+      diff_sha256: hash, unified_diff: "", changed_files: [], raw_requirement: "x",
+      acceptance_design_excerpt: "x", contract_hash: hash, skill_bundle_hash: hash,
+      source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
+      test_evidence: [], host_verified_facts: [],
+    };
+    expect(validateSchema("review-packet", packet)).toBe(packet);
+
+    packet.test_evidence = [{ fact_id: "test-unit", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: hash, status: "passed", exit_code: 0 }];
+    packet.host_verified_facts = [{ fact_id: "tree", kind: "source-tree", source: "git", captured_at: "2026-07-15T00:00:00Z", sha256: hash, value: { clean: true } }];
+    expect(validateSchema("review-packet", packet)).toBe(packet);
+
+    for (const invalid of ["passed", {}, { fact_id: "x", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: hash }]) {
+      packet.test_evidence = [invalid];
+      try { validateSchema("review-packet", packet); throw new Error("expected typed evidence rejection"); }
+      catch (error) { expect(error).toMatchObject({ code: "SCHEMA_VALIDATION_FAILED", schema: "review-packet" }); expect(error.pointer).toMatch(/^\/test_evidence\/0(?:\/|$)/); }
+    }
+    packet.test_evidence = [{ fact_id: "artifact", kind: "artifact", source: "result.json", captured_at: "2026-07-15T00:00:00Z", sha256: hash, status: "passed", exit_code: 0 }];
+    expectSchemaError("review-packet", packet, "/test_evidence/0/kind");
+  });
+
+  it("requires typed verification closure records", () => {
+    const packet = {
+      version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
+      stage: "verify-code", review_track: null, packet_hash: hash, manifest_hash: hash,
+      diff_sha256: hash, unified_diff: "", changed_files: [], raw_requirement: "x",
+      acceptance_design_excerpt: "AC1: x", contract_hash: hash, skill_bundle_hash: hash,
+      source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
+      test_evidence: [], host_verified_facts: [], verification_closure: [],
+    };
+    expect(validateSchema("review-packet", packet)).toBe(packet);
+    packet.verification_closure = [{ closure_id: "ac-1", subject_type: "acceptance", subject_id: "AC1", status: "closed", source: "acceptance-report.md#AC1", captured_at: "2026-07-15T00:00:00Z", sha256: hash, evidence: "AC1 is closed by the bound test evidence" }];
+    expect(validateSchema("review-packet", packet)).toBe(packet);
+    for (const invalid of ["closed", {}, { closure_id: "ac-1", subject_type: "acceptance", subject_id: "AC1", status: "closed" }]) {
+      packet.verification_closure = [invalid];
+      try { validateSchema("review-packet", packet); throw new Error("expected typed closure rejection"); }
+      catch (error) { expect(error).toMatchObject({ code: "SCHEMA_VALIDATION_FAILED", schema: "review-packet" }); expect(error.pointer).toMatch(/^\/verification_closure\/0(?:\/|$)/); }
+    }
+  });
+
   it("rejects an invalid review track and unknown intent controls", () => {
     const intent = {
       task_id: "t", stage: "build-code", review_track: "direction", review_flow_id: "f", business_round: 1,

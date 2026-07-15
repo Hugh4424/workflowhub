@@ -2,6 +2,41 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "review-packet.v1",
   "type": "object",
+  "$defs": {
+    "evidenceRecord": {
+      "type": "object",
+      "$comment": "For kind=artifact, sha256 is the digest of source file bytes and prepare must recompute it before freezing. For all other kinds, sha256 is only the producer-declared assertion digest bound into the packet; it is not independently verified and must not be presented as artifact attestation.",
+      "required": ["fact_id", "kind", "source", "captured_at", "sha256"],
+      "properties": {
+        "fact_id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "captured_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$", "$comment": "Verified against bytes only when kind=artifact; otherwise an opaque producer assertion digest." },
+        "status": { "type": "string", "minLength": 1 },
+        "value": {},
+        "exit_code": { "type": "integer" }
+      },
+      "anyOf": [{ "required": ["status"] }, { "required": ["value"] }],
+      "allOf": [{ "if": { "required": ["exit_code"] }, "then": { "properties": { "kind": { "const": "command" } } } }],
+      "additionalProperties": false
+    },
+    "verificationClosureRecord": {
+      "type": "object",
+      "required": ["closure_id", "subject_type", "subject_id", "status", "source", "captured_at", "sha256", "evidence"],
+      "properties": {
+        "closure_id": { "type": "string", "minLength": 1 },
+        "subject_type": { "enum": ["acceptance", "finding", "exception"] },
+        "subject_id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "closed", "accepted", "deferred"] },
+        "source": { "type": "string", "minLength": 1 },
+        "captured_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "evidence": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
   "required": ["version", "round_kind", "baseline_packet_hash", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "raw_requirement", "host_verified_facts", "contract_hash", "skill_bundle_hash", "source_revision"],
   "properties": {
     "version": { "const": "review-packet.v1" },
@@ -41,9 +76,9 @@
     "decision_log_excerpt": { "type": "string" },
     "acceptance_design_excerpt": { "type": "string" },
     "planning_artifacts": { "type": "array" },
-    "verification_closure": { "type": "array" },
-    "test_evidence": { "type": "array" },
-    "host_verified_facts": { "type": "array" },
+    "verification_closure": { "type": "array", "items": { "$ref": "#/$defs/verificationClosureRecord" } },
+    "test_evidence": { "type": "array", "items": { "$ref": "#/$defs/evidenceRecord" } },
+    "host_verified_facts": { "type": "array", "items": { "$ref": "#/$defs/evidenceRecord" } },
     "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
     ,"source_revision": {

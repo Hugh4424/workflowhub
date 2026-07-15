@@ -33,8 +33,9 @@ function intent(value, secrets) {
 function finding(value, secrets) {
   if (!value || typeof value !== "object") return null;
   const projected = {};
-  for (const key of ["file", "rule_id", "severity", "issue", "evidence", "suggested_fix", "finding_id"]) if (typeof value[key] === "string") projected[key] = cleanString(value[key], secrets);
+  for (const key of ["root_cause_key", "root_cause_fingerprint", "file", "rule_id", "severity", "issue", "evidence", "suggested_fix", "finding_id"]) if (typeof value[key] === "string") projected[key] = cleanString(value[key], secrets);
   if (Number.isInteger(value.line)) projected.line = value.line;
+  if (Array.isArray(value.locations)) projected.locations = value.locations.filter((item) => item && typeof item === "object" && typeof item.file === "string" && Number.isInteger(item.line)).map((item) => ({ file: cleanString(item.file, secrets), line: item.line }));
   if (typeof value.late_finding === "boolean") projected.late_finding = value.late_finding;
   if (value.status === "open" || value.status === "closed") projected.status = value.status;
   if (Array.isArray(value.providers)) projected.providers = strings(value.providers, secrets);
@@ -64,6 +65,7 @@ export function projectPublicReviewCore(value, { sensitiveSource = value } = {})
     intent: intent(value.intent, secrets),
     semantic_verdict: value.semantic_verdict ?? null,
     needs_human: value.needs_human === true,
+    ...(value.source_coverage ? { source_coverage: structuredClone(value.source_coverage) } : {}),
     merged_findings: (value.merged_findings ?? []).map((item) => finding(item, secrets)),
     hard_gates: (value.hard_gates ?? []).map((item) => finding(item, secrets)),
     ...(Array.isArray(value.dispositions) ? { dispositions: value.dispositions.map((item) => ({ finding_id: cleanString(item?.finding_id ?? "", secrets), action: cleanString(item?.action ?? "", secrets), evidence: cleanString(item?.evidence ?? "", secrets) })) } : {}),

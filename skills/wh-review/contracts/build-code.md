@@ -33,6 +33,16 @@
 - C2: Standards：变更是否越出允许范围、破坏边界或引入未批准依赖。
 - C3: Structural Quality：状态流转、错误处理、原子性、消费者影响和测试证据是否完整。
 
+## Structural quality questions
+
+结构质量由本合同直接检查，不依赖未声明的 code lens。
+
+- 行为闭环：diff 是否完整消费批准的设计与验收，错误路径是否返回明确结果而非掩盖失败。
+- 状态与原子性：持久化、发布和外部副作用的顺序是否避免半完成状态；失败时是否保持一致。
+- 竞态与边界：并发、重试、重复调用和取消是否可能破坏状态或跨越批准边界。
+- 消费者影响：签名、数据形状、状态语义或路径变化的所有已知消费者是否同步处理。
+- 验证证据：测试是否覆盖变更行为及关键反例；仅有命令名称、空泛通过声明或无关测试不能证明通过。
+
 ## Hard invariants
 
 - H1: 行为与批准的设计、验收必须一致。
@@ -53,7 +63,7 @@
 
 ## 分类
 
-先关闭上轮 blocking；后续轮只检查 delta、closure evidence 与受影响 artifact。新 blocking 必须由本轮材料引入或前轮不可能发现，否则标 `late_finding:true` 且最高 `minor`。
+先关闭上轮 blocking；后续轮只检查 delta、closure evidence 与受影响 artifact。新 blocking 必须由本轮材料引入，或由冻结的结构化 host fact 证明前轮不可能发现；没有该 fact 时不得仅凭 provider 叙述使用后一条件。否则标 `late_finding:true` 且最高 `minor`。
 
 blocking：行为错误、遗漏状态、半完成更新、竞态、越界变更、关键验证证据失败或缺失、需求消费点遗漏、结构边界破坏。
 

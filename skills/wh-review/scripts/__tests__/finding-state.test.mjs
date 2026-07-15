@@ -44,12 +44,20 @@ describe("finding continuation state", () => {
     expect(result.open_blocking).toHaveLength(0);
   });
 
-  it("requires both host proofs before a new blocking finding may remain blocking", () => {
+  it("keeps a new blocking finding when either host proof establishes it is not late", () => {
     const onlyIntroduced = reconcileFindingState({
       currentFindings: [finding("new")], businessRound: 2,
       introducedBlockingIds: new Set(["new"]), previouslyImpossibleIds: new Set(),
     });
-    expect(onlyIntroduced.findings[0]).toMatchObject({ severity: "minor", late_finding: true });
+    expect(onlyIntroduced.findings[0]).toMatchObject({ severity: "blocking" });
+    expect(onlyIntroduced.findings[0]).not.toHaveProperty("late_finding");
+
+    const onlyPreviouslyImpossible = reconcileFindingState({
+      currentFindings: [finding("impossible")], businessRound: 2,
+      introducedBlockingIds: new Set(), previouslyImpossibleIds: new Set(["impossible"]),
+    });
+    expect(onlyPreviouslyImpossible.findings[0]).toMatchObject({ severity: "blocking" });
+    expect(onlyPreviouslyImpossible.findings[0]).not.toHaveProperty("late_finding");
 
     const bothProven = reconcileFindingState({
       currentFindings: [finding("proven")], businessRound: 2,

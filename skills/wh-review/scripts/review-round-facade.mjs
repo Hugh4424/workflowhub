@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, isDownstreamReviewStage, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
 import { validateReviewerOutput } from "./reviewer-output-validator.mjs";
@@ -154,11 +154,23 @@ function verifiedHumanGates(providerOutcomes, declaredGates) {
   if (declaredGates !== undefined && canonical(declaredGates) !== canonical(derived)) throw new Error("human gate provenance does not match provider outcomes");
   return derived;
 }
-function findingId(finding) { return sha(`${finding.file}\0${finding.line}\0${finding.rule_id}\0${finding.issue.trim().toLowerCase()}`); }
+function findingId(finding, provider) { return sha(`${provider}\0${finding.rule_id}\0${finding.root_cause_key}`); }
+function sourceCoverage({ candidateProviders, providerOutcomes, minimumBusinessValidSources, recommendedBusinessValidSources }) {
+  const requestedProviders = new Set(candidateProviders ?? []);
+  const completedProviders = new Set((providerOutcomes ?? []).filter((item) => requestedProviders.has(item.provider) && item.transport_status === "completed").map((item) => item.provider));
+  const businessValidProviders = new Set((providerOutcomes ?? []).filter((item) => requestedProviders.has(item.provider) && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.semantic_verdict).map((item) => item.provider));
+  return { requested: requestedProviders.size, completed: completedProviders.size, business_valid: businessValidProviders.size, failed: requestedProviders.size - businessValidProviders.size, minimum_business_valid: minimumBusinessValidSources, recommended_business_valid: recommendedBusinessValidSources, below_recommended: businessValidProviders.size < recommendedBusinessValidSources };
+}
+function restoredSourceCoverage(receipt) {
+  if (receipt.source_coverage) return receipt.source_coverage;
+  const resolution = resolveRequiredSkills({ stage: receipt.intent.stage, reviewTrack: receipt.intent.review_track ?? null });
+  return sourceCoverage({ candidateProviders: receipt.candidate_providers ?? receipt.intent.candidate_providers, providerOutcomes: receipt.provider_outcomes, minimumBusinessValidSources: resolution.minimumBusinessValidSources, recommendedBusinessValidSources: resolution.recommendedBusinessValidSources });
+}
 function projectFinding(finding, provider) {
   if (!safeRelativePath(finding.file)) throw new Error("finding file must be repo-relative");
-  const projected = { file: finding.file, line: finding.line, rule_id: finding.rule_id, severity: finding.severity, issue: finding.issue, evidence: finding.evidence, suggested_fix: finding.suggested_fix };
-  return { ...projected, finding_id: findingId(projected), providers: [provider] };
+  const projected = { root_cause_key: finding.root_cause_key, file: finding.file, line: finding.line, rule_id: finding.rule_id, severity: finding.severity, issue: finding.issue, evidence: finding.evidence, suggested_fix: finding.suggested_fix };
+  const root_cause_fingerprint = findingId(projected, provider);
+  return { ...projected, root_cause_fingerprint, finding_id: root_cause_fingerprint, locations: [{ file: finding.file, line: finding.line }], providers: [provider] };
 }
 function exactClosureEvidence(findings, supplied, deltaSource, contractHardIds) {
   if (findings.length === 0 && supplied === undefined) return { items: [], unverifiedBlockingIds: [] };
@@ -516,6 +528,9 @@ export class ReviewRoundFacade {
     let baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
     if (continuation) {
       const previousFindings = structuredClone(priorReceipt.merged_findings ?? []);
+      if (previousFindings.some((finding) => typeof finding.root_cause_key !== "string" || !finding.root_cause_key || !Array.isArray(finding.providers) || finding.providers.length !== 1)) {
+        throw new Error("blocked_by_human_confirmation: prior receipt uses an incompatible finding identity; use reset with human approval");
+      }
       const deltaSource = buildTreeMaterial(this.sourceRoot, { baseTree: prior.last_reviewed_tree, snapshotTree: packet.source_revision.snapshot_tree });
       const closureCheck = exactClosureEvidence(previousFindings, input.closure_evidence, deltaSource, stageContract.hardIds);
       const closureEvidence = closureCheck.items;
@@ -551,22 +566,24 @@ export class ReviewRoundFacade {
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
       const taskDirectory = taskRoot(this.taskTrackingRoot, input.task_id); const taskReal = realpathSync(taskDirectory);
-      const allowedEvidence = new Set(["test-strategy.md", "requirements-ledger.json", "requirements-coverage.json"]); const evidenceByDestination = new Map();
-      for (const item of packet.test_evidence ?? []) {
-        if (!item || typeof item !== "object" || !Object.hasOwn(item, "path")) continue;
-        const ref = item.path; const name = typeof ref === "string" ? basename(ref) : "";
-        if (!safeRelativePath(ref) || !allowedEvidence.has(name)) return this.#materialIncomplete(input, `declared review evidence path is invalid: ${String(ref)}`);
+      const evidenceByDestination = new Map();
+      for (const item of [...(packet.test_evidence ?? []), ...(packet.host_verified_facts ?? [])]) {
+        if (!item || typeof item !== "object" || item.kind !== "artifact") continue;
+        const ref = item.source;
+        if (!safeRelativePath(ref)) return this.#materialIncomplete(input, `declared review evidence path is invalid: ${String(ref)}`);
         const source = resolve(taskReal, ref); let sourceReal;
         try {
           if (!source.startsWith(`${taskReal}/`) || !lstatSync(source).isFile()) throw new Error("not a regular file");
           sourceReal = realpathSync(source);
           if (!sourceReal.startsWith(`${taskReal}/`)) throw new Error("outside task root");
         } catch { return this.#materialIncomplete(input, `declared review evidence is unreadable or unsafe: ${ref}`); }
-        const destination = `evidence/${name}`; const previous = evidenceByDestination.get(destination);
-        if (previous && previous !== sourceReal) return this.#materialIncomplete(input, `declared review evidence destination is ambiguous: ${destination}`);
-        evidenceByDestination.set(destination, sourceReal);
+        const bytes = readFileSync(sourceReal);
+        if (sha(bytes) !== item.sha256) return this.#materialIncomplete(input, `declared review evidence hash mismatch: ${ref}`);
+        const destination = `evidence/${ref}`; const previous = evidenceByDestination.get(destination);
+        if (previous && previous.source !== sourceReal) return this.#materialIncomplete(input, `declared review evidence destination is ambiguous: ${destination}`);
+        evidenceByDestination.set(destination, { source: sourceReal, bytes });
       }
-      for (const [destination, source] of evidenceByDestination) freeze(destination, readFileSync(source));
+      for (const [destination, evidence] of evidenceByDestination) freeze(destination, evidence.bytes);
       freeze("changes.diff", packet.unified_diff);
       if (continuation) freeze("continuation-delta.v1.json", safeJson(delta));
       const bundleId = `wh-review-${intent.idempotency_key}`;
@@ -693,6 +710,7 @@ export class ReviewRoundFacade {
       const eligible = continuable_providers.length > 0;
       const outcomeIntent = { ...intent, continuable_providers };
       const aggregate = outcomes.filter((item) => item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.semantic_verdict);
+      const source_coverage = sourceCoverage({ candidateProviders: intent.candidate_providers, providerOutcomes: outcomes, minimumBusinessValidSources: prepared.resolution.minimumBusinessValidSources, recommendedBusinessValidSources: prepared.resolution.recommendedBusinessValidSources });
       const severityRank = { minor: 1, important: 2, blocking: 3 };
       const unique = new Map();
       for (const item of aggregate) for (const finding of item.findings) {
@@ -702,6 +720,7 @@ export class ReviewRoundFacade {
         else {
           existing.providers = [...new Set([...existing.providers, item.provider])].sort();
           existing.evidence_by_provider.push(providerEvidence);
+          existing.locations = [...new Map([...existing.locations, ...finding.locations].map((location) => [`${location.file}\0${location.line}`, location])).values()];
           if (severityRank[finding.severity] > severityRank[existing.severity]) existing.severity = finding.severity;
         }
       }
@@ -712,10 +731,15 @@ export class ReviewRoundFacade {
       // marks it late and caps it at minor.
       const previousFindings = prepared.delta?.previous_findings ?? [];
       const addedLines = addedDeltaLineKeys(prepared.delta?.affected_materials?.changes_diff);
-      const provenNewBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial"
+      const introducedBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial"
         || (!previousFindings.some((old) => old.finding_id === item.finding_id) && addedLines.has(`${item.file}\0${item.line}`))).map((item) => item.finding_id));
+      // No current packet fact can prove that a semantic root cause was
+      // impossible to detect in the prior round. Keep this proof set empty
+      // instead of converting provider prose into host evidence. A future
+      // implementation must add a hash-bound structured fact before filling it.
+      const previouslyImpossibleIds = new Set();
       const closureBundleGateIds = new Set((prepared.closure_bundle_gates ?? []).map((item) => item.finding_id));
-      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds: provenNewBlockingIds, previouslyImpossibleIds: provenNewBlockingIds, contractHardIds: prepared.stage_contract_rules.hardIds });
+      const findingState = reconcileFindingState({ previousFindings, currentFindings: raw_merged_findings, closureEvidence: prepared.delta?.closure_evidence ?? [], unverifiedClosureFindingIds: closureBundleGateIds, businessRound: intent.business_round, introducedBlockingIds, previouslyImpossibleIds, contractHardIds: prepared.stage_contract_rules.hardIds });
       const merged_findings = findingState.findings;
       const contractHardIds = new Set(prepared.stage_contract_rules.hardIds);
       const hard_gates = merged_findings.filter((finding) => finding.status !== "closed" && isBlocking(finding, contractHardIds));
@@ -723,23 +747,26 @@ export class ReviewRoundFacade {
       // provider provenance independent from findings so a finding-free
       // escalation cannot disappear during merge or publication.
       const human_gates = [...deriveHumanGates(outcomes)];
+      if (source_coverage.business_valid < source_coverage.minimum_business_valid) human_gates.push({ provider: null, verdict: "escalate_to_human", summary: `insufficient business-valid review sources: ${source_coverage.business_valid}/${source_coverage.minimum_business_valid}` });
       for (const item of prepared.closure_bundle_gates ?? []) human_gates.push({ provider: null, verdict: "escalate_to_human", finding_id: item.finding_id, summary: `blocking closure bundle is insufficient: ${item.reason}` });
       if (findingState.escalate_to_human) human_gates.push({ provider: null, verdict: "escalate_to_human", summary: "blocking finding remained open for three rounds" });
       const blockedByHumanConfirmation = outcomes.some((item) => item.requires_human_confirmation === true) || findingState.escalate_to_human || (prepared.closure_bundle_gates?.length ?? 0) > 0;
       const initialDeliveryByProvider = prepared.initial_delivery_by_provider ?? Object.fromEntries(intent.candidate_providers.map((provider) => [provider, outcomes.find((item) => item.provider === provider)?.delivery ?? null]));
       const initialProviderSessions = prepared.initial_provider_sessions ?? Object.fromEntries(outcomes.filter((item) => typeof item.provider === "string" && typeof item.session_id === "string" && item.session_id).map((item) => [item.provider, item.session_id]));
+      const priorFlow = this.#readFlow(intent);
+      const revokesPriorProjection = human_gates.length > 0 && priorFlow !== null;
+      const durableReceipt = aggregate.length > 0 || revokesPriorProjection;
       // Any durable private review state has a public fail-closed companion.
       // Until dispositions complete its projection, CI must not trust an older pass.
-      const pending = aggregate.length ? this.#ensureProjectionGuard(outcomeIntent) : null;
+      const pending = durableReceipt ? this.#ensureProjectionGuard(outcomeIntent) : null;
       const delivery = { delivery_mode: prepared.delivery_policy, raw_material_manifest_sha256: prepared.material_manifest_hash, delivery_manifest_hash: prepared.delivery_manifest_hash, material_total_bytes: prepared.material_total_bytes };
-      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, delivery, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, ...(pending ? { projection_pending: pending } : {}), created_at_ms: this.now() };
-      const receiptPath = aggregate.length ? join(prepared.dir, "round-receipt.json") : attemptReceipts.at(-1); if (aggregate.length) atomic(receiptPath, safeJson(receipt));
+      const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, delivery, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, source_coverage, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, ...(pending ? { projection_pending: pending } : {}), created_at_ms: this.now() };
+      const receiptPath = durableReceipt ? join(prepared.dir, "round-receipt.json") : attemptReceipts.at(-1); if (durableReceipt) atomic(receiptPath, safeJson(receipt));
       const result = { intent: outcomeIntent, round_kind: intent.round_kind, baseline_packet_hash: intent.baseline_packet_hash,
         previous_findings: prepared.delta?.previous_findings ?? [], closure_evidence: prepared.delta?.closure_evidence ?? [], delta_manifest: prepared.delta?.delta_manifest ?? null,
         affected_materials: prepared.delta?.affected_materials ?? {}, current_material_manifest: prepared.delta?.current_material_manifest ?? {},
         cross_stage_carryovers: prepared.delta?.cross_stage_carryovers ?? [], required_skill_lens_hashes: prepared.delta?.required_skill_lens_hashes ?? [],
-        provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
-      const priorFlow = this.#readFlow(intent);
+        provider_outcomes: outcomes, source_coverage, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuation_eligible: eligible, receipt_draft_ref: receiptPath };
       const packetRef = join(prepared.dir, "review-packet.json"); const packetFileHash = sha(readFileSync(packetRef));
       const reviewedTree = packet.source_revision.snapshot_tree;
       const reviewTreeRef = priorFlow?.review_tree_ref ?? this.#treeRef(intent);
@@ -760,10 +787,17 @@ export class ReviewRoundFacade {
         }
         throw error;
       }
+      if (revokesPriorProjection && !aggregate.length) this.#writeFlow(intent, {
+        ...priorFlow,
+        business_round: intent.business_round,
+        projection_pending: pending,
+        previous_receipt_ref: receiptPath,
+        previous_receipt_sha256: sha(readFileSync(receiptPath)),
+      });
       // A provider-originated escalation is already a semantic result. Publish
       // its redacted gate projection in this same run, instead of waiting for
       // a later prepare() recovery pass to revoke a stale public pass.
-      if (human_gates.length) {
+      if (human_gates.length && (aggregate.length || priorFlow)) {
         // run() already holds the task-wide projection lock: ordinary stages
         // use their flow lock, and make-decision uses taskLock above. Taking
         // it again is non-reentrant and turns every human gate into a false
@@ -882,6 +916,7 @@ export class ReviewRoundFacade {
       try { assertSafeTaskId(saved.intent.task_id); assertKnownStage(saved.intent.stage); assertReviewTrack(saved.intent.stage, saved.intent.review_track ?? null); assertSafeReviewFlowId(saved.intent.review_flow_id); }
       catch { throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt intent is invalid"); }
       if (resolve(dir) !== resolve(this.#root(saved.intent))) throw new Error("PROJECTION_RECOVERY_RECEIPT_INVALID: private receipt directory does not bind its intent");
+      saved.source_coverage = restoredSourceCoverage(saved);
       const guardPath = this.#projectionGuardPath(saved.intent);
       // A receipt-write crash leaves the new receipt bytes and the old flow
       // hash behind. Heal (or reject a tampered journal) before any attempt
@@ -917,7 +952,7 @@ export class ReviewRoundFacade {
         continue;
       }
       if (!Array.isArray(saved.dispositions)) continue;
-      this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, blocked_by_human_confirmation: saved.blocked_by_human_confirmation, receipt_draft_ref: receipt }, { items: saved.dispositions });
+      this.#publishUnderLock({ intent: saved.intent, provider_outcomes: saved.provider_outcomes, source_coverage: saved.source_coverage, merged_findings: saved.merged_findings, hard_gates: saved.hard_gates, human_gates: saved.human_gates, blocked_by_human_confirmation: saved.blocked_by_human_confirmation, receipt_draft_ref: receipt }, { items: saved.dispositions });
       recovered += 1;
     }
     for (const guardPath of guards.filter((path) => !boundGuards.has(path) && existsSync(path))) {
@@ -941,12 +976,12 @@ export class ReviewRoundFacade {
     this.#writeFlow(saved.intent, { ...pendingFlow, projection_pending: pending });
     const dir = dirname(receiptPath); const { reportPath, indexPath, stageResultPath } = this.#publicPaths(saved.intent);
     const semantic_verdict = "escalate_to_human", needs_human = true;
-    const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
+    const core = projectPublicReviewCore({ version: 1, intent: saved.intent, semantic_verdict, needs_human, source_coverage: saved.source_coverage, merged_findings: saved.merged_findings ?? [], hard_gates: saved.hard_gates ?? [], human_gates, provider_outcomes: saved.provider_outcomes ?? [] }, { sensitiveSource: saved });
     const corePath = join(dir, "core-receipt.json"); atomic(corePath, safeJson(core)); const coreHash = sha(readFileSync(corePath));
     const publicCorePath = this.#publicCorePath(saved.intent, coreHash); this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644);
-    this.faultInjector("before-public-report-write"); atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n`, 0o644);
+    this.faultInjector("before-public-report-write"); atomic(reportPath, `# 审查报告\n\n结论：需要人工确认\n\n- Human gates：${core.human_gates.map(({ provider }) => provider).join(", ")}\n- 有效来源：${saved.source_coverage?.business_valid ?? 0}/${saved.source_coverage?.recommended_business_valid ?? saved.source_coverage?.minimum_business_valid ?? 1}${saved.source_coverage?.below_recommended ? "（低于建议值）" : ""}\n`, 0o644);
     this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath), verdict: semantic_verdict, blocked_by_human_gate: true }), 0o644);
-    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: saved.intent.stage, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, source_coverage: saved.source_coverage, blocked_by_human_gate: true, human_gate_providers: human_gates.map(({ provider }) => provider) }), 0o644);
     const publishedFlow = this.#readFlow(saved.intent);
     if (publishedFlow) this.#writeFlow(saved.intent, { ...publishedFlow, core_receipt_hash: coreHash, previous_receipt_sha256: sha(readFileSync(receiptPath)), published_at_ms: this.now() });
     if (saved.intent.stage === "make-decision") this.#publishMakeDecisionAggregate(saved.intent.task_id, saved.intent.review_flow_id);
@@ -978,7 +1013,9 @@ export class ReviewRoundFacade {
       const dir = join(privateRoot, name), receiptPath = join(dir, "round-receipt.json"); if (!existsSync(receiptPath)) continue;
       const receiptBytes = readFileSync(receiptPath); const receipt = JSON.parse(receiptBytes);
       if (receipt?.intent?.stage !== stage || (receipt.intent.review_track ?? null) !== review_track || receipt.intent.review_flow_id !== review_flow_id) continue;
-      const human_gates = deriveHumanGates(receipt.provider_outcomes); if (!human_gates.length) continue;
+      const provider_human_gates = deriveHumanGates(receipt.provider_outcomes);
+      const state_human_gates = (receipt.human_gates ?? []).filter((gate) => gate?.provider === null && gate?.verdict === "escalate_to_human");
+      const human_gates = [...provider_human_gates, ...state_human_gates]; if (!human_gates.length) continue;
       const marker = { version: 1, status: "superseded", task_id, stage, review_track, old_review_flow_id: review_flow_id, new_review_flow_id, reset_approval_ref, reset_approval_sha256, human_approval_ref, reason, receipt_sha256: sha(receiptBytes), human_gates };
       const markerPath = join(dir, "resolved-by-reset.json"); writeImmutable(markerPath, marker); markers.push(markerPath);
     }
@@ -1137,11 +1174,12 @@ export class ReviewRoundFacade {
     let receipt;
     try { receipt = JSON.parse(receiptBytes); } catch { throw new Error("private receipt is invalid JSON"); }
     if (canonical(receipt.intent) !== canonical(locator.intent)) throw new Error("private receipt intent binding is invalid");
+    const recoveredSourceCoverage = restoredSourceCoverage(receipt);
     const trusted = { intent: receipt.intent, round_kind: receipt.intent.round_kind, baseline_packet_hash: receipt.intent.baseline_packet_hash,
       previous_findings: receipt.delta?.previous_findings ?? [], closure_evidence: receipt.delta?.closure_evidence ?? [], delta_manifest: receipt.delta?.delta_manifest ?? null,
       affected_materials: receipt.delta?.affected_materials ?? {}, current_material_manifest: receipt.delta?.current_material_manifest ?? {},
       cross_stage_carryovers: receipt.delta?.cross_stage_carryovers ?? [], required_skill_lens_hashes: receipt.delta?.required_skill_lens_hashes ?? [],
-      provider_outcomes: receipt.provider_outcomes, merged_findings: receipt.merged_findings, hard_gates: receipt.hard_gates,
+      provider_outcomes: receipt.provider_outcomes, source_coverage: recoveredSourceCoverage, merged_findings: receipt.merged_findings, hard_gates: receipt.hard_gates,
       human_gates: receipt.human_gates ?? deriveHumanGates(receipt.provider_outcomes), blocked_by_human_confirmation: receipt.blocked_by_human_confirmation === true,
       continuation_eligible: receipt.continuation_eligible, receipt_draft_ref: receiptPath };
     return validateSchema("round-run-result", trusted);
@@ -1193,7 +1231,7 @@ export class ReviewRoundFacade {
     if (!existsSync(corePath) || sha(readFileSync(corePath)) !== track.core_receipt_hash) throw new Error("make-decision track core receipt is unavailable");
     const publicCorePath = this.#publicCorePath(intent, track.core_receipt_hash);
     this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644);
-    const report = `# 审查报告\n\n结论：${track.semantic_verdict === "revise_required" ? "需要修改" : track.semantic_verdict === "pass" ? "通过" : "需要人工确认"}\n\n- 有效审查：${(track.provider_outcomes ?? []).filter((item) => item.business_valid).length}\n- Findings：${(track.merged_findings ?? []).length}\n`;
+    const report = `# 审查报告\n\n结论：${track.semantic_verdict === "revise_required" ? "需要修改" : track.semantic_verdict === "pass" ? "通过" : "需要人工确认"}\n\n- 有效审查：${(track.provider_outcomes ?? []).filter((item) => item.business_valid).length}\n- 来源覆盖：${track.source_coverage?.business_valid ?? 0}/${track.source_coverage?.recommended_business_valid ?? track.source_coverage?.minimum_business_valid ?? 1}${track.source_coverage?.below_recommended ? "（低于建议值）" : ""}\n- Findings：${(track.merged_findings ?? []).length}\n`;
     const { reportPath, indexPath, stageResultPath } = this.#publicPaths(intent);
     this.faultInjector("before-public-report-write"); atomic(reportPath, report, 0o644);
     this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: intent.stage, review_track: intent.review_track, core_receipt_hash: track.core_receipt_hash, semantic_verdict: track.semantic_verdict, needs_human: track.needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644);
@@ -1247,7 +1285,7 @@ export class ReviewRoundFacade {
     const sourceContextBefore = existsSync(sourceContextPath) ? readFileSync(sourceContextPath) : null;
     const pending = this.#ensureProjectionGuard(result.intent);
     const privateReceipt = JSON.parse(receiptBefore); privateReceipt.dispositions = dispositions.items; privateReceipt.projection_pending = pending;
-    const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
+    const dir = dirname(result.receipt_draft_ref); const core = projectPublicReviewCore({ version: 1, intent: result.intent, semantic_verdict, needs_human, source_coverage: result.source_coverage, merged_findings: result.merged_findings, hard_gates: result.hard_gates, dispositions: dispositions.items, provider_outcomes: result.provider_outcomes }, { sensitiveSource: privateReceipt });
     const coreBytes = safeJson(core); const coreHash = sha(coreBytes);
     const privateCorePath = join(dir, "core-receipt.json");
     const privateCoreBefore = existsSync(privateCorePath) ? readFileSync(privateCorePath) : null;
@@ -1296,11 +1334,11 @@ export class ReviewRoundFacade {
     const projection = join(dir, "projection-manifest.json"); const done = existsSync(projection) ? JSON.parse(readFileSync(projection, "utf8")) : { version: 1, done_flags: {} };
     const corePath = join(dir, "core-receipt.json"); this.faultInjector("before-private-core-write"); atomic(corePath, coreBytes); done.done_flags.core_receipt = true; atomic(projection, safeJson(done));
     const publicCorePath = this.#publicCorePath(result.intent, coreHash); this.faultInjector("before-public-core-write"); atomic(publicCorePath, readFileSync(corePath), 0o644); done.done_flags.public_core_receipt = true; atomic(projection, safeJson(done));
-    const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- Findings：${result.merged_findings.length}\n`;
+    const report = `# 审查报告\n\n结论：${semantic_verdict === "revise_required" ? "需要修改" : "通过"}\n\n- 有效审查：${result.provider_outcomes.filter((item) => item.business_valid).length}\n- 来源覆盖：${result.source_coverage.business_valid}/${result.source_coverage.recommended_business_valid}${result.source_coverage.below_recommended ? "（低于建议值）" : ""}\n- Findings：${result.merged_findings.length}\n`;
     const { reportPath, indexPath, stageResultPath } = this.#publicPaths(result.intent);
     this.faultInjector("before-public-report-write"); atomic(reportPath, report, 0o644); done.done_flags.report = true; atomic(projection, safeJson(done));
     this.faultInjector("before-public-index-write"); atomic(indexPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, needs_human, report: relative(dirname(indexPath), reportPath) }), 0o644); done.done_flags.report_index = true; atomic(projection, safeJson(done));
-    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
+    this.faultInjector("before-public-stage-result"); atomic(stageResultPath, safeJson({ stage: result.intent.stage, review_track: result.intent.review_track, core_receipt_hash: coreHash, semantic_verdict, verdict: semantic_verdict, needs_human, source_coverage: result.source_coverage }), 0o644); done.done_flags.stage_result = true; atomic(projection, safeJson(done));
     this.#completeProjection(result.intent, result.receipt_draft_ref);
     const aggregate = result.intent.stage === "make-decision" ? this.#publishMakeDecisionAggregate(result.intent.task_id, result.intent.review_flow_id) : null;
     return { semantic_verdict, core_receipt_hash: coreHash, needs_human, core_receipt_ref: publicCorePath, report_ref: reportPath, report_index_ref: indexPath, stage_result_ref: stageResultPath, aggregate };

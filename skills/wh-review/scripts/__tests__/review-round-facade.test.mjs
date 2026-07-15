@@ -20,6 +20,7 @@ function root() {
   return value;
 }
 function hash(value) { return createHash("sha256").update(value).digest("hex"); }
+const evidence = (fact_id, kind, source, extra = {}) => ({ fact_id, kind, source, captured_at: "2026-07-15T00:00:00Z", sha256: hash(`${fact_id}:${source}`), status: "passed", ...extra });
 const slash = String.fromCharCode(47);
 const unixPath = (...parts) => `${slash}${parts.join(slash)}`;
 const tripleSlashPath = (...parts) => `${slash.repeat(3)}${parts.join(slash)}`;
@@ -32,7 +33,7 @@ function packet({ root } = {}) {
 function hostPacket() {
   return {
     version: "review-packet.v1", stage: "build-code", review_track: null,
-    raw_requirement: "do the thing", acceptance_design_excerpt: "AC: works", test_evidence: [{ name: "unit", status: "passed" }],
+    raw_requirement: "do the thing", acceptance_design_excerpt: "AC: works", test_evidence: [{ fact_id: "unit", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: hash("unit passed"), status: "passed", exit_code: 0 }],
     host_verified_facts: [], contract_hash: contractPathAndHash("build-code").contractHash, skill_bundle_hash: hash(canonical([])),
   };
 }
@@ -43,7 +44,7 @@ function output(input, verdict = "pass", severity = "blocking", ruleId = "H1") {
   const checkIds = ["C1", "C2", "C3", "H1", "H2", "H3"];
   const revised = verdict === "revise_required";
   return JSON.stringify({ packet_status: "complete", verdict,
-    summary: "review complete with packet evidence", findings: revised ? [{ file: "a", line: 1, rule_id: ruleId, severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }] : [],
+    summary: "review complete with packet evidence", findings: revised ? [{ root_cause_key: "publish-before-persist", file: "a", line: 1, rule_id: ruleId, severity, issue: "state publication happens before persistence", evidence: "unified_diff:a:1 publishes the state first", suggested_fix: "publish the state only after persistence succeeds" }] : [],
     checklist: checkIds.map((id) => ({ id, passed: !(revised && id === ruleId), evidence: `unified_diff:a:1 contains the reviewed ${id} behavior` })),
     pass_items: checkIds.filter((id) => !(revised && id === ruleId)).map((id) => ({ rule_id: id, artifact_anchor: `changes.diff#${id}`, evidence: `the reviewed branch returns the expected ${id} state` })), skillResults: [],
     ...(verdict === "revise_required" ? { rootCause: "publication and persistence have separate boundaries", fixApproach: "move publication after the atomic persistence step" } : {}) });
@@ -152,7 +153,7 @@ function stageOutput(input, stage, verdict = "pass") {
 }
 function advancePacket(root, previous, content = "new\nline\nextra\nfixed\n") {
   writeFileSync(join(root, "a"), content); git(root, ["add", "a"]); git(root, ["commit", "-qm", "delta"]);
-  return { ...previous, test_evidence: [{ name: "unit", status: "passed", note: "delta verified" }] };
+  return { ...previous, test_evidence: [{ fact_id: "unit-delta", kind: "command", source: "npm test", captured_at: "2026-07-15T00:00:00Z", sha256: hash("delta verified"), status: "passed", value: "delta verified", exit_code: 0 }] };
 }
 function makeDecisionPacket(root, reviewTrack) {
   const value = packet({ root }); const resolution = resolveRequiredSkills({ stage: "make-decision", reviewTrack });
@@ -173,7 +174,7 @@ function makeDecisionOutput(input, reviewTrack, verdict = "pass") {
   return JSON.stringify({
     packet_status: "complete", verdict,
     summary: "unified_diff:a:1 and packet facts substantiate the selected decision review",
-    findings: failed ? [{ file: "a", line: 1, rule_id: failed, severity: "blocking", issue: "selected decision violates the tested hard invariant", evidence: "unified_diff:a:1 shows the invariant breach", suggested_fix: "revise the decision to satisfy the hard invariant" }] : [],
+    findings: failed ? [{ root_cause_key: "decision-hard-invariant", file: "a", line: 1, rule_id: failed, severity: "blocking", issue: "selected decision violates the tested hard invariant", evidence: "unified_diff:a:1 shows the invariant breach", suggested_fix: "revise the decision to satisfy the hard invariant" }] : [],
     checklist: ids.map((id) => ({ id, passed: id !== failed, evidence: `unified_diff:a:1 provides concrete evidence for ${id}` })),
     pass_items: ids.filter((id) => id !== failed).map((rule_id) => ({ rule_id, artifact_anchor: `changes.diff#${rule_id}`, evidence: `changes.diff demonstrates the required ${rule_id} behavior` })),
     skillResults: resolution.definitions.map(({ name }) => ({ skill: name, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" })),
@@ -235,19 +236,50 @@ describe("ReviewRoundFacade", () => {
     const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const task = join(tracking, "evidence-attachments"); mkdirSync(join(task, "evidence", "attempt"), { recursive: true });
     writeFileSync(join(task, "requirements-ledger.json"), "{\"requirements\":[]}\n"); writeFileSync(join(task, "requirements-coverage.json"), "{\"coverage\":[]}\n"); writeFileSync(join(task, "evidence", "attempt", "test-strategy.md"), "---\nac_routes: {}\n---\n");
     const packet = hostPacket(); packet.acceptance_design_excerpt = "requirements-ledger.json and requirements-coverage.json"; packet.test_evidence = [
-      { name: "strategy", status: "passed", path: "evidence/attempt/test-strategy.md" },
-      { name: "ledger", status: "passed", path: "requirements-ledger.json" },
-      { name: "coverage", status: "passed", path: "requirements-coverage.json" },
+      evidence("strategy", "artifact", "evidence/attempt/test-strategy.md", { sha256: hash(readFileSync(join(task, "evidence", "attempt", "test-strategy.md"))) }),
+      evidence("ledger", "artifact", "requirements-ledger.json", { sha256: hash(readFileSync(join(task, "requirements-ledger.json"))) }),
+      evidence("coverage", "artifact", "requirements-coverage.json", { sha256: hash(readFileSync(join(task, "requirements-coverage.json"))) }),
     ];
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async () => ({ providers: [] })) });
     const prepared = await facade.prepare({ task_id: "evidence-attachments", stage: "build-code", review_flow_id: "flow", packet });
-    for (const name of ["test-strategy.md", "requirements-ledger.json", "requirements-coverage.json"]) {
+    for (const name of ["evidence/attempt/test-strategy.md", "requirements-ledger.json", "requirements-coverage.json"]) {
       const entry = prepared.frozen_attachments.find(({ destination }) => destination === `evidence/${name}`);
       expect(entry).toMatchObject({ size: expect.any(Number), sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
       expect(prepared.provider_visible_manifest.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ destination: `evidence/${name}`, sha256: entry.sha256, size: entry.size })]));
     }
     expect(prepared.initial_prompt).not.toContain("/Users/");
     rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("freezes arbitrary safe task-relative artifacts without host-specific filename rules", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking); const task = join(tracking, "portable-artifact");
+    mkdirSync(join(task, "ui", "screenshots"), { recursive: true }); writeFileSync(join(task, "ui", "screenshots", "checkout.png"), "fake-png-bytes");
+    const bytes = readFileSync(join(task, "ui", "screenshots", "checkout.png")); const packet = hostPacket();
+    packet.test_evidence = [evidence("checkout-ui", "artifact", "ui/screenshots/checkout.png", { sha256: hash(bytes) })];
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async () => ({ providers: [] })) });
+    const prepared = await facade.prepare({ task_id: "portable-artifact", stage: "build-code", review_flow_id: "flow", packet });
+    expect(prepared.frozen_attachments).toEqual(expect.arrayContaining([expect.objectContaining({ destination: "evidence/ui/screenshots/checkout.png", sha256: hash(bytes) })]));
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
+  it("fails loud when declared artifact evidence hash does not match frozen file bytes", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    const task = join(tracking, "evidence-hash-mismatch"); mkdirSync(task, { recursive: true });
+    writeFileSync(join(task, "requirements-ledger.json"), "{\"requirements\":[]}\n");
+    const packet = hostPacket(); packet.test_evidence = [evidence("ledger", "artifact", "requirements-ledger.json", { sha256: hash("wrong bytes") })];
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async () => ({ providers: [] })) });
+    await expect(facade.prepare({ task_id: "evidence-hash-mismatch", stage: "build-code", review_flow_id: "flow", packet }))
+      .rejects.toThrow(/MATERIAL_INCOMPLETE.*hash mismatch/i);
+  });
+
+  it("also verifies artifact records declared as host facts", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    const task = join(tracking, "host-fact-hash-mismatch"); mkdirSync(task, { recursive: true });
+    writeFileSync(join(task, "requirements-coverage.json"), "{\"coverage\":[]}\n");
+    const packet = hostPacket(); packet.host_verified_facts = [evidence("coverage", "artifact", "requirements-coverage.json", { sha256: hash("wrong bytes") })];
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, broker: fakeBroker(async () => ({ providers: [] })) });
+    await expect(facade.prepare({ task_id: "host-fact-hash-mismatch", stage: "build-code", review_flow_id: "flow", packet }))
+      .rejects.toThrow(/MATERIAL_INCOMPLETE.*hash mismatch/i);
   });
 
   it("does not infer evidence attachments from narrative filenames", async () => {
@@ -259,21 +291,25 @@ describe("ReviewRoundFacade", () => {
     rmSync(prepared.lock, { recursive: true, force: true });
   });
 
-  it("fails closed for ambiguous or non-regular declared evidence", async () => {
-    for (const mode of ["ambiguous", "symlink"]) {
+  it("preserves paths for same-name artifacts and rejects non-regular declared evidence", async () => {
+    for (const mode of ["same-name", "symlink"]) {
       const tracking = root(); const taskId = `unsafe-evidence-${mode}`; const task = join(tracking, taskId); mkdirSync(join(task, "one"), { recursive: true }); mkdirSync(join(task, "two"), { recursive: true });
       writeFileSync(join(task, "one", "requirements-ledger.json"), "{}\n");
       const packet = hostPacket();
-      if (mode === "ambiguous") { writeFileSync(join(task, "two", "requirements-ledger.json"), "{}\n"); packet.test_evidence = [{ path: "one/requirements-ledger.json" }, { path: "two/requirements-ledger.json" }]; }
-      else { symlinkSync(join(task, "one", "requirements-ledger.json"), join(task, "two", "requirements-ledger.json")); packet.test_evidence = [{ path: "two/requirements-ledger.json" }]; }
+      if (mode === "same-name") { writeFileSync(join(task, "two", "requirements-ledger.json"), "{}\n"); packet.test_evidence = [evidence("one", "artifact", "one/requirements-ledger.json", { sha256: hash(readFileSync(join(task, "one", "requirements-ledger.json"))) }), evidence("two", "artifact", "two/requirements-ledger.json", { sha256: hash(readFileSync(join(task, "two", "requirements-ledger.json"))) })]; }
+      else { symlinkSync(join(task, "one", "requirements-ledger.json"), join(task, "two", "requirements-ledger.json")); packet.test_evidence = [evidence("symlink", "artifact", "two/requirements-ledger.json")]; }
       const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-      await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet })).rejects.toThrow(/MATERIAL_INCOMPLETE.*evidence/i);
+      if (mode === "same-name") {
+        const prepared = await facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet });
+        expect(prepared.frozen_attachments.map(({ destination }) => destination)).toEqual(expect.arrayContaining(["evidence/one/requirements-ledger.json", "evidence/two/requirements-ledger.json"]));
+        rmSync(prepared.lock, { recursive: true, force: true });
+      } else await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet })).rejects.toThrow(/MATERIAL_INCOMPLETE.*evidence/i);
     }
   });
 
-  it.each(["../requirements-ledger.json", "unknown.json", "evidence.txt"])("rejects unsafe or unsupported declared evidence path %s", async (path) => {
+  it.each(["../requirements-ledger.json", "/absolute/evidence.txt"])("rejects unsafe declared evidence path %s", async (path) => {
     const tracking = root(); const taskId = `invalid-evidence-${hash(path).slice(0, 8)}`; mkdirSync(join(tracking, taskId), { recursive: true });
-    const packet = hostPacket(); packet.test_evidence = [{ path }];
+    const packet = hostPacket(); packet.test_evidence = [evidence("invalid", "artifact", path)];
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
     await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet })).rejects.toThrow(/MATERIAL_INCOMPLETE.*evidence path is invalid/i);
   });
@@ -456,8 +492,69 @@ describe("ReviewRoundFacade", () => {
     const result = await facade.run(facade.prepare({ task_id: "embed-too-large", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
     expect(result.provider_outcomes).toEqual([expect.objectContaining({ provider: "opencode", diagnostic: "MATERIAL_TOO_LARGE", semantic_verdict: null, business_valid: false })]);
     expect(result.merged_findings).toEqual([]);
+    expect(result.source_coverage).toEqual({ requested: 1, completed: 0, business_valid: 0, failed: 1, minimum_business_valid: 1, recommended_business_valid: 2, below_recommended: true });
     expect(result.continuation_eligible).toBe(false);
     expect(() => facade.publish(result, { items: [] })).toThrow("no business-valid provider outcome to publish");
+  });
+
+  it("revokes a prior pass immediately when a continuation has no valid review source", async () => {
+    const tracking = root(); let calls = 0; let current;
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      calls += 1;
+      if (calls === 1) return { runtime_id: "81818181-8181-4181-8181-818181818181", providers: [{ provider: "opencode", status: "completed", session_id: "source-session", output: output(request.packet ?? current) }] };
+      return { runtime_id: "81818181-8181-4181-8181-818181818181", providers: [{ provider: "opencode", status: "failed", error: { code: "UPSTREAM_TIMEOUT" } }] };
+    }) });
+    current = trustedPacket(tracking);
+    const first = await facade.run(facade.prepare({ task_id: "zero-source-revokes-pass", stage: "build-code", review_flow_id: "flow", packet: current }));
+    expect(facade.publish(first, { items: [] })).toMatchObject({ semantic_verdict: "pass" });
+    current = advancePacket(tracking, current, "new\nline\nextra\nfixed again\n");
+    const second = await facade.run(facade.prepare({ task_id: "zero-source-revokes-pass", stage: "build-code", review_flow_id: "flow", packet: current, continuation: true, closure_evidence: [] }));
+    expect(second.source_coverage.business_valid).toBe(0);
+    expect(second.human_gates).toEqual([expect.objectContaining({ provider: null, verdict: "escalate_to_human" })]);
+    const stageResult = JSON.parse(readFileSync(join(tracking, "zero-source-revokes-pass", "reviews", "stage-result-build-code.json"), "utf8"));
+    expect(stageResult).toMatchObject({ semantic_verdict: "escalate_to_human", needs_human: true, source_coverage: second.source_coverage });
+    const flow = JSON.parse(readFileSync(join(tracking, "zero-source-revokes-pass", "reviews", "private", "flows", "build-code-flow.json"), "utf8"));
+    expect(flow).toMatchObject({ business_round: 2, previous_receipt_ref: second.receipt_draft_ref });
+    await expect(facade.prepare({ task_id: "zero-source-revokes-pass", stage: "build-code", review_flow_id: "flow", packet: current, continuation: true, closure_evidence: [] })).rejects.toThrow(/human gate/);
+    facade.reset({ task_id: "zero-source-revokes-pass", stage: "build-code", review_flow_id: "flow", new_review_flow_id: "approved-reset", reason: "human accepted source risk", human_approval_ref: "approval-source-risk" });
+    const resetPrepared = await facade.prepare({ task_id: "zero-source-revokes-pass", stage: "build-code", review_flow_id: "approved-reset", packet: current });
+    rmSync(resetPrepared.lock, { recursive: true, force: true });
+  });
+
+  it("publishes one valid code-review source while exposing below-recommended coverage", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [
+      { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet) },
+      { provider: "kimi", status: "failed", error: { code: "UPSTREAM_TIMEOUT" } },
+    ] })) });
+    const result = await facade.run(facade.prepare({ task_id: "source-shortfall", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.source_coverage).toEqual({ requested: 4, completed: 1, business_valid: 1, failed: 3, minimum_business_valid: 1, recommended_business_valid: 2, below_recommended: true });
+    expect(result.merged_findings).toEqual([]);
+    expect(result.human_gates).toEqual([]);
+    expect(facade.publish(result, { items: [] })).toMatchObject({ semantic_verdict: "pass", needs_human: false });
+    const stageResult = JSON.parse(readFileSync(join(tracking, "source-shortfall", "reviews", "stage-result-build-code.json"), "utf8"));
+    expect(stageResult).toMatchObject({ semantic_verdict: "pass", needs_human: false, source_coverage: result.source_coverage });
+    const publicCore = JSON.parse(readFileSync(join(tracking, "source-shortfall", "reviews", "core-receipts", `${stageResult.core_receipt_hash}.json`), "utf8"));
+    expect(publicCore).toMatchObject({ semantic_verdict: "pass", needs_human: false, source_coverage: result.source_coverage, merged_findings: [] });
+  });
+
+  it("records when two valid code-review sources meet the recommendation", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [
+      { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet) },
+      { provider: "kimi", status: "completed", session_id: "k", output: output(request.packet) },
+    ] })) });
+    const result = await facade.run(facade.prepare({ task_id: "source-recommended", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.source_coverage).toMatchObject({ business_valid: 2, recommended_business_valid: 2, below_recommended: false });
+    expect(result.human_gates).toEqual([]);
+  });
+
+  it("allows a one-source stage to pass with one business-valid source", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [
+      { provider: "opencode", status: "completed", session_id: "o", output: stageOutput(request.packet, "build-plan") },
+    ] })) });
+    const result = await facade.run(facade.prepare({ task_id: "one-source-plan", stage: "build-plan", review_flow_id: "flow", packet: stagePacket(tracking, "build-plan") }));
+    expect(result.source_coverage).toMatchObject({ business_valid: 1, minimum_business_valid: 1 });
+    expect(result.human_gates).toEqual([]);
+    expect(facade.publish(result, { items: [] })).toMatchObject({ semantic_verdict: "pass", needs_human: false });
   });
 
   it("accepts the real Kimi pass anchors for whole diff and provider-visible evidence", async () => {
@@ -1813,7 +1910,7 @@ describe("ReviewRoundFacade", () => {
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
     const initial = trustedPacket(tracking); currentPacket = initial;
     await facade.run(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: initial }));
-    currentPacket = advancePacket(tracking, initial); currentPacket.test_evidence = [{ name: "utf8", status: "passed", note: "界".repeat(180000) }]; refreshPacketHashes(currentPacket);
+    currentPacket = advancePacket(tracking, initial); currentPacket.test_evidence = [evidence("utf8", "command", "large-output", { value: "界".repeat(180000) })]; refreshPacketHashes(currentPacket);
     await expect(facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true, continuation_prompt_max_bytes: 9999999 })).rejects.toThrow(/caller.*continuation.*limit|continuation.*caller/i);
     const probe = await facade.prepare({ task_id: "prompt-budget", stage: "build-code", review_flow_id: "flow", packet: currentPacket, continuation: true });
     expect(Buffer.byteLength(probe.initial_prompt)).toBeLessThan(2048);
@@ -1897,13 +1994,13 @@ describe("ReviewRoundFacade", () => {
     expect(privateReceipt.initial_delivery_by_provider).toEqual({ opencode: expect.objectContaining({ delivery_mode: "file_only", material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
     expect(privateReceipt.provider_outcomes[0].delivery_used).toBe("file_only");
     expect(readFileSync(publication.core_receipt_ref, "utf8")).not.toMatch(/delivery_used|file_only/);
-    const flowPath = join(tracking, "delivery-freeze", "reviews", "private", "flows", "build-code-flow.json"); const successfulFlow = readFileSync(flowPath, "utf8");
+    const flowPath = join(tracking, "delivery-freeze", "reviews", "private", "flows", "build-code-flow.json"); const successfulFlow = JSON.parse(readFileSync(flowPath, "utf8"));
     continuationPacket = input.packet; const second = await facade.run(facade.prepare({ ...input, continuation: true }));
     expect(second.provider_outcomes).toMatchObject([{ provider: "opencode", business_valid: false, semantic_verdict: null, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH" }]);
     expect(second.merged_findings).toEqual([]);
     expect(second.continuation_eligible).toBe(false);
     expect(second.blocked_by_human_confirmation).toBe(true);
-    expect(readFileSync(flowPath, "utf8")).toBe(successfulFlow);
+    expect(JSON.parse(readFileSync(flowPath, "utf8"))).toMatchObject({ business_round: 2, last_reviewed_tree: successfulFlow.last_reviewed_tree, previous_receipt_ref: second.receipt_draft_ref });
     expect(() => facade.publish(second, { items: [] })).toThrow(/human confirmation/);
   });
 
@@ -1957,7 +2054,7 @@ describe("ReviewRoundFacade", () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
       const raw = JSON.parse(output(request.packet));
-      raw.findings = [{ file: "a", line: 1, rule_id: "H99", severity: "minor", issue: "冻结 diff 还暴露了不属于本阶段合同的后续关注项", evidence: "unified_diff:a:1 显示该后续关注项的具体上下文", suggested_fix: "记录为后续阶段的候选审查项，不改变当前合同裁决" }];
+      raw.findings = [{ root_cause_key: "future-scope-drift", file: "a", line: 1, rule_id: "H99", severity: "minor", issue: "冻结 diff 还暴露了不属于本阶段合同的后续关注项", evidence: "unified_diff:a:1 显示该后续关注项的具体上下文", suggested_fix: "记录为后续阶段的候选审查项，不改变当前合同裁决" }];
       return { providers: [{ provider: "opencode", status: "completed", session_id: "s", output: JSON.stringify(raw) }] };
     }) });
     const result = await facade.run(facade.prepare({ task_id: "external-minor", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
@@ -2093,13 +2190,74 @@ describe("ReviewRoundFacade", () => {
     rmSync(held.lock, { recursive: true, force: true });
   });
 
-  it("merges equivalent findings without dropping provider evidence or weakening severity", async () => {
+  it("does not merge independent providers merely because they chose the same slug", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "55555555-5555-4555-8555-555555555555", providers: [
       { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet, "revise_required", "minor", "C1") },
       { provider: "kimi", status: "completed", session_id: "k", output: output(request.packet, "revise_required", "blocking", "C1") },
     ] })) });
     const result = await facade.run(facade.prepare({ task_id: "t", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
-    expect(result.merged_findings).toHaveLength(1); expect(result.merged_findings[0]).toMatchObject({ severity: "blocking", providers: ["kimi", "opencode"] }); expect(result.merged_findings[0].evidence_by_provider).toHaveLength(2);
+    expect(result.merged_findings).toHaveLength(2);
+    expect(result.merged_findings.map((item) => item.providers)).toEqual(expect.arrayContaining([["opencode"], ["kimi"]]));
+    expect(new Set(result.merged_findings.map((item) => item.finding_id)).size).toBe(2);
+  });
+
+  it("merges wording and location variants only through an explicit stable root-cause key", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => {
+      const first = output(request.packet, "revise_required", "important", "C1");
+      const second = JSON.parse(output(request.packet, "revise_required", "blocking", "C1"));
+      Object.assign(second.findings[0], { file: "src/state.mjs", line: 20, issue: "persistence finishes after state visibility", evidence: "src/state.mjs:20 exposes state before the write" });
+      const combined = JSON.parse(first);
+      combined.findings.push(second.findings[0]);
+      return { runtime_id: "56565656-5656-4656-8656-565656565656", providers: [
+        { provider: "opencode", status: "completed", session_id: "o", output: JSON.stringify(combined) },
+      ] };
+    }) });
+    const result = await facade.run(facade.prepare({ task_id: "stable-root", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    expect(result.merged_findings).toHaveLength(1);
+    expect(result.merged_findings[0]).toMatchObject({ root_cause_key: "publish-before-persist", root_cause_fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), providers: ["opencode"] });
+    expect(result.merged_findings[0].locations).toEqual(expect.arrayContaining([{ file: "a", line: 1 }, { file: "src/state.mjs", line: 20 }]));
+    expect(result.merged_findings[0].evidence_by_provider).toHaveLength(2);
+    const publication = facade.publish(result, { items: [{ finding_id: result.merged_findings[0].finding_id, action: "reject", evidence: "confirmed by both provider anchors" }] });
+    const publicCore = JSON.parse(readFileSync(publication.core_receipt_ref, "utf8"));
+    expect(publicCore.merged_findings[0]).toMatchObject({
+      root_cause_key: "publish-before-persist",
+      root_cause_fingerprint: result.merged_findings[0].root_cause_fingerprint,
+      providers: ["opencode"],
+      locations: expect.arrayContaining([{ file: "a", line: 1 }, { file: "src/state.mjs", line: 20 }]),
+      evidence_by_provider: expect.arrayContaining([
+        expect.objectContaining({ provider: "opencode" }),
+      ]),
+    });
+  });
+
+  it("reconstructs source coverage when recovering an old receipt", async () => {
+    const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ providers: [
+      { provider: "opencode", status: "completed", session_id: "o", output: output(request.packet) },
+      { provider: "kimi", status: "failed", error: { code: "UPSTREAM_TIMEOUT" } },
+    ] })) });
+    const result = await facade.run(facade.prepare({ task_id: "old-source-coverage", stage: "build-code", review_flow_id: "flow", packet: packet({ root: tracking }) }));
+    const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8")); delete receipt.source_coverage; receipt.dispositions = [];
+    writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
+    const flowPath = join(tracking, "old-source-coverage", "reviews", "private", "flows", "build-code-flow.json");
+    const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(result.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
+    expect(facade.recover({ task_id: "old-source-coverage" })).toEqual({ recovered: 1 });
+    const stageResult = JSON.parse(readFileSync(join(tracking, "old-source-coverage", "reviews", "stage-result-build-code.json"), "utf8"));
+    const publicCore = JSON.parse(readFileSync(join(tracking, "old-source-coverage", "reviews", "core-receipts", `${stageResult.core_receipt_hash}.json`), "utf8"));
+    expect(publicCore.source_coverage).toEqual({ requested: 4, completed: 1, business_valid: 1, failed: 3, minimum_business_valid: 1, recommended_business_valid: 2, below_recommended: true });
+  });
+
+  it("requires an approved reset before continuing a receipt with legacy finding identity", async () => {
+    const tracking = root(); let current = trustedPacket(tracking);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "91919191-9191-4191-8191-919191919191", providers: [{ provider: "opencode", status: "completed", session_id: "legacy-id", output: output(request.packet, "revise_required", "important", "C1") }] })) });
+    const result = await facade.run(facade.prepare({ task_id: "legacy-finding-id", stage: "build-code", review_flow_id: "flow", packet: current }));
+    const receipt = JSON.parse(readFileSync(result.receipt_draft_ref, "utf8"));
+    delete receipt.merged_findings[0].root_cause_key;
+    receipt.merged_findings[0].finding_id = hash("legacy-file-line-rule-issue");
+    writeFileSync(result.receipt_draft_ref, JSON.stringify(receipt));
+    const flowPath = join(tracking, "legacy-finding-id", "reviews", "private", "flows", "build-code-flow.json");
+    const flow = JSON.parse(readFileSync(flowPath, "utf8")); flow.previous_receipt_sha256 = hash(readFileSync(result.receipt_draft_ref)); writeFileSync(flowPath, JSON.stringify(flow));
+    current = advancePacket(tracking, current);
+    await expect(facade.prepare({ task_id: "legacy-finding-id", stage: "build-code", review_flow_id: "flow", packet: current, continuation: true, closure_evidence: [] })).rejects.toThrow(/incompatible finding identity/);
   });
 
   it("records lock ownership, reclaims a proven-stale owner, and releases lock after prepare recovery errors", async () => {
