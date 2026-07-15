@@ -8,10 +8,10 @@
  * incomplete public review publication).
  */
 
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readReviewResult } from "../core/review-result-consumer.mjs";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -111,52 +111,9 @@ function checkReview(phaseResult, baseDir, errors, checked, options = {}) {
     errors.push("review result missing");
     return;
   }
-  const allowed = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
-  if (Array.isArray(review) || Object.keys(review).some((key) => !allowed.has(key))
-    || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
-    || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
-    || typeof review.needs_human !== "boolean") {
-    errors.push("review must contain only core_receipt_hash, semantic_verdict, and needs_human");
-    return;
-  }
-  if (review.semantic_verdict !== "pass" || review.needs_human !== false) {
-    errors.push("review must be a published pass with needs_human:false");
-    return;
-  }
-  const coreRoot = resolve(options.publicReviewRoot ?? join(baseDir, "reviews", "core-receipts"));
-  const corePath = join(coreRoot, `${review.core_receipt_hash}.json`);
-  if (!existsSync(corePath)) {
-    errors.push("public core receipt is missing for review.core_receipt_hash");
-    return;
-  }
-  const bytes = readFileSync(corePath);
-  if (createHash("sha256").update(bytes).digest("hex") !== review.core_receipt_hash) {
-    errors.push("public core receipt hash does not match review.core_receipt_hash");
-    return;
-  }
-  let core;
-  try { core = JSON.parse(bytes); }
-  catch { errors.push("public core receipt is invalid JSON"); return; }
-  if (core.semantic_verdict !== review.semantic_verdict || core.needs_human !== review.needs_human) {
-    errors.push("public core receipt semantic tuple does not match review");
-  }
-}
-
-function checkProjectionGuards(baseDir, errors, checked) {
-  checked.push("projection-recovery");
-  const reviews = resolve(baseDir, "reviews");
-  if (!existsSync(reviews)) return;
-  const guards = readdirSync(reviews).filter((name) => /^projection-pending-.*\.json$/.test(name));
-  for (const name of guards) {
-    const path = join(reviews, name);
-    try {
-      const guard = JSON.parse(readFileSync(path, "utf8"));
-      if (guard?.status !== "pending" || guard?.needs_human !== true) throw new Error("invalid guard shape");
-      errors.push(`PROJECTION_PENDING: public projection recovery is required (${name})`);
-    } catch (error) {
-      errors.push(`PROJECTION_RECOVERY_GUARD_INVALID: ${name}: ${error.message}`);
-    }
-  }
+  if (!options.reviewDataRoot) { errors.push("review data root missing; pass --review-data-root explicitly"); return; }
+  try { readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: true }); }
+  catch (error) { errors.push(`review is not a formal passing result: ${error.message}`); }
 }
 
 export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
@@ -168,7 +125,6 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   checkStatus(phaseResult, errors, checked);
   checkEvidence(phaseResult, baseDir, errors, checked);
   checkDiffScan(phaseResult, baseDir, errors, checked);
-  checkProjectionGuards(baseDir, errors, checked);
   checkReview(phaseResult, baseDir, errors, checked, options);
 
   return { ok: errors.length === 0, errors, warnings, checked };
@@ -177,9 +133,19 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 
 if (isMain) {
-  const [phaseResultPath, worktreeRootArg] = process.argv.slice(2);
+  const [phaseResultPath, worktreeRootArg, ...flags] = process.argv.slice(2);
+  const reviewDataFlag = flags.find((value) => value.startsWith("--review-data-root="));
+  if (flags.some((value) => !value.startsWith("--review-data-root=")) || flags.filter((value) => value.startsWith("--review-data-root=")).length > 1) {
+    console.error("Usage: node scripts/phase-gate.mjs <phase-result-json> <worktree-root> [--review-data-root=<absolute-path>]");
+    process.exit(2);
+  }
+  const reviewDataRoot = reviewDataFlag?.slice("--review-data-root=".length);
   if (!phaseResultPath || !worktreeRootArg) {
-    console.error("Usage: node scripts/phase-gate.mjs <phase-result-json> <worktree-root>");
+    console.error("Usage: node scripts/phase-gate.mjs <phase-result-json> <worktree-root> [--review-data-root=<absolute-path>]");
+    process.exit(2);
+  }
+  if (reviewDataRoot !== undefined && !isAbsolute(reviewDataRoot)) {
+    console.error("[phase-gate] FAIL: --review-data-root must be absolute");
     process.exit(2);
   }
 
@@ -194,6 +160,7 @@ if (isMain) {
 
   const result = validatePhaseGate(phaseResult, resolve(worktreeRootArg), {
     baseDir: dirname(resolvedPhaseResultPath),
+    ...(reviewDataRoot ? { reviewDataRoot } : {}),
   });
   console.log(JSON.stringify(result, null, 2));
   process.exit(result.ok ? 0 : 1);

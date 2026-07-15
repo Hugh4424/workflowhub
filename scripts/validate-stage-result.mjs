@@ -20,6 +20,7 @@ import { resolve, dirname, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateContract } from "../core/validate-contract.mjs";
 import { verifyAuditCarrier } from "../core/audit-summary-carrier.mjs";
+import { readReviewResult, validateReviewFact } from "../core/review-result-consumer.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -83,6 +84,22 @@ export function validateStageResult(stage, artifact) {
     }
   }
 
+  if (stage === "make-decision" && "reviews" in facts) {
+    const reviews = facts.reviews;
+    if (!reviews || typeof reviews !== "object" || Array.isArray(reviews)
+      || Object.keys(reviews).sort().join(",") !== "detail,direction") {
+      errors.push(`facts["reviews"] for stage "make-decision" must contain only direction and detail`);
+    } else {
+      for (const track of ["direction", "detail"]) try { validateReviewFact(reviews[track]); }
+      catch (error) { errors.push(`facts["reviews"].${track}: ${error.message}`); }
+    }
+  }
+
+  if (["build-spec", "build-plan", "verify-code"].includes(stage) && "review" in facts) {
+    try { validateReviewFact(facts.review); }
+    catch (error) { errors.push(`facts["review"] for stage "${stage}": ${error.message}`); }
+  }
+
   // V1 results are explicit audit consumers. Older receipts remain readable
   // during cutover, but never become an invented quality verdict.
   const auditCarrier = verifyAuditCarrier(facts);
@@ -94,32 +111,8 @@ export function validateStageResult(stage, artifact) {
         errors.push(`facts["${key}"] for stage "build-code" must be an absolute path string`);
       }
     }
-    if (facts.review && typeof facts.review === "object" && !Array.isArray(facts.review)) {
-      const review = facts.review;
-      const publishedKeys = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
-      const pendingKeys = new Set(["status", "needs_human", "legacy_original_sha256", "legacy_original_ref", "diagnostic"]);
-      const isPendingLegacy = review.status === "pending_legacy_review";
-      if (isPendingLegacy) {
-        if (Object.keys(review).some((key) => !pendingKeys.has(key))
-          || review.needs_human !== true
-          || !/^[a-f0-9]{64}$/.test(review.legacy_original_sha256 ?? "")
-          || typeof review.legacy_original_ref !== "string"
-          || review.legacy_original_ref.trim() === ""
-          || typeof review.diagnostic !== "string"
-          || review.diagnostic.trim() === ""
-          || artifact.status !== "unknown"
-          || artifact.user_decision !== true) {
-          errors.push(`facts["review"] pending_legacy_review requires only status, needs_human:true, legacy_original_sha256, legacy_original_ref, diagnostic, plus stage status unknown and user_decision:true`);
-        }
-      } else if (Object.keys(review).some((key) => !publishedKeys.has(key))
-        || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
-        || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
-        || typeof review.needs_human !== "boolean") {
-        errors.push(`facts["review"] for stage "build-code" must be published {core_receipt_hash, semantic_verdict, needs_human} or explicit pending_legacy_review diagnostic`);
-      }
-    } else if ("review" in facts) {
-      errors.push(`facts["review"] for stage "build-code" must be an object`);
-    }
+    if ("review" in facts) try { validateReviewFact(facts.review); }
+    catch (error) { errors.push(`facts["review"] for stage "build-code": ${error.message}`); }
     if (facts.phase_completion && typeof facts.phase_completion === "object" && !Array.isArray(facts.phase_completion)) {
       const phaseCompletion = facts.phase_completion;
       if (Object.keys(phaseCompletion).some((key) => key !== "phase_records")) {
@@ -192,15 +185,11 @@ export function validateStageResult(stage, artifact) {
 }
 
 /** Only a current published semantic pass may authorize merge/finalization. */
-export function isBuildCodeMergeAuthorizing(artifact) {
+export function isBuildCodeMergeAuthorizing(artifact, reviewDataRoot) {
   const review = artifact?.facts?.review;
-  return artifact?.status === "success"
-    && review
-    && typeof review === "object"
-    && Object.keys(review).length === 3
-    && review.semantic_verdict === "pass"
-    && review.needs_human === false
-    && /^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "");
+  if (artifact?.status !== "success" || !reviewDataRoot) return false;
+  try { readReviewResult(review, reviewDataRoot, { stage: "build-code", track: null, requirePass: true }); return true; }
+  catch { return false; }
 }
 
 /**

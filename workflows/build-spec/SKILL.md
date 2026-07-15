@@ -1,7 +1,7 @@
 ---
 name: build-spec
 version: 2.0.0
-description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → V4 review.
+description: Turn the agreed direction into a structured spec and independently review it.
 ---
 <!-- markdownlint-disable MD040 -->
 
@@ -124,25 +124,19 @@ build-spec 完成后必须产出 `specs/{task-id}/spec-acceptance-count.json`，
 
 `steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-decision-log, 2 create-spec-draft, 3 clarify-spec, 4 check-constitution, 5 review-spec, 6 publish-spec-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
 
-## V4 Review Round
+## Review
 
-Use `ReviewRoundFacade` through `runReviewRound()` only:
-
-```js
-await runReviewRound({ stage: "build-spec", review_flow_id: "build-spec-flow", packet });
+```bash
+node <workflowhub_package_root>/skills/wh-review/scripts/wh-review-cli.mjs run <build-spec-review-input.json>
 ```
 
-Create one complete `review-packet.v1` with the spec diff, changed-file manifest,
-requirements/design excerpt and test evidence. Providers review only this packet. Do not
-run git, read the real repository, request absolute paths, or write reports. The facade
-stores raw evidence under `<task>/reviews/private/round-.../`, keeps cancellation as a
-transport diagnostic with `cancel_source`.
-Use `continuation: true` for later rounds of this flow; reset needs human approval. An
-unpublished call returns transport/packet evidence only, never a semantic verdict.
-After host dispositions, the published return is `{ semantic_verdict,
-core_receipt_hash, needs_human }`; only it may advance this stage.
+The JSON input sets `stage="build-spec"`; `materials` contains the content or parsed JSON loaded from task files for
+`raw_requirement`, `approved_decision`, and `draft_spec`.
+Set `ui_scope=true` only when the spec includes UI; this adds the fixed `plan-design-review` lens.
+Providers read only the frozen bundle. Store the returned `{result_ref,snapshot_tree}`
+in `facts.review`. Open the formal result before advancing; unavailable creates no result.
 
-## End V4 Review Round
+## End Review
 
 - 三字段（`ac_count`、`fr_count`、`counted_at`）不可为 null
 - `counted_at` 为产出时刻 ISO8601 时间戳
@@ -237,18 +231,18 @@ spec 产出后运行以下 7 条自检，结论（pass/warn/unknown）写入质�
 
 ---
 
-### 3.7. V4 独立审查（FR-REVIEW-001/002）
+### 3.7. 独立审查（FR-REVIEW-001/002）
 
-spec 初稿完成后，构建完整 packet 并调用 `ReviewRoundFacade`，在独立上下文产出 verdict + findings：
+spec 初稿完成后，构建完整材料并调用 wh-review，在独立上下文产出 verdict + findings：
 
 - 结论记入质量事实契约第 3 项（独立审查摘要路径）
 - 审查失败/不可用时降级记录 unknown + 原因——**这里的"不阻断"仅指记录该事实本身不阻断**（F3/Q1：物理事实机器采集浮现到边界，记录动作不卡死推进）。stage 是否继续推进是另一个独立决策，由第 7 节 auto-advance 判断点裁定：`unknown` 在那里必须停下，不产出 stage-result，转人工确认（needs_human=true）。见第 7 节。
 - **禁止自审自判（FR-REVIEW-002）**：不得使用单一 AI 切换视角替代异源独立审查
-- packet、raw output 和诊断仅保存在 private receipt。
+- provider 原始输出和诊断保存在 attempt；stage 只保存正式 `result_ref`。
 
-Use `ReviewRoundFacade` with the `build-spec` flow. The full packet contains the
-spec diff, changed files, requirement/design excerpt and test evidence. The facade owns
-private evidence and publishes only the core receipt after disposition.
+Use wh-review for `build-spec`. The caller supplies the required stage files; the CLI
+captures source and diff, freezes the complete bundle, and writes an attempt plus an
+optional semantic result.
 
 ---
 
@@ -258,7 +252,7 @@ private evidence and publishes only the core receipt after disposition.
 
 1. **scope 边界**：本次 spec 的 IN/OUT scope 及裁剪机制列表
 2. **自检结果**：7 条自检 + Spec-Purity grep 的 pass/warn/unknown 汇总
-3. **独立审查摘要**：V4 core receipt 的 semantic verdict、finding 摘要与诊断状态
+3. **独立审查摘要**：正式 result 的 verdict、finding 摘要与诊断状态
 4. **未解风险**：已知缺口、摩擦记录（`[FRICTION]` 格式，见下节）、scope-triage 高危词命中、spec↔decision-log 差异
 5. **handoff required_reads**：下游阶段必读文件清单
 
@@ -362,9 +356,9 @@ Compare the current M11 task execution against the M10 baseline using 5 metrics 
 
 Append the baseline comparison table to `specs/{task-id}/spec.md` or write it as a standalone file `tasks/{task-id}/artifacts/build-spec-baseline-report.md`.
 
-### 6. F10 anti-over-engineering gate (apply while the spec can still be revised, before V4 review in step 7)
+### 6. F10 anti-over-engineering gate (apply while the spec can still be revised, before review in step 7)
 
-This step runs on the spec produced by spec-specify → spec-clarify, **before** the V4 review step. It records F10 findings for the packet and plain-language brief. No automatic changes are made to the spec content itself (F7).
+This step runs on the spec produced by spec-specify → spec-clarify, **before** review. It records F10 findings for the material bundle and plain-language brief. No automatic changes are made to the spec content itself (F7).
 
 Before any new mechanism, validation, CI check, gate, schema, dependency, or automation remains in the spec, answer all four questions. If you cannot answer all four for a given mechanism, **record a warning and surface the finding for human review** — do not auto-remove (non-blocking, FR-LADDER-002).
 
@@ -379,16 +373,16 @@ This gate reflects constitution rule F10: automation and validation are added fo
 
 ### 7. Auto-advance on independent review pass
 
-build-spec is an **auto-advance stage**: once spec-specify output, spec-clarify refinement, F10 analysis, constitution check, and baseline comparison are complete, its quality record is the V4 core receipt from step 3.7.
+build-spec is an **auto-advance stage**: once generation and checks are complete, its quality record is the formal wh-review result from step 3.7.
 
 Only a clean `pass` verdict may auto-advance. `revise_required` loops back internally as before. `unknown` does **not** auto-advance — it stops once and escalates to a human (see below).
 
-- If the V4 semantic verdict is `revise_required`, loop back to the relevant step and fix.
-- If the V4 semantic verdict is `pass`, do **not** stop for human confirmation. Instead:
+- If the formal result verdict is `revise_required`, loop back to the relevant step and fix.
+- If the formal result verdict is `pass`, do **not** stop for human confirmation. Instead:
   1. Produce a plain-language progress brief using `docs/human-brief-template.md`'s 七要素 (seven elements), ending with template 结尾 B（自动放行结尾）: state that the stage **passed independent review** and is auto-advancing to build-plan — nothing more is needed from the human. Do not append a "请确认" section.
   2. In the brief, translate internal artifact names into plain language rather than naming them directly — e.g. describe "spec.md 经过澄清后的完整需求" instead of saying `spec.md`, describe the constitution checklist and M11/M10 baseline comparison as "跑了几项内部合规和对比检查，结果都记录了" inside the "审了几次、结论是什么" element, rather than listing `constitution-checklist.md` or "M11 vs M10 baseline" verbatim.
   3. Produce the stage-result immediately after the brief (see below) and proceed to build-plan.
-- If no V4 semantic verdict exists because transport or packet validation failed, do **not** auto-advance. Surface a human decision request instead:
+- If no formal result exists because the attempt was unavailable, do **not** auto-advance. Surface the actionable error instead:
   1. Produce the plain-language brief stating plainly that the independent review could not be completed this time (异源审查未完成/结果不可用) and record the reason — do not claim "已通过异源审查" or otherwise imply the review passed (that would be a fabricated result, F9).
   2. Record the diagnostic and absent semantic verdict in the quality contract's 独立审查摘要.
   3. **Do not produce the auto-advance stage-result and do not proceed to build-plan.** Instead, halt the stage and report `needs_human=true` to the orchestrator/leader along with the pending decision (reuse the same halt-and-report pattern used elsewhere in this pipeline for a one-time human checkpoint, e.g. build-plan's Step 9 "无限等待人工明确回应" convention) — the pending decision is: continue anyway (re-run build-spec's auto-advance path once review becomes available, or accept the current state and proceed manually), or wait for the review tooling to be fixed and re-run 3.7. No stage-result is written until the human responds; this is not a new mechanism, it is the existing "record unknown, do not silently claim pass, stop for a human call" convention applied at the auto-advance boundary instead of being absorbed into it.
@@ -398,13 +392,14 @@ The spec is not silently altered by this step — what spec-specify/spec-clarify
 
 ### 7.5. 提交边界
 
-在审查修复完成、`verify-final` 成功、当前 final flow 已获得 published semantic `pass` 且人工明确确认继续之前，禁止在 task worktree 执行 `git add`、`git commit` 或 `git merge`。所有目标仓库改动保留在同一 task worktree，供后续阶段的完整未提交 diff、R2 续跑和最终复核使用；不得为阶段结束制造中间提交或提前合并。
+在审查修复完成、正式 published semantic `pass` result、`verify-final` 成功且人工明确确认继续之前，禁止在 task worktree 执行 `git add`、`git commit` 或 `git merge`。所有目标仓库改动保留在同一 task worktree；不得为阶段结束制造中间提交或提前合并。
 
-唯一的普通实现提交由 `verify-code` 统一执行：当前 final flow 已获得 published semantic `pass`、`verify-final` 确认审过的临时-index tree 未漂移、且人工明确确认继续后，才在该 task worktree 执行一次 `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`。此规则不改变 task_tracking_root 中 stage-result、journal 等流程记录的落盘方式。
+唯一的普通实现提交由 `verify-code` 统一执行：正式 result 为 `pass`、`verify-final` 确认审过的 tree 未漂移、且人工明确确认继续后，才在该 task worktree 执行一次普通提交。
+该最终提交命令由 verify-code 统一记录为 `workflowhub(verify-code): finalize {task-id}`；本阶段不得提前执行。
 
 ## Produce a stage-result
 
-When the stage is complete (all steps above done and V4 semantic verdict is `pass`, plain-language brief produced per step 7), write a `stage-result` record with:
+When the stage is complete (all steps above done and the formal review result is `pass`, plain-language brief produced per step 7), write a `stage-result` record with:
 
 ```json
 {
@@ -413,11 +408,12 @@ When the stage is complete (all steps above done and V4 semantic verdict is `pas
   "retryable": false,
   "facts": {
     "spec_ref": "<relative path to spec.md>",
-    "requirements": "<comma-separated list of FR identifiers or one-line summary>"
+    "requirements": "<comma-separated list of FR identifiers or one-line summary>",
+    "review": { "result_ref": "reviews/results/<result>.json", "snapshot_tree": "<git-tree>" }
   },
   "missing_items": [],
   "user_decision": false,
-  "reason": "Spec written via spec-specify → spec-clarify → constitution check → baseline comparison, auto-advanced after V4 semantic pass. Without a semantic result, the stage reports needs_human=true instead."
+  "reason": "Spec written and independently reviewed. Without a formal result, the stage does not advance."
 }
 ```
 

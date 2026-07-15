@@ -244,8 +244,8 @@ This gate reflects constitution rule F10. Cautionary example: a predecessor syst
 
 ### Step 8: Plan review
 
-Build a complete V4 packet from the spec, plan, task list and cross-artifact analysis.
-Call `ReviewRoundFacade` and record its public core-receipt hash in
+Build complete review materials from the spec, plan, task list and cross-artifact analysis.
+Call wh-review and record its formal result reference in
 `facts.plan_review_ref`. A missing or incomplete packet is recorded as material
 incomplete; it is never replaced with a local review.
 
@@ -320,9 +320,10 @@ Every task in tasks.md must reference at least one FR from the spec. Check the p
 
 ### Step 10.5: 提交边界
 
-在审查修复完成、`verify-final` 成功、当前 final flow 已获得 published semantic `pass` 且人工明确确认继续之前，禁止在 task worktree 执行 `git add`、`git commit` 或 `git merge`。所有目标仓库改动持续保留在同一 task worktree，后续 wh-review 直接审查完整未提交 diff；不得为了阶段结束制造中间提交或提前合并。
+在审查修复完成、正式 published semantic `pass` result、`verify-final` 成功且人工明确确认继续之前，禁止在 task worktree 执行 `git add`、`git commit` 或 `git merge`。所有目标仓库改动持续保留在同一 task worktree；不得为了阶段结束制造中间提交或提前合并。
 
-唯一的普通实现提交由 `verify-code` 统一执行：当前 final flow 已获得 published semantic `pass`、`verify-final` 确认审过的临时-index tree 未漂移、且人工明确确认继续后，才在该 task worktree 执行一次 `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`。task_tracking_root 中的 stage-result、journal 等流程记录照常落盘，不构成提交理由。
+唯一的普通实现提交由 `verify-code` 统一执行：正式 result 为 `pass`、`verify-final` 确认审过的 tree 未漂移、且人工明确确认继续后，才执行一次普通提交。
+该最终提交命令由 verify-code 统一记录为 `workflowhub(verify-code): finalize {task-id}`；本阶段不得提前执行。
 
 ## Produce a stage-result
 
@@ -341,7 +342,8 @@ When the stage is complete, write a `stage-result` record with:
     "research_ref": "<relative path to research.md or unavailable>",
     "data_contracts_ref": "<relative path to data-contracts.md or unavailable>",
     "plan_review_ref": "<relative path to plan-eng-review.md or unavailable>",
-    "minimal_path": "<simplicity-guard minimal-path conclusion or unavailable>"
+    "minimal_path": "<simplicity-guard minimal-path conclusion or unavailable>",
+    "review": { "result_ref": "reviews/results/<result>.json", "snapshot_tree": "<git-tree>" }
   },
   "missing_items": [],
   "user_decision": false,
@@ -417,24 +419,18 @@ if (!receiptResult.ok) {
 
 `steps.json` is the executable canonical topology. The detailed legacy material above maps to the continuous, one-action sequence: 1 read-spec, 2 research-plan, 3 define-contracts, 4 write-plan, 5 review-plan, 6 approve-plan, 7 publish-plan-result. Each step declares entry conditions, completion evidence, observable result, and dependencies. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
 
-## V4 Review Round
+## Review
 
-Use `ReviewRoundFacade` through `runReviewRound()` only:
-
-```js
-await runReviewRound({ stage: "build-plan", review_flow_id: "build-plan-flow", packet });
+```bash
+node <workflowhub_package_root>/skills/wh-review/scripts/wh-review-cli.mjs run <build-plan-review-input.json>
 ```
 
-The complete `review-packet.v1` contains plan/task diffs, changed files, requirements,
-design excerpts and test evidence. Providers review only that packet. Do not run git,
-read the real repository, request absolute paths, or write reports. Private raw evidence
-is under `<task>/reviews/private/round-.../`; cancellation is recorded with
-`cancel_source`, never converted into a semantic verdict. Continue the initial flow or
-reset it only with human approval. An unpublished call returns transport/packet evidence
-only, never a semantic verdict. After host dispositions, the published return is
-`{ semantic_verdict, core_receipt_hash, needs_human }`; only it may advance this stage.
+The JSON input sets `stage="build-plan"`; `materials` contains the content or parsed JSON loaded from task files for
+`approved_spec`, `acceptance_criteria`, and `draft_plan`. Providers read only
+the frozen bundle. Store the returned `{result_ref,snapshot_tree}` in `facts.review` and
+open the formal result before advancing. A retry is a new attempt; there is no reset or flow.
 
-## End V4 Review Round
+## End Review
 
 ## Workflow friction
 

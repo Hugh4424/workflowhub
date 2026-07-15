@@ -1,21 +1,81 @@
 # Provider Protocol
 
-所有 provider 只读 `review-packet.v1` 与冻结的 skill bundle。不得修改材料、生成报告、访问真实仓库、请求绝对路径或要求执行版本控制命令。
+本合同分开两件事：3rd-review 向 WorkflowHub 返回什么，以及 reviewer 模型输出什么。传输成功不等于审查通过。
 
-Evidence record 的 `sha256` 语义取决于 `kind`：`artifact` 的 `source` 是 task-relative 安全路径，host 必须在冻结前按文件 bytes 复算，并按原相对路径投影到 `evidence/<source>`；不得依赖固定文件名或宿主目录。其他 kind 只是被 packet 绑定的 producer assertion digest，不代表 provider 或 host 已独立复核对应事实。
+## 材料边界
 
-Output must be a single bare JSON object, or contain exactly one Markdown `json` fence containing that object; text before or after the fence is allowed and ignored. 原始 stdout/stderr 由 host 从 `3rd-review` private runtime 复制并按 SHA-256 复核；解析后的本 JSON 另存为 parsed output，二者不得混用。原始输出不是业务结论；只有通过 `reviewer-output.schema.json` 和合同校验的输出才可进入合并。材料、合同与 skill bundle 的 hash 由 host 根据已验证的 delivery receipt 和 intent 绑定，provider 不得回显这些 hash。
+- provider 只能读取 3rd-review 为本次调用准备的只读附件 workspace。
+- provider 不得访问真实仓库、运行 Git、读取宿主绝对路径或自行补取材料。
+- `material_id` 由 WorkflowHub 根据 canonical manifest 计算，绑定全部 provider 可见文件的相对路径、byte size 和 SHA-256；它不包含宿主路径、provider、session、runtime 或时间。
+- 3rd-review 负责附件复制和文件完整性。WorkflowHub 不读取 3rd-review 的 private workspace、`state.json`、raw 文件或内部 attestation。
+- 材料缺失、不可读、传输失败或 hash 不符都不是语义 verdict。
 
-顶层必须包含 `packet_status`、`verdict`、`summary`、`findings`、`checklist`、`pass_items` 与 `skillResults`。`revise_required` 还必须包含 `rootCause` 与 `fixApproach`。
+## 3rd-review 公共结果：workflowhub-result.v1
 
-每个 finding 至少包含 `file`、`line`、`rule_id`、`severity`、`issue`、`evidence` 与 `suggested_fix`。合同内 finding 的 `rule_id` 必须精确属于当前冻结的选中合同。合同外 finding 使用 `external:<stable-id>` 或未选中的 C/H ID，且 `severity` 只能为 `minor`；它不得出现在 checklist 或 `pass_items`，也不得形成 hard gate。
+WorkflowHub 仍只调用现有入口：
 
-`root_cause_key` 是同一 provider、同一 `rule_id` 下单一语义根因的稳定 slug。措辞、位置或轮次变化时必须保持稳定；不同根因不得复用。同一根因影响多个位置时，provider 可以重复 `(rule_id, root_cause_key)` 并分别给出位置与证据；host 会在该 provider 内合并 locations 和 evidence。独立 provider 的自由 slug 不得自动视为同一根因；跨 provider 绑定必须来自明确的结构化人工 disposition。
+```text
+3rd-review.mjs run --request=... --attachments=... --attachments-root=... --attachment-delivery=file_only
+```
 
-`pass_items` 必须逐项对应通过的 checklist id，并包含 `rule_id`、可定位的 `artifact_anchor` 与具体 `evidence`；仅写“已检查”或“通过”无效。`artifact_anchor` 不能只写字段名：通常使用 `changes.diff:line <n>`、`review-packet.v1.json:<json-path>`、`contracts/<stage>.md:line <n>` 或 `skills/<name>/<file>:line <n>` 这类带 `:` 或 `#` 的锚点；仅当证据覆盖整个冻结 diff 时，精确的 `changes.diff` 也是合法锚点。
+request 声明：
 
-`verdict` 的唯一规范枚举是小写 `pass`、`revise_required`、`escalate_to_human`。`revise`、`REVISE` 和其他未知值都不是合法 verdict，必须拒绝。
+```json
+{
+  "required_result_protocol": "workflowhub-result.v1"
+}
+```
 
-`skillResults` 必须与冻结 StageSkillPlan 的 required skills 精确一一对应：每个 declared skill 必须有技能名、`lens-only` mode、检查对象、证据和结论；不得添加未声明的条目。`skillResults[].checked_objects` 的每一项必须等于本轮一个精确的 provider-visible destination，或以该 destination 加 `:` / `#` 开头形成可定位 anchor；旧语义名、目录名、`bundle/` 和宿主路径均无效。bundle hash 由 host 注入。若冻结 StageSkillPlan 没有 required skills，`skillResults` 必须精确为 `[]`，不得输出 `no-extra-lens` 或其他虚拟 skill result。仅写“已检查”或“通过”视为无效证据。
+`material_id` 由 broker 根据已校验附件计算并返回，request 不传该字段。
 
-`checklist` 必须无重复地完整覆盖当前合同全部 C/H ID。每个 passed C/H 必须有同 ID 的 `pass_items`；每个 failed H 必须有同 ID 且 severity 为 `blocking` 的 finding。材料 hash 不一致、材料缺失、非 JSON 或空洞技能证据均不是语义 verdict；其中 hash 只由 host 校验。
+每个 provider 的公开结果最少包含：
+
+```json
+{
+  "result_protocol": "workflowhub-result.v1",
+  "provider": "opencode",
+  "status": "completed",
+  "material_id": "<sha256>",
+  "session_id": null,
+  "output": "provider 最终原文",
+  "error": null
+}
+```
+
+规则：
+
+- `status` 只能是 `completed`、`failed` 或 `cancelled`。
+- `session_id`、`output` 可以为空。
+- `error` 只能是 `null` 或 `{ "code": "...", "message": "..." }`。
+- WorkflowHub 只校验协议 major、status、`material_id` 和 reviewer output；增加可选字段不得导致拒绝。
+- 协议不兼容必须在 provider 启动前返回 `PROTOCOL_INCOMPATIBLE`。
+- runtime/session 只用于续跑和诊断，不参与材料身份、聚合或放行。
+- `completed` 只表示 provider 已返回。只有 reviewer output 解析成功后才有语义结果。
+
+## Reviewer 最小输出
+
+允许完整纯 JSON，或全文唯一一个 fenced JSON object。最小结构：
+
+```json
+{
+  "verdict": "pass",
+  "summary": "简短结论",
+  "findings": []
+}
+```
+
+`verdict` 只能是 `pass` 或 `revise_required`。finding 结构：
+
+```json
+{
+  "severity": "blocking",
+  "path": "材料相对路径",
+  "line": 1,
+  "issue": "具体问题",
+  "recommendation": "具体建议"
+}
+```
+
+`severity` 只能是 `blocking`、`major` 或 `minor`。`path` 必须是 provider 可见的材料相对路径；没有可靠行号时 `line` 可以省略或为 `null`，不得猜测行号。
+
+不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误最多在同一 session 请求一次只重发 JSON；仍失败时本次 provider 结果不可用，原文继续保存，但不得提升为 pass。

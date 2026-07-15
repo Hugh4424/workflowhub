@@ -91,16 +91,16 @@ describe("task-record-paths", () => {
     expect(paths.stage_result.verify_code).toBe(join(paths.task_root, "stage-result-verify-code.json"));
   });
 
-  it("requires a review_flow_id for the group-scoped make-decision stage result", () => {
+  it("uses one canonical make-decision stage result and review record directories", () => {
     const taskTrackingRoot = join(tmpDir, "tasks"); mkdirSync(taskTrackingRoot, { recursive: true });
-    expect(() => resolveMakeDecisionStageResultPath("wh-quality-convergence", undefined, { taskTrackingRoot })).toThrow(/review_flow_id is required/);
-    expect(() => resolveMakeDecisionStageResultPath("wh-quality-convergence", "../legacy", { taskTrackingRoot })).toThrow(/invalid review_flow_id/);
-    expect(resolveMakeDecisionStageResultPath("wh-quality-convergence", "decision-flow", { taskTrackingRoot })).toBe(join(taskTrackingRoot, "wh-quality-convergence", "reviews", "stage-result-make-decision-decision-flow.json"));
-    expect(resolveTaskRecordPaths("wh-quality-convergence", { taskTrackingRoot }).stage_result).not.toHaveProperty("make_decision");
+    expect(resolveMakeDecisionStageResultPath("wh-quality-convergence", { taskTrackingRoot })).toBe(join(taskTrackingRoot, "wh-quality-convergence", "stage-result-make-decision.json"));
+    const paths = resolveTaskRecordPaths("wh-quality-convergence", { taskTrackingRoot });
+    expect(paths.stage_result.make_decision).toBe(join(paths.task_root, "stage-result-make-decision.json"));
+    expect(paths.review_results_dir).toBe(join(paths.task_root, "reviews", "results"));
     const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR; process.env.WORKFLOWHUB_TASK_DIR = taskTrackingRoot;
     try {
-      expect(() => taskRecordPath("wh-quality-convergence", "reviews", "stage-result-make-decision.json")).toThrow(/legacy fixed/);
-      expect(() => taskRecordPath("wh-quality-convergence", "reviews", "..", "stage-result-make-decision.json")).toThrow(/legacy fixed/);
+      expect(() => taskRecordPath("wh-quality-convergence", "reviews", "stage-result-make-decision.json")).toThrow(/legacy reviews/);
+      expect(taskRecordPath("wh-quality-convergence", "stage-result-make-decision.json")).toBe(join(taskTrackingRoot, "wh-quality-convergence", "stage-result-make-decision.json"));
     }
     finally { if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir; }
   });
