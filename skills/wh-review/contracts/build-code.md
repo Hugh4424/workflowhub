@@ -1,70 +1,26 @@
 # Build Code 审查合同
 
-本合同只检查 `review-packet.v1`。finding 必须引用 packet 内 artifact anchor 或 host-verified fact；合同外 finding 最高为 `minor`。
+provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读取宿主绝对路径。
 
-## Reviewer role
+## 必需材料
 
-审查冻结 diff 的行为、边界和验证证据；不访问真实仓库，也不把无关风格偏好升级为阻断。
+- `review-instructions.md`：stage、审查问题和输出格式。
+- 当前完整代码 snapshot 的 `source.json`、`changes.diff`、changed-files 清单和所有未删除变更文件的当前内容。
+- 已批准 spec 和验收标准。
+- 与当前 `snapshot_tree` 对应的测试结果。
+- 与本次审查有关的 reviewer 技能文件。
+- `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-## Must Read
+缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。可选的 plan、设计背景、扫描、性能、安全证据或上轮 findings 不存在时，`review-instructions.md` 必须说明未提供及原因。
 
-1. `contracts/provider-protocol.md`
-2. `contracts/build-code.md`
-3. `schemas/reviewer-output.schema.json`
-4. `review-packet.v1.json`
-5. `changes.diff`
-6. {{StageSkillPlan skill bundle}}
+## 审查重点
 
-## Required materials
+- 实际行为是否符合 spec 和验收。
+- 错误、状态、持久化、原子性、并发和取消是否正确。
+- 接口、依赖和所有受影响消费者是否同步。
+- 测试是否覆盖关键成功、失败和边界反例。
+- 是否出现越界变更或隐藏失败。
 
-`unified_diff`、`changed_files`、`acceptance_design_excerpt`、`test_evidence`、`host_verified_facts`。
+## 输出
 
-## Required skills
-
-无额外 lens；所有规则由本合同和 `provider-protocol.md` 给出。`skillResults` 必须精确为 `[]`，不得声明 `no-extra-lens` 或其他虚拟 skill result。
-
-## Stage output
-
-输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding 和空数组 `skillResults: []`。host 负责绑定 hash。
-
-## Checklist IDs
-
-- C1: Spec：变更是否符合 packet 内设计与验收摘录。
-- C2: Standards：变更是否越出允许范围、破坏边界或引入未批准依赖。
-- C3: Structural Quality：状态流转、错误处理、原子性、消费者影响和测试证据是否完整。
-
-## Structural quality questions
-
-结构质量由本合同直接检查，不依赖未声明的 code lens。
-
-- 行为闭环：diff 是否完整消费批准的设计与验收，错误路径是否返回明确结果而非掩盖失败。
-- 状态与原子性：持久化、发布和外部副作用的顺序是否避免半完成状态；失败时是否保持一致。
-- 竞态与边界：并发、重试、重复调用和取消是否可能破坏状态或跨越批准边界。
-- 消费者影响：签名、数据形状、状态语义或路径变化的所有已知消费者是否同步处理。
-- 验证证据：测试是否覆盖变更行为及关键反例；仅有命令名称、空泛通过声明或无关测试不能证明通过。
-
-## Hard invariants
-
-- H1: 行为与批准的设计、验收必须一致。
-- H2: 状态流转、错误处理与持久化必须保持原子性，不能半完成。
-- H3: 依赖、边界、消费者与关键测试证据不得遗漏或越界。
-
-违反任一 hard invariant 必须产生 `blocking` finding，并用对应 H ID 作为 `rule_id`。
-
-## Pass items
-
-每个通过的 C ID 和 H ID 都必须有一条 `pass_items`，`rule_id` 精确等于该 ID，并提供 packet 内 `artifact_anchor` 与具体 `evidence`。空泛“已检查”不算通过。
-
-## Continuation closure
-
-后续轮只审 `PreviousFindings`、`ClosureEvidence`、`DeltaManifest`、`AffectedMaterials`、`CurrentMaterialManifest`、`CrossStageCarryovers`、`RequiredSkillLensHashes` 与 `OutputRequirements`。每个上轮 finding 必须由同 ID 的 `closure_evidence` 关闭或保持原严重度；不得重审未变材料。
-
-`blocking_streak >= 2` 的 blocking finding 不接受自由文本关闭：`closure_bundle` 必须给出根因、扫描范围、反例矩阵、checklist、repo-relative anchors 及其当前文件 hash，并精确回显当前 delta hash；不足或不匹配时保持 open，`escalate_to_human`，不得发布 pass。
-
-## 分类
-
-先关闭上轮 blocking；后续轮只检查 delta、closure evidence 与受影响 artifact。新 blocking 必须由本轮材料引入，或由冻结的结构化 host fact 证明前轮不可能发现；没有该 fact 时不得仅凭 provider 叙述使用后一条件。否则标 `late_finding:true` 且最高 `minor`。
-
-blocking：行为错误、遗漏状态、半完成更新、竞态、越界变更、关键验证证据失败或缺失、需求消费点遗漏、结构边界破坏。
-
-非阻断：格式、命名偏好、无关风格建议和非约束性架构意见。
+输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

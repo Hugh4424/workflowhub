@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wh-review stage material matrix",
+  "type": "object",
+  "required": ["version", "stages"],
+  "properties": {
+    "version": { "const": "wh-review-stage-materials.v1" },
+    "stages": {
+      "type": "object",
+      "required": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"],
+      "properties": {
+        "make-decision": {
+          "type": "object",
+          "required": ["tracks"],
+          "properties": {
+            "tracks": {
+              "type": "object",
+              "required": ["direction", "detail"],
+              "properties": {
+                "direction": { "$ref": "#/$defs/rule" },
+                "detail": { "$ref": "#/$defs/rule" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "build-spec": { "$ref": "#/$defs/rule" },
+        "build-plan": { "$ref": "#/$defs/rule" },
+        "build-code": { "$ref": "#/$defs/rule" },
+        "verify-code": { "$ref": "#/$defs/rule" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["source_bundle", "required", "forbidden", "minimum_reviewers"],
+      "properties": {
+        "source_bundle": { "enum": ["required", "forbidden"] },
+        "required": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "forbidden": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "minimum_reviewers": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

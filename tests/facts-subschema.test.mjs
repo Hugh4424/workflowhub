@@ -12,6 +12,10 @@
 import { describe, it, expect } from "vitest";
 import { validateStageResult } from "../scripts/validate-stage-result.mjs";
 
+const snapshotTree = "b".repeat(40);
+const reviewFact = { result_ref: "reviews/results/result.json", snapshot_tree: snapshotTree };
+const decisionReviews = { direction: reviewFact, detail: reviewFact };
+
 // Base valid stage-result that satisfies the top-level stage-result.contract.json
 function base() {
   return {
@@ -36,6 +40,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         scope: "backend only",
         decision_log_path: "tasks/m7-intake-v1/decision-log.md",
         flow_profile: "full_vibecoding",
+        reviews: decisionReviews,
       },
     };
     const result = validateStageResult("make-decision", artifact);
@@ -86,6 +91,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         scope: "minimal",
         decision_log_path: "tasks/t1/decision-log.md",
         flow_profile: "full_vibecoding",
+        reviews: decisionReviews,
         extra_note: "fyi",
       },
     };
@@ -101,6 +107,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         scope: "backend only",
         decision_log_path: "tasks/m7-intake-v1/decision-log.md",
         flow_profile: "fast_make_decision_to_code",
+        reviews: decisionReviews,
       },
     };
     const result = validateStageResult("make-decision", artifact);
@@ -126,6 +133,8 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         scope: "backend only",
         decision_log_path: "",
         flow_profile: "full_vibecoding",
+        reviews: decisionReviews,
+        reviews: decisionReviews,
       },
     };
     const result = validateStageResult("make-decision", artifact);
@@ -143,6 +152,7 @@ describe("make-decision facts sub-schema (FR-CONTRACT-002 D11)", () => {
         scope: "backend only",
         decision_log_path: "tasks/m7-intake-v1/decision-log.md",
         flow_profile: "full_vibecoding",
+        reviews: decisionReviews,
       },
     };
     const result = validateStageResult("make-decision", artifact);
@@ -185,7 +195,7 @@ describe("build-spec facts sub-schema (FR-CONTRACT-002 D11)", () => {
   it("positive: spec_ref + requirements non-empty → ok", () => {
     const artifact = {
       ...base(),
-      facts: { spec_ref: "specs/my-feature.md", requirements: "12 requirements" },
+      facts: { spec_ref: "specs/my-feature.md", requirements: "12 requirements", review: reviewFact },
     };
     const result = validateStageResult("build-spec", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
@@ -232,7 +242,7 @@ describe("build-plan facts sub-schema (FR-CONTRACT-002 D11)", () => {
   it("positive: plan_ref + tasks non-empty → ok", () => {
     const artifact = {
       ...base(),
-      facts: { plan_ref: "plans/feature-plan.md", tasks: "4 tasks" },
+      facts: { plan_ref: "plans/feature-plan.md", tasks: "4 tasks", review: reviewFact },
     };
     const result = validateStageResult("build-plan", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
@@ -280,7 +290,7 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     return {
       changed: ["f.ts"],
       tests: "ok",
-      review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false },
+      review: reviewFact,
       worktree_root: "/repo/workflowhub-task",
       task_tracking_root: "/repo/tasks",
       phase_completion: {
@@ -429,32 +439,32 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/review/);
   });
 
-  it("negative: review without the published decision tuple -> fails", () => {
+  it("negative: review without the formal result reference -> fails", () => {
     const artifact = { ...base(), facts: buildCodeFacts({ review: { verdict: "pass" } }) };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
+    expect(result.errors.join(" ")).toMatch(/result_ref|snapshot_tree/);
   });
 
   it("negative: review scalar -> fails", () => {
     const artifact = { ...base(), facts: buildCodeFacts({ review: "pass" }) };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/review.*object/);
+    expect(result.errors.join(" ")).toMatch(/result_ref|snapshot_tree/);
   });
 
   it("negative: review array -> fails", () => {
     const artifact = { ...base(), facts: buildCodeFacts({ review: [] }) };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/review.*object/);
+    expect(result.errors.join(" ")).toMatch(/result_ref|snapshot_tree/);
   });
 
   it("negative: review number -> fails", () => {
     const artifact = { ...base(), facts: buildCodeFacts({ review: 1 }) };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/review.*object/);
+    expect(result.errors.join(" ")).toMatch(/result_ref|snapshot_tree/);
   });
 
   it("negative: raw review artifact references are rejected", () => {
@@ -464,17 +474,17 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
+    expect(result.errors.join(" ")).toMatch(/result_ref|snapshot_tree/);
   });
 
-  it("accepts only the published core receipt decision tuple, not a raw review artifact path", () => {
+  it("accepts only a formal result reference, not a raw review artifact path", () => {
     const artifact = {
       ...base(),
-      facts: buildCodeFacts({ review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false } }),
+      facts: buildCodeFacts({ review: reviewFact }),
     };
     expect(validateStageResult("build-code", artifact).ok).toBe(true);
     const raw = { ...artifact, facts: { ...artifact.facts, review: { artifact_path: "reviews/private/raw.json", verdict: "pass" } } };
-    expect(validateStageResult("build-code", raw).errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
+    expect(validateStageResult("build-code", raw).errors.join(" ")).toMatch(/result_ref|snapshot_tree/);
   });
 
   it("negative: phase_completion must include at least one phase record -> fails", () => {
@@ -563,6 +573,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
         audit_summary_ref: "evidence/audit-summary.json",
         audit_verdict: "pass",
         audit_summary_hash: "a".repeat(64),
+        review: reviewFact,
       },
     };
     const result = validateStageResult("verify-code", artifact);
@@ -632,6 +643,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
         audit_summary_ref: "evidence/audit-summary.json",
         audit_verdict: "pass",
         audit_summary_hash: "a".repeat(64),
+        review: reviewFact,
       },
     };
     const result = validateStageResult("verify-code", artifact);
@@ -668,6 +680,7 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
         audit_summary_ref: "evidence/audit-summary.json",
         audit_verdict,
         audit_summary_hash: "a".repeat(64),
+        review: reviewFact,
       },
     };
     const result = validateStageResult("verify-code", artifact);

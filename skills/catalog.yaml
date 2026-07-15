@@ -219,11 +219,11 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 4209ffb879d4e4b470dbe4055a7d699e7be11e55304afc055b629ed89576e71a
+    local_bundle_hash: 8189d0acdab75f3103b4dafa6280cae2268b72e254f6f58b5e235dd304e7b2ef
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
-    design_idea: sealed packet、provider receipt、continuation flow、人工 gate
+    design_idea: frozen materials、attempt/result、session 可失效加速、verify-final
     used_by_stages: [make-decision, build-spec, build-plan, build-code, verify-code]
     upstream: []
     local_changes: workflowhub 原生 V4 实现

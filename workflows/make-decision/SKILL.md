@@ -294,7 +294,11 @@ When the stage is complete, write a `stage-result` record with:
     "decision": "<one-sentence summary of the agreed direction>",
     "scope": "<brief description of what is in scope and what is explicitly excluded>",
     "decision_log_path": "tasks/<task>/decision-log.md",
-    "flow_profile": "<full_vibecoding | fast_make_decision_to_code>"
+    "flow_profile": "<full_vibecoding | fast_make_decision_to_code>",
+    "reviews": {
+      "direction": { "result_ref": "reviews/results/<direction>.json", "snapshot_tree": "<git-tree>" },
+      "detail": { "result_ref": "reviews/results/<detail>.json", "snapshot_tree": "<git-tree>" }
+    }
   },
   "missing_items": [],
   "user_decision": true,
@@ -349,40 +353,34 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **前提**：`tasks/{task-id}/artifacts/make-decision-original-context.md` 必须已存在（由 S4 台账渲染点①落盘）。S5 开始前检查，缺失则报错停止。
 
-**目标**：以 `ReviewRoundFacade` 的 direction/detail V4 flows 审查 S4 产物。
+**目标**：以 wh-review 的 direction/detail 两个独立结果审查 S4 产物。
 
 ### 1. 单次独立盲审
 
-Build two V4 packets and call `ReviewRoundFacade` for the isolated `direction` and
-`detail` flows. The first has only the raw requirement; the second adds the decision
-log. Provider material stays packet-only.
+Build two complete material bundles and call wh-review for isolated `direction` and
+`detail` tracks. The first has only raw requirements and objective facts; the second adds the decision
+log. Provider material stays bundle-only.
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性、技术可行性（D8 新增第四维 `feasibility`）。
 
-审查结果必须包含以下字段：
+正式 result 包含 host 生成的 `material_id`、`snapshot_tree`、`verdict` 和
+`findings`。reviewer 不回显 hash 或 finding ID。每条 finding 使用最小结构：
 
 ```
-packet_hash: <冻结 review-packet.v1 的哈希，用于隔离验证>
-findings: <V4 finding 数组，带 provider 证据>
-```
-
-每条 `findings` 建议必须包含：
-
-```
-finding_id: <稳定 ID>
-severity: <blocking|non_blocking>
-summary: <问题摘要>
+severity: <blocking|major|minor>
+path: <材料内相对路径>
+line: <可靠行号；未知则省略或 null>
+issue: <问题摘要>
 recommendation: <可执行建议>
-evidence: <对应 S4 内容或调研依据>
 ```
 
 ### 2. 结果整理与失败语义
 
-- 若 provider 失败或材料不完整 → 记录 transport/packet diagnostic，不生成语义结论，也不降级为其他审查路径。
+- 若 provider 失败或材料不完整 → attempt 记录明确错误，不生成 result，也不降级为其他审查路径。
 - 若 `findings` 中出现四类角度（direction/framing/scope/feasibility）之外的标签，或某角度整体未被审查（而非"该角度确实无发现"），视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议，也不因怕超限而截断真实问题。
-- 审查结果只由 private receipt 与公开 core receipt 表示：
+- 审查结果只从 `result_ref` 指向的正式 result 读取：
   - `direction_divergence`: `true`/`false`（方向分歧标记）
-  - `findings`: V4 合并 finding 及 provider 证据
+  - `findings`: 正式 result 的 finding 及 provider 证据
 
 写 journal 事件：`event: "s5_blind_review_done"`。
 
@@ -404,12 +402,12 @@ evidence: <对应 S4 内容或调研依据>
 
 make-decision **委托 debate 技能自己判断是否触发**（debate 技能内部执行 Step 1 触发判定 + 环境自动判定五方法庭/单人三档）。make-decision 在**主调用层**执行 debate，不下派子代理。
 
-**禁止行为（D4）**：debate 触发判定只基于 V4 core receipt 的 finding ID 列表，严禁在审查外自行制造争点。
+**禁止行为（D4）**：debate 触发判定只基于正式 result 的 finding 列表，严禁在审查外自行制造争点。
 
 按以下优先顺序判定：
 
 1. `MAKE_DECISION_SKIP_DEBATE=1` → 记 `debate_1: skipped`，跳过 debate，继续 S6。
-2. 其余情况：使用 manifest 解析出的 `skills/debate/SKILL.md` 与 bundle，提取 core receipt 中具体的 finding ID 列表，连同决策与 decision-log 版本通过完整 resolved-path payload 传入 debate 技能。
+2. 其余情况：使用 manifest 解析出的 `skills/debate/SKILL.md` 与 bundle，把正式 result 中的 finding 列表连同决策与 decision-log 版本通过完整 resolved-path payload 传入 debate 技能；不依赖 finding ID。
    - debate 技能触发时：产出 `tasks/{task-id}/artifacts/make-decision-debate-1.md`（含裁决书），写 journal 事件 `event: "debate_1_triggered"`。
    - debate 技能不触发时：写 journal 事件 `event: "debate_1_skipped", reason: "<debate 技能返回的 skip reason>"`。
 
@@ -483,7 +481,7 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能�
 
 ### 4. intake-decision-review + wh-review 审查 + 第二次 debate
 
-**审查实现**：本步骤先调用仓内 `skills/intake-decision-review/SKILL.md` 检查方向、框架、边界和可行性，再把 draft、S4 baseline、权威定义与 S5 findings 组装成 sealed packet，通过唯一 `wh-review/ReviewRoundFacade` flow 审查。两者均使用 manifest resolved-path payload；不得新增第二条 review 路径。
+**审查实现**：本步骤先调用仓内 `skills/intake-decision-review/SKILL.md` 检查方向、框架、边界和可行性，再把 draft、S4 baseline、权威定义与 S5 findings 组装成完整材料，通过唯一 wh-review 路径审查。不得新增第二条 review 路径。
 
 **入口检测（宿主中立）**：复用第一次 debate 的 `host-subagent` capability probe；记录 `debate_capability_checked`，透传 `parallel_agent_capability: available|unavailable`。不得读取宿主专属环境变量。
 
@@ -579,7 +577,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 
 落盘前检查审查产物完整性：
 
-- 若存在 `severity: blocking` 的审查意见，但 core receipt 及 debate 裁决书中**缺少**三行留痕格式：
+- 若正式 result 中存在 `severity: blocking` 的审查意见，但 decision-log 及 debate 裁决书中**缺少**三行留痕格式：
 
   ```
   反对 X：<内容>
@@ -669,7 +667,8 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 - **worktree_root 路径公式（R4 创建与 R5 首次写入之间的强制约束）**：`worktree_root = path.dirname(target_repo_root) + '/' + {repo目录名}-{task-id}`（`{repo目录名}` 取 target_repo_root 的 basename，`{task-id}` 用 R3 已归一化的 slug）。即 worktree 必须建在 target_repo_root 的平行兄弟目录下，单层目录名，不得嵌套多层子目录（不得出现类似 `{task-id}/worktree/{repo名}` 这种3层结构），也不得建在 task_tracking_root（task_dir）下面。参考先例：agenthub apply 阶段的 worktree 隔离修复（`../{repo-name}-{feature}` 平行目录规则）。R4 执行 `git worktree add` 与 R5 首次写入 `worktree.json` 的 `worktree_root` 字段均须遵循本公式，不得各写各的。
 - R5 worktree.json 首次写入：worktree.json 首次写入须包含原 6 个字段，并在创建 worktree 的同一原子写入中固化 `trusted_base_commit`（创建时完整 40 位 commit OID）、`trusted_base_tree`（该 commit 的 tree OID）与 `trusted_base_source="worktree_creation"`。下游（build-code §17 / verify-code close①）不得覆盖这三个字段。其余字段须一次性满足 common 校验：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径，须满足上方 worktree_root 路径公式）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（固定值 `"verify-code-only"`，其他值 fail-loud，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
 - R6 存在性/冲突检测：使用 `git worktree list --porcelain` 检测 worktree 是否已存在或冲突；发现僵尸 worktree（目录不存在但仍在 git 记录中）须 fail-loud 报错退出；发现路径/分支被其他 worktree 占用同样须 fail-loud，不得静默覆盖。
-- R7 提交边界：在审查修复完成、`verify-final` 成功、当前 final flow 已获得 published semantic `pass` 且人工明确确认继续之前，make-decision 不得在 `target_repo_root` 或 `worktree_root` 执行 `git add`、`git commit` 或 `git merge`。decision-log 等目标仓库改动保留在同一 task worktree，供后续完整未提交 diff 和 R2 续跑使用；不得为本阶段结束制造中间提交或提前合并。唯一的普通实现提交由 `verify-code` 统一执行：满足上述条件后，才在该 task worktree 执行一次 `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）照常落盘，不构成提交理由。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"。
+- R7 提交边界：在审查修复完成、正式 published semantic `pass` result、`verify-final` 成功且人工明确确认继续之前，make-decision 不得在 `target_repo_root` 或 `worktree_root` 执行 `git add`、`git commit` 或 `git merge`。decision-log 等目标仓库改动保留在同一 task worktree；不得为本阶段结束制造中间提交或提前合并。唯一的普通实现提交由 `verify-code` 统一执行。`task_tracking_root` 下的流程记录照常落盘，不构成提交理由。
+- verify-code 最终提交命令统一记录为 `workflowhub(verify-code): finalize {task-id}`；本阶段不得提前执行。
 **task 子目录创建职责**：make-decision 阶段负责幂等地创建 task_tracking_root 下的 task 子目录（`{task_tracking_root}/{task-id}/`）；若父目录（task_tracking_root）不存在，须 fail-loud 报错退出，不得自动创建父目录；若该 task 已处于 `status=cleaned`（已归档）状态，须 fail-loud 报错 "task 已归档"，不得继续复用。
 
 **幂等复用前的 target_repo_root 一致性校验（FR-WORKTREE-MAKEDECISION-002 延伸）**：`{task_tracking_root}/{task-id}/worktree.json` 已存在且 `status=active` 时，不得仅凭 task-id 相同就静默复用——须先比对该 worktree.json 中记录的 `target_repo_root` 与本次调用（R2 探测得到）的 `target_repo_root` 是否完全一致；调用 `core/worktree-reuse-guard.mjs` 的 `checkWorktreeReuse(worktreeJsonPath, currentTargetRepoRoot, taskId)` 执行该判定：一致则返回 `{action: "reuse"}`，按现有 worktree.json 继续；不一致（同一 task-id 撞到不同项目）则 fail-loud 退出，报错须包含 task-id、worktree.json 中记录的 target_repo_root、本次调用的 target_repo_root 三项，提示用户更换 task-id 或核实目标仓库，不得把新一轮请求静默接到旧项目的仓库/worktree 上；worktree.json 不存在时返回 `{action: "create"}`，走 R4/R5 首次创建路径。
@@ -715,31 +714,34 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 
 `steps.json` is the executable canonical topology. The detailed S0–S10 material above is legacy reference only; its identifiers map to this continuous, one-action sequence: 1 load-context, 2 triage-scope, 3 research-inputs, 4 clarify-direction, 5 review-decision, 6 approve-decision, 7 write-decision-log. Each canonical step has one primary action, explicit entry evidence, terminal evidence, and a declared dependency. Every declared dependency must be represented by entry evidence `step://<dependency-step-id>`; therefore `review-decision` enters from `step://clarify-direction`, not unproduced `task://decision-draft`. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
 
-## V4 Review Round
+## Review
 
-Use `ReviewRoundFacade` through `runReviewRound()` only. The provider receives one
-`review-packet.v1`; it must review only that packet. Do not run git, read the real
-repository, request absolute paths, or write review reports in the provider workspace.
-The facade owns `<task>/reviews/private/round-.../` evidence, provider status and
-`cancel_source`. An unpublished call returns transport/packet evidence only, never a
-semantic verdict. After host dispositions, the published return is `{ semantic_verdict,
-core_receipt_hash, needs_human }`; only it may control public stage decisions.
+Run the only production entry twice. Write each JSON input under the task tracking
+directory, then pass its path to the CLI; do not call an in-process `runWhReview`
+helper:
 
-Run two isolated flows in order. They never share a runtime:
-
-```js
-await runReviewRound({ stage: "make-decision", review_track: "direction", review_flow_id: "make-decision-flow", packet });
-await runReviewRound({ stage: "make-decision", review_track: "detail", review_flow_id: "make-decision-flow", packet });
+```bash
+node <workflowhub_package_root>/skills/wh-review/scripts/wh-review-cli.mjs run <direction-input.json>
+node <workflowhub_package_root>/skills/wh-review/scripts/wh-review-cli.mjs run <detail-input.json>
 ```
 
-The direction packet contains only the original requirement. The detail packet may add
-the decision log. The shared flow id is the aggregation group; each track still has its
-own runtime, receipt, and continuation. Later rounds use `continuation: true` with the
-same flow id; reset requires an explicit human approval reference. Consume only the
-group-scoped aggregate `stage-result-make-decision-<review_flow_id>.json`; never read a
-fixed make-decision stage-result path.
+Each input contains `task_tracking_root`, `task_id`, `host_provider`, and `providers`.
+The CLI derives source, target, and review storage from
+`<task_tracking_root>/<task_id>/worktree.json`; callers do not send those paths. The
+first input sets `stage="make-decision"`, `review_track="direction"`, and maps
+`materials.raw_requirement` and `materials.objective_facts` to the content or parsed JSON loaded from task files.
+The second sets `review_track="detail"` and maps `raw_requirement`,
+`approved_direction`, and `draft_spec_or_acceptance`. Provider(s) must differ from the host.
 
-## End V4 Review Round
+The direction bundle contains only raw requirements and objective facts; it must not
+contain the proposed solution, decision log, spec, plan, or diff. The detail bundle adds
+the approved direction and draft decision. Store each returned `{result_ref,
+snapshot_tree}` in `facts.reviews.direction` and `facts.reviews.detail`. Any
+`revise_required` wins; both results must pass before this stage advances. An unavailable
+attempt writes no result and cannot be accepted as pass. Use the CLI JSON output's
+`result_ref` and `snapshot_tree`; never copy a verdict into the stage result.
+
+## End Review
 
 ## Workflow friction
 
