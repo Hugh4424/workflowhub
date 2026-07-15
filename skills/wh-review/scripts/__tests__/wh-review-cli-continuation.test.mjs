@@ -63,13 +63,11 @@ vi.mock("../broker-client.mjs", () => ({
       if (materialManifestHash !== input.request.material_manifest_sha256) throw new Error(`test broker material hash mismatch: expected ${input.request.material_manifest_sha256}, got ${materialManifestHash}`);
       const entries = input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size }));
       const files = input.attachments.entries.map(({ destination: target, sha256, size, embed }) => ({ target, sha256, size, embed }));
-      const deliveryManifestHash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, delivery_mode: input.attachmentDelivery, files: files.filter((item) => item.target !== "manifest.json") }));
-      const continuation = input.request.continuation ? { initial_material_manifest_hash: input.request.continuation.initial_material_manifest_hash, sequence: input.request.continuation.sequence, previous_delivery_manifest_hash: input.request.continuation.previous_delivery_manifest_hash } : null;
       return {
         runtime_id: "11111111-1111-4111-8111-111111111111",
         providers: [{
           provider: "opencode", status: "completed", session_id: "provider-session", delivery_used: input.attachmentDelivery,
-          delivery: { delivery_mode: input.attachmentDelivery, raw_material_manifest_hash: materialManifestHash, material_manifest_hash: materialManifestHash, material_representation: "raw", redaction: { rule_version: "host-root-prefix.v1", root_set_hash: sha("test-roots"), roots: [], replacement_count: 0, raw_material_manifest_hash: materialManifestHash, derived_material_manifest_hash: materialManifestHash, residual_scan: "passed" }, derived_attestation: { packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, delivery_manifest_hash: deliveryManifestHash, continuation }, material_total_bytes: input.attachments.entries.reduce((total, entry) => total + entry.size, 0), provider_visible_attachment_manifest: entries },
+          delivery: { delivery_mode: input.attachmentDelivery, sealed_manifest_hash: materialManifestHash, provider_visible_manifest_hash: materialManifestHash, byte_identity: "verified", material_total_bytes: input.attachments.entries.reduce((total, entry) => total + entry.size, 0), provider_visible_attachment_manifest: entries },
           raw_stdout_ref: stdoutRef, raw_stdout_sha256: stdoutHash, raw_stderr_ref: stderrRef, raw_stderr_sha256: stderrHash,
           output: stdout.toString("utf8"),
         }],

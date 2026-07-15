@@ -21,22 +21,40 @@ describe("run-wh-review-audit-e2e", () => {
     const source = readFileSync(script, "utf8");
     expect(source).toContain("auditMaterial.changed_files.length");
     expect(source).not.toMatch(/(?:93|96) files/);
-    expect(source).toContain('provider_allowlist: ["kimi", "opencode"]');
+    expect(source).toContain('provider_allowlist: ["opencode"]');
     expect(source).toContain("THIRD_REVIEW_SOURCE_ROOT");
   });
 
-  it("requires both file-only providers, host hashes, sessions, and all three raw markers", () => {
+  it("requires OpenCode sealed exact-copy receipt, session, and all three raw markers", () => {
     const root = mkdtempSync(join(tmpdir(), "audit-e2e-evidence-"));
     const markers = ["BEGIN", "MIDDLE", "END"];
+    const evidenceSources = ["test-strategy.md", "evidence/phase-1-GREEN.json", "evidence/phase-1-diff-scan.json"];
     const padding = "x".repeat(100); const unified_diff = `BEGIN${padding}${padding}MIDDLE${padding}${padding}END`;
     const packet = { packet_hash: "a".repeat(64), diff_sha256: "b".repeat(64), changed_files: Array.from({ length: 6 }, (_, index) => ({ path: String(index) })), unified_diff };
     const outcomes = [];
-    for (const id of ["kimi", "opencode"]) {
+    for (const id of ["opencode"]) {
       const raw = join(root, `${id}.raw`); writeFileSync(raw, `${markers.join(" ")}\n`);
       const sha = createHash("sha256").update(readFileSync(raw)).digest("hex");
-      const provider_visible_attachment_manifest = ["test-strategy.md", "requirements-ledger.json", "requirements-coverage.json"].map((name) => ({ destination: `evidence/${name}`, sha256: "d".repeat(64), size: 1 }));
-      outcomes.push({ provider: id, transport_status: "completed", packet_status: "complete", business_valid: true, delivery_used: "file_only", session_id: `${id}-session`, raw_stdout_ref: raw, raw_stdout_sha256: sha, delivery: { derived_attestation: { packet_hash: packet.packet_hash, diff_sha256: packet.diff_sha256, delivery_manifest_hash: "c".repeat(64) }, provider_visible_attachment_manifest } });
+      const provider_visible_attachment_manifest = [
+        { destination: "review-packet.v1.json", sha256: "e".repeat(64), size: 1 },
+        { destination: "changes.diff", sha256: packet.diff_sha256, size: unified_diff.length },
+        { destination: "manifest.json", sha256: "f".repeat(64), size: 1 },
+        ...evidenceSources.map((source) => ({ destination: `evidence/${source}`, sha256: "d".repeat(64), size: 1 })),
+      ];
+      outcomes.push({ provider: id, transport_status: "completed", packet_status: "complete", business_valid: true, delivery_used: "file_only", session_id: `${id}-session`, raw_stdout_ref: raw, raw_stdout_sha256: sha, delivery: { delivery_mode: "file_only", sealed_manifest_hash: "c".repeat(64), provider_visible_manifest_hash: "c".repeat(64), byte_identity: "verified", provider_visible_attachment_manifest } });
     }
-    expect(assertAuditEvidence({ receipt: { provider_outcomes: outcomes }, packet, auditScopeFiles: 3, markers })).toMatchObject({ kimi: { session_id: "kimi-session" }, opencode: { session_id: "opencode-session" } });
+    expect(assertAuditEvidence({ receipt: { delivery: { material_manifest_hash: "c".repeat(64) }, provider_outcomes: outcomes }, packet, auditScopeFiles: 3, markers, evidenceSources })).toMatchObject({ opencode: { session_id: "opencode-session", sealed_manifest_hash: "c".repeat(64) } });
+  });
+
+  it("uses a stable in-scope middle marker and publishes before verify-final", () => {
+    const source = readFileSync(script, "utf8");
+    expect(source).toContain('"specs/m14a-audit-contract-layer/m-review-e2e-middle.txt"');
+    expect(source).toContain('"M".repeat(4096)');
+    expect(source).toContain("dispositions: { items: [] }");
+    expect(source).toContain('"verify-final"');
+    expect(source).not.toContain("derived_attestation");
+    expect(source).toContain('"evidence/phase-1-GREEN.json"');
+    expect(source).toContain('"evidence/phase-1-diff-scan.json"');
+    expect(source).not.toContain("requirements-ledger.json");
   });
 });

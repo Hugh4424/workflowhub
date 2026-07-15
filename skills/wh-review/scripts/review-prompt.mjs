@@ -50,12 +50,16 @@ export function buildContinuationDelta({ previousPacket, currentPacket, deltaSou
     required_skill_lens_hashes: requiredSkills.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256 })),
   };
 }
-function materialInstruction({ packet, intent, attachmentIds, continuation = false }) {
-  if (!Array.isArray(attachmentIds) || attachmentIds.some((id) => typeof id !== "string" || !id)) throw new TypeError("attachmentIds are required");
+function materialInstruction({ packet, intent, providerVisibleDestinations, attachmentIds, continuation = false }) {
+  const destinations = providerVisibleDestinations ?? attachmentIds;
+  if (!Array.isArray(destinations) || destinations.some((id) => typeof id !== "string" || !id)) throw new TypeError("providerVisibleDestinations are required");
+  const example = destinations.includes("changes.diff") ? "changes.diff:line 1" : `${destinations[0]}:line 1`;
   return [
     continuation ? "Continue the existing review session using only this isolated delta attachment workspace." : "Review only this isolated attachment workspace.",
     "Do not access a repository, run git, request host or worktree paths, or infer missing material.",
-    `attachment_ids=${attachmentIds.join(",")}`,
+    `provider_visible_destinations=${JSON.stringify(destinations)}`,
+    "checked_objects_rule=Each skillResults[].checked_objects item must equal one provider_visible_destination or start with it followed by : or #.",
+    `checked_objects_example=${example}`,
     `stage=${packet.stage}`,
     `review_track=${packet.review_track ?? "default"}`,
     "Follow the provider adapter's attachment-root instruction to read the manifest and packet. Return only reviewer-output JSON.",
@@ -65,10 +69,10 @@ function materialInstruction({ packet, intent, attachmentIds, continuation = fal
 // The host never renders packet, diff, or continuation data into a prompt.
 // `file_only` is delivered as files, while `always_embed` is rendered and
 // bounded by the broker after this instruction is finalized.
-export function initialPrompt({ packet, intent, attachmentIds }) {
-  return materialInstruction({ packet, intent, attachmentIds });
+export function initialPrompt({ packet, intent, providerVisibleDestinations, attachmentIds }) {
+  return materialInstruction({ packet, intent, providerVisibleDestinations, attachmentIds });
 }
-export function continuationPrompt(delta, { packet, intent, attachmentIds } = {}) {
+export function continuationPrompt(delta, { packet, intent, providerVisibleDestinations, attachmentIds } = {}) {
   if (!delta?.delta_manifest) throw new TypeError("continuation delta is required");
-  return materialInstruction({ packet, intent, attachmentIds, continuation: true });
+  return materialInstruction({ packet, intent, providerVisibleDestinations, attachmentIds, continuation: true });
 }
