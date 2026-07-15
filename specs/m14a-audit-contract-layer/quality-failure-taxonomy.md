@@ -1,6 +1,6 @@
 # Quality Failure Taxonomy
 
-本文件只定义 `failure_domain` 首批领域词。它不定义解决方案、severity、root cause 或判断算法。
+本文件只定义 `failure_domain` 首批领域词。表格是封闭词表：每行只表达失败领域、描述、包含信号和排除含义；不表达解决方案、severity、root cause 或判断算法。
 
 | failure_domain | 描述 | 包含信号 | 排除含义 |
 |---|---|---|---|
@@ -17,4 +17,5 @@
 ## 版本规则
 
 - 新增、删除或改名 `failure_domain` 属于契约版本变化。
-- 只修正文案、补充说明或修复采集 parser bug 不属于契约版本变化。
+- 各领域的语义变化属于契约版本变化。
+- 只修正文案、补充说明或修复采集 parser bug 不属于契约版本变化；这类采集实现变更只更新 collector implementation version。

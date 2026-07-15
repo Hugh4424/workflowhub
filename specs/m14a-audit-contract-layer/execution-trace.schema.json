@@ -22,25 +22,26 @@
     "facts_refs",
     "provenance",
     "schema_version",
-    "collector_version"
+    "collector_version",
+    "collector_supported_schema_versions"
   ],
   "properties": {
-    "run_id": { "type": "string", "minLength": 1 },
-    "session_id": { "type": "string", "minLength": 1 },
-    "stage": { "type": "string", "minLength": 1 },
-    "step_id": { "type": "string", "minLength": 1 },
-    "attempt_id": { "type": "string", "minLength": 1 },
-    "parent_step_id": { "type": ["string", "null"] },
-    "skill": { "type": "string", "minLength": 1 },
-    "skill_version": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1, "description": "Run identity." },
+    "session_id": { "type": "string", "minLength": 1, "description": "Session identity containing this execution." },
+    "stage": { "type": "string", "minLength": 1, "description": "Workflow stage identity." },
+    "step_id": { "type": "string", "minLength": 1, "description": "Step identity within the stage." },
+    "attempt_id": { "type": "string", "minLength": 1, "description": "Unique execution attempt identity." },
+    "parent_step_id": { "type": ["string", "null"], "description": "Parent step identity when this step is nested." },
+    "skill": { "type": "string", "minLength": 1, "description": "Skill used by this execution." },
+    "skill_version": { "type": "string", "minLength": 1, "description": "Version of the skill contract used by this execution." },
     "agent_id": { "type": ["string", "null"] },
     "issue_id": { "type": ["string", "null"] },
-    "task_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1, "description": "Canonical task identity." },
     "task_dir": { "type": "string", "minLength": 1 },
     "target_repo_root": { "type": ["string", "null"] },
     "worktree_root": { "type": "string", "minLength": 1 },
     "branch": { "type": ["string", "null"] },
-    "started_at": { "type": "string", "format": "date-time" },
+    "started_at": { "type": "string", "format": "date-time", "description": "Execution start time." },
     "completed_at": { "type": ["string", "null"], "format": "date-time" },
     "status": {
       "type": "string",
@@ -63,6 +64,7 @@
     },
     "provenance": {
       "type": "object",
+      "description": "Fact origin. Missing machine evidence must use source_type or confidence unknown, or be explicitly human-declared; it must not be represented as a passing result.",
       "required": ["source_type", "source_ref", "confidence"],
       "additionalProperties": false,
       "properties": {
@@ -71,8 +73,18 @@
         "confidence": { "type": "string", "enum": ["observed", "declared", "unknown"] }
       }
     },
-    "schema_version": { "type": "string", "minLength": 1 },
-    "collector_version": { "type": "string", "minLength": 1 }
+    "schema_version": { "type": "string", "minLength": 1, "description": "Execution trace contract version. Field, enum, or fact-semantics changes require a schema-version change." },
+    "collector_version": { "type": "string", "minLength": 1, "description": "Collector implementation version. Parser bug fixes, collector refactors, and performance improvements change this version without changing schema_version." },
+    "collector_supported_schema_versions": {
+      "type": "object",
+      "description": "Inclusive schema-version range supported by the collector implementation.",
+      "required": ["min", "max"],
+      "additionalProperties": false,
+      "properties": {
+        "min": { "type": "string", "minLength": 1 },
+        "max": { "type": "string", "minLength": 1 }
+      }
+    }
   },
   "$defs": {
     "ref": {
