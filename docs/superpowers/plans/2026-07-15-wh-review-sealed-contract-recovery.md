@@ -1,4 +1,3 @@
-[[31mERROR[0m] - (starship::print): Under a 'dumb' terminal (TERM=dumb).
 # wh-review × 3rd-review sealed contract 修复方案
 
 状态：异源审查通过，待实施

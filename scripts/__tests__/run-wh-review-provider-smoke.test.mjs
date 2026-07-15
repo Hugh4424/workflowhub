@@ -128,7 +128,10 @@ describe("run-wh-review-provider-smoke", () => {
       attachmentIds: ["review-packet.v1.json", "changes.diff", "manifest.json"],
       providerVisibleManifestHash: hash("f"),
     });
-    expect(prompt).toContain("attachment_ids=review-packet.v1.json,changes.diff,manifest.json");
+    expect(prompt).toContain('provider_visible_destinations=["review-packet.v1.json","changes.diff","manifest.json"]');
+    expect(prompt).toContain("checked_objects_rule=Each skillResults[].checked_objects item must equal one provider_visible_destination or start with it followed by : or #.");
+    expect(prompt).toContain("checked_objects_example=changes.diff:line 1");
+    expect(prompt).not.toMatch(/(?:\/Users\/|\/private\/|\/tmp\/)/u);
     expect(prompt).not.toContain("attachment_manifest_sha256=");
     expect(prompt).not.toContain(hash("f"));
     expect(prompt).not.toContain("R2_DELTA_ONLY_MARKER");

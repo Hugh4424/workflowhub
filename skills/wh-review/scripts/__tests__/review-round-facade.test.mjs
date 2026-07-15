@@ -361,6 +361,10 @@ describe("ReviewRoundFacade", () => {
     expect(manifest.attachments.map((item) => item.destination)).toEqual(expect.arrayContaining(["review-packet.v1.json", "changes.diff"]));
     expect(manifest.inner_manifest_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(prepared.frozen_attachments.map((item) => item.destination)).toContain("manifest.json");
+    const allowedLine = prepared.initial_prompt.split("\n").find((line) => line.startsWith("provider_visible_destinations="));
+    expect(JSON.parse(allowedLine.slice("provider_visible_destinations=".length))).toEqual(prepared.provider_visible_destinations);
+    expect(prepared.initial_prompt).toContain("checked_objects_example=changes.diff:line 1");
+    expect(prepared.initial_prompt).not.toContain(tracking);
     expect(prepared.initial_prompt).not.toContain("R1_DIFF_MARKER");
     expect(prepared.initial_prompt).not.toMatch(/(?:attachment_manifest_sha256|packet_hash|manifest_hash|diff_sha256|attachment_sha256)=/u);
     for (const digest of [prepared.packet.packet_hash, prepared.packet.manifest_hash, prepared.packet.diff_sha256, prepared.provider_visible_manifest_sha256]) expect(prepared.initial_prompt).not.toContain(digest);

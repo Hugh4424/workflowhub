@@ -613,13 +613,13 @@ export class ReviewRoundFacade {
       freeze("manifest.json", providerManifestBytes);
       const outerFiles = attachmentRecords(frozenAttachments.map((item) => ({ ...item, embed: attachmentEmbed })));
       const materialBytes = outerFiles.reduce((total, item) => total + item.size, 0);
-      const attachmentIds = frozenAttachments.map(({ destination }) => destination);
+      const providerVisibleDestinations = frozenAttachments.map(({ destination }) => destination).sort();
       const prompt = continuation
-        ? continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash })
-        : initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash });
+        ? continuationPrompt(delta, { packet, intent, providerVisibleDestinations, providerVisibleManifestHash })
+        : initialPrompt({ packet, intent, providerVisibleDestinations, providerVisibleManifestHash });
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, attachments: outerFiles, delta_manifest: continuation ? delta.delta_manifest : null }));
       const expectedDelivery = { delivery_mode: resolution.deliveryMode, sealed_manifest_hash: materialManifestHash };
-      const providerVisibleDestinations = frozenAttachments.map(({ destination }) => destination).sort();
+      const checkedObjectsExample = providerVisibleDestinations.includes("changes.diff") ? "changes.diff:line 1" : `${providerVisibleDestinations[0]}:line 1`;
       const correctionContractFacts = JSON.stringify({
         stage: input.stage,
         checklist_ids: stageContract.allIds,
@@ -628,7 +628,8 @@ export class ReviewRoundFacade {
         provider_visible_destinations: providerVisibleDestinations,
         passed_item_rule: "Every passed checklist id requires exactly one pass_items entry with the same rule_id.",
         artifact_anchor_rule: "artifact_anchor must equal one exact provider_visible_destination or start with one followed by : or #. Directory anchors, bundle/, and invented paths are forbidden.",
-        skill_results_rule: "skillResults must match required_skills exactly; when required_skills is empty, skillResults must be []. Never add a default skill.",
+        skill_results_rule: "skillResults must match required_skills exactly; every checked_objects item must equal one provider_visible_destination or start with one followed by : or #; when required_skills is empty, skillResults must be []. Never add a default skill.",
+        checked_objects_example: checkedObjectsExample,
       });
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, initial_provider_sessions: prior?.initial_provider_sessions ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_destinations: providerVisibleDestinations, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });

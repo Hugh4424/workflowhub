@@ -212,6 +212,25 @@ describe("reviewer-output validator", () => {
     expect(call().valid).toBe(false);
   });
 
+  it("rejects old build-spec semantic object names and accepts provider-visible attachment anchors", () => {
+    const oldKimi = fixture({ stage: "build-spec" });
+    for (const result of oldKimi.output.skillResults) result.checked_objects = ["specification", "requirements-ledger"];
+    expect(validateReviewerOutput({ providerVisibleDestinations, stage: "build-spec", output: oldKimi.output }).errors).toEqual(expect.arrayContaining([
+      `missing checked objects: ${oldKimi.output.skillResults[0].skill}`,
+      `missing checked objects: ${oldKimi.output.skillResults[1].skill}`,
+    ]));
+    const anchored = fixture({ stage: "build-spec" });
+    for (const result of anchored.output.skillResults) result.checked_objects = ["review-packet.v1.json:planning_artifacts"];
+    expect(validateReviewerOutput({ providerVisibleDestinations, stage: "build-spec", output: anchored.output }).valid).toBe(true);
+  });
+
+  it("documents the same provider-visible checked-object anchor boundary", () => {
+    const protocol = readFileSync(new URL("../../contracts/provider-protocol.md", import.meta.url), "utf8");
+    expect(protocol).toContain("skillResults[].checked_objects");
+    expect(protocol).toContain("provider-visible destination");
+    expect(protocol).toMatch(/`:`.*`#`/u);
+  });
+
   it("requires an exact empty skillResults array when build-code declares no lenses", () => {
     const item = fixture({ stage: "build-code" });
     const call = () => validateReviewerOutput({ providerVisibleDestinations, stage: "build-code", output: item.output, packet: item.packet, intent: item.intent });
