@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "task_id", "stage", "attempt_ref", "integrity_hash", "human_confirmation_ref", "accepted_at", "upstream_refs"],
+  "properties": {
+    "schema_version": { "const": "task-accepted.v2" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "attempt_ref": { "type": "string", "pattern": "^attempt-[0-9]{4}\\.json$" },
+    "integrity_hash": { "type": "string", "pattern": "^(sha256:)?[a-f0-9]{64}$" },
+    "human_confirmation_ref": { "type": "string", "minLength": 1 },
+    "accepted_at": { "type": "string", "format": "date-time" },
+    "upstream_refs": { "type": "array" },
+    "checkpoint": { "$ref": "#/$defs/checkpoint" }
+  },
+  "$defs": { "checkpoint": { "type": "object", "required": ["ref", "commit_oid", "tree_oid", "artifacts"], "properties": { "ref": { "type": "string", "pattern": "^refs/workflowhub/checkpoints/[^/]+/[^/]+/(build-spec|build-plan)/plan-[a-f0-9]{64}$" }, "commit_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" }, "tree_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" }, "artifacts": { "type": "array", "items": { "type": "object", "required": ["path", "blob_oid", "content_hash"], "properties": { "path": { "type": "string", "minLength": 1 }, "blob_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" }, "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } } }, "additionalProperties": false } },
+  "additionalProperties": false
+}

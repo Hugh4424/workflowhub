@@ -1,18 +1,19 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { captureReviewSource } from "../review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor } from "../review-materials.mjs";
+import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
 
 function git(cwd, args, options = {}) {
   return execFileSync("git", args, { cwd, encoding: "utf8", ...options }).trim();
 }
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "wh-review-source-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-source-")));
   const target = join(root, "target");
   const source = join(root, "source");
   const data = join(root, "review-data");
@@ -28,6 +29,14 @@ function fixture() {
   git(target, ["worktree", "add", "-b", "feature", source]);
   mkdirSync(data);
   return { root, target, source, data };
+}
+
+function evidenceTask(f, receipt, output, { includeOutput = true } = {}) {
+  const task = createTask({ storageRoot: f.root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: `review-${Math.random().toString(16).slice(2)}`, created_at: new Date().toISOString(), target_repo_root: f.target, issue_ids: [], inputs: {} } });
+  const kernel = createTaskKernel(task);
+  kernel.publishCanonicalRecord("receipts/tests.json", receipt);
+  if (includeOutput) kernel.publishCanonicalRecord("evidence/tests-output.txt", output);
+  return task;
 }
 
 function changeAll(source) {
@@ -94,6 +103,61 @@ describe("review source capture", () => {
 });
 
 describe("review materials", () => {
+  it("preserves canonical receipt/output bytes and closes their manifest graph", () => {
+    const f = fixture(); changeAll(f.source);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const output = Buffer.from("real test output\n");
+    const receipt = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-receipt.v1", output_ref: "evidence/tests-output.txt", output_hash: createHash("sha256").update(output).digest("hex") }, null, 2)}\n`);
+    const task = evidenceTask(f, receipt, output);
+    const evidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
+    const instructions = reviewInstructionsFor("build-code");
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code",
+      materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: evidence, review_instructions: instructions } });
+    expect(readFileSync(join(bundle.bundleRoot, "canonical/receipts/tests.json"))).toEqual(receipt);
+    expect(readFileSync(join(bundle.bundleRoot, "canonical/evidence/tests-output.txt"))).toEqual(output);
+    for (const ref of ["canonical/receipts/tests.json", "canonical/evidence/tests-output.txt"]) {
+      const bytes = readFileSync(join(bundle.bundleRoot, ...ref.split("/")));
+      expect(bundle.manifest.find((item) => item.path === ref)?.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+    }
+    const graph = JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"));
+    expect(graph.map(({ source_ref }) => source_ref).sort()).toEqual(["evidence/tests-output.txt", "receipts/tests.json"]);
+  });
+
+  it("freezes the same canonical evidence closure for verify-code", () => {
+    const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const output = Buffer.from("verify output\n");
+    const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: createHash("sha256").update(output).digest("hex") })}\n`);
+    const task = evidenceTask(f, receipt, output);
+    const acceptanceEvidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { acceptance_criteria: "ac", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") } });
+    expect(readFileSync(join(bundle.bundleRoot, "canonical/receipts/tests.json"))).toEqual(receipt);
+    expect(readFileSync(join(bundle.bundleRoot, "canonical/evidence/tests-output.txt"))).toEqual(output);
+    expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"))).toHaveLength(2);
+  });
+
+  it.each([
+    ["missing output entity", false, false],
+    ["receipt hash mismatch", true, true],
+  ])("fails evidence closure before delivery: %s", (_label, includeOutput, wrongHash) => {
+    const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const output = Buffer.from("output\n"), receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/out.txt", output_hash: createHash("sha256").update(output).digest("hex") })}\n`);
+    const task = evidenceTask(f, receipt, output, { includeOutput });
+    const evidence = { receipt_ref: "receipts/tests.json", receipt_hash: wrongHash ? "0".repeat(64) : createHash("sha256").update(receipt).digest("hex") };
+    expect(() => buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: evidence, review_instructions: reviewInstructionsFor("build-code") } })).toThrow(/MATERIAL_INCOMPLETE|evidence|hash|output|ENOENT/i);
+  });
+
+  it("keeps every manifest skill file present and exactly named in review instructions", () => {
+    const f = fixture(); changeAll(f.source);
+    const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const instructions = reviewInstructionsFor("verify-code");
+    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code",
+      materials: { acceptance_criteria: "ac", acceptance_evidence: "tests", open_exceptions: "none", review_instructions: instructions } });
+    const declared = bundle.manifest.map(({ path }) => path).filter((path) => path.startsWith("skills/"));
+    const instructed = [...instructions.matchAll(/skills\/[A-Za-z0-9._-]+\/SKILL\.md/g)].map(([path]) => path);
+    expect(declared.sort()).toEqual(instructed.sort());
+    for (const path of declared) expect(readFileSync(join(bundle.bundleRoot, ...path.split("/")), "utf8").trim()).not.toBe("");
+  });
+
   it("keeps direction blind and gives code stages the complete snapshot", () => {
     const f = fixture(); changeAll(f.source);
     const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
@@ -146,8 +210,14 @@ describe("review materials", () => {
     const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const materials = { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") };
     const normal = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", materials });
-    const ui = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", uiScope: true, materials });
+    const ui = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec", uiScope: true, materials: { ...materials, review_instructions: reviewInstructionsFor("build-spec", null, true) } });
     expect(normal.files).not.toContain("skills/plan-design-review/SKILL.md");
     expect(ui.files).toContain("skills/plan-design-review/SKILL.md");
+  });
+
+  it("ships and names explicit reviewer skills for code stages", () => {
+    const instructions = reviewInstructionsFor("build-code");
+    for (const skill of ["review", "test-strategy", "diagnosing-bugs"]) expect(instructions).toContain(`skills/${skill}/SKILL.md`);
+    expect(instructions).not.toContain("skills/*/SKILL.md");
   });
 });

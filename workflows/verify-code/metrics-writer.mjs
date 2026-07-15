@@ -6,15 +6,13 @@
  */
 
 import { updateOwnResult, configForCollector } from "../../metrics/collector.mjs";
-import { join } from "node:path";
-import { homedir } from "node:os";
 
-export async function runMetricsWriter({ taskDir, taskId, verdict, executionId } = {}) {
+export async function runMetricsWriter({ task, workspace, metricsLauncherConfig, verdict, executionId } = {}) {
   if (!executionId) throw new Error("executionId required — must come from verify-code recordSkeleton");
 
   const cfg = configForCollector(
-    { metrics_path: join(homedir(), ".workflowhub", "metrics", "global-metrics.jsonl") },
-    { taskDir, taskId, project: "workflowhub" }
+    metricsLauncherConfig,
+    { task, workspace }
   );
 
   if (verdict) {

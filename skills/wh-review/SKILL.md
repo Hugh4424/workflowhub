@@ -5,7 +5,7 @@ description: Freeze the current source and stage evidence, ask independent provi
 
 # wh-review
 
-`wh-review` is a small quality gate: capture one source snapshot, build one complete material bundle, ask independent providers to review only that bundle, and publish one result.
+`wh-review` captures one source snapshot, builds one complete material bundle, asks independent providers to review only that bundle, and publishes one result. It records quality facts; the human stage boundary makes the quality decision.
 
 ## Commands
 
@@ -20,7 +20,7 @@ There is no reset, recover, flow migration, projection repair, or trusted-base r
 
 ## Inputs
 
-`run` receives `task_id`, `stage`, optional `review_track`, source worktree information, the required stage material paths, and provider selection. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
+`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the explicit Workspace root, stage, optional review track, frozen materials, and provider selection. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
 
 The host captures tracked changes, deletions, modes, symlinks, and non-ignored untracked files through a temporary Git index. It captures twice and rejects a changing source. Runtime files are written outside the source repository.
 

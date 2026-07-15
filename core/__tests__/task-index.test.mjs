@@ -1,98 +1,20 @@
-/**
- * task-index.test.mjs
- *
- * Tests for core/task-index.mjs — append and lookup.
- * Uses os.tmpdir() via mkdtempSync for test fixtures.
- * Never touches the real ~/.workflowhub/ path.
- */
-
-import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendTaskIndex, lookupProjectKey, __setIndexPathForTest } from "../task-index.mjs";
+import { createTask } from "../task-handle.mjs";
+import { deriveTaskPath } from "../task-identity.mjs";
+import { __setIndexPathForTest, appendTaskIndex, lookupProjectKey, taskIndexEntry } from "../task-index.mjs";
 
-let testDir;
-let indexPath;
+const temporary=[];
+function fixture() { const root=realpathSync(mkdtempSync(join(tmpdir(),"task-index-v2-"))); temporary.push(root); return createTask({storageRoot:root,taskPath:deriveTaskPath(root,"Demo","task-aa"),manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"task-aa",created_at:new Date().toISOString(),target_repo_root:join(root,"repo"),issue_ids:[],inputs:{}}}); }
+afterEach(()=>{while(temporary.length)rmSync(temporary.pop(),{recursive:true,force:true});});
 
-beforeEach(() => {
-  testDir = mkdtempSync(join(tmpdir(), "task-index-test-"));
-  indexPath = join(testDir, "task-index.json");
-  __setIndexPathForTest(indexPath);
-});
-
-describe("appendTaskIndex + lookupProjectKey", () => {
-  it("append then lookup returns correct data", () => {
-    appendTaskIndex("task-aa", "myproject", "https://github.com/user/myproject");
-    const result = lookupProjectKey("task-aa");
-    expect(result).toEqual({ projectKey: "myproject", repo: "https://github.com/user/myproject" });
-  });
-
-  it("lookup non-existent taskId returns null", () => {
-    const result = lookupProjectKey("no-such-id");
-    expect(result).toBeNull();
-  });
-
-  it("lookup returns null when index file does not exist at all", () => {
-    rmSync(indexPath, { force: true });
-    const result = lookupProjectKey("task-bb");
-    expect(result).toBeNull();
-  });
-});
-
-describe("appendTaskIndex — duplicate detection", () => {
-  it("throws when appending the same taskId twice", () => {
-    appendTaskIndex("task-dup", "proj", "https://github.com/org/repo");
-    expect(() =>
-      appendTaskIndex("task-dup", "proj2", "https://github.com/org/repo2"),
-    ).toThrow(/already exists/i);
-    expect(lookupProjectKey("task-dup")).toEqual({
-      projectKey: "proj",
-      repo: "https://github.com/org/repo",
-    });
-  });
-});
-
-describe("appendTaskIndex — atomic concurrent writes", () => {
-  it("preserves all records from concurrent appenders", async () => {
-    const moduleUrl = new URL("../task-index.mjs", import.meta.url).href;
-    const children = Array.from({ length: 5 }, (_, i) => {
-      const code = [
-        `import { appendTaskIndex, __setIndexPathForTest } from ${JSON.stringify(moduleUrl)};`,
-        `__setIndexPathForTest(${JSON.stringify(indexPath)});`,
-        `appendTaskIndex("task-${i}", "project-${i}", "https://example.com/repo-${i}");`,
-      ].join("\n");
-      return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        let stderr = "";
-        child.stderr.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-        child.on("error", reject);
-        child.on("exit", (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(stderr || `child exited ${code}`));
-        });
-      });
-    });
-
-    await Promise.all(children);
-
-    for (let i = 0; i < 5; i += 1) {
-      expect(lookupProjectKey(`task-${i}`)).toEqual({
-        projectKey: `project-${i}`,
-        repo: `https://example.com/repo-${i}`,
-      });
-    }
-  });
-});
-
-describe("lookupProjectKey — corruption handling", () => {
-  it("throws when index file contains invalid JSON", () => {
-    writeFileSync(indexPath, "this is not json{{{");
-    expect(() => lookupProjectKey("task-cc")).toThrow(/corrupt/i);
-  });
+describe("task index authenticated manifest projection",()=>{
+  it("projects task identity and repository only from TaskHandle",()=>{ expect(taskIndexEntry(fixture())).toEqual({taskId:"task-aa",projectKey:"Demo",repo:expect.stringMatching(/repo$/)}); });
+  it("looks up the authenticated task identity",()=>{ expect(lookupProjectKey(fixture(),"task-aa")).toEqual({projectKey:"Demo",repo:expect.stringMatching(/repo$/)}); });
+  it("returns null for a different requested task id",()=>{ expect(lookupProjectKey(fixture(),"other-task")).toBeNull(); });
+  it("rejects an unbranded task-shaped object",()=>{ expect(()=>lookupProjectKey({identity:{taskId:"task-aa"}},"task-aa")).toThrow(/TaskHandle|capability/i); });
+  it("rejects all legacy global-index append writes",()=>{ expect(()=>appendTaskIndex("task-aa","Demo","https://example.test/repo")).toThrow(/removed|manifest/i); });
+  it("rejects all legacy caller-controlled index paths",()=>{ expect(()=>__setIndexPathForTest("/tmp/task-index.json")).toThrow(/removed|global task index/i); });
 });

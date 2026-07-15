@@ -1,6 +1,6 @@
 # Tasks: {task-id}
 
-**Input**: Design documents from `specs/{task-id}/`
+**Input**: Design documents supplied as frozen named artifacts
 **Prerequisites**: spec.md (authoritative, 3rd-reviewed), plan.md
 <!-- 生成时替换 {task-id} 为实际的 task-id 字面量 -->
 
@@ -24,7 +24,7 @@
 - **Workflow skills**: `workflows/<skill-name>/SKILL.md`
 - **Templates**: `workflows/<skill-name>/templates/`
 - **Registry**: `reuse-registry.md`
-- **Artifacts**: `specs/{task-id}/`
+- **Artifacts**: managed by the parent StageContext ArtifactDir
 - **Constitution**: `constitution-checklist.md`, `CONSTITUTION.md`
 
 ---

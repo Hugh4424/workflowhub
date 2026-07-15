@@ -1,7 +1,7 @@
 # 实施计划：{task-id}
 
 **Task ID**: `{task-id}` | **Date**: {date} | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `specs/{task-id}/spec.md`
+**Input**: Feature specification supplied as named artifact `spec.md`
 **Status**: Draft
 <!-- 生成时替换 {task-id} 为实际的 task-id 字面量，{date} 为当前日期 -->
 
@@ -15,7 +15,7 @@
 
 **Language/Version**: <!-- 如 Markdown, Node.js v20 -->
 **Primary Dependencies**: <!-- 主要依赖，无依赖写 "None" -->
-**Storage**: <!-- 产物存储方式，如 Filesystem — `specs/{task-id}/` -->
+**Storage**: <!-- 由父 stage 的 ArtifactDir 管理 -->
 **Testing**: <!-- 测试命令，如 `npm test` -->
 **Target Platform**: <!-- 目标运行环境 -->
 **Project Type**: <!-- 项目类型，如 AI workflow orchestration tool -->
@@ -72,7 +72,7 @@ Every plan MUST explicitly answer these gates. For workflowhub, the applicable g
 ### Documentation (this feature)
 
 ```text
-specs/{task-id}/
+named artifacts
 ├── spec.md                  # Build-spec output (authoritative)
 ├── plan.md                  # This file (spec-plan workflow output)
 ├── tasks.md                 # spec-tasks workflow output

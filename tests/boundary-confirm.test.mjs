@@ -7,45 +7,32 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "fs";
+import { mkdtempSync, realpathSync, renameSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
 import { confirmBoundary, confirmIrreversible } from "../core/boundary-confirm.mjs";
-import { recordSkeleton } from "../metrics/collector.mjs";
-
-// Read all records from a JSONL path.
-function readAllRecords(path) {
-  if (!existsSync(path)) return [];
-  const text = readFileSync(path, "utf8").trim();
-  if (!text) return [];
-  return text.split("\n").filter(Boolean).map((l) => JSON.parse(l));
-}
+import { configForCollector, createMetricsLauncherConfig, recordSkeleton } from "../metrics/collector.mjs";
+import { createTask } from "../core/task-handle.mjs";
 
 let workDir;
-let taskPath;
-let globalPath;
+let task;
+let cfg;
 
 beforeEach(() => {
-  workDir = mkdtempSync(join(tmpdir(), "m5-bound-"));
-  taskPath = join(workDir, "task-metrics.jsonl");
-  globalPath = join(workDir, "global-metrics.jsonl");
+  workDir = realpathSync(mkdtempSync(join(tmpdir(), "m5-bound-")));
+  task = createTask({ storageRoot: workDir, taskPath: join(workDir, "Projects", "Demo", "tasks", "boundary-task"), manifest: {
+    schema_version: "1.0.0", project_name: "Demo", task_id: "boundary-task", created_at: new Date().toISOString(), target_repo_root: join(workDir, "repo"), issue_ids: [], inputs: {},
+  } });
+  cfg = configForCollector(createMetricsLauncherConfig({ metrics_path: join(workDir, "global-metrics.jsonl") }), { task });
 });
 
 afterEach(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-function baseCfg(extra = {}) {
-  return {
-    execution_id: extra.execution_id ?? "exec-bound-001",
-    taskMetricsPath: taskPath,
-    globalMetricsPath: globalPath,
-    taskId: "m5-quality-mechanism",
-    project: "workflowhub",
-    ...extra,
-  };
-}
+function baseCfg() { return cfg; }
+function readAllRecords() { return task.readRecord("task-metrics.jsonl").trim().split("\n").filter(Boolean).map(JSON.parse); }
 
 // Helper: seed a skeleton so upsert can update (not insert fresh).
 function seedSkeleton(execution_id, cfg) {
@@ -63,10 +50,10 @@ describe("boundary-confirm three states pass-through", () => {
   for (const state of ["missing", "failed", "unknown"]) {
     it(`state=${state}: returns continue result and writes source-gated boundary_decisions`, () => {
       const execution_id = `exec-state-${state}`;
-      const cfg = baseCfg({ execution_id });
+      const cfg = baseCfg();
       seedSkeleton(execution_id, cfg);
 
-      const result = confirmBoundary(state, cfg);
+      const result = confirmBoundary(state, execution_id, cfg);
 
       // Return shape
       expect(result).toHaveProperty("decision");
@@ -76,7 +63,7 @@ describe("boundary-confirm three states pass-through", () => {
       expect(result.decision).toBe("continue");
 
       // Non-orphan: read back the record (FR-BOUND-002)
-      const records = readAllRecords(taskPath);
+      const records = readAllRecords();
       const record = records.find((r) => r.execution_id === execution_id);
       expect(record).toBeDefined();
 
@@ -106,15 +93,15 @@ describe("boundary-confirm irreversible ops", () => {
   it("all four ops write boundary_decisions and return continue (never block)", () => {
     for (const op of OPS) {
       const execution_id = `exec-irrev-${op}`;
-      const cfg = baseCfg({ execution_id });
+      const cfg = baseCfg();
       seedSkeleton(execution_id, cfg);
 
-      const result = confirmIrreversible(op, cfg, undefined, { outcome: "confirmed" });
+      const result = confirmIrreversible(op, execution_id, cfg, undefined, { outcome: "confirmed" });
 
       expect(result).toHaveProperty("decision");
       expect(result.decision).toBe("continue");
 
-      const records = readAllRecords(taskPath);
+      const records = readAllRecords();
       const record = records.find((r) => r.execution_id === execution_id);
       expect(record).toBeDefined();
 
@@ -124,33 +111,33 @@ describe("boundary-confirm irreversible ops", () => {
     }
   });
 
-  it("rejected outcome writes boundary_decisions and continues (FR-GATE-004 守恒)", () => {
+  it("rejected outcome writes boundary_decisions and blocks the irreversible operation", () => {
     const execution_id = "exec-irrev-rejected";
-    const cfg = baseCfg({ execution_id });
+    const cfg = baseCfg();
     seedSkeleton(execution_id, cfg);
 
-    const result = confirmIrreversible("delete", cfg, "some/path.txt", { outcome: "rejected" });
+    const result = confirmIrreversible("delete", execution_id, cfg, "some/path.txt", { outcome: "rejected" });
 
-    expect(result.decision).toBe("continue");
+    expect(result.decision).toBe("block");
 
-    const records = readAllRecords(taskPath);
+    const records = readAllRecords();
     const record = records.find((r) => r.execution_id === execution_id);
     const bd = record.boundary_decisions;
     expect(bd.source).toBe("boundary-confirm@m5");
     expect(bd.outcome).toBe("rejected");
   });
 
-  it("timeout outcome writes boundary_decisions and continues (FR-GATE-004 守恒)", () => {
+  it("timeout outcome writes boundary_decisions and blocks without positive confirmation", () => {
     const execution_id = "exec-irrev-timeout";
-    const cfg = baseCfg({ execution_id });
+    const cfg = baseCfg();
     seedSkeleton(execution_id, cfg);
 
-    const result = confirmIrreversible("push", cfg, undefined, { outcome: "timeout" });
+    const result = confirmIrreversible("push", execution_id, cfg, undefined, { outcome: "timeout" });
 
-    expect(result.decision).toBe("continue");
+    expect(result.decision).toBe("block");
     expect(result.reason).toMatch(/timeout/i);
 
-    const records = readAllRecords(taskPath);
+    const records = readAllRecords();
     const record = records.find((r) => r.execution_id === execution_id);
     const bd = record.boundary_decisions;
     expect(bd.source).toBe("boundary-confirm@m5");
@@ -168,12 +155,12 @@ describe("boundary-confirm findViolation reuse", () => {
     // If boundary-confirm used a home-grown checker with a different list,
     // this test would fail (the assertion is on the specific protected list entry).
     const execution_id = "exec-protected-path";
-    const cfg = baseCfg({ execution_id });
+    const cfg = baseCfg();
     seedSkeleton(execution_id, cfg);
 
-    confirmIrreversible("delete", cfg, "CONSTITUTION.md", { outcome: "confirmed" });
+    confirmIrreversible("delete", execution_id, cfg, "CONSTITUTION.md", { outcome: "confirmed" });
 
-    const records = readAllRecords(taskPath);
+    const records = readAllRecords();
     const record = records.find((r) => r.execution_id === execution_id);
     const bd = record.boundary_decisions;
 
@@ -186,12 +173,12 @@ describe("boundary-confirm findViolation reuse", () => {
 
   it("delete on non-protected path does NOT set needs_manual_confirm", () => {
     const execution_id = "exec-safe-path";
-    const cfg = baseCfg({ execution_id });
+    const cfg = baseCfg();
     seedSkeleton(execution_id, cfg);
 
-    confirmIrreversible("delete", cfg, "some/safe/file.txt", { outcome: "confirmed" });
+    confirmIrreversible("delete", execution_id, cfg, "some/safe/file.txt", { outcome: "confirmed" });
 
-    const records = readAllRecords(taskPath);
+    const records = readAllRecords();
     const record = records.find((r) => r.execution_id === execution_id);
     const bd = record.boundary_decisions;
     expect(bd.needs_manual_confirm).toBeFalsy();
@@ -205,16 +192,16 @@ describe("boundary-confirm findViolation reuse", () => {
 describe("boundary-confirm non-irreversible op", () => {
   it("op=edit does not trigger irreversible handling", () => {
     const execution_id = "exec-edit-op";
-    const cfg = baseCfg({ execution_id });
+    const cfg = baseCfg();
     seedSkeleton(execution_id, cfg);
 
-    const result = confirmIrreversible("edit", cfg, "some/file.txt", { outcome: "confirmed" });
+    const result = confirmIrreversible("edit", execution_id, cfg, "some/file.txt", { outcome: "confirmed" });
 
     // Should still not throw and return an object
     expect(result).toHaveProperty("decision");
 
     // The boundary_decisions entry must reflect it was not treated as irreversible
-    const records = readAllRecords(taskPath);
+    const records = readAllRecords();
     const record = records.find((r) => r.execution_id === execution_id);
     const bd = record.boundary_decisions;
 
@@ -227,11 +214,8 @@ describe("boundary-confirm non-irreversible op", () => {
     // Falsifiable: upsert returns false (not throw) on writeAll failure. With an
     // unwritable taskMetricsPath, writeBoundaryDecision must surface a write-fail warn
     // while confirmBoundary still returns continue (FR-GUARD-001 / never-block).
-    const cfg = baseCfg({
-      execution_id: "exec-bound-writefail",
-      taskMetricsPath: "/dev/null/nope/task-metrics.jsonl",
-      globalMetricsPath: "/dev/null/nope/global-metrics.jsonl",
-    });
+    const cfg = baseCfg();
+    renameSync(task.taskPath, `${task.taskPath}-invalidated`);
 
     const stderrWrites = [];
     const originalWrite = process.stderr.write.bind(process.stderr);
@@ -243,7 +227,7 @@ describe("boundary-confirm non-irreversible op", () => {
     let result;
     try {
       expect(() => {
-        result = confirmBoundary("missing", cfg);
+        result = confirmBoundary("missing", "exec-bound-writefail", cfg);
       }).not.toThrow();
     } finally {
       process.stderr.write = originalWrite;

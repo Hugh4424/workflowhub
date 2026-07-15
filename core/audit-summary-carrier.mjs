@@ -4,8 +4,8 @@
  * callers here only preserve and verify its published tuple.
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { resolve, relative, isAbsolute } from "node:path";
+import { isAbsolute } from "node:path";
+import { assertTaskHandle } from "./task-handle.mjs";
 
 export const AUDIT_CARRIER_VERSION = "v1";
 
@@ -45,15 +45,13 @@ export function verifyAuditSummary(auditSummaryRef, auditSummary, expected = {})
   return { ok: errors.length === 0, errors };
 }
 
-export function loadAuditSummary(taskRoot, auditSummaryRef, expected = {}) {
+export function loadAuditSummary(task, auditSummaryRef, expected = {}) {
+  const taskHandle = assertTaskHandle(task);
   if (!safeRelativeRef(auditSummaryRef)) return { ok: false, errors: ["audit_summary_ref must be a task-relative path"] };
-  const path = resolve(taskRoot, auditSummaryRef);
-  const rel = relative(resolve(taskRoot), path);
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return { ok: false, errors: ["audit_summary_ref escapes task root"] };
   try {
-    const auditSummary = JSON.parse(readFileSync(path, "utf8"));
+    const auditSummary = JSON.parse(taskHandle.readRecord(auditSummaryRef));
     const result = verifyAuditSummary(auditSummaryRef, auditSummary, expected);
-    return { ...result, audit_summary: auditSummary, path };
+    return { ...result, audit_summary: auditSummary, ref: auditSummaryRef };
   } catch (error) { return { ok: false, errors: [`cannot read published audit summary: ${error.message}`] }; }
 }
 

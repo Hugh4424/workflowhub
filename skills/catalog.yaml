@@ -27,7 +27,7 @@ skills:
   - name: decision-log
     path: skills/decision-log/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: d9e9db6e8ad923f51ae0269ae0fde777e61c0a185eda3108f55dee9b4d055c64
+    local_bundle_hash: 264cde9e077bf9ba107034bc19abc385a1b41b33d0740cc81c92fc8b4ff11302
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 生成下游唯一权威需求记录
@@ -82,7 +82,7 @@ skills:
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c20b3417e9b560594e3d25188c7f394db3e32b3499e6363e3c603afc12e9ac72
+    local_bundle_hash: 2946d2efd4fdd0e5984290533a9a587d2b61d86364cf181602c358574d40b2d9
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -95,7 +95,7 @@ skills:
   - name: spec-research
     path: skills/spec-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 3f4a1f155c6bb05bf5f11af6b85f3ae3a11647efe4df120a8ba20bc857e601c8
+    local_bundle_hash: 5e83b0842787c990d444277059db1570dbd683912be2755c014365cd420f186b
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 规划前形成可追踪研究结论
@@ -108,7 +108,7 @@ skills:
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: abddb296b768b00482ed83076f31a0e3a4c4365944999ea2f3435b9f5c38e142
+    local_bundle_hash: 80952ebce4c0be1dbd7acca22a9b3f35a20396090d4ac15ed3c9abefbf4b3a90
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从自然语言生成可测试 spec
@@ -121,7 +121,7 @@ skills:
   - name: spec-clarify
     path: skills/spec-clarify/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 386fa8d05e573f337db199bc9d931444b3da7e1f7eb5ef2cd47934f9a161c3a5
+    local_bundle_hash: 7bdc0c3de6baf6bfb08ed0e675e469926ce1b1b857183a96f95488be0b04833f
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 扫描并逐题消除 spec 歧义
@@ -134,7 +134,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 3ec4723dcf5853df5b1c30da9268dd35c8ea1192ac77e948ad3ad62f3b2c7692
+    local_bundle_hash: caa2a69259a8051021430bfd056326ae58365ae43085b79b25abf3979176e304
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -149,7 +149,7 @@ skills:
   - name: spec-tasks
     path: skills/spec-tasks/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 3ea3b35b1ad4ff28d7e38b82abbbaea685c799e66a136fd379c3196748543a01
+    local_bundle_hash: 053c7c352f1440ba601fc72b30a754f64444ccb96a2d25464a03a395acf9589c
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 将 spec/plan 转成依赖排序任务
@@ -164,7 +164,7 @@ skills:
   - name: spec-analyze
     path: skills/spec-analyze/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 4241fc7bdf7217ac29cc80f95d0edda195de734ba19f21db89fc7293904dce5e
+    local_bundle_hash: a2fd7fad66c94907bc8112604e8a13c8cb8855bd3f7556ca54978f5d821baf75
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 独立检查 spec、plan、tasks 一致性
@@ -219,7 +219,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 8189d0acdab75f3103b4dafa6280cae2268b72e254f6f58b5e235dd304e7b2ef
+    local_bundle_hash: 43c7b9a930f667a77375cd75ca81a8efb4976e3d59b81a3e6f5b526081ddf2eb
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层
@@ -325,7 +325,7 @@ skills:
   - name: debate
     path: skills/debate/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 547934e644d88b1cdce4e43c6de321fbddf7381860d5b1ba14677fb7838fe18b
+    local_bundle_hash: 165d14b8df4e1a8d646581b1c2dfc4f2b6bb8296d90f8e24c3d044a874e092dd
     last_reviewed_at: "2026-07-14"
     status: adopted
     purpose: 对方向级分歧执行可选对抗审查

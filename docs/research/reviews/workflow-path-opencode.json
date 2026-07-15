@@ -1,0 +1,295 @@
+{
+  "verdict": "replace",
+  "confidence": "high",
+  "proven_facts": [
+    "cwd git remote is the single variable controlling misresolution: when cwd is inside the workflowhub tool repo, parser reads tool repo origin as project key",
+    "five stages, journal, review helpers, route, and report writers each independently call the parser instead of sharing a resolved root",
+    "explicit WORKFLOWHUB_TASK_DIR or cwd in business project root both produce correct resolution, proving the mechanism is sound but the trigger is wrong",
+    "single task_id conflates at least three identities: output task name, upstream workflow identity, and external issue ID (ZHI-138 vs kd-phase0-digest-spec)",
+    "verify-code has a bootstrap deadlock: needs correct root to read build-code result, but correct root is only derivable from the unread result",
+    "24 existing tests pass but fixture coverage is limited to same-repo, same-task, explicit-API scenarios; no nested-external-project, CLI-root, dual-task-ID, or verify-code-lineage tests exist",
+    "spec/plan/tasks use cwd-relative paths (specs/{task-id}) which remain wrong even after task-record root is corrected"
+  ],
+  "unknowns": [
+    "whether production users have workarounds (wrappers, env exports) that would break under a radical model change",
+    "exact set of callers that invoke parser independently vs those that accept an already-resolved root",
+    "whether worktree.json is ever consumed by non-WorkflowHub tooling that would break if its format changes",
+    "actual production frequency of cross-run artifact reuse vs same-run linear progression",
+    "whether the tool-repo-inside-business-project nesting pattern is intentional or accidental"
+  ],
+  "root_cause_model": [
+    {
+      "cause": "Path resolution uses ambient state (cwd git remote) as implicit authority instead of requiring an explicit, immutable anchor passed through the entire call chain",
+      "evidence": "unset ENV + cwd in workflowhub → reads tool repo origin; ENV set or cwd in business project → correct. The mechanism works; the trigger selection is wrong.",
+      "blast_radius": "All five stages, journal, review, route, close, report writers, worktree cleanup, legacy migration — every component that calls the parser independently."
+    },
+    {
+      "cause": "task_id is overloaded as namespace key, lineage reference, and external identifier with no disambiguation",
+      "evidence": "ZHI-138 (external issue) cannot coexist with kd-phase0-digest-spec (upstream task); stages assume upstream task_id equals current task_id",
+      "blast_radius": "Any workflow triggered from an external issue tracker, any task that consumes another task's output, all lineage and provenance records."
+    },
+    {
+      "cause": "Five stages plus auxiliary paths each independently decide where to read and write, creating a distributed consistency problem",
+      "evidence": "journal writer, route/index, review helpers, report writers each re-parse; one stage may write to correct project while another writes to tool repo",
+      "blast_radius": "Silent data scattering across multiple project directories; missing files in verify-code causing fail-loud but incomplete (Steps 2-6 never execute)."
+    },
+    {
+      "cause": "No single entry point validates and resolves all path state before any stage logic runs",
+      "evidence": "CLI has no --task-tracking-root flag; make-decision infers target repo from checkout and bakes it into worktree.json without validation; verify-code can't read its own preconditions",
+      "blast_radius": "Errors surface late and non-locally; verify-code fails at Step 1 with cascading missing files; make-decision can permanently encode wrong repo."
+    }
+  ],
+  "minimal_invariants": [
+    "A single absolute run directory path, set once before any stage executes and immutable for the run's lifetime",
+    "A run identity (UUID or hash) that is distinct from any external issue ID and from any task name",
+    "A target repository root (where code changes land), recorded as an absolute path or validated git worktree root",
+    "Within the run directory: a deterministic, flat layout where every artifact (stage-result, journal, spec, plan, review, evidence) has exactly one well-known location derived from the run dir and stage name alone",
+    "A single module (not multiple parsers) that all producers and consumers must use for any path operation; no component may call the module's internal resolver independently"
+  ],
+  "delete_or_deprecate": [
+    {
+      "item": "cwd-git-remote-based project detection in task-dir-parser",
+      "reason": "Single proven cause of all reported failures; ambient state must never be the authority for identity. Replace with mandatory explicit --run-dir or WORKFLOWHUB_RUN_DIR."
+    },
+    {
+      "item": "Independent parser calls from journal, review helpers, route/index, and report writers",
+      "reason": "Distributed consistency problem — each caller can resolve to a different project. Replace with single Run module that all writers call; no component invokes parser directly."
+    },
+    {
+      "item": "task_id as container for upstream workflow identity",
+      "reason": "Conflation of output namespace and lineage. Replace with explicit upstream field in run.json containing absolute path to source run_dir, read-only, never used for output path derivation."
+    },
+    {
+      "item": "cwd-relative spec/plan/tasks paths (specs/{task-id})",
+      "reason": "Remains wrong even after task-record root is corrected because cwd may still be tool repo. Artifacts must live under run_dir/artifacts/ with no dependency on producer worktree or cwd."
+    },
+    {
+      "item": "worktree.json as handoff journal",
+      "reason": "Adds lifecycle management complexity (handoff, ownership transfer, cleanup enforcement) that a simple run_dir/worktree field in run.json eliminates. Worktree path is set once at make-decision and never changes."
+    },
+    {
+      "item": "current/upstream dual resolver with task alias mapping",
+      "reason": "Unnecessary indirection. Within a run, always read the previous stage from the same run_dir. Cross-run reuse is rare and handled by explicit absolute from_result pointing to another run's stage-result, never by alias or name mapping."
+    },
+    {
+      "item": "legacy migration receiving multiple paths without provenance proof",
+      "reason": "Silent data corruption risk — merged records from different projects/tasks/producers look indistinguishable. Migration must require explicit run_dir per batch and validate all entries share the same run identity."
+    },
+    {
+      "item": "branch/commit prefix hardcoded to 'workflowhub' in close/archive",
+      "reason": "Assumes a naming convention that may not hold for all projects. Prefix should be configurable in run.json or derived from run identity."
+    }
+  ],
+  "alternatives": [
+    {
+      "name": "Alternative C: Run Directory Monolith",
+      "model": "Single run_dir with flat layout. One run.json holding immutable identity, target repo, worktree path, issue_ids metadata, and status. All artifacts (stage-result, journal, spec, plan, review, evidence) are files directly in run_dir keyed by stage name. Single Run module exposes openRun(runDir), readResult(stage), writeResult(stage, data), artifactPath(name). CLI: WORKFLOWHUB_RUN_DIR required; no cwd, git remote, config, or env fallback. No lineage tracking — cross-run reuse is explicit from_result with absolute path. No worktree.json — worktree_path is a field in run.json. No handoff, no locator, no hash, no stage-result v2. Legacy: read-only adapter that extracts run_dir from old task dir for one-time migration; deleted after migration window.",
+      "pros": [
+        "Fewest concepts: run_dir, run.json, stage name. Zero indirection.",
+        "All path resolution is trivial string concatenation from run_dir + known filename.",
+        "Impossible for any component to resolve to a different directory.",
+        "No parser, no resolver, no cwd dependency at all.",
+        "verify-code bootstrap solved: run_dir is known before any stage runs, so build-code result is at run_dir/build-code-result.json deterministically.",
+        "Migration is a single-pass extract-and-move; old layout deleted immediately.",
+        "Zero ongoing compatibility burden after migration."
+      ],
+      "cons": [
+        "Abandons per-project task directory hierarchy; all runs are siblings or in a flat runs/ directory.",
+        "No built-in browsing by project or issue — requires external index or run.json metadata queries.",
+        "spec/plan/tasks are now workflow artifacts, not business-repo artifacts; if teams commit specs to their repo, they need an explicit export step.",
+        "Worktree lifecycle (create at make-decision, cleanup at close) is implicit in run.json fields rather than an explicit handoff protocol — may need a worktree manager.",
+        "No provenance chain linking runs together for audit; must be built separately if needed."
+      ],
+      "migration_cost": "Medium — one-time extraction script maps old task dirs to new run dirs; run.json synthesized from worktree.json + task metadata. Old layout deleted. No dual-mode period.",
+      "failure_modes": [
+        "If run_dir is accidentally reused across runs, artifacts overwrite silently. Mitigation: run.json includes creation timestamp; openRun() refuses to initialize an existing run_dir unless resuming.",
+        "If worktree is deleted externally, run.json worktree_path becomes stale. Mitigation: verify-code validates worktree existence before reading.",
+        "Flat run directory with many artifacts becomes hard to browse manually. Mitigation: run.json is the index."
+      ]
+    },
+    {
+      "name": "Alternative D: Hybrid with Staged Simplification",
+      "model": "Keep per-project task directory (Projects/{project}/tasks/{task_id}/) but eliminate all dual-resolution. Introduce WORKFLOWHUB_PROJECT_ROOT as the single required env var (or --project-root CLI flag), set to the business project root. task-dir-parser uses only this variable; no cwd, no git remote, no config file fallback. Run module still wraps all path operations. task_id remains the output namespace but upstream is tracked via a lineage.json in the task dir: {source_task_dir: absolute_path, source_stage: name}. Five stages, journal, review, route, close all use Run module exclusively. Delete: worktree.json (replace with task_dir/worktree field in task metadata), cwd-relative spec paths (move to task_dir/artifacts/), independent parser calls, hardcoded branch prefixes. Keep: per-project hierarchy, task_id as namespace.",
+      "pros": [
+        "Preserves existing directory layout and browsing model.",
+        "Smaller conceptual delta from current state — less retraining.",
+        "Lineage is explicit per-task, not per-run, matching the existing mental model.",
+        "Migration is mostly deleting code paths, not restructuring storage."
+      ],
+      "cons": [
+        "Still has two identity concepts (project root + task_id) where Alternative C has one (run_dir).",
+        "Per-project hierarchy means path derivation still involves two levels of lookup (project_dir from PROJECT_ROOT, then task_dir from task_id).",
+        "Lineage.json adds another file and lifecycle to manage.",
+        "Doesn't solve the task_id conflation — ZHI-138 and kd-phase0-digest-spec still compete for the task_id namespace unless a separate field is added.",
+        "PROJECT_ROOT still needs to be set correctly; misconfiguration produces a different class of error than Alternative C's single-point failure."
+      ],
+      "migration_cost": "Low — delete parser fallback branches, add mandatory PROJECT_ROOT, add Run module wrapper. Existing task dirs stay in place.",
+      "failure_modes": [
+        "PROJECT_ROOT set to wrong project silently scatters data. Mitigation: validate that PROJECT_ROOT is a git repo with expected remote or has a .workflowhub-project marker.",
+        "lineage.json can become inconsistent if source task is moved or deleted. Mitigation: treat missing lineage source as a hard error, not a fallback.",
+        "Does not eliminate the need for task_id disambiguation in cross-issue workflows."
+      ]
+    }
+  ],
+  "recommended_design": {
+    "summary": "Replace the distributed, ambient-state-dependent path resolution with a single mandatory anchor — a run directory — set once before any stage executes. All artifacts live under that directory with deterministic names. A single Run module is the only code path for any file operation. Delete cwd resolution, dual resolvers, worktree.json handoff, independent parser calls, and cwd-relative artifact paths. External issue IDs and workflow task names are metadata in run.json, never used for path derivation.",
+    "authoritative_state": "run_dir (absolute path) set via WORKFLOWHUB_RUN_DIR or --run-dir. This is the only variable needed to locate every artifact for the run. run_dir/run.json contains: run_id (UUID, immutable), target_repo (absolute path), worktree_path (absolute path, nullable before make-decision), issue_ids (string array, informational), status (enum), created_at, updated_at. No other file or variable carries authoritative state.",
+    "stage_interface": "Every stage receives --run-dir or WORKFLOWHUB_RUN_DIR. Stages call Run.openRun(runDir) which validates run.json exists and is well-formed, then returns a handle. Stages read the previous stage's result via handle.previousResult(currentStage) which looks for run_dir/{prev-stage}-result.json in a fixed order (make-decision → build-spec → build-plan → build-code → verify-code). Stages write their result via handle.publishResult(stage, data) which writes to run_dir/{stage}-result.json. Stages read artifacts via handle.artifact(name) which maps to run_dir/artifacts/{name}. No component may call any path function except through the Run handle.",
+    "path_resolution": "All paths are derived from run_dir concatenation: run_dir/run.json, run_dir/{stage}-result.json, run_dir/journal.jsonl, run_dir/review.json, run_dir/evidence/{hash}, run_dir/artifacts/{name}. No relative paths, no cwd involvement, no git remote, no config file, no env var beyond RUN_DIR. The Run module is the only file that contains path constants; no other module imports or duplicates them.",
+    "lineage": "Lineage within a run is implicit: stages are a linear pipeline, and previousResult() always reads the immediately preceding stage from the same run_dir. Cross-run lineage (when a new run consumes another run's output) is expressed as an explicit from_run field in the consuming run's run.json: {from_run: '/absolute/path/to/source/run_dir', from_stage: 'build-code'}. The Run module's previousResult() checks from_run for the first stage that needs input; subsequent stages chain normally. No aliases, no task name mapping, no dual resolver. from_run is read-only reference; the source run is never modified.",
+    "worktree_lifecycle": "make-decision creates or selects a worktree and writes its absolute path to run.json.worktree_path. All subsequent stages read it from run.json. close validates the worktree exists at that path, cleans it up, and sets run.json.status to 'closed'. No separate worktree.json, no handoff protocol, no ownership journal. A worktree manager module (separate from Run) handles git worktree create/remove operations; Run only stores and reads the path.",
+    "failure_semantics": "All failures are immediate and at the entry point. openRun() fails if run_dir doesn't exist or run.json is missing/malformed — no further code executes. previousResult() fails if the expected previous result file is missing — no fallback, no guessing. artifact() fails if the named artifact is missing. publishResult() fails if the stage result already exists (to prevent accidental overwrite of a completed stage). Every error message includes the absolute path that was tried. No component catches and swallows a path error to try an alternative resolution."
+  },
+  "candidate_reviews": {
+    "A": {
+      "keep": [
+        "Explicit task_tracking_root as mandatory anchor — correct direction but should be run_dir not project root",
+        "Structured upstream with explicit fields rather than overloaded task_id — correct diagnosis of the conflation problem",
+        "Stage-result v2 with producer identity — useful for audit but overdesigned if run_dir already scopes identity"
+      ],
+      "remove": [
+        "Dual current/upstream resolver — unnecessary indirection when a single absolute from_run field suffices",
+        "Worktree handoff journal — adds lifecycle state machine complexity; a single run.json.worktree_path field with a worktree manager is simpler",
+        "Artifact locator as separate concept — run_dir/artifacts/ with deterministic naming eliminates the need for a locator",
+        "Current/source resolver dualism — if task_tracking_root is mandatory, there is only one source of truth; no 'current' vs 'source' distinction needed",
+        "Long-term dual-mode compatibility — must have an end date; permanent dual-mode accumulates dead code and testing burden"
+      ],
+      "change": [
+        "task_tracking_root should be a run directory, not a project root — eliminates the need for task_id subdirectory derivation",
+        "Upstream should be an absolute path to a source run_dir and stage, not a structured identity object — simpler, fewer fields, less validation",
+        "Producer artifact locator should be merged into Run.artifact() with no separate protocol — same function, less API surface",
+        "Handoff should be replaced by run.json containing worktree_path directly, with a separate WorktreeManager module for create/cleanup — Run handles paths, WorktreeManager handles git operations, no journal in between"
+      ]
+    },
+    "B": {
+      "keep": [
+        "Single run_dir as the only mandatory input — eliminates all ambient-state problems",
+        "run.json as sole authoritative state file — no worktree.json, no separate config, no multi-file consistency problem",
+        "Run module as single path-resolution entry point — guarantees no component resolves independently",
+        "Explicit from_result for cross-run reuse rather than aliases or name mapping — correct level of indirection",
+        "Legacy adapter with explicit sunset — avoids permanent dual-mode",
+        "issue_ids as metadata array, not path component — correctly decouples external identity from internal namespace"
+      ],
+      "remove": [
+        "Spec/plan/tasks defaulting to external workflow artifact — this should be a configurable choice per project; some teams commit specs to business repos and the model should not prevent it. Add an artifacts.export boolean in run.json.",
+        "Legacy adapter having a 'period' — it should be a one-time migration script, not a runtime adapter. Runtime adapters accumulate bugs and become permanent."
+      ],
+      "change": [
+        "openRun() should return an immutable handle, not a mutable object — prevents accidental mutation of run metadata during a stage",
+        "previousResult() should use a fixed stage order constant (the five-stage pipeline), not an inferred order — prevents subtle bugs if stage names change",
+        "publishResult() should reject overwrites by default with an explicit --force flag — prevents accidental re-execution from clobbering results",
+        "Add a run_dir/.lock or advisory file lock during stage execution — prevents concurrent execution of the same run",
+        "artifacts/ should have a manifest (artifacts/manifest.json) listing all artifacts with their producing stage and hash — enables integrity checking without a separate locator or hash system",
+        "Worktree cleanup should be a separate WorktreeManager module, not part of Run — Run is about paths, WorktreeManager is about git operations; mixing them couples the path model to git semantics"
+      ]
+    }
+  },
+  "migration": [
+    {
+      "step": "Freeze writes to legacy task directories — deploy a version that still reads legacy but only writes to run_dir",
+      "rollback": "Redeploy previous version; no data loss because legacy reads still work",
+      "validation": "All five stages produce run_dir output while legacy task dirs are untouched"
+    },
+    {
+      "step": "One-shot migration script: for each project key, enumerate task dirs, create corresponding run_dir, copy stage-result/journal/evidence/artifacts, write run.json from worktree.json + task metadata, validate run.json.worktree_path points to an existing directory",
+      "rollback": "run_dirs are additive; delete them and revert to legacy reader",
+      "validation": "Run.openRun() succeeds on every migrated run_dir; previousResult() returns the same data as legacy stage-result for each stage"
+    },
+    {
+      "step": "Switch all consumers to Run module: stages, journal, review, route, close, report writers. Delete all independent parser calls.",
+      "rollback": "Gate with feature flag: if RUN_DIR is set use new path, else use legacy path. Remove flag after validation.",
+      "validation": "Run full test suite against both new and legacy fixtures; add tests for nested repo, dual task ID, verify-code lineage, missing run_dir"
+    },
+    {
+      "step": "Delete legacy task directory parser, cwd git remote resolver, worktree.json handler, dual resolver, artifact locator, and all cwd-relative path code",
+      "rollback": "Revert to previous commit; all data is in run_dirs",
+      "validation": "Grep for task-dir-parser, resolveTaskRecordPaths, cwd, process.cwd in path-sensitive modules; confirm zero matches outside Run module"
+    },
+    {
+      "step": "Delete legacy task directories from storage after a retention window (e.g., 30 days with no read access logged)",
+      "rollback": "Restore from backup",
+      "validation": "All workflows complete successfully with only run_dir access; no read attempts on legacy paths in logs"
+    }
+  ],
+  "acceptance_tests": [
+    {
+      "name": "Nested tool repo does not affect resolution",
+      "given": "WorkflowHub tool repo is nested inside business project at business-project/workflowhub; cwd is workflowhub/; WORKFLOWHUB_RUN_DIR is set to /tmp/runs/test-run-1",
+      "when": "build-code stage executes",
+      "then": "Reads previous stage result from /tmp/runs/test-run-1/build-plan-result.json, writes to /tmp/runs/test-run-1/build-code-result.json, never accesses any path under business-project/ or workflowhub/"
+    },
+    {
+      "name": "External issue ID does not pollute path resolution",
+      "given": "run.json contains issue_ids: ['ZHI-138']; run_dir is /tmp/runs/test-run-2",
+      "when": "Any stage reads or writes any artifact",
+      "then": "No file path contains 'ZHI-138'; all paths are under /tmp/runs/test-run-2/"
+    },
+    {
+      "name": "Cross-run lineage via explicit from_run",
+      "given": "Run B's run.json has from_run: '/tmp/runs/run-A', from_stage: 'build-code'; Run A's build-code result exists",
+      "when": "Run B's verify-code calls previousResult()",
+      "then": "Returns Run A's build-code-result.json content; no mutation of Run A's directory"
+    },
+    {
+      "name": "verify-code bootstrap works without pre-known root",
+      "given": "WORKFLOWHUB_RUN_DIR=/tmp/runs/test-run-3; build-code result exists at run_dir/build-code-result.json",
+      "when": "verify-code stage starts",
+      "then": "Reads build-code result from run_dir without needing to discover the root from the result content"
+    },
+    {
+      "name": "All writers use same run_dir",
+      "given": "WORKFLOWHUB_RUN_DIR=/tmp/runs/test-run-4; execute full pipeline with journal, review, and close",
+      "when": "After pipeline completes, list all files under /tmp/runs/test-run-4/",
+      "then": "Every artifact produced by any component (stage results, journal entries, review, evidence, spec, plan) is under run_dir; no files exist in any other project directory"
+    },
+    {
+      "name": "Missing run_dir fails immediately",
+      "given": "WORKFLOWHUB_RUN_DIR=/nonexistent/path",
+      "when": "Any stage starts",
+      "then": "openRun() throws immediately with message containing the absolute path; no further logic executes"
+    },
+    {
+      "name": "Unset RUN_DIR fails immediately",
+      "given": "No WORKFLOWHUB_RUN_DIR set and no --run-dir flag",
+      "when": "Any stage starts",
+      "then": "Prints usage error listing required --run-dir; exits non-zero; no cwd, git remote, or config fallback attempted"
+    },
+    {
+      "name": "Duplicate stage result is rejected",
+      "given": "build-code-result.json already exists in run_dir",
+      "when": "build-code stage calls publishResult('build-code', data)",
+      "then": "Throws error unless --force flag is set; existing result is unchanged"
+    },
+    {
+      "name": "Migration produces valid run_dir",
+      "given": "Legacy task directory at Projects/KnowledgeDigest/tasks/kd-phase0-digest-spec/ with worktree.json and stage results",
+      "when": "Migration script runs",
+      "then": "Produces run_dir with run.json containing correct target_repo, worktree_path, and issue_ids; all stage results are readable via Run.previousResult() in correct order"
+    }
+  ],
+  "top_risks": [
+    {
+      "risk": "Production workflows that depend on cwd-relative spec paths (committing specs to business repo) break when specs move to run_dir/artifacts/",
+      "mitigation": "Add an export step at verify-code: if run.json.artifacts.export_to_repo is set, copy artifacts to the target repo path after verification. Teams configure this once."
+    },
+    {
+      "risk": "Migration script produces incorrect run.json for edge cases (missing worktree.json, corrupted stage results, partial task dirs)",
+      "mitigation": "Migration is idempotent and validates every field; for any task dir that fails validation, skip and log for manual triage rather than producing bad run_dirs."
+    },
+    {
+      "risk": "Teams resist the run_dir model because it decouples workflow artifacts from business repo browsing",
+      "mitigation": "Provide a `workflowhub list-runs --project KnowledgeDigest` command that queries run.json metadata across run_dirs and presents a browseable view without depending on directory hierarchy."
+    },
+    {
+      "risk": "Run module becomes a god object that accumulates all path logic over time, recreating the distributed complexity",
+      "mitigation": "Enforce by lint rule: only Run module imports 'path' or 'fs' for file resolution. All other modules receive already-opened handles. Code review gate: any PR adding path logic outside Run is rejected."
+    }
+  ],
+  "blocking_questions": [
+    "Is the nested-tool-repo-inside-business-project pattern intentional (a monorepo convention) or accidental (someone cloned into the wrong place)? The answer determines whether we need to support this configuration at all or can declare it unsupported.",
+    "Do any external systems (CI, dashboards, notification hooks) parse worktree.json or task directory paths directly? If yes, we need a deprecation notice period before changing the format.",
+    "What is the actual frequency of cross-run artifact reuse vs same-run linear progression in production? If cross-run is <5%, the from_run field is sufficient; if >30%, we may need a registry or index.",
+    "Do teams currently browse task directories directly on the filesystem (ls Projects/X/tasks/) as part of their workflow? If yes, the flat run_dir model needs a good CLI browser before migration.",
+    "Are there any WorkflowHub deployments where the tool repo and the business project are on different filesystems or machines, making absolute paths problematic? If yes, run.json needs a host identifier or relative-to-something convention."
+  ]
+}

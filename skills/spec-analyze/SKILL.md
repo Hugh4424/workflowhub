@@ -29,7 +29,7 @@ This report-only lens is read-only and 不阻断. Scan categories: inconsistency
 
 Each non-summary finding requires `type`, `source_artifact`, `target_artifact`, `fr_or_task_id`, and `line_or_anchor`; any missing field is 无效/non-compliant. With no findings, report “无一致性问题”.
 
-Historical packet anchors can identify `spec.md`, `plan.md`, and `tasks.md`; a supplied anchor may use `specs/{task-id}/cross-artifact-analysis.md` and `facts.analysis_ref`. This lens never creates or updates that artifact.
+The frozen packet identifies `spec.md`, `plan.md`, and `tasks.md` by logical name. This lens never locates, creates, or updates an artifact.
 
 ## Severity and metrics
 

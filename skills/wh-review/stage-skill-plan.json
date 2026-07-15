@@ -32,13 +32,13 @@
     },
     "build-code": {
       "logical_skill_id": "wh-review/build-code",
-      "required_skills": [],
+      "required_skills": ["review", "test-strategy", "diagnosing-bugs"],
       "review_mode": "lens-only",
       "delivery_mode": "file_only"
     },
     "verify-code": {
       "logical_skill_id": "wh-review/verify-code",
-      "required_skills": ["qa-only", "verify-change"],
+      "required_skills": ["qa-only", "verify-change", "test-strategy"],
       "optional_skills": [{ "name": "isolated-browser-qa", "when": "ui" }],
       "review_mode": "lens-only",
       "delivery_mode": "file_only"

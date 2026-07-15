@@ -8,7 +8,7 @@
     },
     {
       "path": "SKILL.md",
-      "sha256": "3b49b6d0a33be19c75c9ab1806f04adb7bfbe21a4fdce7a325677f3a89994a57"
+      "sha256": "989f8fcb087d2ffe99093647a20cbb80a8e525cd062d452e39756e76e48f8ee9"
     },
     {
       "path": "__tests__/skill-contract.test.mjs",
