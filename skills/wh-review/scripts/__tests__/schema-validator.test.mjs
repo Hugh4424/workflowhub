@@ -23,7 +23,7 @@ describe("schema-validator", () => {
     expectSchemaError("review-packet", {
       version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
       stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
-      diff_sha256: hash, unified_diff: "", changed_files: [], raw_requirement: "x",
+      diff_sha256: hash, diff_ref: { attachment: "changes.diff", sha256: hash, size: 0 }, changed_files: [], raw_requirement: "x",
       acceptance_design_excerpt: "x", test_evidence: [], host_verified_facts: [],
       contract_hash: hash, skill_bundle_hash: hash, source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
       fenced: "secret-value",
@@ -34,7 +34,7 @@ describe("schema-validator", () => {
     const packet = {
       version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
       stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
-      diff_sha256: hash, unified_diff: "", raw_requirement: "x", acceptance_design_excerpt: "x",
+      diff_sha256: hash, diff_ref: { attachment: "changes.diff", sha256: hash, size: 0 }, raw_requirement: "x", acceptance_design_excerpt: "x",
       test_evidence: [], host_verified_facts: [], contract_hash: hash, skill_bundle_hash: hash,
       source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
       changed_files: [{ path: "a", old_path: null, status: "modified", sha256: hash, size: 1, old_sha256: hash, old_size: 1 }],
@@ -48,7 +48,7 @@ describe("schema-validator", () => {
     const packet = {
       version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
       stage: "build-code", review_track: null, packet_hash: hash, manifest_hash: hash,
-      diff_sha256: hash, unified_diff: "", changed_files: [], raw_requirement: "x",
+      diff_sha256: hash, diff_ref: { attachment: "changes.diff", sha256: hash, size: 0 }, changed_files: [], raw_requirement: "x",
       acceptance_design_excerpt: "x", test_evidence: [], host_verified_facts: [], contract_hash: hash, skill_bundle_hash: hash,
       source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
     };

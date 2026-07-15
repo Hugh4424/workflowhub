@@ -68,7 +68,7 @@
       "material_profile": "diff-and-evidence",
       "output_schema": "schemas/reviewer-output.schema.json",
       "checkpoints": ["packet-attestation", "diff-review", "contract-checklist"],
-      "expected_evidence": ["unified_diff", "changed_files", "acceptance_design_excerpt", "test_evidence", "host_verified_facts"],
+      "expected_evidence": ["diff_ref", "changed_files", "acceptance_design_excerpt", "test_evidence", "host_verified_facts"],
       "bundle_hash": "resolved-at-prepare",
       "bundle_closure_files": "resolved-at-prepare",
       "review_mode": "lens-only",

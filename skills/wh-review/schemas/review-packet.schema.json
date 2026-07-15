@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "review-packet.v1",
   "type": "object",
-  "required": ["version", "round_kind", "baseline_packet_hash", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "unified_diff", "changed_files", "raw_requirement", "host_verified_facts", "contract_hash", "skill_bundle_hash", "source_revision"],
+  "required": ["version", "round_kind", "baseline_packet_hash", "stage", "review_track", "packet_hash", "manifest_hash", "diff_sha256", "diff_ref", "changed_files", "raw_requirement", "host_verified_facts", "contract_hash", "skill_bundle_hash", "source_revision"],
   "properties": {
     "version": { "const": "review-packet.v1" },
     "round_kind": { "enum": ["initial", "continuation"] },
@@ -13,7 +13,16 @@
     "source_manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "manifest_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "unified_diff": { "type": "string" },
+    "diff_ref": {
+      "type": "object",
+      "required": ["attachment", "sha256", "size"],
+      "properties": {
+        "attachment": { "const": "changes.diff" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "changed_files": {
       "type": "array",
       "items": {

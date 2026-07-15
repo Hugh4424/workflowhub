@@ -54,7 +54,7 @@ describe("wh-review v4 Phase 1 contract foundation", () => {
       "make-decision": ["raw_requirement", "decision_log_excerpt", "host_verified_facts"],
       "build-spec": ["raw_requirement", "acceptance_design_excerpt", "planning_artifacts"],
       "build-plan": ["planning_artifacts", "acceptance_design_excerpt", "changed_files"],
-      "build-code": ["unified_diff", "changed_files", "test_evidence"],
+      "build-code": ["diff_ref", "changed_files", "test_evidence"],
       "verify-code": ["acceptance_design_excerpt", "test_evidence", "verification_closure"],
     };
     for (const [stage, fields] of Object.entries(requiredFields)) {

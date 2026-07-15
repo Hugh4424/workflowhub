@@ -30,7 +30,7 @@ function deliveryForInput(input, packet) {
   const visible = input.attachments.entries.map(({ destination, sha256, size }) => ({ destination, sha256, size }));
   const delivery_manifest_hash = sha(canonical({ version: 1, bundle_id: input.attachments.bundle_id, delivery_mode: input.attachmentDelivery, files: files.filter((item) => item.target !== "manifest.json") }));
   const continuation = input.request.continuation ? { initial_material_manifest_hash: input.request.continuation.initial_material_manifest_hash, sequence: input.request.continuation.sequence, previous_delivery_manifest_hash: input.request.continuation.previous_delivery_manifest_hash } : null;
-  return { delivery_mode: input.attachmentDelivery, raw_material_manifest_hash: material_manifest_hash, material_manifest_hash, material_representation: "raw", redaction: { rule_version: "host-root-prefix.v1", root_set_hash: sha("test-roots"), roots: [], replacement_count: 0, raw_material_manifest_hash: material_manifest_hash, derived_material_manifest_hash: material_manifest_hash, residual_scan: "passed" }, derived_attestation: { packet_hash: packet.packet_hash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, delivery_manifest_hash, continuation }, material_total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), ...(input.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: visible };
+  return { delivery_mode: input.attachmentDelivery, sealed_manifest_hash: material_manifest_hash, provider_visible_manifest_hash: material_manifest_hash, byte_identity: "verified", material_total_bytes: input.attachments.entries.reduce((total, item) => total + item.size, 0), ...(input.attachmentDelivery === "always_embed" ? { rendered_prompt_bytes: 1 } : {}), provider_visible_attachment_manifest: visible };
 }
 function completedProvider(input, packet) {
   const output = reviewerOutput(packet); const stdout = join(input.privateRawDirectory, "opencode.stdout.raw"); const stderr = join(input.privateRawDirectory, "opencode.stderr.raw");
@@ -194,7 +194,7 @@ describe("wh-review v4 workflow wiring", () => {
         expect(sha(frozenStageContract)).toBe(firstPrepared.packet.contract_hash);
       }
       expect(git(sourceRoot, ["rev-parse", "HEAD"])).toBe(initialHead);
-      expect(firstPrepared.packet.unified_diff).toContain("WIRING_R1_UNCOMMITTED_MARKER");
+      expect(firstPrepared.packet.unified_diff).toBeUndefined(); expect(firstPrepared.packet.diff_ref).toMatchObject({ attachment: "changes.diff", sha256: firstPrepared.packet.diff_sha256 });
       expect(firstPrepared.packet.source_revision.snapshot_tree).toMatch(/^[a-f0-9]{40,64}$/);
       expect(first.provider_outcomes).toMatchObject([{ transport_status: "completed", packet_status: "complete", business_valid: true, semantic_verdict: "pass" }]);
       expect(first).not.toHaveProperty("semantic_verdict");
@@ -213,7 +213,7 @@ describe("wh-review v4 workflow wiring", () => {
       const second = await facade.run(secondPrepared);
       expect(git(sourceRoot, ["rev-parse", "HEAD"])).toBe(initialHead);
       expect(secondPrepared.packet.source_revision.base_tree).toBe(firstPrepared.packet.source_revision.snapshot_tree);
-      expect(secondPrepared.packet.unified_diff).toContain("WIRING_R2_DELTA_ONLY_MARKER");
+      expect(secondPrepared.packet.unified_diff).toBeUndefined(); expect(secondPrepared.packet.diff_ref).toMatchObject({ attachment: "changes.diff", sha256: secondPrepared.packet.diff_sha256 });
       expect(second.intent.initial_runtime_id).toBe("11111111-1111-4111-8111-111111111111");
       expect(calls[1].request.continuation).toMatchObject({ runtime_id: "11111111-1111-4111-8111-111111111111", initial_material_manifest_hash: expect.stringMatching(/^[a-f0-9]{64}$/), sequence: 1, previous_delivery_manifest_hash: null });
       expect(Object.keys(calls[1]).sort()).toEqual(["attachmentDelivery", "attachments", "privateRawDirectory", "request"]);

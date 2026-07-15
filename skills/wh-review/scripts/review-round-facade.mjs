@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectStageContract, assertKnownStage, assertReviewTrack, assertSafeReviewFlowId, assertSafeTaskId, isDownstreamReviewStage, reviewFlowStorageKey, reviewStageStorageKey, taskRoot } from "./lib/safe-id.mjs";
@@ -51,6 +51,67 @@ function canonicalInnerManifestHash(manifest) { const { inner_manifest_hash: ign
 function canonicalDeliveryManifestHash(bundleId, files, deliveryMode) { return sha(canonical({ version: 1, bundle_id: bundleId, delivery_mode: deliveryMode, files: files.filter((item) => item.target !== "manifest.json").map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
 function canonicalMaterialManifestHash(bundleId, files) { return sha(canonical({ version: 1, bundle_id: bundleId, files: files.filter((item) => !["review-packet.v1.json", "manifest.json"].includes(item.target)).map(({ target, sha256, size, embed }) => ({ target, sha256, size, embed })) })); }
 function safeRelativePath(value) { return typeof value === "string" && value.length > 0 && !value.includes("\\") && !value.startsWith("/") && !value.split("/").some((part) => !part || part === "." || part === ".."); }
+function registeredHostRoots(values) {
+  const roots = new Set();
+  for (const value of values) {
+    if (typeof value !== "string" || !value) continue;
+    const lexical = resolve(value);
+    if (lexical !== "/") roots.add(lexical);
+    try { const canonicalRoot = realpathSync(lexical); if (canonicalRoot !== "/") roots.add(canonicalRoot); } catch { /* an optional attachment root may not exist yet */ }
+  }
+  return [...roots].sort((left, right) => right.length - left.length || left.localeCompare(right));
+}
+function httpRanges(text) {
+  const ranges = [];
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"'`]+/giu)) ranges.push([match.index, match.index + match[0].length]);
+  return ranges;
+}
+const allowedAbsoluteExamples = ["/Users/example/", "/home/example/", "/path/to/", "/absolute/path"];
+function allowedAbsolutePath(text, start, end) {
+  const value = text.slice(start, end);
+  if (value === "/dev/null") return true;
+  return allowedAbsoluteExamples.some((prefix) => {
+    const base = prefix.replace(/\/$/u, "");
+    return value === base || value.startsWith(`${base}/`);
+  });
+}
+function hostRootFindings(sources, roots) {
+  const findings = [];
+  for (const { destination, bytes } of sources) {
+    const text = Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes);
+    const urls = httpRanges(text); const matched = [];
+    const add = (start, end) => { if (!matched.some(([left, right]) => start < right && end > left)) matched.push([start, end]); };
+    // Registered host roots are always sensitive, including when copied into
+    // an otherwise valid HTTP(S) URL.
+    for (const root of roots) {
+      let offset = 0;
+      while ((offset = text.indexOf(root, offset)) !== -1) {
+        const end = offset + root.length; const after = text[end];
+        const bounded = after === undefined || /[\/\s<>"'`),\]}:;]/u.test(after);
+        if (bounded) add(offset, end);
+        offset = end;
+      }
+    }
+    const scan = (pattern, { skipHttp = false, path = false } = {}) => {
+      for (const match of text.matchAll(pattern)) {
+        const value = match[1] ?? match[0]; const relativeOffset = match[0].indexOf(value); const start = match.index + relativeOffset; const end = start + value.length;
+        if (skipHttp && urls.some(([left, right]) => start >= left && start < right)) continue;
+        if (path && allowedAbsolutePath(text, start, end)) continue;
+        add(start, end);
+      }
+    };
+    scan(/\b(?!https?:)[a-z][a-z0-9+.-]*:(?:\/{1,3}|\\{1,2})[^\s<>"'`]+/giu);
+    scan(/\b[A-Za-z]:[\\/][^\s<>"'`]+/gu);
+    scan(/(?:^|[\s<>"'`(=\[])(\\\\[^\\\s]+\\[^\s<>"'`]+|\/\/[^/\s]+\/[^\s<>"'`]+)/gmu, { skipHttp: true });
+    scan(/(?:^|[\s<>"'`(=\[])(\/{1,3}(?:[A-Za-z0-9._~+%-]+\/)*[A-Za-z0-9._~+%-]+)/gmu, { skipHttp: true, path: true });
+    // Unified diff prefixes are transport syntax, not part of the source
+    // line. Scan the source value after that one-character boundary too.
+    scan(/^[+ -](\/{1,3}[^\s]*)/gmu, { skipHttp: true, path: true });
+    scan(/:\s*"(\/)"/gu, { path: true });
+    if (matched.length) findings.push({ file: destination, matches: matched.length });
+  }
+  return findings;
+}
 function addedDeltaLineKeys(unifiedDiff) {
   const keys = new Set();
   let file = null; let nextLine = null;
@@ -72,7 +133,11 @@ function addedDeltaLineKeys(unifiedDiff) {
   return keys;
 }
 function sealPacket(packet) {
-  packet.diff_sha256 ??= sha(packet.unified_diff);
+  const unifiedDiff = packet.unified_diff;
+  if (typeof unifiedDiff !== "string") throw new Error("source unified_diff is missing");
+  packet.diff_sha256 ??= sha(unifiedDiff);
+  packet.diff_ref = { attachment: "changes.diff", sha256: packet.diff_sha256, size: Buffer.byteLength(unifiedDiff) };
+  delete packet.unified_diff;
   const sourceManifestHash = reviewManifestHash(packet);
   packet.source_manifest_hash ??= sourceManifestHash;
   if (packet.source_manifest_hash !== sourceManifestHash) throw new Error("source_manifest_hash mismatch");
@@ -82,7 +147,7 @@ function sealPacket(packet) {
   packet.manifest_hash = sourceManifestHash;
   packet.packet_hash ??= "0".repeat(64);
   validateSchema("review-packet", packet);
-  const diff = sha(packet.unified_diff);
+  const diff = sha(unifiedDiff);
   if (packet.diff_sha256 && packet.diff_sha256 !== diff) throw new Error("diff_sha256 mismatch");
   packet.diff_sha256 = diff;
   // Git owns diff syntax (multiple hunks, mode/index records, binary patches,
@@ -95,9 +160,9 @@ function sealPacket(packet) {
     if (entry.status === "renamed" && !safeRelativePath(entry.old_path)) throw new Error("renamed changed_files entry requires old_path");
   }
   packet.packet_hash = packetHash(packet);
-  return packet;
+  return unifiedDiff;
 }
-const sourceOwnedFields = new Set(["source_revision", "unified_diff", "changed_files", "diff_sha256", "packet_hash", "source_manifest_hash", "manifest_hash", "repository_root", "repositoryRoot", "changed_file_root", "changedFileRoot"]);
+const sourceOwnedFields = new Set(["source_revision", "unified_diff", "diff_ref", "changed_files", "diff_sha256", "packet_hash", "source_manifest_hash", "manifest_hash", "repository_root", "repositoryRoot", "changed_file_root", "changedFileRoot"]);
 function rejectCallerSourceFields(value, scope = "caller input") {
   const fields = Object.keys(value ?? {}).filter((field) => sourceOwnedFields.has(field));
   if (fields.length) throw new Error(`SOURCE_FIELDS_FORBIDDEN: ${scope} cannot provide ${fields.join(", ")}`);
@@ -218,6 +283,7 @@ export class ReviewRoundFacade {
     if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.sourceRoot = resolve(sourceRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
+    this.sensitiveHostRoots = registeredHostRoots([taskTrackingRoot, sourceRoot, skillsRoot ?? repositoryRoot]);
     this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.maxDispositionAttempts = maxDispositionAttempts; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
   #root(intent) { return join(taskRoot(this.taskTrackingRoot, intent.task_id), "reviews", "private", `round-${reviewFlowStorageKey(intent.stage, intent.review_track, intent.review_flow_id)}-${intent.business_round}`); }
@@ -442,17 +508,17 @@ export class ReviewRoundFacade {
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
     const reviewTrack = input.review_track ?? null;
     const resolution = this.requiredSkillResolver({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
-    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider).sort();
+    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider);
     let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
-    if (continuation && capabilitySnapshotHash !== prior?.capability_snapshot_hash) throw new Error("blocked_by_human_confirmation: broker capability snapshot changed; use reset with human approval");
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
     if (continuation && (!/^[a-f0-9]{40,64}$/.test(prior?.last_reviewed_tree ?? "") || typeof prior?.review_tree_ref !== "string" || readReviewTreeRef(this.sourceRoot, prior.review_tree_ref) !== prior.last_reviewed_tree)) throw new Error("blocked_by_human_confirmation: last reviewed tree is unavailable; use reset with human approval");
     if (continuation && (!prior?.initial_delivery_by_provider || typeof prior.initial_delivery_by_provider !== "object" || !/^[a-f0-9]{64}$/.test(prior.initial_material_manifest_hash ?? "")
-      || ((prior.continuation_sequence ?? 0) === 0 ? prior.last_delivery_manifest_hash !== null || prior.last_provider_delivery_manifest_hash !== null : !/^[a-f0-9]{64}$/.test(prior.last_delivery_manifest_hash ?? "") || !/^[a-f0-9]{64}$/.test(prior.last_provider_delivery_manifest_hash ?? "")))) throw new Error("blocked_by_human_confirmation: verified initial provider delivery is missing; use reset with human approval");
+      || ((prior.continuation_sequence ?? 0) === 0 ? prior.last_delivery_manifest_hash !== null : !/^[a-f0-9]{64}$/.test(prior.last_delivery_manifest_hash ?? "")))) throw new Error("blocked_by_human_confirmation: verified initial provider delivery is missing; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
-    const candidateProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : doctorCandidates;
-    const continuableProviders = continuation ? [...(prior.continuable_providers ?? [])].sort() : [];
+    const readyDeliveryProviders = new Set(doctorCandidates);
+    const candidateProviders = continuation ? (prior.continuable_providers ?? []).filter((provider) => readyDeliveryProviders.has(provider)) : doctorCandidates.slice(0, 1);
+    const continuableProviders = continuation ? [...candidateProviders] : [];
     if (continuation && (!prior.initial_provider_sessions || typeof prior.initial_provider_sessions !== "object" || continuableProviders.some((provider) => typeof prior.initial_provider_sessions[provider] !== "string" || !prior.initial_provider_sessions[provider]))) throw new Error("blocked_by_human_confirmation: initial provider sessions are missing; use reset with human approval");
     const packet = structuredClone(input.packet);
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
@@ -495,7 +561,8 @@ export class ReviewRoundFacade {
       packet.round_kind = "initial"; packet.baseline_packet_hash = null;
       delta = { cross_stage_carryovers: checkedCarryovers(input.cross_stage_carryovers, [], { taskTrackingRoot: this.taskTrackingRoot, taskId: input.task_id, stage: input.stage }) };
     }
-    try { sealPacket(packet); }
+    let sealedDiff;
+    try { sealedDiff = sealPacket(packet); }
     catch (error) { return this.#materialIncomplete(input, error.message); }
     if (continuation && (prior.contract_hash !== packet.contract_hash || prior.skill_bundle_hash !== actualBundleHash || prior.frozen_bundle_hash !== actualBundleHash)) throw new Error("blocked_by_human_confirmation: frozen contract or skill bundle changed; use reset with human approval");
     let baselinePacketHash = continuation ? prior.baseline_packet_hash : packet.packet_hash;
@@ -534,7 +601,7 @@ export class ReviewRoundFacade {
         freeze("schemas/reviewer-output.schema.json", readFileSync(outputSchemaPath));
         for (const definition of resolution.definitions) for (const file of definition.bundle.files) freeze(`skills/${definition.name}/${file.path}`, file.content);
       }
-      freeze("changes.diff", packet.unified_diff);
+      freeze("changes.diff", sealedDiff);
       if (continuation) freeze("continuation-delta.v1.json", safeJson(delta));
       const bundleId = `wh-review-${intent.idempotency_key}`;
       // Delivery metadata is hash-bound before prompt rendering. file_only
@@ -547,6 +614,14 @@ export class ReviewRoundFacade {
       // themselves. Keep the independently derived source binding alongside
       // it, then re-seal the complete provider packet.
       packet.manifest_hash = materialManifestHash;
+      const sourceFindings = hostRootFindings([
+        ...frozenAttachments.map(({ destination, path }) => ({ destination, bytes: readFileSync(path) })),
+        { destination: "review-packet.v1.json", bytes: safeJson(packet) },
+      ], registeredHostRoots([...this.sensitiveHostRoots, input.attachment_root]));
+      if (sourceFindings.length) {
+        const matchCount = sourceFindings.reduce((total, item) => total + item.matches, 0);
+        return this.#materialIncomplete(input, `provider-visible source contains registered host roots in ${sourceFindings.map((item) => item.file).join(", ")} (${matchCount} matches)`, "SOURCE_CONTAINS_ABSOLUTE_PATH", { files: sourceFindings, match_count: matchCount, provider_started: false });
+      }
       packet.packet_hash = packetHash(packet);
       validateSchema("review-packet", packet);
       intent.material_manifest_hash = materialManifestHash;
@@ -568,7 +643,7 @@ export class ReviewRoundFacade {
         ? continuationPrompt(delta, { packet, intent, attachmentIds, providerVisibleManifestHash })
         : initialPrompt({ packet, intent, attachmentIds, providerVisibleManifestHash });
       atomic(join(dir, "manifest.json"), safeJson({ packet_hash: packet.packet_hash, baseline_packet_hash: baselinePacketHash, manifest_hash: packet.manifest_hash, diff_sha256: packet.diff_sha256, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, attachments: outerFiles, delta_manifest: continuation ? delta.delta_manifest : null }));
-      const expectedDelivery = { delivery_mode: resolution.deliveryMode, raw_material_manifest_hash: materialManifestHash, previous_provider_delivery_manifest_hash: prior?.last_provider_delivery_manifest_hash ?? null };
+      const expectedDelivery = { delivery_mode: resolution.deliveryMode, sealed_manifest_hash: materialManifestHash, previous_delivery_manifest_hash: prior?.last_delivery_manifest_hash ?? null };
       const prepared = { intent, packet, input, lock, dir, resolution, capability_snapshot: capabilitySnapshot, initial_delivery_by_provider: prior?.initial_delivery_by_provider ?? null, initial_provider_sessions: prior?.initial_provider_sessions ?? null, frozen_bundle_hash: actualBundleHash, sealed_packet_hash: packet.packet_hash, frozen_snapshot_dir: snapshotDir, frozen_attachments: frozenAttachments, provider_visible_manifest: providerManifest, provider_visible_manifest_sha256: providerVisibleManifestHash, delivery_manifest_hash: providerManifest.delivery_manifest_hash, material_manifest_hash: materialManifestHash, material_total_bytes: materialBytes, expected_delivery: expectedDelivery, stage_contract_rules: { allIds: stageContract.allIds, hardIds: stageContract.hardIds }, closure_bundle_gates: closureBundleGates, delta, initial_prompt: prompt };
       Object.defineProperty(prepared, "delivery_policy", { value: resolution.deliveryMode, enumerable: false, writable: false, configurable: false });
       return prepared;
@@ -610,7 +685,7 @@ export class ReviewRoundFacade {
       const returnedCandidates = new Set((response.providers ?? []).map((item) => item?.provider).filter((provider) => candidateSet.has(provider)));
       for (const provider of intent.candidate_providers) if (!returnedCandidates.has(provider)) outcomes.push({ provider, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, delivery_used: null, diagnostic: "PROVIDER_OUTCOME_MISSING" });
       if (response.transport_error) outcomes.push({ provider: null, transport_status: "failed", packet_status: "material_incomplete", semantic_verdict: null, business_valid: false, diagnostic: response.transport_error.code });
-      const continuable_providers = outcomes.filter((item) => capabilityByProvider.get(item.provider)?.continuation === true && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && typeof item.session_id === "string" && item.session_id.length > 0).map((item) => item.provider).sort();
+      const continuable_providers = outcomes.filter((item) => capabilityByProvider.get(item.provider)?.continuation === true && item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && typeof item.session_id === "string" && item.session_id.length > 0).map((item) => item.provider);
       const eligible = continuable_providers.length > 0;
       const outcomeIntent = { ...intent, continuable_providers };
       const aggregate = outcomes.filter((item) => item.transport_status === "completed" && item.packet_status === "complete" && item.business_valid && item.semantic_verdict);
@@ -632,7 +707,8 @@ export class ReviewRoundFacade {
       // is present in the host-verified delta; otherwise the state machine
       // marks it late and caps it at minor.
       const previousFindings = prepared.delta?.previous_findings ?? [];
-      const addedLines = addedDeltaLineKeys(prepared.delta?.affected_materials?.changes_diff);
+      const sealedDiff = prepared.frozen_attachments?.find((item) => item.destination === "changes.diff");
+      const addedLines = addedDeltaLineKeys(sealedDiff ? readFileSync(sealedDiff.path, "utf8") : "");
       const provenNewBlockingIds = new Set(raw_merged_findings.filter((item) => intent.round_kind === "initial"
         || (!previousFindings.some((old) => old.finding_id === item.finding_id) && addedLines.has(`${item.file}\0${item.line}`))).map((item) => item.finding_id));
       const closureBundleGateIds = new Set((prepared.closure_bundle_gates ?? []).map((item) => item.finding_id));
@@ -652,7 +728,7 @@ export class ReviewRoundFacade {
       // Any durable private review state has a public fail-closed companion.
       // Until dispositions complete its projection, CI must not trust an older pass.
       const pending = this.#ensureProjectionGuard(outcomeIntent);
-      const delivery = { delivery_mode: prepared.delivery_policy, raw_material_manifest_sha256: prepared.material_manifest_hash, delivery_manifest_hash: prepared.delivery_manifest_hash, material_total_bytes: prepared.material_total_bytes };
+      const delivery = { delivery_mode: prepared.delivery_policy, material_manifest_hash: prepared.material_manifest_hash, delivery_manifest_hash: prepared.delivery_manifest_hash, material_total_bytes: prepared.material_total_bytes };
       const receipt = { version: 1, intent: outcomeIntent, delta: prepared.delta, runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, delivery, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, capability_snapshot: prepared.capability_snapshot, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, provider_outcomes: outcomes, merged_findings, hard_gates, human_gates, blocked_by_human_confirmation: blockedByHumanConfirmation, continuable_providers, continuation_eligible: eligible, projection_pending: pending, created_at_ms: this.now() };
       const receiptPath = join(prepared.dir, "round-receipt.json"); atomic(receiptPath, safeJson(receipt));
       const result = { intent: outcomeIntent, round_kind: intent.round_kind, baseline_packet_hash: intent.baseline_packet_hash,
@@ -666,13 +742,13 @@ export class ReviewRoundFacade {
       const reviewTreeRef = priorFlow?.review_tree_ref ?? this.#treeRef(intent);
       const oldReviewTree = typeof priorFlow?.review_tree_ref === "string" ? readReviewTreeRef(this.sourceRoot, priorFlow.review_tree_ref) : null;
       if (aggregate.length) updateReviewTreeRef(this.sourceRoot, reviewTreeRef, reviewedTree);
-      const verifiedInitialMaterial = !intent.initial_runtime_id ? [...new Set(outcomes.filter((item) => item.business_valid).map((item) => item.delivery?.raw_material_manifest_hash).filter(Boolean))] : [priorFlow?.initial_material_manifest_hash];
-      const verifiedProviderDelivery = [...new Set(outcomes.filter((item) => item.business_valid).map((item) => item.delivery?.derived_attestation?.delivery_manifest_hash).filter(Boolean))];
+      const verifiedInitialMaterial = !intent.initial_runtime_id ? [...new Set(outcomes.filter((item) => item.business_valid).map((item) => item.delivery?.sealed_manifest_hash).filter(Boolean))] : [priorFlow?.initial_material_manifest_hash];
+      const verifiedProviderDelivery = aggregate.length ? [prepared.delivery_manifest_hash] : [];
       if (aggregate.length && (verifiedInitialMaterial.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedInitialMaterial[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one initial material hash");
-      if (aggregate.length && (verifiedProviderDelivery.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedProviderDelivery[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one derived delivery hash");
+      if (aggregate.length && (verifiedProviderDelivery.length !== 1 || !/^[a-f0-9]{64}$/.test(verifiedProviderDelivery[0] ?? ""))) throw new Error("MATERIAL_INCOMPLETE: verified provider delivery cannot establish one delivery hash");
       try { this.#writeFlow(intent, { ...(priorFlow ?? {}), ...outcomeIntent, initial_runtime_id: intent.initial_runtime_id ?? response.runtime_id ?? null, delivery_policy: prepared.delivery_policy, initial_delivery_by_provider: initialDeliveryByProvider, initial_provider_sessions: initialProviderSessions, initial_material_manifest_hash: priorFlow?.initial_material_manifest_hash ?? verifiedInitialMaterial[0] ?? null, last_delivery_manifest_hash: aggregate.length && intent.round_kind === "continuation" ? prepared.delivery_manifest_hash : priorFlow?.last_delivery_manifest_hash ?? null, continuation_sequence: aggregate.length ? (prepared.provider_visible_manifest.continuation?.sequence ?? priorFlow?.continuation_sequence ?? 0) : priorFlow?.continuation_sequence ?? 0, capability_snapshot_hash: intent.capability_snapshot_hash, candidate_providers: intent.candidate_providers, continuable_providers, continuation_eligible: eligible, business_round: aggregate.length ? intent.business_round : (priorFlow?.business_round ?? 0), packet_hash: packet.packet_hash, frozen_bundle_hash: prepared.frozen_bundle_hash,
         baseline_packet_ref: priorFlow?.baseline_packet_ref ?? packetRef, baseline_packet_file_sha256: priorFlow?.baseline_packet_file_sha256 ?? packetFileHash,
-        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)), last_provider_delivery_manifest_hash: aggregate.length && intent.round_kind === "continuation" ? verifiedProviderDelivery[0] : priorFlow?.last_provider_delivery_manifest_hash ?? null,
+        previous_packet_ref: packetRef, previous_packet_file_sha256: packetFileHash, previous_receipt_ref: receiptPath, previous_receipt_sha256: sha(readFileSync(receiptPath)),
         projection_pending: pending, ...(aggregate.length ? { last_reviewed_tree: reviewedTree, review_tree_ref: reviewTreeRef } : {}) }); }
       catch (error) {
         if (aggregate.length) {
@@ -905,9 +981,9 @@ export class ReviewRoundFacade {
     }
     return markers;
   }
-  #materialIncomplete(input, message, code = "MATERIAL_INCOMPLETE") {
+  #materialIncomplete(input, message, code = "MATERIAL_INCOMPLETE", details = {}) {
     const root = join(taskRoot(this.taskTrackingRoot, input.task_id), "reviews", "private", "diagnostics");
-    atomic(join(root, `material-incomplete-${this.now()}.json`), safeJson({ code, message, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id }));
+    atomic(join(root, `material-incomplete-${this.now()}.json`), safeJson({ code, message, stage: input.stage, review_track: input.review_track ?? null, review_flow_id: input.review_flow_id, ...details }));
     throw new Error(`${code}: ${message}`);
   }
   #attachments(prepared) {
@@ -968,26 +1044,19 @@ export class ReviewRoundFacade {
     if (intent.initial_runtime_id && item.delivery_used !== initialDelivery?.delivery_mode) return { ...base, diagnostic: "DELIVERY_USED_CONTINUATION_MISMATCH", requires_human_confirmation: true };
     if (item.delivery_used !== expectedDelivery.delivery_mode) return { ...base, diagnostic: "DELIVERY_USED_POLICY_MISMATCH" };
     const delivery = item?.delivery;
-    const normalizedDelivery = delivery && typeof delivery === "object" && !Array.isArray(delivery) ? { delivery_mode: delivery.delivery_mode, raw_material_manifest_hash: delivery.raw_material_manifest_hash, material_manifest_hash: delivery.material_manifest_hash, material_representation: delivery.material_representation, redaction: delivery.redaction, derived_attestation: delivery.derived_attestation, material_total_bytes: delivery.material_total_bytes, ...(delivery.rendered_prompt_bytes !== undefined ? { rendered_prompt_bytes: delivery.rendered_prompt_bytes } : {}), provider_visible_attachment_manifest: delivery.provider_visible_attachment_manifest } : null;
+    const normalizedDelivery = delivery && typeof delivery === "object" && !Array.isArray(delivery) ? { delivery_mode: delivery.delivery_mode, sealed_manifest_hash: delivery.sealed_manifest_hash, provider_visible_manifest_hash: delivery.provider_visible_manifest_hash, byte_identity: delivery.byte_identity, material_total_bytes: delivery.material_total_bytes, ...(delivery.rendered_prompt_bytes !== undefined ? { rendered_prompt_bytes: delivery.rendered_prompt_bytes } : {}), provider_visible_attachment_manifest: delivery.provider_visible_attachment_manifest } : null;
     const renderedPromptInvalid = expectedDelivery.delivery_mode === "file_only"
       ? normalizedDelivery?.rendered_prompt_bytes !== undefined
       : !Number.isSafeInteger(normalizedDelivery?.rendered_prompt_bytes) || normalizedDelivery.rendered_prompt_bytes < 0 || normalizedDelivery.rendered_prompt_bytes > 512 * 1024;
-    const redaction = normalizedDelivery?.redaction; const derived = normalizedDelivery?.derived_attestation;
     const visible = normalizedDelivery?.provider_visible_attachment_manifest;
     const visibleByName = new Map(Array.isArray(visible) ? visible.map((entry) => [entry?.destination, entry]) : []);
     const attestationInvalid = !normalizedDelivery || normalizedDelivery.delivery_mode !== expectedDelivery.delivery_mode
-      || normalizedDelivery.raw_material_manifest_hash !== expectedDelivery.raw_material_manifest_hash
-      || !/^[a-f0-9]{64}$/.test(normalizedDelivery.material_manifest_hash ?? "") || !["raw", "sanitized"].includes(normalizedDelivery.material_representation)
+      || normalizedDelivery.sealed_manifest_hash !== expectedDelivery.sealed_manifest_hash
+      || normalizedDelivery.provider_visible_manifest_hash !== normalizedDelivery.sealed_manifest_hash || normalizedDelivery.byte_identity !== "verified"
       || !Number.isSafeInteger(normalizedDelivery.material_total_bytes) || normalizedDelivery.material_total_bytes < 0 || renderedPromptInvalid
-      || !Array.isArray(visible) || visible.length !== visibleByName.size || !visibleByName.has("review-packet.v1.json") || !visibleByName.has("changes.diff") || !visibleByName.has("manifest.json")
-      || !redaction || typeof redaction.rule_version !== "string" || !/^[a-f0-9]{64}$/.test(redaction.root_set_hash ?? "") || !Array.isArray(redaction.roots)
-      || !Number.isSafeInteger(redaction.replacement_count) || redaction.replacement_count < 0 || redaction.residual_scan !== "passed"
-      || redaction.raw_material_manifest_hash !== normalizedDelivery.raw_material_manifest_hash || redaction.derived_material_manifest_hash !== normalizedDelivery.material_manifest_hash
-      || !derived || !/^[a-f0-9]{64}$/.test(derived.packet_hash ?? "") || derived.manifest_hash !== normalizedDelivery.material_manifest_hash || !/^[a-f0-9]{64}$/.test(derived.diff_sha256 ?? "") || !/^[a-f0-9]{64}$/.test(derived.delivery_manifest_hash ?? "");
+      || !Array.isArray(visible) || visible.length !== visibleByName.size || !visibleByName.has("review-packet.v1.json") || !visibleByName.has("changes.diff") || !visibleByName.has("manifest.json");
     if (attestationInvalid) return { ...base, diagnostic: "DELIVERY_RECORD_MISMATCH" };
-    if (intent.initial_runtime_id && (redaction.rule_version !== initialDelivery?.redaction?.rule_version || redaction.root_set_hash !== initialDelivery?.redaction?.root_set_hash
-      || derived.continuation?.initial_material_manifest_hash !== initialDelivery?.material_manifest_hash
-      || derived.continuation?.previous_delivery_manifest_hash !== expectedDelivery.previous_provider_delivery_manifest_hash)) return { ...base, diagnostic: "DELIVERY_ATTESTATION_CONTINUATION_MISMATCH", requires_human_confirmation: true };
+    if (intent.initial_runtime_id && normalizedDelivery.delivery_mode !== initialDelivery?.delivery_mode) return { ...base, diagnostic: "DELIVERY_ATTESTATION_CONTINUATION_MISMATCH", requires_human_confirmation: true };
     base.delivery = structuredClone(normalizedDelivery);
     const parsed = parseOutput(item.output); if (!parsed.ok) return { ...base, packet_status: "material_incomplete", diagnostic: "NON_JSON_OUTPUT" };
     const output = parsed.value;
@@ -996,9 +1065,9 @@ export class ReviewRoundFacade {
       if (error instanceof SchemaValidationError) return { ...base, packet_status: "material_incomplete", diagnostic: `${error.code}:${error.pointer || "/"}` };
       throw error;
     }
-    if (output.packet_hash !== derived.packet_hash || output.manifest_hash !== derived.manifest_hash || output.diff_sha256 !== derived.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
+    if (output.packet_hash !== packet.packet_hash || output.manifest_hash !== packet.manifest_hash || output.diff_sha256 !== packet.diff_sha256 || output.contract_hash !== intent.contract_hash || output.skill_bundle_hash !== intent.skill_bundle_hash) return { ...base, packet_status: "hash_mismatch", diagnostic: "PACKET_HASH_MISMATCH" };
     if (output.packet_status !== "complete") return { ...base, packet_status: output.packet_status ?? "material_incomplete", diagnostic: "PROVIDER_PACKET_INCOMPLETE" };
-    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet: { ...packet, packet_hash: derived.packet_hash, manifest_hash: derived.manifest_hash, diff_sha256: derived.diff_sha256 }, intent: { ...intent, material_manifest_hash: derived.manifest_hash }, contractRules });
+    const checked = validateReviewerOutput({ stage: intent.stage, reviewTrack: intent.review_track, ui: Boolean(input.ui), output, packet, intent, contractRules });
     if (!checked.valid) return { ...base, packet_status: "complete", diagnostic: "BUSINESS_INVALID" };
     let findings; try { findings = output.findings.map((finding) => projectFinding(finding, item.provider)); }
     catch (error) { return { ...base, packet_status: "complete", diagnostic: error.message }; }

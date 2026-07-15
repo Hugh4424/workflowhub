@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,56 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const slash = String.fromCharCode(47);
 const rooted = (...parts) => `${slash}${parts.join(slash)}`;
 const brokerCommand = () => ["node", rooted("broker", "scripts", "3rd-review.mjs")];
+
+function materialAuditFixture({ destination = "changes.diff", mutate } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "wh-review-material-audit-"));
+  const runtimeRoot = join(root, "runtime");
+  const runtimeId = "33333333-3333-4333-8333-333333333333";
+  const runtime = join(runtimeRoot, runtimeId);
+  const workspace = join(runtime, "workspace");
+  const providerRoot = join(workspace, "opencode");
+  const bytes = Buffer.from("diff bytes\n");
+  const record = { destination, sha256: sha256(bytes), size: bytes.length };
+  const manifestHash = "a".repeat(64);
+  const delivery = {
+    delivery_mode: "file_only",
+    byte_identity: "verified",
+    sealed_manifest_hash: manifestHash,
+    provider_visible_manifest_hash: manifestHash,
+    provider_visible_attachment_manifest: [record],
+    material_total_bytes: bytes.length,
+  };
+  mkdirSync(providerRoot, { recursive: true });
+  const target = join(providerRoot, ...destination.split("/").filter((part) => part !== ".."));
+  mkdirSync(join(target, ".."), { recursive: true });
+  writeFileSync(target, bytes);
+  writeFileSync(join(providerRoot, "attachments-manifest.json"), JSON.stringify({ manifest_hash: manifestHash, files: [{ target: destination, sha256: record.sha256, size: record.size }] }));
+  const stdout = "provider stdout\n"; const stderr = "provider stderr\n";
+  mkdirSync(join(runtime, "raw", "opencode"), { recursive: true });
+  writeFileSync(join(runtime, "raw", "opencode", "stdout"), stdout);
+  writeFileSync(join(runtime, "raw", "opencode", "stderr"), stderr);
+  const stateProvider = { raw_stdout_ref: "raw/opencode/stdout", raw_stdout_sha256: sha256(stdout), raw_stderr_ref: "raw/opencode/stderr", raw_stderr_sha256: sha256(stderr), delivery };
+  const publicProvider = { provider: "opencode", status: "completed", raw_stdout_sha256: sha256(stdout), raw_stderr_sha256: sha256(stderr), delivery };
+  writeFileSync(join(runtime, "state.json"), JSON.stringify({ runtime_id: runtimeId, providers: { opencode: stateProvider } }));
+  const config = join(root, "config.json"); writeFileSync(config, JSON.stringify({ version: 4, runtime: { root: runtimeRoot } }));
+  const client = new BrokerClient({ command: brokerCommand(), config, attachmentRoot: root, spawnImpl(command, args) {
+    const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+    queueMicrotask(() => {
+      child.stdout.emit("data", args.includes("doctor")
+        ? JSON.stringify({ version: 4, capabilities: { attachments: true, cancel_source: true }, attachment_root: { status: "ready" }, providers: [] })
+        : JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [publicProvider] }));
+      child.emit("close", 0);
+    });
+    return child;
+  } });
+  mutate?.({ root, runtime, workspace, providerRoot, target, record, delivery });
+  const run = () => client.run({
+    request: { version: 4, host_provider: "codex", prompt: "p", continuation: null, material_manifest_sha256: manifestHash },
+    attachments: { version: 1, bundle_id: "b", entries: [record] }, attachmentDelivery: "file_only",
+    privateRawDirectory: join(root, "private"),
+  });
+  return { root, run };
+}
 
 describe("BrokerClient", () => {
   it("discovers, normalizes, freezes, and caches broker-owned capabilities from doctor stdout", async () => {
@@ -23,8 +73,8 @@ describe("BrokerClient", () => {
     } });
     const first = await client.discoverCapabilities();
     expect(first).toEqual({ version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
-      { provider: "kimi", status: "disabled", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
       { provider: "opencode", status: "ready", capabilities: { continuation: true, attachment_delivery: ["always_embed"] } },
+      { provider: "kimi", status: "disabled", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
     ] });
     expect(Object.isFrozen(first)).toBe(true); expect(Object.isFrozen(first.providers[0].capabilities.attachment_delivery)).toBe(true);
     await expect(client.discoverCapabilities()).resolves.toBe(first); expect(calls).toBe(1);
@@ -145,6 +195,56 @@ describe("BrokerClient", () => {
       const client = new BrokerClient({ command: brokerCommand(), config, spawnImpl() { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); queueMicrotask(() => { child.stdout.emit("data", JSON.stringify({ version: 4, runtime_id: runtimeId, providers: [{ provider: "opencode", status: "completed", raw_stdout_sha256: sha256("expected"), raw_stderr_sha256: sha256("stderr") }] })); child.emit("close", 0); }); return child; } });
       await expect(client.run({ request: { version: 4, host_provider: "codex", prompt: "p", continuation: null }, privateRawDirectory: join(root, "task", "private") })).rejects.toThrow(/BROKER_RAW_AUDIT_UNAVAILABLE.*bytes/i);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a symlinked provider workspace candidate", async () => {
+    const fixture = materialAuditFixture({ mutate({ root, workspace, providerRoot }) {
+      const external = join(root, "external-provider");
+      mkdirSync(external);
+      writeFileSync(join(external, "changes.diff"), "diff bytes\n");
+      writeFileSync(join(external, "attachments-manifest.json"), readFileSync(join(providerRoot, "attachments-manifest.json")));
+      rmSync(providerRoot, { recursive: true });
+      symlinkSync(external, join(workspace, "opencode"), "dir");
+    } });
+    try { await expect(fixture.run()).rejects.toThrow(/exact-copy workspace is missing or ambiguous/); }
+    finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a hardlinked provider-visible file", async () => {
+    const fixture = materialAuditFixture({ mutate({ root, target }) { linkSync(target, join(root, "hardlink-alias")); } });
+    try { await expect(fixture.run()).rejects.toThrow(/exact-copy workspace is missing or ambiguous/); }
+    finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a hardlinked raw provider stream after opening the exact object", async () => {
+    const fixture = materialAuditFixture({ mutate({ root, runtime }) { linkSync(join(runtime, "raw", "opencode", "stdout"), join(root, "raw-hardlink-alias")); } });
+    try { await expect(fixture.run()).rejects.toThrow(/stdout source is not an isolated regular file/); }
+    finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a provider-visible destination that escapes its root", async () => {
+    const fixture = materialAuditFixture({ destination: "../escape" });
+    try { await expect(fixture.run()).rejects.toThrow(/exact-copy receipt is incomplete/); }
+    finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("rejects an intermediate symlink in a provider-visible path", async () => {
+    const fixture = materialAuditFixture({ destination: "nested/changes.diff", mutate({ root, providerRoot }) {
+      const external = join(root, "external-nested"); mkdirSync(external);
+      writeFileSync(join(external, "changes.diff"), "diff bytes\n");
+      rmSync(join(providerRoot, "nested"), { recursive: true });
+      symlinkSync(external, join(providerRoot, "nested"), "dir");
+    } });
+    try { await expect(fixture.run()).rejects.toThrow(/exact-copy workspace is missing or ambiguous/); }
+    finally { rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a tampered attachments manifest", async () => {
+    const fixture = materialAuditFixture({ mutate({ providerRoot }) {
+      writeFileSync(join(providerRoot, "attachments-manifest.json"), JSON.stringify({ manifest_hash: "b".repeat(64), files: [] }));
+    } });
+    try { await expect(fixture.run()).rejects.toThrow(/exact-copy workspace is missing or ambiguous/); }
+    finally { rmSync(fixture.root, { recursive: true, force: true }); }
   });
 
   it("fails loud before passing Phase2-only attachment or cancel-source flags to the base CLI", async () => {

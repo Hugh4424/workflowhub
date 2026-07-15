@@ -17,7 +17,7 @@
 
 ## Required materials
 
-`unified_diff`、`changed_files`、`acceptance_design_excerpt`、`test_evidence`、`host_verified_facts`。
+`diff_ref`、`changed_files`、`acceptance_design_excerpt`、`test_evidence`、`host_verified_facts`。完整 diff 仅存在于 `changes.diff` 附件。
 
 ## Required skills
 

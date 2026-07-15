@@ -11,7 +11,7 @@ import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
 import { assertSafeTaskId } from "./lib/safe-id.mjs";
 
 const sourceOwnedFields = new Set([
-  "source_revision", "sourceRevision", "unified_diff", "unifiedDiff", "changed_files", "changedFiles",
+  "source_revision", "sourceRevision", "unified_diff", "unifiedDiff", "diff_ref", "diffRef", "changed_files", "changedFiles",
   "diff_sha256", "diffSha256", "packet_hash", "packetHash", "manifest_hash", "manifestHash",
   "repository_root", "repositoryRoot", "changed_file_root", "changedFileRoot", "source_root", "sourceRoot",
   "source_snapshot", "sourceSnapshot",

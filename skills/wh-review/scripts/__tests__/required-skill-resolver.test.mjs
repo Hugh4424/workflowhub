@@ -75,7 +75,7 @@ describe("required skill bundles", () => {
   it("rejects an incomplete StageSkillPlan profile instead of applying defaults", () => {
     expect(() => resolveRequiredSkills({
       stage: "build-code",
-      stageSkillPlan: { version: 1, stages: { "build-code": { logical_skill_id: "wh-review/build-code", required_skills: [], material_profile: "diff-and-evidence", checkpoints: ["packet-attestation"], expected_evidence: ["unified_diff"], bundle_hash: "resolved-at-prepare", bundle_closure_files: "resolved-at-prepare", review_mode: "lens-only", delivery_mode: "file_only", continuation_policy: "initial-runtime-only", pass_finding_policy: "contract-only" } } },
+      stageSkillPlan: { version: 1, stages: { "build-code": { logical_skill_id: "wh-review/build-code", required_skills: [], material_profile: "diff-and-evidence", checkpoints: ["packet-attestation"], expected_evidence: ["diff_ref"], bundle_hash: "resolved-at-prepare", bundle_closure_files: "resolved-at-prepare", review_mode: "lens-only", delivery_mode: "file_only", continuation_policy: "initial-runtime-only", pass_finding_policy: "contract-only" } } },
     })).toThrow(/incomplete stage skill plan.*output_schema/i);
   });
 });

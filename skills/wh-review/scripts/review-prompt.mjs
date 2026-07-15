@@ -18,7 +18,7 @@ export function buildContinuationDelta({ previousPacket, currentPacket, deltaSou
   const previousManifest = currentMaterialManifest(previousPacket); const currentManifest = currentMaterialManifest(currentPacket);
   const changedMaterials = materialKeys.filter((key) => canonical(previousPacket[key] ?? null) !== canonical(currentPacket[key] ?? null));
   const affectedMaterials = Object.fromEntries(changedMaterials.map((key) => [key, currentPacket[key]]));
-  if (deltaSource.unified_diff) affectedMaterials.changes_diff = deltaSource.unified_diff;
+  if (deltaSource.unified_diff) affectedMaterials.changes_diff = { attachment: "changes.diff", sha256: sha(deltaSource.unified_diff), size: Buffer.byteLength(deltaSource.unified_diff) };
   const deltaManifest = {
     baseline_packet_hash: currentPacket.baseline_packet_hash,
     previous_packet_hash: previousPacket.packet_hash,
