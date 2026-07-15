@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub/steps.schema.json",
+  "type": "object",
+  "required": ["schema_version", "stage_slug", "steps"],
+  "properties": {
+    "schema_version": { "const": "2.0.0" },
+    "stage_slug": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["step_id", "step_slug", "order", "entry_conditions", "completion_evidence", "observable_result", "depends_on"],
+        "properties": {
+          "step_id": { "type": "integer", "minimum": 1 },
+          "step_slug": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer", "minimum": 1 },
+          "entry_conditions": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Each depends_on value must have a matching step://<step_id> entry evidence reference; this cross-field rule is enforced by core/step-manifest.mjs.",
+            "items": { "$ref": "#/$defs/evidenceRef" }
+          },
+          "completion_evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceRef" } },
+          "observable_result": { "type": "string", "minLength": 1 },
+          "depends_on": {
+            "type": "array",
+            "uniqueItems": true,
+            "description": "Dependencies must precede this step and be represented in entry_conditions as step://<step_id> evidence.",
+            "items": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "uri_or_path"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "uri_or_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

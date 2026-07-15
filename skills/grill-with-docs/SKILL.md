@@ -11,6 +11,8 @@ Ask the questions one at a time, waiting for feedback on each question before co
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
+**Failure contract**: skill 读取、代码核实或文档写入失败时，立即停止并转人工，记录精确错误和未完成退出项。禁止静默继续。只有用户明确表示跳过本轮 grill 才能继续后续 stage。
+
 **退出条件（客观 checklist，不是主观判断）**：不再用"用户能否复述四件事"这类主观标准判断是否可以退出。退出前必须逐项过下面这份客观 checklist，四项全过才能退：
 
 1. 外部依赖接口是否已核实真实定义（非文档假设）
@@ -72,6 +74,8 @@ When the user uses a term that conflicts with the existing language in `CONTEXT.
 
 When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account' — do you mean the Customer or the User? Those are different things."
 
+区分领域语言与实现语言：`CONTEXT.md` 只收录领域专家会使用的概念、含义、边界和避免同义词；不收录 class/module/API 等实现细节，不把它当 spec 或 scratchpad。
+
 ### Discuss concrete scenarios
 
 When domain relationships are being discussed, stress-test them with specific scenarios. Invent scenarios that probe edge cases and force the user to be precise about the boundaries between concepts.
@@ -97,3 +101,11 @@ Only offer to create an ADR when all three are true:
 If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
 
 </supporting-info>
+
+## Sources
+
+- Matt Pocock `grilling`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/productivity/grilling/SKILL.md>
+- Matt Pocock `grill-with-docs`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/grill-with-docs/SKILL.md>
+- Matt Pocock `domain-modeling`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/domain-modeling/SKILL.md>
+
+All three upstream files are MIT licensed. Domain-modeling ideas are absorbed here; this skill does not invoke or require a separate domain-modeling skill.

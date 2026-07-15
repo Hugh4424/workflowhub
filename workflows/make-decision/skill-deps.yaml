@@ -1,0 +1,21 @@
+stage: make-decision
+skills:
+  - { name: talk-with-zhipeng, path: skills/talk-with-zhipeng/SKILL.md, execution: inline, invocation: always, trigger: always, bundle: skills/talk-with-zhipeng/skill-bundle.json }
+  - { name: grill-with-docs, path: skills/grill-with-docs/SKILL.md, execution: independent, invocation: always, trigger: decision_deepening, bundle: skills/grill-with-docs/skill-bundle.json }
+  - { name: decision-log, path: skills/decision-log/SKILL.md, execution: inline, invocation: always, trigger: decision_record, bundle: skills/decision-log/skill-bundle.json }
+  - { name: intake-decision-review, path: skills/intake-decision-review/SKILL.md, execution: independent, invocation: always, trigger: direction_review, bundle: skills/intake-decision-review/skill-bundle.json }
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
+  - { name: anysearch, path: skills/anysearch/SKILL.md, execution: independent, invocation: conditional, trigger: external_research_approved, bundle: skills/anysearch/skill-bundle.json }
+  - { name: debate, path: skills/debate/SKILL.md, execution: independent, invocation: conditional, trigger: material_disagreement, bundle: skills/debate/skill-bundle.json }
+  - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_direction_lens, bundle: skills/plan-ceo-review/skill-bundle.json }
+  - { name: review, path: skills/review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_detail_lens, bundle: skills/review/skill-bundle.json }
+runtime_capabilities:
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
+  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }
+  - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: research_or_review, absence_semantics: blocked }
+  - { id: git, kind: cli, doctor: [git, --version], required_when: implementation_selected, absence_semantics: blocked }
+external_capabilities:
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: research_or_review, absence_semantics: human_required }
+  - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }
+  - { id: muyu-search-mcp, kind: mcp, doctor: [host-capability, muyu-search-mcp], required_when: external_research_approved, absence_semantics: diagnostic }
+  - { id: anysearch-api, kind: host, doctor: [workflowhub-capability, anysearch-api], required_when: external_research_approved, absence_semantics: diagnostic }

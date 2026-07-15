@@ -1,77 +1,78 @@
 ---
 name: wh-review
-description: workflowhub-specific heterologous review dispatch layer. Owns stage→contract routing, round-state, degrade/escalate rules, and report rendering. Calls the stripped 3rd-review engine as a pure {mode, contract, materials} verdict backend.
+description: workflowhub-specific heterologous review dispatch layer. Owns stage routing, round-state, artifact packaging, provider execution, diagnostics, degrade/escalate rules, and report rendering.
 ---
-
-<!-- component skill — physically independent, invoked by each stage's main agent via the two-phase (prepare / execute) protocol below -->
-<!-- source/origin: partially migrated from agenthub packages/core/agenthub/skills/3rd-review/verifiers/vibecoding/*-contract.md -->
-<!-- status: SKELETON (T001, stage 1). Round-state machine, invoke-review-engine, degrade/escalate logic land in stage 2 (T010-T012). This file will be deepened incrementally; do not treat as final. -->
 
 # wh-review
 
 ## Goal
 
-`wh-review` is workflowhub's own review-orchestration layer. It sits between each stage's main agent and the pure, stage-agnostic `3rd-review` engine. `3rd-review` itself carries zero knowledge of stage names, round counters, or degrade/escalate policy — it only accepts `{mode, contract, materials}` and returns `{verdict, findings, actual_mode}`. All workflowhub-specific behavior (which contract applies, which round we're on, when to escalate to a human) lives here.
+`wh-review` is workflowhub's heterologous review orchestration layer. It routes each workflow stage to its review contract, maintains review rounds, builds immutable review inputs, invokes the selected independent provider, records diagnostics, and renders durable reports. A synthetic failure is never a usable review verdict and must not be presented as independent review findings.
 
-## Input
+## Input and stage routing
 
-Each stage's main agent calls `wh-review` with at minimum:
+The caller supplies:
 
-- `task_id` — see "task-id 来源契约" below for the validation rule.
-- `stage` — one of `make-decision | build-spec | build-plan | build-code | verify-code`. Unknown/missing stage is fail-loud (see AC1-2/AC2-3), never silently defaulted.
+- `task_id`, matching `^[A-Za-z0-9._-]+$` with no path separator or `..`.
+- `stage`, exactly one of the following values.
 
-## Output
-
-- A structured verdict: `pass | revise_required | escalate_to_human`, plus a `findings` summary.
-- Durable artifact paths (resolved via `core/task-dir-parser.mjs`, never hardcoded):
-  - Route decision record: `tasks/{task-id}/reviews/route-decision-{stage}-{review_flow_id}.json`
-  - Raw engine verdict: `tasks/{task-id}/reviews/verdict-{stage}-{review_flow_id}-round-{total_round}.raw.json`
-  - Rendered report: `tasks/{task-id}/reports/` (agenthub-style flat naming, indexed in `report-index.md`)
-
-## stage → contract 映射（5 套，权威定义见 spec.md FR-WHREVIEW-002）
-
-| stage | 合同文件 |
+| stage | contract |
 |---|---|
-| make-decision | `skills/wh-review/contracts/intake.md` |
-| build-spec | `skills/wh-review/contracts/design.md` |
-| build-plan | `skills/wh-review/contracts/plan.md` |
-| build-code | `skills/wh-review/contracts/code.md` |
-| verify-code | `skills/wh-review/contracts/test-acceptance.md` |
+| `make-decision` | `skills/wh-review/contracts/make-decision.md` |
+| `build-spec` | `skills/wh-review/contracts/build-spec.md` |
+| `build-plan` | `skills/wh-review/contracts/build-plan.md` |
+| `build-code` | `skills/wh-review/contracts/build-code.md` |
+| `verify-code` | `skills/wh-review/contracts/verify-code.md` |
 
-Given `stage` not in the table above → fail-loud, non-zero exit, no fallback to a generic contract (AC2-3).
+Unknown stages and unsafe identifiers fail loud. They are not sanitized or routed to a generic contract.
 
-## 四要素调用协议（provisional skeleton — full wiring lands in T010a/T010c）
+## V4 round protocol
 
-One `wh-review` invocation is fully described by four elements, of which the first is consumed internally and the remaining three are forwarded verbatim to the 3rd-review engine:
+All production callers use `ReviewRoundFacade` through `wh-review-cli.mjs run`. It has three operations: `prepare()` seals `review-packet.v1`, `run()` calls the broker and validates provider output, and `publish()` writes disposition-bound projections. No workflow may call a provider runner directly. An unpublished CLI `run` result is transport/packet evidence only and has no public semantic verdict. After dispositions, `publish()` is the sole public decision boundary and returns `{ semantic_verdict, core_receipt_hash, needs_human }`.
 
-1. **`stage`** — used only for contract routing and round-state bookkeeping inside `wh-review`. Never forwarded to 3rd-review (3rd-review has zero stage knowledge; see FR-THIRDREVIEW-002).
-2. **`mode`** — one of `full | incremental | same-source`, derived by `wh-review` from the current round-state (never supplied by the caller).
-3. **`contract`** — the contract path + hash recorded in `route-decision-{stage}-{review_flow_id}.json` (see stage→contract table above).
-4. **`materials`** — the review payload, assembled by `wh-review` itself (diff/snapshot-diff for document-class targets, real `git diff` for code/test-class targets), not authored by the caller.
+The only broker execution form is:
 
-The caller-facing protocol is two-phase:
+```text
+<third_review.command> run --config=<config> --request=<request> [--attachments=<manifest>]
+```
 
-- **Phase 1 — prepare**: caller passes `stage`; `wh-review` returns either `{status: "ready", review_flow_id, total_round, contract_path}` or `{status: "blocked_by_human_confirmation", review_flow_id}` (see FR-WHREVIEW-007, spec.md §"输出契约"). A blocked response means the caller must stop and wait — it must not proceed to phase 2.
-- **Phase 2 — execute**: once `ready`, `wh-review` assembles `{mode, contract, materials}` and invokes the 3rd-review engine, then writes back round-state and renders the report.
+Optional attachment and cancellation-source arguments require machine-readable `doctor` capability declarations from the selected broker command: `capabilities.attachments:true` and `capabilities.cancel_source:true`. Caller configuration cannot assert either capability. A base V4 CLI that lacks either declaration fails loud during dispatch; wh-review never sends unsupported flags or silently drops a cancellation source.
 
-Exact orchestration logic (`round-state.mjs`, `invoke-review-engine.mjs`) is implemented in stage 2 (T010-T012); this section documents the caller-visible contract shape only.
+Broker command, broker config, and packet root come only from the host-owned
+`~/.workflowhub/config.json` `third_review` object. They are never accepted in a
+workflow/CLI request. `third_review.attachment_root` must be a real directory, and
+the selected 3rd-review config must allowlist that exact realpath with source prefix
+`.wh-review-packets`; otherwise dispatch fails before a provider starts. The broker
+doctor is always called with that same root and must return
+`attachment_root.status:"ready"`.
 
-## task-id 来源契约
+Provider candidates, attachment delivery support, and continuation eligibility come only from the selected broker command's validated `doctor.providers[]` snapshot. Callers must not provide `provider_capabilities` or `attachment_delivery`; both are rejected instead of forwarded. The first round stores the normalized snapshot hash and the actual candidate/continuable provider sets. A changed snapshot blocks continuation until a human-approved reset.
 
-`task_id` MUST match the safe character set `^[A-Za-z0-9._-]+$` (no path separators, no `..`). Any `task_id` that does not match this pattern is a fail-loud error: `wh-review` exits non-zero before touching the filesystem. It must never be silently sanitized, truncated, or otherwise coerced into a safe form — a malformed `task_id` is a caller bug, not a recoverable input.
+Before any provider prompt is rendered, the host freezes the broker's exact `review-attachment-manifest.v1` triad: `review-packet.v1.json`, `changes.diff`, and non-self-referential `manifest.json`. Its canonical inner/delivery/material hashes bind packet/diff hashes and every attachment name/size/SHA-256. `file_only` sets every outer attachment `embed:false` and never calls embedded rendering; `always_embed` sets every entry `embed:true`. Its request is only a short instruction, attachment IDs, and material hash—never a diff, packet, chunk, host path, worktree path, or repository handle. Broker delivery records use `material_total_bytes` for the provider-visible attachment total in both modes and `rendered_prompt_bytes` only for final `always_embed` prompt bytes; the host never treats those as interchangeable. Raw provider-visible source containing an absolute path or non-HTTP URI (only `http(s)` references are permitted) fails as `SOURCE_CONTAINS_ABSOLUTE_PATH`; it is not silently redacted or given a new hash.
 
-## 落盘路径解析
+First round stores one `initial_runtime_id` and the initial provider-material manifest hash in the private receipt. Later rounds reuse `continuation:{runtime_id:initial_runtime_id}` and deliver a separately frozen delta triad (including `continuation-delta.v1.json`); they never put delta content in the prompt, pass raw provider session ids, or silently start a new runtime. Missing/expired/ineligible continuation requires `wh-review-cli.mjs reset` with `reason` and `human_approval_ref`.
 
-All filesystem paths (`route-decision-*`, `verdict-*.raw.json`, round-state files, reports) are resolved exclusively via `core/task-dir-parser.mjs`'s `parseTaskDir()`, following the same precedence as FR-TASKDIR-001: `WORKFLOWHUB_TASK_DIR` env var as a direct task root → `~/.workflowhub/config.json` `task_dir` field → `Projects/<project-key>/tasks` when the config value is a global Knowledge root → fail-loud if both are absent. `wh-review` must write task artifacts under `{taskTrackingRoot}/{task-id}/...`, must not hardcode a task directory path, and must not implement a second, parallel path-resolution scheme (AC1-4, statically grep-verifiable).
+## Contract, track, and skill source
 
-## Contracts directory (this phase)
+`contracts/provider-protocol.md` is shared by every provider. The selected stage contract is the only stage rule source. `make-decision` requires an explicit `direction` or `detail` track; the tracks are separate review flows.
 
-- `skills/wh-review/contracts/intake.md` — deepened in this phase (T008), covers C1-C6.
-- `skills/wh-review/contracts/test-acceptance.md` — deepened in this phase (T009), covers F1-F6.
-- `skills/wh-review/contracts/design.md`, `plan.md`, `code.md` — migration placeholders only in this phase (T009b); deepening deferred, see `CONTRACT-DEPTH` marker in each file for the required follow-up scope.
+Required skills resolve only from this repository's `skills/` directory and must declare `review-bundle.json`. Host skill directories, nested framework paths, and implicit fallback are not valid sources. Bundles are report-only lenses; external providers receive only the frozen bundle selected by `stage-skill-plan.json`.
 
-## Scripts (stage 1 scope)
+## Provider outcomes, receipts, and cancellation
 
-- `skills/wh-review/scripts/route-decision-writer.mjs` — two-phase route-decision record writer (T007).
+Each provider has independent `transport_status`, `packet_status`, and `semantic_verdict`. Only `completed + complete + business_valid + semantic_verdict` participates in aggregate findings. `CANCELLED`, authentication failure, timeout, malformed JSON, material incompleteness, and hash mismatch are diagnostics, never semantic verdicts. A cancellation must record its source; broker liveness/duration limits remain broker-owned and no wh-review outer timeout kills a provider.
 
-Additional scripts (`round-state.mjs`, `invoke-review-engine.mjs`, `snapshot-writer.mjs`, `human-confirmation.mjs`, `render-review-report.mjs`) are stage 2 scope (T010-T012) and not present yet.
+Private receipts retain `runtime_id`, provider `session_id`, delivery mode, provider-visible manifest hash, material byte total, and a copied original stdout/stderr audit chain below `reviews/private/round-*`: `raw_output_ref`/`raw_stdout_ref` bytes must hash to `raw_stdout_sha256`, and `raw_stderr_ref` bytes must hash to `raw_stderr_sha256`. Parsed provider text is separate (`parsed_output_ref`/`parsed_output_sha256`) and is never represented as raw stdout. Delivery/copy success is not a verdict: only broker raw output followed by host disposition can publish a semantic verdict. Core receipt, report, report index, and stage result are ordered, atomic redacted projections. Runtime/session/raw/parsed paths must never appear in public artifacts. A published `semantic_verdict` is cryptographically bound into the core receipt and is accompanied by its `core_receipt_hash` and `needs_human` flag.
+
+## Durable artifacts
+
+Paths are resolved through `core/task-dir-parser.mjs` (`WORKFLOWHUB_TASK_DIR`, then workflowhub configuration); no machine-specific task path is hardcoded.
+
+- `tasks/{task-id}/reviews/private/round-*/review-packet.json`
+- `tasks/{task-id}/reviews/private/round-*/providers/<provider>.raw.txt`
+- `tasks/{task-id}/reviews/private/round-*/round-receipt.json`
+- redacted core receipt, Chinese report, report index, and stage result under `tasks/{task-id}/reviews/`
+
+## Verdict handling
+
+Any hard-invariant finding is `revise_required` regardless of provider majority. The main Agent must disposition every merged finding as `accept`, `reject`, or `defer` with evidence; it cannot accept a hard-invariant finding. Never convert infrastructure failure into `pass` or reviewer findings.

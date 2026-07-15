@@ -28,12 +28,19 @@ export function taskRoot(taskTrackingRoot, taskId) {
 
 /** stage → contract file name (spec.md FR-WHREVIEW-002 mapping table) */
 export const STAGE_CONTRACT_MAP = {
-  "make-decision": "intake.md",
-  "build-spec": "design.md",
-  "build-plan": "plan.md",
-  "build-code": "code.md",
-  "verify-code": "test-acceptance.md",
+  "make-decision": "make-decision.md",
+  "build-spec": "build-spec.md",
+  "build-plan": "build-plan.md",
+  "build-code": "build-code.md",
+  "verify-code": "verify-code.md",
 };
+
+/** Canonical workflow order used to validate cross-stage receipt handoffs. */
+export const REVIEW_STAGE_SEQUENCE = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
+
+export function isDownstreamReviewStage(sourceStage, targetStage) {
+  return REVIEW_STAGE_SEQUENCE.indexOf(sourceStage) >= 0 && REVIEW_STAGE_SEQUENCE.indexOf(sourceStage) < REVIEW_STAGE_SEQUENCE.indexOf(targetStage);
+}
 
 const SAFE_ID_RE = /^[A-Za-z0-9._-]+$/;
 
@@ -92,10 +99,62 @@ export function assertKnownStage(stage) {
   }
 }
 
+/**
+ * Make-decision has two independently resumable tracks.  Keep the track in
+ * every storage identity instead of relying on callers to choose distinct
+ * flow ids.  Other stages have exactly one implicit track.
+ */
+export function assertReviewTrack(stage, reviewTrack = null) {
+  assertKnownStage(stage);
+  if (stage === "make-decision") {
+    if (reviewTrack !== "direction" && reviewTrack !== "detail") {
+      throw new FailLoudError("make-decision requires review_track direction or detail");
+    }
+    return reviewTrack;
+  }
+  if (reviewTrack !== null && reviewTrack !== undefined) {
+    throw new FailLoudError(`${stage} does not accept review_track`);
+  }
+  return null;
+}
+
+/** Stable filename component for a single review flow. */
+export function reviewFlowStorageKey(stage, reviewTrack, reviewFlowId) {
+  assertSafeReviewFlowId(reviewFlowId);
+  const track = assertReviewTrack(stage, reviewTrack);
+  return track ? `${stage}-${track}-${reviewFlowId}` : `${stage}-${reviewFlowId}`;
+}
+
+/** Stable filename component for a stage's public projection. */
+export function reviewStageStorageKey(stage, reviewTrack) {
+  const track = assertReviewTrack(stage, reviewTrack);
+  return track ? `${stage}-${track}` : stage;
+}
+
 /** Resolve {contractPath, contractHash} for a known stage. */
 export function contractPathAndHash(stage) {
   const contractPath = join(CONTRACTS_DIR, STAGE_CONTRACT_MAP[stage]);
   const content = readFileSync(contractPath, "utf8");
   const contractHash = createHash("sha256").update(content).digest("hex");
   return { contractPath, contractHash };
+}
+
+/** Resolve the exact stage contract bytes visible to a reviewer. */
+export function projectStageContract(stage, reviewTrack = null) {
+  const selectedTrack = assertReviewTrack(stage, reviewTrack);
+  const { contractPath } = contractPathAndHash(stage);
+  const source = readFileSync(contractPath, "utf8");
+  let content = source;
+  if (stage === "make-decision") {
+    const firstTrack = source.indexOf("## review_track:");
+    const marker = `## review_track: ${selectedTrack}`;
+    const start = source.indexOf(marker);
+    const next = source.indexOf("## review_track:", start + marker.length);
+    if (firstTrack < 0 || start < 0) throw new FailLoudError(`make-decision contract is missing selected track: ${selectedTrack}`);
+    content = `${source.slice(0, firstTrack)}${source.slice(start, next < 0 ? undefined : next)}`;
+  }
+  const rules = [...content.matchAll(/^- ((?:(?:DIR|DET)-)?([CH])\d+):\s+\S.*$/gm)].map((match) => ({ id: match[1], kind: match[2] }));
+  const allIds = rules.map(({ id }) => id); const hardIds = rules.filter(({ kind }) => kind === "H").map(({ id }) => id);
+  if (rules.filter(({ kind }) => kind === "C").length === 0 || hardIds.length === 0 || new Set(allIds).size !== allIds.length) throw new FailLoudError(`projected contract requires unique non-empty C/H rules: ${stage}/${selectedTrack ?? "default"}`);
+  return { contractPath, content, contractHash: createHash("sha256").update(content).digest("hex"), allIds, hardIds };
 }

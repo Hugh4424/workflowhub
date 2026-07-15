@@ -78,9 +78,24 @@ IDs are present, and every route value is in the allowed set.
 - For `risk_level=high`, prefer the highest applicable layer and avoid `skip`
   unless the AC is explicitly out of scope for this change.
 
+## Test Design Anti-Patterns
+
+- **Public behavior only**: route evidence through a real public seam. Do not test private methods, internal call order, or whether a mock exists.
+- **Mocks are boundaries, not assertions**: before mocking, identify the real dependency's side effects. Mock only the slow/external boundary, preserve behavior the test relies on, and keep the mock schema complete. If the test asserts mock behavior, change the seam or unmock it.
+- **No test-only production API**: never add a production method, flag, endpoint, or export solely for setup/cleanup/assertion. Put it in test utilities. A production lifecycle API is valid only when production owns and uses that lifecycle.
+- **Vertical slices**: use one observable behavior → one failing test → minimal implementation → passing evidence. Do not route a horizontal batch of imagined tests before implementation.
+- **Independent oracle**: expected values must come from the spec, a worked example, or another independent source; do not restate the implementation in the assertion.
+
+When a proposed route violates one of these rules, do not hide it behind a higher evidence layer. Record the anti-pattern and require the route to use a valid seam.
+
 ## Timeout Behavior
 
 If the sub-agent call times out or no `test-strategy.md` can be produced, record
 the strategy result as `yellow` with a visible timeout reason. Do not silently
 invent routes after a timeout; the verify-code stage must escalate the yellow
 fact for human confirmation.
+
+## Sources
+
+- Matt Pocock `tdd`: <https://github.com/mattpocock/skills/blob/66898f60e8c744e269f8ce06c2b2b99ce7660d5f/skills/engineering/tdd/SKILL.md> (MIT). Absorbed public seams, independent behavior, and vertical slices.
+- Superpowers `testing-anti-patterns.md`: <https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/test-driven-development/testing-anti-patterns.md> (MIT). Absorbed mock and test-only production API gates.

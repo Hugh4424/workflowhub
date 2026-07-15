@@ -1,0 +1,16 @@
+stage: build-code
+skills:
+  - { name: wh-review, path: skills/wh-review/SKILL.md, execution: inline, invocation: always, trigger: review, bundle: skills/wh-review/skill-bundle.json }
+  - { name: test-routing-advisor, path: skills/test-routing-advisor/SKILL.md, execution: independent, invocation: conditional, trigger: l2_test_routing, bundle: skills/test-routing-advisor/skill-bundle.json }
+  - { name: diagnosing-bugs, path: skills/diagnosing-bugs/SKILL.md, execution: independent, invocation: conditional, trigger: unexpected_failure, bundle: skills/diagnosing-bugs/skill-bundle.json }
+  - { name: review-response, path: skills/review-response/SKILL.md, execution: independent, invocation: conditional, trigger: revise_required, bundle: skills/review-response/skill-bundle.json }
+runtime_capabilities:
+  - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
+  - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }
+  - { id: python, kind: cli, doctor: [python3, --version], required_when: l2_test_routing, absence_semantics: blocked }
+  - { id: process, kind: cli, doctor: [ps, -p, "1"], required_when: phase_execution, absence_semantics: blocked }
+  - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
+  - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }
+external_capabilities:
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: phase_execution, absence_semantics: human_required }
+  - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }

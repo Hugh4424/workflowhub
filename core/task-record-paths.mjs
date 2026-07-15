@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { parseTaskDir } from "./task-dir-parser.mjs";
 
 const SAFE_TASK_ID = /^[A-Za-z0-9._-]+$/;
+const SAFE_REVIEW_FLOW_ID = /^[A-Za-z0-9._-]+$/;
 
 function fail(message) {
   process.stderr.write(`[task-record-paths] FAIL: ${message}\n`);
@@ -28,6 +29,21 @@ export function validateTaskId(taskId) {
     throw new Error(`invalid task_id "${taskId}"`);
   }
   return normalized;
+}
+
+export function validateReviewFlowId(reviewFlowId) {
+  if (typeof reviewFlowId !== "string" || reviewFlowId.trim() === "") {
+    throw new Error("review_flow_id is required for make-decision stage result");
+  }
+  const normalized = reviewFlowId.trim();
+  if (!SAFE_REVIEW_FLOW_ID.test(normalized) || normalized === "." || normalized === ".." || normalized.includes("..")) {
+    throw new Error(`invalid review_flow_id "${reviewFlowId}"`);
+  }
+  return normalized;
+}
+
+export function makeDecisionStageResultFilename(reviewFlowId) {
+  return `stage-result-make-decision-${validateReviewFlowId(reviewFlowId)}.json`;
 }
 
 function assertInside(baseDir, candidate) {
@@ -55,7 +71,6 @@ export function resolveTaskRecordPaths(taskId, options = {}) {
     reviews_dir: join(taskRoot, "reviews"),
     test_dir: join(taskRoot, "test"),
     stage_result: {
-      make_decision: join(taskRoot, "stage-result-make-decision.json"),
       build_spec: join(taskRoot, "stage-result-build-spec.json"),
       build_plan: join(taskRoot, "stage-result-build-plan.json"),
       build_code: join(taskRoot, "stage-result-build-code.json"),
@@ -64,10 +79,20 @@ export function resolveTaskRecordPaths(taskId, options = {}) {
   };
 }
 
+export function resolveMakeDecisionStageResultPath(taskId, reviewFlowId, options = {}) {
+  const paths = resolveTaskRecordPaths(taskId, options);
+  return join(paths.reviews_dir, makeDecisionStageResultFilename(reviewFlowId));
+}
+
 export function taskRecordPath(taskId, ...segments) {
   const paths = resolveTaskRecordPaths(taskId);
   const candidate = resolve(paths.task_root, ...segments);
   assertInside(paths.task_root, candidate);
+  const legacyRoot = resolve(paths.task_root, "stage-result-make-decision.json");
+  const legacyReviews = resolve(paths.reviews_dir, "stage-result-make-decision.json");
+  if (candidate === legacyRoot || candidate === legacyReviews) {
+    throw new Error("legacy fixed make-decision stage-result is forbidden; use resolveMakeDecisionStageResultPath(task_id, review_flow_id)");
+  }
   return candidate;
 }
 

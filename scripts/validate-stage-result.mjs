@@ -13,12 +13,13 @@
  * No AJV — hand-written validator consistent with core/validate-contract.mjs (FR-NC-004).
  */
 
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateContract } from "../core/validate-contract.mjs";
+import { verifyAuditCarrier } from "../core/audit-summary-carrier.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -45,69 +46,6 @@ function isNonEmpty(value) {
   if (typeof value === "object") return Object.keys(value).length > 0;
   // number, boolean — truthy wins
   return Boolean(value);
-}
-
-function isTrackingArtifactPath(file) {
-  return (
-    file === "phase-result.json" ||
-    file.endsWith("/phase-result.json") ||
-    file === "stage-result-build-code.json" ||
-    file.endsWith("/stage-result-build-code.json") ||
-    file.startsWith("tasks/") ||
-    file.includes("/evidence/") ||
-    file.startsWith("evidence/") ||
-    file.includes("/reviews/") ||
-    file.startsWith("reviews/")
-  );
-}
-
-function commitChangedFiles(worktreeRoot, sha) {
-  return execFileSync("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", sha], {
-    cwd: worktreeRoot,
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  })
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function worktreeHead(worktreeRoot, errors) {
-  try {
-    return execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: worktreeRoot,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch (err) {
-    errors.push(`facts["worktree_root"] for stage "build-code" must be a readable git worktree: ${err.message}`);
-    return null;
-  }
-}
-
-function validateBuildCodeCommitRecordAgainstWorktree(record, worktreeRoot, errors) {
-  let changed;
-  try {
-    changed = commitChangedFiles(worktreeRoot, record.commit_sha);
-  } catch (err) {
-    errors.push(`facts["phase_completion"].commit_records commit_sha for phase "${record.phase_id}" must be readable in worktree: ${err.message}`);
-    return;
-  }
-  if (!changed.some((file) => !isTrackingArtifactPath(file))) {
-    errors.push(`facts["phase_completion"].commit_records commit_sha for phase "${record.phase_id}" must include at least one non-tracking implementation/test file`);
-  }
-}
-
-function validateBuildCodeCommitRecordsAgainstWorktree(records, worktreeRoot, errors) {
-  const head = worktreeHead(worktreeRoot, errors);
-  if (!head) return;
-  for (const record of records) {
-    validateBuildCodeCommitRecordAgainstWorktree(record, worktreeRoot, errors);
-  }
-  const finalRecord = records.at(-1);
-  if (finalRecord && finalRecord.commit_sha !== head) {
-    errors.push(`facts["phase_completion"].commit_records final implementation commit for phase "${finalRecord.phase_id}" must match worktree HEAD`);
-  }
 }
 
 /**
@@ -145,6 +83,11 @@ export function validateStageResult(stage, artifact) {
     }
   }
 
+  // V1 results are explicit audit consumers. Older receipts remain readable
+  // during cutover, but never become an invented quality verdict.
+  const auditCarrier = verifyAuditCarrier(facts);
+  if (!auditCarrier.ok) errors.push(...auditCarrier.errors);
+
   if (stage === "build-code") {
     for (const key of ["worktree_root", "task_tracking_root"]) {
       if (key in facts && (typeof facts[key] !== "string" || !isAbsolute(facts[key]))) {
@@ -152,71 +95,112 @@ export function validateStageResult(stage, artifact) {
       }
     }
     if (facts.review && typeof facts.review === "object" && !Array.isArray(facts.review)) {
-      const artifactPaths = [
-        facts.review.artifact_path,
-        ...(
-          Array.isArray(facts.review.artifact_paths)
-            ? facts.review.artifact_paths
-            : []
-        ),
-      ].filter((path) => typeof path === "string" && path.trim() !== "");
-      if (artifactPaths.length === 0) {
-        errors.push(`facts["review"] for stage "build-code" must include artifact_path or artifact_paths`);
-      } else if (!artifactPaths.some((path) => path.endsWith(".json"))) {
-        errors.push(`facts["review"] for stage "build-code" must reference a raw JSON review artifact`);
+      const review = facts.review;
+      const publishedKeys = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
+      const pendingKeys = new Set(["status", "needs_human", "legacy_original_sha256", "legacy_original_ref", "diagnostic"]);
+      const isPendingLegacy = review.status === "pending_legacy_review";
+      if (isPendingLegacy) {
+        if (Object.keys(review).some((key) => !pendingKeys.has(key))
+          || review.needs_human !== true
+          || !/^[a-f0-9]{64}$/.test(review.legacy_original_sha256 ?? "")
+          || typeof review.legacy_original_ref !== "string"
+          || review.legacy_original_ref.trim() === ""
+          || typeof review.diagnostic !== "string"
+          || review.diagnostic.trim() === ""
+          || artifact.status !== "unknown"
+          || artifact.user_decision !== true) {
+          errors.push(`facts["review"] pending_legacy_review requires only status, needs_human:true, legacy_original_sha256, legacy_original_ref, diagnostic, plus stage status unknown and user_decision:true`);
+        }
+      } else if (Object.keys(review).some((key) => !publishedKeys.has(key))
+        || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
+        || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
+        || typeof review.needs_human !== "boolean") {
+        errors.push(`facts["review"] for stage "build-code" must be published {core_receipt_hash, semantic_verdict, needs_human} or explicit pending_legacy_review diagnostic`);
       }
     } else if ("review" in facts) {
       errors.push(`facts["review"] for stage "build-code" must be an object`);
     }
     if (facts.phase_completion && typeof facts.phase_completion === "object" && !Array.isArray(facts.phase_completion)) {
-      const commitRecords = Array.isArray(facts.phase_completion.commit_records)
-        ? facts.phase_completion.commit_records
+      const phaseCompletion = facts.phase_completion;
+      if (Object.keys(phaseCompletion).some((key) => key !== "phase_records")) {
+        errors.push(`facts["phase_completion"] for stage "build-code" must contain only phase_records`);
+      }
+      const phaseRecords = Array.isArray(phaseCompletion.phase_records)
+        ? phaseCompletion.phase_records
         : null;
-      const noChangeRecords = Array.isArray(facts.phase_completion.no_change_records)
-        ? facts.phase_completion.no_change_records
-        : null;
-      if (!commitRecords) {
-        errors.push(`facts["phase_completion"].commit_records for stage "build-code" must be an array`);
+      if (!phaseRecords) {
+        errors.push(`facts["phase_completion"].phase_records for stage "build-code" must be an array`);
       }
-      if (!noChangeRecords) {
-        errors.push(`facts["phase_completion"].no_change_records for stage "build-code" must be an array`);
+      const validPhaseRecords = (phaseRecords ?? []).filter((record) => {
+        if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+        const canonical = Object.keys(record).length === 2
+          && Object.keys(record).every((key) => key === "phase_id" || key === "changed");
+        const migrated = Object.keys(record).every((key) => ["phase_id", "changed", "evidence_status", "provenance"].includes(key))
+          && Object.keys(record).length === 4
+          && ["legacy_commit_only", "canonical_report_missing"].includes(record.evidence_status)
+          && record.provenance
+          && typeof record.provenance === "object"
+          && !Array.isArray(record.provenance)
+          && Object.keys(record.provenance).length === 4
+          && Object.keys(record.provenance).every((key) => ["source", "commit_sha", "original_sha256", "original_ref"].includes(key))
+          && record.provenance.source === "legacy_commit_record"
+          && /^[a-f0-9]{40}$/.test(record.provenance.commit_sha ?? "")
+          && /^[a-f0-9]{64}$/.test(record.provenance.original_sha256 ?? "")
+          && typeof record.provenance.original_ref === "string"
+          && record.provenance.original_ref.trim() !== "";
+        return (canonical || migrated)
+          && typeof record.phase_id === "string"
+          && record.phase_id.trim() !== ""
+          && typeof record.changed === "boolean";
+      });
+      if ((phaseRecords?.length ?? 0) === 0) {
+        errors.push(`facts["phase_completion"] for stage "build-code" must include at least one phase_records entry`);
       }
-      const validCommitRecords = (commitRecords ?? []).filter(
-        (record) =>
-          record &&
-          typeof record === "object" &&
-          typeof record.phase_id === "string" &&
-          record.phase_id.trim() !== "" &&
-          typeof record.commit_sha === "string" &&
-          /^[a-f0-9]{40}$/.test(record.commit_sha)
-      );
-      const validNoChangeRecords = (noChangeRecords ?? []).filter(
-        (record) =>
-          record &&
-          typeof record === "object" &&
-          typeof record.phase_id === "string" &&
-          record.phase_id.trim() !== "" &&
-          typeof record.no_change_reason === "string" &&
-          record.no_change_reason.trim() !== ""
-      );
-      if ((commitRecords?.length ?? 0) + (noChangeRecords?.length ?? 0) === 0) {
-        errors.push(`facts["phase_completion"] for stage "build-code" must include at least one commit_records or no_change_records entry`);
-      }
-      if (commitRecords && validCommitRecords.length !== commitRecords.length) {
-        errors.push(`facts["phase_completion"].commit_records entries must include phase_id and a real 40-hex commit_sha shape`);
-      }
-      if (noChangeRecords && validNoChangeRecords.length !== noChangeRecords.length) {
-        errors.push(`facts["phase_completion"].no_change_records entries must include phase_id and non-empty no_change_reason`);
-      }
-      if (validCommitRecords.length > 0 && typeof facts.worktree_root === "string" && isAbsolute(facts.worktree_root)) {
-        validateBuildCodeCommitRecordsAgainstWorktree(validCommitRecords, facts.worktree_root, errors);
+      if (phaseRecords && validPhaseRecords.length !== phaseRecords.length) {
+        errors.push(`facts["phase_completion"].phase_records entries must be canonical {phase_id,changed} or provenance-bound legacy migration records`);
       }
     } else if ("phase_completion" in facts) {
       errors.push(`facts["phase_completion"] for stage "build-code" must be an object`);
     }
   }
 
+  if (stage === "verify-code") {
+    if (!("audit_summary_ref" in facts)) {
+      errors.push(`facts missing required key for stage "verify-code": "audit_summary_ref"`);
+    } else if (
+      typeof facts.audit_summary_ref !== "string" ||
+      facts.audit_summary_ref.trim() === "" ||
+      !facts.audit_summary_ref.endsWith(".json")
+    ) {
+      errors.push(`facts["audit_summary_ref"] for stage "verify-code" must be a non-empty JSON artifact path`);
+    }
+    if (!("audit_verdict" in facts)) {
+      errors.push(`facts missing required key for stage "verify-code": "audit_verdict"`);
+    } else if (!new Set(["pass", "fail"]).has(facts.audit_verdict)) {
+      errors.push(`facts["audit_verdict"] for stage "verify-code" must be pass or fail`);
+    }
+    if (!("audit_summary_hash" in facts)) {
+      errors.push(`facts missing required key for stage "verify-code": "audit_summary_hash"`);
+    } else if (typeof facts.audit_summary_hash !== "string" || !/^[a-f0-9]{64}$/.test(facts.audit_summary_hash)) {
+      errors.push(`facts["audit_summary_hash"] for stage "verify-code" must be a lowercase 64-hex SHA-256`);
+    }
+    // Audit ownership remains upstream: validate the receipt fields only; never
+    // parse the summary or recompute/override its verdict here.
+  }
+
   return { ok: errors.length === 0, errors };
+}
+
+/** Only a current published semantic pass may authorize merge/finalization. */
+export function isBuildCodeMergeAuthorizing(artifact) {
+  const review = artifact?.facts?.review;
+  return artifact?.status === "success"
+    && review
+    && typeof review === "object"
+    && Object.keys(review).length === 3
+    && review.semantic_verdict === "pass"
+    && review.needs_human === false
+    && /^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "");
 }
 
 /**

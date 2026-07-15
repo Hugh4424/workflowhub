@@ -8,6 +8,10 @@
 
 **Organization**: Tasks grouped by user story to enable independent implementation and testing of each story.
 
+## Global Constraints
+
+<!-- 从 plan.md 原样继承，不改写。 -->
+
 ## Format: `- [ ] [TaskID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
@@ -53,10 +57,23 @@
 
 **FR Coverage**: <!-- 覆盖的 FR 列表 -->
 
+**Files**: <!-- 精确 create/modify/test 路径 -->
+
+**Interfaces**:
+
+- Consumes: <!-- 精确签名/schema -->
+- Produces: <!-- 精确签名/schema -->
+
+**Knowledge**: <!-- 已核实外部事实/文档；无则 None -->
+
+**STOP**: <!-- 人工或不可逆边界；无则 None -->
+
 ### Implementation for User Story 1
 
 - [ ] T005 [US1] Create ... FR: <!-- FR 映射 -->
 - [ ] T006 [US1] Verify ... FR: <!-- FR 映射 -->
+
+**Verify**: <!-- 精确命令 + 预期 RED/GREEN 信号 -->
 
 **Gate**: <!-- 门禁条件 -->
 

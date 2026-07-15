@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "stages": {
+    "make-decision": {
+      "tracks": {
+        "direction": {
+          "logical_skill_id": "wh-review/make-decision-direction",
+          "required_skills": ["plan-ceo-review", "review"],
+          "material_profile": "raw-requirement-only",
+          "output_schema": "schemas/reviewer-output.schema.json",
+          "checkpoints": ["packet-attestation", "direction-purity", "contract-checklist"],
+          "expected_evidence": ["raw_requirement", "host_verified_facts", "contract-checklist"],
+          "bundle_hash": "resolved-at-prepare",
+          "bundle_closure_files": "resolved-at-prepare",
+          "review_mode": "lens-only",
+          "delivery_mode": "file_only",
+          "continuation_policy": "initial-runtime-only",
+          "pass_finding_policy": "contract-only",
+          "minimum_business_valid_sources": 1,
+          "recommended_business_valid_sources": 1
+        },
+        "detail": {
+          "logical_skill_id": "wh-review/make-decision-detail",
+          "required_skills": ["plan-ceo-review", "review"],
+          "material_profile": "requirement-and-decision-log",
+          "output_schema": "schemas/reviewer-output.schema.json",
+          "checkpoints": ["packet-attestation", "decision-consistency", "contract-checklist"],
+          "expected_evidence": ["raw_requirement", "decision_log_excerpt", "acceptance_design_excerpt", "contract-checklist"],
+          "bundle_hash": "resolved-at-prepare",
+          "bundle_closure_files": "resolved-at-prepare",
+          "review_mode": "lens-only",
+          "delivery_mode": "file_only",
+          "continuation_policy": "initial-runtime-only",
+          "pass_finding_policy": "contract-only",
+          "minimum_business_valid_sources": 1,
+          "recommended_business_valid_sources": 1
+        }
+      }
+    },
+    "build-spec": {
+      "logical_skill_id": "wh-review/build-spec",
+      "required_skills": ["plan-ceo-review", "review"],
+      "optional_skills": [{ "name": "plan-design-review", "when": "ui" }],
+      "material_profile": "spec-and-design",
+      "output_schema": "schemas/reviewer-output.schema.json",
+      "checkpoints": ["packet-attestation", "spec-traceability", "contract-checklist"],
+      "expected_evidence": ["raw_requirement", "decision_log_excerpt", "acceptance_design_excerpt", "planning_artifacts", "host_verified_facts"],
+      "bundle_hash": "resolved-at-prepare",
+      "bundle_closure_files": "resolved-at-prepare",
+      "review_mode": "lens-only",
+      "delivery_mode": "file_only",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only",
+      "minimum_business_valid_sources": 1,
+      "recommended_business_valid_sources": 1
+    },
+    "build-plan": {
+      "logical_skill_id": "wh-review/build-plan",
+      "required_skills": ["spec-analyze", "plan-eng-review", "review"],
+      "material_profile": "spec-plan-tasks",
+      "output_schema": "schemas/reviewer-output.schema.json",
+      "checkpoints": ["packet-attestation", "plan-executability", "contract-checklist"],
+      "expected_evidence": ["planning_artifacts", "acceptance_design_excerpt", "changed_files", "host_verified_facts"],
+      "bundle_hash": "resolved-at-prepare",
+      "bundle_closure_files": "resolved-at-prepare",
+      "review_mode": "lens-only",
+      "delivery_mode": "file_only",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only",
+      "minimum_business_valid_sources": 1,
+      "recommended_business_valid_sources": 1
+    },
+    "build-code": {
+      "logical_skill_id": "wh-review/build-code",
+      "required_skills": [],
+      "material_profile": "diff-and-evidence",
+      "output_schema": "schemas/reviewer-output.schema.json",
+      "checkpoints": ["packet-attestation", "diff-review", "contract-checklist"],
+      "expected_evidence": ["unified_diff", "changed_files", "acceptance_design_excerpt", "test_evidence", "host_verified_facts"],
+      "bundle_hash": "resolved-at-prepare",
+      "bundle_closure_files": "resolved-at-prepare",
+      "review_mode": "lens-only",
+      "delivery_mode": "file_only",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only",
+      "minimum_business_valid_sources": 1,
+      "recommended_business_valid_sources": 2
+    },
+    "verify-code": {
+      "logical_skill_id": "wh-review/verify-code",
+      "required_skills": ["qa-only", "verify-change"],
+      "material_profile": "acceptance-and-evidence",
+      "output_schema": "schemas/reviewer-output.schema.json",
+      "checkpoints": ["packet-attestation", "acceptance-closure", "contract-checklist"],
+      "expected_evidence": ["acceptance_design_excerpt", "test_evidence", "verification_closure", "changed_files", "host_verified_facts"],
+      "bundle_hash": "resolved-at-prepare",
+      "bundle_closure_files": "resolved-at-prepare",
+      "review_mode": "lens-only",
+      "delivery_mode": "file_only",
+      "continuation_policy": "initial-runtime-only",
+      "pass_finding_policy": "contract-only",
+      "minimum_business_valid_sources": 1,
+      "recommended_business_valid_sources": 2
+    }
+  }
+}

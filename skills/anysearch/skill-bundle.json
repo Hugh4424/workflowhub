@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "skill": "anysearch",
+  "files": [
+    ".env.example",
+    ".gitignore",
+    "LICENSE",
+    "NOTICE",
+    "SECURITY.md",
+    "SKILL.md",
+    "TEST_PLAN.md",
+    "runtime.conf.example",
+    "scripts/anysearch_cli.js",
+    "scripts/anysearch_cli.ps1",
+    "scripts/anysearch_cli.py",
+    "scripts/anysearch_cli.sh",
+    "scripts/generate.py",
+    "scripts/shared/constants.json",
+    "scripts/shared/doc_spec.md"
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/anysearch-ai/anysearch-skill",
+      "commit": "db3d76e5597aec7261257be5322dd211c9d9bb87",
+      "path": "SKILL.md",
+      "license": "Apache-2.0"
+    }
+  ]
+}

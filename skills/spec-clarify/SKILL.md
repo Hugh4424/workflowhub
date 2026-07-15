@@ -6,6 +6,7 @@ description: 对当前 task 的 spec 执行 10 维歧义扫描，通过最多 5 
 # spec-clarify
 
 > 改造自 speckit-clarify，适配为 workflowhub 契约：
+>
 > - 去 git / check-prerequisites / .specify 耦合
 > - 以 task-id 参数化定位 spec
 > - 保全文 speckit 质量机制
@@ -39,22 +40,26 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 **10 维歧义分类：**
 
 **1. Functional Scope & Behavior**
+
 - 核心用户目标与成功标准
 - 显式不做范围声明
 - 用户角色/角色区分
 
 **2. Domain & Data Model**
+
 - 实体、属性、关系
 - 标识与唯一性规则
 - 生命周期/状态转换
 - 数据量级/规模假设
 
 **3. Interaction & UX Flow**
+
 - 关键用户旅程/操作序列
 - 错误态/空态/加载态
 - 可访问性或本地化说明
 
 **4. Non-Functional Quality Attributes**（1 个顶级维度，含 6 子项）
+
 - 性能（延迟、吞吐量目标）
 - 可扩展性（水平/垂直扩展、限制）
 - 可靠性与可用性（运行时间、恢复预期）
@@ -63,32 +68,39 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 - 合规/监管约束（如有）
 
 **5. Integration & External Dependencies**
+
 - 外部服务/API 及其失败模式
 - 数据导入/导出格式
 - 协议/版本假设
 
 **6. Edge Cases & Failure Handling**
+
 - 负向场景
 - 限流/节流
 - 冲突解决（如并发编辑）
 
 **7. Constraints & Tradeoffs**
+
 - 技术约束（语言、存储、托管）
 - 显式取舍或拒绝的替代方案
 
 **8. Terminology & Consistency**
+
 - 规范术语表
 - 已弃用同义词
 
 **9. Completion Signals**
+
 - 验收标准可测试性
 - 可度量的 Definition of Done 指标
 
 **10. Misc / Placeholders**
+
 - TODO 标记/未解决决策
 - 模糊形容词（"健壮""直观"）缺乏量化
 
 对每维标注 Partial 或 Missing 的类别添加候选问题，除非：
+
 - 澄清不会实质改变实现或验证策略
 - 信息更适合推迟到规划阶段（内部备注）
 
@@ -97,6 +109,7 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 内部生成优先级排序的候选澄清问题队列（最多 10 个候选），按 (Impact * Uncertainty) 启发式排序。不一次性全部输出。
 
 约束：
+
 - 全程最多 5 题已问。
 - 每题须为多选题（2-5 互斥选项）；自由文本仅可作为显式 Other 选项（<=5 词），不可替代选项设计。
 - 仅纳入对架构、数据建模、任务分解、测试设计、UX 行为、运维就绪或合规验证有实质影响的题目。
@@ -110,6 +123,7 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 **一次只呈现一题**（ONE question at a time），不提前透露后续题目。
 
 **多选题格式：**
+
 - 分析所有选项，基于项目类型最佳实践/同类实现常见模式/安全与性能风险降低/spec 中可见目标与约束，确定最佳选项。
 - **Recommended: Option [X] — <1-2 句理由>**
 - 然后以 Markdown 表格呈现所有选项：
@@ -124,12 +138,14 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 - 表格后追加："回复选项字母（如 'A'），'yes' / 'recommended' 采纳推荐，或提供 Other 选项回答。"
 
 **用户回答后：**
+
 - 若回复 "yes" / "recommended" / "suggested"，采用之前声明的推荐/建议为答案。
 - 否则验证答案映射到某选项或符合 <=5 词约束。
 - 若歧义，快速消歧（仍属同一题，不推进）。
 - 确认后立即执行步骤 4 的增量更新（写入 spec 并保存），然后推进到下一题。
 
 **停止提问条件：**
+
 - 所有关键歧义提前解决（剩余队列不再必要）
 - 用户发出完成信号（"done""good""no more"）
 - 达到 5 题上限
@@ -160,6 +176,7 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 ### 5) 校验
 
 每题写入后及最终校验：
+
 - Clarifications 节每题恰好一条记录（无重复）
 - 已问（已采纳）问题总数 ≤ 5
 - 已更新节无不应用新答案解决的模糊占位符
@@ -216,6 +233,7 @@ task-id 和 spec-path 必须**恰好提供一个**。同时提供或均缺失 �
 ## 去耦约束
 
 本 skill 不依赖 speckit 基础设施：
+
 - 不调 `check-prerequisites.sh`
 - 不读 `.specify/` 目录或 `.specify/feature.json`
 - 不执行 git 命令

@@ -3,6 +3,7 @@ name: make-decision
 version: 2.0.0
 description: Clarify requirements with the user via structured debate/review护城河, then produce a decision log that captures the agreed direction and scope.
 ---
+<!-- markdownlint-disable MD040 -->
 
 ## Environment Variables
 
@@ -10,12 +11,7 @@ description: Clarify requirements with the user via structured debate/review护�
 
 | 变量名 | 默认值 | 说明 | override 方式 |
 |---|---|---|---|
-| `MAKE_DECISION_DEBATE_PATH` | `/Users/Hugh/Hugh/Project/debate` | 外部 debate skill 路径；路径不可达时自动降级跳过 debate（skipped），记录 `debate_path_invalid: true` | `export MAKE_DECISION_DEBATE_PATH=/path/to/debate` |
 | `MAKE_DECISION_SKIP_DEBATE` | `0` | `=1` 时强制跳过所有 debate 轮次，直接记录 `debate_1: skipped` / `debate_2: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_DEBATE=1` |
-| `MAKE_DECISION_SKIP_BLIND_REVIEW` | `0` | `=1` 时跳过盲审（3rd-review）护城河，记录 `blind_review: skipped`；非 `0`/`1` 值视为 `0`（warn+log） | `export MAKE_DECISION_SKIP_BLIND_REVIEW=1` |
-| `THIRD_REVIEW_RUNNER` | `run-heterologous-review.mjs` | 自定义 reviewer runner 文件路径；文件不可达时记录 `runner_invalid`，用默认 runner，继续 | `export THIRD_REVIEW_RUNNER=/path/to/runner.mjs` |
-| `REVIEW_DISPATCH_CONFIG` | （空，走内置默认调度） | 允许值：有效 JSON/YAML **配置文件路径**；文件不可达或解析失败时记录 `dispatch_config_invalid`，用默认调度继续；缺省为空时 3rd-review 使用内部默认调度 | `export REVIEW_DISPATCH_CONFIG=/path/to/dispatch.json` |
-| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | `0` | debate 技能读取此变量以决定模式：`=1` 启用五方法庭模式（debate 内部并发）；`=0` debate 自动降级单人三档；非 `0`/`1` 值视为 `0`（warn+log）。make-decision 本身不读此变量控制 S1，S1 模式由运行时 teams 能力自动判定 | `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` |
 | `WORKFLOWHUB_TASK_DIR` | （无默认值，缺失则 fail-loud） | 所有阶段跟踪文件的存储根目录（task_tracking_root）；通过 `core/task-dir-parser.mjs` 解析，优先级：`WORKFLOWHUB_TASK_DIR` 环境变量（直接 task root）→ `~/.workflowhub/config.json` 的 `task_dir` 字段；若 config `task_dir` 是全局 Knowledge 根且存在 `Projects/<project-key>/tasks`，解析器会基于当前 git remote / `repo_root_map` 返回项目级 task root；两者均缺失时 fail-loud 非零退出，不使用默认路径，不静默降级 | `export WORKFLOWHUB_TASK_DIR=/path/to/workflowhub-tracking` |
 
 ## Metrics — Stage Start（最前置步骤）
@@ -43,9 +39,55 @@ recordSkeleton({
 
 # make-decision
 
+## Receipt wiring
+
+Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, `step_id` and call `writeEntryReceipt`. Never emit the exit receipt before the durable result.
+
+## Executable canonical sequence (v2)
+
+`steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "make-decision"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
+
+### Step 1 — load-context
+
+Load task context.
+
+### Step 2 — triage-scope
+
+Record scope profile.
+
+### Step 3 — research-inputs
+
+Collect decision evidence.
+
+### Step 4 — clarify-direction
+
+Clarify the proposed direction.
+
+### Step 5 — review-decision
+
+Obtain independent decision review evidence.
+
+### Step 6 — approve-decision
+
+Obtain explicit user approval.
+
+### Step 7 — write-decision-log
+
+Persist the canonical decision log and stage result.
+
+## Legacy reference
+
 ## Goal
 
 Work with the user to surface the real problem, agree on the narrowest viable scope, and capture every significant choice in the decision log. The output is the single authoritative source for what the change is trying to do and why.
+
+## Local skill resolution and capability boundary
+
+调用方必须显式传入 `workflowhub_package_root`。本 stage 只读取同目录 `skill-deps.yaml` 声明的仓内技能，并把每次调用解析为 `${workflowhub_package_root}/skills/...` 下的 realpath。调度 payload 必须携带 `{name,resolved_skill_path,resolved_bundle_paths,bundle_hash,source_manifest,package_root}`；禁止只传 skill 名称，禁止从 HOME、cwd、全局同名目录或外仓查找。
+
+本 stage 的本地技能为 `talk-with-zhipeng`、`grill-with-docs`、`decision-log`、`intake-decision-review`、`wh-review`，条件技能为 `anysearch`、`debate`；review lens 由 `wh-review` 的本地 bundle 解析。Node、git、shell、网络/MCP、宿主 subagent/teams、`wh-review` provider 与凭据是 runtime/external capability，不是 skill。需要独立上下文的本地 skill 或异源 review 不支持 inline：宿主不支持时 fail loud 并转人工。S1 内部资料调研不是独立 skill/review，明确允许下文定义的 `inline_serial` 例外。
+
+到达 trigger 才读取条件技能。`debate` 文件必须通过 stage preflight，但没有有效争点时记 `not_invoked`；触发后执行失败时记录 diagnostic 并继续，不阻断 stage。
 
 ## What to do
 
@@ -55,7 +97,7 @@ Work with the user to surface the real problem, agree on the narrowest viable sc
 2. **交互澄清等待**：S2/S4/S7 是与用户对话收集输入的交互澄清等待——属于正常对话交互，不是推进门；每处均有默认/继续行为，不视为"阻断推进"。
 3. **致命输入停止**：S3（`get_sources` 无法核实）和 S5（关键前置文件缺失）在输入不可用时按 let-it-crash 原则停下报错——属于"输入不可用的致命停止"，不是质量门，不同于推进硬门。
 
-其余步骤失败均记录后继续推进（非阻断）。
+其余步骤失败均记录后继续推进（非阻断）；S7 grill 关键输入失败是明确例外，必须暂停并等待用户选择修复或明确跳过。
 
 ---
 
@@ -90,6 +132,7 @@ const taskRoot = taskRecords.task_root;
 **目标**：判定本次决策的规模档位（lite 或 full），决定后续路径。
 
 **分档逻辑**：
+
 - **lite 档**：需求范围窄、影响面小、无跨模块依赖、用户明确不需要调研。
   - 仅跳过 S1 内部调研（记录 `s1: skipped: scope=lite`）和 S3 外部调研（记录 `s3: skipped: scope=lite`）。
   - S2 talk#1 以空内部调研上下文进入，S4–S10 正常执行。
@@ -130,6 +173,7 @@ const taskRoot = taskRecords.task_root;
   3. 写 journal 事件：`event: "s1_complete", s1_mode: "inline_serial"`
 
 **失败处理**（非阻断）：
+
 - sub-agent 模式：任一 sub-agent 失败 → 记录该 agent ID 和原因到 `internal-research-summary.md`，继续合并其余产出；全部失败 → 写 journal 事件 `event: "s1_all_agents_failed", reason: "<失败原因>"`, `s1_mode: "subagent"`，继续推进到 S2。
 - inline_serial 模式：任一切片失败 → 记录失败切片编号和原因，继续其余切片；全部失败 → 写 journal 事件 `event: "s1_all_agents_failed", reason: "<失败原因>"`, `s1_mode: "inline_serial"`，继续推进到 S2。
 - 无论成功或失败，S1 均非阻断，必须继续到 S2。
@@ -237,6 +281,8 @@ Follow the canonical 7-section structure defined in `skills/decision-log/SKILL.m
 
 ## Produce stage-result
 
+<!-- Receipt-wiring compatibility marker: ## Produce a stage-result -->
+
 When the stage is complete, write a `stage-result` record with:
 
 ```json
@@ -253,6 +299,21 @@ When the stage is complete, write a `stage-result` record with:
   "missing_items": [],
   "user_decision": true,
   "reason": "User confirmed direction and scope."
+}
+```
+
+After the durable Stage Result is written, call `writeExitReceipt` with the same `workflow_run_id`, `run_id`, `attempt_id`, and `step_id`.
+
+### Receipt verification
+
+After writing the stage-result and exit receipt, call:
+
+```js
+const { verifyReceipts } = await import("../../scripts/validate-stage-result.mjs");
+const receiptResult = verifyReceipts("make-decision", "<stageResultPath>", "<worktreeRoot>");
+if (!receiptResult.ok) {
+  process.stderr.write(`[receipt] FAIL: ${receiptResult.errors.join("; ")}\n`);
+  process.exit(1);
 }
 ```
 
@@ -288,38 +349,21 @@ These are the M4 record-schema core fields (`execution_id`, `skill_or_stage`, `s
 
 **前提**：`tasks/{task-id}/artifacts/make-decision-original-context.md` 必须已存在（由 S4 台账渲染点①落盘）。S5 开始前检查，缺失则报错停止。
 
-**目标**：通过一次独立 3rd-review 对 S4 产物做盲审，产出 3 条审查建议，并根据结果决定是否触发第一次 debate。S5 不要求三条审查链。
-
-### 0. MAKE_DECISION_SKIP_BLIND_REVIEW 快速跳过分支
-
-**判定方式**：本分支是否生效，必须通过实际读取 `MAKE_DECISION_SKIP_BLIND_REVIEW` 环境变量的真实值来判断（例如 `echo $MAKE_DECISION_SKIP_BLIND_REVIEW` 或等价的真实环境探测），不得由 agent 凭记忆/推测手动模拟"当作已设置=1"来走跳过分支。agent 手动模拟环境变量值视为违规，必须以本次执行环境的真实检测结果为准。
-
-若 `MAKE_DECISION_SKIP_BLIND_REVIEW=1`（真实检测结果）：
-- 跳过以下单次盲审（### 1）和结果整理（### 2）全部步骤。
-- 写 journal 事件：`event: "s5_blind_review_skipped", reason: "MAKE_DECISION_SKIP_BLIND_REVIEW=1"`。
-- S5 产出以空审查集合视为"无 blocking 发现"：`direction_divergence: false`，`findings: []`。
-- 第一次 debate 门控（### 4）仍正常执行，但因无 blocking findings，通常记 `debate_1: skipped`。
-- 直接跳至 S6，S6/S7 以上述产出为输入。
+**目标**：以 `ReviewRoundFacade` 的 direction/detail V4 flows 审查 S4 产物。
 
 ### 1. 单次独立盲审
 
-**入口检测（THIRD_REVIEW_RUNNER）**：读取 `THIRD_REVIEW_RUNNER` 环境变量（默认 `run-heterologous-review.mjs`）。若设置了该变量，检查对应文件是否可达；文件不可达时写 journal 事件 `event: "runner_invalid", runner: "<值>"`，并回退使用默认 runner `run-heterologous-review.mjs`，继续执行，不阻断流程。
-
-**入口检测（REVIEW_DISPATCH_CONFIG）**：读取 `REVIEW_DISPATCH_CONFIG` 环境变量（默认为空，走内置默认调度）。若设置了该变量，检查对应配置文件是否可达且可解析；文件不可达或解析失败时写 journal 事件 `event: "dispatch_config_invalid", config: "<值>"`，并回退使用内置默认调度，继续执行，不阻断流程。若未设置（空），直接使用内置默认调度。
-
-通过稳定 CLI `node skills/wh-review/scripts/wh-review.mjs prepare|execute` 执行两段式协议（JSON stdin/stdout，非 `standalone.sh`；保留 `THIRD_REVIEW_RUNNER` 兼容并透传底层 provenance/failure diagnostics）：①内部 `prepareRoundState({taskId, stage:"make-decision", taskTrackingRoot})`→`ready{review_flow_id,total_round,contract_path}`或 `blocked_by_human_confirmation`（D2 门未过，不得绕过/伪造批准）；②派发前 `assertSafeTaskId` 校验 task_id，子代理只拿 `review_flow_id`/`total_round`，写 `prompt-{review_flow_id}-r{total_round}.md`，不下发 `contract_path`；③主 agent 通过 stable execute CLI 驱动引擎，写回 `round-state-make-decision-{review_flow_id}.json`，渲染 review 产物。
+Build two V4 packets and call `ReviewRoundFacade` for the isolated `direction` and
+`detail` flows. The first has only the raw requirement; the second adds the decision
+log. Provider material stays packet-only.
 
 - `skills/intake-decision-review/SKILL.md`：同时审查方向合理性、问题框架设定、范围边界合理性、技术可行性（D8 新增第四维 `feasibility`）。
 
 审查结果必须包含以下字段：
 
 ```
-reviewer_runtime_id: <唯一标识该 agent 运行实例>
-reviewer_source: <来源标识>
-fallback_used: <true|false>
-input_hash: <审查输入内容的哈希，用于隔离验证>
-findings: <四个角度 direction/framing/scope/feasibility，每角度 0-N 条，不设总数上限>
-verified_interface: <{tool, checked_at, method}，涉及外部工具调用时必填>
+packet_hash: <冻结 review-packet.v1 的哈希，用于隔离验证>
+findings: <V4 finding 数组，带 provider 证据>
 ```
 
 每条 `findings` 建议必须包含：
@@ -334,12 +378,11 @@ evidence: <对应 S4 内容或调研依据>
 
 ### 2. 结果整理与失败语义
 
-- 若 `fallback_used: true` → 视为本次审查失败，结果不采用，立即停下报告用户，**禁止静默降级**。
+- 若 provider 失败或材料不完整 → 记录 transport/packet diagnostic，不生成语义结论，也不降级为其他审查路径。
 - 若 `findings` 中出现四类角度（direction/framing/scope/feasibility）之外的标签，或某角度整体未被审查（而非"该角度确实无发现"），视为审查输出不合格，要求 reviewer 重跑或补齐；不自行编造建议，也不因怕超限而截断真实问题。
-- 若涉及外部工具调用但缺 `verified_interface` 字段，直接判该次审查不可执行，要求 reviewer 补齐后重跑。
-- 审查通过后写入 `tasks/{task-id}/artifacts/make-decision-review.md`：
+- 审查结果只由 private receipt 与公开 core receipt 表示：
   - `direction_divergence`: `true`/`false`（方向分歧标记）
-  - `findings`: 四个角度、每角度 0-N 条审查建议（不设总数上限）
+  - `findings`: V4 合并 finding 及 provider 证据
 
 写 journal 事件：`event: "s5_blind_review_done"`。
 
@@ -357,17 +400,16 @@ evidence: <对应 S4 内容或调研依据>
 
 ### 4. Debate 门控（第一次 debate）
 
-**入口检测（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）**：调用 debate 技能前，记录 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 的当前状态——已设置（`=1`）还是未设置/`=0`——写 journal 事件 `event: "debate_env_checked", agent_teams: "<当前值>"`，并透传给 debate 技能，由 debate 技能决定启用五方法庭模式（`=1`）或自动降级单人三档（`=0`）。make-decision 本身不读此变量控制 debate 是否触发。
+**入口检测（宿主中立）**：调用 debate 技能前，通过 manifest 声明的 `host-subagent` capability probe 判断能否并行启动独立代理，写 journal 事件 `event: "debate_capability_checked", parallel_agent_capability: "available|unavailable"`，并把该字段透传给 debate。禁止读取 Claude/Codex 等宿主专属环境变量。
 
 make-decision **委托 debate 技能自己判断是否触发**（debate 技能内部执行 Step 1 触发判定 + 环境自动判定五方法庭/单人三档）。make-decision 在**主调用层**执行 debate，不下派子代理。
 
-**禁止行为（D4）**：debate 触发判定必须基于已存在 artifact 中的具体 finding ID 列表（争点来源），**严禁在审查完成前或审查外自行制造争点**。make-decision 只负责提取并传递 artifact 来源的 finding ID 列表（可为空）和相关上下文；是否触发、以及无有效争点时如何降级，均由 debate 技能 Step 1 自行裁决。
+**禁止行为（D4）**：debate 触发判定只基于 V4 core receipt 的 finding ID 列表，严禁在审查外自行制造争点。
 
 按以下优先顺序判定：
 
 1. `MAKE_DECISION_SKIP_DEBATE=1` → 记 `debate_1: skipped`，跳过 debate，继续 S6。
-2. `MAKE_DECISION_DEBATE_PATH` 不可达（路径无法访问）→ 写 journal 事件 `event: "debate_1_skipped", reason: "debate_path_invalid"` 和 `debate_path_invalid: true`，记录 `debate_1: skipped`，降级继续，不阻断流程。
-3. 其余情况：提取审查 artifact（`make-decision-review.md`）中具体的 finding ID 列表（争点来源，可为空），传入 debate 技能 + Claude 决策 + decision-log 版本，由 debate 技能的 Step 1 自行判断是否触发；读回 debate 技能产出的裁决书。
+2. 其余情况：使用 manifest 解析出的 `skills/debate/SKILL.md` 与 bundle，提取 core receipt 中具体的 finding ID 列表，连同决策与 decision-log 版本通过完整 resolved-path payload 传入 debate 技能。
    - debate 技能触发时：产出 `tasks/{task-id}/artifacts/make-decision-debate-1.md`（含裁决书），写 journal 事件 `event: "debate_1_triggered"`。
    - debate 技能不触发时：写 journal 事件 `event: "debate_1_skipped", reason: "<debate 技能返回的 skip reason>"`。
 
@@ -410,14 +452,16 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能�
 纯委托（pure delegation）给 `skills/grill-with-docs/SKILL.md` 执行，退出逻辑（含其内部客观 checklist）由其内部控制，不在本 agent 内联展开。
 
 **成功分支**：
+
 - 产出：`tasks/{task-id}/artifacts/make-decision-grill-with-docs.md`（grill 会话记录）
 - 写 journal 事件：`event: "s7_grill_done", s7_grill_done: true`
 
-**失败/不可达分支**（非阻断）：
-- 当 `skills/grill-with-docs/` 路径不可达或调用失败时：
-  1. 创建 `tasks/{task-id}/artifacts/make-decision-grill-with-docs.md`，内容写明失败原因（路径不可达 / 调用错误 / 错误信息）。
-  2. 写 journal 事件：`event: "s7_grill_done", s7_grill_done: false, reason: "<失败原因>"`
-  3. 以该失败产物作为降级输入，继续进入 draft 步骤，不阻断主流程。
+**失败/不可达分支**（人工决定后可继续）：
+
+- 当 `skills/grill-with-docs/` 调用失败时：
+  1. 创建 `tasks/{task-id}/artifacts/make-decision-grill-with-docs.md`，内容写明调用错误。
+  2. 写 journal 事件：`event: "s7_grill_done", s7_grill_done: false, reason: "<失败原因>"`。
+  3. 立即转人工并暂停；只有用户明确选择跳过 grill 才能继续，并以该失败产物作为输入进入 draft。禁止自动降级继续。
 
 ### 3. draft（决策日志草稿）
 
@@ -437,21 +481,20 @@ make-decision **委托 debate 技能自己判断是否触发**（debate 技能�
 
 写 journal 事件：`event: "s7_draft_complete"`
 
-### 4. orchestrator 审查 + 第二次 debate
+### 4. intake-decision-review + wh-review 审查 + 第二次 debate
 
-**orchestrator 实现**：本步骤的 orchestrator 审查由 `skills/intake-review-orchestrator/SKILL.md` 承担（ZHI-93 遗漏加固机制），不是抽象占位描述。调用时按其"审查合同"组装 `materials`：`draft`（S7.3 产出的 decision-log 草稿）、`s4_baseline`（S4 原始需求台账）、`authoritative_definitions`（decision-log 权威定义表）、`s5_findings`（S5 单次盲审结果）。`intake-review-orchestrator` 不设跳过分支，S7 draft 产出后必须执行一次。
+**审查实现**：本步骤先调用仓内 `skills/intake-decision-review/SKILL.md` 检查方向、框架、边界和可行性，再把 draft、S4 baseline、权威定义与 S5 findings 组装成 sealed packet，通过唯一 `wh-review/ReviewRoundFacade` flow 审查。两者均使用 manifest resolved-path payload；不得新增第二条 review 路径。
 
-**入口检测（CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS）**：调用 debate 技能前，记录 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` 的当前状态——已设置（`=1`）还是未设置/`=0`——写 journal 事件 `event: "debate_env_checked", agent_teams: "<当前值>"`，并透传给 debate 技能，由 debate 技能决定启用五方法庭模式（`=1`）或自动降级单人三档（`=0`）。make-decision 本身不读此变量控制 debate 是否触发。
+**入口检测（宿主中立）**：复用第一次 debate 的 `host-subagent` capability probe；记录 `debate_capability_checked`，透传 `parallel_agent_capability: available|unavailable`。不得读取宿主专属环境变量。
 
 make-decision **委托 debate 技能自己判断是否触发**（与 S5 相同，debate 技能在主调用层执行，不下派子代理）。
 
-**禁止行为（D4）**：debate 触发判定必须基于 orchestrator 产出 artifact 中的具体 finding ID 列表（争点来源），**严禁在审查外自行制造争点**。make-decision 只负责提取并传递 orchestrator 产出的 finding ID 列表（可为空）和相关上下文；是否触发、以及无有效争点时如何降级，均由 debate 技能 Step 1 自行裁决。
+**禁止行为（D4）**：debate 触发判定必须基于上述审查产出的具体 finding ID 列表（争点来源），**严禁在审查外自行制造争点**。make-decision 只负责提取并传递 finding ID 列表（可为空）和相关上下文；是否触发由 debate 技能 Step 1 裁决。
 
 - orchestrator 审查草稿，将 findings **附加**到草稿末尾 `## orchestrator-findings` 节，**不覆盖正文**（不覆盖）。
 - 按以下优先顺序执行第二次 debate 门控（make-decision 不自行判断 blocking 有无，由 debate 技能 Step 1 自判触发）：
   1. `MAKE_DECISION_SKIP_DEBATE=1` → 写 journal 事件 `event: "debate_2_skipped", reason: "MAKE_DECISION_SKIP_DEBATE=1"`，跳过。
-  2. `MAKE_DECISION_DEBATE_PATH` 不可达 → 写 journal 事件 `event: "debate_2_skipped", reason: "debate_path_invalid"` 和 `debate_path_invalid: true`，记录 `debate_2: skipped`，降级继续。
-  3. 其余情况：提取 orchestrator 产出 artifact 中的 finding ID 列表（争点来源，可为空），传入 debate 技能 + Claude 决策 + decision-log 版本，由 debate 技能的 Step 1 自行判断是否触发；读回裁决书。
+  2. 其余情况：提取审查产出的 finding ID 列表（争点来源，可为空），使用 manifest 解析出的本地 debate payload 传入决策与 decision-log 版本，由 debate 技能的 Step 1 自行判断是否触发；读回裁决书。
      - debate 技能触发时：产出 `tasks/{task-id}/artifacts/make-decision-debate-2.md`，写 journal 事件 `event: "debate_2_triggered"`。
      - debate 技能不触发时：写 journal 事件 `event: "debate_2_skipped", reason: "<debate 技能返回的 skip reason>"`。
 
@@ -505,6 +548,7 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 7. **下一步**——用户确认后进入 S10 落盘决策记录。
 
 七要素之后，加"请确认"结尾块（模板 A 类）：
+
 ```
 请确认：
 - **推荐：继续** —— 后果：<写清继续会发生什么，如"进入落盘阶段，把这次讨论定下来的方案正式记录">
@@ -535,12 +579,14 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 
 落盘前检查审查产物完整性：
 
-- 若存在 `severity: blocking` 的审查意见，但对应审查产物（`make-decision-review.md` 及 debate 裁决书）中**缺少**三行留痕格式：
+- 若存在 `severity: blocking` 的审查意见，但 core receipt 及 debate 裁决书中**缺少**三行留痕格式：
+
   ```
   反对 X：<内容>
   决定 Y：<内容>
   理由 Z：<内容>
   ```
+
   则**不得**标记"落盘完整"，须先补全三行留痕后再继续。
 
 ### 2. 确定写入根目录
@@ -564,9 +610,10 @@ S7 结束后，逐条渲染台账（ledger）所有条目，写入 `tasks/{task-
 6. **开放问题**——仍存在歧义或待人确认的事项
 7. **验收标准**——可验证的验收标准
 
-**执行环境**字段（小节，写在 7 节之后）：记录本次执行中 7 个 env var 的检测结果，包含：
+**执行环境**字段（小节，写在 7 节之后）：记录本次执行所声明 env var 与 host capability probe 的检测结果，包含：
+
 - 每个 env var 是否已设置、实际值（未设置时标注"使用默认值"）
-- 检测过程中触发的降级事件（如 `dispatch_config_invalid`、`debate_path_invalid`、`runner_invalid`）及对应 env var 名称
+- 检测过程中触发的降级事件（如 `dispatch_config_invalid`、`debate_execution_failed`、`runner_invalid`）及对应 capability/config 名称
 - `WORKFLOWHUB_TASK_DIR` 是否已设置（未设置则 fail-loud，无降级）
 
 文件顶部 frontmatter 包含字段：
@@ -615,14 +662,14 @@ decision-log.md 写入动作执行完毕后，不得只凭"执行了写命令"�
 **task-id 归一化步骤（先归一化，再校验分支命名）**：branch 命名校验前必须先对 task-id 做归一化（normalize），步骤依次为：①小写（lower case，全部转小写）；②非字母数字字符折叠为连字符；③合并连续连字符为单个连字符（连续连字符须合并，例如 `--` → `-`）；④去除首尾连字符（去除首尾连字符，例如结尾的 `-` 须去掉）。归一化完成后才允许进入分支命名校验步骤。例如 "Worktree Unification" 归一化后得到 "worktree-unification"；"--foo--bar--" 归一化后得到 "foo-bar"。
 
 - R1 task_tracking_root 读取：make-decision 阶段须通过 `parseTaskDir()`（`core/task-dir-parser.mjs`）读取最终 task_tracking_root，遵循 env var 直接根优先、`~/.workflowhub/config.json` 的 `task_dir` 次之、config 全局 Knowledge 根自动解析到 `Projects/<project-key>/tasks`、两者缺失 fail-loud 的顺序。**target_repo_root 不等于当前 checkout 上下文**：make-decision 阶段被调用时所在的 checkout 目录（例如沙箱临时 workdir）不得被默认当作 target_repo_root——该目录可能只是临时产物，非用户可见的持久 clone；target_repo_root 的真实来源须完全依照 R2 定义的 config 查表流程解析，不允许任何阶段绕过 R2 直接假定"当前工作目录即 target_repo_root"。
-- R2 target_repo_root 探测与固化：解析逻辑须为通用的"探测 remote → 查表 → 校验"流程，不得在判断分支里写死任何具体仓库名（`repo_root_map` 里允许存在具体仓库条目，但代码/规则本身的判断逻辑必须是遍历查表的通用写法）。执行时序为「① 在当前 checkout 上下文执行 `git remote get-url origin`（或等价方式）取得该 checkout 的 git remote origin url → ② 读取 `~/.workflowhub/config.json` 的 `repo_root_map` 字段（结构为 `{"<git remote url>": "<持久本地 clone 路径>"}`），以①取得的 remote url 为 key 在该表中查找 → ③ 命中：取对应 value 作为候选 target_repo_root，须依次校验（a）该路径存在（`fs.existsSync` 或等价）、（b）该路径是合法 git 仓库（`git rev-parse --show-toplevel` 可执行且指向自身）、（c）该仓库的 `git remote get-url origin` 与①取得的 url 一致；三项全部通过才允许固化为 target_repo_root，任一项失败按未命中处理 → ④ 未命中（`repo_root_map` 中无此 remote url 对应 key，或候选路径三项校验未全部通过）：不得静默 fallback 到当前沙箱 checkout 路径或任何猜测路径，须 fail-loud 并 escalate_to_human，报错须附带该 remote url 与 `repo_root_map` 现有 key 列表，等待人工补充映射或确认后再继续 → ⑤ target_repo_root 固化后，按 R4 创建 worktree → ⑥ 基于该 target_repo_root 执行 `git worktree list --porcelain`，校验刚创建的 worktree 的 `worktree_root`/`branch`/同仓关系（commondir 须同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）→ ⑦ 校验通过后按 R5 首次写入 worktree.json」。任一环节不一致须 fail-loud，不得固化、不得跳步。**步骤⑥/⑦失败时的清理契约**：步骤⑥校验失败，或步骤⑦首次写入 `worktree.json` 失败，均须按顺序执行两步清理（`git worktree remove` 只移除 worktree 目录，不会删除本地分支，须显式补第二步）：(a) `git worktree remove` 清理步骤⑤刚创建的 worktree；(b) 若步骤⑥校验涉及的分支为本次新建（非复用已有分支），额外执行 `git branch -D` 删除该本地分支。两步任一失败均单独记录失败详情（区分是 worktree 清理失败还是分支删除失败），并 escalate_to_human 附带残留路径/分支名，不得静默吞掉分支残留。固化后的 `target_repo_root` 后续阶段不再重新探测，直接读取该固化值。
+- R2 target_repo_root 探测与固化：解析逻辑须为通用的"探测 remote → 查表 → 校验"流程，不得在判断分支里写死任何具体仓库名（`repo_root_map` 里允许存在具体仓库条目，但代码/规则本身的判断逻辑必须是遍历查表的通用写法）。执行时序为「① 在当前 checkout 上下文执行 `git remote get-url origin`（或等价方式）取得该 checkout 的 git remote origin url → ② 读取 `~/.workflowhub/config.json` 的 `repo_root_map` 字段（结构为 `{"<git remote url>": "<持久本地 clone 路径>"}`），以①取得的 remote url 为 key 在该表中查找 → ③ 命中：取对应 value 作为候选 target_repo_root，须依次校验（a）该路径存在（`fs.existsSync` 或等价）、（b）该路径是合法 git 仓库（`git rev-parse --show-toplevel` 可执行且指向自身）、（c）该仓库的 `git remote get-url origin` 与①取得的 url 一致；三项全部通过才允许固化为 target_repo_root，任一项失败按未命中处理 → ④ 未命中（`repo_root_map` 中无此 remote url 对应 key，或候选路径三项校验未全部通过）：不得静默 fallback 到当前沙箱 checkout 路径或任何猜测路径，须 fail-loud 并 escalate_to_human，报错须附带该 remote url 与 `repo_root_map` 现有 key 列表，等待人工补充映射或确认后再继续 → ⑤ target_repo_root 固化后，按 R4 创建 worktree → ⑥ 基于该 target_repo_root 执行 `git worktree list --porcelain`，校验刚创建的 worktree 的 `worktree_root`/`branch`/同仓关系（commondir 须同源；linked worktree 的 gitdir 本身与主仓库不同属正常现象，不作为判定依据，只校验 commondir）→ ⑦ 校验通过后按 R5 首次写入 worktree.json」。任一环节不一致须 fail-loud，不得固化、不得跳步。**步骤⑥/⑦失败时的清理契约**：步骤⑥校验失败，或步骤⑦首次写入 `worktree.json` 失败，均须按顺序执行两步清理（`git worktree remove` 只移除 worktree 目录，不会删除本地分支，须显式补第二步）：(a) `git worktree remove` 清理步骤⑤刚创建的 worktree；该命令成功后须检查被移除 worktree 的父级目录，若父级目录因此变空，须执行 `rmdir` 清理该空容器；父级目录非空时不得删除。(b) 若步骤⑥校验涉及的分支为本次新建（非复用已有分支），额外执行 `git branch -D` 删除该本地分支。两步任一失败均单独记录失败详情（区分是 worktree 清理失败还是分支删除失败），并 escalate_to_human 附带残留路径/分支名，不得静默吞掉分支残留。固化后的 `target_repo_root` 后续阶段不再重新探测，直接读取该固化值。
 - R3 分支命名 `workflowhub/{task-id}`：task-id 先执行归一化（见上文步骤①-④）完成后才继续。
   分支命名正则校验分两层：① 归一化产物本身（task-id slug，不含 `workflowhub/` 前缀）须满足正则 `^[a-z]+(-[a-z]+){1,2}$`（纯小写英文字母，连字符分隔，2-3 段，不允许数字，与 decision-log D3 及 spec.md §274/321 保持一致）；② 拼接 `workflowhub/` 前缀后得到的最终分支名须满足正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`。下游（build-code §17 / verify-code）对 `branch` 字段的校验统一引用②的最终分支名正则，不引用①的裸 slug 正则。校验顺序须在归一化之后，不得颠倒。
 - R4 worktree 创建时机：仅在 make-decision 阶段首次决定进入实现流程时创建 worktree（`git worktree add`），不得在其余阶段重复创建。**触发条件覆盖 debate 中途临时实现场景**：用户在 S5/S7 debate 等中途环节临时要求当场实现代码改动，同样视为"决定进入实现流程"——不因为这个决定发生在 S10 落盘之前、发生在 debate 环节中途、或用户措辞不是"进入实现阶段"而免于本规则。触发后必须先完整走完 R2-R5（探测并固化 target_repo_root → 建分支 → `git worktree add` 建 worktree → 首次写入 worktree.json）再动代码，不得在决策阶段用来跑 debate/审查的临时或复用 worktree 里直接改代码；已经违规改动的，须先按本节流程补建专属 worktree/分支/worktree.json，再把改动迁移过去。
 - **worktree_root 路径公式（R4 创建与 R5 首次写入之间的强制约束）**：`worktree_root = path.dirname(target_repo_root) + '/' + {repo目录名}-{task-id}`（`{repo目录名}` 取 target_repo_root 的 basename，`{task-id}` 用 R3 已归一化的 slug）。即 worktree 必须建在 target_repo_root 的平行兄弟目录下，单层目录名，不得嵌套多层子目录（不得出现类似 `{task-id}/worktree/{repo名}` 这种3层结构），也不得建在 task_tracking_root（task_dir）下面。参考先例：agenthub apply 阶段的 worktree 隔离修复（`../{repo-name}-{feature}` 平行目录规则）。R4 执行 `git worktree add` 与 R5 首次写入 `worktree.json` 的 `worktree_root` 字段均须遵循本公式，不得各写各的。
-- R5 worktree.json 首次写入：worktree.json 首次写入须包含 6 个字段，且一次性满足下游（build-code §17 / verify-code close①）common 校验，不得写出下游必然拒收的值：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径，须满足上方 worktree_root 路径公式）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（固定值 `"verify-code-only"`，其他值 fail-loud，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
+- R5 worktree.json 首次写入：worktree.json 首次写入须包含原 6 个字段，并在创建 worktree 的同一原子写入中固化 `trusted_base_commit`（创建时完整 40 位 commit OID）、`trusted_base_tree`（该 commit 的 tree OID）与 `trusted_base_source="worktree_creation"`。下游（build-code §17 / verify-code close①）不得覆盖这三个字段。其余字段须一次性满足 common 校验：`target_repo_root`（绝对路径）、`worktree_root`（绝对路径，须满足上方 worktree_root 路径公式）、`branch`（R3 归一化+正则校验后的合法值）、`created_by_stage="make-decision"`、`push_policy`（固定值 `"verify-code-only"`，其他值 fail-loud，不得为空）、`status="active"`。写入须为原子操作（先写临时文件再 rename，或等价的写后校验+替换机制），避免进程中断留下半写/损坏的 `worktree.json`；若写入过程中发现磁盘上已残留部分写入或损坏的 `worktree.json`，须先删除该残留文件再重试或转入下方清理契约，不得让 build-code/verify-code 读到半写文件。
 - R6 存在性/冲突检测：使用 `git worktree list --porcelain` 检测 worktree 是否已存在或冲突；发现僵尸 worktree（目录不存在但仍在 git 记录中）须 fail-loud 报错退出；发现路径/分支被其他 worktree 占用同样须 fail-loud，不得静默覆盖。
-- R7 make-decision stage commit 规则：本规则仅约束 `target_repo_root`（代码仓库）——本阶段在 target_repo_root 内涉及文件变更（如 decision-log 等产物写入代码仓库路径）时须在 target_repo_root 执行 commit（message 含 `workflowhub(make-decision)` 前缀）；无变更时须在 stage-result 的 `missing_items` 或 journal 中记录无变更原因。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）不受本规则约束，不要求 commit。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"，不因此触发本规则的 commit 要求。
+- R7 提交边界：在审查修复完成、`verify-final` 成功、当前 final flow 已获得 published semantic `pass` 且人工明确确认继续之前，make-decision 不得在 `target_repo_root` 或 `worktree_root` 执行 `git add`、`git commit` 或 `git merge`。decision-log 等目标仓库改动保留在同一 task worktree，供后续完整未提交 diff 和 R2 续跑使用；不得为本阶段结束制造中间提交或提前合并。唯一的普通实现提交由 `verify-code` 统一执行：满足上述条件后，才在该 task worktree 执行一次 `git add -A && git commit -m "workflowhub(verify-code): finalize {task-id}"`。`task_tracking_root` 下的写入（task 子目录、`worktree.json`、journal 等）照常落盘，不构成提交理由。target_repo_root 侧的 `git worktree add`/分支创建（R4）本身不构成"文件变更"。
 **task 子目录创建职责**：make-decision 阶段负责幂等地创建 task_tracking_root 下的 task 子目录（`{task_tracking_root}/{task-id}/`）；若父目录（task_tracking_root）不存在，须 fail-loud 报错退出，不得自动创建父目录；若该 task 已处于 `status=cleaned`（已归档）状态，须 fail-loud 报错 "task 已归档"，不得继续复用。
 
 **幂等复用前的 target_repo_root 一致性校验（FR-WORKTREE-MAKEDECISION-002 延伸）**：`{task_tracking_root}/{task-id}/worktree.json` 已存在且 `status=active` 时，不得仅凭 task-id 相同就静默复用——须先比对该 worktree.json 中记录的 `target_repo_root` 与本次调用（R2 探测得到）的 `target_repo_root` 是否完全一致；调用 `core/worktree-reuse-guard.mjs` 的 `checkWorktreeReuse(worktreeJsonPath, currentTargetRepoRoot, taskId)` 执行该判定：一致则返回 `{action: "reuse"}`，按现有 worktree.json 继续；不一致（同一 task-id 撞到不同项目）则 fail-loud 退出，报错须包含 task-id、worktree.json 中记录的 target_repo_root、本次调用的 target_repo_root 三项，提示用户更换 task-id 或核实目标仓库，不得把新一轮请求静默接到旧项目的仓库/worktree 上；worktree.json 不存在时返回 `{action: "create"}`，走 R4/R5 首次创建路径。
@@ -652,14 +699,48 @@ lite 档跳过的 S1 / S3 均有对应 `event: "s1_skipped"` / `event: "s3_skipp
 | `s4_baseline_recorded` | S4 | — | 台账渲染点①落盘 |
 | `s5_blind_review_done` | S5 | — | 单次盲审完成 |
 | `debate_1_triggered` | S5 | — | 第一次 debate 触发 |
-| `debate_1_skipped` | S5 | `reason: "MAKE_DECISION_SKIP_DEBATE=1"` / `"debate_path_invalid"` / `"no_blocking_findings"` | 第一次 debate 跳过 |
+| `debate_1_skipped` | S5 | `reason: "MAKE_DECISION_SKIP_DEBATE=1"` / `"no_blocking_findings"` / `"debate_execution_failed"` | 第一次 debate 跳过 |
 | `s6_results_shown` | S6 | — | 审查结果展示 |
 | `s7_talk3_done` | S7 | — | talk#3 完成 |
 | `s7_grill_done` | S7 | `s7_grill_done: true/false`, `reason: "<失败原因>"（失败时）` | grill-with-docs-lite 完成或失败 |
 | `s7_draft_complete` | S7 | — | 决策日志草稿完成 |
 | `debate_2_triggered` | S7 | — | 第二次 debate 触发 |
-| `debate_2_skipped` | S7 | `reason: "MAKE_DECISION_SKIP_DEBATE=1"` / `"debate_path_invalid"` / `"no_blocking_findings"` | 第二次 debate 跳过 |
+| `debate_2_skipped` | S7 | `reason: "MAKE_DECISION_SKIP_DEBATE=1"` / `"no_blocking_findings"` / `"debate_execution_failed"` | 第二次 debate 跳过 |
 | `s8_context_synced` | S8 | — | CONTEXT 已同步 |
 | `s8_context_no_change` | S8 | — | CONTEXT 无变化 |
 | `s9_user_approved` | S9 | `s9_user_approved: true` | 用户明确批准 |
 | `s10_decision_log_complete` | S10 | — | decision-log 落盘完成 |
+
+## Canonical v1 step sequence
+
+`steps.json` is the executable canonical topology. The detailed S0–S10 material above is legacy reference only; its identifiers map to this continuous, one-action sequence: 1 load-context, 2 triage-scope, 3 research-inputs, 4 clarify-direction, 5 review-decision, 6 approve-decision, 7 write-decision-log. Each canonical step has one primary action, explicit entry evidence, terminal evidence, and a declared dependency. Every declared dependency must be represented by entry evidence `step://<dependency-step-id>`; therefore `review-decision` enters from `step://clarify-direction`, not unproduced `task://decision-draft`. Unknown legacy actions fail closed and use `docs/migration-and-fallback.md`.
+
+## V4 Review Round
+
+Use `ReviewRoundFacade` through `runReviewRound()` only. The provider receives one
+`review-packet.v1`; it must review only that packet. Do not run git, read the real
+repository, request absolute paths, or write review reports in the provider workspace.
+The facade owns `<task>/reviews/private/round-.../` evidence, provider status and
+`cancel_source`. An unpublished call returns transport/packet evidence only, never a
+semantic verdict. After host dispositions, the published return is `{ semantic_verdict,
+core_receipt_hash, needs_human }`; only it may control public stage decisions.
+
+Run two isolated flows in order. They never share a runtime:
+
+```js
+await runReviewRound({ stage: "make-decision", review_track: "direction", review_flow_id: "make-decision-flow", packet });
+await runReviewRound({ stage: "make-decision", review_track: "detail", review_flow_id: "make-decision-flow", packet });
+```
+
+The direction packet contains only the original requirement. The detail packet may add
+the decision log. The shared flow id is the aggregation group; each track still has its
+own runtime, receipt, and continuation. Later rounds use `continuation: true` with the
+same flow id; reset requires an explicit human approval reference. Consume only the
+group-scoped aggregate `stage-result-make-decision-<review_flow_id>.json`; never read a
+fixed make-decision stage-result path.
+
+## End V4 Review Round
+
+## Workflow friction
+
+发现流程卡点立即追加到 `path.join(taskRoot, "friction.md")`：`[FRICTION] <stage>/<step>: <卡点> | impact: <影响> | suggestion: <建议或 none>`。将该文件路径写入 metrics/stage-result 的 `friction_ref`；无记录时为 `null`。只记录事实，不恢复外部 feedback skill，不因记录失败掩盖原始错误。

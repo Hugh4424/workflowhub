@@ -42,6 +42,7 @@ function runFreshnessAssertions() {
   };
 
   const pass = checkEvidenceFreshness({
+    mode: 'phase_tdd',
     headSha,
     phaseReport: valid,
     redReport: valid,
@@ -54,11 +55,13 @@ function runFreshnessAssertions() {
       3: 'hash-ok',
       4: 'hash-ok',
     },
+    expectedSegmentShas: { 1: headSha, 2: headSha, 3: headSha, 4: headSha },
   });
 
   assert.deepEqual(pass.mtime_violations, [], 'valid four-segment + l3 reports must pass');
 
   const fail = checkEvidenceFreshness({
+    mode: 'final_verification',
     headSha,
     phaseReport: valid,
     redReport: valid,
@@ -100,6 +103,7 @@ function runFreshnessAssertions() {
   }
 
   const missingExpectedSha = checkEvidenceFreshness({
+    mode: 'final_verification',
     headSha: null,
     phaseReport: { git_sha: null, content_hash: 'h' },
     redReport: { git_sha: null, content_hash: 'h' },
@@ -118,6 +122,49 @@ function runFreshnessAssertions() {
     missingExpectedSha.mtime_violations.some(v => v.reason === 'missing_git_sha'),
     'missing expected headSha must produce at least one missing_git_sha violation'
   );
+
+  const historicalRedSha = 'red-commit';
+  const historicalGreenSha = 'green-commit';
+  const finalTreeSha = 'final-index-tree';
+  const finalVerification = checkEvidenceFreshness({
+    mode: 'final_verification',
+    headSha: 'commit-head-is-not-the-index-tree',
+    currentTreeSha: finalTreeSha,
+    phaseReport: { git_sha: finalTreeSha, content_hash: 'final-summary' },
+    redReport: { git_sha: historicalRedSha, content_hash: 'red-proof' },
+    greenReport: { git_sha: historicalGreenSha, content_hash: 'green-proof' },
+    l2Report: { git_sha: finalTreeSha, content_hash: 'fresh-suite' },
+    l3Report: null,
+    noBrowserTest: true,
+    expectedContentHashes: {
+      1: 'final-summary', 2: 'red-proof', 3: 'green-proof', 4: 'fresh-suite',
+    },
+    isAncestor: (ancestor, descendant) =>
+      (ancestor === historicalRedSha && descendant === historicalGreenSha) ||
+      (ancestor === historicalGreenSha && descendant === finalTreeSha),
+  });
+  assert.deepEqual(finalVerification.mtime_violations, [],
+    'final verification accepts historical RED/GREEN provenance and binds final reports to temp-index tree');
+  assert.deepEqual(finalVerification.informational, [{
+    segment: 'l3-iron', file: 'l3-e2e-report.json', reason: 'intentional_skip',
+  }], 'no_browser_test records missing L3 as intentional skip');
+
+  const phaseTdd = checkEvidenceFreshness({
+    mode: 'phase_tdd',
+    headSha: finalTreeSha,
+    phaseReport: { git_sha: historicalGreenSha, content_hash: 'phase' },
+    redReport: { git_sha: historicalRedSha, content_hash: 'red' },
+    greenReport: { git_sha: historicalGreenSha, content_hash: 'green' },
+    l2Report: { git_sha: historicalGreenSha, content_hash: 'l2' },
+    noBrowserTest: true,
+    expectedSegmentShas: {
+      1: historicalGreenSha, 2: historicalRedSha, 3: historicalGreenSha, 4: historicalGreenSha,
+    },
+    isAncestor: (ancestor, descendant) =>
+      ancestor === historicalRedSha && descendant === historicalGreenSha,
+  });
+  assert.deepEqual(phaseTdd.mtime_violations, [],
+    'phase_tdd validates historical segment identities without forcing final HEAD equality');
 
   const l3Only = checkL3IronLaw({ git_sha: 'old-sha' }, headSha, 'l3-e2e-report.json');
   assert.equal(l3Only.mtime_violations[0].segment, 'l3-iron', 'L3 iron-law uses dedicated segment');

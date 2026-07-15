@@ -1,4 +1,5 @@
 export const JOURNAL_SCHEMA_VERSION = "v1";
+export const RECEIPT_MANIFEST_SCHEMA_VERSION = "2.0.0";
 
 export const JOURNAL_EVENT_TYPES = Object.freeze({
   STAGE_ENTER: "stage_enter",
@@ -28,4 +29,23 @@ export const AUDIT_SUMMARY_FIELDS = Object.freeze([
   "blocked_step_count",
   "skipped_step_count",
   "rollback_count",
+]);
+
+// Canonical v1 receipt identity.  Journal records may retain legacy fields for
+// migration, but canonical receipts must carry every field below verbatim.
+export const RECEIPT_IDENTITY_FIELDS = Object.freeze([
+  "workflow_run_id",
+  "stage_slug",
+  "step_id",
+  "attempt_id",
+  "event_type",
+  "timestamp",
+]);
+
+export const TERMINAL_STATUSES = Object.freeze([
+  "success",
+  "failure",
+  "blocked",
+  "skipped",
+  "needs_human",
 ]);

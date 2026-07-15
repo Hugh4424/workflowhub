@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Summary Carrier"
+  short_description: "Carry bounded audit summaries between stages"
+  default_prompt: "Package an audit summary for the next workflow stage."

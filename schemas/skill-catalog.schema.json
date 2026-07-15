@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/schemas/skill-catalog.schema.json",
+  "type": "object",
+  "required": ["schema_version", "last_reviewed_at", "projects", "skills", "capability_decisions"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "last_reviewed_at": { "type": "string", "format": "date" },
+    "projects": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/project" }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "local_version", "local_bundle_hash", "last_reviewed_at", "status", "purpose", "design_idea", "used_by_stages", "upstream", "local_changes", "dependency_closure", "update_policy"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "path": { "type": "string" },
+          "local_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+          "local_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "last_reviewed_at": { "type": "string", "format": "date" },
+          "status": { "enum": ["native", "adopted", "adapted", "absorbed", "rejected", "watch"] },
+          "standalone": { "type": "boolean" },
+          "purpose": { "type": "string", "minLength": 1 },
+          "design_idea": { "type": "string", "minLength": 1 },
+          "used_by_stages": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "upstream": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+          "local_changes": { "type": "string", "minLength": 1 },
+          "dependency_closure": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "update_policy": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "capability_decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "status", "purpose", "design_idea", "used_by_stages", "local_path", "upstream", "local_changes", "dependency_closure", "update_policy"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["absorbed", "rejected", "watch"] },
+          "purpose": { "type": "string", "minLength": 1 },
+          "design_idea": { "type": "string", "minLength": 1 },
+          "used_by_stages": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "local_path": { "type": ["string", "null"] },
+          "upstream": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+          "local_changes": { "type": "string", "minLength": 1 },
+          "dependency_closure": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "update_policy": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "project": {
+      "type": "object",
+      "required": ["github_url", "commit", "commit_url", "license", "reviewed_at", "review_outcome"],
+      "properties": {
+        "github_url": { "type": "string", "pattern": "^https://github\\.com/[^/]+/[^/]+$" },
+        "commit": { "anyOf": [{ "pattern": "^[a-f0-9]{40}$" }, { "const": "local" }] },
+        "commit_url": { "type": "string", "pattern": "^https://github\\.com/" },
+        "license": { "type": "string", "minLength": 1 },
+        "reviewed_at": { "type": "string", "format": "date" },
+        "review_outcome": { "enum": ["accepted", "rejected", "watch"] }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["github_url", "commit", "commit_url", "license", "reviewed_at", "review_outcome", "path", "skill_url"],
+          "properties": {
+            "github_url": { "type": "string", "pattern": "^https://github\\.com/" },
+            "commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+            "commit_url": { "type": "string", "pattern": "^https://github\\.com/.+/commit/[a-f0-9]{40}$" },
+            "license": { "type": "string", "minLength": 1 },
+            "reviewed_at": { "type": "string", "format": "date" },
+            "review_outcome": { "enum": ["accepted", "rejected", "watch"] },
+            "path": { "type": "string", "minLength": 1 },
+            "skill_url": { "type": "string", "pattern": "^https://github\\.com/" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind", "path", "license", "snapshot_sha256", "authorization_basis", "reviewed_at", "review_outcome"],
+          "properties": {
+            "kind": { "const": "user-provided-local-source" },
+            "path": { "type": "string", "minLength": 1 },
+            "license": { "type": "string", "minLength": 1 },
+            "snapshot_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "authorization_basis": { "type": "string", "minLength": 1 },
+            "reviewed_at": { "type": "string", "format": "date" },
+            "review_outcome": { "enum": ["accepted", "rejected", "watch"] }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

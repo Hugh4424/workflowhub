@@ -8,6 +8,7 @@ import { dirname } from "node:path";
 
 import {
   resolveTaskRecordPaths,
+  resolveMakeDecisionStageResultPath,
   taskRecordPath,
   validateTaskId,
 } from "../task-record-paths.mjs";
@@ -88,6 +89,20 @@ describe("task-record-paths", () => {
     expect(paths.worktree_json).toBe(join(paths.task_root, "worktree.json"));
     expect(paths.stage_result.build_code).toBe(join(paths.task_root, "stage-result-build-code.json"));
     expect(paths.stage_result.verify_code).toBe(join(paths.task_root, "stage-result-verify-code.json"));
+  });
+
+  it("requires a review_flow_id for the group-scoped make-decision stage result", () => {
+    const taskTrackingRoot = join(tmpDir, "tasks"); mkdirSync(taskTrackingRoot, { recursive: true });
+    expect(() => resolveMakeDecisionStageResultPath("wh-quality-convergence", undefined, { taskTrackingRoot })).toThrow(/review_flow_id is required/);
+    expect(() => resolveMakeDecisionStageResultPath("wh-quality-convergence", "../legacy", { taskTrackingRoot })).toThrow(/invalid review_flow_id/);
+    expect(resolveMakeDecisionStageResultPath("wh-quality-convergence", "decision-flow", { taskTrackingRoot })).toBe(join(taskTrackingRoot, "wh-quality-convergence", "reviews", "stage-result-make-decision-decision-flow.json"));
+    expect(resolveTaskRecordPaths("wh-quality-convergence", { taskTrackingRoot }).stage_result).not.toHaveProperty("make_decision");
+    const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR; process.env.WORKFLOWHUB_TASK_DIR = taskTrackingRoot;
+    try {
+      expect(() => taskRecordPath("wh-quality-convergence", "reviews", "stage-result-make-decision.json")).toThrow(/legacy fixed/);
+      expect(() => taskRecordPath("wh-quality-convergence", "reviews", "..", "stage-result-make-decision.json")).toThrow(/legacy fixed/);
+    }
+    finally { if (previousTaskDir === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previousTaskDir; }
   });
 
   it("rejects unsafe task ids and path traversal", () => {

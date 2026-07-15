@@ -1,0 +1,37 @@
+[
+  {
+    "type": "assistant",
+    "sessionId": "redacted-session",
+    "uuid": "redacted-assistant-event",
+    "parentUuid": "redacted-parent",
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "{{TOOL_USE_ID}}",
+          "name": "Read",
+          "input": {
+            "file_path": "{{FILE_PATH}}"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "type": "user",
+    "sessionId": "redacted-session",
+    "uuid": "redacted-user-event",
+    "parentUuid": "redacted-assistant-event",
+    "message": {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "{{TOOL_USE_ID}}",
+          "content": "{{READ_CONTENT}}"
+        }
+      ]
+    }
+  }
+]

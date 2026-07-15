@@ -6,7 +6,7 @@
  * - AC2-2/AC2-3: route-decision two-phase write contract (7 fields non-empty +
  *   empty review_input_hash after prepare; 8 fields non-empty after execute);
  *   unknown stage fails loud (non-zero exit)
- * - AC9-1/AC10-1: intake.md contains C1..C6 markers, test-acceptance.md contains F1..F6 markers
+ * - AC9-1/AC10-1: make-decision.md and verify-code.md contain stable C1..C6 markers
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scriptPath = resolve(here, "../route-decision-writer.mjs");
@@ -33,25 +34,25 @@ function runCli(args, env) {
 }
 
 describe("AC2-1: 5 stage contract files exist", () => {
-  it("intake/design/plan/code/test-acceptance all present", () => {
-    for (const name of ["intake", "design", "plan", "code", "test-acceptance"]) {
+  it("make-decision/build-spec/build-plan/build-code/verify-code all present", () => {
+    for (const name of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       expect(existsSync(join(contractsDir, `${name}.md`))).toBe(true);
     }
   });
 });
 
 describe("AC9-1/AC10-1: contract content coverage markers", () => {
-  it("intake.md contains C1..C6", () => {
-    const content = readFileSync(join(contractsDir, "intake.md"), "utf8");
+  it("make-decision.md contains C1..C6", () => {
+    const content = readFileSync(join(contractsDir, "make-decision.md"), "utf8");
     for (const n of [1, 2, 3, 4, 5, 6]) {
       expect(content).toMatch(new RegExp(`\\bC${n}\\b`));
     }
   });
 
-  it("test-acceptance.md contains F1..F6", () => {
-    const content = readFileSync(join(contractsDir, "test-acceptance.md"), "utf8");
+  it("verify-code.md contains stable C1..C6 check ids", () => {
+    const content = readFileSync(join(contractsDir, "verify-code.md"), "utf8");
     for (const n of [1, 2, 3, 4, 5, 6]) {
-      expect(content).toMatch(new RegExp(`\\bF${n}\\b`));
+      expect(content).toMatch(new RegExp(`^- C${n}:`, "m"));
     }
   });
 });
@@ -168,6 +169,42 @@ describe("AC2-2/AC2-3: route-decision two-phase write", () => {
       readFileSync(join(reviewsDir, files[0]), "utf8")
     );
     expect(record.total_round).toBe(2);
+  });
+
+  it("records the selected make-decision contract projection and hash", () => {
+    const taskId = "t-direction"; const stage = "make-decision"; const reviewFlowId = "flow-direction";
+    const prep = runCli(["prepare", `--task-id=${taskId}`, `--stage=${stage}`, "--review-track=direction", `--review-flow-id=${reviewFlowId}`, "--total-round=1"], { WORKFLOWHUB_TASK_DIR: taskDir });
+    expect(prep.exitCode).toBe(0);
+    const record = JSON.parse(readFileSync(join(taskDir, taskId, "reviews", `route-decision-${stage}-direction-${reviewFlowId}.json`), "utf8"));
+    const source = readFileSync(join(contractsDir, "make-decision.md"), "utf8"); const first = source.indexOf("## review_track:"); const start = source.indexOf("## review_track: direction"); const next = source.indexOf("## review_track:", start + 1);
+    const projected = `${source.slice(0, first)}${source.slice(start, next)}`;
+    expect(record.review_track).toBe("direction");
+    expect(record.contract_hash).toBe(createHash("sha256").update(projected).digest("hex"));
+  });
+
+  it("isolates direction and detail route records even when their flow ids match", () => {
+    const taskId = "t-track-isolation"; const stage = "make-decision"; const reviewFlowId = "shared-flow";
+    for (const reviewTrack of ["direction", "detail"]) {
+      const result = runCli([
+        "prepare", `--task-id=${taskId}`, `--stage=${stage}`, `--review-track=${reviewTrack}`,
+        `--review-flow-id=${reviewFlowId}`, "--total-round=1",
+      ], { WORKFLOWHUB_TASK_DIR: taskDir });
+      expect(result.exitCode).toBe(0);
+    }
+    const reviews = join(taskDir, taskId, "reviews");
+    const direction = join(reviews, "route-decision-make-decision-direction-shared-flow.json");
+    const detail = join(reviews, "route-decision-make-decision-detail-shared-flow.json");
+    expect(existsSync(direction)).toBe(true);
+    expect(existsSync(detail)).toBe(true);
+    expect(JSON.parse(readFileSync(direction, "utf8")).review_track).toBe("direction");
+    expect(JSON.parse(readFileSync(detail, "utf8")).review_track).toBe("detail");
+    const execute = runCli([
+      "execute", `--task-id=${taskId}`, `--stage=${stage}`, "--review-track=detail",
+      `--review-flow-id=${reviewFlowId}`, "--review-input-hash=detail-hash",
+    ], { WORKFLOWHUB_TASK_DIR: taskDir });
+    expect(execute.exitCode).toBe(0);
+    expect(JSON.parse(readFileSync(detail, "utf8")).review_input_hash).toBe("detail-hash");
+    expect(JSON.parse(readFileSync(direction, "utf8")).review_input_hash).toBe("");
   });
 
   it("unknown stage fails loud with non-zero exit", () => {

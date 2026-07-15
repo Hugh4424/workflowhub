@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "skill": "review",
+  "files": [
+    "SKILL.md",
+    "review-bundle.json"
+  ],
+  "sources": [{ "url": "https://github.com/garrytan/gstack", "commit": "7c9df1c568a9ea745508f679a329332b2c338063", "path": "review", "license": "MIT" }]
+}

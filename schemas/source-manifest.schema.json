@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "workflowhub/source-manifest.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "atoms", "manifest_hash"],
+  "properties": {
+    "schema_version": { "const": "v1" },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_type", "source_id", "revision", "content_hash"],
+      "properties": {
+        "source_type": { "type": "string", "minLength": 1 },
+        "source_id": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "minLength": 1 },
+        "content_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "atoms": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/atom" } },
+    "manifest_hash": { "$ref": "#/$defs/hash" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "atom": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requirement_id", "text", "owner", "authority", "derived_from", "supersedes", "status", "stale", "content_hash"],
+      "properties": {
+        "requirement_id": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "authority": { "type": "string", "minLength": 1 },
+        "derived_from": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "supersedes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "status": { "enum": ["accepted", "withdrawn", "rejected", "unknown"] },
+        "stale": { "type": "boolean" },
+        "content_hash": { "$ref": "#/$defs/hash" }
+      }
+    }
+  }
+}

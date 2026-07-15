@@ -10,10 +10,6 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { validateStageResult } from "../scripts/validate-stage-result.mjs";
 
 // Base valid stage-result that satisfies the top-level stage-result.contract.json
@@ -284,45 +280,14 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     return {
       changed: ["f.ts"],
       tests: "ok",
-      review: { status: "executed", source: "third_party", verdict: "pass", artifact_path: "reviews/verdict-build-code-phase-1-round-1.raw.json" },
+      review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false },
       worktree_root: "/repo/workflowhub-task",
       task_tracking_root: "/repo/tasks",
       phase_completion: {
-        commit_records: [],
-        no_change_records: [{ phase_id: "phase-1", no_change_reason: "no file changes" }],
+        phase_records: [{ phase_id: "phase-1", changed: false }],
       },
       ...overrides,
     };
-  }
-
-  function sh(cmd, cwd) {
-    return execSync(cmd, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
-  }
-
-  function withGitFixture(callback) {
-    const root = mkdtempSync(join(tmpdir(), "stage-result-build-code-"));
-    const repo = join(root, "repo");
-    try {
-      mkdirSync(repo, { recursive: true });
-      sh("git init", repo);
-      sh('git config user.email "stage-result@example.invalid"', repo);
-      sh('git config user.name "Stage Result Test"', repo);
-      writeFileSync(join(repo, "README.md"), "# fixture\n", "utf8");
-      sh("git add README.md", repo);
-      sh('git commit -m "init"', repo);
-      return callback(repo);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  }
-
-  function commitFile(repo, relativePath, content, message) {
-    const path = join(repo, relativePath);
-    mkdirSync(join(path, ".."), { recursive: true });
-    writeFileSync(path, content, "utf8");
-    sh(`git add ${relativePath}`, repo);
-    sh(`git commit -m "${message}"`, repo);
-    return sh("git rev-parse HEAD", repo).trim();
   }
 
   it("positive: changed + tests + handoff roots non-empty -> ok", () => {
@@ -464,11 +429,11 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/review/);
   });
 
-  it("negative: review without artifact path -> fails", () => {
+  it("negative: review without the published decision tuple -> fails", () => {
     const artifact = { ...base(), facts: buildCodeFacts({ review: { verdict: "pass" } }) };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/artifact_path|artifact_paths/);
+    expect(result.errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
   });
 
   it("negative: review scalar -> fails", () => {
@@ -492,21 +457,31 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/review.*object/);
   });
 
-  it("negative: review artifact path must be raw JSON -> fails", () => {
+  it("negative: raw review artifact references are rejected", () => {
     const artifact = {
       ...base(),
       facts: buildCodeFacts({ review: { verdict: "pass", artifact_path: "reviews/build-code-phase-1.md" } }),
     };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/raw JSON/);
+    expect(result.errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
   });
 
-  it("negative: phase_completion must include at least one commit or no-change record -> fails", () => {
+  it("accepts only the published core receipt decision tuple, not a raw review artifact path", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({ review: { core_receipt_hash: "a".repeat(64), semantic_verdict: "pass", needs_human: false } }),
+    };
+    expect(validateStageResult("build-code", artifact).ok).toBe(true);
+    const raw = { ...artifact, facts: { ...artifact.facts, review: { artifact_path: "reviews/private/raw.json", verdict: "pass" } } };
+    expect(validateStageResult("build-code", raw).errors.join(" ")).toMatch(/core_receipt_hash|semantic_verdict|needs_human/);
+  });
+
+  it("negative: phase_completion must include at least one phase record -> fails", () => {
     const artifact = {
       ...base(),
       facts: buildCodeFacts({
-        phase_completion: { commit_records: [], no_change_records: [] },
+        phase_completion: { phase_records: [] },
       }),
     };
     const result = validateStageResult("build-code", artifact);
@@ -514,28 +489,58 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.errors.join(" ")).toMatch(/phase_completion/);
   });
 
-  it("negative: commit_records require phase_id and 40-hex commit_sha -> fails", () => {
+  it("negative: phase_records require phase_id and changed boolean -> fails", () => {
     const artifact = {
       ...base(),
       facts: buildCodeFacts({
         phase_completion: {
-          commit_records: [{ phase_id: "phase-1", commit_sha: "not-a-sha" }],
-          no_change_records: [],
+          phase_records: [{ phase_id: "phase-1", changed: "yes" }],
         },
       }),
     };
     const result = validateStageResult("build-code", artifact);
     expect(result.ok).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/commit_records/);
+    expect(result.errors.join(" ")).toMatch(/phase_records/);
   });
 
-  it("positive: no-change phase completion records are accepted", () => {
+  it("negative: phase_records reject private review references", () => {
     const artifact = {
       ...base(),
       facts: buildCodeFacts({
         phase_completion: {
-          commit_records: [],
-          no_change_records: [{ phase_id: "phase-docs", no_change_reason: "documentation-only verification phase" }],
+          phase_records: [{ phase_id: "phase-1", changed: true, review_flow_ref: "refs/workflowhub/review/private" }],
+        },
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/phase_records/);
+  });
+
+  it("negative: phase_completion rejects private review references", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        phase_completion: {
+          phase_records: [{ phase_id: "phase-1", changed: true }],
+          review_flow_ref: "refs/workflowhub/review/private",
+        },
+      }),
+    };
+    const result = validateStageResult("build-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/phase_completion/);
+  });
+
+  it("positive: phase completion records are accepted without a commit SHA", () => {
+    const artifact = {
+      ...base(),
+      facts: buildCodeFacts({
+        phase_completion: {
+          phase_records: [
+            { phase_id: "phase-implementation", changed: true },
+            { phase_id: "phase-docs", changed: false },
+          ],
         },
       }),
     };
@@ -543,88 +548,6 @@ describe("build-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     expect(result.ok, result.errors?.join("; ")).toBe(true);
   });
 
-  it("positive: commit_records are accepted only when they match worktree HEAD implementation commit", () => {
-    withGitFixture((repo) => {
-      const commitSha = commitFile(repo, "src/implementation.txt", "phase work\n", "phase implementation");
-      const artifact = {
-        ...base(),
-        facts: buildCodeFacts({
-          worktree_root: repo,
-          task_tracking_root: join(repo, "tasks"),
-          phase_completion: {
-            commit_records: [{ phase_id: "phase-1", commit_sha: commitSha }],
-            no_change_records: [],
-          },
-        }),
-      };
-      const result = validateStageResult("build-code", artifact);
-      expect(result.ok, result.errors?.join("; ")).toBe(true);
-    });
-  });
-
-  it("positive: multi-phase commit_records accept earlier implementation commits before final HEAD", () => {
-    withGitFixture((repo) => {
-      const phaseOneCommit = commitFile(repo, "src/phase-one.txt", "phase one\n", "phase one implementation");
-      const phaseTwoCommit = commitFile(repo, "src/phase-two.txt", "phase two\n", "phase two implementation");
-      const artifact = {
-        ...base(),
-        facts: buildCodeFacts({
-          worktree_root: repo,
-          task_tracking_root: join(repo, "tasks"),
-          phase_completion: {
-            commit_records: [
-              { phase_id: "phase-1", commit_sha: phaseOneCommit },
-              { phase_id: "phase-2", commit_sha: phaseTwoCommit },
-            ],
-            no_change_records: [],
-          },
-        }),
-      };
-      const result = validateStageResult("build-code", artifact);
-      expect(result.ok, result.errors?.join("; ")).toBe(true);
-    });
-  });
-
-  it("negative: commit_records fail when implementation commit is behind HEAD", () => {
-    withGitFixture((repo) => {
-      const implementationCommit = commitFile(repo, "src/implementation.txt", "phase work\n", "phase implementation");
-      commitFile(repo, "phase-result.json", "{}\n", "tracking artifact");
-      const artifact = {
-        ...base(),
-        facts: buildCodeFacts({
-          worktree_root: repo,
-          task_tracking_root: join(repo, "tasks"),
-          phase_completion: {
-            commit_records: [{ phase_id: "phase-1", commit_sha: implementationCommit }],
-            no_change_records: [],
-          },
-        }),
-      };
-      const result = validateStageResult("build-code", artifact);
-      expect(result.ok).toBe(false);
-      expect(result.errors.join(" ")).toMatch(/final implementation commit.*must match worktree HEAD/);
-    });
-  });
-
-  it("negative: commit_records fail when HEAD only changes tracking artifacts", () => {
-    withGitFixture((repo) => {
-      const trackingCommit = commitFile(repo, "phase-result.json", "{}\n", "tracking artifact");
-      const artifact = {
-        ...base(),
-        facts: buildCodeFacts({
-          worktree_root: repo,
-          task_tracking_root: join(repo, "tasks"),
-          phase_completion: {
-            commit_records: [{ phase_id: "phase-1", commit_sha: trackingCommit }],
-            no_change_records: [],
-          },
-        }),
-      };
-      const result = validateStageResult("build-code", artifact);
-      expect(result.ok).toBe(false);
-      expect(result.errors.join(" ")).toMatch(/non-tracking implementation\/test file/);
-    });
-  });
 });
 
 // ── verify-code ───────────────────────────────────────────────────────────────
@@ -633,7 +556,14 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
   it("positive: verdict + evidence_ref non-empty → ok", () => {
     const artifact = {
       ...base(),
-      facts: { verdict: "pass", evidence_ref: "evidence/verify-code-2026-06-24.json" },
+      facts: {
+        verdict: "pass",
+        evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_contract_version: "v1",
+        audit_summary_ref: "evidence/audit-summary.json",
+        audit_verdict: "pass",
+        audit_summary_hash: "a".repeat(64),
+      },
     };
     const result = validateStageResult("verify-code", artifact);
     expect(result.ok, result.errors?.join("; ")).toBe(true);
@@ -680,6 +610,68 @@ describe("verify-code facts sub-schema (FR-CONTRACT-002 D11)", () => {
     const result = validateStageResult("verify-code", artifact);
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/evidence_ref/);
+  });
+
+  it("rejects a consumer verdict when its canonical summary reference, hash, and verdict are absent", () => {
+    const artifact = {
+      ...base(),
+      facts: { verdict: "pass", evidence_ref: "evidence/verify-code-2026-06-24.json" },
+    };
+    const result = validateStageResult("verify-code", artifact);
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/audit_summary_ref|audit_verdict|audit_summary_hash/);
+  });
+
+  it("accepts a consumer that exposes the canonical aggregator verdict and hash unchanged", () => {
+    const artifact = {
+      ...base(),
+      facts: {
+        verdict: "pass",
+        evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_contract_version: "v1",
+        audit_summary_ref: "evidence/audit-summary.json",
+        audit_verdict: "pass",
+        audit_summary_hash: "a".repeat(64),
+      },
+    };
+    const result = validateStageResult("verify-code", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
+  });
+
+  it.each(["revise_required", "escalate_to_human"])(
+    "rejects non-canonical audit_verdict %s",
+    (audit_verdict) => {
+      const artifact = {
+        ...base(),
+        facts: {
+          verdict: "pass",
+          evidence_ref: "evidence/verify-code-2026-06-24.json",
+          audit_contract_version: "v1",
+          audit_summary_ref: "evidence/audit-summary.json",
+          audit_verdict,
+          audit_summary_hash: "a".repeat(64),
+        },
+      };
+      const result = validateStageResult("verify-code", artifact);
+      expect(result.ok).toBe(false);
+      expect(result.errors.join(" ")).toMatch(/audit_verdict/);
+    },
+  );
+
+  it.each(["pass", "fail"])("accepts canonical audit_verdict %s", (audit_verdict) => {
+    const artifact = {
+      ...base(),
+      facts: {
+        verdict: "pass",
+        evidence_ref: "evidence/verify-code-2026-06-24.json",
+        audit_contract_version: "v1",
+        audit_summary_ref: "evidence/audit-summary.json",
+        audit_verdict,
+        audit_summary_hash: "a".repeat(64),
+      },
+    };
+    const result = validateStageResult("verify-code", artifact);
+    expect(result.ok, result.errors?.join("; ")).toBe(true);
   });
 });
 

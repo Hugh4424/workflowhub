@@ -1,87 +1,89 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { appendRequiredSkillDefinitions, parseRequiredSkillManifest, resolveRequiredSkills } from "../required-skill-resolver.mjs";
-import { invokeReviewEngine } from "../invoke-review-engine.mjs";
+import { appendRequiredSkillDefinitions, resolveRequiredSkills } from "../required-skill-resolver.mjs";
 
-const manifest = '<!-- wh-review-skills: {"required":["review","plan-design-review","plan-ceo-review"]} -->';
-function skill(root, name, content, nested = false) { const dir = join(root, ...(nested ? ["gstack", name] : [name])); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "SKILL.md"), content); }
+const repositorySkillsRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..", "skills");
 
-describe("Claude required skill dependency closure", () => {
-  it("parses and deterministically sorts the machine-readable manifest", () => {
-    expect(parseRequiredSkillManifest(manifest)).toEqual({ required: ["plan-ceo-review", "plan-design-review", "review"], optional: [] });
-  });
-
-  it("resolves exact root/name and root/gstack/name definitions in name order", () => {
-    const root = mkdtempSync(join(tmpdir(), "skills-"));
-    skill(root, "review", "REVIEW-BYTES\n"); skill(root, "plan-ceo-review", "CEO-BYTES\n", true); skill(root, "plan-design-review", "DESIGN-BYTES\n");
-    const result = resolveRequiredSkills({ contract: manifest, roots: [root] });
-    expect(result.definitions.map((d) => d.name)).toEqual(["plan-ceo-review", "plan-design-review", "review"]);
-  });
-
-  it("deduplicates byte-identical copies but fails loud on different copies", () => {
-    const a = mkdtempSync(join(tmpdir(), "skills-a-")); const b = mkdtempSync(join(tmpdir(), "skills-b-"));
-    skill(a, "review", "same"); skill(b, "review", "same");
-    expect(resolveRequiredSkills({ contract: '<!-- wh-review-skills: {"required":["review"]} -->', roots: [a, b] }).definitions).toHaveLength(1);
-    writeFileSync(join(b, "review", "SKILL.md"), "different");
-    expect(() => resolveRequiredSkills({ contract: '<!-- wh-review-skills: {"required":["review"]} -->', roots: [a, b] })).toThrow(/required-skill-conflict/);
-  });
-
-  it("fails before use for missing, traversal names, and symlink SKILL.md", () => {
-    const root = mkdtempSync(join(tmpdir(), "skills-"));
-    expect(() => resolveRequiredSkills({ contract: '<!-- wh-review-skills: {"required":["missing"]} -->', roots: [root] })).toThrow(/required-skill-unavailable/);
-    expect(() => parseRequiredSkillManifest('<!-- wh-review-skills: {"required":["../escape"]} -->')).toThrow(/required-skill-unavailable/);
-    const outside = join(mkdtempSync(join(tmpdir(), "outside-")), "SKILL.md"); writeFileSync(outside, "outside"); mkdirSync(join(root, "review")); symlinkSync(outside, join(root, "review", "SKILL.md"));
-    expect(() => resolveRequiredSkills({ contract: '<!-- wh-review-skills: {"required":["review"]} -->', roots: [root] })).toThrow(/required-skill-unavailable/);
-  });
-
-  it("injects complete bytes and metadata; changing bytes changes sha256", () => {
-    const root = mkdtempSync(join(tmpdir(), "skills-")); const full = "---\nversion: 9.1\n---\nFULL\nBYTES\n"; skill(root, "review", full);
-    const contract = '<!-- wh-review-skills: {"required":["review"]} -->';
-    const first = resolveRequiredSkills({ contract, roots: [root] });
-    const augmented = appendRequiredSkillDefinitions({ contract, materials: "M", resolution: first });
-    expect(augmented.contract).toContain(full); expect(augmented.materials).toBe("M"); expect(augmented.contract).toContain("version: 9.1");
-    writeFileSync(join(root, "review", "SKILL.md"), `${full}changed`);
-    expect(resolveRequiredSkills({ contract, roots: [root] }).definitions[0].sha256).not.toBe(first.definitions[0].sha256);
-  });
-
-  it("design contract declares and resolves all three required definitions in full", () => {
-    const contract = readFileSync(new URL("../../contracts/design.md", import.meta.url), "utf8");
-    const root = mkdtempSync(join(tmpdir(), "skills-")); skill(root, "review", "review-full"); skill(root, "plan-ceo-review", "ceo-full"); skill(root, "plan-design-review", "design-full");
-    const result = resolveRequiredSkills({ contract, roots: [root] });
-    expect(result.definitions.map((d) => d.content)).toEqual(["ceo-full", "design-full", "review-full"]);
-    const augmented = appendRequiredSkillDefinitions({ contract, materials: "M", resolution: result });
-    for (const bytes of ["ceo-full", "design-full", "review-full"]) {
-      expect(augmented.contract).toContain(bytes);
+describe("required skill bundles", () => {
+  it("resolves the make-decision direction profile from the stage plan", () => {
+    const result = resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction" });
+    expect(result.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
+    for (const definition of result.definitions) {
+      expect(relative(repositorySkillsRoot, definition.source)).toBe(`${definition.name}/SKILL.md`);
+      expect(definition.bundle.files).toEqual(expect.arrayContaining([expect.objectContaining({ path: "SKILL.md" })]));
+      expect(definition.bundle.sha256).toMatch(/^[a-f0-9]{64}$/);
     }
+    expect(resolveRequiredSkills({ stage: "make-decision", reviewTrack: "detail" }).definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
+  });
+
+  it("rejects external roots and a missing required make-decision track", () => {
+    const root = mkdtempSync(join(tmpdir(), "skills-"));
+    mkdirSync(join(root, "review"));
+    writeFileSync(join(root, "review", "SKILL.md"), "external");
+    expect(() => resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction", roots: [root] })).toThrow(/repository skills root/);
+    expect(() => resolveRequiredSkills({ stage: "make-decision" })).toThrow(/review_track/);
+  });
+
+  it("uses a profile-specific UI lens and keeps default delivery file-only", () => {
+    const plain = resolveRequiredSkills({ stage: "build-spec" });
+    const ui = resolveRequiredSkills({ stage: "build-spec", ui: true });
+    expect(plain.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "review"]);
+    expect(ui.definitions.map((definition) => definition.name)).toEqual(["plan-ceo-review", "plan-design-review", "review"]);
+    expect(ui.deliveryMode).toBe("file_only");
+  });
+
+  it("selects packet-only spec and verification lenses for their stages", () => {
+    const plan = resolveRequiredSkills({ stage: "build-plan" });
+    const verify = resolveRequiredSkills({ stage: "verify-code" });
+    expect(plan.definitions.map((definition) => definition.name)).toEqual(["plan-eng-review", "review", "spec-analyze"]);
+    expect(verify.definitions.map((definition) => definition.name)).toEqual(["qa-only", "verify-change"]);
+    expect([...plan.definitions, ...verify.definitions].every((definition) => definition.deliveryMode !== "always_embed")).toBe(true);
+  });
+
+  it("keeps one source sufficient while recommending two for code and verification", () => {
+    expect(resolveRequiredSkills({ stage: "build-code" })).toMatchObject({ minimumBusinessValidSources: 1, recommendedBusinessValidSources: 2 });
+    expect(resolveRequiredSkills({ stage: "verify-code" })).toMatchObject({ minimumBusinessValidSources: 1, recommendedBusinessValidSources: 2 });
+    expect(resolveRequiredSkills({ stage: "build-spec" }).minimumBusinessValidSources).toBe(1);
+    expect(resolveRequiredSkills({ stage: "build-plan" }).minimumBusinessValidSources).toBe(1);
+    expect(resolveRequiredSkills({ stage: "make-decision", reviewTrack: "direction" })).toMatchObject({ minimumBusinessValidSources: 1, recommendedBusinessValidSources: 1 });
+  });
+
+  it("does not inject file-only bundles into the provider prompt", () => {
+    const resolution = resolveRequiredSkills({ stage: "build-plan" });
+    const augmented = appendRequiredSkillDefinitions({ contract: "CONTRACT", materials: "M", resolution });
     expect(augmented.materials).toBe("M");
+    expect(augmented.contract).toBe("CONTRACT");
   });
 
-  it("fails before Claude spawn when plan-design-review is missing", () => {
-    const contract = readFileSync(new URL("../../contracts/design.md", import.meta.url), "utf8");
-    const taskRoot = mkdtempSync(join(tmpdir(), "tasks-")); const root = mkdtempSync(join(tmpdir(), "skills-"));
-    skill(root, "review", "review-full"); skill(root, "plan-ceo-review", "ceo-full");
-    expect(() => invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "missing-design", totalRound: 1, mode: "full", contract, materials: "M", taskTrackingRoot: taskRoot, env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_SKILL_ROOTS: root } })).toThrow(/plan-design-review not found/);
-    expect(existsSync(join(taskRoot, "closure-test", "reviews", "verdict-build-spec-missing-design-round-1.raw.json"))).toBe(false);
+  it.each([
+    ["make-decision", "direction"], ["make-decision", "detail"], ["build-spec", null],
+    ["build-plan", null], ["build-code", null], ["verify-code", null],
+  ])("exposes a complete frozen StageSkillPlan for %s/%s", (stage, reviewTrack) => {
+    const plan = resolveRequiredSkills({ stage, reviewTrack });
+    expect(plan).toMatchObject({
+      stage,
+      reviewTrack,
+      logicalSkillId: expect.stringMatching(/^wh-review\//),
+      outputSchema: "schemas/reviewer-output.schema.json",
+      checkpoints: expect.any(Array),
+      expectedEvidence: expect.any(Array),
+      reviewMode: "lens-only",
+      deliveryMode: expect.stringMatching(/^(file_only|always_embed)$/),
+      skillBundleHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      bundleClosureFiles: expect.any(Array),
+    });
+    expect(plan.checkpoints.length).toBeGreaterThan(0);
+    expect(plan.expectedEvidence.length).toBeGreaterThan(0);
+    expect(plan.bundleClosureFiles).toEqual(plan.definitions.flatMap(({ name, bundle }) => bundle.files.map(({ path, sha256 }) => ({ skill: name, path, sha256 }))));
   });
 
-  it("fails required-skill resolution before Claude is spawned or an artifact is written", () => {
-    const taskRoot = mkdtempSync(join(tmpdir(), "tasks-")); const emptySkills = mkdtempSync(join(tmpdir(), "skills-"));
-    const previous = process.env.WORKFLOWHUB_TASK_DIR; process.env.WORKFLOWHUB_TASK_DIR = taskRoot;
-    try {
-      expect(() => invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "closure-flow", totalRound: 1, mode: "full", contract: '<!-- wh-review-skills: {"required":["review"]} -->', materials: "M", taskTrackingRoot: taskRoot, env: { WH_REVIEW_PROVIDER: "claude-code", CLAUDE_CODE_SKILL_ROOTS: emptySkills } })).toThrow(/required-skill-unavailable/);
-      expect(existsSync(join(taskRoot, "closure-test", "reviews", "verdict-build-spec-closure-flow-round-1.raw.json"))).toBe(false);
-    } finally { if (previous === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previous; }
-  });
-
-  it("keeps custom runner contract and materials byte-for-byte unchanged", () => {
-    const taskRoot = mkdtempSync(join(tmpdir(), "tasks-")); const runnerDir = mkdtempSync(join(tmpdir(), "runner-")); const capture = join(runnerDir, "capture.json"); const runner = join(runnerDir, "runner.mjs");
-    writeFileSync(runner, `import {readFileSync,writeFileSync} from "node:fs";const a=Object.fromEntries(process.argv.slice(2).map(x=>x.slice(2).split("=")));const p=JSON.parse(readFileSync(a.diff,"utf8"));writeFileSync(${JSON.stringify(capture)},JSON.stringify(p));writeFileSync(a.output,JSON.stringify({verdict:"pass",findings:[],actual_mode:p.mode}));`);
-    const previous = process.env.WORKFLOWHUB_TASK_DIR; process.env.WORKFLOWHUB_TASK_DIR = taskRoot;
-    try {
-      invokeReviewEngine({ taskId: "closure-test", stage: "build-spec", reviewFlowId: "custom-flow", totalRound: 1, mode: "full", contract: `${manifest}\nC\u0000`, materials: "M\r\nbytes", taskTrackingRoot: taskRoot, env: { THIRD_REVIEW_RUNNER: runner } });
-      const received = JSON.parse(readFileSync(capture, "utf8")); expect(received.contract).toBe(`${manifest}\nC\u0000`); expect(received.materials).toBe("M\r\nbytes");
-    } finally { if (previous === undefined) delete process.env.WORKFLOWHUB_TASK_DIR; else process.env.WORKFLOWHUB_TASK_DIR = previous; }
+  it("rejects an incomplete StageSkillPlan profile instead of applying defaults", () => {
+    expect(() => resolveRequiredSkills({
+      stage: "build-code",
+      stageSkillPlan: { version: 1, stages: { "build-code": { logical_skill_id: "wh-review/build-code", required_skills: [], material_profile: "diff-and-evidence", checkpoints: ["packet-attestation"], expected_evidence: ["unified_diff"], bundle_hash: "resolved-at-prepare", bundle_closure_files: "resolved-at-prepare", review_mode: "lens-only", delivery_mode: "file_only", continuation_policy: "initial-runtime-only", pass_finding_policy: "contract-only" } } },
+    })).toThrow(/incomplete stage skill plan.*output_schema/i);
   });
 });
