@@ -1,17 +1,16 @@
 #!/usr/bin/env node
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolveMakeDecisionStageResultPath, resolveTaskRecordPaths } from '../core/task-record-paths.mjs';
+import { readReviewResult, aggregateMakeDecisionResults } from '../core/review-result-consumer.mjs';
 
 const args = process.argv.slice(2);
 const taskIdArg = args.find(a => a.startsWith('--task-id='));
-const reviewFlowIdArg = args.find(a => a.startsWith('--review-flow-id='));
 const taskTrackingRootArg = args.find(a => a.startsWith('--task-tracking-root='));
 const taskId = taskIdArg ? taskIdArg.split('=')[1] : null;
-const reviewFlowId = reviewFlowIdArg ? reviewFlowIdArg.split('=')[1] : null;
 const taskTrackingRoot = taskTrackingRootArg ? taskTrackingRootArg.slice('--task-tracking-root='.length) : undefined;
 
-if (!taskId || !reviewFlowId) {
-  console.error('Usage: node scripts/ci-chain-check.mjs --task-id=<id> --review-flow-id=<id> [--task-tracking-root=<absolute-root>]');
+if (!taskId) {
+  console.error('Usage: node scripts/ci-chain-check.mjs --task-id=<id> [--task-tracking-root=<absolute-root>]');
   process.exit(2);
 }
 
@@ -19,26 +18,19 @@ let taskRecords, makeDecisionResult;
 try {
   const options = taskTrackingRoot ? { taskTrackingRoot } : {};
   taskRecords = resolveTaskRecordPaths(taskId, options);
-  makeDecisionResult = resolveMakeDecisionStageResultPath(taskId, reviewFlowId, options);
+  makeDecisionResult = resolveMakeDecisionStageResultPath(taskId, options);
 } catch (error) {
   console.error(`[FAIL] make-decision: ${error.message}`);
   process.exit(2);
 }
 let errors = 0, warnings = 0;
 
-// A projection guard is deliberately public so every CI consumer fails closed
-// even if a prior stage-result still says pass after a process crash.
-const pendingGuards = existsSync(taskRecords.reviews_dir)
-  ? readdirSync(taskRecords.reviews_dir).filter(name => /^projection-pending-.*\.json$/.test(name))
-  : [];
-if (pendingGuards.length) {
-  console.error(`[FAIL] PROJECTION_PENDING: recover public review projection first (${pendingGuards.join(', ')})`);
-  errors++;
-}
-
 // 1. make-decision
 try {
-  JSON.parse(readFileSync(makeDecisionResult, 'utf-8'));
+  const stage = JSON.parse(readFileSync(makeDecisionResult, 'utf-8'));
+  const direction = readReviewResult(stage.facts?.reviews?.direction, taskRecords.task_root, { stage: 'make-decision', track: 'direction' }).result;
+  const detail = readReviewResult(stage.facts?.reviews?.detail, taskRecords.task_root, { stage: 'make-decision', track: 'detail' }).result;
+  if (aggregateMakeDecisionResults(direction, detail) !== 'pass') throw new Error('direction/detail aggregate is not pass');
   console.log('[OK] make-decision stage-result exists and is valid JSON');
 } catch (e) {
   console.error(`[FAIL] make-decision: ${e.message}`);
@@ -54,6 +46,7 @@ try {
   } else {
     console.log(`[OK] build-code: facts.tests.command = ${bc.facts.tests.command}`);
   }
+  readReviewResult(bc.facts?.review, taskRecords.task_root, { stage: 'build-code', track: null, requirePass: true });
 } catch (e) {
   console.error(`[FAIL] build-code: ${e.message}`);
   errors++;

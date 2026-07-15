@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wh-review semantic result",
+  "type": "object",
+  "required": ["version", "task_id", "stage", "review_track", "source", "snapshot_tree", "material_id", "attempt_ref", "provider_results", "verdict", "findings"],
+  "properties": {
+    "version": { "const": "wh-review-result.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "review_track": { "enum": ["direction", "detail", null] },
+    "source": { "$ref": "attempt.schema.json#/properties/source" },
+    "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "attempt_ref": { "type": "string", "minLength": 1 },
+    "provider_results": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "required": ["provider", "output"],
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "output": {
+            "type": "object", "required": ["verdict", "summary", "findings"],
+            "properties": {
+              "verdict": { "enum": ["pass", "revise_required"] },
+              "summary": { "type": "string", "minLength": 1 },
+              "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+            },
+            "allOf": [{
+              "if": { "properties": { "verdict": { "const": "pass" } }, "required": ["verdict"] },
+              "then": { "properties": { "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/finding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } } } },
+              "else": { "properties": { "findings": { "type": "array", "minItems": 1 } } }
+            }],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verdict": { "enum": ["pass", "revise_required"] },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/resultFinding" } }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object", "required": ["severity", "path", "issue", "recommendation"],
+      "properties": { "severity": { "enum": ["blocking", "major", "minor"] }, "path": { "type": "string", "minLength": 1 }, "line": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] }, "issue": { "type": "string", "minLength": 1 }, "recommendation": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    },
+    "resultFinding": {
+      "type": "object", "required": ["provider", "severity", "path", "issue", "recommendation"],
+      "properties": { "provider": { "type": "string", "minLength": 1 }, "severity": { "enum": ["blocking", "major", "minor"] }, "path": { "type": "string", "minLength": 1 }, "line": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] }, "issue": { "type": "string", "minLength": 1 }, "recommendation": { "type": "string", "minLength": 1 } },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [{
+    "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
+    "then": { "properties": { "review_track": { "enum": ["direction", "detail"] } } },
+    "else": { "properties": { "review_track": { "type": "null" } } }
+  }, {
+    "if": { "properties": { "verdict": { "const": "pass" } }, "required": ["verdict"] },
+    "then": {
+      "properties": {
+        "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/resultFinding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } },
+        "provider_results": { "type": "array", "items": { "type": "object", "properties": { "output": { "type": "object", "properties": { "verdict": { "const": "pass" }, "findings": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/finding" }, { "type": "object", "properties": { "severity": { "const": "minor" } } }] } } } } } } }
+      }
+    },
+    "else": { "properties": { "findings": { "type": "array", "minItems": 1 } } }
+  }],
+  "additionalProperties": false
+}

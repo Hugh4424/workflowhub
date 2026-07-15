@@ -1,6 +1,10 @@
 # ADR 0002 — V4 审查异常状态矩阵
 
-**状态**：已采纳（2026-07-13）
+**状态**：已取代（2026-07-15）。当前生产设计见
+`docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-design.md`。
+
+> 本 ADR 仅保留历史背景。TTL、delta
+> mismatch、projection pending 不再要求 reset/recover；失败 attempt 不控制下一次运行。
 
 ## 决策
 

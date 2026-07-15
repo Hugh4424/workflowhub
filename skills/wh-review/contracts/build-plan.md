@@ -1,70 +1,26 @@
 # Build Plan 审查合同
 
-本合同只检查 `review-packet.v1`。finding 必须引用 packet 内 artifact anchor 或 host-verified fact；合同外 finding 最高为 `minor`。
+provider 只能审查冻结材料，不得访问真实仓库、运行 Git 或读取宿主绝对路径。
 
-## Reviewer role
+## 必需材料
 
-审查计划能否独立执行、验证并消费已批准规格；不得把 packet 外工程偏好升级为阻断。
+- `review-instructions.md`：stage、审查问题和输出格式。
+- 已批准 spec 和验收标准。
+- 待审 plan，至少包含 phase、任务、依赖和验证方式。
+- `source.json`、`changes.diff`、changed-files 清单和所有未删除变更文件的当前内容。
+- 与本次审查有关的 reviewer 技能文件。
+- `manifest.json`：列出 provider 可见的每个文件及其 byte size、SHA-256，并据此计算 `material_id`。
 
-## Must Read
+缺少任一必需材料时，本次 attempt 返回 `unavailable`。补齐后直接重跑，不创建或修复永久 flow。可选材料不存在时，`review-instructions.md` 必须说明未提供及原因。
 
-1. `contracts/provider-protocol.md`
-2. `contracts/build-plan.md`
-3. `schemas/reviewer-output.schema.json`
-4. `review-packet.v1.json`
-5. `changes.diff`
-6. {{StageSkillPlan skill bundle}}
+## 审查重点
 
-## Required materials
+- 每项需求是否落到具体任务和可判断的验证。
+- phase、依赖和生产者/消费者顺序是否可执行。
+- 接口、状态、失败路径、并发和回退是否遗漏。
+- 验证是否能在行为错误时失败，而不是只检查文件存在。
+- 是否引入 spec 未要求的抽象、兼容层或范围。
 
-`planning_artifacts`、`acceptance_design_excerpt`、`host_verified_facts`、`changed_files`。
+## 输出
 
-## Required skills
-
-`spec-analyze`、`plan-eng-review`、`review`。
-
-## Stage output
-
-输出必须符合 `schemas/reviewer-output.schema.json`，并给出完整 checklist、pass_items、finding 和所需 lens 的 skillResults。host 负责绑定 hash。
-
-## Checklist IDs
-
-- C1: Traceability：每项需求都有计划项、范围说明与可判定验证证据。
-- C2: Executability：阶段粒度、依赖顺序、接口边界、失败模式与回退假设可执行。
-- C3: Verification：验证设计能证明行为，不依赖空洞或不可判定的声明。
-
-必需 lens：`spec-analyze` 检查 packet 内规划材料的一致性；`plan-eng-review` 检查工程顺序与风险；`review` 独立检查范围漂移和遗漏。
-
-## Plan quality questions
-
-- 需求消费：每项需求是否落到具体计划项、改动范围、消费者或调用点，并给出行为级验证。
-- 顺序与边界：阶段依赖是否按生产者先于消费者排列，接口、数据和状态所有权是否明确。
-- 失败路径：错误、部分完成、并发、回滚或恢复路径是否在相关阶段被实现和验证。
-- 验证真实性：验证命令必须对当前仓库与计划产物真实可执行，能在行为错误时失败；占位命令、只查文件存在或不可证伪声明无效。
-- 最小实现：计划不得引入规格未要求的兼容层、抽象或平台耦合；影响面内已有消费者不得遗漏。
-
-## Hard invariants
-
-- H1: 每项需求必须有计划项、范围与可判定验证证据。
-- H2: 依赖顺序不得倒置或循环，阶段必须可独立执行。
-- H3: 关键失败模式、接口边界与影响消费点不得遗漏。
-
-违反任一 hard invariant 必须产生 `blocking` finding，并用对应 H ID 作为 `rule_id`。
-
-## Pass items
-
-每个通过的 C ID 和 H ID 都必须有一条 `pass_items`，`rule_id` 精确等于该 ID，并提供 packet 内 `artifact_anchor` 与具体 `evidence`。空泛“已检查”不算通过。
-
-## Continuation closure
-
-后续轮只审 `PreviousFindings`、`ClosureEvidence`、`DeltaManifest`、`AffectedMaterials`、`CurrentMaterialManifest`、`CrossStageCarryovers`、`RequiredSkillLensHashes` 与 `OutputRequirements`。每个上轮 finding 必须由同 ID 的 `closure_evidence` 关闭或保持原严重度；不得重审未变材料。
-
-`blocking_streak >= 2` 的 blocking finding 不接受自由文本关闭：`closure_bundle` 必须给出根因、扫描范围、反例矩阵、checklist、repo-relative anchors 及其当前文件 hash，并精确回显当前 delta hash；不足或不匹配时保持 open，`escalate_to_human`，不得发布 pass。
-
-## 分类
-
-先关闭上轮 blocking；新 blocking 必须由本轮材料引入，或由冻结的结构化 host fact 证明前轮不可能发现；没有该 fact 时不得仅凭 provider 叙述使用后一条件。否则标 `late_finding:true` 且最高 `minor`。
-
-blocking：需求到计划到验证链路断裂、阶段不可独立执行、依赖倒置或循环、验证不可判定、影响范围漏项、关键失败模式遗漏、治理或 UI 范围缺可验收描述。
-
-非阻断：计划表述、排序建议、非关键风险说明。
+输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

@@ -1,6 +1,11 @@
 # ADR 0001 — V4 审查层：workflowhub 编排与通用 broker 分层
 
-**状态**：已采纳（2026-07-13）
+**状态**：已取代（2026-07-15）。当前生产设计见
+`docs/superpowers/specs/2026-07-15-wh-review-simple-reliable-design.md`。
+
+> 本 ADR 仅保留历史背景。runtime、
+> session、flow、reset、private receipt 和 public projection 不再作为 WorkflowHub
+> 正确性链；异源 provider、冻结完整材料、transport/semantic 分离仍保留。
 
 ## 背景
 

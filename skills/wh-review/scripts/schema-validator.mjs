@@ -2,11 +2,8 @@ import { readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020.js";
 
 const SCHEMAS = {
-  "review-packet": "review-packet.schema.json",
-  "review-intent": "review-intent.schema.json",
-  "reviewer-output": "reviewer-output.schema.json",
-  dispositions: "dispositions.schema.json",
-  "round-run-result": "round-run-result.schema.json",
+  attempt: "attempt.schema.json",
+  result: "result.schema.json",
 };
 
 // Conditional `required` clauses intentionally target properties declared at

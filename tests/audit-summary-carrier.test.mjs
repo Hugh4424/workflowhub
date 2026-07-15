@@ -10,11 +10,12 @@ function summary(verdict = 'pass') {
   return { ...value, summary_hash: hashAuditSummary(value) };
 }
 function result(stage, facts) {
-  const stageFacts = stage === 'make-decision' ? { decision: 'go', scope: 'small', decision_log_path: 'decision.md', flow_profile: 'full_vibecoding' }
-    : stage === 'build-spec' ? { spec_ref: 'spec.md', requirements: ['R1'] }
-    : stage === 'build-plan' ? { plan_ref: 'plan.md', tasks: ['P1'] }
-    : stage === 'build-code' ? { changed: ['a.mjs'], tests: { command: 'npm test' }, review: { core_receipt_hash: 'a'.repeat(64), semantic_verdict: 'pass', needs_human: false }, worktree_root: '/tmp/worktree', task_tracking_root: '/tmp/task', phase_completion: { phase_records: [{ phase_id: 'P1', changed: false }] } }
-    : { verdict: 'pass', evidence_ref: 'test/report.md' };
+  const review = { result_ref: `reviews/results/${stage}.json`, snapshot_tree: 'a'.repeat(40) };
+  const stageFacts = stage === 'make-decision' ? { decision: 'go', scope: 'small', decision_log_path: 'decision.md', flow_profile: 'full_vibecoding', reviews: { direction: review, detail: review } }
+    : stage === 'build-spec' ? { spec_ref: 'spec.md', requirements: ['R1'], review }
+    : stage === 'build-plan' ? { plan_ref: 'plan.md', tasks: ['P1'], review }
+    : stage === 'build-code' ? { changed: ['a.mjs'], tests: { command: 'npm test' }, review, worktree_root: '/tmp/worktree', task_tracking_root: '/tmp/task', phase_completion: { phase_records: [{ phase_id: 'P1', changed: false }] } }
+    : { verdict: 'pass', evidence_ref: 'test/report.md', review };
   return { status: 'success', error_code: '', retryable: false, facts: { ...stageFacts, ...facts }, missing_items: [], user_decision: false, reason: 'ok' };
 }
 
