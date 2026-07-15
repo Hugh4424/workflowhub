@@ -11,7 +11,7 @@ import { projectPublicReviewCore } from "./public-review-projection.mjs";
 import { SchemaValidationError, validateSchema } from "./schema-validator.mjs";
 import { reconcileFindingState, aggregateMakeDecisionTracks, isBlocking, mergeCrossStageCarryovers, validateClosureBundle } from "./finding-state.mjs";
 import { canonicalPacketJson as canonical, reviewManifestHash, reviewPacketHash } from "./review-packet-integrity.mjs";
-import { buildTreeMaterial, captureWorktreeTree, capturedHead, deleteReviewTreeRef, headTree, readReviewTreeRef, updateReviewTreeRef } from "./source-tree.mjs";
+import { buildTreeMaterial, captureWorktreeTree, capturedHead, deleteReviewTreeRef, headTree, readReviewTreeRef, trustedBase, updateReviewTreeRef } from "./source-tree.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const safeJson = (value) => JSON.stringify(value, null, 2) + "\n";
@@ -61,25 +61,11 @@ function registeredHostRoots(values) {
   }
   return [...roots].sort((left, right) => right.length - left.length || left.localeCompare(right));
 }
-function httpRanges(text) {
-  const ranges = [];
-  for (const match of text.matchAll(/https?:\/\/[^\s<>"'`]+/giu)) ranges.push([match.index, match.index + match[0].length]);
-  return ranges;
-}
-const allowedAbsoluteExamples = ["/Users/example/", "/home/example/", "/path/to/", "/absolute/path"];
-function allowedAbsolutePath(text, start, end) {
-  const value = text.slice(start, end);
-  if (value === "/dev/null") return true;
-  return allowedAbsoluteExamples.some((prefix) => {
-    const base = prefix.replace(/\/$/u, "");
-    return value === base || value.startsWith(`${base}/`);
-  });
-}
 function hostRootFindings(sources, roots) {
   const findings = [];
   for (const { destination, bytes } of sources) {
     const text = Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes);
-    const urls = httpRanges(text); const matched = [];
+    const matched = [];
     const add = (start, end) => { if (!matched.some(([left, right]) => start < right && end > left)) matched.push([start, end]); };
     // Registered host roots are always sensitive, including when copied into
     // an otherwise valid HTTP(S) URL.
@@ -92,25 +78,33 @@ function hostRootFindings(sources, roots) {
         offset = end;
       }
     }
-    const scan = (pattern, { skipHttp = false, path = false } = {}) => {
+    const scan = (pattern) => {
       for (const match of text.matchAll(pattern)) {
         const value = match[1] ?? match[0]; const relativeOffset = match[0].indexOf(value); const start = match.index + relativeOffset; const end = start + value.length;
-        if (skipHttp && urls.some(([left, right]) => start >= left && start < right)) continue;
-        if (path && allowedAbsolutePath(text, start, end)) continue;
         add(start, end);
       }
     };
-    scan(/\b(?!https?:)[a-z][a-z0-9+.-]*:(?:\/{1,3}|\\{1,2})[^\s<>"'`]+/giu);
-    scan(/\b[A-Za-z]:[\\/][^\s<>"'`]+/gu);
-    scan(/(?:^|[\s<>"'`(=\[])(\\\\[^\\\s]+\\[^\s<>"'`]+|\/\/[^/\s]+\/[^\s<>"'`]+)/gmu, { skipHttp: true });
-    scan(/(?:^|[\s<>"'`(=\[])(\/{1,3}(?:[A-Za-z0-9._~+%-]+\/)*[A-Za-z0-9._~+%-]+)/gmu, { skipHttp: true, path: true });
-    // Unified diff prefixes are transport syntax, not part of the source
-    // line. Scan the source value after that one-character boundary too.
-    scan(/^[+ -](\/{1,3}[^\s]*)/gmu, { skipHttp: true, path: true });
-    scan(/:\s*"(\/)"/gu, { path: true });
+    // Generic POSIX-looking tokens are common source syntax: regex literals,
+    // comments, shebangs, and adversarial fixtures. Only registered host roots
+    // and unambiguously non-portable URI/Windows/UNC forms are sensitive.
+    if (destination !== "changes.diff") {
+      scan(/\b(?!https?:)[a-z][a-z0-9+.-]*:(?:\/{1,3}|\\{1,2})[^\s<>"'`]+/giu);
+      scan(/\b[A-Za-z]:[\\/][^\s<>"'`]+/gu);
+    }
     if (matched.length) findings.push({ file: destination, matches: matched.length });
   }
   return findings;
+}
+function verifyCodeEvidenceError(packet) {
+  if (packet.stage !== "verify-code") return null;
+  const authoritative = [...new Set(String(packet.acceptance_design_excerpt ?? "").match(/\bAC-\d+\b/gu) ?? [])].sort();
+  const supplied = Array.isArray(packet.acceptance_evidence) ? packet.acceptance_evidence.map((item) => item?.ac_id).filter(Boolean) : [];
+  if (authoritative.length === 0) return "verify-code authoritative AC list is missing";
+  if (new Set(supplied).size !== supplied.length) return "verify-code acceptance evidence contains duplicate AC ids";
+  const missing = authoritative.filter((id) => !supplied.includes(id));
+  const unknown = supplied.filter((id) => !authoritative.includes(id));
+  if (missing.length || unknown.length) return `verify-code acceptance evidence does not exactly cover authoritative ACs (missing=${missing.join(",") || "none"}; unknown=${unknown.join(",") || "none"})`;
+  return null;
 }
 function addedDeltaLineKeys(unifiedDiff) {
   const keys = new Set();
@@ -275,7 +269,7 @@ function checkedCarryovers(value, previousFindings, { taskTrackingRoot, taskId, 
 }
 
 export class ReviewRoundFacade {
-  constructor({ taskTrackingRoot, sourceRoot = taskTrackingRoot, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
+  constructor({ taskTrackingRoot, sourceRoot = taskTrackingRoot, trustedBaseCommit = null, trustedBaseTree = null, trustedBaseSource = null, broker, skillsRoot, now = () => Date.now(), continuationPromptMaxBytes = 524288, initialPromptMaxBytes = 524288, maxDispositionAttempts = 3, requiredSkillResolver = resolveRequiredSkills, faultInjector = () => {} } = {}) {
     if (!taskTrackingRoot) throw new TypeError("taskTrackingRoot is required"); if (!broker?.run) throw new TypeError("broker.run is required");
     if (!Number.isSafeInteger(continuationPromptMaxBytes) || continuationPromptMaxBytes < 1) throw new TypeError("continuationPromptMaxBytes must be a positive integer");
     if (!Number.isSafeInteger(initialPromptMaxBytes) || initialPromptMaxBytes < 1) throw new TypeError("initialPromptMaxBytes must be a positive integer");
@@ -283,6 +277,7 @@ export class ReviewRoundFacade {
     if (typeof requiredSkillResolver !== "function") throw new TypeError("requiredSkillResolver must be a function");
     if (typeof faultInjector !== "function") throw new TypeError("faultInjector must be a function");
     this.taskTrackingRoot = resolve(taskTrackingRoot); this.sourceRoot = resolve(sourceRoot); this.broker = broker; this.skillsRoot = resolve(skillsRoot ?? repositoryRoot); this.now = now;
+    this.trustedBase = trustedBaseCommit === null ? null : { ...trustedBase(this.sourceRoot, trustedBaseCommit, trustedBaseTree), source: trustedBaseSource ?? "worktree_creation" };
     this.sensitiveHostRoots = registeredHostRoots([taskTrackingRoot, sourceRoot, skillsRoot ?? repositoryRoot]);
     this.continuationPromptMaxBytes = continuationPromptMaxBytes; this.initialPromptMaxBytes = initialPromptMaxBytes; this.maxDispositionAttempts = maxDispositionAttempts; this.requiredSkillResolver = requiredSkillResolver; this.faultInjector = faultInjector;
   }
@@ -293,12 +288,17 @@ export class ReviewRoundFacade {
   #readSourceContext(taskId) {
     const path = this.#sourceContext(taskId); if (!existsSync(path)) return null;
     let context; try { context = JSON.parse(readFileSync(path, "utf8")); } catch { throw new Error("task source context is invalid"); }
-    if (!(context?.version === 1 && /^[a-f0-9]{40,64}$/.test(context.initial_tree ?? "") && (context.last_approved_tree === null || /^[a-f0-9]{40,64}$/.test(context.last_approved_tree ?? "")))) throw new Error("task source context is invalid");
+    const legacy = context?.version === 1 && /^[a-f0-9]{40,64}$/.test(context.initial_tree ?? "");
+    const current = context?.version === 2 && /^[a-f0-9]{40}$/.test(context.trusted_base_commit ?? "") && /^[a-f0-9]{40,64}$/.test(context.trusted_base_tree ?? "") && context.initial_tree === context.trusted_base_tree;
+    if (!(legacy || current) || (context.last_approved_tree !== null && !/^[a-f0-9]{40,64}$/.test(context.last_approved_tree ?? ""))) throw new Error("task source context is invalid");
+    if (this.trustedBase && (!current || context.trusted_base_commit !== this.trustedBase.commit || context.trusted_base_tree !== this.trustedBase.tree)) throw new Error("task source context conflicts with immutable trusted base");
     return context;
   }
   #recordInitialTree(taskId, initialTree) {
     const existing = this.#readSourceContext(taskId); if (existing) return existing;
-    const context = { version: 1, initial_tree: initialTree, last_approved_tree: null };
+    const context = this.trustedBase
+      ? { version: 2, trusted_base_commit: this.trustedBase.commit, trusted_base_tree: this.trustedBase.tree, trusted_base_source: this.trustedBase.source, initial_tree: this.trustedBase.tree, last_approved_tree: null }
+      : { version: 1, initial_tree: initialTree, last_approved_tree: null };
     this.faultInjector("before-source-context-write", context); atomic(this.#sourceContext(taskId), safeJson(context)); return context;
   }
   #recordLastApprovedTree(taskId, tree) {
@@ -500,7 +500,8 @@ export class ReviewRoundFacade {
     let initialHostSource = null;
     if (input.continuation !== true) {
       const sourceContext = this.#readSourceContext(input.task_id);
-      initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: sourceContext?.last_approved_tree ?? headTree(this.sourceRoot), excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
+      const initialBase = sourceContext?.last_approved_tree ?? sourceContext?.trusted_base_tree ?? this.trustedBase?.tree ?? headTree(this.sourceRoot);
+      initialHostSource = buildHostWorktreeSource(this.sourceRoot, { baseTree: initialBase, excludePaths: internalLedgerExclusion(this.sourceRoot, this.taskTrackingRoot, input.task_id) });
       this.#recordInitialTree(input.task_id, initialHostSource.source_revision.base_tree);
     }
     if (!this.broker.discoverCapabilities) throw new Error("broker capability discovery is required");
@@ -508,7 +509,11 @@ export class ReviewRoundFacade {
     const capabilitySnapshotHash = sha(canonical(capabilitySnapshot));
     const reviewTrack = input.review_track ?? null;
     const resolution = this.requiredSkillResolver({ stage: input.stage, reviewTrack, ui: Boolean(input.ui) });
-    const doctorCandidates = capabilitySnapshot.providers.filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode)).map((item) => item.provider);
+    const doctorReady = capabilitySnapshot.providers
+      .map((item, index) => ({ ...item, effectiveTier: item.tier ?? index }))
+      .filter((item) => item.status === "ready" && item.provider !== input.host_provider && item.capabilities.attachment_delivery.includes(resolution.deliveryMode));
+    const firstReadyTier = doctorReady.length > 0 ? Math.min(...doctorReady.map((item) => item.effectiveTier)) : null;
+    const doctorCandidates = doctorReady.filter((item) => item.effectiveTier === firstReadyTier).map((item) => item.provider);
     let prior = this.#readFlow(input); const continuation = input.continuation === true; let closureBundleGates = [];
     if (prior) prior = this.#recoverPendingReceiptBinding(input, prior);
     if (continuation && (!prior?.initial_runtime_id || !prior.continuation_eligible)) throw new Error("blocked_by_human_confirmation: flow cannot continue; use reset with human approval");
@@ -517,12 +522,20 @@ export class ReviewRoundFacade {
       || ((prior.continuation_sequence ?? 0) === 0 ? prior.last_delivery_manifest_hash !== null : !/^[a-f0-9]{64}$/.test(prior.last_delivery_manifest_hash ?? "")))) throw new Error("blocked_by_human_confirmation: verified initial provider delivery is missing; use reset with human approval");
     if (!continuation && prior?.initial_runtime_id) throw new Error("blocked_by_human_confirmation: an initial runtime already exists; use reset with human approval");
     const readyDeliveryProviders = new Set(doctorCandidates);
-    const candidateProviders = continuation ? (prior.continuable_providers ?? []).filter((provider) => readyDeliveryProviders.has(provider)) : doctorCandidates.slice(0, 1);
+    const candidateProviders = continuation ? (prior.continuable_providers ?? []).filter((provider) => readyDeliveryProviders.has(provider)) : doctorCandidates;
     const continuableProviders = continuation ? [...candidateProviders] : [];
     if (continuation && (!prior.initial_provider_sessions || typeof prior.initial_provider_sessions !== "object" || continuableProviders.some((provider) => typeof prior.initial_provider_sessions[provider] !== "string" || !prior.initial_provider_sessions[provider]))) throw new Error("blocked_by_human_confirmation: initial provider sessions are missing; use reset with human approval");
     const packet = structuredClone(input.packet);
     if (packet?.stage !== input.stage || packet?.review_track !== reviewTrack) return this.#materialIncomplete(input, "packet stage or review_track does not match review intent");
     const stageContract = projectStageContract(input.stage, reviewTrack);
+    // Seal the host-resolved stage plan boundary into the provider-visible
+    // packet. Providers can now attest each lens against its own bundle and
+    // the complete object set without reading host-only configuration.
+    packet.review_lenses = resolution.definitions.map(({ name, bundle }) => ({
+      skill: name,
+      bundle_hash: bundle.sha256,
+      checked_objects: [...resolution.checkedObjects],
+    }));
     const { contractHash } = stageContract;
     if (packet.contract_hash !== contractHash) {
       if (continuation) throw new Error("blocked_by_human_confirmation: frozen contract changed; use reset with human approval");
@@ -533,6 +546,8 @@ export class ReviewRoundFacade {
       if (continuation) throw new Error("blocked_by_human_confirmation: frozen skill bundle changed; use reset with human approval");
       return this.#materialIncomplete(input, "skill bundle hash mismatch");
     }
+    const evidenceError = verifyCodeEvidenceError(packet);
+    if (evidenceError) return this.#materialIncomplete(input, evidenceError);
     let priorPacket = null; let priorReceipt = null; let delta = null;
     if (continuation) {
       if (!prior.baseline_packet_hash || !prior.baseline_packet_ref || !prior.baseline_packet_file_sha256 || !prior.previous_packet_ref || !prior.previous_packet_file_sha256 || !prior.previous_receipt_ref || !prior.previous_receipt_sha256) throw new Error("blocked_by_human_confirmation: frozen baseline packet or previous private receipt is missing; use reset with human approval");

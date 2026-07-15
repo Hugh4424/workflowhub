@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "skill": "spec-plan",
+  "files": [
+    { "path": "SKILL.md", "sha256": "d5a30ad58ba19d62f970c41784bbf585df31837baa8f9ffcabb242eff2e2881a" },
+    { "path": "templates/plan-template.md", "sha256": "05db1836a3e5a5cdb36af80b55a2ea92bbd928b038446fe858dbe4261cc0682d" }
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/github/spec-kit",
+      "commit": "b7e67f55bf7a937aaa57dbe0a8198774e285de3a",
+      "path": "templates/commands/plan.md",
+      "license": "MIT"
+    },
+    {
+      "url": "https://github.com/obra/superpowers",
+      "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "path": "skills/writing-plans/SKILL.md",
+      "license": "MIT"
+    }
+  ]
+}

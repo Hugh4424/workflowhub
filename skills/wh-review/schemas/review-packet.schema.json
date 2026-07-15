@@ -49,10 +49,61 @@
     "raw_requirement": { "type": "string" },
     "decision_log_excerpt": { "type": "string" },
     "acceptance_design_excerpt": { "type": "string" },
+    "acceptance_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ac_id", "status", "evidence"],
+        "properties": {
+          "ac_id": { "type": "string", "pattern": "^AC-[0-9]+$" },
+          "status": { "enum": ["covered", "partial", "not_covered"] },
+          "evidence": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["kind", "name", "result", "object"],
+              "properties": {
+                "kind": { "enum": ["test", "code", "trace", "report"] },
+                "name": { "type": "string", "minLength": 1 },
+                "result": { "type": "string", "minLength": 1 },
+                "object": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "planning_artifacts": { "type": "array" },
-    "verification_closure": { "type": "array" },
+    "verification_closure": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["subject", "state", "evidence"],
+        "properties": {
+          "subject": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["closed", "open", "accepted_exception"] },
+          "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        },
+        "additionalProperties": true
+      }
+    },
     "test_evidence": { "type": "array" },
     "host_verified_facts": { "type": "array" },
+    "review_lenses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["skill", "bundle_hash", "checked_objects"],
+        "properties": {
+          "skill": { "type": "string", "minLength": 1 },
+          "bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "checked_objects": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        },
+        "additionalProperties": false
+      }
+    },
     "contract_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "skill_bundle_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "redactions_applied": {
@@ -94,7 +145,7 @@
     },
     {
       "if": { "properties": { "stage": { "const": "make-decision" }, "review_track": { "const": "direction" } }, "required": ["stage", "review_track"] },
-      "then": { "not": { "anyOf": [{ "required": ["decision_log_excerpt"] }, { "required": ["acceptance_design_excerpt"] }, { "required": ["planning_artifacts"] }, { "required": ["verification_closure"] }, { "required": ["test_evidence"] }] } }
+      "then": { "not": { "anyOf": [{ "required": ["decision_log_excerpt"] }, { "required": ["acceptance_design_excerpt"] }, { "required": ["acceptance_evidence"] }, { "required": ["planning_artifacts"] }, { "required": ["verification_closure"] }, { "required": ["test_evidence"] }] } }
     },
     {
       "if": { "properties": { "stage": { "const": "make-decision" }, "review_track": { "const": "detail" } }, "required": ["stage", "review_track"] },
@@ -114,7 +165,14 @@
     },
     {
       "if": { "properties": { "stage": { "const": "verify-code" } }, "required": ["stage"] },
-      "then": { "required": ["acceptance_design_excerpt", "verification_closure", "test_evidence"] }
+      "then": {
+        "required": ["acceptance_design_excerpt", "acceptance_evidence", "verification_closure", "test_evidence", "review_lenses"],
+        "properties": {
+          "acceptance_evidence": { "type": "array", "minItems": 1 },
+          "verification_closure": { "type": "array", "minItems": 1 },
+          "review_lenses": { "type": "array", "minItems": 1 }
+        }
+      }
     }
   ],
   "additionalProperties": false

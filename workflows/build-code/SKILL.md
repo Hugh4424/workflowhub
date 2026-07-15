@@ -2,6 +2,7 @@
 name: build-code
 description: Implement each task phase by phase using TDD, collecting RED and GREEN evidence, then running one V4 packet review per phase.
 ---
+<!-- markdownlint-disable MD029 MD040 -->
 
 # build-code
 
@@ -14,20 +15,35 @@ Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, 
 `steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "build-code"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
 
 ### Step 1 — read-plan
+
 Load the approved plan.
+
 ### Step 2 — write-red-tests
+
 Write a failing test.
+
 ### Step 3 — implement-change
+
 Implement the minimal scoped change.
+
 ### Step 4 — run-green-tests
+
 Run and capture passing tests.
+
 ### Step 5 — scan-diff
+
 Scan the implementation diff.
+
 ### Step 6 — review-change
+
 Obtain independent code review evidence.
+
 ### Step 7 — commit-implementation
+
 Record the implementation commit.
+
 ### Step 8 — publish-code-result
+
 Persist the build-code handoff.
 
 ## Legacy reference
@@ -37,6 +53,12 @@ Persist the build-code handoff.
 Implement the change described by the upstream stage-result. The upstream may be `build-plan` (full path) or `make-decision` directly (slim path — small tasks that skip design and planning). Read the upstream `stage-result` first and consume its `facts` keys to understand scope and constraints.
 
 Each phase follows a strict RED → implement → GREEN cycle. No phase is done without both evidence files. After GREEN, `ReviewRoundFacade` records the V4 result in `facts.review`.
+
+## Local skill resolution and capability boundary
+
+调用方必须显式传入 `workflowhub_package_root`。本 stage 只读取同目录 `skill-deps.yaml`，将技能 realpath 限制在 `${workflowhub_package_root}/skills/`，并通过 `{name,resolved_skill_path,resolved_bundle_paths,bundle_hash,source_manifest,package_root}` payload 调用。禁止只传名称、HOME/cwd fallback、全局同名覆盖或远程 prompt。
+
+本 stage 的本地技能为 `wh-review`，条件技能为 `test-routing-advisor`、`diagnosing-bugs`、`review-response`。Node、git、shell、目标项目测试命令、宿主原生 subagent 与 review provider/凭据是 runtime/external capability，不是 skill。非简单 phase 需要独立上下文；宿主不支持时 fail loud 并转人工，禁止静默 inline。测试异常、实现异常、finding 根因未知或重复修复失败时必须调用 `diagnosing-bugs`；`revise_required` 时必须调用 `review-response` 后沿同一 review continuation 重审。
 
 ## What to do
 
@@ -95,7 +117,7 @@ Inspect the `anomaly_flags` array in each evidence file for any of:
 - `suspicious_green_exit` — GREEN exited non-zero (tests should have passed)
 - `green_test_files_empty` — no test files were discovered in the GREEN run
 
-When any of these conditions hold, surface a **non-blocking warning** to the user. Do not halt the phase; record the warning in the phase notes. A false-green does not automatically invalidate the phase, but must be acknowledged.
+When any of these conditions hold, mark the phase evidence invalid and never claim the tests passed. Record the exact anomaly, dispatch the repo-local `skills/diagnosing-bugs/SKILL.md` through the resolved-path payload, and recapture after diagnosis. Send the invalid evidence and diagnosis to `wh-review`; whether the phase advances is decided by the existing review/human flow, not by the test exit code itself.
 
 ### 4. diff-only 越界检测
 
@@ -113,18 +135,13 @@ This checks the current `git diff` against the C2 bounded-change list defined in
 
 ### 5. worktree 路径可配置
 
-The skill accepts a caller-provided `worktree_root` config key that specifies the absolute path to the implementation worktree. Never hardcode a path. Never resolve upward to the host agenthub repo directory — the worktree is always the provided `worktree_root` and all file operations are scoped to it. This is enforced by FR-WT-001.
+The skill accepts a caller-provided `worktree_root` config key that specifies the absolute path to the implementation worktree. Never hardcode a path. Never resolve upward to the workflowhub tooling checkout — the worktree is always the provided `worktree_root` and all file operations are scoped to it. This is enforced by FR-WT-001.
 
 If `worktree_root` is absent from the caller config, fail fast with a clear error rather than guessing.
 
 ### 6. 子任务派发后端
 
-Use the available dispatch backend to run implementation work outside the main coordinator context. The dispatch backend is an implementation detail — do not inline its logic.
-
-Preferred backends:
-
-- In issue-tracker mode: create phase child tasks under the current build-code task and assign them to implementation agents.
-- Outside issue-tracker mode: use Worker-Mode as the fallback dispatch backend (external semver dependency — version-pin it in the skill config).
+Use the host's native subagent/independent-context capability to run implementation work outside the main coordinator context. This is an external capability declared by the stage manifest, not a skill and not a package dependency. It is the only dispatch route. When the required host capability is unavailable, fail loud and escalate to human; do not inline a non-trivial phase.
 
 When dispatching implementation work, regardless of backend:
 
@@ -221,9 +238,8 @@ This log is a traceability record, not a blocking gate. Classification failures 
 
 After **all** implementation phases have GREEN evidence, trigger an L2 integration smoke step before writing the final stage-result.
 
-1. Dispatch the agenthub `test-routing-advisor` skill as an independent subagent in its own context.
-   - Cross-repo lock: `https://github.com/Hugh4424/AgentHub.git` at commit `f59b4b471df3522fcf46ec4f01c78874c90ded3c`, path `packages/core/agenthub/skills/test-routing-advisor/SKILL.md`.
-   - Pass the task context (changed files, phase count, test command) so the advisor can select a tier.
+1. 使用 stage manifest 解析出的本地 `skills/test-routing-advisor/SKILL.md` 与 bundle，在独立上下文调用，并传完整 resolved-path payload。
+   - 输入固定为 changed files、phase count、test command；不加载 backend/frontend/full-chain 执行器。
 2. The advisor selects one of three routing tiers: `simple`, `feature`, or `fullstack`.
 3. Persist the report to `{taskDir}/{task-id}/evidence/l2-integration-test-report.json` with exactly these fields:
    - `routing_tier`: one of `simple|feature|fullstack`
@@ -240,10 +256,7 @@ results; it never synthesizes a pass or substitutes a local reviewer.
 
 ### 14. Revision handling (FR-REVIEW-002)
 
-Use the facade's merged findings and human gates. A `revise_required` result returns
-to implementation with the same flow's continuation runtime; an escalation is published
-as a private receipt and requires explicit human confirmation. No local retry classifier
-or parallel review path exists.
+Use the facade's merged findings and human gates. A `revise_required` result first invokes local `skills/review-response/SKILL.md` with the full resolved-path payload. For every finding: restate it, verify the fact, group by root cause, scan equivalent callers, make the minimum fix, add targeted evidence, then return through the same flow's continuation runtime. If the finding's root cause is unknown or the same class fails repeatedly, invoke local `skills/diagnosing-bugs/SKILL.md` and persist `root_cause`, `hypothesis`, `evidence_ref`, `fix_scope`, and `verification_ref`. Three failed independent hypotheses stop the patch loop and escalate to architecture review or a human. An escalation is published as a private receipt and requires explicit human confirmation. No local retry classifier or parallel review path exists.
 
 ### 15. phase 完成留痕
 
@@ -302,17 +315,19 @@ Before starting implementation, locate the worktree descriptor at `taskRecords.w
 **Missing file — fail-loud (FR-WORKTREE-FAILLOUD-007):**
 
 2. **File does not exist** → do **not** create a worktree. Output a clear error to stderr:
+
    ```
    ERROR [FR-WORKTREE-001]: worktree.json not found at expected path: {taskDir}/{task-id}/worktree.json
    make-decision stage must complete successfully before build-code can proceed.
    ```
+
    Trigger `escalate_to_human`, stop build-code progression immediately, and record the missing path in `missing_items`. Do **not** silently fall back to creating a new worktree.
 
 **Exception paths:**
 
 3. **Corrupted file:** If `worktree.json` cannot be parsed as JSON, or if `worktree_root` is missing / not a string / empty string / points to a non-existent path / is not a git worktree directory, do **not** read the corrupted content and do **not** guess a path. Trigger `escalate_to_human`, stop build-code progression, and record the corruption details in `missing_items`.
 
-The `worktree_root` config key passed to this skill (see §5) must always match the path recorded in `worktree.json`. Never resolve upward to the host agenthub repo directory.
+The `worktree_root` config key passed to this skill (see §5) must always match the path recorded in `worktree.json`. Never resolve upward to the workflowhub tooling checkout.
 
 **消费 6 字段前的 common 校验（全字段非空、绝对路径、值域）：** 读取 `worktree.json` 后，在消费 `target_repo_root`、`worktree_root`、`branch`、`created_by_stage`、`push_policy`、`status` 六字段之前，须先执行 common 校验：①全字段非空（六个字段均不得为空字符串或 `null`）；②路径字段（`target_repo_root`、`worktree_root`）须为绝对路径（以 `/` 开头）；③各字段值域校验（`status` ∈ `{active, cleaned}`；`push_policy` ∈ 预定义枚举；`created_by_stage` ∈ `{make-decision}`——本字段记录首次创建 worktree.json 的阶段，当前唯一合法值为 `make-decision`（R4/R5 规定 worktree 仅在 make-decision 阶段创建）；`branch` 须匹配 make-decision R3 定义的规范化分支正则 `^workflowhub/[a-z]+(-[a-z]+){1,2}$`）。任一项校验失败即触发 `escalate_to_human`，停止 build-code 推进，并在 `missing_items` 记录具体失败字段。**`status` 前置约束**：common 校验通过后，build-code 仅允许 `status="active"` 的任务继续推进；`status="cleaned"` 视为已归档任务重入，直接 `escalate_to_human`/fail-loud，停止 build-code 推进，不得复用陈旧 worktree.json 继续后续步骤（与 verify-code close 的 re-entry 约束保持一致）。
 
@@ -350,3 +365,7 @@ published return is `{ semantic_verdict, core_receipt_hash, needs_human }`; only
 advance this stage.
 
 ## End V4 Review Round
+
+## Workflow friction
+
+发现流程卡点立即追加到 `path.join(taskRoot, "friction.md")`：`[FRICTION] <stage>/<step>: <卡点> | impact: <影响> | suggestion: <建议或 none>`。将该文件路径写入 metrics/stage-result 的 `friction_ref`；无记录时为 `null`。只记录事实，不恢复外部 feedback skill，不因记录失败掩盖原始错误。

@@ -51,17 +51,18 @@ function materialPacket(stage, reviewTrack = null) {
     stage,
     review_track: reviewTrack,
     raw_requirement: "review this change",
-    acceptance_design_excerpt: "AC: marker is visible",
+    acceptance_design_excerpt: "AC-01: marker is visible",
     decision_log_excerpt: "decision",
     planning_artifacts: [],
-    verification_closure: [],
+    verification_closure: [{ subject: "AC-01", state: "closed", evidence: ["tests/wiring.test.mjs:AC-01 passed"] }],
+    acceptance_evidence: [{ ac_id: "AC-01", status: "covered", evidence: [{ kind: "test", name: "wiring fixture", result: "passed", object: "tests/wiring.test.mjs:AC-01" }] }],
     test_evidence: [{ name: "unit", status: "passed" }],
     host_verified_facts: [],
     contract_hash: sha(projectedContract(stage, reviewTrack)),
     skill_bundle_hash: bundleHash(stage, reviewTrack),
   };
   if (stage === "make-decision" && reviewTrack === "direction") {
-    delete result.decision_log_excerpt; delete result.acceptance_design_excerpt; delete result.planning_artifacts; delete result.verification_closure; delete result.test_evidence;
+    delete result.decision_log_excerpt; delete result.acceptance_design_excerpt; delete result.acceptance_evidence; delete result.planning_artifacts; delete result.verification_closure; delete result.test_evidence;
   }
   return result;
 }
@@ -83,7 +84,8 @@ function expectPrivateRawDirectory(path, taskRoot) {
   expect(path).not.toContain(join("reviews", "core-receipts"));
 }
 function reviewerOutput(packet) {
-  const skillResults = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track }).definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [packet.stage === "build-plan" ? "/Users/reviewer/private/skill.md#L10" : "review-packet.v1#packet_hash"], evidence: packet.stage === "build-plan" ? "plan.md#L10 was checked with Bearer skill-secret-token" : "review-packet.v1#packet_hash binds the inspected packet", conclusion: packet.stage === "build-plan" ? "behavior evidence 123e4567-e89b-12d3-a456-426614174000 is complete" : "the lens found no contract violation in the packet" }));
+  const resolution = resolveRequiredSkills({ stage: packet.stage, reviewTrack: packet.review_track });
+  const skillResults = resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [...resolution.checkedObjects], evidence: packet.stage === "build-plan" ? "plan.md#L10 was checked with Bearer skill-secret-token" : "review-packet.v1#packet_hash binds the inspected packet", conclusion: packet.stage === "build-plan" ? "behavior evidence 123e4567-e89b-12d3-a456-426614174000 is complete" : "the lens found no contract violation in the packet" }));
   const contract = projectedContract(packet.stage, packet.review_track);
   const ids = [...new Set(contract.match(/\b(?:(?:DIR|DET)-)?[CH]\d+\b/g) ?? ["contract"])];
   const checklist = ids.map((id) => ({ id, passed: true, evidence: `review-packet.v1#${id} has specific packet evidence` }));

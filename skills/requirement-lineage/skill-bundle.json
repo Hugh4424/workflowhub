@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "skill": "requirement-lineage",
+  "files": [
+    "SKILL.md",
+    "agents/openai.yaml"
+  ]
+}

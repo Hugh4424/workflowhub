@@ -57,6 +57,22 @@ describe("schema-validator", () => {
     expectSchemaError("review-packet", packet, "/source_revision/base");
   });
 
+  it("fails verify-code closed without direct AC evidence and non-empty closure", () => {
+    const packet = {
+      version: "review-packet.v1", round_kind: "initial", baseline_packet_hash: null,
+      stage: "verify-code", review_track: null, packet_hash: hash, manifest_hash: hash,
+      diff_sha256: hash, diff_ref: { attachment: "changes.diff", sha256: hash, size: 0 }, changed_files: [], raw_requirement: "x",
+      acceptance_design_excerpt: "AC-01: works", acceptance_evidence: [], verification_closure: [], test_evidence: [{ name: "unit", status: "passed" }], host_verified_facts: [],
+      review_lenses: [{ skill: "qa-only", bundle_hash: hash, checked_objects: ["review-packet.v1.json:test_evidence"] }],
+      contract_hash: hash, skill_bundle_hash: hash, source_revision: { base_tree: "b".repeat(40), snapshot_tree: "c".repeat(40), captured_head: "d".repeat(40) },
+    };
+    expectSchemaError("review-packet", packet, "/acceptance_evidence");
+    packet.acceptance_evidence = [{ ac_id: "AC-01", status: "covered", evidence: [{ kind: "test", name: "unit", result: "passed", object: "tests/unit.test.mjs:AC-01" }] }];
+    expectSchemaError("review-packet", packet, "/verification_closure");
+    packet.verification_closure = [{ subject: "AC-01", state: "closed", evidence: ["tests/unit.test.mjs:AC-01 passed"] }];
+    expect(validateSchema("review-packet", packet)).toBe(packet);
+  });
+
   it("rejects an invalid review track and unknown intent controls", () => {
     const intent = {
       task_id: "t", stage: "build-code", review_track: "direction", review_flow_id: "f", business_round: 1,

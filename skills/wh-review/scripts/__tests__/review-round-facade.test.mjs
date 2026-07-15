@@ -113,6 +113,10 @@ function stagePacket(root, stage) {
   value.skill_bundle_hash = resolution.skillBundleHash;
   value.decision_log_excerpt = "decision-log.md: scope is approved";
   value.planning_artifacts = [{ path: "plan.md", summary: "ordered implementation and verification" }];
+  if (stage === "verify-code") {
+    value.acceptance_evidence = [{ ac_id: "AC-01", status: "covered", evidence: [{ kind: "test", name: "unit", result: "passed", object: "tests/unit.test.mjs:AC-01" }] }];
+    value.verification_closure = [{ subject: "AC-01", state: "closed", evidence: ["tests/unit.test.mjs:AC-01 passed"] }];
+  }
   return refreshPacketHashes(value);
 }
 function uncommittedStagePacket(stage) {
@@ -122,11 +126,15 @@ function uncommittedStagePacket(stage) {
   value.skill_bundle_hash = resolution.skillBundleHash;
   value.decision_log_excerpt = "decision-log.md: scope is approved";
   value.planning_artifacts = [{ path: "plan.md", summary: "ordered implementation and verification" }];
+  if (stage === "verify-code") {
+    value.acceptance_evidence = [{ ac_id: "AC-01", status: "covered", evidence: [{ kind: "test", name: "unit", result: "passed", object: "tests/unit.test.mjs:AC-01" }] }];
+    value.verification_closure = [{ subject: "AC-01", state: "closed", evidence: ["tests/unit.test.mjs:AC-01 passed"] }];
+  }
   return value;
 }
 function stageOutput(input, stage, verdict = "pass") {
   const value = JSON.parse(output(input, verdict)); const resolution = resolveRequiredSkills({ stage, reviewTrack: null });
-  value.skillResults = resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" }));
+  value.skillResults = resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [...resolution.checkedObjects], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" }));
   return JSON.stringify(value);
 }
 function advancePacket(root, previous, content = "new\nline\nextra\nfixed\n") {
@@ -156,12 +164,26 @@ function makeDecisionOutput(input, reviewTrack, verdict = "pass") {
     findings: failed ? [{ file: "a", line: 1, rule_id: failed, severity: "blocking", issue: "selected decision violates the tested hard invariant", evidence: "unified_diff:a:1 shows the invariant breach", suggested_fix: "revise the decision to satisfy the hard invariant" }] : [],
     checklist: ids.map((id) => ({ id, passed: id !== failed, evidence: `unified_diff:a:1 provides concrete evidence for ${id}` })),
     pass_items: ids.filter((id) => id !== failed).map((rule_id) => ({ rule_id, artifact_anchor: `unified_diff:a:1#${rule_id}`, evidence: `unified_diff:a:1 demonstrates the required ${rule_id} behavior` })),
-    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["review-packet.v1.json:1"], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" })),
+    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [...resolution.checkedObjects], evidence: "review-packet.v1.json:1 supplies the required lens evidence", conclusion: "the review lens found concrete packet evidence" })),
     ...(failed ? { rootCause: "the selected decision conflicts with a hard invariant", fixApproach: "change the decision before the next review round" } : {}),
   });
 }
 
 describe("ReviewRoundFacade", () => {
+  it("pins the immutable trusted base across committed and uncommitted task changes", async () => {
+    const source = root(); const tracking = mkdtempSync(join(tmpdir(), "wh-review-tracking-")); roots.push(tracking);
+    const trustedCommit = git(source, ["rev-parse", "HEAD~1"]); const trustedTree = git(source, ["rev-parse", `${trustedCommit}^{tree}`]);
+    writeFileSync(join(source, "uncommitted.txt"), "UNCOMMITTED_SCOPE_MARKER\n");
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, sourceRoot: source, trustedBaseCommit: trustedCommit, trustedBaseTree: trustedTree, broker: fakeBroker(async () => ({ providers: [] })) });
+
+    const prepared = await facade.prepare({ task_id: "trusted-scope", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+
+    expect(prepared.packet.source_revision.base_tree).toBe(trustedTree);
+    expect(prepared.packet.changed_files.map(({ path }) => path)).toContain("uncommitted.txt");
+    expect(JSON.parse(readFileSync(join(tracking, "trusted-scope", "reviews", "private", "source-context.json"), "utf8"))).toMatchObject({ version: 2, trusted_base_commit: trustedCommit, trusted_base_tree: trustedTree, last_approved_tree: null });
+    rmSync(prepared.lock, { recursive: true, force: true });
+  });
+
   it("rejects every caller-owned source field before preparing a packet", () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
@@ -234,12 +256,12 @@ describe("ReviewRoundFacade", () => {
     expect(calls[0].attachments.entries.every((entry) => entry.embed === false)).toBe(true);
   });
 
-  it("rejects raw POSIX absolute paths before broker delivery", async () => {
+  it("allows generic POSIX fixture paths that are not registered host roots", async () => {
     const tracking = root(); let calls = 0;
     writeFileSync(join(tracking, "a"), `const source = '${unixPath("Users", "Hugh", "secret")}';\n`);
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
 
-    await expect(facade.prepare({ task_id: "absolute-source", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "absolute-source", stage: "build-code", review_flow_id: "flow", packet: hostPacket() })).resolves.toBeDefined();
     expect(calls).toBe(0);
   });
 
@@ -279,10 +301,22 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.prepare({ task_id: "safe-absolute-examples", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement } })).resolves.toBeDefined();
   });
 
-  it.each(["/dev/null/secret", "/absolute/pathological-secret", "/absolute/path-secret"])("does not allow an example prefix without a path boundary: %s", async (raw_requirement) => {
+  it("allows source lexical syntax and preserves the sealed diff bytes", async () => {
+    const tracking = root();
+    const source = "#!/usr/bin/env node\n// path scanner regression\nconst pattern = /duplicate.*/gu;\nconst fixture = '/tmp/adversarial/private';\n";
+    writeFileSync(join(tracking, "a"), source);
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
+
+    const prepared = await facade.prepare({ task_id: "source-lexical-syntax", stage: "build-code", review_flow_id: "flow", packet: hostPacket() });
+    const sealed = readFileSync(join(prepared.frozen_snapshot_dir, "changes.diff"), "utf8");
+    for (const line of source.trim().split("\n")) expect(sealed).toContain(`+${line}`);
+    expect(prepared.packet.diff_sha256).toBe(hash(sealed));
+  });
+
+  it.each(["/dev/null/secret", "/absolute/pathological-secret", "/absolute/path-secret"])("allows generic POSIX adversarial fixtures without treating them as host roots: %s", async (raw_requirement) => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });
-    await expect(facade.prepare({ task_id: "unsafe-example-prefix", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "unsafe-example-prefix", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement } })).resolves.toBeDefined();
   });
 
   it("rejects a registered root even when it appears inside an HTTPS URL", async () => {
@@ -297,12 +331,12 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.prepare({ task_id: "registered-root-no-boundary", stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `prefix${tracking}/private` } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
   });
 
-  it("rejects absolute paths in packet supplements", async () => {
+  it("allows generic POSIX fixture paths in packet supplements", async () => {
     const tracking = root(); let calls = 0;
     const supplemental = { ...hostPacket(), planning_artifacts: [{ path: unixPath("Users", "Hugh", "private-plan.md"), summary: "must not be delivered" }] };
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
 
-    await expect(facade.prepare({ task_id: "absolute-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "absolute-supplement", stage: "build-code", review_flow_id: "flow", packet: supplemental })).resolves.toBeDefined();
     expect(calls).toBe(0);
   });
 
@@ -339,12 +373,12 @@ describe("ReviewRoundFacade", () => {
     await expect(facade.prepare({ task_id: `file-uri-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: `open ${literal}` } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
   });
 
-  it("rejects a non-HTTP URI in the R2 delta", async () => {
+  it("allows a non-HTTP URI fixture in source diff bytes without mutating it", async () => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "12121212-1212-4212-8212-121212121212", providers: [{ provider: "opencode", status: "completed", session_id: "file-uri-session", output: output(request.packet) }] })) });
     await facade.run(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
     writeFileSync(join(tracking, "a"), `${nonHttpUri("vscode", `${slash.repeat(2)}file${unixPath("Users", "Hugh", "private")}`)}\n`);
-    await expect(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: "file-uri-delta", stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).resolves.toBeDefined();
   });
 
   it.each([
@@ -354,10 +388,10 @@ describe("ReviewRoundFacade", () => {
     `<${unixPath("tmp", "review-secret")}>`,
     `value=${unixPath("var", "private", "item")}`,
     `[private](${tripleSlashPath("tmp", "review-secret")})`,
-  ])("rejects root, UNC-like, Markdown, punctuation, and triple-slash material in R1: %s", async (literal) => {
+  ])("allows generic POSIX source syntax and fixtures in R1: %s", async (literal) => {
     const tracking = root(); let calls = 0;
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => { calls += 1; return { providers: [] }; }) });
-    await expect(facade.prepare({ task_id: `absolute-r1-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: literal } })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: `absolute-r1-${hash(literal).slice(0, 8)}`, stage: "build-code", review_flow_id: "flow", packet: { ...hostPacket(), raw_requirement: literal } })).resolves.toBeDefined();
     expect(calls).toBe(0);
   });
 
@@ -366,13 +400,13 @@ describe("ReviewRoundFacade", () => {
     `${slash.repeat(2)}host${slash}share`,
     `[private](${unixPath("tmp", "review-secret")})`,
     `[private](${tripleSlashPath("tmp", "review-secret")})`,
-  ])("rejects root, UNC-like, Markdown, and triple-slash material in R2: %s", async (literal) => {
+  ])("allows generic POSIX source syntax and fixtures in R2: %s", async (literal) => {
     const tracking = root();
     const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async (request) => ({ runtime_id: "15151515-1515-4515-8515-151515151515", providers: [{ provider: "opencode", status: "completed", session_id: "path-session", output: output(request.packet) }] })) });
     const taskId = `absolute-r2-${hash(literal).slice(0, 8)}`;
     await facade.run(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: hostPacket() }));
     writeFileSync(join(tracking, "a"), `${literal}\n`);
-    await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).rejects.toThrow("SOURCE_CONTAINS_ABSOLUTE_PATH");
+    await expect(facade.prepare({ task_id: taskId, stage: "build-code", review_flow_id: "flow", packet: hostPacket(), continuation: true })).resolves.toBeDefined();
   });
 
   it("fails closed when the frozen provider-visible manifest is forged before delivery", async () => {
@@ -1001,6 +1035,44 @@ describe("ReviewRoundFacade", () => {
     const unknown = result.provider_outcomes.find((item) => item.diagnostic === "UNKNOWN_PROVIDER");
     expect(unknown).toMatchObject({ provider: null, business_valid: false });
     expect(JSON.stringify(result)).not.toContain("/private/secret");
+  });
+
+  it("dispatches every ready provider in the first ready broker tier without crossing tiers", async () => {
+    const tracking = root(); let dispatched;
+    const broker = capabilityBroker(async (request) => {
+      dispatched = request.request;
+      const sealed = packetFromTriad(request);
+      return { runtime_id: "56565656-5656-4656-8656-565656565656", providers: request.request.provider_allowlist.map((provider) => completedProvider(request, { provider, session_id: `${provider}-session`, output: output(sealed) })) };
+    }, {
+      version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+        { provider: "opencode", tier: 0, status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "kimi", tier: 0, status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "claude-code", tier: 1, status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      ],
+    });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    const result = await facade.run(await facade.prepare({ task_id: "same-tier", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }) }));
+    expect(dispatched.provider_allowlist).toEqual(["opencode", "kimi"]);
+    expect(result.intent.candidate_providers).toEqual(["opencode", "kimi"]);
+    expect(result.provider_outcomes.map((item) => item.provider)).toEqual(["opencode", "kimi"]);
+  });
+
+  it("omits an unavailable peer while keeping selection inside the first ready tier", async () => {
+    const tracking = root(); let dispatched;
+    const broker = capabilityBroker(async (request) => {
+      dispatched = request.request;
+      const sealed = packetFromTriad(request);
+      return { runtime_id: "67676767-6767-4676-8676-676767676767", providers: [completedProvider(request, { provider: "opencode", session_id: "session", output: output(sealed) })] };
+    }, {
+      version: 4, capabilities: { attachments: true, cancel_source: true }, providers: [
+        { provider: "opencode", tier: 0, status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "kimi", tier: 0, status: "unavailable", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+        { provider: "claude-code", tier: 1, status: "ready", capabilities: { continuation: true, attachment_delivery: ["file_only"] } },
+      ],
+    });
+    const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker });
+    await facade.run(await facade.prepare({ task_id: "ready-only", stage: "build-code", review_flow_id: "flow", host_provider: "codex", packet: packet({ root: tracking }) }));
+    expect(dispatched.provider_allowlist).toEqual(["opencode"]);
   });
   it("builds and verifies source evidence from immutable host git revisions instead of caller snapshots", async () => {
     const tracking = root(); const facade = new ReviewRoundFacade({ taskTrackingRoot: tracking, broker: fakeBroker(async () => ({ providers: [] })) });

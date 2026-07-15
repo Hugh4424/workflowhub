@@ -23,9 +23,10 @@
 
 ## Phase 1 — 3rd-review: explicit delivery plan and file-only triad
 
-**Repository:** `/Users/Hugh/Hugh/Project/3rd-review-delivery-mode`
+**Repository:** `${HOME}/Projects/3rd-review-delivery-mode`
 
 **Files:**
+
 - Create: `lib/delivery-plan.mjs`
 - Modify: `lib/attachments.mjs`
 - Modify: `lib/broker.mjs`
@@ -110,9 +111,10 @@ git commit -m "feat: plan provider review material delivery"
 
 ## Phase 2 — workflowhub: seal provider-visible material and fail closed on paths
 
-**Repository:** `/Users/Hugh/Hugh/Project/workflowhub-delivery-mode`
+**Repository:** `${HOME}/Projects/workflowhub-delivery-mode`
 
 **Files:**
+
 - Modify: `skills/wh-review/scripts/review-round-facade.mjs`
 - Modify: `skills/wh-review/scripts/review-prompt.mjs`
 - Modify: `skills/wh-review/scripts/source-tree.mjs`
@@ -175,6 +177,7 @@ git commit -m "feat(wh-review): seal file-only review delivery"
 **Repositories:** both delivery-mode worktrees
 
 **Files:**
+
 - Modify: `scripts/run-wh-review-provider-smoke.mjs`
 - Modify: `scripts/__tests__/run-wh-review-provider-smoke.test.mjs`
 - Modify: `docs/adr/0002-v4-review-exception-state-matrix.md`

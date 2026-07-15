@@ -21,7 +21,7 @@ function fixture({ stage = "build-code", reviewTrack = null, verdict = "pass" } 
     ...hashes, packet_status: "complete", verdict, summary: "审查结论基于冻结 packet 的逐项证据。", findings: [],
     checklist: ids.map((id) => ({ id, passed: true, evidence: `unified_diff:a:1 显示 ${id} 的目标行为已实现。` })),
     pass_items: ids.map((id) => ({ rule_id: id, artifact_anchor: `unified_diff:a:1#${id}`, evidence: `新增分支明确返回 ${id} 的预期结果。` })),
-    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: ["planning_artifacts:plan.md#L10"], evidence: "plan.md#L10 显示需求和验证步骤直接关联。", conclusion: "该 lens 未发现违反合同的证据。" })),
+    skillResults: resolution.definitions.map(({ name, bundle }) => ({ skill: name, bundle_hash: bundle.sha256, mode: "lens-only", checked_objects: [...resolution.checkedObjects], evidence: "plan.md#L10 显示需求和验证步骤直接关联。", conclusion: "该 lens 未发现违反合同的证据。" })),
   };
   return { output, resolution, packet: { ...hashes }, intent: { contract_hash: hashes.contract_hash, material_manifest_hash: hashes.manifest_hash, skill_bundle_hash: hashes.skill_bundle_hash } };
 }

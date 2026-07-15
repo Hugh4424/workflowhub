@@ -3,6 +3,7 @@ name: build-spec
 version: 2.0.0
 description: Turn the agreed direction into a structured spec that is the single source of truth for requirements. Orchestrates spec-specify → spec-clarify → constitution check → baseline comparison → V4 review.
 ---
+<!-- markdownlint-disable MD040 -->
 
 # build-spec
 
@@ -15,16 +16,27 @@ Before any stage work, create shared `workflow_run_id`, `run_id`, `attempt_id`, 
 `steps.json` is the only executable topology. For every step: emit `step_entry` with `stage_slug: "build-spec"`, integer `step_id`, the shared `attempt_id`, and `manifest_schema_version: "2.0.0"`; emit exactly one paired terminal `step_exit` carrying the returned `entry_journal_entry_id`. A retry uses a new `attempt_id`; a skipped or terminal non-success outcome keeps its reason. Do not execute an unmapped label.
 
 ### Step 1 — read-decision-log
+
 Load the approved decision log.
+
 ### Step 2 — create-spec-draft
+
 Create the specification draft.
+
 ### Step 3 — clarify-spec
+
 Resolve or record specification ambiguity.
+
 ### Step 4 — check-constitution
+
 Record constitution compliance evidence.
+
 ### Step 5 — review-spec
+
 Obtain independent specification review evidence.
+
 ### Step 6 — publish-spec-result
+
 Persist the specification handoff.
 
 ## Legacy reference
@@ -32,6 +44,12 @@ Persist the specification handoff.
 ## Goal
 
 Translate the decision log from `make-decision` into a full spec via an orchestrated pipeline. The spec becomes the sole authority that later stages (plan, code, verify) refer to.
+
+## Local skill resolution and capability boundary
+
+调用方必须显式传入 `workflowhub_package_root`。本 stage 只读取同目录 `skill-deps.yaml`，将技能路径解析到 `${workflowhub_package_root}/skills/` 内，并通过 `{name,resolved_skill_path,resolved_bundle_paths,bundle_hash,source_manifest,package_root}` payload 调用。禁止按名称全局发现、HOME/cwd fallback、外仓 prompt 或同名覆盖。
+
+本 stage 的本地技能为 `spec-specify`、`spec-clarify`、`simplicity-guard`、`wh-review`；review lens `plan-ceo-review`、`review` 与 UI 条件 lens `plan-design-review` 由 `wh-review` 本地 bundle 解析。Node、git、shell、宿主独立上下文及 review provider/凭据是 runtime/external capability，不是 skill。所需 capability 缺失按 manifest fail loud；不得伪装为 skill fallback。
 
 ## 全局参数与产出约定
 
@@ -165,6 +183,7 @@ At stage start, call `metrics/collector.mjs` `recordSkeleton` with stage `build-
 - **C 档**（大改动）：跨系统边界、新引入外部依赖或破坏性变更；完整三层 spec + 额外影响范围分析
 
 F10 反过度工程四问（FR-LADDER-002）在档位判断时一并执行，结论记入 spec 序言，不作为阻断条件：
+
 1. What real threat does this defend against?
 2. Does any existing mechanism already cover it?
 3. Can it be bypassed, making it security-theatre?
@@ -195,6 +214,7 @@ spec-specify 产出初稿后，对 `specs/{task-id}/spec.md` 执行高危词 gre
 **高危词黑名单**：`阻断` / `blocking` / `不能进` / `BLOCK` / `强制门` / `必须停止` / `强制完整流程`
 
 命中时：
+
 - 浮现命中位置 + 建议修改（供人工确认是文档示例还是执行语义）
 - 记录进质量事实契约第 4 项（未解风险）
 - **不构成阻断条件**（CONSTITUTION F4/F5，记录+浮现+人判断）
@@ -288,6 +308,7 @@ Read `constitution-checklist.md`. Check all 21 items (F1–F10, Q1–Q3, S1–S8
 The 21 items are:
 
 **Framework (F1–F10)**:
+
 - [ ] **F1 薄核心** — 判据：核心是否只做调度编排、重活下沉技能层（改动牵连面小）。
 - [ ] **F2 窄契约** — 判据：模块间是否走窄而明确的接口、不暴露内部实现。
 - [ ] **F3 物理事实靠机器校验但不阻断** — 判据：物理事实是否机器客观采集且不阻断推进。
@@ -300,11 +321,13 @@ The 21 items are:
 - [ ] **F10 自动化按真实收益添加，不为"机器可校验"本身堆基建** — 判据：自动化(CI/校验/机器基建)是否真实收益大于长期维护成本、不为"机器可校验"本身预堆基建、能实跑的优先实跑。
 
 **Quality (Q1–Q3)**:
+
 - [ ] **Q1 记事实而非阻断** — 判据：质量事实是否只记录浮现、不阻断推进。
 - [ ] **Q2 gate 三类划分** — 判据：关卡是否分入口校验/记录采集/人工确认三类、未把记录型做成阻断门。
 - [ ] **Q3 异源审查加人工把关** — 判据：质量裁决是否由独立来源独立上下文产出、无自审自判。
 
 **Skills (S1–S8)**:
+
 - [ ] **S1 能用外部就不造轮子** — 判据：通用能力是否优先复用外部、文件直放项目内。
 - [ ] **S2 外部技能可针对项目改造合宪** — 判据：采用的外部技能是否按需改造至合宪。
 - [ ] **S3 迭代时保持最新并就地检查** — 判据：迭代时是否查更新/更优、来源路径写进技能文件。
@@ -431,3 +454,7 @@ if (!receiptResult.ok) {
   process.exit(1);
 }
 ```
+
+## Workflow friction
+
+发现流程卡点立即追加到 `path.join(taskRoot, "friction.md")`：`[FRICTION] <stage>/<step>: <卡点> | impact: <影响> | suggestion: <建议或 none>`。将该文件路径写入 metrics/stage-result 的 `friction_ref`；无记录时为 `null`。只记录事实，不恢复外部 feedback skill，不因记录失败掩盖原始错误。

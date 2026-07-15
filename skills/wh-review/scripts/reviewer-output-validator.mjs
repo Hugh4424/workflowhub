@@ -71,12 +71,15 @@ export function validateReviewerOutput({ stage, reviewTrack, ui = false, output,
   for (const id of selectedRules.hardIds) if (checklistIds.has(id) && !passedChecklistIds.has(id) && !(output.findings ?? []).some((finding) => finding?.rule_id === id && finding.severity === "blocking")) errors.push(`failed hard invariant requires blocking finding: ${id}`);
 
   const requiredNames = new Set(resolution.definitions.map(({ name }) => name)); const seenSkills = new Set();
+  const sealedLenses = new Map((packet?.review_lenses ?? []).map((lens) => [lens.skill, lens]));
   for (const [index, result] of output.skillResults.entries()) {
     if (seenSkills.has(result.skill)) errors.push(`duplicate skill result: ${result.skill}`); else seenSkills.add(result.skill);
     if (!requiredNames.has(result.skill)) errors.push(`unexpected skill result: ${result.skill}`);
     const definition = resolution.definitions.find(({ name }) => name === result.skill);
     if (definition && result.bundle_hash !== definition.bundle.sha256) errors.push(`invalid skill bundle hash: ${result.skill}`);
     if (result.checked_objects.some((value) => !concreteAnchor(value))) errors.push(`missing checked objects: ${result.skill}`);
+    const expectedObjects = sealedLenses.get(result.skill)?.checked_objects ?? resolution.checkedObjects;
+    if (new Set(result.checked_objects).size !== result.checked_objects.length || expectedObjects.some((value) => !result.checked_objects.includes(value)) || result.checked_objects.some((value) => !expectedObjects.includes(value))) errors.push(`incomplete checked objects: ${result.skill}`);
     if (!concrete(result.evidence)) errors.push(`missing skill evidence: ${result.skill}`);
     if (!concrete(result.conclusion)) errors.push(`missing skill conclusion: ${result.skill}`);
   }

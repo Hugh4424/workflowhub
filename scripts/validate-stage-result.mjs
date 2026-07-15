@@ -96,14 +96,26 @@ export function validateStageResult(stage, artifact) {
     }
     if (facts.review && typeof facts.review === "object" && !Array.isArray(facts.review)) {
       const review = facts.review;
-      const allowedReviewKeys = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
-      if (Object.keys(review).some((key) => !allowedReviewKeys.has(key))
+      const publishedKeys = new Set(["core_receipt_hash", "semantic_verdict", "needs_human"]);
+      const pendingKeys = new Set(["status", "needs_human", "legacy_original_sha256", "legacy_original_ref", "diagnostic"]);
+      const isPendingLegacy = review.status === "pending_legacy_review";
+      if (isPendingLegacy) {
+        if (Object.keys(review).some((key) => !pendingKeys.has(key))
+          || review.needs_human !== true
+          || !/^[a-f0-9]{64}$/.test(review.legacy_original_sha256 ?? "")
+          || typeof review.legacy_original_ref !== "string"
+          || review.legacy_original_ref.trim() === ""
+          || typeof review.diagnostic !== "string"
+          || review.diagnostic.trim() === ""
+          || artifact.status !== "unknown"
+          || artifact.user_decision !== true) {
+          errors.push(`facts["review"] pending_legacy_review requires only status, needs_human:true, legacy_original_sha256, legacy_original_ref, diagnostic, plus stage status unknown and user_decision:true`);
+        }
+      } else if (Object.keys(review).some((key) => !publishedKeys.has(key))
         || !/^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "")
         || !["pass", "revise_required", "escalate_to_human"].includes(review.semantic_verdict)
         || typeof review.needs_human !== "boolean") {
-        errors.push(`facts["review"] for stage "build-code" must contain only core_receipt_hash, semantic_verdict, and needs_human`);
-      } else if (review.semantic_verdict !== "pass" || review.needs_human !== false) {
-        errors.push(`facts["review"] for stage "build-code" must be a published pass with needs_human:false`);
+        errors.push(`facts["review"] for stage "build-code" must be published {core_receipt_hash, semantic_verdict, needs_human} or explicit pending_legacy_review diagnostic`);
       }
     } else if ("review" in facts) {
       errors.push(`facts["review"] for stage "build-code" must be an object`);
@@ -119,21 +131,33 @@ export function validateStageResult(stage, artifact) {
       if (!phaseRecords) {
         errors.push(`facts["phase_completion"].phase_records for stage "build-code" must be an array`);
       }
-      const validPhaseRecords = (phaseRecords ?? []).filter(
-        (record) =>
-          record &&
-          typeof record === "object" &&
-          Object.keys(record).length === 2 &&
-          Object.keys(record).every((key) => key === "phase_id" || key === "changed") &&
-          typeof record.phase_id === "string" &&
-          record.phase_id.trim() !== "" &&
-          typeof record.changed === "boolean"
-      );
+      const validPhaseRecords = (phaseRecords ?? []).filter((record) => {
+        if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+        const canonical = Object.keys(record).length === 2
+          && Object.keys(record).every((key) => key === "phase_id" || key === "changed");
+        const migrated = Object.keys(record).every((key) => ["phase_id", "changed", "evidence_status", "provenance"].includes(key))
+          && Object.keys(record).length === 4
+          && ["legacy_commit_only", "canonical_report_missing"].includes(record.evidence_status)
+          && record.provenance
+          && typeof record.provenance === "object"
+          && !Array.isArray(record.provenance)
+          && Object.keys(record.provenance).length === 4
+          && Object.keys(record.provenance).every((key) => ["source", "commit_sha", "original_sha256", "original_ref"].includes(key))
+          && record.provenance.source === "legacy_commit_record"
+          && /^[a-f0-9]{40}$/.test(record.provenance.commit_sha ?? "")
+          && /^[a-f0-9]{64}$/.test(record.provenance.original_sha256 ?? "")
+          && typeof record.provenance.original_ref === "string"
+          && record.provenance.original_ref.trim() !== "";
+        return (canonical || migrated)
+          && typeof record.phase_id === "string"
+          && record.phase_id.trim() !== ""
+          && typeof record.changed === "boolean";
+      });
       if ((phaseRecords?.length ?? 0) === 0) {
         errors.push(`facts["phase_completion"] for stage "build-code" must include at least one phase_records entry`);
       }
       if (phaseRecords && validPhaseRecords.length !== phaseRecords.length) {
-        errors.push(`facts["phase_completion"].phase_records entries must contain only phase_id and changed boolean`);
+        errors.push(`facts["phase_completion"].phase_records entries must be canonical {phase_id,changed} or provenance-bound legacy migration records`);
       }
     } else if ("phase_completion" in facts) {
       errors.push(`facts["phase_completion"] for stage "build-code" must be an object`);
@@ -165,6 +189,18 @@ export function validateStageResult(stage, artifact) {
   }
 
   return { ok: errors.length === 0, errors };
+}
+
+/** Only a current published semantic pass may authorize merge/finalization. */
+export function isBuildCodeMergeAuthorizing(artifact) {
+  const review = artifact?.facts?.review;
+  return artifact?.status === "success"
+    && review
+    && typeof review === "object"
+    && Object.keys(review).length === 3
+    && review.semantic_verdict === "pass"
+    && review.needs_human === false
+    && /^[a-f0-9]{64}$/.test(review.core_receipt_hash ?? "");
 }
 
 /**

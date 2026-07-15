@@ -256,12 +256,13 @@ Example metric record:
 // T018 Phase 5 (FR-METRIC-003): scope-triage + decision-log positive wiring checks
 // ---------------------------------------------------------------------------
 
-describe("T018 — scope-triage and decision-log positive wiring (FR-METRIC-003)", () => {
-  it("scope-triage/SKILL.md passes full scanSkillMetrics (recordSkeleton + updateOwnResult + collector.mjs + correct stage)", async () => {
+describe("T018 — absorbed scope-triage and decision-log positive wiring (FR-METRIC-003)", () => {
+  it("scope-triage metrics are carried by its make-decision/build-spec stage owners", async () => {
     const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
-    const skillPath = join(repoRoot, "skills", "scope-triage", "SKILL.md");
-    const result = scanSkillMetrics(skillPath);
-    expect(result.found, `scope-triage missing wiring: ${result.reason ?? ""}`).toBe(false);
+    for (const stage of ["make-decision", "build-spec"]) {
+      const result = scanSkillMetrics(join(repoRoot, "workflows", stage, "SKILL.md"));
+      expect(result.found, `${stage} missing absorbed scope-triage wiring: ${result.reason ?? ""}`).toBe(false);
+    }
   });
 
   it("decision-log/SKILL.md passes full scanSkillMetrics (recordSkeleton + updateOwnResult + collector.mjs + correct stage)", async () => {
@@ -271,10 +272,10 @@ describe("T018 — scope-triage and decision-log positive wiring (FR-METRIC-003)
     expect(result.found, `decision-log missing wiring: ${result.reason ?? ""}`).toBe(false);
   });
 
-  it("integration: all 7 skills pass scanSkillMetrics (no missing wiring)", async () => {
+  it("integration: five stages and remaining runtime decision-log pass scanSkillMetrics", async () => {
     const { scanSkillMetrics } = await import("../scripts/check-stage-quality.mjs");
     const STAGE_SKILLS = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
-    const AUX_SKILLS = ["scope-triage", "decision-log"];
+    const AUX_SKILLS = ["decision-log"];
     for (const skill of STAGE_SKILLS) {
       const skillPath = join(repoRoot, "workflows", skill, "SKILL.md");
       const result = scanSkillMetrics(skillPath);
@@ -367,7 +368,7 @@ Example metric record:
 // (FR-SKELETON-002). If any REAL stage skill SKILL.md frontmatter contains
 // "kind: sub-skill", it would be silently excluded from metrics enforcement
 // — a low-confidence MEDIUM abuse vector with no test coverage until now.
-// FALSIFIABLE: adding "kind: sub-skill" frontmatter to any of the 7 real
+// FALSIFIABLE: adding "kind: sub-skill" frontmatter to a real runtime skill
 // stage skills makes this test fail with that skill's name in the message.
 // ---------------------------------------------------------------------------
 
@@ -378,7 +379,6 @@ describe("hardening — real stage skills lack kind: sub-skill marker (FR-SKELET
     ["build-plan",     "workflows"],
     ["build-code",     "workflows"],
     ["verify-code",    "workflows"],
-    ["scope-triage",   "skills"],
     ["decision-log",   "skills"],
   ];
 

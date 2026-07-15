@@ -40,7 +40,8 @@ function normalizeCapabilities(value, { requireReadyAttachmentRoot = false } = {
       || !Object.hasOwn(capabilities, "continuation") || !Object.hasOwn(capabilities, "attachment_delivery")
       || typeof capabilities.continuation !== "boolean") throw new Error(`third-review doctor continuation capability is invalid: ${item.provider}`);
     if (!Array.isArray(capabilities.attachment_delivery) || capabilities.attachment_delivery.some((mode) => !deliveryModes.has(mode)) || new Set(capabilities.attachment_delivery).size !== capabilities.attachment_delivery.length) throw new Error(`third-review doctor attachment_delivery capability is invalid: ${item.provider}`);
-    return { provider: item.provider, status: item.status, capabilities: { continuation: capabilities.continuation, attachment_delivery: [...capabilities.attachment_delivery].sort() } };
+    if (item.tier !== undefined && (!Number.isSafeInteger(item.tier) || item.tier < 0)) throw new Error(`third-review doctor provider tier is invalid: ${item.provider}`);
+    return { provider: item.provider, tier: item.tier, status: item.status, capabilities: { continuation: capabilities.continuation, attachment_delivery: [...capabilities.attachment_delivery].sort() } };
   });
   return deepFreeze({ version: 4, capabilities: { attachments: value.capabilities.attachments, cancel_source: value.capabilities.cancel_source }, providers });
 }

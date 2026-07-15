@@ -6,7 +6,7 @@ function canonical(value) {
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
 }
-const materialKeys = ["raw_requirement", "acceptance_design_excerpt", "decision_log_excerpt", "planning_artifacts", "verification_closure", "test_evidence", "host_verified_facts"];
+const materialKeys = ["raw_requirement", "acceptance_design_excerpt", "acceptance_evidence", "decision_log_excerpt", "planning_artifacts", "verification_closure", "test_evidence", "host_verified_facts", "review_lenses"];
 function fingerprint(value) {
   const bytes = typeof value === "string" ? value : canonical(value ?? null);
   return { sha256: sha(bytes), size: Buffer.byteLength(bytes) };
