@@ -1,6 +1,4 @@
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { carryAuditSummary, verifyAuditCarrier } from '../../core/audit-summary-carrier.mjs';
+import { validateTaskId } from '../../core/task-identity.mjs';
 
 const METRIC_KEYS = [
   'execution_id', 'skill_or_stage', 'stage', 'skill_version',
@@ -28,47 +26,31 @@ export function readCommand(buildResult) {
   return cmd;
 }
 
-export function assembleStageResult({ verdict, evidenceRef, anomalyFlags, missingItems, userDecision, reason, errorCode, retryable, workflowRunId, auditSummaryRef, auditVerdict, auditSummaryHash, auditSummary }) {
-  // FR-PATH-003: evidence_ref must be relative path WITHOUT specs/{task-id}/ prefix
-  if (evidenceRef.startsWith('/')) {
-    throw new Error(`evidence_ref must be a relative path, absolute paths are not allowed, got: ${evidenceRef}`);
+export function assembleVerifyAttempt({ taskId, createdAt, facts, evidenceRefs = [], missingItems = [], reason = '' } = {}) {
+  const task = validateTaskId(taskId);
+  if (typeof createdAt !== 'string' || !Number.isFinite(Date.parse(createdAt))) {
+    throw new TypeError('createdAt must be a valid timestamp');
   }
-  if (evidenceRef.includes('../')) {
-    throw new Error(`evidence_ref must not contain path traversal (../), got: ${evidenceRef}`);
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) {
+    throw new TypeError('facts must be an object');
   }
-  if (evidenceRef.startsWith('specs/')) {
-    throw new Error(`evidence_ref must be a relative path without 'specs/{task-id}/' prefix, got: ${evidenceRef}`);
+  if (!Array.isArray(evidenceRefs)) throw new TypeError('evidenceRefs must be an array');
+  for (const ref of evidenceRefs) {
+    if (typeof ref !== 'string' || ref === '' || ref.startsWith('/') || ref.startsWith('specs/') ||
+        ref.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) {
+      throw new Error(`evidence reference must be relative, traversal-free, and outside specs: ${ref}`);
+    }
   }
-  const auditFacts = auditSummary
-    ? carryAuditSummary(auditSummaryRef, auditSummary)
-    : auditSummaryRef != null || auditVerdict != null || auditSummaryHash != null
-      ? { audit_contract_version: 'v1', audit_summary_ref: auditSummaryRef, audit_verdict: auditVerdict, audit_summary_hash: auditSummaryHash }
-      : {};
-  const carrier = verifyAuditCarrier(auditFacts);
-  if (!carrier.ok) throw new Error(carrier.errors.join('; '));
+  if (!Array.isArray(missingItems)) throw new TypeError('missingItems must be an array');
   return {
-    status: verdict,
-    retryable: retryable ?? false,
-    facts: {
-      evidence_ref: evidenceRef,
-      anomaly_flags: anomalyFlags,
-      ...auditFacts,
-    },
-    missing_items: missingItems,
-    user_decision: userDecision,
-    reason,
-    error_code: errorCode ?? '',
-    ...(workflowRunId != null ? { workflow_run_id: workflowRunId } : {}),
+    task_id: task,
+    stage: 'verify-code',
+    created_at: new Date(createdAt).toISOString(),
+    facts: structuredClone(facts),
+    evidence_refs: [...evidenceRefs],
+    missing_items: [...missingItems],
+    reason: String(reason),
   };
-}
-
-export function writeStageResult(taskSpecDir, result, auditOptions = {}) {
-  mkdirSync(taskSpecDir, { recursive: true });
-  const path = join(taskSpecDir, 'stage-result-verify-code.json');
-  // Consumer-only boundary: aggregator owns verdict construction.  This
-  // function persists the already verified reference/hash without reading a
-  // journal or deriving another quality conclusion.
-  writeFileSync(path, JSON.stringify(result, null, 2), 'utf-8');
 }
 
 export function validateMetricRecord(record) {

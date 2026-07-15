@@ -1,29 +1,38 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
-import { relativeReviewRef } from "./review-result.mjs";
 import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
-import { assertSafeTaskId } from "./lib/safe-id.mjs";
+import { bootstrapStage, assertWorkspace } from "../../../core/stage-context.mjs";
 
 function trustedTaskWorktree(input) {
-  const taskTrackingRoot = input.task_tracking_root ?? input.taskTrackingRoot;
-  if (!isAbsolute(taskTrackingRoot ?? "")) throw new TypeError("task_tracking_root must be an absolute path");
-  const taskId = input.task_id ?? input.taskId; assertSafeTaskId(taskId);
-  const trackingRoot = realpathSync(taskTrackingRoot); const statePath = join(trackingRoot, taskId, "worktree.json");
-  const stat = lstatSync(statePath);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error("trusted task worktree.json must be a regular file");
-  const state = JSON.parse(readFileSync(statePath, "utf8"));
-  if (!(isAbsolute(state?.target_repo_root ?? "") && isAbsolute(state?.worktree_root ?? "") && state.target_repo_root !== state.worktree_root && state.status === "active")) throw new Error("trusted task worktree.json requires distinct active target_repo_root and worktree_root");
-  const targetRepoRoot = realpathSync(state.target_repo_root); const sourceRoot = realpathSync(state.worktree_root);
-  const gitRoot = (root) => realpathSync(String(execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: root, encoding: "utf8" })).trim());
-  const commonDir = (root) => { const value = String(execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: root, encoding: "utf8" })).trim(); return realpathSync(isAbsolute(value) ? value : resolve(root, value)); };
-  if (gitRoot(targetRepoRoot) !== targetRepoRoot || gitRoot(sourceRoot) !== sourceRoot || commonDir(targetRepoRoot) !== commonDir(sourceRoot)) throw new Error("trusted task roots must be registered worktrees of the same repository");
-  return { taskId, reviewDataRoot: join(trackingRoot, taskId), sourceRoot, targetRepoRoot };
+  if (!isAbsolute(input.task_path ?? "")) throw new TypeError("task_path must be an absolute TaskHandle path");
+  const taskId = input.task_id ?? input.taskId;
+  const projectName = input.project_name ?? input.projectName;
+  const stage = input.stage;
+  if (stage === "make-decision") {
+    throw new Error("make-decision review requires an in-process candidate Workspace capability; the CLI only accepts an already accepted Workspace");
+  }
+  if (input.source_root !== undefined || input.sourceRoot !== undefined) {
+    throw new TypeError("source_root is forbidden; Workspace comes from accepted make-decision facts");
+  }
+  const context = bootstrapStage(stage, {
+    mode: "sidecar",
+    taskPath: input.task_path,
+    projectName,
+    taskId,
+  });
+  const workspace = assertWorkspace(context.workspace);
+  return {
+    taskId,
+    task: context.task,
+    workspace,
+    sourceRoot: workspace.worktreeRoot,
+    targetRepoRoot: context.task.manifest.target_repo_root,
+  };
 }
 
 function providerClient() {
@@ -42,8 +51,8 @@ export async function runReviewRound(input) {
   });
   return {
     status: result.status, verdict: result.verdict,
-    attempt_ref: relativeReviewRef(trusted.reviewDataRoot, result.attemptPath),
-    result_ref: result.resultPath ? relativeReviewRef(trusted.reviewDataRoot, result.resultPath) : null,
+    attempt_ref: result.attemptRef,
+    result_ref: result.resultRef,
     snapshot_tree: result.snapshotTree, material_id: result.materialId, runtime_ids: result.runtimeIds,
   };
 }
@@ -51,7 +60,7 @@ export async function runReviewRound(input) {
 export function verifyFinalReview(input) {
   const trusted = trustedTaskWorktree(input);
   const result = verifyFinal({
-    ...trusted, resultPath: input.result_ref ?? input.resultRef,
+    ...trusted, attachmentRoot: providerClient().thirdReview.attachmentRoot, resultRef: input.result_ref ?? input.resultRef,
     taskId: trusted.taskId, stage: input.stage, reviewTrack: input.review_track ?? input.reviewTrack,
   });
   return { status: result.status, snapshot_tree: result.snapshotTree };

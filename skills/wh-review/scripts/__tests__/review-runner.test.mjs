@@ -1,16 +1,31 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { afterEach } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
-import { runReview, verifyFinal } from "../review-runner.mjs";
+import { runReview, runReviewFixture, verifyFinal } from "../review-runner.mjs";
+import { createTask } from "../../../../core/task-handle.mjs";
+import { openCandidateWorkspace } from "../../../../core/workspace.mjs";
+import { execFileSync } from "node:child_process";
 
 const materialId = "a".repeat(64);
 const source = { targetCommit: "1".repeat(40), baseCommit: "2".repeat(40), baseTree: "3".repeat(40), capturedHead: "4".repeat(40), snapshotTree: "5".repeat(40) };
 const pass = JSON.stringify({ verdict: "pass", summary: "ok", findings: [] });
 const revise = JSON.stringify({ verdict: "revise_required", summary: "fix", findings: [{ severity: "major", path: "a.js", line: 1, issue: "bug", recommendation: "fix it" }] });
+const temporary = [];
+function fixture(prefix = "simple-review-") {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), prefix))); temporary.push(root);
+  const attachmentRoot = join(root, "attachments"); mkdirSync(attachmentRoot);
+  const task = createTask({ storageRoot: root, taskPath: join(root, "Projects", "Demo", "tasks", "task"), manifest: {
+    schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-16T00:00:00.000Z",
+    target_repo_root: join(root, "repo"), issue_ids: [], inputs: {},
+  } });
+  return { root, attachmentRoot, task };
+}
+afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("review output", () => {
   it("accepts pure JSON or one fenced JSON object only", () => {
@@ -47,6 +62,50 @@ describe("public provider client", () => {
 });
 
 describe("aggregation and runner", () => {
+  it("never calls a provider when source capture reports mutation", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-source-mutated-"); const calls = [];
+    await expect(runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient: { run: async (request) => { calls.push(request); } }, captureSource: () => { throw new Error("SOURCE_CHANGED_DURING_CAPTURE"); } })).rejects.toThrow(/SOURCE_CHANGED_DURING_CAPTURE/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("guards an empty code-stage skill plan before the provider fan-out", () => {
+    const materialsSource = readFileSync(join(import.meta.dirname, "..", "review-materials.mjs"), "utf8");
+    expect(materialsSource).toMatch(/\["build-code",\s*"verify-code"\][\s\S]*required_skills[\s\S]*length === 0[\s\S]*MATERIAL_INCOMPLETE/);
+    const runnerSource = readFileSync(join(import.meta.dirname, "..", "review-runner.mjs"), "utf8");
+    expect(runnerSource.indexOf("reviewInstructionsFor(stage")).toBeLessThan(runnerSource.indexOf("Promise.all(providers.map"));
+  });
+
+  it("keeps a real provider revise result blocked at final verification", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-provider-revise-");
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: revise, error: null } }) },
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result).toMatchObject({ status: "semantic", verdict: "revise_required" });
+    expect(() => verifyFinal({ task, resultRef: result.resultRef, attachmentRoot })).toThrow(/REVIEW_NOT_APPROVED/);
+  });
+
+  it("requires branded CandidateWorkspace for make-decision direction review", async () => {
+    const { root, attachmentRoot, task } = fixture("simple-review-candidate-");
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const baselineCommit = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo })).trim();
+    const candidateWorkspace = openCandidateWorkspace(task, { worktreeRoot: repo, baselineCommit });
+    const options = { task, attachmentRoot, taskId: "task", stage: "make-decision", reviewTrack: "direction", hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "completed", session_id: "s", output: pass, error: null } }) },
+      captureSource: ({ sourceRoot, targetRepoRoot }) => { expect(sourceRoot).toBe(realpathSync(repo)); expect(targetRepoRoot).toBe(realpathSync(repo)); return source; },
+      buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    await expect(runReview({ ...options, sourceRoot: repo })).rejects.toThrow(/naked|CandidateWorkspace|forbid/i);
+    await expect(runReview({ ...options, candidateWorkspace })).resolves.toMatchObject({ status: "semantic", verdict: "pass" });
+  });
+  it("rejects a forged or wrong-worktree Workspace capability", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-wrong-worktree-");
+    const providerClient = { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "completed", session_id: "s", output: pass, error: null } }) };
+    await expect(runReview({ task, workspace: { worktreeRoot: "/wrong" }, attachmentRoot, taskId: "task", stage: "build-code", hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) })).rejects.toThrow(/Workspace|worktree|capability/i);
+  });
   it("uses revise > unavailable > pass independent of completion order", () => {
     const validPass = { provider: "a", review: JSON.parse(pass) }; const validRevise = { provider: "b", review: JSON.parse(revise) };
     expect(aggregateProviderResults([validPass, validRevise], 2).verdict).toBe("revise_required");
@@ -55,83 +114,83 @@ describe("aggregation and runner", () => {
   });
 
   it("corrects format once in-session, writes one terminal attempt, then one semantic result", async () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-runner-")); const calls = [];
+    const { attachmentRoot, task } = fixture("simple-review-runner-"); const calls = [];
     const providerClient = { run: async (request) => { calls.push(request); return calls.length === 1
       ? { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: "preface without json", error: null } }
       : { runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }; } };
-    const result = await runReview({ reviewDataRoot: root, attachmentRoot: root, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: root, materialId, manifest: [] }) });
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     expect(result.status).toBe("semantic"); expect(result.verdict).toBe("pass"); expect(calls).toHaveLength(2); expect(calls[1].continuationRuntimeId).toBe("runtime");
-    const attempt = JSON.parse(readFileSync(result.attemptPath, "utf8")); expect(attempt.terminal_status).toBe("semantic"); expect(attempt.provider_attempts).toHaveLength(2);
-    expect(readFileSync(join(root, attempt.provider_attempts[0].output_ref), "utf8")).toBe("preface without json");
-    expect(readFileSync(join(root, attempt.provider_attempts[1].output_ref), "utf8")).toBe(pass);
-    expect(JSON.parse(readFileSync(result.resultPath, "utf8")).verdict).toBe("pass");
+    const attempt = JSON.parse(task.readRecord(result.attemptRef)); expect(attempt.terminal_status).toBe("semantic"); expect(attempt.provider_attempts).toHaveLength(2);
+    expect(JSON.parse(task.readRecord(attempt.provider_attempts[0].output_ref)).content).toBe("preface without json");
+    expect(JSON.parse(task.readRecord(attempt.provider_attempts[1].output_ref)).content).toBe(pass);
+    expect(JSON.parse(task.readRecord(result.resultRef)).verdict).toBe("pass");
   });
 
   it("records OUTPUT_INVALID on the final provider attempt after correction fails", async () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-format-failed-"));
+    const { attachmentRoot, task } = fixture("simple-review-format-failed-");
     const providerClient = { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: "not json", error: null } }) };
-    const result = await runReview({ reviewDataRoot: root, attachmentRoot: root, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: root, materialId, manifest: [] }) });
-    const attempt = JSON.parse(readFileSync(result.attemptPath, "utf8"));
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    const attempt = JSON.parse(task.readRecord(result.attemptRef));
     expect(attempt.provider_attempts).toHaveLength(2);
     expect(attempt.provider_attempts[1]).toMatchObject({ status: "failed", error: { code: "OUTPUT_INVALID" } });
     expect(attempt.provider_attempts[1].output_ref).not.toBe(null);
-    expect(result.resultPath).toBe(null);
+    expect(result.resultRef).toBe(null);
   });
 
   it("fresh-runs once only for an unavailable continuation", async () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-fresh-")); const calls = [];
+    const { attachmentRoot, task } = fixture("simple-review-fresh-"); const calls = [];
     const providerClient = { run: async (request) => { calls.push(request); return calls.length === 1
       ? { runtimeId: "old", provider: { provider: "opencode", status: "failed", session_id: null, output: null, error: { code: "NO_CONTINUABLE_SESSION", message: "gone" } } }
       : { runtimeId: "new", provider: { provider: "opencode", status: "completed", session_id: "s", output: pass, error: null } }; } };
-    const result = await runReview({ reviewDataRoot: root, attachmentRoot: root, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["opencode"], previousRuntimeIds: { opencode: "old" }, providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: root, materialId, manifest: [] }) });
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["opencode"], previousRuntimeIds: { opencode: "old" }, providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
     expect(result.verdict).toBe("pass"); expect(calls.map((item) => item.continuationRuntimeId)).toEqual(["old", null]);
     expect(result.runtimeIds).toEqual({ opencode: "new" });
   });
 
   it("routes continuation runtimes per provider and rejects invalid provider lists", async () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-routing-")); const calls = [];
+    const { attachmentRoot, task } = fixture("simple-review-routing-"); const calls = [];
     const providerClient = { run: async (request) => { calls.push(request); return { runtimeId: `new-${request.provider}`, provider: { provider: request.provider, status: "completed", session_id: "s", output: pass, error: null } }; } };
-    const base = { reviewDataRoot: root, attachmentRoot: root, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: root, materialId, manifest: [] }) };
-    const result = await runReview({ ...base, providers: ["kimi", "opencode"], previousRuntimeIds: { kimi: "old-k", opencode: "old-o" } });
+    const base = { task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
+    const result = await runReviewFixture({ ...base, providers: ["kimi", "opencode"], previousRuntimeIds: { kimi: "old-k", opencode: "old-o" } });
     expect(calls.map(({ provider, continuationRuntimeId }) => [provider, continuationRuntimeId]).sort()).toEqual([["kimi", "old-k"], ["opencode", "old-o"]]);
     expect(result.runtimeIds).toEqual({ kimi: "new-kimi", opencode: "new-opencode" });
-    await expect(runReview({ ...base, providers: ["kimi", "kimi"] })).rejects.toThrow(/unique/);
-    await expect(runReview({ ...base, providers: ["codex"] })).rejects.toThrow(/differ/);
+    await expect(runReviewFixture({ ...base, providers: ["kimi", "kimi"] })).rejects.toThrow(/unique/);
+    await expect(runReviewFixture({ ...base, providers: ["codex"] })).rejects.toThrow(/differ/);
   });
 
   it("writes no result when valid reviewers are insufficient", async () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-unavailable-")); const providerClient = { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }) };
-    const result = await runReview({ reviewDataRoot: root, attachmentRoot: root, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: root, materialId, manifest: [] }) });
-    expect(result.status).toBe("unavailable"); expect(result.resultPath).toBe(null);
-    const attempt = JSON.parse(readFileSync(result.attemptPath, "utf8")); expect(attempt.provider_attempts[0].output_ref).toBe(null);
+    const { attachmentRoot, task } = fixture("simple-review-unavailable-"); const providerClient = { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "failed", session_id: null, output: null, error: { code: "AUTH", message: "no" } } }) };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result.status).toBe("unavailable"); expect(result.resultRef).toBe(null);
+    const attempt = JSON.parse(task.readRecord(result.attemptRef)); expect(attempt.provider_attempts[0].output_ref).toBe(null);
   });
 
   it("keeps a material delivery mismatch outside semantic results", async () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-material-mismatch-"));
+    const { attachmentRoot, task } = fixture("simple-review-material-mismatch-");
     const providerClient = { run: async () => { const error = new Error("different material"); error.code = "MATERIAL_INCOMPLETE"; throw error; } };
-    const result = await runReview({ reviewDataRoot: root, attachmentRoot: root, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
-      captureSource: () => source, buildMaterials: () => ({ bundleRoot: root, materialId, manifest: [] }) });
-    expect(result.status).toBe("unavailable"); expect(result.resultPath).toBe(null);
-    expect(JSON.parse(readFileSync(result.attemptPath, "utf8")).error.code).toBe("MATERIAL_INCOMPLETE");
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient,
+      captureSource: () => source, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result.status).toBe("unavailable"); expect(result.resultRef).toBe(null);
+    expect(JSON.parse(task.readRecord(result.attemptRef)).error.code).toBe("MATERIAL_INCOMPLETE");
   });
 });
 
 describe("verify final", () => {
-  it("accepts the same full snapshot and rejects drift", () => {
-    const root = mkdtempSync(join(tmpdir(), "simple-review-final-")); const resultPath = join(root, "result.json");
-    const result = { version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null,
-      source: { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead }, snapshot_tree: source.snapshotTree,
-      material_id: materialId, attempt_ref: "reviews/attempts/a/attempt.json", provider_results: [{ provider: "kimi", output: JSON.parse(pass) }], verdict: "pass", findings: [] };
-    writeFileSync(resultPath, JSON.stringify(result));
-    expect(verifyFinal({ resultPath: "result.json", reviewDataRoot: root, taskId: "task", stage: "build-code", reviewTrack: null, captureSource: () => source })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
-    expect(() => verifyFinal({ resultPath, reviewDataRoot: root, captureSource: () => ({ ...source, targetCommit: "9".repeat(40) }) })).toThrow(/WORKTREE_CHANGED_AFTER_REVIEW/);
-    expect(() => verifyFinal({ resultPath: join(tmpdir(), "outside.json"), reviewDataRoot: root, captureSource: () => source })).toThrow(/RESULT_REF_INVALID/);
-    writeFileSync(resultPath, JSON.stringify({ ...result, verdict: "revise_required", findings: [{ provider: "kimi", ...JSON.parse(revise).findings[0] }], provider_results: [{ provider: "kimi", output: JSON.parse(revise) }] }));
-    expect(() => verifyFinal({ resultPath, reviewDataRoot: root, captureSource: () => source })).toThrow(/REVIEW_NOT_APPROVED/);
+  it("accepts the same full snapshot and rejects drift", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-final-");
+    const providerClient={run:async()=>({runtimeId:"runtime",provider:{provider:"kimi",status:"completed",session_id:"session",output:pass,error:null}})};
+    const run=await runReviewFixture({task,attachmentRoot,taskId:"task",stage:"build-code",materials:{},hostProvider:"codex",providers:["kimi"],providerClient,captureSource:()=>source,buildMaterials:()=>({bundleRoot:attachmentRoot,materialId,manifest:[]})});
+    const resultRef=run.resultRef;
+    expect(verifyFinal({ resultRef, task, attachmentRoot, taskId: "task", stage: "build-code", reviewTrack: null, captureSource: () => source })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
+    expect(() => verifyFinal({ resultRef, task, attachmentRoot, captureSource: () => ({ ...source, targetCommit: "9".repeat(40) }) })).toThrow(/WORKTREE_CHANGED_AFTER_REVIEW/);
+    expect(() => verifyFinal({ resultRef: "outside.json", task, attachmentRoot, captureSource: () => source })).toThrow(/RESULT_REF_INVALID/);
+    const reviseClient={run:async()=>({runtimeId:"runtime",provider:{provider:"kimi",status:"completed",session_id:"session",output:revise,error:null}})};
+    const revised=await runReviewFixture({task,attachmentRoot,taskId:"task",stage:"build-code",materials:{},hostProvider:"codex",providers:["kimi"],providerClient:reviseClient,captureSource:()=>source,buildMaterials:()=>({bundleRoot:attachmentRoot,materialId,manifest:[]})});
+    expect(() => verifyFinal({ resultRef:revised.resultRef, task, attachmentRoot, captureSource: () => source })).toThrow(/REVIEW_NOT_APPROVED/);
   });
 });

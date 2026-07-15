@@ -1,0 +1,416 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { spawn } from "node:child_process";
+import { hostname, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { createTask, openTask } from "../task-handle.mjs";
+
+const temporaryDirs = [];
+const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../task-handle.mjs");
+
+function manifest(overrides = {}) {
+  return {
+    schema_version: "1.0.0",
+    task_id: "paperbuilder-phase-foundation",
+    project_name: "PaperBuilder",
+    created_at: "2026-07-16T00:00:00.000Z",
+    target_repo_root: "/absolute/PaperBuilder",
+    issue_ids: [],
+    inputs: {},
+    ...overrides,
+  };
+}
+
+function fixture() {
+  const storageRoot = realpathSync(
+    mkdtempSync(join(tmpdir(), "workflowhub-task-handle-")),
+  );
+  temporaryDirs.push(storageRoot);
+  const taskPath = join(
+    storageRoot,
+    "Projects",
+    "PaperBuilder",
+    "tasks",
+    "paperbuilder-phase-foundation",
+  );
+  return { storageRoot, taskPath };
+}
+
+afterEach(() => {
+  while (temporaryDirs.length > 0) {
+    rmSync(temporaryDirs.pop(), { recursive: true, force: true });
+  }
+});
+
+describe("TaskHandle", () => {
+  it("creates task.json once and opens it only with matching path and identity", () => {
+    const { storageRoot, taskPath } = fixture();
+    const manifest = {
+      schema_version: "1.0.0",
+      task_id: "paperbuilder-phase-foundation",
+      project_name: "PaperBuilder",
+      created_at: "2026-07-16T00:00:00.000Z",
+      target_repo_root: "/absolute/PaperBuilder",
+      issue_ids: ["ZHI-138"],
+      inputs: {},
+    };
+
+    const created = createTask({ storageRoot, taskPath, manifest });
+    expect(created.identity).toEqual({
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+    });
+    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
+      manifest,
+    );
+
+    const opened = openTask(
+      taskPath,
+      "PaperBuilder",
+      "paperbuilder-phase-foundation",
+    );
+    expect(opened.manifest).toEqual(manifest);
+    expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
+  });
+
+  it.each([
+    ["OtherProject", "paperbuilder-phase-foundation"],
+    ["PaperBuilder", "other-task"],
+  ])("rejects expected identity mismatch (%s, %s)", (projectName, taskId) => {
+    const { storageRoot, taskPath } = fixture();
+    createTask({ storageRoot, taskPath, manifest: {
+      schema_version: "1.0.0",
+      task_id: "paperbuilder-phase-foundation",
+      project_name: "PaperBuilder",
+      created_at: "2026-07-16T00:00:00.000Z",
+      target_repo_root: "/absolute/PaperBuilder",
+      issue_ids: [],
+      inputs: {},
+    } });
+
+    expect(() => openTask(taskPath, projectName, taskId)).toThrow(
+      /identity|mismatch|does not match/i,
+    );
+  });
+
+  it("rejects a manifest whose identity disagrees with its directory", () => {
+    const { storageRoot, taskPath } = fixture();
+    mkdirSync(taskPath, { recursive: true });
+    writeFileSync(
+      join(taskPath, "task.json"),
+      JSON.stringify({
+        schema_version: "1.0.0",
+        task_id: "wrong-task",
+        project_name: "PaperBuilder",
+        created_at: "2026-07-16T00:00:00.000Z",
+        target_repo_root: "/absolute/PaperBuilder",
+        issue_ids: [],
+        inputs: {},
+      }),
+    );
+
+    expect(() =>
+      openTask(taskPath, "PaperBuilder", "paperbuilder-phase-foundation"),
+    ).toThrow(/identity|mismatch|directory/i);
+  });
+
+  it("keeps recordPath inside taskPath and ignores cwd bait", () => {
+    const { storageRoot, taskPath } = fixture();
+    const baitCwd = mkdtempSync(join(tmpdir(), "workflowhub-task-bait-"));
+    temporaryDirs.push(baitCwd);
+    mkdirSync(join(baitCwd, "tasks", "paperbuilder-phase-foundation"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(baitCwd, "tasks", "paperbuilder-phase-foundation", "journal.jsonl"),
+      "bait",
+    );
+    createTask({ storageRoot, taskPath, manifest: {
+      schema_version: "1.0.0",
+      task_id: "paperbuilder-phase-foundation",
+      project_name: "PaperBuilder",
+      created_at: "2026-07-16T00:00:00.000Z",
+      target_repo_root: "/absolute/PaperBuilder",
+      issue_ids: [],
+      inputs: {},
+    } });
+
+    const previousCwd = process.cwd();
+    process.chdir(baitCwd);
+    try {
+      const task = openTask(
+        taskPath,
+        "PaperBuilder",
+        "paperbuilder-phase-foundation",
+      );
+      expect(task.recordPath("journal.jsonl")).toBe(join(taskPath, "journal.jsonl"));
+      expect(() => task.recordPath("..", "escape.json")).toThrow(
+        /escape|relative|unsafe segment/i,
+      );
+      expect(() => task.recordPath("/absolute.json")).toThrow(/absolute|relative/i);
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
+  it("rejects create through a symlinked parent and writes nothing outside storageRoot", () => {
+    const { storageRoot, taskPath } = fixture();
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-task-outside-"));
+    temporaryDirs.push(outside);
+    symlinkSync(outside, join(storageRoot, "Projects"), "dir");
+
+    expect(() =>
+      createTask({ storageRoot, taskPath, manifest: manifest() }),
+    ).toThrow(/symlink|storage|escape|identity mismatch|real directory/i);
+    expect(existsSync(join(outside, "PaperBuilder"))).toBe(false);
+  });
+
+  it("requires taskPath containment under the declared storageRoot", () => {
+    const { storageRoot } = fixture();
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-other-storage-"));
+    temporaryDirs.push(outside);
+    const outsideTaskPath = join(
+      outside,
+      "Projects",
+      "PaperBuilder",
+      "tasks",
+      "paperbuilder-phase-foundation",
+    );
+
+    expect(() =>
+      createTask({ storageRoot, taskPath: outsideTaskPath, manifest: manifest() }),
+    ).toThrow(/storage|contain|escape/i);
+    expect(existsSync(outsideTaskPath)).toBe(false);
+  });
+
+  it("rejects a task.json symlink instead of following it", () => {
+    const { storageRoot, taskPath } = fixture();
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-manifest-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(taskPath, { recursive: true });
+    const outsideManifest = join(outside, "task.json");
+    writeFileSync(outsideManifest, JSON.stringify(manifest()));
+    symlinkSync(outsideManifest, join(taskPath, "task.json"));
+
+    expect(() =>
+      openTask(taskPath, "PaperBuilder", "paperbuilder-phase-foundation"),
+    ).toThrow(/manifest|symlink|regular file/i);
+  });
+
+  it("uses controlled record I/O and refuses an ancestor symlink", () => {
+    const { storageRoot, taskPath } = fixture();
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-record-outside-"));
+    temporaryDirs.push(outside);
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    symlinkSync(outside, join(taskPath, "records"), "dir");
+
+    expect(() => task.writeRecordAtomic("records/result.json", "bad")).toThrow(
+      /symlink|escape|real directory/i,
+    );
+    expect(() => task.readRecord("records/secret.json")).toThrow(
+      /symlink|escape|real directory/i,
+    );
+    expect(existsSync(join(outside, "result.json"))).toBe(false);
+  });
+
+  it("keeps recordPath display-only; writers remain safe if an ancestor changes", () => {
+    const { storageRoot, taskPath } = fixture();
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-record-swap-"));
+    temporaryDirs.push(outside);
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    mkdirSync(join(taskPath, "records"));
+    const displayed = task.recordPath("records/result.json");
+    rmSync(join(taskPath, "records"), { recursive: true });
+    symlinkSync(outside, join(taskPath, "records"), "dir");
+
+    expect(displayed).toBe(join(taskPath, "records", "result.json"));
+    expect(() => task.writeRecordAtomic("records/result.json", "bad")).toThrow(
+      /symlink|escape|real directory/i,
+    );
+    expect(existsSync(join(outside, "result.json"))).toBe(false);
+  });
+
+  it("revalidates record parent fd after the deterministic precheck swap hook", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const evidence = join(taskPath, "records");
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-record-hook-swap-"));
+    temporaryDirs.push(outside);
+    mkdirSync(evidence);
+
+    expect(() =>
+      task.writeRecordAtomic("records/result.json", "bad", {
+        testHooks: {
+          afterParentPrecheck() {
+            rmSync(evidence, { recursive: true });
+            symlinkSync(outside, evidence, "dir");
+          },
+        },
+      }),
+    ).toThrow(/changed|symlink|nofollow|race/i);
+    expect(existsSync(join(outside, "result.json"))).toBe(false);
+  });
+
+  it.each(["afterClaim", "afterTemporary", "beforeRename"])(
+    "recovers after a creator is killed at %s without a permanent claim",
+    async (phase) => {
+      const { storageRoot } = fixture();
+      const taskId = `paperbuilder-${phase.toLowerCase()}`;
+      const taskPath = join(storageRoot, "Projects", "PaperBuilder", "tasks", taskId);
+      const taskManifest = manifest({ task_id: taskId });
+      const code = [
+        `import { createTask } from ${JSON.stringify(modulePath)};`,
+        `const storageRoot = ${JSON.stringify(storageRoot)};`,
+        `const taskPath = ${JSON.stringify(taskPath)};`,
+        `const manifest = ${JSON.stringify(taskManifest)};`,
+        `const phase = ${JSON.stringify(phase)};`,
+        "const testHooks = { [phase]() { process.kill(process.pid, 'SIGKILL'); } };",
+        "createTask({ storageRoot, taskPath, manifest, testHooks });",
+      ].join("\n");
+      const killed = await new Promise((resolveResult) => {
+        const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
+          stdio: "ignore",
+        });
+        child.once("exit", (status, signal) => resolveResult({ status, signal }));
+      });
+
+      expect(killed.signal).toBe("SIGKILL");
+      const recovered = createTask({ storageRoot, taskPath, manifest: taskManifest });
+      expect(recovered.identity.taskId).toBe(taskId);
+      const parentEntries = (await import("node:fs")).readdirSync(dirname(taskPath));
+      expect(parentEntries.filter((name) => name.startsWith(`.${taskId}`))).toEqual([]);
+    },
+  );
+
+  it("never deletes a sibling named by a malicious stale claim temporary", () => {
+    const { storageRoot, taskPath } = fixture();
+    const parent = dirname(taskPath);
+    mkdirSync(parent, { recursive: true });
+    const sibling = join(parent, "do-not-delete");
+    mkdirSync(sibling);
+    writeFileSync(join(sibling, "proof.txt"), "safe");
+    const claim = join(parent, ".paperbuilder-phase-foundation.create.lock");
+    writeFileSync(claim, `${JSON.stringify({
+      pid: 99999999,
+      host: hostname(),
+      started_at: "2000-01-01T00:00:00.000Z",
+      temporary: "../do-not-delete",
+    })}\n`);
+
+    expect(() =>
+      createTask({ storageRoot, taskPath, manifest: manifest() }),
+    ).toThrow(/claim|exist|temporary|EEXIST/i);
+    expect(readFileSync(join(sibling, "proof.txt"), "utf8")).toBe("safe");
+  });
+
+  it("blocks a record ancestor swap in the open-to-rename window", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const evidence = join(taskPath, "records");
+    const parked = join(taskPath, "records-parked");
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-open-rename-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(evidence);
+
+    expect(() =>
+      task.writeRecordAtomic("records/result.json", "bad", {
+        testHooks: {
+          afterOpenBeforeRename() {
+            renameSync(evidence, parked);
+            symlinkSync(outside, evidence, "dir");
+          },
+        },
+      }),
+    ).toThrow(/changed|symlink|nofollow|race/i);
+    expect(existsSync(join(outside, "result.json"))).toBe(false);
+  });
+
+  it("invalidates an open TaskHandle when its task root is replaced at the same path", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const original = `${taskPath}-original`;
+    renameSync(taskPath, original);
+    mkdirSync(taskPath);
+    writeFileSync(join(taskPath, "task.json"), JSON.stringify(manifest()));
+    writeFileSync(join(taskPath, "bait.json"), "replacement");
+
+    expect(() => task.recordPath("new.json")).toThrow(/changed|replaced|stale|identity/i);
+    expect(() => task.readRecord("bait.json")).toThrow(/changed|replaced|stale|identity/i);
+    expect(() => task.writeRecordAtomic("new.json", "bad")).toThrow(
+      /changed|replaced|stale|identity/i,
+    );
+    expect(() => task.appendJournal({ event: "bad" })).toThrow(
+      /changed|replaced|stale|identity/i,
+    );
+    expect(existsSync(join(taskPath, "new.json"))).toBe(false);
+    expect(existsSync(join(taskPath, "journal.jsonl"))).toBe(false);
+    expect(readFileSync(join(taskPath, "bait.json"), "utf8")).toBe("replacement");
+  });
+
+  it("appends journal through the controlled handle, not a public record path", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+
+    task.appendJournal({ event: "stage_started", stage: "build-spec" });
+    task.appendJournal({ event: "stage_finished", stage: "build-spec" });
+
+    const lines = readFileSync(join(taskPath, "journal.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(lines).toEqual([
+      { event: "stage_started", stage: "build-spec" },
+      { event: "stage_finished", stage: "build-spec" },
+    ]);
+  });
+
+  it("publishes task creation atomically and leaves no orphan on serialization failure", () => {
+    const { storageRoot, taskPath } = fixture();
+    const invalid = manifest({ inputs: { cannotSerialize: 1n } });
+
+    expect(() => createTask({ storageRoot, taskPath, manifest: invalid })).toThrow();
+    expect(existsSync(taskPath)).toBe(false);
+    expect(
+      existsSync(join(dirname(taskPath), `.paperbuilder-phase-foundation.tmp`)),
+    ).toBe(false);
+  });
+
+  it("allows exactly one winner when two processes create the same task", async () => {
+    const { storageRoot, taskPath } = fixture();
+    const taskManifest = manifest();
+    const code = [
+      `import { createTask } from ${JSON.stringify(modulePath)};`,
+      `const storageRoot = ${JSON.stringify(storageRoot)};`,
+      `const taskPath = ${JSON.stringify(taskPath)};`,
+      `const manifest = ${JSON.stringify(taskManifest)};`,
+      "try { createTask({ storageRoot, taskPath, manifest }); process.exit(0); }",
+      "catch { process.exit(23); }",
+    ].join("\n");
+
+    const run = () =>
+      new Promise((resolveResult) => {
+        const child = spawn(process.execPath, ["--input-type=module", "-e", code], {
+          stdio: "ignore",
+        });
+        child.once("exit", (status) => resolveResult(status));
+      });
+    const statuses = await Promise.all([run(), run()]);
+
+    expect(statuses.sort((a, b) => a - b)).toEqual([0, 23]);
+    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
+      taskManifest,
+    );
+  });
+});

@@ -87,8 +87,8 @@ Phase 3: 综合裁决    法官综合幸存论点逐条裁决（采纳/部分采
 
 **输出根**：
 
-- 有 task-dir 传参 → 以 `{output-root}/` 为根
-- 无传参 → 当前会话根目录建 `tasks/{task-name}/`，产物落 `tasks/{task-name}/artifacts/`
+- 输出只返回父 stage，或写入父 stage 提供的受控 callback。
+- 缺少 callback 时返回内存结果；不得自行选择目录或创建任务路径。
 
 新写产物统一使用 `debate/` 子目录：`{output-root}/debate/round-{seq}/`。读取时兼容旧版 `debate/` 之前的 `pk/` 轮次目录（找不到 `debate/` 时回退读取 `pk/` 目录）。
 

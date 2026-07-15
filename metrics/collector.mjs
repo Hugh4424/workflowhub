@@ -15,12 +15,25 @@
  * Storage is JSON Lines via fs.appendFileSync (O_APPEND atomic). No third-party deps.
  */
 
-import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { dirname, join } from "path";
+import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync, openSync, closeSync, fsyncSync, renameSync, rmSync, constants } from "fs";
+import { dirname, isAbsolute, join, resolve } from "path";
 import { homedir } from "os";
+import { randomUUID } from "crypto";
 import { spawnSync } from "child_process";
+import { assertTaskHandle } from "../core/task-handle.mjs";
+import { assertWorkspace } from "../core/stage-context.mjs";
 
 const GAP = "gap";
+const METRICS_LAUNCHER_CONFIGS = new WeakSet();
+const COLLECTOR_CONFIGS = new WeakSet();
+
+export function assertCollectorConfig(value) {
+  if (!value || typeof value !== "object" || !COLLECTOR_CONFIGS.has(value)) {
+    throw new TypeError("authentic MetricsCollector capability required");
+  }
+  assertTaskHandle(value.taskHandle);
+  return value;
+}
 
 /**
  * configForCollector — FR-COLLECT-006/007: bridge a loaded workflowhub config (which
@@ -42,15 +55,60 @@ function expandHome(p) {
   return p;
 }
 
-export function configForCollector(loadedConfig, { taskDir, taskId, project, onWarn } = {}) {
+export function createMetricsLauncherConfig(loadedConfig) {
   const globalMetricsPath = expandHome(loadedConfig?.metrics_path);
-  return {
-    globalMetricsPath,
-    taskMetricsPath: taskDir ? join(taskDir, "task-metrics.jsonl") : undefined,
-    taskId,
-    project,
+  if (typeof globalMetricsPath !== "string" || !isAbsolute(globalMetricsPath)) {
+    throw new TypeError("trusted launcher metrics_path must resolve to an absolute path");
+  }
+  const capability = Object.freeze({ globalMetricsPath: resolve(globalMetricsPath) });
+  METRICS_LAUNCHER_CONFIGS.add(capability);
+  return capability;
+}
+
+export function configForCollector(launcherConfig, { task, workspace, onWarn } = {}) {
+  if (!launcherConfig || !METRICS_LAUNCHER_CONFIGS.has(launcherConfig)) {
+    throw new TypeError("trusted metrics launcher config capability required");
+  }
+  const taskHandle = assertTaskHandle(task);
+  const authenticWorkspace = workspace === undefined ? undefined : assertWorkspace(workspace);
+  const capability = {
+    globalMetricsPath: launcherConfig.globalMetricsPath,
+    taskHandle,
+    taskId: taskHandle.identity.taskId,
+    project: taskHandle.identity.projectName,
+    repoRoot: authenticWorkspace?.worktreeRoot,
     ...(onWarn ? { onWarn } : {}),
   };
+  COLLECTOR_CONFIGS.add(capability);
+  return Object.freeze(capability);
+}
+
+function readTaskAll(cfg) {
+  try {
+    const text = cfg.taskHandle.readRecord("task-metrics.jsonl").trim();
+    if (!text) return [];
+    return text.split("\n").filter(Boolean).flatMap((line) => {
+      try { return [JSON.parse(line)]; } catch { return []; }
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    warn(cfg, `metrics read failed: ${error.message}`);
+    return [];
+  }
+}
+
+function upsertTask(executionId, patch, cfg) {
+  const records = readTaskAll(cfg);
+  const index = records.findIndex((record) => record.execution_id === executionId);
+  if (index < 0) records.push({ execution_id: executionId, ...patch });
+  else records[index] = { ...records[index], ...patch };
+  try {
+    cfg.taskHandle.writeRecordAtomic("task-metrics.jsonl", records.map((record) => JSON.stringify(record)).join("\n") + "\n");
+    return true;
+  } catch (error) {
+    warn(cfg, `metrics write failed: ${error.message}`);
+    return false;
+  }
 }
 
 function warn(cfg, message) {
@@ -70,18 +128,29 @@ function readAll(path) {
 
 // Rewrite a jsonl store atomically (used for in-place merge of the same execution_id).
 function writeAll(path, records, cfg) {
+  let temporary;
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : ""));
+    temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+    try {
+      writeFileSync(fd, records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : ""));
+      fsyncSync(fd);
+    } finally { closeSync(fd); }
+    renameSync(temporary, path);
+    const directoryFd = openSync(dirname(path), constants.O_RDONLY);
+    try { fsyncSync(directoryFd); } finally { closeSync(directoryFd); }
     return true;
   } catch (err) {
+    if (temporary) rmSync(temporary, { force: true });
     warn(cfg, `metrics write failed: ${path}: ${err.message}`);
     return false;
   }
 }
 
 // Upsert one record by execution_id into a jsonl store (re-locate from disk + merge).
-export function upsert(path, execution_id, patch, cfg) {
+function upsertGlobal(execution_id, patch, cfg) {
+  const path = cfg.globalMetricsPath;
   const records = readAll(path);
   const idx = records.findIndex((r) => r.execution_id === execution_id);
   if (idx === -1) {
@@ -90,6 +159,10 @@ export function upsert(path, execution_id, patch, cfg) {
     records[idx] = { ...records[idx], ...patch };
   }
   return writeAll(path, records, cfg);
+}
+
+export function updateTaskRecord(execution_id, patch, cfg) {
+  return upsertTask(execution_id, patch, assertCollectorConfig(cfg));
 }
 
 // Count actions deduped by their own action_id (FR-GUARD-002), never by message_id.
@@ -142,8 +215,8 @@ export function recordSkeleton(seed, cfg) {
     action_count: actionCount(seed.actions),
     stage_unit: seed.stage_unit ?? null,
   };
-  upsert(cfg.taskMetricsPath, record.execution_id, record, cfg);
-  upsert(cfg.globalMetricsPath, record.execution_id, toGlobalRow(record, cfg), cfg);
+  upsertTask(record.execution_id, record, cfg);
+  upsertGlobal(record.execution_id, toGlobalRow(record, cfg), cfg);
   return record;
 }
 
@@ -156,9 +229,9 @@ export function updateOwnResult(execution_id, patch, cfg) {
   if ("tokens" in resolved || cfg.tokenSourceReachable === false) {
     resolved.tokens = resolveTokens(resolved.tokens, cfg);
   }
-  upsert(cfg.taskMetricsPath, execution_id, resolved, cfg);
+  upsertTask(execution_id, resolved, cfg);
   const current = readRecord(execution_id, cfg);
-  if (current) upsert(cfg.globalMetricsPath, execution_id, toGlobalRow(current, cfg), cfg);
+  if (current) upsertGlobal(execution_id, toGlobalRow(current, cfg), cfg);
   collectFacts(execution_id, patch, cfg);
   return current;
 }
@@ -181,7 +254,8 @@ export function collectFacts(execution_id, factSeed, cfg) {
     // git_sha: zero-cost read of HEAD commit sha.
     let git_sha = null;
     try {
-      const cwd = cfg.repoRoot ?? process.cwd();
+      if (!cfg.repoRoot) throw new Error("Workspace required for Git facts");
+      const cwd = cfg.repoRoot;
       const r = spawnSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" });
       if (r.status === 0 && r.stdout) git_sha = r.stdout.trim();
     } catch (_) { /* non-git env: leave null */ }
@@ -189,7 +263,8 @@ export function collectFacts(execution_id, factSeed, cfg) {
     // files_changed: zero-cost list of changed paths relative to HEAD.
     let files_changed = null;
     try {
-      const cwd = cfg.repoRoot ?? process.cwd();
+      if (!cfg.repoRoot) throw new Error("Workspace required for Git facts");
+      const cwd = cfg.repoRoot;
       const r = spawnSync("git", ["diff", "--name-only", "HEAD"], { cwd, encoding: "utf8" });
       if (r.status === 0 && r.stdout != null) {
         files_changed = r.stdout.split("\n").filter(Boolean);
@@ -213,7 +288,7 @@ export function collectFacts(execution_id, factSeed, cfg) {
     }
 
     const facts = { exit_code, git_sha, files_changed, review_invoked };
-    const ok = upsert(cfg.taskMetricsPath, execution_id, { facts }, cfg);
+    const ok = upsertTask(execution_id, { facts }, cfg);
     if (ok === false) {
       process.stderr.write(
         `[collectFacts warn] fact write failed for ${execution_id}\n`
@@ -231,15 +306,15 @@ export function collectFacts(execution_id, factSeed, cfg) {
  * stage onto the SAME record (one-record-three-updates, FR-COLLECT-003/004).
  */
 export function updateStageImpact(execution_id, patch, cfg) {
-  upsert(cfg.taskMetricsPath, execution_id, patch, cfg);
+  upsertTask(execution_id, patch, cfg);
   const current = readRecord(execution_id, cfg);
-  if (current) upsert(cfg.globalMetricsPath, execution_id, toGlobalRow(current, cfg), cfg);
+  if (current) upsertGlobal(execution_id, toGlobalRow(current, cfg), cfg);
   return current;
 }
 
 /** readRecord — re-locate one record by execution_id from the task store. */
 export function readRecord(execution_id, cfg) {
-  return readAll(cfg.taskMetricsPath).find((r) => r.execution_id === execution_id) ?? null;
+  return readTaskAll(cfg).find((r) => r.execution_id === execution_id) ?? null;
 }
 
 /**
@@ -248,7 +323,7 @@ export function readRecord(execution_id, cfg) {
  */
 export function collectorRollup() {
   function rollupStage(stage, cfg) {
-    const records = readAll(cfg.taskMetricsPath).filter((r) => r.stage === stage);
+    const records = readTaskAll(cfg).filter((r) => r.stage === stage);
     const units = new Set();
     for (const r of records) {
       if (r.stage_unit) units.add(r.stage_unit);

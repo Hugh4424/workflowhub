@@ -1,68 +1,114 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { cpSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "..");
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checker = resolve(repoRoot, "scripts/check-task-record-paths.mjs");
+const temporary = [];
+const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 
-function runChecker(cwd = repoRoot) {
-  return spawnSync(process.execPath, [checker, "--root", cwd], {
-    cwd,
+function run(root = repoRoot) {
+  return spawnSync(process.execPath, [checker, "--root", root], {
+    cwd: root,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
-describe("check-task-record-paths", () => {
-  it("passes the repository stage path contract", () => {
-    const result = runChecker();
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("[check-task-record-paths] PASS");
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), "workflowhub-task-context-check-"));
+  temporary.push(root);
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  cpSync(checker, join(root, "scripts", "check-task-record-paths.mjs"));
+  mkdirSync(join(root, "core"), { recursive: true });
+  writeFileSync(join(root, "core", "task-identity.mjs"), "export const taskPath = join(root, 'Projects', project, 'tasks', task);\n");
+  for (const stage of stages) {
+    const directory = join(root, "workflows", stage);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(directory, "SKILL.md"),
+      "Use StageContext from core/stage-context.mjs via bootstrapStage.\n",
+    );
+  }
+  return root;
+}
+
+afterEach(() => {
+  while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true });
+});
+
+describe("TaskContext static guard", () => {
+  it("passes the migrated repository contract", () => {
+    const result = run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("TaskContext is the only stage path contract");
   });
 
-  it("fails when a stage prompt omits task-record-paths bootstrap", () => {
-    const tmp = mkdtempSync(join(tmpdir(), "task-record-paths-check-"));
-    try {
-      for (const dir of ["scripts", "core", "workflows", "skills"]) {
-        cpSync(resolve(repoRoot, dir), join(tmp, dir), { recursive: true });
-      }
-      writeFileSync(
-        join(tmp, "workflows", "verify-code", "SKILL.md"),
-        "stage prompt without canonical task record path bootstrap\n"
-      );
-
-      const result = runChecker(tmp);
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain("workflows/verify-code/SKILL.md");
-      expect(result.stderr).toContain("core/task-record-paths.mjs");
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
+  it("accepts a minimal repository that routes all stages through bootstrapStage", () => {
+    const result = run(fixture());
+    expect(result.status, result.stderr).toBe(0);
   });
 
-  it("fails on runtime code that directly joins repo-local tasks", () => {
-    const tmp = mkdtempSync(join(tmpdir(), "task-record-paths-check-"));
-    try {
-      for (const dir of ["scripts", "core", "workflows", "skills"]) {
-        cpSync(resolve(repoRoot, dir), join(tmp, dir), { recursive: true });
-      }
-      mkdirSync(join(tmp, "scripts"), { recursive: true });
-      writeFileSync(
-        join(tmp, "scripts", "bad-task-path.mjs"),
-        "import { join } from 'node:path';\nexport const p = join(process.cwd(), \"tasks\", taskId, \"worktree.json\");\n"
-      );
+  it.each([
+    ["core/task-dir-parser.mjs", "legacy task-dir parser"],
+    ["resolveTaskRecordPaths(taskId)", "legacy task-record resolver"],
+    ["WORKFLOWHUB_TASK_DIR", "must not read"],
+    ["WORKFLOWHUB_TASK_TRACKING_ROOT", "unsupported"],
+    ["process.cwd()", "cwd identity"],
+    ["const storageRoot = caller.storageRoot", "caller-supplied"],
+    ["const taskPath = caller.taskPath", "caller-supplied"],
+    ["git remote get-url origin", "Git remote identity"],
+  ])("rejects forbidden stage contract: %s", (bad, reason) => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "workflows", "verify-code", "SKILL.md"),
+      `Use StageContext from core/stage-context.mjs via bootstrapStage.\n${bad}\n`,
+    );
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(reason);
+  });
 
-      const result = runChecker(tmp);
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain("scripts/bad-task-path.mjs");
-      expect(result.stderr).toContain("literal \"tasks\"");
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
+  it("rejects literal tasks path assembly outside task-identity", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "workflows", "build-code", "sidecar.mjs"),
+      "import { join } from 'node:path'; export const bad = join(root, 'tasks', taskId);\n",
+    );
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("only legal in core/task-identity.mjs");
+  });
+
+  it("scans transitive runtime imports outside the fixed component roots", () => {
+    const root = fixture();
+    mkdirSync(join(root, "metrics"), { recursive: true });
+    writeFileSync(join(root, "metrics", "sidecar.mjs"), "export const bad = process.cwd();\n");
+    writeFileSync(join(root, "workflows", "verify-code", "runtime.mjs"), "import '../../metrics/sidecar.mjs';\n");
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("metrics/sidecar.mjs");
+    expect(result.stderr).toContain("cwd identity discovery");
+  });
+
+  it.each(["core/source-manifest.mjs", "core/requirement-ledger.mjs", "core/task-index.mjs"])("guards identity sidecar bypass in %s even before it is imported", (relativeFile) => {
+    const root = fixture();
+    const full = join(root, relativeFile); mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, "export const guessed = process.cwd();\n");
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(relativeFile);
+    expect(result.stderr).toContain("cwd identity discovery");
+  });
+
+  it("fails when any stage omits the common bootstrap contract", () => {
+    const root = fixture();
+    writeFileSync(join(root, "workflows", "build-plan", "SKILL.md"), "legacy stage\n");
+    const result = run(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("workflows/build-plan/SKILL.md");
+    expect(result.stderr).toContain("bootstrapStage");
   });
 });

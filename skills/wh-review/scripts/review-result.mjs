@@ -1,20 +1,10 @@
-import { linkSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { posix } from "node:path";
+import { assertTaskHandle } from "../../../core/task-handle.mjs";
+import { createCanonicalReviewWriter } from "../../../core/canonical-receipt-writer.mjs";
 
 function safePart(value, label) {
   if (typeof value !== "string" || !/^[a-zA-Z0-9._-]+$/.test(value)) throw new TypeError(`${label} is invalid`);
   return value;
-}
-
-function createJson(path, value, atomic = false) {
-  mkdirSync(dirname(path), { recursive: true });
-  const bytes = `${JSON.stringify(value, null, 2)}\n`;
-  if (!atomic) { writeFileSync(path, bytes, { flag: "wx", mode: 0o600 }); return path; }
-  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  try { writeFileSync(temporary, bytes, { flag: "wx", mode: 0o600 }); linkSync(temporary, path); }
-  finally { rmSync(temporary, { force: true }); }
-  return path;
 }
 
 export function aggregateProviderResults(providerResults, minimumReviewers = 1) {
@@ -27,23 +17,32 @@ export function aggregateProviderResults(providerResults, minimumReviewers = 1) 
   return { status: "semantic", verdict: "pass", valid };
 }
 
-export function reviewPaths({ reviewDataRoot, attemptId, stage, reviewTrack, snapshotTree }) {
-  const root = resolve(reviewDataRoot, "reviews"); const id = safePart(attemptId, "attemptId");
-  const attemptDirectory = join(root, "attempts", id); const track = reviewTrack ?? "default";
+export function reviewRefs({ attemptId, stage, reviewTrack, snapshotTree }) {
+  const id = safePart(attemptId, "attemptId");
+  const track = reviewTrack ?? "default";
+  const attemptDirectoryRef = posix.join("reviews", "attempts", id);
   const resultName = `${safePart(stage, "stage")}-${safePart(track, "reviewTrack")}-${safePart(snapshotTree, "snapshotTree")}-${id}.json`;
-  return { root, attemptDirectory, attemptPath: join(attemptDirectory, "attempt.json"), providerDirectory: join(attemptDirectory, "providers"), resultPath: join(root, "results", resultName) };
+  return {
+    attemptRef: posix.join(attemptDirectoryRef, "attempt.json"),
+    providerDirectoryRef: posix.join(attemptDirectoryRef, "providers"),
+    resultRef: posix.join("reviews", "results", resultName),
+  };
 }
 
-export function writeProviderOutput(directory, provider, output, sequence = 1) {
+export function writeProviderOutput(task, directoryRef, provider, output, sequence = 1, provenance = {}) {
   if (typeof output !== "string") return null;
-  const suffix = sequence === 1 ? "" : `-${sequence}`; const path = join(directory, `${safePart(provider, "provider")}${suffix}.output.txt`); mkdirSync(directory, { recursive: true }); writeFileSync(path, output, { flag: "wx", mode: 0o600 }); return path;
+  const suffix = sequence === 1 ? "" : `-${sequence}`;
+  const ref = posix.join(directoryRef, `${safePart(provider, "provider")}${suffix}.output.json`);
+  const safeTask = assertTaskHandle(task);
+  return createCanonicalReviewWriter({ task: safeTask, taskId: provenance.taskId, stage: provenance.stage }).writeProviderOutput(ref, output);
 }
 
-export function writeAttempt(path, attempt) { return createJson(path, attempt, false); }
-export function writeSemanticResult(path, result) { return createJson(path, result, true); }
+export function writeAttempt(task, ref, attempt) {
+  const safeTask = assertTaskHandle(task);
+  return createCanonicalReviewWriter({ task: safeTask, taskId: attempt?.task_id, stage: attempt?.stage }).writeAttempt(ref, attempt);
+}
 
-export function relativeReviewRef(reviewDataRoot, path) {
-  const ref = relative(resolve(reviewDataRoot), resolve(path)).replaceAll("\\", "/");
-  if (!ref || ref.startsWith("..")) throw new Error("review artifact escapes review data root");
-  return ref;
+export function writeSemanticResult(task, ref, result) {
+  const safeTask = assertTaskHandle(task);
+  return createCanonicalReviewWriter({ task: safeTask, taskId: result?.task_id, stage: result?.stage }).writeResult(ref, result);
 }

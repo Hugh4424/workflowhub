@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at"],
+  "properties": {
+    "schema_version": { "const": "human-confirmation.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
+    "attempt_ref": { "type": "string", "pattern": "^attempt-[0-9]{4}\\.json$" },
+    "decision": { "enum": ["accepted", "rejected"] },
+    "confirmed_at": { "type": "string", "format": "date-time" },
+    "checkpoint_plan_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

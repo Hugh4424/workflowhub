@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
-import { validateStageResult } from "../../../../scripts/validate-stage-result.mjs";
 
 const root = join(import.meta.dirname, "..", "..", "..");
 const schemaRoot = join(root, "wh-review", "schemas");
@@ -61,6 +60,15 @@ describe("simple wh-review contracts", () => {
       expect(entry).not.toHaveProperty("output_schema");
       expect(entry).not.toHaveProperty("continuation_policy");
       expect(entry).not.toHaveProperty("bundle_hash");
+    }
+  });
+
+  it("requires canonical reviewer skills for both code stages", () => {
+    const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
+    for (const stage of ["build-code", "verify-code"]) {
+      const required = plan.stages[stage].required_skills;
+      expect(required, `${stage} must declare a reviewer lens`).not.toHaveLength(0);
+      for (const skill of required) expect(existsSync(join(root, skill, "SKILL.md")), `${stage}: ${skill}`).toBe(true);
     }
   });
 
@@ -155,6 +163,5 @@ describe("simple wh-review contracts", () => {
       user_decision: false,
       reason: "complete"
     };
-    expect(validateStageResult("build-code", artifact)).toEqual({ ok: true, errors: [] });
   });
 });
