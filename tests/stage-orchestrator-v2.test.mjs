@@ -9,10 +9,10 @@ import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 const temporary = [];
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-runner-"))); temporary.push(root);
-  const repo = join(root, "repo"), worktree = join(root, "worktree"); mkdirSync(repo);
+  const repo = join(root, "repo"), worktree = join(root, "repo-chain-task"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo }); execFileSync("git", ["config", "user.email", "t@example.com"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo }); execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
-  const oid = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim(); execFileSync("git", ["worktree", "add", "-q", worktree, oid], { cwd: repo });
+  const oid = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim(); execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/chain-task", worktree, oid], { cwd: repo });
   const taskPath = join(root, "Projects", "Demo", "tasks", "chain-task");
   const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "chain-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
   return { root, task, taskPath, worktree, oid };
@@ -29,13 +29,20 @@ describe("stage-runner capability unit", () => {
     const {taskPath,worktree,oid}=fixture();const {runStage}=await import("../core/stage-runner.mjs");const {bootstrapStage}=await import("../core/stage-context.mjs");const context=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"});
     await runStage("make-decision",context,async(worker)=>{expect(worker).not.toHaveProperty("task");expect(worker).not.toHaveProperty("kernel");expect(worker).not.toHaveProperty("accept");return{facts:{worktree_root:worktree,baseline_commit:oid}};});
   });
-  it("runs a real cross-task mapping from kd-phase decision into ZHI build-spec", async () => {
-    const { root, task, taskPath, worktree, oid }=fixture(); const { runStage,acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage }=await import("../core/stage-context.mjs");
+  it("keeps a cross-task decision read-only while the consumer owns its Workspace", async () => {
+    const { root, task, taskPath, worktree, oid }=fixture(); const { runStage,acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage,prepareMakeDecisionWorkspace }=await import("../core/stage-context.mjs");
     const sourceContext=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}); const decision=await runStage("make-decision",sourceContext,async()=>({facts:{worktree_root:worktree,baseline_commit:oid}})); acceptStageAttempt("make-decision",sourceContext,{attemptRef:decision.attempt_ref,humanConfirmationRef:writeHumanConfirmation(sourceContext.kernel,"make-decision",decision)});
     const consumerPath=join(root,"Projects","Demo","tasks","ZHI-138"); createTask({storageRoot:root,taskPath:consumerPath,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"ZHI-138",created_at:new Date().toISOString(),target_repo_root:task.manifest.target_repo_root,issue_ids:["ZHI-138"],inputs:{decision:join(task.taskPath,"results","make-decision","accepted.json")}}});
+    expect(()=>bootstrapStage("build-spec",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"})).toThrow(/current task.*accepted make-decision/i);
+    const consumerDecisionContext=prepareMakeDecisionWorkspace(bootstrapStage("make-decision",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"}));
+    const consumerDecision=await runStage("make-decision",consumerDecisionContext,async(ctx,upstream)=>{expect(upstream.accepted.task_id).toBe("chain-task");return{facts:{worktree_root:ctx.candidateWorkspace.worktreeRoot,baseline_commit:ctx.candidateWorkspace.baselineCommit}};});
+    expect(consumerDecision.attempt.upstream_refs[0].task_id).toBe("chain-task");
+    acceptStageAttempt("make-decision",consumerDecisionContext,{attemptRef:consumerDecision.attempt_ref,humanConfirmationRef:writeHumanConfirmation(consumerDecisionContext.kernel,"make-decision",consumerDecision)});
     const consumer=bootstrapStage("build-spec",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"});
-    const attempt=await runStage("build-spec",consumer,async(ctx,upstream)=>{expect(upstream.accepted.task_id).toBe("chain-task");ctx.artifacts.writeAtomic("spec.md","spec\n");const checkpoint=ctx.createCheckpoint("build-spec");return{facts:{spec_ref:"specs/ZHI-138/spec.md",checkpoint}};});
-    expect(attempt.attempt.upstream_refs[0].task_id).toBe("chain-task");
+    expect(consumer.workspace.worktreeRoot).not.toBe(worktree);
+    const attempt=await runStage("build-spec",consumer,async(ctx,upstream)=>{expect(upstream.accepted.task_id).toBe("ZHI-138");ctx.artifacts.writeAtomic("spec.md","spec\n");const checkpoint=ctx.createCheckpoint("build-spec");return{facts:{spec_ref:"specs/ZHI-138/spec.md",checkpoint}};});
+    expect(attempt.attempt.upstream_refs[0].task_id).toBe("ZHI-138");
+    expect(()=>execFileSync("git",["status","--porcelain"],{cwd:worktree,encoding:"utf8"})).not.toThrow();
   });
   it("acceptance cannot override checkpoint data", async () => {
     const { taskPath, worktree, oid }=fixture(); const { runStage,acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage }=await import("../core/stage-context.mjs");

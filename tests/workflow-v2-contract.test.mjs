@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 const root = resolve(new URL("..", import.meta.url).pathname);
 const stages = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const readStage = (stage) => readFileSync(join(root, "workflows", stage, "SKILL.md"), "utf8");
+const readComponent = (component) => readFileSync(join(root, "skills", component, "SKILL.md"), "utf8");
 
 describe("five-stage v2 business contract", () => {
   it.each(stages)("%s has valid identity and one TaskContext bootstrap", (stage) => {
@@ -33,6 +34,23 @@ describe("five-stage v2 business contract", () => {
     for (const stage of ["build-spec", "build-plan", "build-code"]) {
       expect(readStage(stage)).toMatch(/frozen|controlled|ArtifactDir/i);
     }
+  });
+
+  it("keeps build-plan research in memory and publishes only plan/tasks artifacts", () => {
+    const skill = readStage("build-plan");
+    const research = readComponent("spec-research");
+    const plan = readComponent("spec-plan");
+    expect(skill).toMatch(/Writes: `plan\.md` and `tasks\.md` only/i);
+    expect(skill).toMatch(/research notes[\s\S]*in-memory|in-memory[\s\S]*research/i);
+    expect(skill).not.toMatch(/Writes:[^\n]*(?:research\.md|data-contracts\.md)/i);
+    expect(research).toMatch(/Return one in-memory `spec-research-result\.v1` value/i);
+    expect(research).toMatch(/Never write a\s+file or publish a formal artifact/i);
+    expect(research).not.toMatch(/controlled writer|research\.md/i);
+    expect(plan).toMatch(/optional frozen[\s\S]*`spec-research-result\.v1` content/i);
+    expect(plan).not.toMatch(/research\.md/i);
+    const steps = JSON.parse(readFileSync(join(root, "workflows", "build-plan", "steps.json"), "utf8"));
+    expect(steps.steps.slice(1, 3).flatMap((step) => step.completion_evidence.map((item) => item.uri_or_path)))
+      .toEqual(["memory://build-plan/research", "memory://build-plan/data-contracts"]);
   });
 
   it("keeps independent review, fresh tests, browser QA, and confirmed close", () => {

@@ -13,6 +13,8 @@ Follow `docs/contracts/task-context.md`; runtime implementation is
 `bootstrapStage("build-code", ...)`. All commands run with explicit
 `ctx.workspace.worktreeRoot`. This execution cwd is not an identity source.
 Task records use `ctx.task`/`ctx.kernel`; design files use `ctx.artifacts`.
+Repository-owned subprocesses use `core/workspace-runner.mjs`, which accepts
+only a branded Workspace plus argv and fixes cwd to the verified worktree.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-code
 --project=<project> --task=<task> --input=<component-receipts.json>`. Use the
@@ -63,6 +65,11 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
 
 No task identifier, issue identifier, branch name, or shell location may select
 the project or task. Missing accepted inputs stop before implementation.
+WorkspaceRunner sets the authenticated starting cwd for repository-owned test
+and diff commands; it is not a sandbox and does not prevent an invoked command
+from changing directory. It cannot constrain a host coding worker's own shell; that external boundary
+receives the explicit workspace root and its output is accepted only through
+workspace-bound diff, test, and review evidence.
 
 ## Metrics capability
 

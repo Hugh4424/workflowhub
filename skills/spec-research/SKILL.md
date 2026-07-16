@@ -5,11 +5,12 @@ description: Research planning uncertainties from a frozen specification packet.
 
 # Spec Research
 
-Receive frozen specification content, explicit research questions, and a
-controlled writer from build-plan. Do not receive or discover task/storage/repo
-paths. External research follows the host's approved search capability.
+Receive frozen specification content and explicit research questions from
+build-plan. Do not receive a writer or discover task/storage/repo paths.
+External research follows the host's approved search capability.
 
-For each question record evidence, alternatives, recommendation, trade-offs,
-and remaining uncertainty. Write only named artifact `research.md`. If research
-is unnecessary, write the supplied skip reason instead of pretending research
-was performed.
+Return one in-memory `spec-research-result.v1` value. For each question it
+records evidence, alternatives, recommendation, trade-offs, and remaining
+uncertainty. If research is unnecessary, return `status: skipped` with the
+supplied reason instead of pretending research was performed. Never write a
+file or publish a formal artifact.

@@ -20,8 +20,8 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-spec | 5 | review-spec | §3.7 V4 + §3.8 quality contract | revise_required returns to affected step; incomplete material/transport needs human and emits no result |
 | build-spec | 6 | publish-spec-result | §7 auto-advance + §7.5 commit | only semantic pass advances; commit change or record no-change reason; close result/exit receipt |
 | build-plan | 1 | read-spec | Step 1 upstream read | missing/cleaned worktree escalates |
-| build-plan | 2 | research-plan | Step 0 spec-research | declared skip requires reason; failure escalates but is non-blocking |
-| build-plan | 3 | define-contracts | Step 1.5 data-contracts | extraction failure/ambiguity escalates but is non-blocking |
+| build-plan | 2 | research-plan | in-memory spec-research | no standalone artifact; failure remains visible |
+| build-plan | 3 | define-contracts | in-memory contract extraction | relevant contracts fold into plan.md |
 | build-plan | 4 | write-plan | Steps 2–3 spec-plan/spec-tasks + Step 7 F10 | missing required section fails; F10 change retries Steps 2–4 |
 | build-plan | 5 | review-plan | Steps 4–6 and Step 8 V4 review | analysis/constitution/baseline findings non-blocking; incomplete packet remains material-incomplete |
 | build-plan | 6 | approve-plan | Step 9 human checkpoint | hard gate; wait for human; change/pause re-displays; no stage result |

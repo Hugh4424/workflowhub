@@ -14,13 +14,13 @@ import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 const temporary = [];
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-capture-v2-"))); temporary.push(root);
-  const repo = join(root, "repo"); const worktree = join(root, "worktree"); mkdirSync(repo);
+  const repo = join(root, "repo"); const worktree = join(root, "repo-capture-task"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
   execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-q", worktree, sha], { cwd: repo });
+  execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/capture-task", worktree, sha], { cwd: repo });
   const taskPath = join(root, "Projects", "Demo", "tasks", "capture-task");
   const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "capture-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
   const kernel = createTaskKernel(task);
@@ -44,6 +44,13 @@ describe("build-code capture v2 boundary", () => {
     expect(result).toMatchObject({ exit_code: 3, receipt_ref: outputPath });
     expect(result.snapshot_head).toMatch(/^[a-f0-9]{40}$/); expect(result.snapshot_tree).toMatch(/^[a-f0-9]{40}$/);
     expect(JSON.parse(task.readRecord(outputPath)).exit_code).toBe(3);
+  });
+
+  it("runs the official test subprocess in the accepted Workspace", async () => {
+    const { cwd, outputPath, workspace, task } = fixture();
+    const result = await runCapture("node -e \"console.log(process.cwd())\"", outputPath, { workspace, task });
+    expect(result.exit_code).toBe(0);
+    expect(task.readRecord(result.output_ref)).toContain(realpathSync(cwd));
   });
 
   it("preserves failing command, stdout, stderr, hash, and red-baseline anomaly", async () => {

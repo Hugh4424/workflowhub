@@ -12,16 +12,17 @@ const UPSTREAM_STAGE = Object.freeze({
   "verify-code": "build-code",
 });
 const UPSTREAM_INPUT = Object.freeze({
-  "build-spec": "decision",
+  "make-decision": "decision",
+  "build-spec": null,
   "build-plan": "spec",
   "build-code": "build_plan",
   "verify-code": null,
 });
 
 function upstreamForStage(ctx, stage, upstreamStage) {
-  if (!upstreamStage) return null;
   const slot = UPSTREAM_INPUT[stage];
   const hasInput = slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot);
+  if (!upstreamStage) return hasInput ? ctx.kernel.readInput(slot) : null;
   if (!hasInput) return ctx.kernel.readAccepted(upstreamStage);
   let local;
   try { local = ctx.kernel.readAccepted(upstreamStage); } catch (error) {

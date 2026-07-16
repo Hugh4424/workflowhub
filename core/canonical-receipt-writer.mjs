@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { assertWorkspace } from "./workspace.mjs";
+import { runWorkspaceCommand } from "./workspace-runner.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -20,6 +21,18 @@ const OFFICIAL_COMPONENTS = Object.freeze({
 });
 
 function git(root, args) { return String(execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
+
+function workspaceCommand(workspace, command, args, label) {
+  const result = runWorkspaceCommand(workspace, command, args);
+  if (result.error || result.status !== 0) {
+    throw new Error(`${label} failed: ${result.stderr?.trim() || result.error?.message || `exit ${result.status}`}`);
+  }
+  return result.stdout;
+}
+
+function workspaceGit(workspace, args, label = "workspace Git command") {
+  return workspaceCommand(workspace, "git", args, label).trim();
+}
 
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
 export function captureWorkspaceSnapshot(workspace) {
@@ -48,14 +61,14 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     if (Object.keys(payload).some((key) => key !== "content") || typeof payload.content !== "string" || payload.content.trim() === "") throw new TypeError(`${component} content payload required`);
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };
   } else if (registration.kind === "implementation") {
-    const safeWorkspace = assertWorkspace(workspace), root = safeWorkspace.worktreeRoot;
+    const safeWorkspace = assertWorkspace(workspace);
     if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");
     const snapshot = captureWorkspaceSnapshot(safeWorkspace), snapshotHead = snapshot.head, snapshotTree = snapshot.tree;
-    const patch = String(execFileSync("git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
-    const tracked = git(root, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
-    const untracked = git(root, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
+    const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
+    const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
+    const untracked = workspaceGit(safeWorkspace, ["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
     const changed = [...new Set([...tracked, ...untracked])].sort();
-    const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, patch, untracked: untracked.map((path) => ({ path, blob_oid: git(root, ["hash-object", "--", path]) })) }, null, 2)}\n`;
+    const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
     const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
     write(diffRef, diff);
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, phase_completion: structuredClone(payload.phase_completion), snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
@@ -104,10 +117,9 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
     captureTests({ command, receiptRef, outputRef } = {}) {
       if (typeof command !== "string" || command.trim() === "") throw new TypeError("test command required");
       if (!/^receipts\/[a-zA-Z0-9._/-]+\.json$/.test(receiptRef ?? "") || !/^evidence\/[a-zA-Z0-9._/-]+$/.test(outputRef ?? "")) throw new Error("canonical tests receipt/output namespace required");
-      const root = safeWorkspace.worktreeRoot;
       const before = captureWorkspaceSnapshot(safeWorkspace), headBefore = before.head, treeBefore = before.tree;
       const startedAt = now();
-      const proc = spawnSync(command, { shell: true, cwd: root, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
+      const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command]);
       const completedAt = now();
       const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
       const after = captureWorkspaceSnapshot(safeWorkspace);

@@ -23,9 +23,9 @@ async function fixture({ reverseLast = false, tamper = false } = {}) {
   const taskId = "demo-task";
   const projectName = "Demo";
   const taskPath = join(storageRoot, "Projects", projectName, "tasks", taskId);
-  const repo = join(storageRoot,"repo"), worktree = join(storageRoot,"worktree"); mkdirSync(repo);
+  const repo = join(storageRoot,"repo"), worktree = join(storageRoot,"repo-demo-task"); mkdirSync(repo);
   execFileSync("git",["init","-q"],{cwd:repo}); execFileSync("git",["config","user.email","t@example.com"],{cwd:repo}); execFileSync("git",["config","user.name","Test"],{cwd:repo}); execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});
-  const oid=execFileSync("git",["rev-parse","HEAD"],{cwd:repo,encoding:"utf8"}).trim(); execFileSync("git",["worktree","add","-q",worktree,oid],{cwd:repo});
+  const oid=execFileSync("git",["rev-parse","HEAD"],{cwd:repo,encoding:"utf8"}).trim(); execFileSync("git",["worktree","add","-q","-b","task/Demo/demo-task",worktree,oid],{cwd:repo});
   const tree=execFileSync("git",["rev-parse","HEAD^{tree}"],{cwd:repo,encoding:"utf8"}).trim(), hash="a".repeat(64);
   const testFacts=(prefix)=>({command:"npm test",exit_code:0,command_hash:hash,snapshot_head:oid,snapshot_tree:tree,snapshot_commit:oid,started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z",receipt_ref:`evidence/${prefix}-receipt.json`,receipt_hash:hash,output_ref:`evidence/${prefix}-output.txt`,output_hash:hash});
   const reviewFacts=(stage)=>({verdict:"pass",result_ref:`reviews/results/${stage}.json`,result_hash:hash,snapshot_tree:tree});

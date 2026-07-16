@@ -95,16 +95,16 @@ skills:
   - name: spec-research
     path: skills/spec-research/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 5e83b0842787c990d444277059db1570dbd683912be2755c014365cd420f186b
+    local_bundle_hash: 1623561aca7b2f8288140187ff357310bd80a7011ee5f2d6d34737c37bcc78a5
     last_reviewed_at: "2026-07-14"
     status: native
-    purpose: 规划前形成可追踪研究结论
-    design_idea: fail-loud、可明确跳过、证据可追踪
+    purpose: 规划前形成内存研究材料
+    design_idea: 冻结输入、内存交接、不新增正式产物
     used_by_stages: [build-plan]
     upstream: []
     local_changes: workflowhub 原生实现
     dependency_closure: [skills/spec-research]
-    update_policy: 随 research 产物合同变更审查
+    update_policy: 随内存研究接口变更审查
   - name: spec-specify
     path: skills/spec-specify/SKILL.md
     local_version: 1.0.0
@@ -134,7 +134,7 @@ skills:
   - name: spec-plan
     path: skills/spec-plan/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: caa2a69259a8051021430bfd056326ae58365ae43085b79b25abf3979176e304
+    local_bundle_hash: ac900c3617befec6e9a5a07b8278130121db0c6250d2b01e504cf94c583f18b8
     last_reviewed_at: "2026-07-14"
     status: adapted
     purpose: 从 spec 生成实现 plan
@@ -143,7 +143,7 @@ skills:
     upstream:
       - { <<: *speckit, path: "templates/commands/plan.md", skill_url: "https://github.com/github/spec-kit/blob/b7e67f55bf7a937aaa57dbe0a8198774e285de3a/templates/commands/plan.md" }
       - { <<: *superpowers, path: "skills/writing-plans/SKILL.md", skill_url: "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/writing-plans/SKILL.md" }
-    local_changes: 去分支耦合；内置模板；吸收 right-sizing/global constraints/interfaces
+    local_changes: 去分支耦合；接可选冻结研究内容；内置模板；吸收 right-sizing/global constraints/interfaces
     dependency_closure: [skills/spec-plan]
     update_policy: 比较 Spec Kit 与 Superpowers planning 变更，只吸收不重复编排的规则
   - name: spec-tasks
@@ -219,7 +219,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: c59c492ca759f18fc33c4a1f2adeade98188902309eda1b71c9dbe14bf84c628
+    local_bundle_hash: b501fed4c6af224d6f3e6b7ea186db072a834cccbe8aabcbe336a2c8e140ccbd
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

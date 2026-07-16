@@ -15,8 +15,9 @@ Follow `docs/contracts/task-context.md`; runtime implementation is
 `ctx.manifest`. Workspace and ArtifactDir must be absent.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=make-decision
---project=<project> --task=<task> --worktree-root=<absolute-worktree>
---baseline-commit=<oid> --input=<component-receipts.json>`. Acceptance is
+--project=<project> --task=<task> --input=<component-receipts.json>`. The official
+runtime deterministically creates or validates the task worktree from the
+TaskHandle; callers must not supply a worktree path or baseline. Acceptance is
 a separate `accept` invocation with `--attempt` and
 `--human-confirmation-ref`. First record the decision with
 `confirm --attempt=<attempt> --decision=accepted|rejected`, then pass its

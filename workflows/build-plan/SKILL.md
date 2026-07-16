@@ -28,8 +28,9 @@ manifest.
 ## Named artifacts
 
 - Reads: `spec.md`.
-- Writes: `research.md`, `plan.md`, `tasks.md`, and `data-contracts.md` when
-  declared by the stage.
+- Writes: `plan.md` and `tasks.md` only.
+- In-memory planning material: research notes and extracted data contracts;
+  neither is a standalone artifact.
 - Stage record: append-only build-plan attempt through TaskKernel.
 
 ## Procedure
@@ -37,7 +38,10 @@ manifest.
 1. Validate context and read the accepted build-spec result.
 2. Read `spec.md` through ArtifactDir and verify it matches the accepted
    checkpoint blob consumed by this stage.
-3. Give `spec-research` frozen spec content and a named output callback.
+3. Give `spec-research` frozen spec content. Keep its result in memory; do not
+   create `research.md`. Extracted data contracts remain in memory and are
+   incorporated into `plan.md` when relevant; do not create a separate contract
+   artifact.
 4. Give `spec-plan` frozen spec/research content and the `plan.md` writer.
 5. Give `spec-tasks` frozen spec/plan content and the `tasks.md` writer.
 6. Run `spec-analyze`, simplicity review, and independent engineering review

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
+import { createTaskWorktreeRemoval } from "./workspace.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
@@ -126,10 +126,13 @@ function git(cwd, args, { allowFailure = false } = {}) {
 }
 
 /** Mint the only supported close executors from a verified repository root. */
-export function createGovernedCloseExecutorRegistry({ repoRoot } = {}) {
-  if (typeof repoRoot !== "string" || !repoRoot.startsWith("/")) throw new TypeError("absolute governed close repoRoot required");
-  const root = git(repoRoot, ["rev-parse", "--show-toplevel"]);
-  if (root !== repoRoot) throw new Error("governed close repoRoot must be the Git toplevel");
+export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
+  const safeTask = assertTaskHandle(task);
+  const safeKernel = assertTaskKernel(kernel);
+  if (safeKernel.task !== safeTask) throw new Error("close executor TaskHandle/TaskKernel mismatch");
+  const root = safeTask.manifest.target_repo_root;
+  if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
+  let removal;
   const registry = {
     executorFor(step) {
       if (step.operation === "verify-checkpoint-ancestry") {
@@ -143,10 +146,16 @@ export function createGovernedCloseExecutorRegistry({ repoRoot } = {}) {
         return { probe: observe, execute: async () => { if (!observe().satisfied) throw new Error("checkpoint is not an ancestor of final commit"); }, verify: async (value) => value.satisfied && value.checkpoint_oid === checkpoint && value.final_oid === final };
       }
       if (step.operation === "remove-worktree") {
-        const path = step.worktree_root;
-        if (typeof path !== "string" || !path.startsWith("/")) throw new TypeError("remove-worktree requires absolute worktree_root");
-        const observe = () => ({ satisfied: !existsSync(path), worktree_root: path });
-        return { probe: observe, execute: async () => { execFileSync("git", ["worktree", "remove", "--", path], { cwd: root, stdio: ["ignore", "pipe", "pipe"] }); }, verify: async (value) => value.satisfied && value.worktree_root === path };
+        if (Object.prototype.hasOwnProperty.call(step, "worktree_root")) throw new TypeError("remove-worktree path is selected only by the current accepted Workspace");
+        const acceptedDecision = safeKernel.readAccepted("make-decision");
+        const acceptedBinding = Object.freeze({
+          taskId: acceptedDecision.accepted.task_id,
+          stage: acceptedDecision.accepted.stage,
+          worktreeRoot: acceptedDecision.facts.worktree_root,
+          baselineCommit: acceptedDecision.facts.baseline_commit,
+        });
+        removal ??= createTaskWorktreeRemoval(safeTask, acceptedBinding);
+        return removal;
       }
       throw new Error(`unsupported governed close operation: ${step.operation}`);
     },

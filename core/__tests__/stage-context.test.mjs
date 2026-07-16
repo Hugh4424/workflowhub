@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { bootstrapStage } from "../stage-context.mjs";
 import { createTask } from "../task-handle.mjs";
 import { createTaskKernel } from "../task-kernel.mjs";
-import { openCandidateWorkspace } from "../workspace.mjs";
+import { prepareTaskWorkspace } from "../workspace.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 
 const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
@@ -26,14 +26,14 @@ function fixture({ acceptDecision = true } = {}) {
     "paperbuilder-phase-foundation",
   );
   const targetRepoRoot = join(storageRoot, "PaperBuilder");
-  const worktreeRoot = join(storageRoot, "PaperBuilder-worktree");
+  const worktreeRoot = join(storageRoot, "PaperBuilder-paperbuilder-phase-foundation");
   mkdirSync(targetRepoRoot, { recursive: true });
   execFileSync("git", ["init", "-q"], { cwd: targetRepoRoot });
   execFileSync("git", ["config", "user.email", "tests@workflowhub.local"], { cwd: targetRepoRoot });
   execFileSync("git", ["config", "user.name", "WorkflowHub Tests"], { cwd: targetRepoRoot });
   execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: targetRepoRoot });
   const baselineCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: targetRepoRoot, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-qb", "task/test", worktreeRoot, baselineCommit], { cwd: targetRepoRoot });
+  execFileSync("git", ["worktree", "add", "-qb", "task/PaperBuilder/paperbuilder-phase-foundation", worktreeRoot, baselineCommit], { cwd: targetRepoRoot });
   const manifest = Object.freeze({
     schema_version: "1.0.0",
     project_name: "PaperBuilder",
@@ -64,10 +64,11 @@ afterEach(() => {
 });
 
 describe("bootstrapStage", () => {
-  it("rejects a candidate baseline commit that exists but is not worktree HEAD",()=>{
-    const {task,worktreeRoot,baselineCommit}=fixture({acceptDecision:false});
-    execFileSync("git",["commit","--allow-empty","-qm","advanced"],{cwd:worktreeRoot});
-    expect(()=>openCandidateWorkspace(task,{worktreeRoot,baselineCommit})).toThrow(/HEAD|baseline/i);
+  it("rejects a prepared candidate after its HEAD changes before acceptance",()=>{
+    const {task}=fixture({acceptDecision:false});
+    const candidate = prepareTaskWorkspace(task);
+    execFileSync("git",["commit","--allow-empty","-qm","advanced"],{cwd:candidate.worktreeRoot});
+    expect(()=>candidate.worktreeRoot).toThrow(/HEAD|baseline|changed/i);
   });
   it("launcher mode resolves env once and derives taskPath from project/task", () => {
     const { storageRoot, taskPath } = fixture();
@@ -158,16 +159,17 @@ describe("bootstrapStage", () => {
     expect(context.artifacts).toBeUndefined();
   });
 
-  it("brands a declared CandidateWorkspace and binds make-decision acceptance to it", () => {
-    const { storageRoot, worktreeRoot, baselineCommit } = fixture({ acceptDecision: false });
+  it("prepares a deterministic CandidateWorkspace and binds make-decision acceptance to it", () => {
+    const { storageRoot, baselineCommit } = fixture({ acceptDecision: false });
     const context = bootstrapStage("make-decision", {
       mode: "launcher",
       home: storageRoot,
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
       env: { WORKFLOWHUB_TASK_DIR: storageRoot },
-      candidateWorkspace: { worktreeRoot, baselineCommit },
+      workspaceLifecycle: "prepare",
     });
+    const worktreeRoot = join(storageRoot, "PaperBuilder-paperbuilder-phase-foundation");
     expect(context.candidateWorkspace).toMatchObject({ worktreeRoot: realpathSync(worktreeRoot), baselineCommit });
     expect(() => context.kernel.publishAttempt("make-decision", {
       facts: { worktree_root: worktreeRoot, baseline_commit: "a".repeat(40) },

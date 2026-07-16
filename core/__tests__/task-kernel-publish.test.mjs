@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 import { createTask } from "../task-handle.mjs";
 import { createTaskKernel } from "../task-kernel.mjs";
-import { openWorkspace } from "../workspace.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
 import { ArtifactDir } from "../artifact-dir.mjs";
 import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
 
@@ -77,13 +77,13 @@ describe("TaskKernel append-only publication", () => {
 
   it("requires checkpoint provenance for accepted design stages", () => {
     const { task, kernel } = fixture();
-    const baseline = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: task.manifest.target_repo_root })).trim();
-    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: task.manifest.target_repo_root, baseline_commit: baseline } });
+    const candidate = prepareTaskWorkspace(task);
+    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
     kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
     const upstream_refs = [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }];
     expect(() => kernel.publishAttempt("build-spec", { facts: { spec_ref: "specs/task-one/spec.md", checkpoint: {} }, upstream_refs }))
       .toThrow(/checkpoint/i);
-    const workspace = openWorkspace(kernel.readAccepted("make-decision"), task.manifest);
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
     const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
     artifacts.writeAtomic("spec.md", "# Spec\n");
     const boundKernel = createTaskKernel(task, { workspace, artifacts });

@@ -6,7 +6,12 @@ import { assertRuntimeAuthority } from "./runtime-mode.mjs";
 import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
 import { openTask } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
-import { assertWorkspace, openCandidateWorkspace, openWorkspace } from "./workspace.mjs";
+import {
+  assertWorkspace,
+  openAcceptedWorkspace,
+  prepareTaskWorkspace,
+  validateTaskWorkspaceAttempt,
+} from "./workspace.mjs";
 
 const STAGES = new Set([
   "make-decision",
@@ -16,6 +21,35 @@ const STAGES = new Set([
   "verify-code",
 ]);
 export { assertWorkspace } from "./workspace.mjs";
+
+function bindCandidateWorkspace(context, candidate) {
+  if (!context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
+    throw new TypeError("unprepared make-decision StageContext required");
+  }
+  return Object.freeze({
+    ...context,
+    kernel: createTaskKernel(context.task, { candidateWorkspace: candidate }),
+    candidateWorkspace: candidate,
+  });
+}
+
+/** Prepare only after the official invocation input has been loaded successfully. */
+export function prepareMakeDecisionWorkspace(context) {
+  return bindCandidateWorkspace(context, prepareTaskWorkspace(context?.task));
+}
+
+/** Revalidate the published attempt immediately before acceptance. */
+export function validateMakeDecisionWorkspaceAttempt(context, attemptRef) {
+  if (!context || context.stage !== "make-decision" || !context.task || context.candidateWorkspace) {
+    throw new TypeError("unprepared make-decision StageContext required");
+  }
+  if (typeof attemptRef !== "string" || !/^attempt-[0-9]{4}\.json$/.test(attemptRef)) throw new Error("valid make-decision attemptRef is required for workspace validation");
+  let attempt;
+  try { attempt = JSON.parse(context.task.readRecord(`results/make-decision/${attemptRef}`)); }
+  catch (error) { throw new Error(`invalid make-decision attempt for workspace validation: ${error.message}`); }
+  if (attempt?.task_id !== context.task.identity.taskId || attempt?.stage !== "make-decision") throw new Error("make-decision attempt identity mismatch during workspace validation");
+  return bindCandidateWorkspace(context, validateTaskWorkspaceAttempt(context.task, attempt.facts));
+}
 
 function validateStage(stage) {
   if (!STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
@@ -53,6 +87,9 @@ export function bootstrapStage(
   if (Object.prototype.hasOwnProperty.call(options, "kernel")) {
     throw new TypeError("caller-supplied TaskKernel is forbidden; bootstrap creates the authentic kernel");
   }
+  if (Object.prototype.hasOwnProperty.call(options, "candidateWorkspace")) {
+    throw new TypeError("caller-supplied workspace paths are no longer supported; make-decision owns worktree preparation");
+  }
   const {
     mode = "launcher",
     projectName,
@@ -60,7 +97,8 @@ export function bootstrapStage(
     taskPath,
     env,
     home,
-    candidateWorkspace,
+    workspaceLifecycle,
+    attemptRef,
   } = options;
   const normalizedStage = validateStage(stage);
   const project = validateProjectName(projectName);
@@ -79,9 +117,22 @@ export function bootstrapStage(
   }
 
   const taskHandle = openTask(resolvedTaskPath, project, task);
-  const candidate = normalizedStage === "make-decision" && candidateWorkspace
-    ? openCandidateWorkspace(taskHandle, candidateWorkspace)
-    : undefined;
+  if (workspaceLifecycle !== undefined && normalizedStage !== "make-decision") {
+    throw new TypeError("workspaceLifecycle is only valid for make-decision");
+  }
+  let candidate;
+  if (workspaceLifecycle === "prepare") {
+    candidate = prepareTaskWorkspace(taskHandle);
+  } else if (workspaceLifecycle === "validate-attempt") {
+    if (typeof attemptRef !== "string" || !/^attempt-[0-9]{4}\.json$/.test(attemptRef)) throw new Error("valid make-decision attemptRef is required for workspace validation");
+    let attempt;
+    try { attempt = JSON.parse(taskHandle.readRecord(`results/make-decision/${attemptRef}`)); }
+    catch (error) { throw new Error(`invalid make-decision attempt for workspace validation: ${error.message}`); }
+    if (attempt?.task_id !== taskHandle.identity.taskId || attempt?.stage !== "make-decision") throw new Error("make-decision attempt identity mismatch during workspace validation");
+    candidate = validateTaskWorkspaceAttempt(taskHandle, attempt.facts);
+  } else if (workspaceLifecycle !== undefined) {
+    throw new TypeError(`unsupported make-decision workspaceLifecycle: ${workspaceLifecycle}`);
+  }
   const kernel = createTaskKernel(taskHandle, { candidateWorkspace: candidate });
   const base = {
     stage: normalizedStage,
@@ -92,15 +143,12 @@ export function bootstrapStage(
   };
 
   if (normalizedStage === "make-decision") return Object.freeze({ ...base, ...(candidate ? { candidateWorkspace: candidate } : {}) });
-  const hasDecisionInput = Object.prototype.hasOwnProperty.call(taskHandle.manifest.inputs ?? {}, "decision");
   let localDecision;
   try { localDecision = kernel.readAccepted("make-decision"); } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  if (hasDecisionInput && localDecision) throw new Error("task has both current accepted make-decision and manifest decision input");
-  const decision = hasDecisionInput ? kernel.readInput("decision") : localDecision;
-  if (!decision) throw new Error("stage requires an accepted make-decision result or declared decision input");
-  const workspace = openWorkspace(decision, taskHandle.manifest);
+  if (!localDecision) throw new Error("stage requires the current task's accepted make-decision result");
+  const workspace = openAcceptedWorkspace(taskHandle, localDecision);
   const artifacts = ArtifactDir.open(workspace.worktreeRoot, taskHandle);
   const stageKernel = createTaskKernel(taskHandle, { workspace, artifacts });
   return Object.freeze({ ...base, kernel: stageKernel, workspace, artifacts });

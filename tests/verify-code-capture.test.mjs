@@ -12,11 +12,11 @@ import { runCapture } from "../workflows/verify-code/capture.mjs";
 const temporary = []; const STUB_SHA = "0".repeat(40);
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "verify-capture-v2-"))); temporary.push(root);
-  const repo = join(root, "repo"), worktree = join(root, "worktree"); mkdirSync(repo);
+  const repo = join(root, "repo"), worktree = join(root, "repo-verify-task"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo }); execFileSync("git", ["config", "user.email", "t@e.co"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "T"], { cwd: repo }); execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
   const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-q", worktree, sha], { cwd: repo });
+  execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/verify-task", worktree, sha], { cwd: repo });
   const recordRoot = join(root, "Projects", "Demo", "tasks", "verify-task");
   const task = createTask({ storageRoot: root, taskPath: recordRoot, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "verify-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
   const kernel = createTaskKernel(task); const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: sha } }); kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));

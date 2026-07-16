@@ -63,7 +63,9 @@ function validateRefs(refs, label) {
 function validateStageUpstream(stage, _taskId, refs) {
   const expected = EXPECTED_UPSTREAM[stage];
   if (expected === null) {
-    if (refs.length !== 0) throw new Error("make-decision must not declare an upstream stage");
+    if (refs.length > 1 || refs.some((ref) => ref.stage !== "make-decision" || ref.accepted_ref !== "results/make-decision/accepted.json")) {
+      throw new Error("make-decision may declare only its manifest decision input as upstream");
+    }
     return;
   }
   if (!refs.some((ref) => ref.stage === expected && ref.accepted_ref === `results/${expected}/accepted.json`)) {

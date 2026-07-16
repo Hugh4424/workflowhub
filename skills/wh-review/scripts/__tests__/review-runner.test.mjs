@@ -8,7 +8,7 @@ import { aggregateProviderResults } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal } from "../review-runner.mjs";
 import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
-import { openCandidateWorkspace } from "../../../../core/workspace.mjs";
+import { prepareTaskWorkspace } from "../../../../core/workspace.mjs";
 import { execFileSync } from "node:child_process";
 
 const materialId = "a".repeat(64);
@@ -103,11 +103,10 @@ describe("aggregation and runner", () => {
     execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
     execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-    const baselineCommit = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo })).trim();
-    const candidateWorkspace = openCandidateWorkspace(task, { worktreeRoot: repo, baselineCommit });
+    const candidateWorkspace = prepareTaskWorkspace(task);
     const options = { task, attachmentRoot, taskId: "task", stage: "make-decision", reviewTrack: "direction", hostProvider: "codex", providers: ["kimi"],
       providerClient: { run: async () => ({ runtimeId: "r", provider: { provider: "kimi", status: "completed", session_id: "s", output: pass, error: null } }) },
-      captureSource: ({ sourceRoot, targetRepoRoot }) => { expect(sourceRoot).toBe(realpathSync(repo)); expect(targetRepoRoot).toBe(realpathSync(repo)); return source; },
+      captureSource: ({ sourceRoot, targetRepoRoot }) => { expect(sourceRoot).toBe(candidateWorkspace.worktreeRoot); expect(targetRepoRoot).toBe(realpathSync(repo)); return source; },
       buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     await expect(runReview({ ...options, sourceRoot: repo })).rejects.toThrow(/naked|CandidateWorkspace|forbid/i);
     await expect(runReview({ ...options, candidateWorkspace })).resolves.toMatchObject({ status: "semantic", verdict: "pass" });

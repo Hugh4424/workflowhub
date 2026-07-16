@@ -8,17 +8,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { captureWorkspaceSnapshot, writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
-import { openWorkspace } from "../core/workspace.mjs";
+import { openAcceptedWorkspace } from "../core/workspace.mjs";
 
 const temporary = [];
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-official-receipt-"))); temporary.push(root);
-  const repo = join(root, "repo"), worktree = join(root, "worktree"); mkdirSync(repo);
+  const repo = join(root, "repo"), worktree = join(root, "repo-receipt-task"); mkdirSync(repo);
   const git = (args, cwd = repo) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
   git(["init", "-q"]); git(["config", "user.email", "test@example.com"]); git(["config", "user.name", "Test"]); writeFileSync(join(repo, "tracked.txt"), "base\n"); git(["add", "tracked.txt"]); git(["commit", "-qm", "base"]);
-  const baseline = git(["rev-parse", "HEAD"]); git(["worktree", "add", "-q", worktree, baseline]);
+  const baseline = git(["rev-parse", "HEAD"]); git(["worktree", "add", "-q", "-b", "task/Demo/receipt-task", worktree, baseline]);
   const task = createTask({ storageRoot: root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "receipt-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
-  return { task, worktree, workspace: openWorkspace({ facts: { worktree_root: worktree, baseline_commit: baseline } }, task.manifest) };
+  return { task, worktree, workspace: openAcceptedWorkspace(task, { facts: { worktree_root: worktree, baseline_commit: baseline } }) };
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
