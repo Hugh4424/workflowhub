@@ -13,8 +13,11 @@ const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "content", ref: "receipts/decision.json" }),
   spec: Object.freeze({ stage: "build-spec", kind: "content", ref: "receipts/spec.json" }),
-  plan: Object.freeze({ stage: "build-plan", kind: "content", ref: "receipts/plan.json" }),
-  tasks: Object.freeze({ stage: "build-plan", kind: "content", ref: "receipts/tasks.json" }),
+  plan: Object.freeze({ stage: "build-plan", kind: "versioned-content", ref: "receipts/plan" }),
+  tasks: Object.freeze({ stage: "build-plan", kind: "versioned-content", ref: "receipts/tasks" }),
+  research: Object.freeze({ stage: "build-plan", kind: "versioned-fact", ref: "evidence/research" }),
+  analysis: Object.freeze({ stage: "build-plan", kind: "versioned-fact", ref: "evidence/analysis" }),
+  simplicity: Object.freeze({ stage: "build-plan", kind: "versioned-fact", ref: "evidence/simplicity" }),
   implementation: Object.freeze({ stage: "build-code", kind: "implementation", ref: "receipts/implementation.json" }),
   evidence: Object.freeze({ stage: "verify-code", kind: "evidence-aggregate", ref: "evidence/verify-evidence.json" }),
 });
@@ -36,7 +39,7 @@ export function captureWorkspaceSnapshot(workspace) {
 }
 
 /** Fixed registry for official non-test component receipts. */
-export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0" } = {}) {
+export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revision, supersedes, pairId } = {}) {
   const safeTask = assertTaskHandle(task);
   const registration = OFFICIAL_COMPONENTS[component];
   if (!registration || registration.stage !== stage) throw new Error("component is not allowlisted for this stage");
@@ -44,9 +47,46 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   const write = createTaskKernel(safeTask).publishCanonicalRecord;
   const producer = { stage, component, version };
   let value;
-  if (registration.kind === "content") {
+  if (registration.kind === "content" || registration.kind === "versioned-content") {
     if (Object.keys(payload).some((key) => key !== "content") || typeof payload.content !== "string" || payload.content.trim() === "") throw new TypeError(`${component} content payload required`);
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };
+    if (registration.kind === "versioned-content") {
+      if (!Number.isInteger(revision) || revision < 1) throw new TypeError(`${component} revision must be an integer >= 1`);
+      const boundPairId = pairId ?? sha256(`${safeTask.identity.taskId}:build-plan:${revision}`);
+      if (typeof boundPairId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(boundPairId)) throw new TypeError(`${component} pair_id is invalid`);
+      const expectedRef = `${registration.ref}/rev-${String(revision).padStart(4, "0")}.json`;
+      if (revision === 1) {
+        if (supersedes != null) throw new Error(`${component} revision 1 cannot supersede another receipt`);
+        value = { ...value, revision, pair_id: boundPairId, supersedes: null };
+      } else {
+        if (!supersedes || typeof supersedes !== "object" || Array.isArray(supersedes) || Object.keys(supersedes).sort().join(",") !== "ref,sha256") throw new TypeError(`${component} supersedes must contain ref and sha256`);
+        const previousRef = `${registration.ref}/rev-${String(revision - 1).padStart(4, "0")}.json`;
+        if (supersedes.ref !== previousRef || !/^[a-f0-9]{64}$/.test(supersedes.sha256 ?? "")) throw new Error(`${component} supersedes must identify the immediately preceding revision`);
+        let previousRaw;
+        try { previousRaw = safeTask.readRecord(previousRef); } catch { throw new Error(`${component} superseded receipt is missing`); }
+        if (sha256(previousRaw) !== supersedes.sha256) throw new Error(`${component} supersedes hash mismatch`);
+        let previous;
+        try { previous = JSON.parse(previousRaw); } catch { throw new Error(`${component} superseded receipt is invalid JSON`); }
+        if (previous.task_id !== safeTask.identity.taskId || previous.stage !== stage || previous.producer?.component !== component || previous.revision !== revision - 1) throw new Error(`${component} superseded receipt provenance/revision mismatch`);
+        if (previous.pair_id === boundPairId) throw new Error(`${component} pair_id must change between revisions`);
+        value = { ...value, revision, pair_id: boundPairId, supersedes: { ref: supersedes.ref, sha256: supersedes.sha256 } };
+      }
+      const raw = `${JSON.stringify(value, null, 2)}\n`; write(expectedRef, raw);
+      return Object.freeze({ ref: expectedRef, sha256: sha256(raw), value: Object.freeze(value) });
+    }
+  } else if (registration.kind === "versioned-fact") {
+    if (Object.keys(payload).some((key) => !["status", "facts"].includes(key)) || !new Set(["pass", "fail"]).has(payload.status) || !payload.facts || typeof payload.facts !== "object" || Array.isArray(payload.facts)) throw new TypeError(`${component} fact payload requires status and facts`);
+    if (!Number.isInteger(revision) || revision < 1) throw new TypeError(`${component} revision must be an integer >= 1`);
+    const boundPairId = pairId ?? sha256(`${safeTask.identity.taskId}:build-plan:${revision}`), ref = `${registration.ref}/rev-${String(revision).padStart(4, "0")}.json`;
+    if (revision === 1) { if (supersedes != null) throw new Error(`${component} revision 1 cannot supersede another receipt`); }
+    else {
+      const previousRef = `${registration.ref}/rev-${String(revision - 1).padStart(4, "0")}.json`;
+      if (supersedes?.ref !== previousRef || !/^[a-f0-9]{64}$/.test(supersedes?.sha256 ?? "")) throw new Error(`${component} supersedes must identify the immediately preceding revision`);
+      const previousRaw = safeTask.readRecord(previousRef); if (sha256(previousRaw) !== supersedes.sha256) throw new Error(`${component} supersedes hash mismatch`);
+      const previous = JSON.parse(previousRaw); if (previous.producer?.component !== component || previous.revision !== revision - 1 || previous.task_id !== safeTask.identity.taskId) throw new Error(`${component} superseded receipt provenance/revision mismatch`);
+    }
+    value = { schema_version: "workflowhub-build-plan-fact.v1", task_id: safeTask.identity.taskId, stage, producer, revision, pair_id: boundPairId, supersedes: supersedes ?? null, status: payload.status, facts: structuredClone(payload.facts) };
+    const raw = `${JSON.stringify(value, null, 2)}\n`; write(ref, raw); return Object.freeze({ ref, sha256: sha256(raw), value: Object.freeze(value) });
   } else if (registration.kind === "implementation") {
     const safeWorkspace = assertWorkspace(workspace), root = safeWorkspace.worktreeRoot;
     if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");

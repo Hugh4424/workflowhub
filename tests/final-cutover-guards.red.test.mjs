@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { officialStageHandler } from "../core/stage-handlers.mjs";
@@ -9,6 +10,14 @@ describe("final cutover guard contracts", () => {
   const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "now", completed_at: "now", output_ref: "evidence/test.txt", output_hash: sha });
   const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree) => ({ version: "wh-review-result.v1", source: { provider: "fixture" }, material_id: sha, task_id: "task", stage, verdict, snapshot_tree: snapshotTree });
   const workerFor = (stage, values, currentTree = tree) => ({ stage, identity: { taskId: "task" }, readReceipt: (ref) => ({ value: values[ref], sha256: sha }), readEvidence: (ref) => ({ value: values[ref], sha256: values[`${ref}:sha256`] ?? sha }), snapshotWorkspace: () => ({ tree: currentTree }) });
+  const buildPlanInput = (overrides = {}) => ({ receipts: { plan: "receipts/plan/rev-0002.json", tasks: "receipts/tasks/rev-0002.json", research: "evidence/research.json", analysis: "evidence/analysis.json", simplicity: "evidence/simplicity.json", review: "reviews/results/build-plan.json" }, ...overrides });
+  const buildPlanValues = () => ({
+    "receipts/plan/rev-0002.json": canonical("build-plan", { producer: { stage: "build-plan", component: "plan", version: "1" }, revision: 2, pair_id: "pair-2", supersedes: { ref: "receipts/plan/rev-0001.json", sha256: sha }, content: "plan", content_hash: createHash("sha256").update("plan").digest("hex") }),
+    "receipts/tasks/rev-0002.json": canonical("build-plan", { producer: { stage: "build-plan", component: "tasks", version: "1" }, revision: 2, pair_id: "pair-2", supersedes: { ref: "receipts/tasks/rev-0001.json", sha256: sha }, content: "tasks", content_hash: createHash("sha256").update("tasks").digest("hex") }),
+    "receipts/plan/rev-0001.json": canonical("build-plan", { producer: { stage: "build-plan", component: "plan", version: "1" }, revision: 1, pair_id: "pair-1", supersedes: null, content: "old plan", content_hash: createHash("sha256").update("old plan").digest("hex") }),
+    "receipts/tasks/rev-0001.json": canonical("build-plan", { producer: { stage: "build-plan", component: "tasks", version: "1" }, revision: 1, pair_id: "pair-1", supersedes: null, content: "old tasks", content_hash: createHash("sha256").update("old tasks").digest("hex") }),
+    "reviews/results/build-plan.json": reviewReceipt("build-plan"), ...Object.fromEntries(["research", "analysis", "simplicity"].map((name) => [`evidence/${name}.json`, { schema_version: "workflowhub-build-plan-fact.v1", task_id: "task", stage: "build-plan", producer: { stage: "build-plan", component: name, version: "1" }, revision: 2, pair_id: "pair-2", supersedes: {}, status: "pass", facts: {} }])),
+  });
 
   it.each([
     ["tests", "notes/tests.json"],
@@ -31,6 +40,32 @@ describe("final cutover guard contracts", () => {
     const worker = { stage: "build-spec", identity: { taskId: "task" }, writeArtifact() {}, createCheckpoint() { return {}; }, readReceipt: () => ({ value: { content: "fake" }, sha256: "a".repeat(64) }) };
     await expect(officialStageHandler("build-spec")(worker, { receipts: { spec: "receipts/spec.json" } }))
       .rejects.toThrow(/schema|producer|provenance/i);
+  });
+
+  it("rejects missing build-plan audit facts", async () => {
+    const values = buildPlanValues(), input = buildPlanInput(); delete input.receipts.research;
+    const worker = { ...workerFor("build-plan", values), writeArtifact() {}, artifactRef: (name) => `specs/task/${name}`, createCheckpoint: () => ({}) };
+    await expect(officialStageHandler("build-plan")(worker, input)).rejects.toThrow(/research.*receipt|research/i);
+  });
+
+  it("rejects mismatched plan/tasks revisions and supersedes", async () => {
+    const values = buildPlanValues(); values["receipts/tasks/rev-0002.json"].revision = 1;
+    const worker = { ...workerFor("build-plan", values), writeArtifact() {}, artifactRef: (name) => `specs/task/${name}`, createCheckpoint: () => ({}) };
+    await expect(officialStageHandler("build-plan")(worker, buildPlanInput())).rejects.toThrow(/revision mismatch/i);
+  });
+
+  it("rejects cross-pair predecessors", async () => {
+    const values = buildPlanValues(); values["receipts/tasks/rev-0001.json"].pair_id = "other-pair";
+    const worker = { ...workerFor("build-plan", values), writeArtifact() {}, artifactRef: (name) => `specs/task/${name}`, createCheckpoint: () => ({}) };
+    await expect(officialStageHandler("build-plan")(worker, buildPlanInput())).rejects.toThrow(/predecessor pair_id mismatch/i);
+  });
+
+  it("emits authenticated research, analysis, simplicity, and wh-review facts and evidence", async () => {
+    const values = buildPlanValues();
+    const worker = { ...workerFor("build-plan", values), writeArtifact() {}, artifactRef: (name) => `specs/task/${name}`, createCheckpoint: () => ({ ref: "checkpoint" }) };
+    const result = await officialStageHandler("build-plan")(worker, buildPlanInput());
+    expect(result.facts).toMatchObject({ revision: 2, research: { result_ref: "evidence/research.json", result_hash: sha }, analysis: { result_ref: "evidence/analysis.json", result_hash: sha }, simplicity: { result_ref: "evidence/simplicity.json", result_hash: sha }, review: { verdict: "pass", result_ref: "reviews/results/build-plan.json", result_hash: sha } });
+    expect(result.evidence_refs).toHaveLength(6);
   });
 
   it("cannot turn a real failing test command into a passing stage", async () => {

@@ -111,7 +111,7 @@ describe("TaskKernel append-only publication", () => {
     const planCheckpoint = boundKernel.createCheckpoint("build-plan");
     const planUpstream = [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }];
     const planAttempt = boundKernel.publishAttempt("build-plan", {
-      facts: { plan_ref: "specs/task-one/plan.md", tasks_ref: "specs/task-one/tasks.md", checkpoint: planCheckpoint },
+      facts: { plan_ref: "specs/task-one/plan.md", tasks_ref: "specs/task-one/tasks.md", revision: 1, pair_id: "pair-1", research: { status: "pass", result_ref: "evidence/research.json", result_hash: "a".repeat(64) }, analysis: { status: "pass", result_ref: "evidence/analysis.json", result_hash: "a".repeat(64) }, simplicity: { status: "pass", result_ref: "evidence/simplicity.json", result_hash: "a".repeat(64) }, review: { verdict: "pass", result_ref: "reviews/results/build-plan.json", result_hash: "a".repeat(64), snapshot_tree: execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: workspace.worktreeRoot, encoding: "utf8" }).trim() }, checkpoint: planCheckpoint },
       upstream_refs: planUpstream,
     });
     const acceptedPlan = boundKernel.acceptAttempt("build-plan", planAttempt.attempt_ref, confirmation(boundKernel, "build-plan", planAttempt.attempt_ref));

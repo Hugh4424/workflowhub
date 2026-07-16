@@ -29,7 +29,7 @@ const REQUIRED_FACTS = Object.freeze(Object.fromEntries(
 const ALLOWED_FACTS = Object.freeze({
   "make-decision": new Set(["worktree_root", "baseline_commit", "decision", "scope", "risks", "decision_ref", "decision_hash"]),
   "build-spec": new Set(["spec_ref", "checkpoint"]),
-  "build-plan": new Set(["plan_ref", "tasks_ref", "checkpoint"]),
+  "build-plan": new Set(["plan_ref", "tasks_ref", "revision", "pair_id", "research", "analysis", "simplicity", "review", "checkpoint"]),
   "build-code": new Set(["changed", "tests", "review", "phase_completion"]),
   "verify-code": new Set(["tests", "review", "evidence_refs", "quality_note"]),
 });
@@ -95,6 +95,10 @@ export function validateStageFacts(stage, facts) {
   if (name === "build-plan") {
     artifactRef(facts.plan_ref, "build-plan facts.plan_ref");
     artifactRef(facts.tasks_ref, "build-plan facts.tasks_ref");
+    if (facts.revision !== undefined && (!Number.isInteger(facts.revision) || facts.revision < 1)) throw new TypeError("build-plan facts.revision must be an integer >= 1");
+    if (facts.pair_id !== undefined) nonemptyString(facts.pair_id, "build-plan facts.pair_id");
+    for (const key of ["research", "analysis", "simplicity"]) if (facts[key] !== undefined) validateAuditFact(facts[key], `build-plan facts.${key}`);
+    if (facts.review !== undefined) validateReview(facts.review, "build-plan facts.review");
     validateCheckpointPlan(facts.checkpoint);
   }
   if (name === "build-code") {
@@ -166,6 +170,15 @@ function validateReview(value, label) {
   if (!value.result_ref.startsWith("reviews/results/")) throw new TypeError(`${label}.result_ref must reference a formal wh-review result`);
   if (!HASH.test(value.result_hash ?? "")) throw new TypeError(`${label}.result_hash must be sha256`);
   gitOid(value.snapshot_tree, `${label}.snapshot_tree`);
+}
+
+function validateAuditFact(value, label) {
+  plain(value, label);
+  rejectUnknown(value, new Set(["status", "result_ref", "result_hash"]), label);
+  if (value.status !== "pass") throw new TypeError(`${label}.status must be pass`);
+  artifactRef(value.result_ref, `${label}.result_ref`);
+  if (!value.result_ref.startsWith("evidence/")) throw new TypeError(`${label}.result_ref must reference canonical evidence`);
+  if (!HASH.test(value.result_hash ?? "")) throw new TypeError(`${label}.result_hash must be sha256`);
 }
 
 function validateEvidenceRefs(refs, label) {

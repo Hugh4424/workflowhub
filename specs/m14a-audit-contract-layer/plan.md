@@ -76,7 +76,7 @@ tests/
 
 ## Complexity Tracking
 
-No constitution violations requiring justification. 上游 spec 的 Claude Code 正式 flow 为 `not_executed/unknown`；Kimi Code CLI 首轮和本轮异源审查均已完成且 verdict 为 `revise`。这些是并存的已记录事实，不改变本计划的契约范围，也不能写成通过。
+No constitution violations requiring justification. 上游 spec 的 Claude Code 正式 flow 为 `not_executed/unknown`。Kimi Code CLI 首轮与 round 2 的结论为 `revise`；修订后的 round 3 结论为 `pass`、`findings=none`，证据见 task root 下 `artifacts/build-plan-kimi-review-round3.md`。此前“首轮和本轮均为 revise”的 wording 是 round 3 完成前的过时记录，本计划以 round 3 报告为当前结论。
 
 ## Implementation Steps
 
@@ -122,6 +122,7 @@ No constitution violations requiring justification. 上游 spec 的 Claude Code 
 - 不新增 per-skill `index.mjs`、采集 parser、诊断器、自进化推荐、blocking CI gate、权限执行系统或第三方依赖。
 - 不把本机绝对路径写进 schema 常量或示例；task execution 路径继续通过 canonical task root 解析。
 - 实施代码/契约范围仅含四份契约与一个聚焦测试文件；`spec.md` 仅作验证输入。计划阶段另产生或更新 `plan.md`、`tasks.md`、`research.md`、`data-contracts.md` 与一致性分析产物，不计入上述五个实施文件。
+- 当前 branch/review snapshot 还包含 `core/make-decision-worktree.mjs`、对应测试、`skills/wh-review/scripts/wh-review.mjs`、review runners、review resilience 测试，以及工作区的 `decision-payload.json`、`receipt-map.json`。按 git/review snapshot 事实，这些属于上游 make-decision 或审查基础设施，不是 M14a 四契约实施 task，也不纳入“四份契约 + 一个聚焦测试”的范围；本 stage 不声明曾修改或交付这些文件。
 
 ## F10 Anti-Over-Engineering Gate
 

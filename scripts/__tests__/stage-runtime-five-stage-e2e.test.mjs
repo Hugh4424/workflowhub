@@ -39,7 +39,7 @@ function run(root, args) {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official five-stage CLI", () => {
-  it("runs repository-owned handlers and accepts the complete chain", () => {
+  it("keeps unaccepted build-plan attempt-0001, then accepts corrected attempt-0002 in the complete chain", () => {
     const { root, task, worktree, baseline } = fixture();
     const invoke = (stage, receipts, extra = []) => {
       const input = join(root, `${stage}-input.json`);
@@ -60,9 +60,24 @@ describe("official five-stage CLI", () => {
     writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     invoke("build-spec", { spec: "receipts/spec.json" });
 
-    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan\n" } });
-    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });
-    invoke("build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json" });
+    const cliReceipt = (component, payload, extra = []) => { const input = join(root, `${component}-cli-input.json`); writeFileSync(input, `${JSON.stringify(payload)}\n`); return run(root, ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--component=${component}`, `--input=${input}`, ...extra]); };
+    const plan1 = cliReceipt("plan", { content: "# Plan v1\n" }, ["--revision=1"]), tasks1 = cliReceipt("tasks", { content: "# Tasks v1\n" }, ["--revision=1"]);
+    const fact1 = Object.fromEntries(["research", "analysis", "simplicity"].map((component) => [component, cliReceipt(component, { status: "pass", facts: { source: "fixture-v1" } }, ["--revision=1"])]));
+    const reviewWriter = createCanonicalReviewWriter({ task, taskId: "official-chain", stage: "build-plan" }), reviewValue = (material_id) => ({ version: "wh-review-result.v1", task_id: "official-chain", stage: "build-plan", verdict: "pass", source: { target_commit: baseline, captured_head: baseline }, snapshot_tree: execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim(), material_id });
+    reviewWriter.writeResult("reviews/results/build-plan-rev-0001.json", reviewValue("fixture-build-plan-rev-1"));
+    const buildPlanReceipts = (plan, tasks, facts, review) => ({ plan, tasks, research: facts.research.receipt_ref, analysis: facts.analysis.receipt_ref, simplicity: facts.simplicity.receipt_ref, review });
+    const firstInput = join(root, "build-plan-rev1-run.json"); writeFileSync(firstInput, `${JSON.stringify({ receipts: buildPlanReceipts(plan1.receipt_ref, tasks1.receipt_ref, fact1, "reviews/results/build-plan-rev-0001.json") })}\n`);
+    expect(run(root, ["run", "--stage=build-plan", "--project=Demo", "--task=official-chain", `--input=${firstInput}`]).attempt_ref).toBe("attempt-0001.json");
+    const plan2 = cliReceipt("plan", { content: "# Plan v2\n" }, ["--revision=2", `--supersedes-ref=${plan1.receipt_ref}`, `--supersedes-hash=${plan1.receipt_hash}`]);
+    const tasks2 = cliReceipt("tasks", { content: "# Tasks v2\n" }, ["--revision=2", `--supersedes-ref=${tasks1.receipt_ref}`, `--supersedes-hash=${tasks1.receipt_hash}`]);
+    const fact2 = Object.fromEntries(["research", "analysis", "simplicity"].map((component) => [component, cliReceipt(component, { status: "pass", facts: { source: "fixture-v2" } }, ["--revision=2", `--supersedes-ref=${fact1[component].receipt_ref}`, `--supersedes-hash=${fact1[component].receipt_hash}`])]));
+    reviewWriter.writeResult("reviews/results/build-plan-rev-0002.json", reviewValue("fixture-build-plan-rev-2"));
+    const second = invoke("build-plan", buildPlanReceipts(plan2.receipt_ref, tasks2.receipt_ref, fact2, "reviews/results/build-plan-rev-0002.json"));
+    expect(second.attempt_ref).toBe("attempt-0002.json");
+    expect(JSON.parse(task.readRecord(plan1.receipt_ref)).content).toBe("# Plan v1\n");
+    expect(JSON.parse(task.readRecord(fact1.research.receipt_ref)).facts.source).toBe("fixture-v1");
+    expect(JSON.parse(task.readRecord("results/build-plan/attempt-0001.json"))).toMatchObject({ attempt_id: "build-plan:attempt-0001", facts: { revision: 1 } });
+    expect(JSON.parse(task.readRecord("results/build-plan/attempt-0002.json"))).toMatchObject({ attempt_id: "build-plan:attempt-0002", facts: { revision: 2 } });
 
     const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
     createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf fixture-output", receiptRef: "receipts/build-tests.json", outputRef: "evidence/build-output.txt" });

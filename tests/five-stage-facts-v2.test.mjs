@@ -6,7 +6,7 @@ const testFacts=(prefix)=>({ command: "npm test", exit_code: 0, command_hash: "1
 const valid = {
   "make-decision": { worktree_root: "/repo/worktree", baseline_commit: "a".repeat(40), decision: "go" },
   "build-spec": { spec_ref: "specs/task/spec.md", checkpoint: checkpoint("build-spec","specs/task/spec.md") },
-  "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", checkpoint: {...checkpoint("build-plan","specs/task/plan.md"),artifacts:[{path:"specs/task/plan.md",blob_oid:"b".repeat(40),content_hash:"c".repeat(64)},{path:"specs/task/tasks.md",blob_oid:"c".repeat(40),content_hash:"d".repeat(64)}]} },
+  "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", revision: 1, pair_id: "pair-1", research: { status: "pass", result_ref: "evidence/research.json", result_hash: "4".repeat(64) }, analysis: { status: "pass", result_ref: "evidence/analysis.json", result_hash: "4".repeat(64) }, simplicity: { status: "pass", result_ref: "evidence/simplicity.json", result_hash: "4".repeat(64) }, review: { verdict: "pass", result_ref: "reviews/results/build-plan.json", result_hash: "4".repeat(64), snapshot_tree: "a".repeat(40) }, checkpoint: {...checkpoint("build-plan","specs/task/plan.md"),artifacts:[{path:"specs/task/plan.md",blob_oid:"b".repeat(40),content_hash:"c".repeat(64)},{path:"specs/task/tasks.md",blob_oid:"c".repeat(40),content_hash:"d".repeat(64)}]} },
   "build-code": {
     changed: [], phase_completion: true,
     tests: testFacts("build-test"),

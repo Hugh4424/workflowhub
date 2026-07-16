@@ -11,8 +11,8 @@
 
 ## Stage 2 — Registry 与治理边界
 
-- [ ] T003 [P] [US1] 完善 `specs/m14a-audit-contract-layer/skills-inventory.schema.json` 顶层与 skill entry 的 required/type/enum/additionalProperties/required_reads 约束，明确不要求 `index.mjs` 或等价入口 (stage:2, depends:T001) FR: FR-CONTRACT-006, FR-CONTRACT-009, FR-CONTRACT-010
-- [ ] T004 [P] [US2] 完善 `specs/m14a-audit-contract-layer/harness-surface.md` 的 schema/orchestrator/skills/adapters/dashboard 五行及 risk/owner/permission/validation_method，定义四种 permission 只表达治理边界 (stage:2, depends:T002) FR: FR-CONTRACT-007, FR-CONTRACT-008, FR-CONTRACT-009
+- [ ] T003 [P] [US1] 完善 `specs/m14a-audit-contract-layer/skills-inventory.schema.json` 顶层与 skill entry 的 required/type/enum/additionalProperties/required_reads 约束，明确不要求 `index.mjs` 或等价入口 (stage:2, depends:无；建议在 T001 后审查，以先统一版本/事实引用术语，无接口强依赖) FR: FR-CONTRACT-006, FR-CONTRACT-009, FR-CONTRACT-010
+- [ ] T004 [P] [US2] 完善 `specs/m14a-audit-contract-layer/harness-surface.md` 的 schema/orchestrator/skills/adapters/dashboard 五行及 risk/owner/permission/validation_method，定义四种 permission 只表达治理边界 (stage:2, depends:无；建议在 T002 后审查，以先统一 taxonomy 治理措辞，无接口强依赖) FR: FR-CONTRACT-007, FR-CONTRACT-008, FR-CONTRACT-009
 
 ## Stage 3 — 可证伪验证与交付核对
 
@@ -25,13 +25,13 @@
 ### Stage Dependencies
 
 - Stage 1 无前置；T001、T002 可并行。
-- Stage 2 依赖对应基础契约；T003 与 T004 可并行。
+- Stage 2 是建议审查顺序，不表示 T003→T001 或 T004→T002 的接口强依赖；T003 与 T004 可并行，也可在 Stage 1 完成前启动。
 - Stage 3 在四份契约成型后执行；T005 与 T006 可并行，T007 最后执行。
 
 ### User Story Dependencies
 
-- US1（下游按 required reads 使用契约）：T001 → T003 → T006。
-- US2（审查者核查来源与治理边界）：T001/T002 → T004 → T005 → T007。
+- US1（下游按 required reads 使用契约）：建议 T001 ↝ T003，之后执行 T006；T001 与 T003 无接口强依赖。
+- US2（审查者核查来源与治理边界）：建议先核对 T001/T002，再审查 T004；T005 → T007 保持验证依赖。
 - US3（失败分类保持窄口径）：T002 → T005。
 - 场景四“防止范围越界”由 T003、T004、T005、T007 的禁止项和 diff 核对共同覆盖。
 

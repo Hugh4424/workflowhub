@@ -19,10 +19,16 @@
       }
     },
     "build-plan": {
-      "required_keys": ["plan_ref", "tasks_ref", "checkpoint"],
+      "required_keys": ["plan_ref", "tasks_ref", "revision", "pair_id", "research", "analysis", "simplicity", "review", "checkpoint"],
       "semantics": {
         "plan_ref": "Named plan artifact reference",
         "tasks_ref": "Named tasks artifact reference",
+        "revision": "Positive plan/tasks pair revision authenticated by immutable component receipts",
+        "pair_id": "Shared identity binding the plan and tasks receipts for this revision",
+        "research": "Passing official workflowhub-build-plan-fact.v1 research receipt reference and hash",
+        "analysis": "Passing official workflowhub-build-plan-fact.v1 cross-artifact analysis receipt reference and hash",
+        "simplicity": "Passing official workflowhub-build-plan-fact.v1 simplicity receipt reference and hash",
+        "review": "Passing formal attempt-scoped wh-review result reference, hash, verdict, and snapshot tree",
         "checkpoint": "Immutable Git checkpoint facts"
       }
     },

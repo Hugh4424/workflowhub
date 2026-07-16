@@ -7,8 +7,8 @@
 ## 独立审查摘要
 
 - 2026-07-11 的 Claude Code 正式 flow 未完成：材料进度为 `0/32`，结果为 `unknown` / `actual_mode=not_executed` / `needs_human=true`；详见附录 B.3。
-- 随后的 Kimi Code CLI 全量异源审查已完成，当前结论为 `revise`，发现 1 条 important 与 5 条 minor；本版正在修复这些问题，尚不能声称 `pass`。
-- 两次记录按时间并存：前者是未执行成功的 Claude flow，后者是已执行完成的 Kimi 审查，不互相覆盖。
+- 随后的 Kimi Code CLI 全量异源审查经历修订并完成 round 3 复审，当前结论为 `pass`、`findings=none`；证据见 `{task_root}/artifacts/kimi-cross-source-review-round3.md`。
+- 两类记录按时间并存：前者是未执行成功的 Claude flow，后者是完成修订闭环的 Kimi 审查，不互相覆盖；不得把 Claude flow 改写为成功。
 
 ## 速读卡（30 秒看懂这个需求）
 
@@ -323,14 +323,15 @@
 
 ### 3. 独立审查摘要
 
-- **verdict**：unknown
-- **报告路径**：`/Users/Hugh/Hugh/Knowledge/Projects/workflowhub/tasks/m14a-audit-contract-layer/reports/build-spec--e8257f85-015e-4f29-9a2e-62bad219f780--1-escalated.md`
-- **说明**：正式 flow `e8257f85-015e-4f29-9a2e-62bad219f780` 已建立 Claude session，但首次运行和一次有限恢复各等待 5 分钟，均未出现首个 `Read` 或 terminal 事件，材料进度始终为 `0/32`。runner 按 `claude-code-idle-after-resume` fail-closed，返回 `escalate_to_human` / `actual_mode=not_executed`。本次异源审查未完成，不能声称 `pass`；当前 `needs_human=true`。
+- **当前 verdict**：pass
+- **通过报告路径**：`{task_root}/artifacts/kimi-cross-source-review-round3.md`
+- **历史失败报告路径**：`{task_root}/reports/build-spec--e8257f85-015e-4f29-9a2e-62bad219f780--1-escalated.md`
+- **说明**：正式 Claude flow `e8257f85-015e-4f29-9a2e-62bad219f780` 仍按历史事实记录为 `escalate_to_human` / `actual_mode=not_executed`，不能作为通过证据。Kimi Code CLI 在修订后完成 round 3 异源复审，报告给出 `verdict=pass`、`findings=none`，关闭本 spec 的审查缺口；当前 `needs_human=false`。
 
 ### 4. 未解风险
 
 - `[FRICTION] spec-purity grep`: 契约规格不可避免包含 schema 文件名和字段名；建议审查时区分“契约字段定义”和“实现细节泄露”。
-- `[FRICTION] claude-code-idle-after-resume`: Claude session 建立后，首次运行与一次有限恢复各 5 分钟均无首个 `Read` / terminal 事件，材料进度 `0/32`；runner 已 fail-closed。本次不缩减材料、不改审查上下文。人工选择：A（推荐）等待 Claude/provider 恢复后，以新 flow 重跑 Step 3.7；B 明确接受当前 spec 并手工推进，同时记录其未通过独立审查。
+- `[RESOLVED] claude-code-idle-after-resume`: Claude session 无首个 `Read` / terminal 事件，runner 已 fail-closed；后续 Kimi Code CLI round 3 异源复审通过。保留 Claude 失败记录，不再需要人工裁决。
 - 当前无 decision-log 覆盖缺口。
 - scope-triage 命中 `blocking` / `阻断`，均位于“明确不做”或“非阻断记录语义”上下文；不是执行阻断语义。
 

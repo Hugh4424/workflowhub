@@ -36,8 +36,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     ...(candidateWorkspace ? { candidateWorkspace } : {}),
   });
   if (command === "receipt") {
-    if (!values.component || !values.input) throw new TypeError("receipt requires --component and --input=<payload.json>");
-    const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload: JSON.parse(readFileSync(values.input, "utf8")) });
+    if (!values.component || (!values.input && !values["content-file"] && !values["content-record"])) throw new TypeError("receipt requires --component and --input=<payload.json> or a content source");
+    let payload;
+    if (values["content-file"]) payload = { content: readFileSync(values["content-file"], "utf8") };
+    else if (values["content-record"]) payload = { content: JSON.parse(context.task.readRecord(values["content-record"])).content };
+    else payload = JSON.parse(readFileSync(values.input, "utf8"));
+    const supersedes = values["supersedes-ref"] || values["supersedes-hash"] ? { ref: values["supersedes-ref"], sha256: values["supersedes-hash"] } : undefined;
+    const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload, ...(values.revision ? { revision: Number(values.revision) } : {}), ...(supersedes ? { supersedes } : {}), ...(values["pair-id"] ? { pairId: values["pair-id"] } : {}) });
     return { receipt_ref: result.ref, receipt_hash: result.sha256 };
   }
   if (command === "run") {

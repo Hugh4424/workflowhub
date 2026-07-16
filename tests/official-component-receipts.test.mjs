@@ -23,6 +23,27 @@ function fixture() {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
+  it("preserves build-plan revision 1 when publishing an authenticated revision 2", () => {
+    const { task } = fixture();
+    const plan1 = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", revision: 1, payload: { content: "plan v1\n" } });
+    const tasks1 = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", revision: 1, payload: { content: "tasks v1\n" } });
+    const plan2 = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", revision: 2, supersedes: { ref: plan1.ref, sha256: plan1.sha256 }, payload: { content: "plan v2\n" } });
+    const tasks2 = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", revision: 2, supersedes: { ref: tasks1.ref, sha256: tasks1.sha256 }, payload: { content: "tasks v2\n" } });
+    expect([plan1.ref, plan2.ref, tasks1.ref, tasks2.ref]).toEqual(["receipts/plan/rev-0001.json", "receipts/plan/rev-0002.json", "receipts/tasks/rev-0001.json", "receipts/tasks/rev-0002.json"]);
+    expect(JSON.parse(task.readRecord(plan1.ref)).content).toBe("plan v1\n");
+    expect(plan2.value.supersedes).toEqual({ ref: plan1.ref, sha256: plan1.sha256 });
+  });
+
+  it.each([
+    ["missing predecessor", 2, undefined, /supersedes/],
+    ["revision gap", 3, { ref: "receipts/plan/rev-0001.json", sha256: "a".repeat(64) }, /immediately preceding/],
+    ["wrong predecessor hash", 2, { ref: "receipts/plan/rev-0001.json", sha256: "a".repeat(64) }, /hash mismatch/],
+  ])("rejects non-continuous build-plan history: %s", (_label, revision, supersedes, error) => {
+    const { task } = fixture();
+    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", revision: 1, payload: { content: "v1\n" } });
+    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", revision, supersedes, payload: { content: "next\n" } })).toThrow(error);
+  });
+
   it("publishes allowlisted content and physical implementation receipts create-only", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
