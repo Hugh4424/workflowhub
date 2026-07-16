@@ -1,5 +1,9 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { scanDiff } from '../workflows/build-code/diff-scanner.mjs';
+import { createPhaseDiffScan, scanDiff } from '../workflows/build-code/diff-scanner.mjs';
 
 describe('scanDiff', () => {
   it('case 1: clean .mjs source change → safe, no violations', () => {
@@ -368,5 +372,73 @@ index 1234567..abcdefg 100644
     expect(mjsResult.violations.filter(v => v.pattern === 'plugin-semver-bump').length).toBe(0);
     expect(mjsResult.violations.length).toBe(0);
     expect(mjsResult.safe).toBe(true);
+  });
+});
+
+describe('createPhaseDiffScan', () => {
+  it('produces phase-diff-scan.v1 from an immutable commit pair', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      writeFileSync(join(root, 'history.txt'), 'history\n'); git(['add', '.']); git(['commit', '-qm', 'history']);
+      const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'phase-a.txt'), 'a\n'); writeFileSync(join(root, 'phase-b.txt'), 'b\n');
+      git(['add', '.']); git(['commit', '-qm', 'phase']);
+      const implementation = git(['rev-parse', 'HEAD']);
+      const result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-1', baselineCommit: baseline, implementationCommit: implementation, allowedFiles: ['phase-a.txt', 'phase-b.txt'] });
+      expect(result).toMatchObject({ schema_version: 'phase-diff-scan.v1', phase_id: 'phase-1', baseline_commit: baseline, implementation_commit: implementation, changed_files: ['phase-a.txt', 'phase-b.txt'], safe: true, violations: [], c2_violations: [], allowlist_violations: [] });
+      expect(result.snapshot_tree).toBe(git(['rev-parse', 'HEAD^{tree}']));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports files outside the phase allowlist', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      git(['commit', '--allow-empty', '-qm', 'base']); const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'unexpected.txt'), 'unexpected\n'); git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const result = createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-2', baselineCommit: baseline, implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: [] });
+      expect(result.safe).toBe(false);
+      expect(result.allowlist_violations).toEqual([{ path: 'unexpected.txt' }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an unrelated implementation commit', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      git(['commit', '--allow-empty', '-qm', 'base']); const baseline = git(['rev-parse', 'HEAD']);
+      git(['checkout', '--orphan', 'unrelated', '-q']); git(['rm', '-rf', '--ignore-unmatch', '.']);
+      writeFileSync(join(root, 'unrelated.txt'), 'unrelated\n'); git(['add', '.']); git(['commit', '-qm', 'unrelated']);
+      expect(() => createPhaseDiffScan({ sourceRoot: root, phaseId: 'phase-2', baselineCommit: baseline,
+        implementationCommit: git(['rev-parse', 'HEAD']), allowedFiles: ['unrelated.txt'] })).toThrow(/must be an ancestor/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('CLI reads a large allowlist from an absolute JSON file and prints JSON only', () => {
+    const root = mkdtempSync(join(tmpdir(), 'phase-diff-scan-cli-'));
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+    try {
+      git(['init', '-q']); git(['config', 'user.name', 'Test']); git(['config', 'user.email', 'test@example.com']);
+      git(['commit', '--allow-empty', '-qm', 'base']); const baseline = git(['rev-parse', 'HEAD']);
+      writeFileSync(join(root, 'phase.txt'), 'phase\n'); git(['add', '.']); git(['commit', '-qm', 'candidate']);
+      const implementation = git(['rev-parse', 'HEAD']);
+      const allowlist = join(root, 'allowed.json'); writeFileSync(allowlist, JSON.stringify(['phase.txt']));
+      const stdout = execFileSync(process.execPath, [join(process.cwd(), 'workflows/build-code/diff-scanner.mjs'),
+        `--source-root=${root}`, '--phase-id=phase-3', `--baseline-commit=${baseline}`,
+        `--implementation-commit=${implementation}`, `--allowed-files-json=${allowlist}`], { encoding: 'utf8' });
+      expect(JSON.parse(stdout)).toMatchObject({ schema_version: 'phase-diff-scan.v1', phase_id: 'phase-3', safe: true, changed_files: ['phase.txt'] });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

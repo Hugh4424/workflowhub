@@ -8,6 +8,10 @@
     "task_id": { "type": "string", "minLength": 1 },
     "stage": { "enum": ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"] },
     "review_track": { "enum": ["direction", "detail", null] },
+    "subject_kind": { "enum": ["worktree", "phase"] },
+    "phase_id": { "type": ["string", "null"], "minLength": 1 },
+    "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -55,6 +59,10 @@
     "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
     "then": { "properties": { "review_track": { "enum": ["direction", "detail"] } } },
     "else": { "properties": { "review_track": { "type": "null" } } }
+  }, {
+    "if": { "properties": { "subject_kind": { "const": "phase" } }, "required": ["subject_kind"] },
+    "then": { "required": ["phase_id", "base_tree", "candidate_tree"], "properties": { "stage": { "const": "build-code" }, "phase_id": { "type": "string", "minLength": 1 } } },
+    "else": { "properties": { "phase_id": { "type": "null" } } }
   }, {
     "if": { "properties": { "verdict": { "const": "pass" } }, "required": ["verdict"] },
     "then": {

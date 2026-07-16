@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { captureReviewSource } from "../review-source.mjs";
+import { capturePhaseReviewSource, captureReviewSource } from "../review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor } from "../review-materials.mjs";
 import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
 
@@ -51,6 +51,37 @@ function changeAll(source) {
 }
 
 describe("review source capture", () => {
+  it("captures only the immutable phase commit range named by current phase evidence", () => {
+    const f = fixture();
+    writeFileSync(join(f.source, "upstream.txt"), "upstream\n");
+    git(f.source, ["add", "upstream.txt"]); git(f.source, ["commit", "-m", "upstream"]);
+    const baselineCommit = git(f.source, ["rev-parse", "HEAD"]);
+    writeFileSync(join(f.source, "phase.txt"), "phase\n");
+    git(f.source, ["add", "phase.txt"]); git(f.source, ["commit", "-m", "phase"]);
+    writeFileSync(join(f.source, "phase-two.txt"), "phase two\n");
+    git(f.source, ["add", "phase-two.txt"]); git(f.source, ["commit", "-m", "phase two"]);
+    const implementationCommit = git(f.source, ["rev-parse", "HEAD"]);
+    writeFileSync(join(f.source, "later.txt"), "later\n");
+    git(f.source, ["add", "later.txt"]); git(f.source, ["commit", "-m", "later"]);
+    const task = evidenceTask(f, Buffer.from("{}\n"), Buffer.from(""));
+    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({ phase_id: "phase-1", evidence: { diff: "evidence/phase-1-diff-scan.json" } })}\n`);
+    createTaskKernel(task).publishCanonicalRecord("evidence/phase-1-diff-scan.json", Buffer.from(`${JSON.stringify({ schema_version: "phase-diff-scan.v1", phase_id: "phase-1", baseline_commit: baselineCommit, implementation_commit: implementationCommit, snapshot_tree: git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]) })}\n`));
+
+    const result = capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1" });
+    expect(result.diff).toContain("phase.txt");
+    expect(result.diff).toContain("phase-two.txt");
+    expect(result.diff).not.toContain("upstream.txt");
+    expect(result.diff).not.toContain("later.txt");
+    expect(result.baseTree).toBe(git(f.source, ["rev-parse", `${baselineCommit}^{tree}`]));
+    expect(result.snapshotTree).toBe(git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]));
+  });
+
+  it("rejects a phase id or evidence record that does not match", () => {
+    const f = fixture(); const task = evidenceTask(f, Buffer.from("{}\n"), Buffer.from(""));
+    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({ phase_id: "phase-2", evidence: { diff: "scan.json" } })}\n`);
+    expect(() => capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1" })).toThrow(/PHASE_EVIDENCE_INVALID/);
+  });
+
   it("captures the whole dirty tree twice against the current target HEAD", () => {
     const f = fixture(); changeAll(f.source);
     const result = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });

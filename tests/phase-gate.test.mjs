@@ -1,29 +1,42 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { validatePhaseGate } from "../scripts/phase-gate.mjs";
 
-let root;
-const tree = "b".repeat(40);
+let root, outside;
+let tree, baseTree, baselineCommit, implementationCommit;
+function git(args) { return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim(); }
 function write(path, value) { mkdirSync(join(path, ".."), { recursive: true }); writeFileSync(path, JSON.stringify(value)); }
 function result(verdict = "pass", snapshot = tree) {
   return { version: "wh-review-result.v1", task_id: "fixture", stage: "build-code", review_track: null,
     source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshot,
+    subject_kind: "phase", phase_id: "phase-1", base_tree: baseTree, candidate_tree: tree,
     material_id: "a".repeat(64), attempt_ref: "reviews/attempts/a/attempt.json", provider_results: [{ provider: "kimi" }], verdict, findings: [] };
 }
 function fixture(verdict = "pass") {
   mkdirSync(join(root, "evidence"), { recursive: true });
   write(join(root, "evidence/RED.json"), { exit_code: 1 });
   write(join(root, "evidence/GREEN.json"), { exit_code: 0 });
-  write(join(root, "evidence/diff.json"), { safe: true, violations: [], c2_violations: [], allowlist_violations: [] });
+  write(join(root, "evidence/diff.json"), { schema_version: "phase-diff-scan.v1", phase_id: "phase-1",
+    baseline_commit: baselineCommit, implementation_commit: implementationCommit,
+    snapshot_tree: tree, safe: true, violations: [], c2_violations: [], allowlist_violations: [] });
   write(join(root, "reviews/results/build-code.json"), result(verdict));
   return { phase_id: "phase-1", status: "done", needs_human: false,
     tests: { red: { path: "evidence/RED.json" }, green: { path: "evidence/GREEN.json" } },
     diff_scan: { path: "evidence/diff.json" }, review: { result_ref: "reviews/results/build-code.json", snapshot_tree: tree } };
 }
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), "phase-gate-")); });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+beforeEach(() => {
+  outside = null;
+  root = mkdtempSync(join(tmpdir(), "phase-gate-"));
+  git(["init", "-q"]); git(["config", "user.name", "Test"]); git(["config", "user.email", "test@example.com"]);
+  writeFileSync(join(root, "source.txt"), "base\n"); git(["add", "source.txt"]); git(["commit", "-qm", "base"]);
+  baselineCommit = git(["rev-parse", "HEAD"]); baseTree = git(["rev-parse", "HEAD^{tree}"]);
+  writeFileSync(join(root, "source.txt"), "candidate\n"); git(["commit", "-qam", "candidate"]);
+  implementationCommit = git(["rev-parse", "HEAD"]); tree = git(["rev-parse", "HEAD^{tree}"]);
+});
+afterEach(() => { rmSync(root, { recursive: true, force: true }); if (outside) rmSync(outside, { force: true }); });
 
 describe("phase-gate formal review result", () => {
   it("accepts a referenced passing result", () => {
@@ -41,9 +54,45 @@ describe("phase-gate formal review result", () => {
     const item = fixture(); item.review.snapshot_tree = "c".repeat(40);
     expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/does not match/);
   });
+  it("rejects a passing review for another phase", () => {
+    const item = fixture();
+    const reviewPath = join(root, item.review.result_ref);
+    write(reviewPath, { ...result(), phase_id: "phase-2" });
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/phase.*mismatch/i);
+  });
+  it("rejects a passing review for another phase tree pair", () => {
+    const item = fixture();
+    const reviewPath = join(root, item.review.result_ref);
+    write(reviewPath, { ...result(), base_tree: "c".repeat(40) });
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/tree.*mismatch/i);
+
+    write(reviewPath, { ...result(), candidate_tree: "d".repeat(40) });
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/tree.*mismatch/i);
+  });
+  it("rejects a legacy whole-workspace result for a phase", () => {
+    const item = fixture();
+    const legacy = result();
+    delete legacy.subject_kind; delete legacy.phase_id; delete legacy.base_tree; delete legacy.candidate_tree;
+    write(join(root, item.review.result_ref), legacy);
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/phase.*identity/i);
+  });
   it("rejects missing material evidence", () => {
     const item = fixture(); item.tests.red.path = "evidence/missing.json";
     expect(validatePhaseGate(item, root, { reviewDataRoot: root }).ok).toBe(false);
+  });
+  it("rejects an absolute phase diff evidence ref", () => {
+    const item = fixture(); item.diff_scan.path = join(root, "evidence/diff.json");
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/diff scan.*task-relative/i);
+  });
+  it("rejects a phase diff evidence ref escaping the task root", () => {
+    const item = fixture(); item.diff_scan.path = "../diff.json";
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/diff scan.*task-relative/i);
+  });
+  it("rejects a phase diff evidence symlink escaping the task root", () => {
+    const item = fixture(); outside = `${root}-outside.json`;
+    writeFileSync(outside, JSON.stringify({})); symlinkSync(outside, join(root, "evidence/linked.json"));
+    item.diff_scan.path = "evidence/linked.json";
+    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/diff scan.*inside the task root/i);
   });
   it("requires an explicit review data root", () => {
     expect(validatePhaseGate(fixture(), root).errors.join(" ")).toMatch(/review data root missing/);

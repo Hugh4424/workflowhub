@@ -8,10 +8,11 @@
  * incomplete public review publication).
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readReviewResult } from "../core/review-result-consumer.mjs";
+import { validatePhaseReviewEvidence } from "../skills/wh-review/scripts/phase-review-subject.mjs";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -75,6 +76,18 @@ function checkEvidence(phaseResult, baseDir, errors, checked) {
 function scanObjectFromArtifactOrInline(phaseResult, baseDir, errors) {
   const path = phaseResult.diff_scan?.path ?? phaseResult.artifact_paths?.diff;
   if (path) {
+    if (typeof path !== "string" || isAbsolute(path) || path.includes("\\") || path.split("/").some((part) => !part || part === "." || part === "..")) {
+      errors.push("diff scan artifact ref must be task-relative");
+      return null;
+    }
+    const resolved = resolve(baseDir, path);
+    if (existsSync(resolved)) {
+      const rel = relative(realpathSync(baseDir), realpathSync(resolved));
+      if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+        errors.push("diff scan artifact ref must stay inside the task root");
+        return null;
+      }
+    }
     const artifact = readArtifact(baseDir, path, "diff scan", errors);
     if (artifact) return artifact.data;
   }
@@ -86,7 +99,7 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
   const scan = scanObjectFromArtifactOrInline(phaseResult, baseDir, errors);
   if (!scan || typeof scan !== "object") {
     errors.push("diff scan result missing");
-    return;
+    return null;
   }
 
   if (scan.safe !== true) {
@@ -102,9 +115,10 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
       errors.push(`diff scan ${key} must be empty (got ${violations.length})`);
     }
   }
+  return scan;
 }
 
-function checkReview(phaseResult, baseDir, errors, checked, options = {}) {
+function checkReview(phaseResult, scan, worktreeRoot, errors, checked, options = {}) {
   checked.push("heterogeneous-review");
   const review = phaseResult.review;
   if (!review || typeof review !== "object") {
@@ -112,7 +126,14 @@ function checkReview(phaseResult, baseDir, errors, checked, options = {}) {
     return;
   }
   if (!options.reviewDataRoot) { errors.push("review data root missing; pass --review-data-root explicitly"); return; }
-  try { readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: true }); }
+  try {
+    if (!scan) throw new Error("phase diff evidence is unavailable");
+    const subject = validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot: worktreeRoot, phaseId: phaseResult.phase_id });
+    const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: true });
+    if (result.subject_kind !== "phase" || typeof result.phase_id !== "string") throw new Error("phase review identity is missing");
+    if (result.phase_id !== subject.phaseId) throw new Error(`phase review identity mismatch: expected ${subject.phaseId}`);
+    if (result.base_tree !== subject.baseTree || result.candidate_tree !== subject.candidateTree) throw new Error("phase review tree identity mismatch");
+  }
   catch (error) { errors.push(`review is not a formal passing result: ${error.message}`); }
 }
 
@@ -124,8 +145,8 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
 
   checkStatus(phaseResult, errors, checked);
   checkEvidence(phaseResult, baseDir, errors, checked);
-  checkDiffScan(phaseResult, baseDir, errors, checked);
-  checkReview(phaseResult, baseDir, errors, checked, options);
+  const scan = checkDiffScan(phaseResult, baseDir, errors, checked);
+  checkReview(phaseResult, scan, worktreeRoot, errors, checked, options);
 
   return { ok: errors.length === 0, errors, warnings, checked };
 }

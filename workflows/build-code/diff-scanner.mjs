@@ -3,6 +3,11 @@
  * Pure function: scan diff text for C2 violations. No IO, no side effects.
  */
 
+import { execFileSync } from 'node:child_process';
+import { readFileSync, realpathSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 // Literal patterns matched against content lines (added/removed/context lines).
 // These represent operations that appear as code content — not file paths.
 const C2_IRREVERSIBLE_GIT_RULES = [
@@ -198,4 +203,120 @@ export function scanDiff(diffText) {
   }
 
   return { violations, safe: violations.length === 0 };
+}
+
+function git(root, args) {
+  try {
+    return execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 128 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch (error) {
+    throw new Error(`PHASE_DIFF_SCAN_INVALID: ${error.stderr?.trim() || error.message}`);
+  }
+}
+
+function changedPaths(root, baselineCommit, implementationCommit) {
+  const raw = execFileSync('git', ['diff', '--name-status', '-z', '-M', baselineCommit, implementationCommit], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 128 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const fields = raw.split('\0');
+  if (fields.at(-1) === '') fields.pop();
+  const paths = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++];
+    const first = fields[index++];
+    if (status.startsWith('R') || status.startsWith('C')) {
+      paths.push(first, fields[index++]);
+    } else {
+      paths.push(first);
+    }
+  }
+  return [...new Set(paths)].sort();
+}
+
+/** Build the canonical evidence consumed by phase review and phase-gate. */
+export function createPhaseDiffScan({ sourceRoot, phaseId, baselineCommit, implementationCommit, allowedFiles = [] } = {}) {
+  if (typeof sourceRoot !== 'string' || !isAbsolute(sourceRoot)) throw new TypeError('sourceRoot must be absolute');
+  if (typeof phaseId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(phaseId)) throw new TypeError('phaseId is invalid');
+  for (const [label, value] of [['baselineCommit', baselineCommit], ['implementationCommit', implementationCommit]]) {
+    if (typeof value !== 'string' || !/^[a-f0-9]{40,64}$/.test(value)) throw new TypeError(`${label} is invalid`);
+  }
+  if (!Array.isArray(allowedFiles) || !allowedFiles.every((value) => typeof value === 'string' && value.length > 0 && !value.startsWith('/') && !value.split('/').includes('..'))) {
+    throw new TypeError('allowedFiles must contain repository-relative paths');
+  }
+
+  const root = realpathSync(sourceRoot);
+  const base = git(root, ['rev-parse', '--verify', `${baselineCommit}^{commit}`]);
+  const implementation = git(root, ['rev-parse', '--verify', `${implementationCommit}^{commit}`]);
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', base, implementation], {
+      cwd: root,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+  } catch {
+    throw new Error('PHASE_DIFF_SCAN_INVALID: baselineCommit must be an ancestor of implementationCommit');
+  }
+  const snapshotTree = git(root, ['rev-parse', '--verify', `${implementation}^{tree}`]);
+  const diff = execFileSync('git', ['diff', '-M', '--binary', '--no-ext-diff', base, implementation], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 128 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const c2 = scanDiff(diff);
+  const changed_files = changedPaths(root, base, implementation);
+  const allowed = new Set(allowedFiles);
+  const allowlist_violations = changed_files.filter((path) => !allowed.has(path)).map((path) => ({ path }));
+  const c2_violations = c2.violations;
+  return {
+    schema_version: 'phase-diff-scan.v1',
+    phase_id: phaseId,
+    baseline_commit: base,
+    implementation_commit: implementation,
+    snapshot_tree: snapshotTree,
+    changed_files,
+    safe: c2_violations.length === 0 && allowlist_violations.length === 0,
+    violations: c2_violations,
+    c2_violations,
+    allowlist_violations,
+  };
+}
+
+function cliArguments(argv) {
+  const values = new Map();
+  const repeatedAllowed = [];
+  for (const argument of argv) {
+    const separator = argument.indexOf('=');
+    if (!argument.startsWith('--') || separator < 3) throw new Error(`unknown argument: ${argument}`);
+    const key = argument.slice(2, separator);
+    const value = argument.slice(separator + 1);
+    if (key === 'allowed-file') repeatedAllowed.push(value);
+    else if (values.has(key)) throw new Error(`duplicate argument: --${key}`);
+    else values.set(key, value);
+  }
+  const allowedFilePath = values.get('allowed-files-json');
+  if (allowedFilePath && !isAbsolute(allowedFilePath)) throw new TypeError('--allowed-files-json must be absolute');
+  const fromFile = allowedFilePath ? JSON.parse(readFileSync(allowedFilePath, 'utf8')) : [];
+  return {
+    sourceRoot: values.get('source-root'),
+    phaseId: values.get('phase-id'),
+    baselineCommit: values.get('baseline-commit'),
+    implementationCommit: values.get('implementation-commit'),
+    allowedFiles: [...fromFile, ...repeatedAllowed],
+  };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    process.stdout.write(`${JSON.stringify(createPhaseDiffScan(cliArguments(process.argv.slice(2))))}\n`);
+  } catch (error) {
+    process.stderr.write(`${error?.stack || error}\n`);
+    process.exitCode = 1;
+  }
 }
