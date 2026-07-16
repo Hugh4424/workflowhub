@@ -56,6 +56,7 @@ specs/**/task-metrics.jsonl
 /m13d-build-code-deepening/
 /tasks/
 /.wh-review-packets/
+/.runtime-recovery/
 
 stage-result.json
 journal.jsonl

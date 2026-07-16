@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, realpathSync, renameSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -101,6 +101,26 @@ describe("bootstrapStage", () => {
         env: poisonEnv,
       },
     );
+
+    expect(context.task.taskPath).toBe(taskPath);
+  });
+
+  it("sidecar mode never reads the global WorkflowHub config", () => {
+    const { storageRoot, taskPath } = fixture();
+    const configHome = mkdtempSync(join(tmpdir(), "workflowhub-poison-config-"));
+    temporaryDirs.push(configHome);
+    const configDirectory = join(configHome, "workflowhub");
+    mkdirSync(configDirectory, { recursive: true });
+    writeFileSync(join(configDirectory, "config.json"), "{", "utf8");
+
+    const context = bootstrapStage("verify-code", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      home: storageRoot,
+      env: { XDG_CONFIG_HOME: configHome },
+    });
 
     expect(context.task.taskPath).toBe(taskPath);
   });
