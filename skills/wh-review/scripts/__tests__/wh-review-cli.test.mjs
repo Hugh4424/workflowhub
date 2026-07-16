@@ -25,4 +25,11 @@ describe("wh-review production CLI", () => {
     await expect(runReviewRound({ task_tracking_root: "relative", task_id: "task" })).rejects.toThrow(/absolute/);
     expect(() => verifyFinalReview({ task_tracking_root: "relative", task_id: "task" })).toThrow(/absolute/);
   });
+
+  it("accepts only phase_id as the phase scope selector", async () => {
+    const { runReviewRound } = await import(cli.href);
+    for (const field of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
+      await expect(runReviewRound({ [field]: "forged", task_path: "/tmp/task", stage: "build-code" })).rejects.toThrow(/forbidden/);
+    }
+  });
 });

@@ -41,10 +41,13 @@ function providerClient() {
 }
 
 export async function runReviewRound(input) {
+  for (const forbidden of ["path_filter", "paths", "base_commit", "candidate_commit", "commit_range", "diff"]) {
+    if (input[forbidden] !== undefined) throw new TypeError(`${forbidden} is forbidden; use phase_id or the full worktree subject`);
+  }
   const trusted = trustedTaskWorktree(input); const { thirdReview, client } = providerClient();
   const result = await runReview({
     ...trusted, attachmentRoot: thirdReview.attachmentRoot,
-    stage: input.stage, reviewTrack: input.review_track ?? input.reviewTrack ?? null, uiScope: input.ui_scope === true,
+    stage: input.stage, phaseId: input.phase_id ?? input.phaseId ?? null, reviewTrack: input.review_track ?? input.reviewTrack ?? null, uiScope: input.ui_scope === true,
     materials: input.materials, hostProvider: input.host_provider ?? input.hostProvider,
     providers: input.providers ?? input.provider_allowlist ?? input.providerAllowlist,
     previousRuntimeIds: input.previous_runtime_ids ?? input.previousRuntimeIds ?? {}, providerClient: client,
@@ -54,6 +57,7 @@ export async function runReviewRound(input) {
     attempt_ref: result.attemptRef,
     result_ref: result.resultRef,
     snapshot_tree: result.snapshotTree, material_id: result.materialId, runtime_ids: result.runtimeIds,
+    subject_kind: result.subjectKind, phase_id: result.phaseId, base_tree: result.baseTree, candidate_tree: result.candidateTree,
   };
 }
 

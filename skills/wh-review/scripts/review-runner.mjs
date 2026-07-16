@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { assertTaskHandle } from "../../../core/task-handle.mjs";
 import { createTaskKernel } from "../../../core/task-kernel.mjs";
 import { assertCandidateWorkspace } from "../../../core/workspace.mjs";
-import { captureReviewSource as captureSourceDefault } from "./review-source.mjs";
+import { capturePhaseReviewSource as capturePhaseSourceDefault, captureReviewSource as captureSourceDefault } from "./review-source.mjs";
 import { buildReviewMaterials as buildMaterialsDefault, minimumReviewersFor, reviewInstructionsFor } from "./review-materials.mjs";
 import { FORMAT_CORRECTION_PROMPT, parseReviewerOutput } from "./review-output.mjs";
 import { aggregateProviderResults, reviewRefs, writeAttempt, writeProviderOutput, writeSemanticResult } from "./review-result.mjs";
@@ -16,6 +16,10 @@ const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 
 function sourceRecord(source) {
   return { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead };
+}
+
+function subjectRecord(source, phaseId) {
+  return { subject_kind: phaseId ? "phase" : "worktree", phase_id: phaseId ?? null, base_tree: source.baseTree, candidate_tree: source.snapshotTree };
 }
 
 function failedProvider(provider, error) {
@@ -58,12 +62,13 @@ async function reviewOne({ providerClient, provider, hostProvider, materials, co
   }
 }
 
-export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace, task, attachmentRoot, taskId, stage, reviewTrack = null, uiScope = false, materials = {}, hostProvider, providers, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
+export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace, task, attachmentRoot, taskId, stage, phaseId = null, reviewTrack = null, uiScope = false, materials = {}, hostProvider, providers, previousRuntimeIds = {}, providerClient, captureSource = captureSourceDefault, capturePhaseSource = capturePhaseSourceDefault, buildMaterials = buildMaterialsDefault, fixtureSourceToken } = {}) {
   const taskHandle = assertTaskHandle(task);
   if (!(attachmentRoot && taskId && stage && hostProvider && providerClient) || !Array.isArray(providers) || providers.length === 0) throw new TypeError("review inputs, attachmentRoot, and at least one provider are required");
   if (new Set(providers).size !== providers.length) throw new TypeError("providers must be unique");
   if (providers.includes(hostProvider)) throw new TypeError("provider must differ from hostProvider");
   if (!previousRuntimeIds || typeof previousRuntimeIds !== "object" || Array.isArray(previousRuntimeIds)) throw new TypeError("previousRuntimeIds must be an object keyed by provider");
+  if (phaseId !== null && (stage !== "build-code" || typeof phaseId !== "string" || phaseId.length === 0)) throw new TypeError("phase_id is supported only for build-code and must be non-empty");
   if (stage === "make-decision" && reviewTrack === "direction" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
     if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision direction review forbids naked source/target paths; use CandidateWorkspace");
     const candidate = assertCandidateWorkspace(candidateWorkspace);
@@ -78,7 +83,10 @@ export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace
       throw new Error("review target must match the authenticated task manifest");
     }
   }
-  const source = captureSource({ sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
+  const source = phaseId
+    ? capturePhaseSource({ sourceRoot, task: taskHandle, phaseId })
+    : captureSource({ sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
+  const subject = subjectRecord(source, phaseId);
   const fixedMaterials = { ...materials, review_instructions: reviewInstructionsFor(stage, reviewTrack, uiScope) };
   const bundle = buildMaterials({ reviewDataRoot: attachmentRoot, attachmentRoot, source, task: taskHandle, taskId, stage, reviewTrack, uiScope, materials: fixedMaterials });
   const attemptId = randomUUID(); const refs = reviewRefs({ attemptId, stage, reviewTrack, snapshotTree: source.snapshotTree });
@@ -96,21 +104,21 @@ export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace
   const unavailableError = primaryError(reviewed);
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
-    source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
     error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }
   };
   validateSchema("attempt", attempt); writeAttempt(taskHandle, refs.attemptRef, attempt);
-  if (aggregation.status !== "semantic") return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds };
+  if (aggregation.status !== "semantic") return { status: "unavailable", verdict: null, attemptRef: refs.attemptRef, resultRef: null, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
   const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   const findings = providerResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
   const result = {
-    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, source: sourceRecord(source), snapshot_tree: source.snapshotTree,
+    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree,
     material_id: bundle.materialId, attempt_ref: refs.attemptRef, provider_results: providerResults,
     verdict: aggregation.verdict, findings
   };
   validateSchema("result", result); writeSemanticResult(taskHandle, refs.resultRef, result);
-  return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds };
+  return { status: "semantic", verdict: result.verdict, attemptRef: refs.attemptRef, resultRef: refs.resultRef, snapshotTree: source.snapshotTree, materialId: bundle.materialId, runtimeIds, subjectKind: subject.subject_kind, phaseId: subject.phase_id, baseTree: subject.base_tree, candidateTree: subject.candidate_tree };
 }
 
 /** Explicit fake-source seam for isolated tests; the private token is not caller-forgeable. */
@@ -126,6 +134,7 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, candidateWo
   catch { throw new Error("RESULT_REF_INVALID: result does not exist or is invalid"); }
   validateSchema("result", result);
   if (result.verdict !== "pass") throw new Error("REVIEW_NOT_APPROVED: semantic result is not pass");
+  if (result.subject_kind === "phase") { const error = new Error("PHASE_RESULT_NOT_FINAL: phase review results are consumed by phase-gate, not verify-final"); error.code = "PHASE_RESULT_NOT_FINAL"; throw error; }
   if (taskId !== null && result.task_id !== taskId) throw new Error("RESULT_REF_INVALID: task does not match result");
   if (stage !== null && result.stage !== stage) throw new Error("RESULT_REF_INVALID: stage does not match result");
   if (reviewTrack !== undefined && result.review_track !== reviewTrack) throw new Error("RESULT_REF_INVALID: review track does not match result");
@@ -136,6 +145,7 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, candidateWo
     targetRepoRoot = candidate.targetRepoRoot;
   }
   const current = captureSource({ sourceRoot, targetRepoRoot, reviewDataRoot: attachmentRoot });
-  if (current.targetCommit !== result.source.target_commit || current.snapshotTree !== result.snapshot_tree) { const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current target or source tree differs from the reviewed snapshot"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error; }
+  const subjectMismatch = result.subject_kind === "worktree" && (current.baseTree !== result.base_tree || current.snapshotTree !== result.candidate_tree);
+  if (subjectMismatch || current.snapshotTree !== result.snapshot_tree || current.targetCommit !== result.source.target_commit) { const error = new Error("WORKTREE_CHANGED_AFTER_REVIEW: current review subject differs from the reviewed subject"); error.code = "WORKTREE_CHANGED_AFTER_REVIEW"; throw error; }
   return { status: "finalized", snapshotTree: current.snapshotTree };
 }

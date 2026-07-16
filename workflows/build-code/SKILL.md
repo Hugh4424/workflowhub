@@ -44,11 +44,21 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
 5. Run the target project's real test command in the Workspace. Record command,
    exit code, freshness, and output reference without turning the observation
    into an automatic quality decision.
-6. Run independent code review from a frozen diff packet. Address revisions in
-   a new phase attempt; do not overwrite evidence.
-7. Publish a build-code attempt containing baseline/head commits, changed
+6. Run `createPhaseDiffScan` from `diff-scanner.mjs` with the trusted Workspace
+   root, phase ID, phase baseline commit, immutable implementation commit, and
+   the plan's allowed files. Its CLI accepts repeated
+   `--allowed-file=<repo-relative-path>` flags or one absolute
+   `--allowed-files-json=<json-array-file>` and prints JSON to stdout. Save the
+   `phase-diff-scan.v1` JSON as task-relative evidence and point the current
+   `phase-result.json.diff_scan.path` at it.
+7. Run independent code review with only the current `phase_id` as its scope
+   selector. `wh-review` resolves the frozen commit pair from the current diff
+   scan and regenerates the complete phase diff. Do not pass paths, commits,
+   ranges, or a caller-built diff. Address revisions in a new phase attempt; do
+   not overwrite evidence.
+8. Publish a build-code attempt containing baseline/head commits, changed
    files, fresh test command, test facts, review facts, and missing items.
-8. Present the boundary summary and record the decision with `confirm`. Only an
+9. Present the boundary summary and record the decision with `confirm`. Only an
    accepted confirmation ref may be passed to `accept`.
 
 No task identifier, issue identifier, branch name, or shell location may select

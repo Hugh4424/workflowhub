@@ -130,7 +130,7 @@ target commit 来自 task `worktree.json` 已登记的 `target_repo_root` 当前
 
 如 stage 明确支持 stacked branch，可在创建 worktree 时登记显式 target ref。审查运行时不得猜测、迁移或修改 target。
 
-### 6.2 base
+### 6.2 worktree review base
 
 每次 attempt 读取一次：
 
@@ -144,15 +144,15 @@ base_commit = git merge-base --all target_commit captured_head
 
 feature branch 正常 merge main 后，merge-base 会自然前移到新的 main；不需要 trusted-base migration。
 
-### 6.3 capture
+### 6.3 worktree capture
 
 temporary index 从 captured HEAD `read-tree`，再执行等价于 `git add -A` 的完整捕获，生成 snapshot tree。
 
-捕获两次；若 HEAD 变化或两次 tree 不同，返回 `SOURCE_CHANGED_DURING_CAPTURE`。不得退化为只审部分 `git diff`。
+捕获两次；若 HEAD 变化或两次 tree 不同，返回 `SOURCE_CHANGED_DURING_CAPTURE`。不得截断当前声明的审查对象。
 
 所有 packet 文件都从 immutable snapshot tree 读取，不从仍在变化的 worktree 读取。
 
-### 6.4 diff
+### 6.4 worktree diff
 
 生成：
 
@@ -162,7 +162,15 @@ git diff -M --binary --full-index --no-ext-diff --no-textconv base_tree snapshot
 
 changed-files 清单记录 old/new path、mode、blob identity、size 和文本/二进制类型。删除记录旧对象；二进制不得假装已经完成文本审查。
 
-### 6.5 内部文件
+### 6.5 build-code phase subject
+
+`build-code` 每个 phase 单独审查。调用方只传 `phase_id`；不得传 path filter、自制 diff 或任意 commit range。
+
+host 从当前 `phase-result.json` 引用的 `phase-diff-scan.v1` 读取 `baseline_commit`、`implementation_commit` 和 `snapshot_tree`，校验 baseline commit 是 implementation commit 的祖先，并校验 implementation tree 等于登记的 snapshot tree。随后 host 自己生成完整的 `base_tree..candidate_tree` diff 和 changed-files。allowed paths 只用于 scope scan，不裁剪审查材料。
+
+phase result 绑定 `phase_id`、`base_tree`、`candidate_tree`。后续 phase 改变 worktree 不会让已完成 phase 失效；同一 phase 产生新的 implementation commit 后，旧 result 因 tree identity 不相等自然失效，不需要 superseded 状态。
+
+### 6.6 内部文件
 
 所有 attempts、results、packet、request 和 raw 必须写在 source repo 外的 task 数据目录或 packet root。
 
@@ -455,12 +463,14 @@ wh-review 不再要求每个 finding 做 accept/reject/defer disposition。
 
 输入为 stage-result 引用的正式 result。
 
-用与审查时完全相同的 temporary-index 算法重新捕获当前 snapshot tree：
+worktree result 用与审查时完全相同的 temporary-index 算法重新捕获当前 snapshot tree：
 
 - 相等 → finalized。
 - 不等 → `WORKTREE_CHANGED_AFTER_REVIEW`，直接重新审查。
 
-不比较旧 flow、session、base 或 receipt。不使用“业务文件白名单”。审查后 merge/rebase/main sync 或任何 source tree 变化都必须重审，但不会锁死 task。
+phase result 只由 phase-gate 消费。`verify-final` 对它返回 `PHASE_RESULT_NOT_FINAL`，防止局部审查授权最终 commit 或 merge。phase-gate 重新读取当前 phase diff-scan，要求 `phase_id`、`base_tree`、`candidate_tree` 与 result 完全一致；后续 phase 不影响该比较，同一 phase 的新 implementation commit 会让旧 result 自然失效。
+
+不比较旧 flow、session 或 trusted base。不使用“业务文件白名单”。worktree review 后 merge/rebase/main sync 或任何 source tree 变化都必须重审，但不会锁死 task。
 
 commit/merge gate 必须调用 `verify-final` 后才能承认 pass。普通 stage 消费者读取 result 时也必须核对引用的 `snapshot_tree` 是当前 stage 正在推进的 snapshot，不能缓存一个过期 pass。
 
@@ -519,9 +529,11 @@ commit/merge gate 必须调用 `verify-final` 后才能承认 pass。普通 stag
 15. 任一有效 revise 使聚合 revise；有效 reviewer 不足为 unavailable。
 16. make-decision direction/detail 互不污染，最终规则固定。
 17. R2 优先续 session；session 不可用自动完整重审。
-18. 审查后任意 source tree 变化使 verify-final 失败。
-19. 崩溃只留下 attempt，不留下半个 pass，也不需要 recover。
-20. 用户永远不编辑内部 JSON、不 reset、不 recover、不迁移 trusted base。
+18. phase 审查只包含本 phase 的完整 tree diff；同一 worktree 的累计历史和后续 phase 不进入该 subject。
+19. phase implementation commit 更新后，旧 result 因 tree identity 不匹配自然失效，无 superseded 状态。
+20. worktree 审查后任意 source tree 变化使 verify-final 失败。
+21. 崩溃只留下 attempt，不留下半个 pass，也不需要 recover。
+22. 用户永远不编辑内部 JSON、不 reset、不 recover、不迁移 trusted base。
 
 ## 20. 明确不做
 

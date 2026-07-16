@@ -87,6 +87,7 @@ RED 必须证明当前 V4 会失败：
 - target 来自登记的 target repo 当前分支。
 - 每次动态 merge-base，不写 task base。
 - 两次 temporary-index capture 保证稳定。
+- `build-code` phase 从当前 `phase-diff-scan.v1` 解析 baseline/implementation tree，只审完整 phase tree diff；最终 worktree review 仍使用动态 merge-base。
 - 所有文件从 snapshot tree 读取。
 - 所有运行产物放 source repo 外。
 - 启动时配置 repo 外 `review_data_root`；不复制、不解释旧 V4 状态，旧文件只保留历史。
@@ -97,6 +98,7 @@ RED 必须证明当前 V4 会失败：
 - staged、unstaged、untracked。
 - add/delete/rename/mode/symlink。
 - main merge 后 base 前移。
+- 同一 worktree 已有累计历史时，phase review 只包含当前 phase；phase implementation 更新后旧 result 自然失效。
 - target main 继续前进但 source 未 merge。
 - source 捕获期间变化。
 - ignored 文件。

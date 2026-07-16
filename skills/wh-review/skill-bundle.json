@@ -24,6 +24,7 @@
     "scripts/__tests__/third-review-host-config.test.mjs",
     "scripts/__tests__/wh-review-cli.test.mjs",
     "scripts/lib/safe-id.mjs",
+    "scripts/phase-review-subject.mjs",
     "scripts/review-materials.mjs",
     "scripts/review-output.mjs",
     "scripts/review-provider-client.mjs",

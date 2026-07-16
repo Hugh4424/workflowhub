@@ -20,9 +20,9 @@ There is no reset, recover, flow migration, projection repair, or trusted-base r
 
 ## Inputs
 
-`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the explicit Workspace root, stage, optional review track, frozen materials, and provider selection. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
+`run` receives the absolute `task_path` and expected project/task identity from the parent sidecar launcher, plus the stage, optional review track, frozen materials, and provider selection. A `build-code` phase review also receives only `phase_id`; arbitrary paths, diffs, and commit ranges are forbidden. It opens a branded TaskHandle and never reads global storage configuration or derives a task path. The stage matrix is `stage-materials.json`; the reviewer contract is `contracts/<stage>.md`.
 
-The host captures tracked changes, deletions, modes, symlinks, and non-ignored untracked files through a temporary Git index. It captures twice and rejects a changing source. Runtime files are written outside the source repository.
+For a normal worktree review, the host captures tracked changes, deletions, modes, symlinks, and non-ignored untracked files through a temporary Git index. It captures twice and rejects a changing source. For a `build-code` phase review, the host resolves the current phase's `phase-diff-scan.v1` evidence and regenerates the complete `base_tree..candidate_tree` diff itself. Runtime files are written outside the source repository.
 
 The provider receives only the frozen bundle. It must not read the source repository, host paths, Git, shell, or network. Every provider-visible byte is bound by `material_id`; the captured source is bound by `snapshot_tree`.
 
@@ -31,7 +31,7 @@ The provider receives only the frozen bundle. It must not read the source reposi
 Only two durable record types exist:
 
 - `attempt`: transport, material, provider status, raw output references, and errors. It may end `unavailable`.
-- `result`: a valid semantic `pass` or `revise_required` bound to `material_id` and `snapshot_tree`.
+- `result`: a valid semantic `pass` or `revise_required` bound to `material_id` and its declared review subject. A phase result records `phase_id`, `base_tree`, and `candidate_tree`; a worktree result records the captured `snapshot_tree`.
 
 Transport success is not review success. Authentication, cancellation, timeout, malformed output, missing material, and protocol failure never become a semantic verdict. Raw provider output is retained in the attempt.
 
@@ -51,6 +51,6 @@ Reviewer output is one JSON object with `verdict`, `summary`, and `findings`. Pu
 
 ## Final gate
 
-`verify-final` takes a formal `result_ref`, recaptures the source with the same temporary-index algorithm, and requires the current tree to equal `result.snapshot_tree`. A mismatch returns `WORKTREE_CHANGED_AFTER_REVIEW`; run review again. Only a passing result plus successful `verify-final` may authorize commit or merge.
+`verify-final` accepts only a worktree result. It recaptures the source and requires the current tree to equal `result.snapshot_tree`; a phase result returns `PHASE_RESULT_NOT_FINAL` because a partial review cannot authorize commit or merge. A worktree mismatch returns `WORKTREE_CHANGED_AFTER_REVIEW`; run the final review again. Phase results are consumed only by phase-gate, which compares their `phase_id`, `base_tree`, and `candidate_tree` with the current phase evidence.
 
 Human risk acceptance belongs to the stage execution record. It never edits the review result, and it cannot turn `unavailable` into `pass`.

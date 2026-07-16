@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { resolvePhaseReviewSubject } from "./phase-review-subject.mjs";
 
 function fail(code, message) {
   throw new Error(`${code}: ${message}`);
@@ -135,4 +136,27 @@ export function captureReviewSource({ sourceRoot, targetRepoRoot, reviewDataRoot
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
+}
+
+export function capturePhaseReviewSource({ sourceRoot, task, phaseId } = {}) {
+  if (!sourceRoot) throw new TypeError("sourceRoot is required");
+  const source = realpathSync(resolve(sourceRoot));
+  const subject = resolvePhaseReviewSubject({ task, sourceRoot: source, phaseId });
+  const diff = git(source, ["diff", "-M", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", subject.baseTree, subject.candidateTree], { encoding: "utf8" });
+  const changedFiles = parseChangedFiles(source, subject.baseTree, subject.candidateTree);
+  return Object.freeze({
+    sourceRoot: source,
+    targetCommit: subject.baselineCommit,
+    capturedHead: subject.implementationCommit,
+    baseCommit: subject.baselineCommit,
+    baseTree: subject.baseTree,
+    snapshotTree: subject.candidateTree,
+    diff,
+    changedFiles: Object.freeze(changedFiles),
+    readSnapshotFile(path) {
+      const entry = treeEntry(source, subject.candidateTree, path);
+      if (!entry || entry.type !== "blob") fail("SOURCE_UNAVAILABLE", `snapshot file is missing: ${path}`);
+      return git(source, ["cat-file", "blob", entry.oid]);
+    }
+  });
 }

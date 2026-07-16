@@ -7,7 +7,7 @@ import { parseReviewerOutput } from "../review-output.mjs";
 import { aggregateProviderResults } from "../review-result.mjs";
 import { ReviewProviderClient } from "../review-provider-client.mjs";
 import { runReview, runReviewFixture, verifyFinal } from "../review-runner.mjs";
-import { createTask } from "../../../../core/task-handle.mjs";
+import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
 import { openCandidateWorkspace } from "../../../../core/workspace.mjs";
 import { execFileSync } from "node:child_process";
 
@@ -62,6 +62,18 @@ describe("public provider client", () => {
 });
 
 describe("aggregation and runner", () => {
+  it("records phase subject identity in the attempt, result, and public response", async () => {
+    const { attachmentRoot, task } = fixture("simple-review-phase-");
+    const phaseSource = { ...source, baseTree: "6".repeat(40), snapshotTree: "7".repeat(40) };
+    const result = await runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "build-code", phaseId: "phase-1", materials: {}, hostProvider: "codex", providers: ["kimi"],
+      providerClient: { run: async () => ({ runtimeId: "runtime", provider: { provider: "kimi", status: "completed", session_id: "session", output: pass, error: null } }) },
+      capturePhaseSource: () => phaseSource, buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) });
+    expect(result).toMatchObject({ subjectKind: "phase", phaseId: "phase-1", baseTree: phaseSource.baseTree, candidateTree: phaseSource.snapshotTree });
+    expect(JSON.parse(task.readRecord(result.attemptRef))).toMatchObject({ subject_kind: "phase", phase_id: "phase-1", base_tree: phaseSource.baseTree, candidate_tree: phaseSource.snapshotTree });
+    expect(JSON.parse(task.readRecord(result.resultRef))).toMatchObject({ subject_kind: "phase", phase_id: "phase-1", base_tree: phaseSource.baseTree, candidate_tree: phaseSource.snapshotTree });
+    expect(() => verifyFinal({ resultRef: result.resultRef, task, attachmentRoot })).toThrow(/PHASE_RESULT_NOT_FINAL/);
+  });
+
   it("never calls a provider when source capture reports mutation", async () => {
     const { attachmentRoot, task } = fixture("simple-review-source-mutated-"); const calls = [];
     await expect(runReviewFixture({ task, attachmentRoot, taskId: "task", stage: "verify-code", materials: {}, hostProvider: "codex", providers: ["kimi"], providerClient: { run: async (request) => { calls.push(request); } }, captureSource: () => { throw new Error("SOURCE_CHANGED_DURING_CAPTURE"); } })).rejects.toThrow(/SOURCE_CHANGED_DURING_CAPTURE/);
@@ -181,6 +193,19 @@ describe("aggregation and runner", () => {
 });
 
 describe("verify final", () => {
+  it("accepts a legacy worktree v1 result without subject fields", () => {
+    const { attachmentRoot, task } = fixture("simple-review-legacy-final-");
+    const resultRef = "reviews/results/legacy-worktree.json";
+    const legacy = {
+      version: "wh-review-result.v1", task_id: "task", stage: "build-code", review_track: null,
+      source: { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead },
+      snapshot_tree: source.snapshotTree, material_id: materialId, attempt_ref: "reviews/attempts/legacy/attempt.json",
+      provider_results: [{ provider: "kimi", output: JSON.parse(pass) }], verdict: "pass", findings: []
+    };
+    createTaskKernel(task).publishCanonicalRecord(resultRef, Buffer.from(`${JSON.stringify(legacy)}\n`));
+    expect(verifyFinal({ resultRef, task, attachmentRoot, captureSource: () => source })).toEqual({ status: "finalized", snapshotTree: source.snapshotTree });
+  });
+
   it("accepts the same full snapshot and rejects drift", async () => {
     const { attachmentRoot, task } = fixture("simple-review-final-");
     const providerClient={run:async()=>({runtimeId:"runtime",provider:{provider:"kimi",status:"completed",session_id:"session",output:pass,error:null}})};
