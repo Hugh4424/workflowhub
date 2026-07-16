@@ -21,19 +21,25 @@ close 幂等恢复和原子 cutover，同时调整目录与 artifact 权威位�
 
 用户配置名称统一为 `task_dir`，环境变量为：
 
-```bash
-WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Knowledge
+```text
+~/.config/workflowhub/config.json
+```
+
+```json
+{"task_dir":"/Users/Hugh/Hugh/Knowledge"}
 ```
 
 取值只有一个覆盖源：
 
-1. 已设置 `WORKFLOWHUB_TASK_DIR`：使用其绝对路径；
-2. 未设置：直接使用本机用户目录 `os.homedir()`。
+1. 已设置 `WORKFLOWHUB_TASK_DIR`：作为临时覆盖，使用其绝对路径；
+2. 否则读取 `$XDG_CONFIG_HOME/workflowhub/config.json`，未设置 XDG 时读取
+   `~/.config/workflowhub/config.json` 的 `task_dir`；
+3. 配置文件不存在时，使用本机用户目录 `os.homedir()`。
 
-不再增加 `config.json.task_dir` 等第二配置源。当前机器全局环境配置为：
+不再增加其他项目级或宿主专用配置源。当前机器全局配置为：
 
-```bash
-WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Knowledge
+```json
+{"task_dir":"/Users/Hugh/Hugh/Knowledge"}
 ```
 
 `task_dir` 必须是绝对目录。对外名称按用户习惯保留；内部统一称 `storageRoot`，禁止把它
@@ -41,9 +47,6 @@ WORKFLOWHUB_TASK_DIR=/Users/Hugh/Hugh/Knowledge
 
 这是对旧 `WORKFLOWHUB_TASK_DIR` 语义的 breaking 重定义：旧版把它当某个项目的 `tasks`
 目录，新版把它当所有项目的全局根。cutover 前不得让新旧 runtime 同时解释这个变量。
-
-提供只读诊断命令 `workflowhub config show`，展示环境值、默认用户目录和最终解析值；它不
-维护另一份持久配置。
 
 ### 确定性任务路径
 
@@ -180,7 +183,7 @@ bootstrapStage(stage, {projectName, taskId, taskPath?}) -> StageContext
 ```
 
 - 顶层 CLI 通过 project/task 调用 launcher；launcher 唯一允许读取
-  `WORKFLOWHUB_TASK_DIR`、解析 `storageRoot`、派生 `taskPath`。
+  全局配置与可选的 `WORKFLOWHUB_TASK_DIR` 覆盖、解析 `storageRoot`、派生 `taskPath`。
 - 同进程 stage、journal、route、report、close 只持 `StageContext`/`TaskHandle`。
 - 独立 sidecar 不读取环境变量，只接父进程传入的绝对 `--task-path`，调用
   `openTask(taskPath, expectedIdentity)` 验证 manifest；不得再次派生。
@@ -370,7 +373,7 @@ cutover sentinel `~/.workflowhub/runtime-mode` 不是裸字符串，而是原子
 }
 ```
 
-新 runtime 每次启动都将 `WORKFLOWHUB_TASK_DIR`（或 `os.homedir()` 默认值）解析为
+新 runtime 每次启动都按“环境覆盖 → XDG 全局配置 → `os.homedir()`”解析为
 `storageRoot`，并要求与 sentinel 完全一致；不一致立即失败且不得创建目录。明显形如
 `.../Projects/<project>/tasks` 的旧值也必须明确报 `legacy WORKFLOWHUB_TASK_DIR semantics`。
 
@@ -394,7 +397,7 @@ cutover：
 
 1. 配置 root 后，PaperBuilder task 必须稳定得到示例路径；旧 project tasks root 被当作
    环境值时必须在创建目录前失败。
-2. 未配置时稳定使用 `os.homedir()`，不读取 cwd/remote 或第二配置文件。
+2. 未配置时稳定使用 `os.homedir()`，不读取 cwd/remote；全局配置只有 XDG config 一个来源。
 3. 同 project/task 从业务根、嵌套 workflowhub、`/tmp` 执行，taskPath 完全一致。
 4. project/task/manifest 不一致、路径逃逸、repo basename 冲突真实失败。
 5. 五阶段及 journal/review/route/report/metrics/close 全部使用同一 Task handle。
@@ -443,7 +446,7 @@ cutover：
 
 ## 后果
 
-- 用户可通过全局环境变量覆盖 `task_dir`；未配置时直接使用本机用户目录。
+- 用户在 XDG 全局配置中设置 `task_dir`，也可用环境变量临时覆盖；配置不存在时使用本机用户目录。
 - 保留熟悉的 `Projects/<repo>/tasks/<task>` 目录，减少迁移和认知成本。
 - spec/plan/tasks 随业务 Git 历史追踪，但 worktree cleanup 前必须确认已提交。
 - `WORKFLOWHUB_TASK_DIR` 发生 breaking 语义变化，需要原子 cutover。

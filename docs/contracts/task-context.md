@@ -4,7 +4,8 @@
 
 ## 术语
 
-- `WORKFLOWHUB_TASK_DIR`：用户配置的全局 storage root；stage 不直接读取。
+- `~/.config/workflowhub/config.json` 的 `task_dir`：用户配置的全局 storage root；stage 不直接读取。
+- `WORKFLOWHUB_TASK_DIR`：仅用于临时覆盖全局配置；stage 不直接读取。
 - `storageRoot`：launcher 内部值，不进入 skill contract 或 stage result。
 - `taskPath`：`storageRoot/Projects/<project>/tasks/<task>` 的绝对任务叶目录；唯一跨进程锚。
 - `TaskHandle`：当前进程从 taskPath 验证得到的任务记录能力对象。
@@ -17,7 +18,7 @@
 Launcher → bootstrapStage() → StageContext → Stage / Pure Worker
 ```
 
-Launcher 唯一允许读取 `WORKFLOWHUB_TASK_DIR` 并派生 taskPath。stage 和 sidecar 不得读取
+Launcher 唯一允许读取全局配置和 `WORKFLOWHUB_TASK_DIR` 覆盖并派生 taskPath。stage 和 sidecar 不得读取
 storage root。独立官方 sidecar 只接绝对 `--task-path` 并验证 manifest；provider/worker
 只收材料内容、父进程解析的绝对路径或受控回调。
 

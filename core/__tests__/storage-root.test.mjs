@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +12,12 @@ function temporaryDirectory(prefix) {
   const directory = mkdtempSync(join(tmpdir(), prefix));
   temporaryDirs.push(directory);
   return directory;
+}
+
+function writeConfig(configHome, value) {
+  const directory = join(configHome, "workflowhub");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "config.json"), value, "utf8");
 }
 
 afterEach(() => {
@@ -30,15 +36,75 @@ describe("resolveStorageRoot", () => {
     expect(resolveStorageRoot()).toBe(storageRoot);
   });
 
-  it.each([undefined, "", "   "])(
-    "uses os.homedir() when WORKFLOWHUB_TASK_DIR is unset or blank (%s)",
-    (value) => {
-      if (value === undefined) delete process.env.WORKFLOWHUB_TASK_DIR;
-      else process.env.WORKFLOWHUB_TASK_DIR = value;
+  it("gives a non-blank environment override precedence over the config file", () => {
+    const home = temporaryDirectory("workflowhub-home-");
+    const configHome = temporaryDirectory("workflowhub-config-");
+    const configuredRoot = join(home, "configured");
+    const overrideRoot = join(home, "override");
+    writeConfig(configHome, JSON.stringify({ task_dir: configuredRoot }));
 
-      expect(resolveStorageRoot()).toBe(homedir());
+    expect(
+      resolveStorageRoot({
+        home,
+        env: {
+          XDG_CONFIG_HOME: configHome,
+          WORKFLOWHUB_TASK_DIR: overrideRoot,
+        },
+      }),
+    ).toBe(overrideRoot);
+  });
+
+  it.each([undefined, "", "   "])(
+    "reads task_dir from XDG_CONFIG_HOME when the env override is absent or blank (%s)",
+    (value) => {
+      const home = temporaryDirectory("workflowhub-home-");
+      const configHome = temporaryDirectory("workflowhub-config-");
+      const configuredRoot = join(home, "Knowledge");
+      writeConfig(configHome, JSON.stringify({ task_dir: configuredRoot }));
+      const env = { XDG_CONFIG_HOME: configHome };
+      if (value !== undefined) env.WORKFLOWHUB_TASK_DIR = value;
+
+      expect(resolveStorageRoot({ env, home })).toBe(configuredRoot);
     },
   );
+
+  it("uses ~/.config/workflowhub/config.json when XDG_CONFIG_HOME is unset", () => {
+    const home = temporaryDirectory("workflowhub-home-");
+    const configuredRoot = join(home, "Knowledge");
+    writeConfig(join(home, ".config"), JSON.stringify({ task_dir: configuredRoot }));
+
+    expect(resolveStorageRoot({ env: {}, home })).toBe(configuredRoot);
+  });
+
+  it("falls back to homedir when neither override nor config file exists", () => {
+    const home = temporaryDirectory("workflowhub-home-");
+
+    expect(resolveStorageRoot({ env: {}, home })).toBe(home);
+  });
+
+  it("keeps the real os.homedir fallback contract", () => {
+    const configHome = temporaryDirectory("workflowhub-empty-config-");
+
+    expect(resolveStorageRoot({ env: { XDG_CONFIG_HOME: configHome } })).toBe(
+      homedir(),
+    );
+  });
+
+  it.each([
+    ["malformed JSON", "{"],
+    ["missing task_dir", JSON.stringify({ storageRoot: "/tmp/wrong-field" })],
+    ["non-string task_dir", JSON.stringify({ task_dir: 42 })],
+    ["blank task_dir", JSON.stringify({ task_dir: "   " })],
+    ["relative task_dir", JSON.stringify({ task_dir: "relative/storage" })],
+  ])("fails loud for %s", (_label, contents) => {
+    const home = temporaryDirectory("workflowhub-home-");
+    const configHome = temporaryDirectory("workflowhub-config-");
+    writeConfig(configHome, contents);
+
+    expect(() =>
+      resolveStorageRoot({ env: { XDG_CONFIG_HOME: configHome }, home }),
+    ).toThrow();
+  });
 
   it("rejects a relative storage root", () => {
     process.env.WORKFLOWHUB_TASK_DIR = "relative/storage";
