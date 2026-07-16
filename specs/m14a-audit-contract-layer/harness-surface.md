@@ -2,6 +2,8 @@
 
 本文件定义可被审计的 harness surface 边界。它只表达风险、归属、权限和验证方式，不实现权限系统，不给出自进化建议。
 
+四种 permission 值只表达治理边界：不授权自动流程、不触发自动修改，也不构成 blocking enforcement。
+
 ## Permission Semantics
 
 | permission | 语义 |
