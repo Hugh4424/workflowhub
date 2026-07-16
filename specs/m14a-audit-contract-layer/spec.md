@@ -297,6 +297,7 @@
 | `provenance` | evidence | collector/stage | machine or human declared | audit view | provenance record |
 | `schema_version` | contract | contract owner | declared | compatibility view | schema file |
 | `collector_version` | collector | collector owner | declared | compatibility view | collector release |
+| `collector_supported_schema_versions` | collector | collector owner | declared | compatibility view | collector release/config |
 
 ## 附录 B：质量事实契约
 

@@ -124,6 +124,16 @@ describe("M14a audit contract layer", () => {
     expect(surfaces).toContain("不授权自动流程、不触发自动修改，也不构成 blocking enforcement");
   });
 
+  it("lists every required execution-trace field in the spec field-ownership table", () => {
+    const table = spec.split("\n").filter((line) => line.startsWith("| `"));
+    const tableFields = new Set(
+      table.map((line) => line.split("|")[1].trim().replaceAll("`", ""))
+    );
+    for (const field of traceRequired) {
+      expect(tableFields.has(field)).toBe(true);
+    }
+  });
+
   it("keeps the spec handoff-readable and artifact-first", () => {
     const top = spec.split("\n").slice(0, 30).join("\n");
     expect(top).toContain("速读卡（30 秒看懂这个需求）");
