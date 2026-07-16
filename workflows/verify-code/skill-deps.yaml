@@ -13,5 +13,5 @@ runtime_capabilities:
   - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }
   - { id: browser-cli, kind: cli, doctor_any: [[agent-browser, --version], [browser-use, doctor]], required_when: ui_acceptance, absence_semantics: blocked }
 external_capabilities:
-  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: test_strategy_or_ui, absence_semantics: human_required }
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: test_strategy_or_ui, absence_semantics: diagnostic }
   - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }

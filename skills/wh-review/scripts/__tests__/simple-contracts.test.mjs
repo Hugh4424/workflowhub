@@ -118,6 +118,9 @@ describe("simple wh-review contracts", () => {
     const direction = matrix.stages["make-decision"].tracks.direction;
     expect(direction.required).toEqual(expect.arrayContaining(["raw_requirement", "objective_facts"]));
     expect(direction.forbidden).toEqual(expect.arrayContaining(["proposed_solution", "decision_log", "spec", "plan", "changes_diff"]));
+    const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
+    expect(plan.stages["make-decision"].tracks.direction.required_skills)
+      .toEqual(expect.arrayContaining(["intake-decision-review"]));
   });
 
   it("accepts additive fields in workflowhub-result.v1", () => {

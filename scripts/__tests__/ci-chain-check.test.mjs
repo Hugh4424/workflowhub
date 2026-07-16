@@ -11,6 +11,7 @@ import { createTaskKernel } from "../../core/task-kernel.mjs";
 import { bootstrapStage } from "../../core/stage-context.mjs";
 import { acceptStageAttempt, runStage } from "../../core/stage-runner.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
+import { requiresHumanConfirmation } from "../../core/stage-acceptance-policy.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const script = join(root, "scripts/ci-chain-check.mjs");
@@ -35,7 +36,7 @@ async function fixture({ reverseLast = false, tamper = false } = {}) {
     issue_ids: [], inputs: {},
   } });
   const contextFor=(stage)=>bootstrapStage(stage,{mode:"sidecar",taskPath,projectName,taskId});
-  const execute=async(stage,handler)=>{const context=contextFor(stage);const attempt=await runStage(stage,context,handler);acceptStageAttempt(stage,context,{attemptRef:attempt.attempt_ref,humanConfirmationRef:writeHumanConfirmation(context.kernel,stage,attempt)});};
+  const execute=async(stage,handler)=>{const context=contextFor(stage);const attempt=await runStage(stage,context,handler);const request={attemptRef:attempt.attempt_ref};if(requiresHumanConfirmation(stage))request.humanConfirmationRef=writeHumanConfirmation(context.kernel,stage,attempt);acceptStageAttempt(stage,context,request);};
   await execute("make-decision",async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
   await execute("build-spec",async(ctx)=>{ctx.artifacts.writeAtomic("spec.md","spec\n");const checkpoint=ctx.createCheckpoint("build-spec");return{facts:{spec_ref:"specs/demo-task/spec.md",checkpoint}};});
   await execute("build-plan",async(ctx)=>{ctx.artifacts.writeAtomic("plan.md","plan\n");ctx.artifacts.writeAtomic("tasks.md","tasks\n");const checkpoint=ctx.createCheckpoint("build-plan");return{facts:{plan_ref:"specs/demo-task/plan.md",tasks_ref:"specs/demo-task/tasks.md",checkpoint}};});

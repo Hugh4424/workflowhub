@@ -14,5 +14,5 @@ runtime_capabilities:
   - { id: git, kind: cli, doctor: [git, --version], required_when: always, absence_semantics: blocked }
   - { id: target-test-command, kind: command, doctor: [target-test-command, --version], required_when: always, absence_semantics: blocked }
 external_capabilities:
-  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: phase_execution, absence_semantics: human_required }
+  - { id: host-subagent, kind: host, doctor: [host-capability, host-subagent], required_when: phase_execution, absence_semantics: diagnostic }
   - { id: wh-review-provider, kind: review, doctor: [workflowhub-capability, wh-review-provider], required_when: review, absence_semantics: diagnostic }

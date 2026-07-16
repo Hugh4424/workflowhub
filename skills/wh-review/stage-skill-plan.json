@@ -5,7 +5,7 @@
       "tracks": {
         "direction": {
           "logical_skill_id": "wh-review/make-decision-direction",
-          "required_skills": ["plan-ceo-review", "review"],
+          "required_skills": ["intake-decision-review", "plan-ceo-review", "review"],
           "review_mode": "lens-only",
           "delivery_mode": "file_only"
         },

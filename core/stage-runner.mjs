@@ -1,6 +1,7 @@
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
 import { officialStageHandler } from "./stage-handlers.mjs";
+import { requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { createHash } from "node:crypto";
 import { captureWorkspaceSnapshot } from "./canonical-receipt-writer.mjs";
 
@@ -113,7 +114,11 @@ function officialWorkerContext(ctx) {
     },
     ...(ctx.workspace ? { workspace: Object.freeze({ worktreeRoot: ctx.workspace.worktreeRoot, baselineCommit: ctx.workspace.baselineCommit }) } : {}),
     ...(ctx.workspace ? { snapshotWorkspace: () => captureWorkspaceSnapshot(ctx.workspace) } : {}),
-    ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({ worktreeRoot: ctx.candidateWorkspace.worktreeRoot, baselineCommit: ctx.candidateWorkspace.baselineCommit }) } : {}),
+    ...(ctx.candidateWorkspace ? { candidateWorkspace: Object.freeze({
+      worktreeRoot: ctx.candidateWorkspace.worktreeRoot,
+      baselineCommit: ctx.candidateWorkspace.baselineCommit,
+      captureSnapshot: () => ctx.candidateWorkspace.captureSnapshot(),
+    }) } : {}),
     ...(ctx.artifacts ? {
       readArtifact: (name) => ctx.artifacts.read(name),
       writeArtifact: (name, value) => ctx.artifacts.writeAtomic(name, value),
@@ -159,16 +164,20 @@ export function runOfficialStage(stage, context, invocation) {
 /** Persist the user's explicit decision before acceptance. */
 export function confirmStageAttempt(stage, context, { attemptRef, decision } = {}) {
   const ctx = assertContext(context, stage);
+  if (!requiresHumanConfirmation(stage)) throw new Error(`${stage} uses automatic acceptance and does not require confirmation`);
   return ctx.kernel.confirmAttempt(stage, attemptRef, decision);
 }
 
-/** Acceptance is intentionally separate from execution and requires a human ref. */
+/** Acceptance stays separate from execution; only decision gates require a human ref. */
 export function acceptStageAttempt(stage, context, request = {}) {
   if (Object.prototype.hasOwnProperty.call(request, "checkpoint")) throw new TypeError("caller checkpoint override is forbidden");
   const { attemptRef, humanConfirmationRef } = request;
   const ctx = assertContext(context, stage);
-  if (typeof humanConfirmationRef !== "string" || humanConfirmationRef.trim() === "") {
+  if (requiresHumanConfirmation(stage) && (typeof humanConfirmationRef !== "string" || humanConfirmationRef.trim() === "")) {
     throw new TypeError("explicit humanConfirmationRef is required");
+  }
+  if (!requiresHumanConfirmation(stage) && humanConfirmationRef !== undefined) {
+    throw new TypeError(`${stage} uses automatic acceptance; omit humanConfirmationRef`);
   }
   return ctx.kernel.acceptAttempt(stage, attemptRef, humanConfirmationRef);
 }

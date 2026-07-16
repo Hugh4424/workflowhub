@@ -159,7 +159,7 @@ openTask(taskPath, expectedProject, expectedTask)
 readAccepted(stage)
 readInput(slot)
 publishAttempt(stage, data)
-acceptAttempt(stage, attemptRef, humanConfirmationRef)
+acceptAttempt(stage, attemptRef, acceptance)
 appendJournal(event)
 reviewDir()
 lock() / unlock()
@@ -211,13 +211,15 @@ manifest 三者完全一致；不一致 fail-loud，不能规定隐式优先级�
 跨进程传递的稳定锚是绝对 `taskPath`，不是 JS 对象。每个进程可从同一 taskPath 创建自己
 的受控 handle，但只有 launcher 能从全局 root 派生 taskPath。
 
-### Stage attempt 与人工确认
+### Stage attempt 与接受策略
 
-阶段失败、`revise_required`、暂停和取消都写新的 attempt，不覆盖历史。成功 attempt 只有经
-人确认后才能生成 immutable `accepted.json`。下一阶段只读取前一阶段 accepted。
+阶段失败、`revise_required`、暂停和取消都写新的 attempt，不覆盖历史。make-decision、
+build-plan、verify-code 经人确认后生成 immutable `accepted.json`；build-spec、build-code
+由固定 stage policy 自动生成。下一阶段只读取前一阶段 accepted。
 
-accepted 必须记录 attempt 引用、完整性 hash、`human_confirmation_ref` 与确认时间。完整性
-hash 失败时不得 accept；测试/review 等质量事实 hash 可记 `unknown`，由人决定接受或重跑。
+accepted 必须记录 attempt 引用、完整性 hash 和 acceptance mode。人工 gate 另记录确认引用
+与确认时间；自动 stage 记录固定 policy。完整性 hash 失败时不得 accept；测试/review 等
+质量事实 hash 可记 `unknown`，不得阻断自动 stage，并在下个人工 gate 浮现。
 
 stage 已 accepted 后禁止继续写该 stage。需要回退时创建新 task，通过允许的只读 input
 继承设计产物，不修改历史。
@@ -405,7 +407,8 @@ cutover：
 7. spec/plan/tasks 的唯一可编辑工作路径位于 make-decision worktree 的固定 specs 目录；
    accepted 强制记录
    可达 checkpoint commit/tree/blob，cwd 中同名文件不得被读取。
-8. stage attempt 可重跑、不覆盖；accepted 后禁止改写；每阶段推进有人确认。
+8. stage attempt 可重跑、不覆盖；accepted 后禁止改写；make-decision/build-plan/verify-code
+   人工确认，build-spec/build-code 自动接受。
 9. cross-task input 固定、只读；source 身份或 Git checkpoint/blob/hash 不一致真实失败，
    source worktree 删除后仍能读取 accepted artifact。
    `decision` 不需要 checkpoint ref，但伪造 accepted/attempt/hash 必须失败。
@@ -436,7 +439,7 @@ cutover：
 - F1/F2：路径规则集中在窄 Task 模块。
 - F3/Q1：质量事实只记录；accepted 完整性属于入口边界。
 - F6：执行记录集中 taskPath；设计产物以 Git checkpoint 为可恢复权威。
-- F7：阶段推进与不可逆操作均人工确认。
+- F7：方向、计划、最终验证三个 stage gate 人工确认；build-spec/build-code 自动推进；close 独立授权。
 - F8：删除 run/upstream/locator/handoff/永久 adapter。
 - F9：无显式 project/task 或身份冲突真实失败，不猜测。
 - F10：不建数据库、registry 或强制 artifact hash gate。

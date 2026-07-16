@@ -19,8 +19,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["receipt", "run", "confirm", "accept"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <receipt|run|confirm|accept> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "receipt", "run", "confirm", "accept"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|receipt|run|confirm|accept> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -40,6 +40,14 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   const input = new Set(["receipt", "run"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
+  if (command === "prepare") {
+    if (values.stage !== "make-decision") throw new TypeError("prepare is only valid for make-decision");
+    context = prepareMakeDecisionWorkspace(context);
+    return {
+      worktree_root: context.candidateWorkspace.worktreeRoot,
+      baseline_commit: context.candidateWorkspace.baselineCommit,
+    };
+  }
   if (values.stage === "make-decision" && command === "run") context = prepareMakeDecisionWorkspace(context);
   if (values.stage === "make-decision" && command === "accept") context = validateMakeDecisionWorkspaceAttempt(context, values.attempt);
   if (command === "receipt") {

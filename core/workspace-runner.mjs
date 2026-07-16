@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { assertWorkspace } from "./workspace.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
 
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 
@@ -10,8 +10,7 @@ const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
  * This boundary deliberately has no cwd override, task lookup, shell mode, or
  * persistence. Callers that need shell syntax must invoke a shell explicitly.
  */
-export function runWorkspaceCommand(workspace, command, args = []) {
-  const safeWorkspace = assertWorkspace(workspace);
+function runBoundCommand(worktreeRoot, command, args) {
   if (typeof command !== "string" || command.trim() === "") {
     throw new TypeError("workspace command must be a non-empty string");
   }
@@ -19,9 +18,18 @@ export function runWorkspaceCommand(workspace, command, args = []) {
     throw new TypeError("workspace command args must be an array of strings");
   }
   return spawnSync(command, [...args], {
-    cwd: safeWorkspace.worktreeRoot,
+    cwd: worktreeRoot,
     encoding: "utf8",
     maxBuffer: MAX_OUTPUT_BYTES,
     stdio: ["ignore", "pipe", "pipe"],
   });
+}
+
+export function runWorkspaceCommand(workspace, command, args = []) {
+  return runBoundCommand(assertWorkspace(workspace).worktreeRoot, command, args);
+}
+
+/** Run a make-decision component in the authenticated candidate worktree. */
+export function runCandidateWorkspaceCommand(candidateWorkspace, command, args = []) {
+  return runBoundCommand(assertCandidateWorkspace(candidateWorkspace).worktreeRoot, command, args);
 }

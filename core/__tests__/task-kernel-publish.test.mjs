@@ -7,7 +7,7 @@ import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 
 import { createTask } from "../task-handle.mjs";
-import { createTaskKernel } from "../task-kernel.mjs";
+import { createTaskKernel, validateAccepted } from "../task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
 import { ArtifactDir } from "../artifact-dir.mjs";
 import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
@@ -103,7 +103,11 @@ describe("TaskKernel append-only publication", () => {
     expect(revisedCheckpoint).not.toHaveProperty("ref");
     const attempt = boundKernel.publishAttempt("build-spec", { facts: { spec_ref: "specs/task-one/spec.md", checkpoint: revisedCheckpoint }, upstream_refs });
     expect(String(execFileSync("git", ["for-each-ref", "--format=%(refname)", "refs/workflowhub/checkpoints/"], { cwd: task.manifest.target_repo_root }))).toBe("");
-    const acceptedSpec = boundKernel.acceptAttempt("build-spec", attempt.attempt_ref, confirmation(boundKernel, "build-spec", attempt.attempt_ref));
+    expect(() => boundKernel.confirmAttempt("build-spec", attempt.attempt_ref, "accepted")).toThrow(/automatic acceptance/i);
+    expect(() => boundKernel.acceptAttempt("build-spec", attempt.attempt_ref, "human:forged")).toThrow(/automatic acceptance/i);
+    const acceptedSpec = boundKernel.acceptAttempt("build-spec", attempt.attempt_ref);
+    expect(acceptedSpec).toMatchObject({ acceptance_mode: "automatic" });
+    expect(acceptedSpec).not.toHaveProperty("human_confirmation_ref");
     expect(acceptedSpec.checkpoint.ref).toMatch(/^refs\/workflowhub\/checkpoints\/Demo\/task-one\/build-spec\//);
     expect(() => verifyGitCheckpoint({ repoRoot: workspace.worktreeRoot, checkpoint: acceptedSpec.checkpoint, projectName: "Demo", taskId: "task-one", stage: "build-spec" })).not.toThrow();
     artifacts.writeAtomic("plan.md", "# Plan\n");
@@ -115,7 +119,17 @@ describe("TaskKernel append-only publication", () => {
       upstream_refs: planUpstream,
     });
     const acceptedPlan = boundKernel.acceptAttempt("build-plan", planAttempt.attempt_ref, confirmation(boundKernel, "build-plan", planAttempt.attempt_ref));
+    expect(acceptedPlan).toMatchObject({ acceptance_mode: "human" });
     expect(() => execFileSync("git", ["merge-base", "--is-ancestor", acceptedSpec.checkpoint.commit_oid, acceptedPlan.checkpoint.commit_oid], { cwd: task.manifest.target_repo_root })).not.toThrow();
+  });
+
+  it("reads legacy automatic-stage accepted records that have a human ref and no acceptance mode", () => {
+    const { kernel } = fixture();
+    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });
+    const accepted = kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const legacy = { ...accepted, stage: "build-code", human_confirmation_ref: "confirmations/build-code/attempt-0001.json" };
+    delete legacy.acceptance_mode;
+    expect(() => validateAccepted(legacy, { taskId: "task-one", stage: "build-code" })).not.toThrow();
   });
 
   it("resolves only declared upstream slots and keeps source read-only", () => {

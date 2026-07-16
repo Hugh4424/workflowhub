@@ -1,144 +1,57 @@
 ---
 name: intake-decision-review
-description: 单一入口的 intake 决策审查技能。把 direction、framing、scope、feasibility 四个内部审查角度拼成一次 3rd-review 请求，并用大白话与用户确认关键选择。
+description: Blind review lens for the problem, framing, scope, and feasibility of an intake direction.
 ---
 
-# intake-decision-review
+# Intake Decision Review
 
-本技能用于 make-decision 或类似 intake 流程中的异源审查护城河。它不拆成多个 intake-* 子技能，也不引入 orchestrator；所有审查输入在本技能内拼装，随后对 3rd-review 做**单次调用**。
+This skill is a pure review lens used only by the `wh-review` make-decision
+direction track. `wh-review` owns material freezing, provider selection,
+provider invocation, transport validation, retries, and result publication.
+This lens never invokes a provider, asks the user a question, waits for
+confirmation, or writes task or product files.
 
-内部审查角度是：
+## Input contract
 
-- `direction`：方向是否真的值得做，是否解决了真实问题。
-- `framing`：问题表述是否偏了，是否把手段当目标。
-- `scope`：范围是否过大、过小或边界不清。
-- `feasibility`：技术可行性——方案里的外部工具/接口/边界条件假设是否与现实相符。
+Read only `review-packet.v1` and its frozen direction bundle. Allowed material:
 
-这些英文标签只用于内部记录和输出结构。面向用户时必须翻译成大白话，不能把这些词作为独立术语直接扔给用户。
+- the raw user requirement;
+- objective facts with traceable sources;
+- hard constraints;
+- explicit non-goals;
+- the make-decision direction review instructions.
 
-## 输入
+The bundle must not contain a proposed or recommended solution, candidate
+decision, option ranking, decision log, approved direction, specification,
+plan, code, diff, test result, or detail-review conclusion. Report forbidden or
+missing material as unavailable; do not infer it, request another file, or ask
+the user to supply it.
 
-- 用户原始需求与补充回答。
-- 已有调研、代码阅读、规格草稿或计划草稿。
-- 当前流程已形成的候选决策、约束、风险、待确认事项。
-- 可调用的 3rd-review runner 或等价异源审查机制。
+## Review method
 
-## 执行协议
+Independently inspect all four angles:
 
-### S0 建立边界
+- `direction`: whether the stated work addresses the real user problem;
+- `framing`: whether the requirement mistakes a tool or implementation for the
+  goal, or embeds an unsupported premise;
+- `scope`: whether the boundary is too broad, too narrow, or missing a
+  load-bearing non-goal;
+- `feasibility`: whether objective facts already disprove an external
+  interface, dependency, timing, or operational assumption.
 
-确认本次只做 intake 决策审查：检查方向、表述和范围，不替代实现、不直接改代码、不扩展到后续 phase。
+Each finding must use exactly one angle and include evidence, risk, and a
+recommended next action. Findings are `0-N`; do not invent one merely to fill an
+angle and do not cap real findings. Distinguish supplied facts from reviewer
+inference.
 
-### S1 汇总已知事实
+This is direction review, not solution review. Do not compare implementation
+approaches, refine the candidate design, or use knowledge of downstream stage
+artifacts. Return findings to the provider's normal `verdict`, `summary`, and
+`findings` response; `wh-review` validates and publishes that response.
 
-把输入压缩成事实清单、用户原话、已知约束、当前候选方案和缺口。事实必须能追溯到输入；推断必须显式标注。
+## Failure contract
 
-### S2 给用户展示大白话选项
-
-如需要用户先选审查重点，用中文选项展示，不暴露内部英文术语。每个选项都要有推荐标记和后果说明：
-
-- **推荐：先看这事值不值得做**。后果：能最快发现方向错了的问题，避免后面做得很精致但没价值。
-- **推荐：先看说法有没有偏**。后果：能发现是不是把工具、流程或实现手段误当成真实目标。
-- **推荐：先看边界是否合适**。后果：能发现范围太大导致做不完，或范围太小导致交付无效。
-
-一次只问一个最关键问题。若上下文足够，不打断用户，直接进入 S3。
-
-### S3 拼装四角度审查请求
-
-把四个内部角度拼进同一个 3rd-review 请求中，要求 reviewer 返回 findings。请求必须明确：
-
-- findings **不设条数上限**，每个角度 0-N 条：某角度确实无发现可以是 0 条，但不得因为"凑数"而编造，也不得因为"怕超限"而截断真实问题。
-- 每条 finding 标注且只标注 `direction`、`framing`、`scope`、`feasibility` 之一。
-- 四类角度均须被覆盖考察（允许某角度产出为空，但不得未审），顺序不限。
-- 每条 finding 必须包含证据、风险、建议动作。
-- 请求必须携带强制字段 `verified_interface: {tool, checked_at, method}`：审查涉及调用外部脚本/工具时，必须先实测跑一次 `--help` 或读源码确认接口，再把核实结果写进这个字段。请求缺这个字段直接判不可执行，不得静默假设旧接口。
-
-### S4 遇到问题时给中文选项
-
-如果输入不足、审查 runner 不可用、返回格式异常或用户目标自相矛盾，暂停并给出中文选项，每项含推荐标记和后果说明：
-
-- **推荐：先补最关键的缺口**。后果：审查结论更可靠，但会多一次用户确认。
-- **推荐：先按最小假设继续审查**。后果：速度更快，但输出必须标注哪些结论依赖假设。
-- **不推荐：忽略异常继续**。后果：可能产生看似完整但不可用的结论，默认不得采用。
-
-### S5 单次调用 3rd-review
-
-只调用一次 3rd-review。不得为三个角度分别调用三次，也不得在主流程中复制三套审查逻辑。单次调用的输入必须包含 S3 的完整审查请求。
-
-### S6 校验 fallback
-
-读取 3rd-review 返回。如果返回包含 `fallback_used: true`，立即停止并报错或标记 blocked；不得采用该结果，不得静默降级，不得继续主流程。
-
-### S7 校验 findings 完整性
-
-校验 findings：
-
-- 数量不设上限，每个角度 0-N 条，不得因固定条数上限截断真实问题。
-- `direction`、`framing`、`scope`、`feasibility` 四类必须均已被考察（angle 标签只允许取这四个值之一），允许某角度为 0 条，但不得整体缺失某个角度未被审查。
-- 若标签值非法（不属于四类之一）或明显缺整角度未审查，要求重跑或重新调用审查。
-- **契约漂移检测**：审查请求实际返回的结构与本合同声明的结构（字段名、angle 枚举值、必填字段）不一致时，审查器必须把这个不一致本身列为一条 blocking finding，不得吞掉重试、不得静默忽略差异继续解析。
-- 不得编造、不自行编造、不补齐缺失角度；缺什么就明确说缺什么。
-
-### S8 产出审查结论
-
-输出 findings（每个角度 0-N 条，不设总数上限），并附一个汇总判断：
-
-```text
-findings:
-  - angle: direction
-    evidence: ...
-    risk: ...
-    recommendation: ...
-  # 0..N items
-  - angle: framing
-    evidence: ...
-    risk: ...
-    recommendation: ...
-  # 0..N items
-  - angle: scope
-    evidence: ...
-    risk: ...
-    recommendation: ...
-  # 0..N items
-  - angle: feasibility
-    evidence: ...
-    risk: ...
-    recommendation: ...
-  # 0..N items
-verified_interface:
-  tool: ...
-  checked_at: ...
-  method: ...
-summary:
-  verdict: pass | revise_required | blocked
-  reason: ...
-```
-
-### S9 等待确认
-
-把结论翻译成大白话交给用户确认，明确说明：**不确认就不继续**。如果用户没有确认，等待确认，不推进到后续实现或计划步骤。
-
-### S9.5 跳过机制（允许跳过，但不许静默消失）
-
-允许跳过本轮盲审（例如已有更早轮次的等效审查覆盖）。但跳过前必须检查：本轮盲审在被跳过之前，是否已经产出过任何 finding（哪怕只是中途生成、尚未走完流程）。
-
-- 若已产出过 finding：不允许直接跳过消失，必须把这些 finding 转成调用方 decision-log 的"开放问题"节，并为其生成一个对应的可追踪 issue（issue 编号写入开放问题条目）。
-- 若确实没有产出过任何 finding：可以正常跳过，写明跳过原因。
-
-## 输出
-
-- findings：每个角度 0-N 条，标签覆盖 `direction`、`framing`、`scope`、`feasibility`。
-- `verified_interface` 字段（工具、核实时间、核实方式）。
-- `fallback_used` 检查结果。
-- 完整性校验结果（含契约漂移检测结果）。
-- 面向用户的大白话确认文本。
-- 若 blocked，输出阻塞原因和需要用户补充的最小信息。
-- 若跳过，输出跳过原因；若跳过前已有 finding，输出对应的开放问题条目与 issue 编号。
-
-## 约束
-
-- 单一 intake-decision-review skill，不拆分为多个 intake-* 技能。
-- 四角度内容必须拼装后对 3rd-review 单次调用。
-- findings 不设总数上限，缺整角度未审查就重跑，不得编造，也不得为了凑数虚报 finding。
-- 跳过必须满足 S9.5 的留痕约束，跳过前已有 finding 不许直接消失。
-- 用户可见文本用中文大白话表达，不直接暴露内部英文术语。
+Missing required material, forbidden material, or an unreadable frozen packet
+is `unavailable`, never `pass`. A material disagreement is a finding, not a
+prompt for interactive clarification. The parent make-decision flow decides
+whether a finding becomes a round-3 question or remains a visible fact.

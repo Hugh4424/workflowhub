@@ -42,7 +42,7 @@ export async function dispatchStageSkill({ packageRoot, stage, name, triggered =
     return { name, status: "not_invoked", source_manifest: prepared.source, package_root: prepared.root };
   }
   if (dependency.execution === "independent" && !independentContextAvailable) {
-    throw new Error(`${stage}/${name}: independent context capability unavailable; human decision required`);
+    return { name, status: "unavailable", reason: "independent_context_unavailable", source_manifest: prepared.source, package_root: prepared.root };
   }
   if (typeof hostInvoke !== "function") throw new Error(`${stage}/${name}: hostInvoke is required`);
   return hostInvoke(prepared.payloads.get(name));

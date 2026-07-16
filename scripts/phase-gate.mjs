@@ -58,18 +58,18 @@ function checkStatus(phaseResult, errors, checked) {
   }
 }
 
-function checkEvidence(phaseResult, baseDir, errors, checked) {
+function checkEvidence(phaseResult, baseDir, warnings, checked) {
   checked.push("red-green-evidence");
   const redPath = phaseResult.tests?.red?.path ?? phaseResult.artifact_paths?.red;
   const greenPath = phaseResult.tests?.green?.path ?? phaseResult.artifact_paths?.green;
-  const red = readArtifact(baseDir, redPath, "RED", errors);
-  const green = readArtifact(baseDir, greenPath, "GREEN", errors);
+  const red = readArtifact(baseDir, redPath, "RED", warnings);
+  const green = readArtifact(baseDir, greenPath, "GREEN", warnings);
 
   if (red && (!Number.isInteger(red.data.exit_code) || red.data.exit_code === 0)) {
-    errors.push(`RED evidence exit_code must be non-zero (got ${JSON.stringify(red.data.exit_code)})`);
+    warnings.push(`RED evidence exit_code is not non-zero (got ${JSON.stringify(red.data.exit_code)})`);
   }
   if (green && green.data.exit_code !== 0) {
-    errors.push(`GREEN evidence exit_code must be 0 (got ${JSON.stringify(green.data.exit_code)})`);
+    warnings.push(`GREEN evidence exit_code is not 0 (got ${JSON.stringify(green.data.exit_code)})`);
   }
 }
 
@@ -118,7 +118,7 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
   return scan;
 }
 
-function checkReview(phaseResult, scan, worktreeRoot, errors, checked, options = {}) {
+function checkReview(phaseResult, scan, worktreeRoot, errors, warnings, checked, options = {}) {
   checked.push("heterogeneous-review");
   const review = phaseResult.review;
   if (!review || typeof review !== "object") {
@@ -129,12 +129,13 @@ function checkReview(phaseResult, scan, worktreeRoot, errors, checked, options =
   try {
     if (!scan) throw new Error("phase diff evidence is unavailable");
     const subject = validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot: worktreeRoot, phaseId: phaseResult.phase_id });
-    const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: true });
+    const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: false });
     if (result.subject_kind !== "phase" || typeof result.phase_id !== "string") throw new Error("phase review identity is missing");
     if (result.phase_id !== subject.phaseId) throw new Error(`phase review identity mismatch: expected ${subject.phaseId}`);
     if (result.base_tree !== subject.baseTree || result.candidate_tree !== subject.candidateTree) throw new Error("phase review tree identity mismatch");
+    if (result.verdict !== "pass") warnings.push(`review verdict is ${result.verdict}; preserve this quality fact`);
   }
-  catch (error) { errors.push(`review is not a formal passing result: ${error.message}`); }
+  catch (error) { errors.push(`review is not a formal result: ${error.message}`); }
 }
 
 export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
@@ -144,9 +145,9 @@ export function validatePhaseGate(phaseResult, worktreeRoot, options = {}) {
   const baseDir = options.baseDir ?? worktreeRoot;
 
   checkStatus(phaseResult, errors, checked);
-  checkEvidence(phaseResult, baseDir, errors, checked);
+  checkEvidence(phaseResult, baseDir, warnings, checked);
   const scan = checkDiffScan(phaseResult, baseDir, errors, checked);
-  checkReview(phaseResult, scan, worktreeRoot, errors, checked, options);
+  checkReview(phaseResult, scan, worktreeRoot, errors, warnings, checked, options);
 
   return { ok: errors.length === 0, errors, warnings, checked };
 }

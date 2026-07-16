@@ -19,7 +19,7 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
 decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
 confirmations never publish checkpoint refs.
 
-Create `plan` and `tasks` through `stage-runtime.mjs receipt` with fixed `--component=plan|tasks`; pass only returned refs.
+Create `plan` and `tasks` through `stage-runtime.mjs receipt` with fixed `--component=plan|tasks`; pass those refs plus the canonical `wh-review` result ref as `plan`, `tasks`, and `review`. Missing review evidence stops the official run.
 
 Declared runtime components: `spec-research`, `simplicity-guard`, `spec-plan`,
 `spec-tasks`, `spec-analyze`, `wh-review`, and the review lenses declared by the
@@ -50,7 +50,8 @@ manifest.
    status, review facts, and missing items.
 8. Present the plan summary and record the decision with `confirm`. Only an
    accepted confirmation may be passed to `accept`, which creates the
-   build-plan checkpoint and accepts the attempt.
+   build-plan checkpoint and accepts the attempt. Use the gate ending from
+   `docs/human-brief-template.md`.
 
 Changing an already accepted specification requires a new task. Missing or
 mismatched accepted provenance fails loud before planning.

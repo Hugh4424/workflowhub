@@ -13,6 +13,6 @@ describe("v2 human boundary summaries", () => {
   });
 
   it("irreversible close remains explicitly confirmed", () => {
-    expect(readStage("verify-code")).toMatch(/Present[\s\S]*user[\s\S]*confirmed close/i);
+    expect(readStage("verify-code")).toMatch(/confirmation accepts verification facts only[\s\S]*separate close authorization[\s\S]*plan hash[\s\S]*Never reuse the verify-code confirmation ref/i);
   });
 });

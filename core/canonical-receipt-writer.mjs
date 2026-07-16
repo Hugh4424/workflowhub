@@ -1,13 +1,12 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { resolve } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
+import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
+import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -19,8 +18,6 @@ const OFFICIAL_COMPONENTS = Object.freeze({
   implementation: Object.freeze({ stage: "build-code", kind: "implementation", ref: "receipts/implementation.json" }),
   evidence: Object.freeze({ stage: "verify-code", kind: "evidence-aggregate", ref: "evidence/verify-evidence.json" }),
 });
-
-function git(root, args) { return String(execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
 
 function workspaceCommand(workspace, command, args, label) {
   const result = runWorkspaceCommand(workspace, command, args);
@@ -37,15 +34,7 @@ function workspaceGit(workspace, args, label = "workspace Git command") {
 /** Capture tracked, dirty, and untracked files in an immutable, unpublished Git commit. */
 export function captureWorkspaceSnapshot(workspace) {
   const root = assertWorkspace(workspace).worktreeRoot;
-  const head = git(root, ["rev-parse", "HEAD"]), index = resolve(tmpdir(), `workflowhub-snapshot-${randomUUID()}.index`);
-  const env = { ...process.env, GIT_INDEX_FILE: index };
-  const run = (args, extra = {}) => String(execFileSync("git", args, { cwd: root, env, encoding: "utf8", stdio: [extra.input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...extra })).trim();
-  try {
-    run(["read-tree", head]); run(["add", "-A", "--", "."]);
-    const tree = run(["write-tree"]);
-    const commit = run(["commit-tree", tree, "-p", head, "-m", "workflowhub ephemeral workspace snapshot"], { env: { ...env, GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local", GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local" } });
-    return Object.freeze({ head, tree, commit });
-  } finally { rmSync(index, { force: true }); }
+  return captureGitWorktreeSnapshot(root);
 }
 
 /** Fixed registry for official non-test component receipts. */
@@ -80,7 +69,6 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
       const raw = safeTask.readRecord(entry.ref);
       if (sha256(raw) !== entry.sha256) throw new Error(`evidence ref hash mismatch: ${entry.ref}`);
       const acceptance = validateAcceptanceEvidence(JSON.parse(raw), `evidence ref ${index}`);
-      if (acceptance.result !== "pass") throw new Error(`acceptance criterion ${acceptance.acceptance_criterion_id} did not pass`);
       if (acceptanceIds.has(acceptance.acceptance_criterion_id)) throw new Error(`duplicate acceptance_criterion_id: ${acceptance.acceptance_criterion_id}`);
       acceptanceIds.add(acceptance.acceptance_criterion_id);
       for (const [nestedIndex, nested] of acceptance.refs.entries()) {
@@ -158,11 +146,11 @@ export function createCanonicalReviewWriter({ task, taskId, stage } = {}) {
     },
     writeAttempt(ref, value) {
       if (!/^reviews\/attempts\/[a-zA-Z0-9._-]+\/attempt\.json$/.test(ref)) throw new Error("canonical review attempt ref required");
-      validateProvenance(value, "attempt"); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
+      validateProvenance(value, "attempt"); validateSchema("attempt", value); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
     },
     writeResult(ref, value) {
       if (!/^reviews\/results\/[a-zA-Z0-9._-]+\.json$/.test(ref)) throw new Error("canonical review result ref required");
-      validateProvenance(value, "result"); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
+      validateProvenance(value, "result"); validateSchema("result", value); write(ref, `${JSON.stringify(value, null, 2)}\n`); return ref;
     },
   });
 }

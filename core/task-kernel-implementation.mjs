@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, normalize, resolve } from "node:path";
 
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
+import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace } from "./workspace.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 
@@ -27,9 +28,9 @@ const REQUIRED_FACTS = Object.freeze(Object.fromEntries(
   Object.entries(factsContract.stages).map(([stage, contract]) => [stage, Object.freeze([...contract.required_keys])]),
 ));
 const ALLOWED_FACTS = Object.freeze({
-  "make-decision": new Set(["worktree_root", "baseline_commit", "decision", "scope", "risks", "decision_ref", "decision_hash"]),
-  "build-spec": new Set(["spec_ref", "checkpoint"]),
-  "build-plan": new Set(["plan_ref", "tasks_ref", "checkpoint"]),
+  "make-decision": new Set(["worktree_root", "baseline_commit", "snapshot_tree", "decision", "scope", "risks", "decision_ref", "decision_hash", "reviews"]),
+  "build-spec": new Set(["spec_ref", "checkpoint", "review"]),
+  "build-plan": new Set(["plan_ref", "tasks_ref", "checkpoint", "review"]),
   "build-code": new Set(["changed", "tests", "review", "phase_completion"]),
   "verify-code": new Set(["tests", "review", "evidence_refs", "quality_note"]),
 });
@@ -84,6 +85,7 @@ export function validateStageFacts(stage, facts) {
   if (name === "make-decision") {
     absoluteString(facts.worktree_root, "make-decision facts.worktree_root");
     gitOid(facts.baseline_commit, "make-decision facts.baseline_commit");
+    if (facts.snapshot_tree !== undefined) gitOid(facts.snapshot_tree, "make-decision facts.snapshot_tree");
     if ((facts.decision_ref === undefined) !== (facts.decision_hash === undefined)) throw new TypeError("make-decision decision_ref and decision_hash must be provided together");
     if (facts.decision_ref !== undefined) {
       artifactRef(facts.decision_ref, "make-decision facts.decision_ref");
@@ -234,7 +236,20 @@ export function validateAccepted(accepted, expected = {}) {
   if (accepted.schema_version !== "task-accepted.v2") throw new Error("accepted schema_version must be task-accepted.v2");
   const stage = stageName(accepted.stage);
   if (!ATTEMPT_REF.test(accepted.attempt_ref ?? "") || !HASH.test(String(accepted.integrity_hash ?? "").replace(/^sha256:/, ""))) throw new Error("accepted attempt_ref/integrity_hash invalid");
-  if (typeof accepted.human_confirmation_ref !== "string" || accepted.human_confirmation_ref.trim() === "") throw new Error("accepted human_confirmation_ref required");
+  const hasMode = Object.prototype.hasOwnProperty.call(accepted, "acceptance_mode");
+  const hasHumanRef = typeof accepted.human_confirmation_ref === "string" && accepted.human_confirmation_ref.trim() !== "";
+  if (!hasMode) {
+    // Legacy task-accepted.v2 records predate automatic acceptance. They always
+    // carry a human ref, including records for stages that are automatic now.
+    if (!hasHumanRef) throw new Error("legacy accepted human_confirmation_ref required");
+  } else {
+    const expectedMode = acceptanceModeFor(stage);
+    if (accepted.acceptance_mode !== expectedMode) throw new Error(`accepted acceptance_mode must be ${expectedMode} for ${stage}`);
+    if (accepted.acceptance_mode === "human" && !hasHumanRef) throw new Error("accepted human_confirmation_ref required for human acceptance");
+    if (accepted.acceptance_mode === "automatic" && Object.prototype.hasOwnProperty.call(accepted, "human_confirmation_ref")) {
+      throw new Error("automatic accepted record must not contain human_confirmation_ref");
+    }
+  }
   if (!Number.isFinite(Date.parse(accepted.accepted_at))) throw new Error("accepted_at invalid");
   validateRefs(accepted.upstream_refs, "accepted upstream_refs");
   if (["build-spec", "build-plan"].includes(stage)) validateCheckpoint(accepted.checkpoint);
@@ -248,6 +263,19 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   const task = assertTaskHandle(taskHandle);
   const createKernelRecord = createKernelRecordFor(task);
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
+  const verifyCandidateSnapshot = (facts) => {
+    if (!candidate) return;
+    const snapshot = candidate.captureSnapshot();
+    if (snapshot.head !== facts.baseline_commit) throw new Error("make-decision CandidateWorkspace HEAD changed from baseline");
+    if (facts.snapshot_tree !== undefined) {
+      if (snapshot.tree !== facts.snapshot_tree) throw new Error("make-decision CandidateWorkspace snapshot_tree changed after publication");
+      return;
+    }
+    const baselineTree = String(execFileSync("git", ["rev-parse", `${facts.baseline_commit}^{tree}`], {
+      cwd: candidate.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    })).trim();
+    if (snapshot.tree !== baselineTree) throw new Error("legacy make-decision attempt cannot accept unbound CandidateWorkspace changes");
+  };
   const verifyCheckpoint = (stage, checkpoint, { live = true } = {}) => verifyGitCheckpoint({
     repoRoot: workspace?.worktreeRoot ?? task.manifest.target_repo_root,
     checkpoint,
@@ -307,6 +335,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (name === "make-decision" && candidate && (resolve(data.facts.worktree_root) !== candidate.worktreeRoot || data.facts.baseline_commit !== candidate.baselineCommit)) {
           throw new Error("make-decision facts do not match CandidateWorkspace");
         }
+        if (name === "make-decision") verifyCandidateSnapshot(data.facts);
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
           if (data.checkpoint !== undefined && data.checkpoint !== data.facts.checkpoint) throw new Error("caller checkpoint override is forbidden");
@@ -341,6 +370,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     },
     confirmAttempt(stage, attemptRef, decision) {
       const name = stageName(stage);
+      if (!requiresHumanConfirmation(name)) throw new Error(`${name} uses automatic acceptance and does not accept human confirmation`);
       if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
       if (!new Set(["accepted", "rejected"]).has(decision)) throw new TypeError("explicit confirmation decision must be accepted or rejected");
       const attempt = validateAttempt(parseJson(task.readRecord(`results/${name}/${attemptRef}`), `${name} attempt`), { taskId: task.identity.taskId, stage: name });
@@ -353,6 +383,13 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     acceptAttempt(stage, attemptRef, humanConfirmationRef) {
       if (arguments.length > 3) throw new TypeError("caller checkpoint override is forbidden; acceptance uses the published attempt checkpoint");
       const name = stageName(stage);
+      const acceptanceMode = acceptanceModeFor(name);
+      if (acceptanceMode === "automatic" && humanConfirmationRef !== undefined) {
+        throw new TypeError(`${name} uses automatic acceptance; omit humanConfirmationRef`);
+      }
+      if (acceptanceMode === "human" && (typeof humanConfirmationRef !== "string" || humanConfirmationRef.trim() === "")) {
+        throw new TypeError(`${name} requires explicit humanConfirmationRef`);
+      }
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
         const attemptRaw = task.readRecord(`results/${name}/${attemptRef}`);
@@ -361,18 +398,22 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           if (resolve(attempt.facts.worktree_root) !== candidate.worktreeRoot || attempt.facts.baseline_commit !== candidate.baselineCommit) {
             throw new Error("make-decision facts do not match CandidateWorkspace");
           }
+          verifyCandidateSnapshot(attempt.facts);
         }
         verifyUpstream(name, attempt.upstream_refs);
-        const confirmation = parseJson(task.readRecord(humanConfirmationRef), "human confirmation");
-        rejectUnknown(confirmation, new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at", "checkpoint_plan_hash"]), "human confirmation");
-        if (confirmation.decision === "rejected") {
-          throw new Error("rejected confirmation leaves checkpoint ref unpublished");
+        let confirmation;
+        if (acceptanceMode === "human") {
+          confirmation = parseJson(task.readRecord(humanConfirmationRef), "human confirmation");
+          rejectUnknown(confirmation, new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at", "checkpoint_plan_hash"]), "human confirmation");
+          if (confirmation.decision === "rejected") {
+            throw new Error("rejected confirmation leaves checkpoint ref unpublished");
+          }
+          if (confirmation.schema_version !== "human-confirmation.v1" || confirmation.task_id !== task.identity.taskId || confirmation.stage !== name || confirmation.attempt_ref !== attemptRef || confirmation.decision !== "accepted" || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("human confirmation does not bind this task/stage/attempt");
         }
-        if (confirmation.schema_version !== "human-confirmation.v1" || confirmation.task_id !== task.identity.taskId || confirmation.stage !== name || confirmation.attempt_ref !== attemptRef || confirmation.decision !== "accepted" || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("human confirmation does not bind this task/stage/attempt");
         let acceptedCheckpoint;
         if (["build-spec", "build-plan"].includes(name)) {
           if (!workspace || !artifacts) throw new Error("accepting a design checkpoint requires Workspace and ArtifactDir capabilities");
-          if (confirmation.checkpoint_plan_hash !== attempt.checkpoint.plan_hash) throw new Error("human confirmation checkpoint plan hash mismatch");
+          if (acceptanceMode === "human" && confirmation.checkpoint_plan_hash !== attempt.checkpoint.plan_hash) throw new Error("human confirmation checkpoint plan hash mismatch");
           acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, publishRef: (ref, commit, zeroOid) => {
             execFileSync("git", ["update-ref", ref, commit, zeroOid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
           } });
@@ -384,7 +425,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           stage: name,
           attempt_ref: attemptRef,
           integrity_hash: hash(attemptRaw),
-          human_confirmation_ref: humanConfirmationRef,
+          acceptance_mode: acceptanceMode,
+          ...(acceptanceMode === "human" ? { human_confirmation_ref: humanConfirmationRef } : {}),
           accepted_at: now(),
           upstream_refs: structuredClone(attempt.upstream_refs),
           ...(acceptedCheckpoint ? { checkpoint: structuredClone(acceptedCheckpoint) } : {}),

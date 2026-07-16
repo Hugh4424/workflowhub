@@ -44,10 +44,10 @@ describe("phase-gate formal review result", () => {
     expect(checked.ok, checked.errors.join("; ")).toBe(true);
     expect(checked.checked).toEqual(["phase-status", "red-green-evidence", "diff-scan", "heterogeneous-review"]);
   });
-  it("rejects revise_required", () => {
+  it("records revise_required without blocking the phase", () => {
     const checked = validatePhaseGate(fixture("revise_required"), root, { reviewDataRoot: root });
-    expect(checked.ok).toBe(false);
-    expect(checked.errors.join(" ")).toMatch(/must be pass/);
+    expect(checked.ok).toBe(true);
+    expect(checked.warnings.join(" ")).toMatch(/revise_required/);
   });
   it("rejects a copied verdict and a mismatched snapshot", () => {
     expect(validatePhaseGate({ ...fixture(), review: { verdict: "pass" } }, root, { reviewDataRoot: root }).ok).toBe(false);
@@ -76,9 +76,11 @@ describe("phase-gate formal review result", () => {
     write(join(root, item.review.result_ref), legacy);
     expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/phase.*identity/i);
   });
-  it("rejects missing material evidence", () => {
+  it("records missing quality evidence without blocking", () => {
     const item = fixture(); item.tests.red.path = "evidence/missing.json";
-    expect(validatePhaseGate(item, root, { reviewDataRoot: root }).ok).toBe(false);
+    const checked = validatePhaseGate(item, root, { reviewDataRoot: root });
+    expect(checked.ok).toBe(true);
+    expect(checked.warnings.join(" ")).toMatch(/RED artifact not found/);
   });
   it("rejects an absolute phase diff evidence ref", () => {
     const item = fixture(); item.diff_scan.path = join(root, "evidence/diff.json");
@@ -94,7 +96,18 @@ describe("phase-gate formal review result", () => {
     item.diff_scan.path = "evidence/linked.json";
     expect(validatePhaseGate(item, root, { reviewDataRoot: root }).errors.join(" ")).toMatch(/diff scan.*inside the task root/i);
   });
-  it("requires an explicit review data root", () => {
-    expect(validatePhaseGate(fixture(), root).errors.join(" ")).toMatch(/review data root missing/);
+  it("blocks when independent review capability is unavailable", () => {
+    const checked = validatePhaseGate(fixture(), root);
+    expect(checked.ok).toBe(false);
+    expect(checked.errors.join(" ")).toMatch(/review data root missing/);
+  });
+  it("still blocks on an unfinished phase or an out-of-scope diff", () => {
+    const unfinished = fixture(); unfinished.status = "blocked"; unfinished.needs_human = true;
+    expect(validatePhaseGate(unfinished, root, { reviewDataRoot: root }).ok).toBe(false);
+    const outsideScope = fixture();
+    write(join(root, "evidence/diff.json"), { schema_version: "phase-diff-scan.v1", phase_id: "phase-1",
+      baseline_commit: baselineCommit, implementation_commit: implementationCommit, snapshot_tree: tree,
+      safe: false, violations: ["scope"], c2_violations: [], allowlist_violations: ["x"] });
+    expect(validatePhaseGate(outsideScope, root, { reviewDataRoot: root }).ok).toBe(false);
   });
 });

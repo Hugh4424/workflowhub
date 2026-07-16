@@ -41,7 +41,7 @@ describe("stage runtime terminal contracts", () => {
 describe("verify close executor fail-stop", () => {
   const roots=[];
   afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true})});
-  const governed=async(steps)=>{const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-")));roots.push(root);const repo=join(root,"repo"),taskId=`close-${roots.length}`,worktree=`${repo}-${taskId}`;mkdirSync(repo);execFileSync("git",["init","-q"],{cwd:repo});execFileSync("git",["config","user.email","t@e.co"],{cwd:repo});execFileSync("git",["config","user.name","T"],{cwd:repo});execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});const head=String(execFileSync("git",["rev-parse","HEAD"],{cwd:repo})).trim();execFileSync("git",["worktree","add","-qb",`task/Demo/${taskId}`,worktree,head],{cwd:repo});const task=createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:taskId,created_at:new Date().toISOString(),target_repo_root:repo,issue_ids:[],inputs:{}}});const kernel=createTaskKernel(task),decision=kernel.publishAttempt("make-decision",{facts:{worktree_root:worktree,baseline_commit:head}});kernel.acceptAttempt("make-decision",decision.attempt_ref,writeHumanConfirmation(kernel,"make-decision",decision));const resolvedSteps=typeof steps==="function"?steps({head,worktree}):steps;const plan={schema_version:"task-close-plan.v1",task_id:task.identity.taskId,steps:resolvedSteps??[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:head,final_oid:head}]};const {closePlanHash,createGovernedCloseExecutorRegistry}=await import("../core/task-close.mjs");return{task,kernel,decision,plan,repo,worktree,head,executors:createGovernedCloseExecutorRegistry({task,kernel}),confirmation:{outcome:"confirmed",plan_hash:closePlanHash(plan),confirmation_ref:"human:test"}};};
+  const governed=async(steps,outcome="confirmed")=>{const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-")));roots.push(root);const repo=join(root,"repo"),taskId=`close-${roots.length}`,worktree=`${repo}-${taskId}`;mkdirSync(repo);execFileSync("git",["init","-q"],{cwd:repo});execFileSync("git",["config","user.email","t@e.co"],{cwd:repo});execFileSync("git",["config","user.name","T"],{cwd:repo});execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});const head=String(execFileSync("git",["rev-parse","HEAD"],{cwd:repo})).trim();execFileSync("git",["worktree","add","-qb",`task/Demo/${taskId}`,worktree,head],{cwd:repo});const task=createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:taskId,created_at:new Date().toISOString(),target_repo_root:repo,issue_ids:[],inputs:{}}});const kernel=createTaskKernel(task),decision=kernel.publishAttempt("make-decision",{facts:{worktree_root:worktree,baseline_commit:head}});kernel.acceptAttempt("make-decision",decision.attempt_ref,writeHumanConfirmation(kernel,"make-decision",decision));const resolvedSteps=typeof steps==="function"?steps({head,worktree}):steps;const plan={schema_version:"task-close-plan.v1",task_id:task.identity.taskId,steps:resolvedSteps??[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:head,final_oid:head}]};const {confirmClosePlan,createGovernedCloseExecutorRegistry}=await import("../core/task-close.mjs");const closeConfirmationRef=confirmClosePlan({task,kernel,plan,outcome}).ref;return{task,kernel,decision,plan,repo,worktree,head,executors:createGovernedCloseExecutorRegistry({task,kernel}),closeConfirmationRef};};
   it("rejects the transitional in-memory close adapter", async () => {
     const { executeClosePlan } = await import("../core/task-close.mjs");
     await expect(executeClosePlan({ confirmationOutcome: "confirmed", steps: [async () => {}] }))
@@ -55,8 +55,15 @@ describe("verify close executor fail-stop", () => {
   });
   it.each(["rejected", "timeout"])("does not execute close steps after %s confirmation", async (outcome) => {
     const taskClose = await import("../core/task-close.mjs");
-    const f=await governed(), result = await taskClose.executeClosePlan({ ...f, confirmation:{...f.confirmation,outcome} });
+    const f=await governed(undefined,outcome), result = await taskClose.executeClosePlan(f);
     expect(result.status).toBe("blocked"); expect(existsSync(f.worktree)).toBe(true);
+  });
+
+  it("allows a later explicit close confirmation after an earlier rejection", async () => {
+    const taskClose = await import("../core/task-close.mjs"), f = await governed(undefined, "rejected");
+    const confirmed = taskClose.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: f.plan, outcome: "confirmed" });
+    expect(confirmed.ref).not.toBe(f.closeConfirmationRef);
+    await expect(taskClose.executeClosePlan({ ...f, closeConfirmationRef: confirmed.ref })).resolves.toMatchObject({ status: "completed" });
   });
 
   it("stops after the first failed close step", async () => {
@@ -68,7 +75,8 @@ describe("verify close executor fail-stop", () => {
 
   it("rejects a close plan hash mismatch before any step side effect", async () => {
     const taskClose = await import("../core/task-close.mjs"), f=await governed();
-    await expect(taskClose.executeClosePlan({...f,confirmation:{...f.confirmation,plan_hash:"forged"}})).rejects.toThrow(/hash|plan/i);
+    f.plan.steps.push({step_id:"changed",operation:"verify-checkpoint-ancestry",checkpoint_oid:f.head,final_oid:f.head});
+    await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/closeConfirmationRef|hash|plan/i);
     expect(existsSync(f.worktree)).toBe(true);
   });
 
@@ -81,7 +89,7 @@ describe("verify close executor fail-stop", () => {
   it("rebuilds authority after a crash between physical remove and step recording", async () => {
     const taskClose=await import("../core/task-close.mjs"),f=await governed(()=>[{step_id:"remove",operation:"remove-worktree"}]);
     const first=f.executors.executorFor(f.plan.steps[0]);await first.execute();expect(existsSync(f.worktree)).toBe(false);
-    const stepPath=`operations/close/plans/${f.confirmation.plan_hash}/steps/remove.json`;expect(()=>f.task.readRecord(stepPath)).toThrow();
+    const stepPath=`operations/close/plans/${taskClose.closePlanHash(f.plan)}/steps/remove.json`;expect(()=>f.task.readRecord(stepPath)).toThrow();
     const restartedKernel=createTaskKernel(f.task),restartedExecutors=taskClose.createGovernedCloseExecutorRegistry({task:f.task,kernel:restartedKernel});
     await expect(taskClose.executeClosePlan({...f,kernel:restartedKernel,executors:restartedExecutors})).resolves.toMatchObject({status:"completed"});
     expect(JSON.parse(f.task.readRecord(stepPath))).toMatchObject({completion_mode:"reconciled",physical_state:{satisfied:true,worktree_root:f.worktree}});
@@ -95,6 +103,12 @@ describe("verify close executor fail-stop", () => {
   it("rejects a caller-selected worktree removal path", async () => {
     const taskClose = await import("../core/task-close.mjs"), f = await governed(({worktree}) => [{step_id:"remove",operation:"remove-worktree",worktree_root:worktree}]);
     await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/path.*accepted Workspace|selected only/i);
+    expect(existsSync(f.worktree)).toBe(true);
+  });
+  it("rejects an arbitrary or verify-stage confirmation ref", async () => {
+    const taskClose = await import("../core/task-close.mjs"), f = await governed();
+    await expect(taskClose.executeClosePlan({ ...f, closeConfirmationRef: `confirmations/make-decision/${f.decision.attempt_ref}` })).rejects.toThrow(/canonical.*closeConfirmationRef/i);
+    await expect(taskClose.executeClosePlan({ ...f, closeConfirmationRef: "human:test" })).rejects.toThrow(/canonical.*closeConfirmationRef/i);
     expect(existsSync(f.worktree)).toBe(true);
   });
   it.each([

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 import { assertTaskHandle } from "./task-handle.mjs";
@@ -54,18 +54,6 @@ function validatePlan(plan, task) {
   return plan;
 }
 
-function confirmationFields(options) {
-  if (options.confirmation !== undefined) {
-    const value = plain(options.confirmation, "close confirmation");
-    return { outcome: value.outcome, planHash: value.plan_hash, confirmationRef: value.confirmation_ref };
-  }
-  return {
-    outcome: options.confirmationOutcome,
-    planHash: options.planHash,
-    confirmationRef: options.humanConfirmationRef,
-  };
-}
-
 function readOptional(task, path) {
   try { return task.readRecord(path); }
   catch (error) { if (error?.code === "ENOENT") return undefined; throw error; }
@@ -84,6 +72,27 @@ function createOrVerify(task, path, record, label) {
     if (task.readRecord(path) !== raw) throw new Error(`${label} conflicts with immutable record: ${path}`);
   }
   return record;
+}
+
+/** Persist one immutable, plan-bound close decision. */
+export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, outcome, now = () => new Date().toISOString() } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("close confirmation TaskHandle/TaskKernel mismatch");
+  validatePlan(plan, task);
+  if (!new Set(["confirmed", "rejected", "timeout"]).has(outcome)) throw new TypeError("close confirmation outcome must be confirmed, rejected, or timeout");
+  if (typeof now !== "function") throw new TypeError("close confirmation now must be a function");
+  const planHash = closePlanHash(plan);
+  const ref = `operations/close/confirmations/${planHash}/${randomUUID()}.json`;
+  const confirmation = {
+    schema_version: "task-close-confirmation.v1",
+    task_id: task.identity.taskId,
+    plan_hash: planHash,
+    outcome,
+    confirmed_at: now(),
+  };
+  createOrVerify(task, ref, confirmation, "close confirmation");
+  return Object.freeze({ ref, confirmation: Object.freeze(confirmation) });
 }
 
 function executorFor(executors, step) {
@@ -172,21 +181,27 @@ export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
  * task records are create-only; after a crash, physical state is authoritative.
  */
 export async function executeClosePlan(options = {}) {
-  const { outcome, planHash: confirmedHash, confirmationRef } = confirmationFields(options);
-  if (outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: outcome });
-
   const task = assertTaskHandle(options.task);
   const kernel = assertTaskKernel(options.kernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
   const plan = validatePlan(options.plan, task);
   const planRaw = canonical(plan);
   const planHash = sha256(planRaw);
-  if (!HASH.test(confirmedHash ?? "") || confirmedHash !== planHash) {
+  const confirmationRef = options.closeConfirmationRef;
+  const confirmationPrefix = `operations/close/confirmations/${planHash}/`;
+  if (typeof confirmationRef !== "string" || !confirmationRef.startsWith(confirmationPrefix) || !/^operations\/close\/confirmations\/[a-f0-9]{64}\/[a-f0-9-]{36}\.json$/.test(confirmationRef)) {
+    throw new TypeError("canonical plan-bound closeConfirmationRef is required");
+  }
+  const confirmation = plain(JSON.parse(task.readRecord(confirmationRef)), "close confirmation");
+  const confirmationKeys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "confirmed_at"]);
+  if (Object.keys(confirmation).some((key) => !confirmationKeys.has(key))) throw new Error("close confirmation contains unknown fields");
+  if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) {
+    throw new Error("close confirmation identity is invalid");
+  }
+  if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) {
     throw new Error("close confirmation plan hash mismatch");
   }
-  if (typeof confirmationRef !== "string" || confirmationRef.trim() === "") {
-    throw new TypeError("close confirmation_ref is required");
-  }
+  if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
   const executors = options.executors;
   // Validate every executable boundary before creating a record or performing a
   // physical probe. A malformed later step must have zero side effects.

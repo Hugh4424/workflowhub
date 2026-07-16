@@ -39,7 +39,7 @@ describe("official component receipt authority", () => {
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
   });
 
-  it("accepts only passing, uniquely identified acceptance evidence with closed refs", () => {
+  it("records pass and fail acceptance facts with unique identities and closed refs", () => {
     const { task } = fixture();
     const kernel = createTaskKernel(task), output = "proof\n";
     kernel.publishCanonicalRecord("evidence/proof.txt", output);
@@ -50,13 +50,13 @@ describe("official component receipt authority", () => {
       return { ref: path, sha256: createHash("sha256").update(raw).digest("hex") };
     };
     const ac1 = publishAcceptance("evidence/ac-1.json", "AC-1");
-    expect(writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [ac1] } }).value.refs).toEqual([ac1]);
+    const ac2 = publishAcceptance("evidence/ac-2.json", "AC-2", "fail");
+    expect(writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [ac1, ac2] } }).value.refs).toEqual([ac1, ac2]);
   });
 
   it.each([
     ["missing identity", { schema_version: "acceptance-evidence.v1", result: "pass", refs: [] }, /acceptance_criterion_id|refs/],
     ["wrong schema", { schema_version: "other.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [] }, /schema_version/],
-    ["failed criterion", { schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "fail", refs: [{ ref: "evidence/proof.txt", sha256: "0".repeat(64) }] }, /did not pass/],
   ])("rejects invalid acceptance evidence: %s", (_label, entity, pattern) => {
     const { task } = fixture(); const kernel = createTaskKernel(task);
     const raw = `${JSON.stringify(entity)}\n`, ref = "evidence/ac.json";

@@ -17,13 +17,15 @@ describe("five-stage v2 business contract", () => {
     expect(skill).not.toMatch(/parseTaskDir|resolveTaskRecordPaths|task_tracking_root|worktree\.json/);
   });
 
-  it("keeps human confirmation and visible quality facts without an automatic quality gate", () => {
-    for (const stage of stages) {
-      const skill = readStage(stage);
-      expect(skill).toMatch(/human\s+(?:confirmation|decision)|user|用户|人工/i);
+  it("keeps three stage gates, two automatic stages, and visible quality facts", () => {
+    for (const stage of ["make-decision", "build-plan", "verify-code"])
+      expect(readStage(stage)).toMatch(/confirm|human|user|用户|人工/i);
+    for (const stage of ["build-spec", "build-code"]) {
+      expect(readStage(stage)).toMatch(/automatic|automatically/i);
+      expect(readStage(stage)).not.toMatch(/wait for human confirmation|human-confirmation-ref/i);
     }
     expect(readStage("make-decision")).toMatch(/Quality facts are recorded, not converted into automatic quality gates/i);
-    expect(readStage("build-code")).toMatch(/Before each phase[\s\S]*human confirmation/i);
+    expect(readStage("build-code")).toMatch(/phase scope[\s\S]*continue automatically/i);
     expect(readStage("verify-code")).toMatch(/Quality failures remain visible facts/i);
   });
 
@@ -57,7 +59,33 @@ describe("five-stage v2 business contract", () => {
     expect(readStage("make-decision")).toMatch(/independent direction review/i);
     expect(readStage("build-code")).toMatch(/independent code review[\s\S]*fresh test/i);
     expect(readStage("verify-code")).toMatch(/isolated-browser-qa[\s\S]*independent verification review/i);
-    expect(readStage("verify-code")).toMatch(/hashed close plan[\s\S]*user/i);
+    expect(readStage("verify-code")).toMatch(/hashed close plan[\s\S]*separate close authorization[\s\S]*Never reuse the verify-code confirmation ref/i);
+  });
+
+  it("keeps the accepted three-talk make-decision flow with one final confirmation", () => {
+    const skill = readStage("make-decision");
+    const positions = [
+      "`talk-with-zhipeng` round 1",
+      "`talk-with-zhipeng` round 2",
+      "`wh-review` direction track",
+      "`talk-with-zhipeng` round 3",
+      "complete `grill-with-docs`",
+      "`wh-review` detail track",
+      "only make-decision confirmation",
+    ].map((marker) => skill.indexOf(marker));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect(skill).toMatch(/Do not substitute a lite or read-only variant/i);
+    expect(skill).toMatch(/round 2[\s\S]*non-blocking conversation checkpoint[\s\S]*not a confirmation gate/i);
+    expect(skill).toMatch(/post-grill `snapshot_tree`[\s\S]*recapture the tree/i);
+
+    const steps = JSON.parse(readFileSync(join(root, "workflows", "make-decision", "steps.json"), "utf8"));
+    expect(steps.steps.map((step) => step.step_slug)).toEqual([
+      "load-context", "triage-scope", "talk-round-1", "research-inputs",
+      "talk-round-2", "blind-direction-review", "talk-round-3",
+      "grill-with-docs", "write-decision-draft", "review-decision-detail",
+      "approve-decision", "publish-decision",
+    ]);
   });
 
   it("uses append-only attempts and accepted lineage instead of mutable stage results", () => {

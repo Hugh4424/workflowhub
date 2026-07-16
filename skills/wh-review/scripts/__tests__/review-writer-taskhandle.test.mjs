@@ -24,9 +24,10 @@ describe("review writer TaskHandle boundary", () => {
   });
   it("writes create-only review records through controlled TaskHandle I/O", () => {
     const task = fixture();
-    const provenance={task_id:"review-task",stage:"build-code",source:{target_commit:"a".repeat(40)},snapshot_tree:"b".repeat(40),material_id:"material"};
-    const attempt={version:"wh-review-attempt.v1",...provenance};
-    const result={version:"wh-review-result.v1",...provenance};
+    const source={target_commit:"a".repeat(40),base_commit:"a".repeat(40),base_tree:"a".repeat(40),captured_head:"a".repeat(40)};
+    const provenance={task_id:"review-task",stage:"build-code",review_track:null,source,snapshot_tree:"b".repeat(40),material_id:"c".repeat(64)};
+    const attempt={version:"wh-review-attempt.v1",attempt_id:"a",...provenance,provider_attempts:[],terminal_status:"semantic",error:null};
+    const result={version:"wh-review-result.v1",...provenance,attempt_ref:"reviews/attempts/a/attempt.json",provider_results:[{provider:"fixture",output:{verdict:"pass",summary:"ok",findings:[]}}],verdict:"pass",findings:[]};
     writeAttempt(task, "reviews/attempts/a/attempt.json", attempt);
     writeSemanticResult(task, "reviews/results/a.json", result);
     expect(JSON.parse(task.readRecord("reviews/attempts/a/attempt.json"))).toEqual(attempt);

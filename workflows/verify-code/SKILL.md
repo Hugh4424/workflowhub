@@ -45,11 +45,14 @@ Declared runtime components: `test-strategy`, `wh-review`, conditional
    cleanup completion.
 5. Run independent verification review from frozen diff/test packets.
 6. Publish an append-only verify-code attempt with all facts and unresolved
-   items. Record the decision with `confirm`; only an accepted confirmation ref
-   may be passed to `accept`.
-7. Build a hashed close plan from accepted lineage and current Git facts.
-   Present it to the user before commit, push, merge, archive, or cleanup.
-8. Execute confirmed close steps idempotently, probing physical Git facts
+   items. Present the gate brief from `docs/human-brief-template.md`; record the
+   verification-stage decision with `confirm`, and pass only its accepted ref to
+   `accept`. This confirmation accepts verification facts only.
+7. After verify-code is accepted, build a hashed close plan from accepted
+   lineage and current Git facts. Present its exact commit, push, merge, archive,
+   and cleanup actions for a separate close authorization bound to the plan hash.
+   Never reuse the verify-code confirmation ref.
+8. Execute separately authorized close steps idempotently, probing physical Git facts
    before each action and recording each result. Never infer a task path during
    recovery.
 

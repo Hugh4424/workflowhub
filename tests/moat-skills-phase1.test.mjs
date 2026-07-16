@@ -113,41 +113,33 @@ describe("Stage 1 moat skills avoid host-specific residue", () => {
 });
 
 describe("intake-decision-review execution protocol", () => {
-  test("contains S0 through S9 protocol steps", () => {
+  test("is a pure blind direction lens owned by wh-review", () => {
     const content = readRequiredFile("skills", "intake-decision-review", "SKILL.md");
-    for (let i = 0; i <= 9; i += 1) {
-      assert.match(content, new RegExp(`\\bS${i}\\b`), `Missing S${i} step`);
-    }
+    assert.match(content, /pure review lens/i);
+    assert.match(content, /used only by the `wh-review` make-decision[\s\S]*direction track/i);
+    assert.match(content, /`wh-review` owns[\s\S]*provider invocation/i);
+    assert.match(content, /never invokes a provider/i);
+    assert.match(content, /never[\s\S]*asks the user a question[\s\S]*waits for[\s\S]*confirmation/i);
+    assert.doesNotMatch(content, /\bS9\b|fallback_used|single 3rd-review call/i);
   });
 
-  test("defines multi-angle review contract with no fixed findings cap", () => {
+  test("defines four blind angles with no fixed findings cap", () => {
     const content = readRequiredFile("skills", "intake-decision-review", "SKILL.md");
     assert.match(content, /direction/, "must include direction review angle");
     assert.match(content, /framing/, "must include framing review angle");
     assert.match(content, /scope/, "must include scope review angle");
-    assert.match(content, /不设条数上限|0-N\s*条|no\s*(fixed\s*)?cap/i, "must state no fixed cap on findings count");
-    assert.match(content, /单次|single\s+call|一次调用/i, "must require a single 3rd-review call");
+    assert.match(content, /feasibility/, "must include feasibility review angle");
+    assert.match(content, /0-N|do not cap real findings/i, "must state no fixed cap on findings count");
   });
 
-  test("rejects fallback and incomplete findings without inventing missing angles", () => {
+  test("accepts only objective blind material and rejects candidate material", () => {
     const content = readRequiredFile("skills", "intake-decision-review", "SKILL.md");
-    assert.match(content, /fallback_used/, "must inspect fallback_used");
-    assert.match(content, /停止|报错|blocked|不采用/, "fallback_used must stop instead of continuing");
-    assert.match(content, /不足|缺角度|缺.*角度/, "must detect insufficient findings or missing angles");
-    assert.match(content, /重跑|rerun|重新调用/, "must require rerun on missing findings or angles");
-    assert.match(content, /不得编造|不自行编造|不得补齐|不补齐/, "must not invent missing angles");
-  });
-
-  test("S2, S4, and S9 user communication rules are explicit", () => {
-    const content = readRequiredFile("skills", "intake-decision-review", "SKILL.md");
-    const s2 = content.match(/S2[\s\S]*?(?=\n###?\s*S3\b|\n##\s*S3\b)/)?.[0] ?? "";
-    const s4 = content.match(/S4[\s\S]*?(?=\n###?\s*S5\b|\n##\s*S5\b)/)?.[0] ?? "";
-    const s9 = content.match(/S9[\s\S]*$/)?.[0] ?? "";
-
-    assert.match(s2, /推荐/, "S2 options must include a recommendation marker");
-    assert.match(s2, /后果|影响|会导致|这样做/, "S2 options must explain consequences in Chinese");
-    assert.match(s4, /推荐/, "S4 problem options must include a recommendation marker");
-    assert.match(s4, /后果|影响|会导致|这样做/, "S4 options must explain consequences in Chinese");
-    assert.match(s9, /不确认|等待确认/, "S9 must say it will wait and not continue without confirmation");
+    assert.match(content, /raw user requirement/i);
+    assert.match(content, /objective facts/i);
+    assert.match(content, /hard constraints/i);
+    assert.match(content, /explicit non-goals/i);
+    assert.match(content, /must not contain[\s\S]*proposed or recommended solution/i);
+    assert.match(content, /decision log[\s\S]*specification[\s\S]*plan[\s\S]*code[\s\S]*diff/i);
+    assert.match(content, /Missing required material, forbidden material[\s\S]*`unavailable`/i);
   });
 });

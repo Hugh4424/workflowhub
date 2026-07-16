@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../core/task-handle.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
+import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 
 const temporary = [];
 function fixture() {
@@ -63,7 +64,7 @@ describe("stage-runner capability unit", () => {
     const testFacts=(prefix)=>({command:"npm test",exit_code:0,command_hash:hash,snapshot_head:oid,snapshot_tree:tree,snapshot_commit:"b".repeat(40),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z",receipt_ref:`evidence/${prefix}-receipt.json`,receipt_hash:hash,output_ref:`evidence/${prefix}-output.txt`,output_hash:hash});
     const reviewFacts=(stage)=>({verdict:"pass",result_ref:`reviews/results/${stage}.json`,result_hash:hash,snapshot_tree:tree});
     const contextFor = (stage) => bootstrapStage(stage, { mode:"sidecar", taskPath, projectName:"Demo", taskId:"chain-task" });
-    const execute = async (stage, handler) => { const context=contextFor(stage); const attempt=await runStage(stage,context,handler); acceptStageAttempt(stage,context,{attemptRef:attempt.attempt_ref,humanConfirmationRef:writeHumanConfirmation(context.kernel,stage,attempt)}); };
+    const execute = async (stage, handler) => { const context=contextFor(stage); const attempt=await runStage(stage,context,handler); const request={attemptRef:attempt.attempt_ref}; if(requiresHumanConfirmation(stage)) request.humanConfirmationRef=writeHumanConfirmation(context.kernel,stage,attempt); acceptStageAttempt(stage,context,request); };
     await execute("make-decision", async (context, upstream) => { seen.push([context.stage, upstream]); return { facts: { worktree_root: worktree, baseline_commit: oid } }; });
     await execute("build-spec", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("spec.md","spec\n"); const cp=context.createCheckpoint("build-spec"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: cp } }; });
     await execute("build-plan", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("plan.md","plan\n"); context.artifacts.writeAtomic("tasks.md","tasks\n"); const cp=context.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: cp } }; });

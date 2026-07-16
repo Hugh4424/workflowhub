@@ -14,12 +14,11 @@ Follow `docs/contracts/task-context.md`; runtime implementation is
 `ctx.task`, `ctx.kernel`, `ctx.workspace`, and `ctx.artifacts`.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
---project=<project> --task=<task> --input=<component-receipts.json>`. Use the
-`confirm --attempt=<attempt> --decision=accepted|rejected` records the human
-decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
-confirmations never publish checkpoint refs.
+--project=<project> --task=<task> --input=<component-receipts.json>`. Build-spec
+is an automatic stage: the trusted runtime publishes the attempt, materializes
+its checkpoint, and accepts it without a human confirmation command.
 
-Create the spec input first with `stage-runtime.mjs receipt --stage=build-spec --project=<project> --task=<task> --component=spec --input=<content-payload.json>` and pass only the returned ref.
+Create the spec input first with `stage-runtime.mjs receipt --stage=build-spec --project=<project> --task=<task> --component=spec --input=<content-payload.json>`. Pass its ref and the canonical `wh-review` result ref as `spec` and `review`; missing review evidence stops the official run.
 
 The accepted make-decision result is read only through `ctx.kernel`. Design
 files are accessed only through ArtifactDir. Components receive the content of
@@ -50,10 +49,14 @@ the manifest.
 6. Run independent review using a frozen packet built from `spec.md`, decision
    facts, and relevant evidence.
 7. Publish an append-only attempt containing named artifact hashes, review
-   facts, and missing items.
-8. Record the decision with `confirm`. Only an accepted confirmation may be
-   passed to `accept`, which creates the checkpoint and accepts the attempt.
-   Checkpoint failure is an integrity error; review disagreement stays visible.
+   facts, and missing items. Actionable findings are revised and reviewed again
+   without asking the user. If independent review capability is unavailable,
+   publish the diagnostic and stop as blocked; a human confirmation cannot
+   substitute for the missing independent source.
+8. Present the progress brief from `docs/human-brief-template.md`. The trusted
+   runtime immediately runs `accept --attempt=<attempt>` without a confirmation,
+   creates the checkpoint, and accepts the attempt.
+   Checkpoint failure is an integrity error; quality facts never become a gate.
 
 No component may use shell location, repository discovery, or ad-hoc product
 paths. A missing named artifact fails with its ArtifactDir error.

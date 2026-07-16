@@ -7,15 +7,18 @@
       "semantics": {
         "worktree_root": "Absolute verified producer worktree root",
         "baseline_commit": "Git baseline commit verified in the producer repository",
+        "snapshot_tree": "Optional immutable tree captured after full grill-with-docs writes; new official attempts always include it",
         "decision_ref": "Optional task-relative canonical decision receipt; requires decision_hash",
-        "decision_hash": "SHA-256 of the exact decision receipt bytes"
+        "decision_hash": "SHA-256 of the exact decision receipt bytes",
+        "reviews": "Direction and detail wh-review result refs consumed by new official attempts"
       }
     },
     "build-spec": {
       "required_keys": ["spec_ref", "checkpoint"],
       "semantics": {
         "spec_ref": "Named spec artifact reference",
-        "checkpoint": "Immutable Git checkpoint facts"
+        "checkpoint": "Immutable Git checkpoint facts",
+        "review": "Task-relative wh-review result ref consumed by new official attempts"
       }
     },
     "build-plan": {
@@ -23,7 +26,8 @@
       "semantics": {
         "plan_ref": "Named plan artifact reference",
         "tasks_ref": "Named tasks artifact reference",
-        "checkpoint": "Immutable Git checkpoint facts"
+        "checkpoint": "Immutable Git checkpoint facts",
+        "review": "Task-relative wh-review result ref consumed by new official attempts"
       }
     },
     "build-code": {

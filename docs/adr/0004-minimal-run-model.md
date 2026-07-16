@@ -129,7 +129,7 @@ readInput(slot)
 readAccepted(stage)
 artifact(name)
 publishAttempt(stage, data)
-acceptAttempt(stage, attemptRef, humanConfirmationRef)
+acceptAttempt(stage, attemptRef, acceptance)
 appendJournal(event)
 reviewDir()
 lock() / unlock()
@@ -143,19 +143,21 @@ handle；不得接收 task ID/root 后自行拼路径或调用 parser。
 必须失败。`publishAttempt()` 在锁内分配下一序号并原子写，永不覆盖旧 attempt。
 
 阶段失败、`revise_required`、人工暂停和取消都必须发布 attempt，之后可重跑并产生新
-attempt。`accepted.json` 是不可变边界记录，包含被接受 attempt 的相对引用、hash、
-`human_confirmation_ref` 与确认时间；只有人确认后才能创建。下一阶段只读取前一阶段的
-`accepted.json`。质量事实失败不自动阻止人确认，但必须原样浮现，不能改写成 pass。
+attempt。`accepted.json` 是不可变边界记录，包含被接受 attempt 的相对引用、hash 与
+acceptance。make-decision、build-plan、verify-code 的 acceptance 必须引用人工确认；
+build-spec、build-code 由固定 stage policy 自动接受。下一阶段只读取前一阶段的
+`accepted.json`。质量事实失败必须原样浮现，不能改写成 pass，也不能阻止自动 stage
+写 accepted。
 
 accepted 引用 attempt 的完整性 hash 属于边界完整性，必须成功计算和校验；失败则不能
 创建 accepted。它不同于测试、review、artifact 等质量事实采集 hash，后者失败可记
-`unknown` 而不自动阻断人工判断。
+`unknown`；人工 gate 据此判断，自动 stage 则原样携带到下个人工 gate。
 
 某 stage 已有 `accepted.json` 后，Run API 拒绝该 stage 的新 attempt 和再次 accept。下游
 若发现必须回退，结束当前 Run 并创建新 Run；只可通过下述允许的设计 input 继承已接受
 材料，不可改写历史 accepted。
 
-### Stage attempt 与人工边界
+### Stage attempt 与三个关键边界
 
 每份 attempt 只增加最小防串线 stamp：
 
@@ -170,10 +172,11 @@ accepted 引用 attempt 的完整性 hash 属于边界完整性，必须成功�
 }
 ```
 
-读取 attempt/accepted 时校验 `run_id`、`stage`、attempt 引用与 source `run.json`。
-make-decision → build-spec → build-plan → build-code → verify-code 每个推进边界都要求人工
-确认并写 `accepted.json`；系统不得因 review pass 自动推进。人工确认是 F7 边界，不是
-质量 gate：测试、review、hash 等事实仍按 F3/Q1 记录并浮现，由人决定是否接受或重跑。
+读取 attempt/accepted 时校验 `run_id`、`stage`、attempt 引用与 source `run.json`。阶段策略
+固定为：make-decision、build-plan、verify-code 经人工确认后写 `accepted.json`；build-spec、
+build-code 发布 attempt 后由受控 runtime 自动写 `accepted.json`。人工确认是 F7 关键业务
+边界，不是质量 gate；自动接受也不能把测试、review、hash 等事实改写成 pass。所有事实按
+F3/Q1 记录并在下一个人工边界浮现。
 
 不建立通用 artifact locator、全量
 producer identity 协议或强制 hash gate。hash 可作为 journal 事实采集；采集失败记
@@ -233,7 +236,9 @@ WorktreeManager 与 Run 分责：前者只负责 Git worktree 创建、验证和
 消费 make-decision result 中的资源事实。
 
 一个 Run 至多一个 active worktree。close 前重新验证 worktree、同仓与 baseline。
-阶段推进以及 commit、push、cleanup 等不可逆操作必须人工确认并写 journal/accepted。
+三个关键 stage gate 以及 commit、push、merge、archive、cleanup 等不可逆操作必须人工
+确认；build-spec/build-code 自动推进。stage acceptance 写 accepted，close 授权写独立
+operation 记录，两者不得复用。
 branch/commit 文案不得写死
 `workflowhub`；命名策略是 launcher/项目配置，不参与路径身份。
 
@@ -346,7 +351,7 @@ cutover 采用显式 quiesce 协议，不依赖“大家不要再跑旧版”：
 
 - F1/F2：路径复杂度集中在单一窄 Run module；stage 不理解路径规则。
 - F6：所有执行记录与 artifact 共置一个 Run。
-- F7：每次阶段推进以及 commit、push、cleanup 均要求人工确认并留痕。
+- F7：方向、计划、最终验证三个 stage gate 人工确认；可逆中间阶段自动推进；close 不可逆动作独立授权并留痕。
 - F8：删除 resolver、alias、locator、handoff 和永久 adapter。
 - F9：缺显式 run_dir 与身份错配真实失败，不搜索、不假绿。
 - F10：首版不建 registry、数据库或 hash gate。

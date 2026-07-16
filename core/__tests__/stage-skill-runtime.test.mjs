@@ -45,9 +45,9 @@ describe("stage skill runtime", () => {
     expect(() => preflightStageSkills({ packageRoot: root, stage: "stage" })).toThrow();
   });
 
-  it("fails loud when an independent context is unavailable", async () => {
+  it("records an unavailable independent context without a human gate", async () => {
     const root = fixture();
-    await expect(dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", independentContextAvailable: false, hostInvoke: () => null })).rejects.toThrow(/human decision required/);
+    await expect(dispatchStageSkill({ packageRoot: root, stage: "stage", name: "demo", independentContextAvailable: false, hostInvoke: () => null })).resolves.toMatchObject({ name: "demo", status: "unavailable", reason: "independent_context_unavailable" });
   });
 
   it("blocks preflight according to required_when and absence_semantics", () => {

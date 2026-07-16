@@ -2,6 +2,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { assertTaskHandle } from "./task-handle.mjs";
+import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 
 const WORKSPACES = new WeakSet();
 const CANDIDATE_WORKSPACES = new WeakSet();
@@ -118,9 +119,6 @@ function validateCandidate(task, expected, facts = {
   if (gitValue(realWorktree, ["rev-parse", "HEAD"], "task worktree HEAD") !== expected.baselineCommit) {
     throw new Error("task worktree HEAD must equal the make-decision baseline");
   }
-  if (gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "task worktree status") !== "") {
-    throw new Error("task worktree must remain clean until make-decision is accepted");
-  }
   const identity = lstatSync(realWorktree);
   const validate = () => {
     const current = lstatSync(realWorktree);
@@ -131,12 +129,15 @@ function validateCandidate(task, expected, facts = {
     if (gitCommonDir(realWorktree) !== gitCommonDir(expected.targetRepoRoot)) throw new Error("CandidateWorkspace Git common directory changed");
     if (gitValue(realWorktree, ["symbolic-ref", "--quiet", "--short", "HEAD"], "CandidateWorkspace branch") !== expected.branch) throw new Error("CandidateWorkspace branch changed");
     if (gitValue(realWorktree, ["rev-parse", "HEAD"], "CandidateWorkspace HEAD") !== expected.baselineCommit) throw new Error("CandidateWorkspace HEAD changed");
-    if (gitValue(realWorktree, ["status", "--porcelain", "--untracked-files=all"], "CandidateWorkspace status") !== "") throw new Error("CandidateWorkspace became dirty before acceptance");
     return true;
   };
   const candidate = { baselineCommit: expected.baselineCommit, targetRepoRoot: expected.targetRepoRoot, branch: expected.branch };
   Object.defineProperty(candidate, "worktreeRoot", { enumerable: true, get() { validate(); return realWorktree; } });
   Object.defineProperty(candidate, "assertValid", { enumerable: false, value: validate });
+  Object.defineProperty(candidate, "captureSnapshot", { enumerable: false, value: () => {
+    validate();
+    return captureGitWorktreeSnapshot(realWorktree);
+  } });
   CANDIDATE_WORKSPACES.add(candidate);
   return Object.freeze(candidate);
 }

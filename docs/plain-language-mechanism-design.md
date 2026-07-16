@@ -8,21 +8,21 @@
 五阶段分两类：
 
 - **决策 gate（停下等人拍板）**：make-decision、build-plan、verify-code。人看大白话决策摘要，选"继续 / 返工 / 暂停"。
-- **自动放行（不停，给人瞄一眼）**：build-spec、build-code。3rd-review 异源审查 pass 后，输出大白话进度汇报摘要，自动产 stage-result、进下一阶段。build-spec 例外：审查结论若是 `unknown`（审不了/审不完），不自动放行，停一次，不产 stage-result，冒泡给人一次性拍板"继续 / 等重审"。build-code 目前没有 `unknown` 这个状态，这条例外只针对 build-spec。
+- **自动放行（不停，给人瞄一眼）**：build-spec、build-code。输出大白话进度汇报摘要，自动接受本阶段结果并进入下一阶段。审查结论、测试结果和未解决项原样记录；可自动修复的继续修复，审不了或暂时修不完也不增加中途人工门，而是在下一个决策 gate 集中呈现。
 
 | 阶段 | 人拍板 | 质量把关 | 摘要类型 | 进入下一阶段 |
 |---|---|---|---|---|
-| make-decision | 是 | —（决策不涉代码审查） | 决策摘要 | 人点继续 |
-| build-spec | 否 | 3rd-review | 进度汇报 | 审查 pass 自动 |
+| make-decision | 是 | 方向审查 | 决策摘要 | 人点继续 |
+| build-spec | 否 | 3rd-review | 进度汇报 | 自动接受 |
 | build-plan | 是 | 3rd-review | 决策摘要 | 人点继续 |
-| build-code | 否 | 3rd-review | 进度汇报 | 审查 pass 自动 |
-| verify-code | 是（合并不可逆，F7） | 测试 + 3rd-review | 决策摘要 | 人点合并 |
+| build-code | 否 | 3rd-review | 进度汇报 | 自动接受 |
+| verify-code | 是（接受验证结论） | 测试 + 3rd-review | 决策摘要 | 人点继续；close 另授权 |
 
 要点：
 
 - 摘要**不是审查门**，纯给人看进度 / 拍板，不判质量。
 - 决策 gate 停下等的是**人点头（人工确认，合宪）**，不是"摘要字段缺了机器自动卡"。
-- 自动放行阶段：审查 revise_required 就回去改（现有行为），只有 pass 才带摘要自动进。
+- 自动放行阶段：审查 finding 能自动处理就处理并重审；pass/revise_required 等已取得的质量事实如实带到下一个决策 gate，不伪造 pass，也不在中途卡人。若独立审查能力本身不可用，明确记诊断并 blocked；用户点头不能替代缺失的异源审查。
 
 ## 二、大白话摘要（问题 1 + 2）
 
@@ -32,7 +32,7 @@
 1 这阶段做了什么 / 2 审了几次、结论 / 3 这个 task 要解决什么 / 4 准备怎么做（或已怎么做）/ 5 原始需求覆盖情况 / 6 现在结果 / 7 下一步。
 
 - **决策 gate**（make-decision/build-plan/verify-code）：七要素 + 结尾"请确认"块（继续/返工/暂停 + 每项后果）。
-- **自动放行**（build-spec/build-code）：只七要素，不带"请确认"，结尾写"已通过异源审查，自动进入下一阶段"。
+- **自动放行**（build-spec/build-code）：只七要素，不带"请确认"，结尾说明阶段已完成、将自动进入下一阶段，并原样列出审查事实和未解决项。
 
 硬规则（写进模板）：
 
@@ -48,10 +48,10 @@ agent 中途要问人时，问题按"请确认"块格式走：大白话问题 + 
 ### 2.3 五阶段各改哪一步
 
 - **make-decision**：保留人确认（S9）。结尾按模板输出决策摘要。补上"审了几次""需求覆盖情况"两项。
-- **build-spec**：**去掉强确认门**（现 `SKILL.md:300`：没人确认就不产 stage-result）。改成：3rd-review pass → 输出进度汇报摘要 → 自动产 stage-result → 进 build-plan。若审查结论是 `unknown`（审不了/审不完），不自动放行，停一次、不产 stage-result，冒泡给人一次性拍板"继续 / 等重审"。
+- **build-spec**：去掉强确认门。输出进度汇报摘要，自动接受阶段结果并进入 build-plan；审查异常和未解决项作为事实带到 build-plan gate。
 - **build-plan**：保留人确认（Step 9）。结尾输出决策摘要。**删掉违宪句**（见 2.5）。
-- **build-code**：本来就没收尾人确认。加一步：3rd-review pass 后输出进度汇报摘要，自动进 verify-code。
-- **verify-code**：保留人确认（合并/删分支，F7 不可逆）。结尾输出决策摘要再问是否合并。补上"验了几轮、结论、需求覆盖"。
+- **build-code**：不设每 Phase 或收尾人工确认。输出进度汇报摘要，自动接受阶段结果并进入 verify-code。
+- **verify-code**：保留阶段确认，用来接受验证结论。阶段接受后另行冻结 close 动作计划；commit、push、merge、archive、cleanup 必须取得绑定计划 hash 的独立授权，不能复用 verify-code 确认。
 
 ### 2.4 机器事实采集（已推迟，不是本次交付内容）
 
