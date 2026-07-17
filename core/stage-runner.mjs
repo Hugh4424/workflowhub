@@ -162,10 +162,10 @@ export function runOfficialStage(stage, context, invocation) {
 }
 
 /** Persist the user's explicit decision before acceptance. */
-export function confirmStageAttempt(stage, context, { attemptRef, decision, confirmationRef } = {}) {
+export function confirmStageAttempt(stage, context, { attemptRef, decision } = {}) {
   const ctx = assertContext(context, stage);
   if (!requiresHumanConfirmation(stage)) throw new Error(`${stage} uses automatic acceptance and does not require confirmation`);
-  return ctx.kernel.confirmAttempt(stage, attemptRef, decision, confirmationRef);
+  return ctx.kernel.confirmAttempt(stage, attemptRef, decision);
 }
 
 /** Acceptance stays separate from execution; only decision gates require a human ref. */

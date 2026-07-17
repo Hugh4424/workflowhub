@@ -47,6 +47,6 @@
 - Code Builder 从旧 DeepSeek/OpenCode runtime 切换到现有 Codex runtime，是因为旧 runtime 两次越权自行实现或使用错误工作区；这是现有 Agent 的运行配置纠正，不是 provider 框架或新增产品需求；
 - `project/task` 两值交接保留，因为 Canary 实际出现后续阶段身份缺失；只写在 Issue 末尾内部引用，不恢复 Launcher、lineage 或 provider 设计。
 
-最新回归：close 聚焦测试 8/8；全量 94 files、750 tests 中 746 pass、2 skip，剩余 2 test failure 和 2 suite error 均来自 sandbox 禁止测试写工作树；对应写入型 3 files/31 tests 在可写临时副本全部通过。structure、Skill closure、task-record paths、anti-host、`run-checks`、five-stage smoke 和 `git diff --check` 均 exit 0。
+最新回归：全量 94 files、750 tests 全部通过。structure、Skill closure、task-record paths、anti-host、`run-checks`、five-stage smoke 和 `git diff --check` 均 exit 0。
 
-最新正式复审状态为 `unavailable`，不是 `pass`：冻结 snapshot tree `882eae7f742703fd401449457d3daa18de58ba89`，66 项 file-only material hash `7127f3552932a0798fea6689299258dd484d43d888d395d6821e4c1b28863886`，并确认 build-code bundle 含 `simplicity-guard`。联合 attempt `5ae20d35-ab8f-4881-87e6-edc2d5eccafd` 中 OpenCode 为 `PROCESS_EXIT_NONZERO`、Claude 为 `PROVIDER_OUTPUT_INVALID`；tier0 Kimi attempt `1d8f1cf3-9c9a-4992-8027-e3e8f09fd677` 为 `PROVIDER_PERMISSION_DENIED`；tier1 Claude 单独重试 attempt `c0082828-30c1-4112-a045-52108645d2f8` 仍为 `PROVIDER_OUTPUT_INVALID`。没有有效 reviewer JSON，因此不把空 findings 冒充审查通过；代码、方案和 provider 架构均未为此扩张。
+旧快照正式复审因 provider 输出失败，状态为 `unavailable`，不冒充审查通过。最终范围审计随后发现实现违反 spec 的非目标：把 Multica 的真人交互约束扩成 WorkflowHub comment reference、`interaction_refs` 和 confirmation `source_ref` 硬门；这些内容已全部删除，未增加替代框架。最新 HEAD 的 tier0+tier1 正式复审以 TaskHandle 中的不可变结果为准，必须得到语义结果后才能完成任务。

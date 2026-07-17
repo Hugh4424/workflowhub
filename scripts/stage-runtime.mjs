@@ -57,7 +57,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "run") {
     return runOfficialStage(values.stage, context, input);
   }
-  if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision, confirmationRef: values["confirmation-ref"] });
+  if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
   return acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],

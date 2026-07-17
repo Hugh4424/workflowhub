@@ -7,7 +7,6 @@ import { assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
-import { assertCommentReference } from "./comment-reference.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -48,14 +47,10 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   const producer = { stage, component, version };
   let value;
   if (registration.kind === "decision-log") {
-    if (Object.keys(payload).some((key) => !["decision_log", "interaction_refs"].includes(key)) || typeof payload.decision_log !== "string" || payload.decision_log.trim() === "") {
+    if (Object.keys(payload).some((key) => key !== "decision_log") || typeof payload.decision_log !== "string" || payload.decision_log.trim() === "") {
       throw new TypeError("decision_log payload required");
     }
-    if (!Array.isArray(payload.interaction_refs) || payload.interaction_refs.length === 0) {
-      throw new TypeError("decision interaction_refs must contain at least one comment ID or link");
-    }
-    const interactionRefs = payload.interaction_refs.map((ref, index) => assertCommentReference(ref, `decision interaction_refs[${index}]`));
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, decision_log: payload.decision_log, content_hash: sha256(payload.decision_log), interaction_refs: interactionRefs };
+    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, decision_log: payload.decision_log, content_hash: sha256(payload.decision_log) };
   } else if (registration.kind === "content") {
     if (Object.keys(payload).some((key) => key !== "content") || typeof payload.content !== "string" || payload.content.trim() === "") throw new TypeError(`${component} content payload required`);
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, content: payload.content, content_hash: sha256(payload.content) };
