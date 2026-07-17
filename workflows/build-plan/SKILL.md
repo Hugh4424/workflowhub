@@ -21,9 +21,10 @@ confirmations never publish checkpoint refs.
 
 Create `plan` and `tasks` through `stage-runtime.mjs receipt` with fixed `--component=plan|tasks`; pass those refs plus the canonical `wh-review` result ref as `plan`, `tasks`, and `review`. Missing review evidence stops the official run.
 
-Declared runtime components: `spec-research`, `simplicity-guard`, `spec-plan`,
-`spec-tasks`, `spec-analyze`, `wh-review`, and the review lenses declared by the
-manifest.
+Declared runtime components: `spec-research`, `spec-plan`, `spec-tasks`,
+`spec-analyze`, `wh-review`, and the review lenses declared by the manifest.
+`simplicity-guard` is provider-visible only inside `wh-review`; it is not a
+planning step.
 
 ## Named artifacts
 
@@ -44,8 +45,8 @@ manifest.
    artifact.
 4. Give `spec-plan` frozen spec/research content and the `plan.md` writer.
 5. Give `spec-tasks` frozen spec/plan content and the `tasks.md` writer.
-6. Run `spec-analyze`, simplicity review, and independent engineering review
-   over frozen content. Components do not locate files themselves.
+6. Run `spec-analyze` and independent engineering review over frozen content.
+   Components do not locate files themselves.
 7. Publish an attempt with artifact hashes, requirement mapping, research
    status, review facts, and missing items.
 8. Present the plan summary and record the decision with `confirm`. Only an

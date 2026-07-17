@@ -48,13 +48,32 @@ Declared runtime components: `test-strategy`, `wh-review`, conditional
    items. Present the gate brief from `docs/human-brief-template.md`; record the
    verification-stage decision with `confirm`, and pass only its accepted ref to
    `accept`. This confirmation accepts verification facts only.
-7. After verify-code is accepted, build a hashed close plan from accepted
-   lineage and current Git facts. Present its exact commit, push, merge, archive,
-   and cleanup actions for a separate close authorization bound to the plan hash.
+7. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
+   explicit task path and identity, task branch, target branch, remote, task
+   commit, accepted spec path, and archive path. The frozen plan contains exactly
+   six actions: commit delivery, archive and commit the spec, merge the task
+   branch from the main checkout, push the target branch, remove the task
+   worktree, and remove the merged local task branch. Show the full hashed close plan
+   for one separate close authorization bound to the plan hash.
    Never reuse the verify-code confirmation ref.
-8. Execute separately authorized close steps idempotently, probing physical Git facts
-   before each action and recording each result. Never infer a task path during
-   recovery.
+8. Record that one decision with `scripts/task-close.mjs confirm`. Only a
+   `confirmed` result authorizes all six plan-bound actions; rejection or timeout
+   performs none of them. Do not ask again before each command.
+9. The Code Verifier performs the Git writes, stopping at the first failure and
+   resuming from current Git facts: ensure the task worktree is clean; `git mv`
+   the spec to the planned archive path and commit it; merge the task branch into
+   the target branch from the main checkout; push the target branch; remove the
+   task worktree; then delete the merged local task branch. Immediately before
+   completion, run `git fetch <remote> <target-branch>` in the main checkout.
+10. Run `scripts/task-close.mjs complete` with the plan hash and close
+    confirmation ref. WorkflowHub performs no Git writes and does not fetch; it
+    reads the live remote with `git ls-remote` and verifies the task commit and
+    archive commit are in the local target branch, local and remote target OIDs
+    match, the archive path exists while the source path does not, and both the
+    worktree and local task branch are absent. Any false fact fails loudly and
+    leaves recovery state intact. Use `status` to show completed and missing
+    physical actions; only a `task-close-completed.v1` result permits reporting
+    close complete. Never infer a task path during recovery.
 
 Quality failures remain visible facts. Identity, lineage, hash, and capability
 failures stop before verification because continuing would inspect another task.

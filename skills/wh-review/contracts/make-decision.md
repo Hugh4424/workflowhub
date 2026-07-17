@@ -42,6 +42,13 @@ runner 必须从材料集合中排除这些内容，不能先交付再要求 pro
 
 审查重点：方案是否忠实于批准方向，关键前提和边界是否完整，验收是否可判断，是否未经确认扩大范围。
 
+detail 必须加载 `simplicity-guard` 只读 lens，逐项执行 P0-P3：优先删除、
+直接复用或最小改造；标出 scope creep、重复已有能力，以及没有故障证据或
+硬约束的长期能力。实质扩大实现或维护面时必须 `revise_required`。
+
+direction 是不含候选方案的盲审，禁止加载 `simplicity-guard`，避免从不存在的
+方案中推断或裁剪内容。
+
 ## 输出
 
 输出遵循 `provider-protocol.md` 的最小 reviewer JSON：`verdict`、`summary`、`findings`。不要求 checklist、pass items、skillResults、bundle hash、finding 生命周期或模型回显材料 hash。

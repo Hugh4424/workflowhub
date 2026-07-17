@@ -208,7 +208,7 @@ describe("review materials", () => {
       reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code", reviewTrack: null,
       materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests pass", review_instructions: reviewInstructionsFor("build-code") }
     });
-    expect(code.files).toEqual(expect.arrayContaining(["changes.diff", "changed/added.txt", "changed/link.txt", "changed/untracked.txt", "contracts/build-code.md"]));
+    expect(code.files).toEqual(expect.arrayContaining(["changes.diff", "changed/added.txt", "changed/link.txt", "changed/untracked.txt", "contracts/build-code.md", "skills/simplicity-guard/SKILL.md"]));
     expect(code.files).toContain("contracts/provider-protocol.md");
     expect(readFileSync(join(code.bundleRoot, "changed", "link.txt"), "utf8")).toBe("added.txt");
     const repeated = buildReviewMaterials({

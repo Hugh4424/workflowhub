@@ -25,9 +25,9 @@ files are accessed only through ArtifactDir. Components receive the content of
 named artifacts or controlled read/write callbacks; they never receive a root,
 task identifier, or authority to derive paths.
 
-Declared runtime components: `spec-specify`, `spec-clarify`,
-`simplicity-guard`, `wh-review`, and the conditional review lenses declared by
-the manifest.
+Declared runtime components: `spec-specify`, `spec-clarify`, `wh-review`, and
+the conditional review lenses declared by the manifest. `simplicity-guard` is
+provider-visible only inside `wh-review`; it is not a spec generation step.
 
 ## Named artifacts
 
@@ -44,8 +44,8 @@ the manifest.
    `spec.md`.
 4. Invoke `spec-clarify` with the current `spec.md` content and the same named
    writer when clarification is needed.
-5. Apply simplicity review and the constitutional checklist. Record findings;
-   do not silently rewrite scope.
+5. Apply the constitutional checklist. Record findings; do not silently rewrite
+   scope.
 6. Run independent review using a frozen packet built from `spec.md`, decision
    facts, and relevant evidence.
 7. Publish an append-only attempt containing named artifact hashes, review

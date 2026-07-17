@@ -69,20 +69,20 @@ skills:
   - name: simplicity-guard
     path: skills/simplicity-guard/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: ee379c3bc86a073b14bf000867058106500ad25efac99aa431dceff3d943c90b
+    local_bundle_hash: 852eff6e208dc964e62d786b3fa940ecf7264fe96a3ae882ca8793e67598abd0
     last_reviewed_at: "2026-07-14"
     status: native
-    purpose: 写代码前执行四阶梯复用判断
-    design_idea: 优先已有能力，最后才做最小新实现
-    used_by_stages: [build-spec, build-plan]
+    purpose: 审查方案是否遵守四阶梯最小路径
+    design_idea: 只读 lens 识别范围膨胀并优先删除或复用
+    used_by_stages: [make-decision, build-spec, build-plan, build-code]
     upstream: []
-    local_changes: workflowhub 原生实现
+    local_changes: workflowhub 原生 review-only lens；不参与 stage 生成
     dependency_closure: [skills/simplicity-guard]
     update_policy: 随宪法复用条款变更审查
   - name: talk-with-zhipeng
     path: skills/talk-with-zhipeng/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 2946d2efd4fdd0e5984290533a9a587d2b61d86364cf181602c358574d40b2d9
+    local_bundle_hash: 4001dcd5fa55cd7aedb2511d106b00222db61acad07b0a55a2ef16ce3db9f312
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: 对话式收敛方向、歧义、风险和范围
@@ -219,7 +219,7 @@ skills:
   - name: wh-review
     path: skills/wh-review/SKILL.md
     local_version: 1.0.0
-    local_bundle_hash: 15f2223009f6e498c4d606aa4951327d937ff1fd92a64da5e94cf1304f209043
+    local_bundle_hash: 8fdf7aa870199269a0997966ef5ddd78f5d2387cbca8af3027fcd829952fb3f8
     last_reviewed_at: "2026-07-14"
     status: native
     purpose: workflowhub 唯一异源审查调度层

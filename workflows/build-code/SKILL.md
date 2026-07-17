@@ -61,6 +61,10 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    attempt; do not overwrite evidence. If the independent review capability is
    unavailable, publish the diagnostic and stop as blocked; do not turn missing
    capability into a human confirmation prompt.
+   `simplicity-guard` is provider-visible only inside `wh-review`; the build-code
+   generator and implementation workers never invoke it. Its lens may reject
+   concrete scope creep or speculative code in the current diff, but it may not
+   reopen accepted product scope.
 8. Publish a build-code attempt containing baseline/head commits, changed
    files, fresh test command, test facts, review facts, and missing items.
 9. Present the automatic-progress brief from `docs/human-brief-template.md`.

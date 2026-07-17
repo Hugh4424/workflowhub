@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
@@ -132,6 +134,189 @@ function completedRecord(task, planHash, step, observation, mode, now) {
 function git(cwd, args, { allowFailure = false } = {}) {
   const result = execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", allowFailure ? "ignore" : "pipe"] });
   return String(result).trim();
+}
+
+function gitResult(cwd, args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return { ok: result.status === 0, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
+}
+
+function oid(value, label) {
+  if (!/^[a-f0-9]{40}$/i.test(value ?? "")) throw new TypeError(`${label} must be a full commit OID`);
+  return value.toLowerCase();
+}
+
+function repositoryPath(value, label) {
+  if (typeof value !== "string" || value === "" || /[\0\r\n\t]/.test(value) || isAbsolute(value) || value.split("/").includes("..")) {
+    throw new TypeError(`${label} must be a repository-relative path`);
+  }
+  return value;
+}
+
+function treeEntry(root, commit, path) {
+  const result = gitResult(root, ["ls-tree", "-z", commit, "--", path]);
+  if (!result.ok || result.stdout === "") return null;
+  const match = /^([0-7]{6}) (blob|tree) ([a-f0-9]{40})\t([^\0]+)\0?$/i.exec(result.stdout);
+  if (!match || match[4] !== path) return null;
+  return Object.freeze({ mode: match[1], type: match[2], oid: match[3].toLowerCase() });
+}
+
+function validateDeliveryPlan(plan, task, kernel) {
+  validatePlan(plan, task);
+  if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
+  const delivery = plain(plan.delivery, "delivery close plan");
+  const required = ["target_repo_root", "worktree_root", "task_branch", "target_branch", "remote", "task_commit", "spec_source_path", "spec_archive_path"];
+  if (required.some((key) => typeof delivery[key] !== "string" || delivery[key] === "")) throw new TypeError("delivery close plan is missing required fields");
+  if (resolve(delivery.target_repo_root) !== task.manifest.target_repo_root) throw new Error("delivery close target repository mismatch");
+  const accepted = kernel.readAccepted("make-decision");
+  if (resolve(delivery.worktree_root) !== resolve(accepted.facts.worktree_root)) throw new Error("delivery close worktree does not match accepted make-decision");
+  oid(delivery.task_commit, "delivery task_commit");
+  repositoryPath(delivery.spec_source_path, "delivery spec_source_path");
+  repositoryPath(delivery.spec_archive_path, "delivery spec_archive_path");
+  if (delivery.spec_source_path === delivery.spec_archive_path) throw new Error("delivery spec source and archive paths must differ");
+  for (const branch of [delivery.task_branch, delivery.target_branch]) {
+    if (!gitResult(delivery.target_repo_root, ["check-ref-format", "--branch", branch]).ok) throw new TypeError(`invalid Git branch: ${branch}`);
+  }
+  if (delivery.task_branch === delivery.target_branch) throw new Error("task branch and target branch must differ");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(delivery.remote)) throw new TypeError("delivery remote must be an explicit remote name");
+  return delivery;
+}
+
+function closeConfirmation(task, planHash, ref) {
+  const prefix = `operations/close/confirmations/${planHash}/`;
+  if (typeof ref !== "string" || !ref.startsWith(prefix) || !/^operations\/close\/confirmations\/[a-f0-9]{64}\/[a-f0-9-]{36}\.json$/.test(ref)) {
+    throw new TypeError("canonical plan-bound closeConfirmationRef is required");
+  }
+  const confirmation = plain(JSON.parse(task.readRecord(ref)), "close confirmation");
+  const keys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "confirmed_at"]);
+  if (Object.keys(confirmation).some((key) => !keys.has(key))) throw new Error("close confirmation contains unknown fields");
+  if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("close confirmation identity is invalid");
+  if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) throw new Error("close confirmation plan hash mismatch");
+  return confirmation;
+}
+
+const DELIVERY_STEPS = Object.freeze([
+  ["commit-delivery", "commit-delivery"],
+  ["archive-spec", "archive-spec"],
+  ["merge-task-branch", "merge-task-branch"],
+  ["push-target-branch", "push-target-branch"],
+  ["remove-task-worktree", "remove-task-worktree"],
+  ["remove-task-branch", "remove-task-branch"],
+]);
+
+/** Freeze the concrete close actions before asking for their independent authorization. */
+export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel, delivery: requested } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
+  const accepted = kernel.readAccepted("make-decision");
+  const input = plain(requested, "delivery close input");
+  const root = task.manifest.target_repo_root;
+  if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
+  const worktree = resolve(accepted.facts.worktree_root);
+  if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
+  if (git(worktree, ["status", "--porcelain"]) !== "") throw new Error("task worktree has uncommitted delivery changes");
+  const taskCommit = oid(input.task_commit, "delivery task_commit");
+  const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
+  if (!branchTip.ok || branchTip.stdout.toLowerCase() !== taskCommit) throw new Error("task commit must be the clean task branch tip before archive");
+  const plan = {
+    schema_version: "task-close-plan.v1",
+    task_id: task.identity.taskId,
+    delivery: {
+      target_repo_root: root,
+      worktree_root: worktree,
+      task_branch: input.task_branch,
+      target_branch: input.target_branch,
+      remote: input.remote,
+      task_commit: taskCommit,
+      spec_source_path: repositoryPath(input.spec_source_path, "delivery spec_source_path"),
+      spec_archive_path: repositoryPath(input.spec_archive_path, "delivery spec_archive_path"),
+    },
+    steps: DELIVERY_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
+  };
+  const delivery = validateDeliveryPlan(plan, task, kernel);
+  if (!gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok) throw new Error("task commit does not exist");
+  if (!gitResult(root, ["cat-file", "-e", `${delivery.task_commit}:${delivery.spec_source_path}`]).ok) throw new Error("accepted spec source does not exist in the task commit");
+  if (gitResult(root, ["cat-file", "-e", `${delivery.task_commit}:${delivery.spec_archive_path}`]).ok) throw new Error("spec is already archived in the task commit");
+  if (!gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]).ok) throw new Error("target branch does not exist");
+  const planHash = closePlanHash(plan);
+  createOrVerify(task, `operations/close/plans/${planHash}/plan.json`, {
+    schema_version: "task-close-plan-record.v1",
+    task_id: task.identity.taskId,
+    plan_hash: planHash,
+    plan: structuredClone(plan),
+  }, "close plan");
+  return Object.freeze({ plan: Object.freeze(plan), plan_hash: planHash });
+}
+
+/** Read final delivery facts without performing fetch or any other Git write. */
+export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel, plan } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  const delivery = validateDeliveryPlan(plan, task, kernel);
+  const root = delivery.target_repo_root;
+  const localTarget = gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]);
+  const commitExists = gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok;
+  const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
+  const archivePathExists = localTarget.ok && gitResult(root, ["cat-file", "-e", `${delivery.target_branch}:${delivery.spec_archive_path}`]).ok;
+  const sourcePathAbsent = localTarget.ok && !gitResult(root, ["cat-file", "-e", `${delivery.target_branch}:${delivery.spec_source_path}`]).ok;
+  const archiveLog = localTarget.ok ? gitResult(root, ["log", "-1", "--format=%H", delivery.target_branch, "--", delivery.spec_archive_path]) : { ok: false, stdout: "" };
+  const archiveCommit = archiveLog.ok && /^[a-f0-9]{40}$/i.test(archiveLog.stdout) ? archiveLog.stdout.toLowerCase() : null;
+  const archiveParent = archiveCommit === null ? { ok: false, stdout: "" } : gitResult(root, ["rev-parse", `${archiveCommit}^`]);
+  const archiveCommitIncluded = archiveCommit !== null && archiveParent.ok && archiveParent.stdout.toLowerCase() === delivery.task_commit && gitResult(root, ["merge-base", "--is-ancestor", archiveCommit, localTarget.stdout]).ok;
+  const sourceEntry = treeEntry(root, delivery.task_commit, delivery.spec_source_path);
+  const archiveEntry = archiveCommit === null ? null : treeEntry(root, archiveCommit, delivery.spec_archive_path);
+  const archiveBlobPreserved = sourceEntry !== null && archiveEntry !== null && sourceEntry.type === "blob" && archiveEntry.type === "blob" && sourceEntry.mode === archiveEntry.mode && sourceEntry.oid === archiveEntry.oid;
+  const archiveDiff = archiveCommit === null ? { ok: false, stdout: "" } : gitResult(root, ["diff-tree", "--no-commit-id", "--name-status", "--find-renames=100%", "-r", "-z", `${archiveCommit}^`, archiveCommit]);
+  const archiveChanges = archiveDiff.ok ? archiveDiff.stdout.split("\0").filter((value) => value !== "") : [];
+  const archiveOnlyRename = archiveBlobPreserved && archiveChanges.length === 3 && archiveChanges[0] === "R100" && archiveChanges[1] === delivery.spec_source_path && archiveChanges[2] === delivery.spec_archive_path;
+  const remote = gitResult(root, ["ls-remote", "--exit-code", delivery.remote, `refs/heads/${delivery.target_branch}`]);
+  const remoteTarget = remote.ok ? remote.stdout.split(/\s+/)[0]?.toLowerCase() : null;
+  const pushed = localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
+  const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => resolve(line.slice(9)));
+  const worktreeCleanup = !existsSync(delivery.worktree_root) && !listedWorktrees.includes(resolve(delivery.worktree_root));
+  const branchCleanup = !gitResult(root, ["show-ref", "--verify", "--quiet", `refs/heads/${delivery.task_branch}`]).ok;
+  const facts = {
+    delivery_committed: commitExists,
+    archive: archivePathExists && sourcePathAbsent && archiveCommitIncluded && archiveBlobPreserved && archiveOnlyRename,
+    archive_commit: archiveCommit,
+    archive_blob_preserved: archiveBlobPreserved,
+    archive_only_rename: archiveOnlyRename,
+    merge: merged,
+    push: pushed,
+    local_target_oid: localTarget.ok ? localTarget.stdout.toLowerCase() : null,
+    remote_target_oid: remoteTarget,
+    worktree_cleanup: worktreeCleanup,
+    branch_cleanup: branchCleanup,
+  };
+  const missing = [["delivery", facts.delivery_committed], ["archive", facts.archive], ["merge", facts.merge], ["push", facts.push], ["worktree_cleanup", facts.worktree_cleanup], ["branch_cleanup", facts.branch_cleanup]].filter(([, done]) => !done).map(([name]) => name);
+  return Object.freeze({ schema_version: "task-close-delivery-state.v1", status: missing.length === 0 ? "ready" : "incomplete", missing: Object.freeze(missing), facts: Object.freeze(facts) });
+}
+
+/** Write completed only after every plan-bound delivery fact is currently true. */
+export async function completeDeliveryClosePlan({ task: taskHandle, kernel: taskKernel, plan, closeConfirmationRef, now = () => new Date().toISOString() } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  validateDeliveryPlan(plan, task, kernel);
+  const planHash = closePlanHash(plan);
+  const prepared = JSON.parse(task.readRecord(`operations/close/plans/${planHash}/plan.json`));
+  if (prepared.schema_version !== "task-close-plan-record.v1" || prepared.task_id !== task.identity.taskId || prepared.plan_hash !== planHash || canonical(prepared.plan) !== canonical(plan)) throw new Error("prepared close plan record is invalid");
+  const confirmation = closeConfirmation(task, planHash, closeConfirmationRef);
+  if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
+  if (typeof now !== "function") throw new TypeError("close now must be a function");
+  return task.withRecordLock("locks/close.execution.lock", async () => {
+    const existing = readOptional(task, "operations/close/completed.json");
+    if (existing !== undefined) {
+      const completed = JSON.parse(existing);
+      if (completed.schema_version !== "task-close-completed.v1" || completed.task_id !== task.identity.taskId || completed.plan_hash !== planHash || completed.status !== "completed") throw new Error("task close completed by a conflicting or invalid plan");
+      return Object.freeze(completed);
+    }
+    const state = inspectDeliveryCloseState({ task, kernel, plan });
+    if (state.status !== "ready") throw new Error(`delivery close is incomplete: ${state.missing.join(", ")}`);
+    const completion = { schema_version: "task-close-completed.v1", task_id: task.identity.taskId, plan_hash: planHash, status: "completed", physical_state: structuredClone(state.facts), completed_at: now() };
+    createOrVerify(task, "operations/close/completed.json", completion, "close completion");
+    return Object.freeze(completion);
+  });
 }
 
 /** Mint the only supported close executors from a verified repository root. */

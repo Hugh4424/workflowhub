@@ -15,7 +15,7 @@ import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
 const temporary = [];
 const execFileAsync = promisify(execFile);
 function confirmation(kernel, stage, attemptRef) {
-  return kernel.confirmAttempt(stage, attemptRef, "accepted").ref;
+  return kernel.confirmAttempt(stage, attemptRef, "accepted", stage === "make-decision" ? "comment:test-confirmation" : undefined).ref;
 }
 function fixture(inputs = {}) {
   const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-kernel-publish-")));

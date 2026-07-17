@@ -1,7 +1,7 @@
 stage: build-plan
 skills:
   - { name: spec-research, path: skills/spec-research/SKILL.md, execution: independent, invocation: always, trigger: in_memory_research, bundle: skills/spec-research/skill-bundle.json }
-  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: independent, invocation: always, trigger: scope_check, bundle: skills/simplicity-guard/skill-bundle.json }
+  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_simplicity_lens, bundle: skills/simplicity-guard/skill-bundle.json }
   - { name: spec-plan, path: skills/spec-plan/SKILL.md, execution: inline, invocation: always, trigger: planning, bundle: skills/spec-plan/skill-bundle.json }
   - { name: spec-tasks, path: skills/spec-tasks/SKILL.md, execution: inline, invocation: always, trigger: task_breakdown, bundle: skills/spec-tasks/skill-bundle.json }
   - { name: spec-analyze, path: skills/spec-analyze/SKILL.md, execution: independent, invocation: always, trigger: consistency_review, bundle: skills/spec-analyze/skill-bundle.json }

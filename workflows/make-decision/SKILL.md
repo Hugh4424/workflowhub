@@ -22,7 +22,8 @@ runtime deterministically creates or validates the task worktree from the
 TaskHandle; callers must not supply a worktree path or baseline. Acceptance is
 a separate `accept` invocation with `--attempt` and
 `--human-confirmation-ref`. First record the decision with
-`confirm --attempt=<attempt> --decision=accepted|rejected`, then pass its
+`confirm --attempt=<attempt> --decision=accepted|rejected
+--confirmation-ref=<final-comment-id-or-link>`, then pass its
 returned ref to `accept`; execution never accepts its own result.
 
 Before any code inspection or `grill-with-docs` write, call
@@ -34,6 +35,11 @@ its receipt with `stage-runtime.mjs receipt --stage=make-decision
 --input=<content-payload.json>`. Pass that ref plus the canonical `wh-review`
 direction and detail result refs as `decision`, `direction_review`, and
 `detail_review` in the `run` input. Missing review refs stop the official run.
+The decision payload is `{ "decision_log": "...", "interaction_refs":
+["<comment-id-or-link>"] }`. Missing decision-log content or interaction
+references stops receipt creation. These references record the conversation;
+each uses `comment:<id>` or an `http(s)` URL. They do not add author
+authentication or a Multica dependency to WorkflowHub.
 
 The stage and every component must not discover identity from the shell, Git,
 an issue number, a branch, or directory scanning. Components receive frozen
@@ -65,7 +71,9 @@ only through `wh-review`; it is not a second review runner.
 2. Run `talk-with-zhipeng` round 1 on the original requirement and known facts.
    Its purpose is to identify the real problem and whether external research is
    materially needed. Ask only a question whose answer can change direction or
-   research authorization; otherwise continue.
+   research authorization; otherwise continue. When a question is asked, wait
+   for the user's answer and record the comment ID or link. Never write or infer
+   the user's answer on their behalf.
 3. When research is needed and authorized, invoke `anysearch` with a frozen,
    non-sensitive packet. Otherwise record the skip reason and continue.
 4. Run `talk-with-zhipeng` round 2 on the requirement plus research. Produce the
@@ -92,8 +100,10 @@ only through `wh-review`; it is not a second review runner.
    and baseline commit into the attempt. Acceptance must recapture the tree and
    fail loud if it changed after the attempt was published.
 10. Present decision, scope, risks, both review tracks, worktree, baseline, and
-    snapshot to the user. This is the only make-decision confirmation. Record it
-    with `confirm`; only an accepted confirmation ref may be passed to `accept`.
+    snapshot to the user, including the readable decision-log. This is the
+    only make-decision confirmation. Record its comment ID or link with `confirm`;
+    only an accepted confirmation record containing that source ref may be
+    passed to `accept`.
 
 Quality facts are recorded, not converted into automatic quality gates.
 Contradictory identity, missing physical workspace facts, or an invalid context

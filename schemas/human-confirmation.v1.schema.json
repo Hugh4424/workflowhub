@@ -9,7 +9,14 @@
     "attempt_ref": { "type": "string", "pattern": "^attempt-[0-9]{4}\\.json$" },
     "decision": { "enum": ["accepted", "rejected"] },
     "confirmed_at": { "type": "string", "format": "date-time" },
+    "source_ref": { "type": "string", "pattern": "^(?:comment:\\S+|https?://\\S+)$" },
     "checkpoint_plan_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "stage": { "const": "make-decision" } }, "required": ["stage"] },
+      "then": { "required": ["source_ref"] }
+    }
+  ],
   "additionalProperties": false
 }

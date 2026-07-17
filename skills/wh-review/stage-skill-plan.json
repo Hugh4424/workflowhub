@@ -11,7 +11,7 @@
         },
         "detail": {
           "logical_skill_id": "wh-review/make-decision-detail",
-          "required_skills": ["plan-ceo-review", "review"],
+          "required_skills": ["simplicity-guard", "plan-ceo-review", "review"],
           "review_mode": "lens-only",
           "delivery_mode": "file_only"
         }
@@ -19,20 +19,20 @@
     },
     "build-spec": {
       "logical_skill_id": "wh-review/build-spec",
-      "required_skills": ["plan-ceo-review", "review"],
+      "required_skills": ["simplicity-guard", "plan-ceo-review", "review"],
       "optional_skills": [{ "name": "plan-design-review", "when": "ui" }],
       "review_mode": "lens-only",
       "delivery_mode": "file_only"
     },
     "build-plan": {
       "logical_skill_id": "wh-review/build-plan",
-      "required_skills": ["spec-analyze", "plan-eng-review", "review"],
+      "required_skills": ["simplicity-guard", "spec-analyze", "plan-eng-review", "review"],
       "review_mode": "lens-only",
       "delivery_mode": "file_only"
     },
     "build-code": {
       "logical_skill_id": "wh-review/build-code",
-      "required_skills": ["review", "test-strategy", "diagnosing-bugs"],
+      "required_skills": ["simplicity-guard", "review", "test-strategy", "diagnosing-bugs"],
       "review_mode": "lens-only",
       "delivery_mode": "file_only"
     },

@@ -2,6 +2,7 @@
   "schema_version": 1,
   "skill": "simplicity-guard",
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "review-bundle.json"
   ]
 }

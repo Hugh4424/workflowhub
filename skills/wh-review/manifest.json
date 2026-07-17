@@ -16,16 +16,21 @@
   "contracts": {
     "make-decision": {
       "path": "contracts/make-decision.md",
-      "review_tracks": ["direction", "detail"]
+      "review_tracks": ["direction", "detail"],
+      "required_skills_by_track": {
+        "direction": ["intake-decision-review", "plan-ceo-review", "review"],
+        "detail": ["simplicity-guard", "plan-ceo-review", "review"]
+      }
     },
     "build-spec": {
       "path": "contracts/build-spec.md",
-      "required_skills": ["plan-ceo-review", "review"],
+      "required_skills": ["simplicity-guard", "plan-ceo-review", "review"],
       "optional_skills": [{ "name": "plan-design-review", "when": "ui" }]
     },
     "build-plan": {
       "path": "contracts/build-plan.md",
       "required_skills": [
+        "simplicity-guard",
         "spec-analyze",
         "plan-eng-review",
         "review"
@@ -33,7 +38,7 @@
     },
     "build-code": {
       "path": "contracts/build-code.md",
-      "required_skills": []
+      "required_skills": ["simplicity-guard", "review", "test-strategy", "diagnosing-bugs"]
     },
     "verify-code": {
       "path": "contracts/verify-code.md",

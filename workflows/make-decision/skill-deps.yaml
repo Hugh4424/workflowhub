@@ -9,6 +9,7 @@ skills:
   - { name: debate, path: skills/debate/SKILL.md, execution: independent, invocation: conditional, trigger: material_disagreement, bundle: skills/debate/skill-bundle.json }
   - { name: plan-ceo-review, path: skills/plan-ceo-review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_direction_lens, bundle: skills/plan-ceo-review/skill-bundle.json }
   - { name: review, path: skills/review/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_detail_lens, bundle: skills/review/skill-bundle.json }
+  - { name: simplicity-guard, path: skills/simplicity-guard/SKILL.md, execution: independent, invocation: conditional, trigger: wh_review_simplicity_lens, bundle: skills/simplicity-guard/skill-bundle.json }
 runtime_capabilities:
   - { id: node, kind: cli, version_policy: ">=24", doctor: [node, --version], required_when: always, absence_semantics: blocked }
   - { id: shell, kind: cli, doctor: [sh, -c, "exit 0"], required_when: always, absence_semantics: blocked }

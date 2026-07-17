@@ -151,6 +151,59 @@ describe("simple wh-review contracts", () => {
     expect(plan.stages["verify-code"].optional_skills).toEqual([{ name: "isolated-browser-qa", when: "ui" }]);
   });
 
+  it("wires simplicity-guard only into proposal-bearing reviews", () => {
+    const plan = readJson(join(root, "wh-review", "stage-skill-plan.json"));
+    const manifest = readJson(join(root, "wh-review", "manifest.json"));
+    expect(plan.stages["make-decision"].tracks.detail.required_skills).toContain("simplicity-guard");
+    expect(plan.stages["make-decision"].tracks.direction.required_skills).not.toContain("simplicity-guard");
+    expect(plan.stages["build-spec"].required_skills).toContain("simplicity-guard");
+    expect(plan.stages["build-plan"].required_skills).toContain("simplicity-guard");
+    expect(plan.stages["build-code"].required_skills).toContain("simplicity-guard");
+    expect(plan.stages["verify-code"].required_skills).not.toContain("simplicity-guard");
+    expect(manifest.contracts["make-decision"].required_skills_by_track.detail).toContain("simplicity-guard");
+    expect(manifest.contracts["make-decision"].required_skills_by_track.direction).not.toContain("simplicity-guard");
+    expect(manifest.contracts["build-spec"].required_skills).toContain("simplicity-guard");
+    expect(manifest.contracts["build-plan"].required_skills).toContain("simplicity-guard");
+    expect(manifest.contracts["build-code"].required_skills).toContain("simplicity-guard");
+    expect(manifest.contracts["verify-code"].required_skills).not.toContain("simplicity-guard");
+    expect(manifest.contracts["build-code"].required_skills).toEqual(plan.stages["build-code"].required_skills);
+
+    const lens = readFileSync(join(root, "simplicity-guard", "SKILL.md"), "utf8");
+    expect(lens).toMatch(/P0[\s\S]*P1[\s\S]*P2[\s\S]*P3/);
+    expect(lens).toMatch(/scope creep/);
+    expect(lens).toMatch(/重复已有能力/);
+    expect(lens).toMatch(/没有故障证据/);
+    expect(lens).toMatch(/优先删除|删除优于新增/);
+    const projection = readJson(join(root, "simplicity-guard", "review-bundle.json"));
+    expect(projection).toMatchObject({ mode: "lens-only", delivery_mode: "file_only", entrypoint: "SKILL.md" });
+
+    const projectRoot = join(root, "..");
+    for (const stage of ["build-spec", "build-plan", "build-code"]) {
+      const prompt = readFileSync(join(projectRoot, "workflows", stage, "SKILL.md"), "utf8");
+      const deps = readFileSync(join(projectRoot, "workflows", stage, "skill-deps.yaml"), "utf8");
+      expect(prompt).toMatch(/`simplicity-guard` is\s+provider-visible only inside `wh-review`/);
+      expect(prompt).not.toMatch(/Apply simplicity review|simplicity review, and/);
+      expect(deps).toMatch(/name: simplicity-guard[^\n]*invocation: conditional[^\n]*trigger: wh_review_simplicity_lens/);
+    }
+    const decisionDeps = readFileSync(join(projectRoot, "workflows", "make-decision", "skill-deps.yaml"), "utf8");
+    expect(decisionDeps).toMatch(/name: simplicity-guard[^\n]*invocation: conditional[^\n]*trigger: wh_review_simplicity_lens/);
+  });
+
+  it("makes scope expansion revise-required without rejecting necessary protections", () => {
+    const lens = readFileSync(join(root, "simplicity-guard", "SKILL.md"), "utf8");
+    for (const expansion of [
+      "scope creep",
+      "重复已有能力",
+      "投机性抽象",
+      "兼容层",
+      "死代码",
+      "隐藏失败兜底"
+    ]) expect(lens).toContain(expansion);
+    expect(lens).toMatch(/任一上述问题[\s\S]*输出 `revise_required`/);
+    for (const protection of ["测试", "输入校验", "错误处理", "安全", "可访问性"])
+      expect(lens).toMatch(new RegExp(`不得删除[^。]*${protection}|${protection}[\\s\\S]*不得因追求少代码而删掉`));
+  });
+
   it("RED: stage-result facts.review references the result instead of copying a verdict", () => {
     const artifact = {
       status: "success",

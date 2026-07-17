@@ -6,6 +6,7 @@ import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint,
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace } from "./workspace.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
+import { assertCommentReference } from "./comment-reference.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;
@@ -368,13 +369,16 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         throw new Error(`${name} attempt sequence exhausted`);
       });
     },
-    confirmAttempt(stage, attemptRef, decision) {
+    confirmAttempt(stage, attemptRef, decision, confirmationRef) {
       const name = stageName(stage);
       if (!requiresHumanConfirmation(name)) throw new Error(`${name} uses automatic acceptance and does not accept human confirmation`);
       if (!ATTEMPT_REF.test(attemptRef ?? "")) throw new Error("invalid attemptRef");
       if (!new Set(["accepted", "rejected"]).has(decision)) throw new TypeError("explicit confirmation decision must be accepted or rejected");
+      if (name === "make-decision") assertCommentReference(confirmationRef, "make-decision confirmation ref");
+      if (name !== "make-decision" && confirmationRef !== undefined) throw new TypeError("confirmation ref is only valid for make-decision");
       const attempt = validateAttempt(parseJson(task.readRecord(`results/${name}/${attemptRef}`), `${name} attempt`), { taskId: task.identity.taskId, stage: name });
       const record = { schema_version: "human-confirmation.v1", task_id: task.identity.taskId, stage: name, attempt_ref: attemptRef, decision, confirmed_at: now(),
+        ...(name === "make-decision" ? { source_ref: confirmationRef } : {}),
         ...(attempt.checkpoint ? { checkpoint_plan_hash: attempt.checkpoint.plan_hash } : {}) };
       const ref = `confirmations/${name}/${attemptRef}`;
       createKernelRecord(ref, `${JSON.stringify(record, null, 2)}\n`);
@@ -404,11 +408,12 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         let confirmation;
         if (acceptanceMode === "human") {
           confirmation = parseJson(task.readRecord(humanConfirmationRef), "human confirmation");
-          rejectUnknown(confirmation, new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at", "checkpoint_plan_hash"]), "human confirmation");
+          rejectUnknown(confirmation, new Set(["schema_version", "task_id", "stage", "attempt_ref", "decision", "confirmed_at", "source_ref", "checkpoint_plan_hash"]), "human confirmation");
           if (confirmation.decision === "rejected") {
             throw new Error("rejected confirmation leaves checkpoint ref unpublished");
           }
           if (confirmation.schema_version !== "human-confirmation.v1" || confirmation.task_id !== task.identity.taskId || confirmation.stage !== name || confirmation.attempt_ref !== attemptRef || confirmation.decision !== "accepted" || !Number.isFinite(Date.parse(confirmation.confirmed_at))) throw new Error("human confirmation does not bind this task/stage/attempt");
+          if (name === "make-decision") assertCommentReference(confirmation.source_ref, "make-decision confirmation source_ref");
         }
         let acceptedCheckpoint;
         if (["build-spec", "build-plan"].includes(name)) {
