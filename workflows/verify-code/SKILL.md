@@ -62,25 +62,17 @@ Declared runtime components: `test-strategy`, `wh-review`, conditional
 8. Record that one decision with `scripts/task-close.mjs confirm`. Only a
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.
-9. The Code Verifier performs the Git writes, stopping at the first failure and
-   resuming from current Git facts. Immediately before the first write, rerun
-   `prepare` and require the same plan hash. Publish the already verified commit
-   without changing worktree bytes by atomically updating the task branch from
-   the plan-bound parent to `task_commit`, then run `git reset --mixed
-   <task_commit>` in the task worktree and require a clean status. Next, `git mv`
-   the spec to the planned archive path and commit it; merge the task branch into
-   the target branch from the main checkout; push the target branch; remove the
-   task worktree; then delete the merged local task branch. Immediately before
-   completion, run `git fetch <remote> <target-branch>` in the main checkout.
-10. Run `scripts/task-close.mjs complete` with the plan hash and close
-    confirmation ref. WorkflowHub performs no Git writes and does not fetch; it
-    reads the live remote with `git ls-remote` and verifies the task commit and
-    archive commit are in the local target branch, local and remote target OIDs
-    match, the archive path exists while the source path does not, and both the
-    worktree and local task branch are absent. Any false fact fails loudly and
-    leaves recovery state intact. Use `status` to show completed and missing
-    physical actions; only a `task-close-completed.v1` result permits reporting
-    close complete. Never infer a task path during recovery.
+9. Run `scripts/task-close.mjs execute` with the plan hash and close confirmation
+   ref. The controlled executor rechecks the target checkout, clean state, and
+   frozen local/remote baselines before its first Git write, then performs the
+   fixed six actions in order. It uses `--no-ff --no-edit` merge and a non-force
+   push, stops at the first failure, and reconciles already completed physical
+   actions on retry. Do not issue the six Git operations by hand.
+10. Run `scripts/task-close.mjs status` with the same explicit identity and plan
+    hash. It reads live local and remote facts and reports completed and missing
+    actions. Only `record_status: completed` together with physical
+    `status: ready` permits reporting close complete. Never infer a task path
+    during recovery.
 
 Quality failures remain visible facts. Identity, lineage, hash, and capability
 failures stop before verification because continuing would inspect another task.

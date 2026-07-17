@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
@@ -162,16 +162,61 @@ function treeEntry(root, commit, path) {
   return Object.freeze({ mode: match[1], type: match[2], oid: match[3].toLowerCase() });
 }
 
+function remoteOid(root, remote, branch) {
+  const result = gitResult(root, ["ls-remote", "--exit-code", remote, `refs/heads/${branch}`]);
+  const value = result.ok ? result.stdout.split(/\s+/)[0]?.toLowerCase() : null;
+  return /^[a-f0-9]{40}$/.test(value ?? "") ? value : null;
+}
+
+function branchOid(root, branch) {
+  const result = gitResult(root, ["rev-parse", "--verify", `refs/heads/${branch}`]);
+  return result.ok && /^[a-f0-9]{40}$/i.test(result.stdout) ? result.stdout.toLowerCase() : null;
+}
+
+function exactDirectoryRenames(raw, source, archive) {
+  const fields = raw.split("\0").filter(Boolean);
+  if (fields.length === 0 || fields.length % 3 !== 0) return false;
+  for (let index = 0; index < fields.length; index += 3) {
+    const [status, from, to] = fields.slice(index, index + 3);
+    if (status !== "R100" || !from.startsWith(`${source}/`) || to !== `${archive}/${from.slice(source.length + 1)}`) return false;
+  }
+  return true;
+}
+
+function archiveFacts(root, ref, delivery) {
+  if (!ref) return { commit: null, tree_preserved: false, only_renames: false };
+  const log = gitResult(root, ["log", "-1", "--format=%H", ref, "--", delivery.spec_archive_path]);
+  const commit = log.ok && /^[a-f0-9]{40}$/i.test(log.stdout) ? log.stdout.toLowerCase() : null;
+  if (!commit) return { commit: null, tree_preserved: false, only_renames: false };
+  const parent = gitResult(root, ["rev-parse", `${commit}^`]);
+  const source = treeEntry(root, delivery.task_commit, delivery.spec_source_path);
+  const archive = treeEntry(root, commit, delivery.spec_archive_path);
+  const treePreserved = parent.ok && parent.stdout.toLowerCase() === delivery.task_commit && source?.type === "tree" && archive?.type === "tree" && source.oid === archive.oid;
+  const diff = gitResult(root, ["diff-tree", "--no-commit-id", "--name-status", "--find-renames=100%", "-r", "-z", `${commit}^`, commit]);
+  return { commit, tree_preserved: treePreserved, only_renames: treePreserved && diff.ok && exactDirectoryRenames(diff.stdout, delivery.spec_source_path, delivery.spec_archive_path) };
+}
+
+function targetPreflight(delivery, expectedLocal = delivery.target_baseline) {
+  const root = delivery.target_repo_root;
+  if (gitResult(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout !== delivery.target_branch) throw new Error("target branch must be checked out in the target repository");
+  if (git(root, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("target repository must be clean");
+  if (branchOid(root, delivery.target_branch) !== expectedLocal) throw new Error("local target baseline changed");
+  if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed");
+}
+
 function validateDeliveryPlan(plan, task, kernel) {
   validatePlan(plan, task);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const delivery = plain(plan.delivery, "delivery close plan");
-  const required = ["target_repo_root", "worktree_root", "task_branch", "target_branch", "remote", "task_commit", "spec_source_path", "spec_archive_path"];
+  const required = ["target_repo_root", "worktree_root", "task_branch", "target_branch", "remote", "task_commit", "spec_source_path", "spec_archive_path", "target_baseline", "remote_target_baseline", "merge_strategy"];
   if (required.some((key) => typeof delivery[key] !== "string" || delivery[key] === "")) throw new TypeError("delivery close plan is missing required fields");
   if (resolve(delivery.target_repo_root) !== task.manifest.target_repo_root) throw new Error("delivery close target repository mismatch");
   const accepted = kernel.readAccepted("make-decision");
   if (resolve(delivery.worktree_root) !== resolve(accepted.facts.worktree_root)) throw new Error("delivery close worktree does not match accepted make-decision");
   oid(delivery.task_commit, "delivery task_commit");
+  oid(delivery.target_baseline, "delivery target_baseline");
+  oid(delivery.remote_target_baseline, "delivery remote_target_baseline");
+  if (delivery.merge_strategy !== "--no-ff --no-edit") throw new Error("delivery merge strategy must be --no-ff --no-edit");
   repositoryPath(delivery.spec_source_path, "delivery spec_source_path");
   repositoryPath(delivery.spec_archive_path, "delivery spec_archive_path");
   if (delivery.spec_source_path === delivery.spec_archive_path) throw new Error("delivery spec source and archive paths must differ");
@@ -212,10 +257,14 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const accepted = kernel.readAccepted("make-decision");
   const input = plain(requested, "delivery close input");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
   const worktree = resolve(accepted.facts.worktree_root);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
+  if (git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== input.task_branch) throw new Error("task branch does not match the accepted Workspace");
+  const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
+  if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
   const taskCommit = oid(input.task_commit, "delivery task_commit");
   const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
   if (!branchTip.ok) throw new Error("task branch does not exist");
@@ -232,6 +281,10 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
       throw new Error("task worktree does not match the verified task snapshot commit");
     }
   }
+  const targetBaseline = branchOid(root, input.target_branch);
+  if (!targetBaseline) throw new Error("target branch does not exist");
+  const remoteTargetBaseline = remoteOid(root, input.remote, input.target_branch);
+  if (!remoteTargetBaseline || remoteTargetBaseline !== targetBaseline) throw new Error("local and remote target baselines must match");
   const plan = {
     schema_version: "task-close-plan.v1",
     task_id: task.identity.taskId,
@@ -244,14 +297,17 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
       task_commit: taskCommit,
       spec_source_path: repositoryPath(input.spec_source_path, "delivery spec_source_path"),
       spec_archive_path: repositoryPath(input.spec_archive_path, "delivery spec_archive_path"),
+      target_baseline: targetBaseline,
+      remote_target_baseline: remoteTargetBaseline,
+      merge_strategy: "--no-ff --no-edit",
     },
     steps: DELIVERY_STEPS.map(([step_id, operation]) => ({ step_id, operation })),
   };
   const delivery = validateDeliveryPlan(plan, task, kernel);
+  targetPreflight(delivery);
   if (!gitResult(root, ["cat-file", "-e", `${delivery.task_commit}^{commit}`]).ok) throw new Error("task commit does not exist");
-  if (!gitResult(root, ["cat-file", "-e", `${delivery.task_commit}:${delivery.spec_source_path}`]).ok) throw new Error("accepted spec source does not exist in the task commit");
+  if (treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.type !== "tree") throw new Error("accepted spec source must be a directory in the task commit");
   if (gitResult(root, ["cat-file", "-e", `${delivery.task_commit}:${delivery.spec_archive_path}`]).ok) throw new Error("spec is already archived in the task commit");
-  if (!gitResult(root, ["rev-parse", "--verify", `refs/heads/${delivery.target_branch}`]).ok) throw new Error("target branch does not exist");
   const planHash = closePlanHash(plan);
   createOrVerify(task, `operations/close/plans/${planHash}/plan.json`, {
     schema_version: "task-close-plan-record.v1",
@@ -273,28 +329,19 @@ export function inspectDeliveryCloseState({ task: taskHandle, kernel: taskKernel
   const merged = localTarget.ok && commitExists && gitResult(root, ["merge-base", "--is-ancestor", delivery.task_commit, localTarget.stdout]).ok;
   const archivePathExists = localTarget.ok && gitResult(root, ["cat-file", "-e", `${delivery.target_branch}:${delivery.spec_archive_path}`]).ok;
   const sourcePathAbsent = localTarget.ok && !gitResult(root, ["cat-file", "-e", `${delivery.target_branch}:${delivery.spec_source_path}`]).ok;
-  const archiveLog = localTarget.ok ? gitResult(root, ["log", "-1", "--format=%H", delivery.target_branch, "--", delivery.spec_archive_path]) : { ok: false, stdout: "" };
-  const archiveCommit = archiveLog.ok && /^[a-f0-9]{40}$/i.test(archiveLog.stdout) ? archiveLog.stdout.toLowerCase() : null;
-  const archiveParent = archiveCommit === null ? { ok: false, stdout: "" } : gitResult(root, ["rev-parse", `${archiveCommit}^`]);
-  const archiveCommitIncluded = archiveCommit !== null && archiveParent.ok && archiveParent.stdout.toLowerCase() === delivery.task_commit && gitResult(root, ["merge-base", "--is-ancestor", archiveCommit, localTarget.stdout]).ok;
-  const sourceEntry = treeEntry(root, delivery.task_commit, delivery.spec_source_path);
-  const archiveEntry = archiveCommit === null ? null : treeEntry(root, archiveCommit, delivery.spec_archive_path);
-  const archiveBlobPreserved = sourceEntry !== null && archiveEntry !== null && sourceEntry.type === "blob" && archiveEntry.type === "blob" && sourceEntry.mode === archiveEntry.mode && sourceEntry.oid === archiveEntry.oid;
-  const archiveDiff = archiveCommit === null ? { ok: false, stdout: "" } : gitResult(root, ["diff-tree", "--no-commit-id", "--name-status", "--find-renames=100%", "-r", "-z", `${archiveCommit}^`, archiveCommit]);
-  const archiveChanges = archiveDiff.ok ? archiveDiff.stdout.split("\0").filter((value) => value !== "") : [];
-  const archiveOnlyRename = archiveBlobPreserved && archiveChanges.length === 3 && archiveChanges[0] === "R100" && archiveChanges[1] === delivery.spec_source_path && archiveChanges[2] === delivery.spec_archive_path;
-  const remote = gitResult(root, ["ls-remote", "--exit-code", delivery.remote, `refs/heads/${delivery.target_branch}`]);
-  const remoteTarget = remote.ok ? remote.stdout.split(/\s+/)[0]?.toLowerCase() : null;
-  const pushed = localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
+  const archive = archiveFacts(root, localTarget.ok ? delivery.target_branch : null, delivery);
+  const archiveCommitIncluded = archive.commit !== null && gitResult(root, ["merge-base", "--is-ancestor", archive.commit, localTarget.stdout]).ok;
+  const remoteTarget = remoteOid(root, delivery.remote, delivery.target_branch);
+  const pushed = merged && localTarget.ok && /^[a-f0-9]{40}$/.test(remoteTarget ?? "") && remoteTarget === localTarget.stdout.toLowerCase();
   const listedWorktrees = gitResult(root, ["worktree", "list", "--porcelain"]).stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => resolve(line.slice(9)));
   const worktreeCleanup = !existsSync(delivery.worktree_root) && !listedWorktrees.includes(resolve(delivery.worktree_root));
   const branchCleanup = !gitResult(root, ["show-ref", "--verify", "--quiet", `refs/heads/${delivery.task_branch}`]).ok;
   const facts = {
-    delivery_committed: commitExists,
-    archive: archivePathExists && sourcePathAbsent && archiveCommitIncluded && archiveBlobPreserved && archiveOnlyRename,
-    archive_commit: archiveCommit,
-    archive_blob_preserved: archiveBlobPreserved,
-    archive_only_rename: archiveOnlyRename,
+    delivery_committed: merged,
+    archive: archivePathExists && sourcePathAbsent && archiveCommitIncluded && archive.tree_preserved && archive.only_renames,
+    archive_commit: archive.commit,
+    archive_blob_preserved: archive.tree_preserved,
+    archive_only_rename: archive.only_renames,
     merge: merged,
     push: pushed,
     local_target_oid: localTarget.ok ? localTarget.stdout.toLowerCase() : null,
@@ -365,6 +412,123 @@ export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
         return removal;
       }
       throw new Error(`unsupported governed close operation: ${step.operation}`);
+    },
+  };
+  GOVERNED_EXECUTORS.add(registry);
+  return Object.freeze(registry);
+}
+
+/** Mint the fixed six delivery executors for one prepared delivery plan. */
+export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: taskKernel, plan } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  const delivery = validateDeliveryPlan(plan, task, kernel);
+  if (plan.steps.length !== DELIVERY_STEPS.length || plan.steps.some((step, index) => step.step_id !== DELIVERY_STEPS[index][0] || step.operation !== DELIVERY_STEPS[index][1])) {
+    throw new Error("delivery close plan must contain exactly the fixed six steps");
+  }
+  const root = delivery.target_repo_root;
+  const worktree = delivery.worktree_root;
+  const contains = (ancestor, descendant) => Boolean(descendant) && gitResult(root, ["merge-base", "--is-ancestor", ancestor, descendant]).ok;
+  const findArchive = () => {
+    const taskTip = branchOid(root, delivery.task_branch);
+    const targetTip = branchOid(root, delivery.target_branch);
+    const ref = taskTip && contains(delivery.task_commit, taskTip) ? delivery.task_branch : targetTip && contains(delivery.task_commit, targetTip) ? delivery.target_branch : null;
+    return archiveFacts(root, ref, delivery);
+  };
+  const published = () => {
+    const taskTip = branchOid(root, delivery.task_branch);
+    const targetTip = branchOid(root, delivery.target_branch);
+    const referenced = contains(delivery.task_commit, taskTip) || contains(delivery.task_commit, targetTip);
+    const staged = existsSync(worktree) ? gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout : "";
+    const advanced = !existsSync(worktree) || (contains(delivery.task_commit, git(worktree, ["rev-parse", "HEAD"])) && (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) === "" || exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)));
+    return { satisfied: referenced && advanced, task_commit: delivery.task_commit };
+  };
+  const archived = () => {
+    const value = findArchive();
+    return { satisfied: value.commit !== null && value.tree_preserved && value.only_renames, archive_commit: value.commit, tree_oid: treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid ?? null };
+  };
+  const mergeState = () => {
+    const archive = findArchive();
+    const target = branchOid(root, delivery.target_branch);
+    const parents = target ? gitResult(root, ["rev-list", "--parents", "-n", "1", target]).stdout.split(" ").slice(1) : [];
+    const satisfied = Boolean(archive.commit) && parents.length === 2 && parents[0] === delivery.target_baseline && parents[1] === archive.commit;
+    return { satisfied, target_oid: target, archive_commit: archive.commit };
+  };
+  let removal;
+  const registry = {
+    executorFor(step) {
+      if (step.operation === "commit-delivery") return {
+        probe: published,
+        execute: async () => {
+          targetPreflight(delivery);
+          const tip = branchOid(root, delivery.task_branch);
+          if (tip !== delivery.task_commit) {
+            const parent = gitResult(root, ["rev-parse", `${delivery.task_commit}^`]).stdout.toLowerCase();
+            if (tip !== parent) throw new Error("task branch changed before publishing verified snapshot");
+            git(root, ["update-ref", `refs/heads/${delivery.task_branch}`, delivery.task_commit, parent]);
+          }
+          const snapshot = captureGitWorktreeSnapshot(worktree);
+          if (snapshot.tree.toLowerCase() !== git(root, ["rev-parse", `${delivery.task_commit}^{tree}`]).toLowerCase()) throw new Error("task worktree bytes changed before snapshot publish");
+          git(worktree, ["reset", "--mixed", delivery.task_commit]);
+          if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("published task worktree is not clean");
+        },
+        verify: async (value) => value.satisfied && value.task_commit === delivery.task_commit,
+      };
+      if (step.operation === "archive-spec") return {
+        probe: archived,
+        execute: async () => {
+          targetPreflight(delivery);
+          if (!published().satisfied) throw new Error("verified snapshot is not published");
+          const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+          if (existsSync(join(worktree, delivery.spec_source_path))) {
+            if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("task worktree changed before spec archive");
+            git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
+          } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
+            throw new Error("partial spec archive does not match the planned directory move");
+          }
+          if (!gitResult(worktree, ["diff", "--quiet"]).ok) throw new Error("spec archive contains unstaged changes");
+          const moves = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
+          if (!exactDirectoryRenames(moves, delivery.spec_source_path, delivery.spec_archive_path)) throw new Error("spec archive is not an exact directory move");
+          git(worktree, ["commit", "-m", `archive ${delivery.spec_source_path}`]);
+        },
+        verify: async (value) => value.satisfied && value.tree_oid === treeEntry(root, delivery.task_commit, delivery.spec_source_path)?.oid,
+      };
+      if (step.operation === "merge-task-branch") return {
+        probe: mergeState,
+        execute: async () => {
+          targetPreflight(delivery);
+          if (!archived().satisfied) throw new Error("spec archive is incomplete");
+          git(root, ["merge", "--no-ff", "--no-edit", delivery.task_branch]);
+        },
+        verify: async (value) => value.satisfied && value.archive_commit !== null,
+      };
+      if (step.operation === "push-target-branch") return {
+        probe: () => { const merged = mergeState(); const remote = remoteOid(root, delivery.remote, delivery.target_branch); return { satisfied: merged.satisfied && remote === merged.target_oid, target_oid: merged.target_oid, remote_oid: remote }; },
+        execute: async () => {
+          const merged = mergeState();
+          if (!merged.satisfied) throw new Error("target branch is not the planned no-ff merge");
+          if (remoteOid(root, delivery.remote, delivery.target_branch) !== delivery.remote_target_baseline) throw new Error("remote target baseline changed before push");
+          git(root, ["push", delivery.remote, `refs/heads/${delivery.target_branch}:refs/heads/${delivery.target_branch}`]);
+        },
+        verify: async (value) => value.satisfied && value.target_oid === value.remote_oid,
+      };
+      if (step.operation === "remove-task-worktree") {
+        const accepted = kernel.readAccepted("make-decision");
+        removal ??= createTaskWorktreeRemoval(task, { taskId: accepted.accepted.task_id, stage: accepted.accepted.stage, worktreeRoot: accepted.facts.worktree_root, baselineCommit: accepted.facts.baseline_commit });
+        return removal;
+      }
+      if (step.operation === "remove-task-branch") return {
+        probe: () => ({ satisfied: branchOid(root, delivery.task_branch) === null, task_branch: delivery.task_branch }),
+        execute: async () => {
+          if (existsSync(worktree)) throw new Error("task worktree must be removed before branch cleanup");
+          const target = branchOid(root, delivery.target_branch);
+          const tip = branchOid(root, delivery.task_branch);
+          if (!tip || !contains(tip, target)) throw new Error("task branch is not merged into target");
+          git(root, ["branch", "-d", "--", delivery.task_branch]);
+        },
+        verify: async (value) => value.satisfied && value.task_branch === delivery.task_branch,
+      };
+      throw new Error(`unsupported delivery close operation: ${step.operation}`);
     },
   };
   GOVERNED_EXECUTORS.add(registry);
@@ -453,12 +617,15 @@ export async function executeClosePlan(options = {}) {
       createOrVerify(task, recordPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id}`);
     }
 
+    const deliveryState = plan.delivery ? inspectDeliveryCloseState({ task, kernel, plan }) : null;
+    if (deliveryState && deliveryState.status !== "ready") throw new Error(`delivery close is incomplete: ${deliveryState.missing.join(", ")}`);
     if (acceptedCompletion) return Object.freeze(acceptedCompletion);
     const completion = {
       schema_version: "task-close-completed.v1",
       task_id: task.identity.taskId,
       plan_hash: planHash,
       status: "completed",
+      ...(deliveryState ? { physical_state: structuredClone(deliveryState.facts) } : {}),
       completed_at: now(),
     };
     createOrVerify(task, "operations/close/completed.json", completion, "close completion");
