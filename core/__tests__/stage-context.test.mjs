@@ -5,10 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { bootstrapStage } from "../stage-context.mjs";
+import { createLauncherAuthority, openTaskFromLaunchAuthority, taskAuthorityFor } from "../launcher-authority.mjs";
 import { createTask } from "../task-handle.mjs";
 import { createTaskKernel } from "../task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
-import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
+import { testConfirmationVerification, writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 
 const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
 const temporaryDirs = [];
@@ -44,10 +45,11 @@ function fixture({ acceptDecision = true } = {}) {
     inputs: {},
   });
   const task = createTask({ storageRoot, taskPath, manifest });
-  const kernel = createTaskKernel(task);
+  const candidate = prepareTaskWorkspace(task);
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate, confirmationVerification: testConfirmationVerification });
   if (acceptDecision) {
     const published = kernel.publishAttempt("make-decision", {
-      facts: { worktree_root: worktreeRoot, baseline_commit: baselineCommit },
+      facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit, snapshot_tree: candidate.captureSnapshot().tree },
     });
     kernel.acceptAttempt("make-decision", published.attempt_ref, writeHumanConfirmation(kernel, "make-decision", published));
   }
@@ -86,6 +88,47 @@ describe("bootstrapStage", () => {
     );
 
     expect(context.task.taskPath).toBe(taskPath);
+  });
+
+  it("accepts only a branded same-process task launch authority", () => {
+    const { storageRoot, taskPath } = fixture();
+    const launcher = createLauncherAuthority({ home: storageRoot, env: { WORKFLOWHUB_TASK_DIR: storageRoot } });
+    const authority = taskAuthorityFor(launcher, { projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation" });
+    const context = bootstrapStage("make-decision", {
+      mode: "launcher", projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", launcherAuthority: authority,
+    });
+    expect(context.task.taskPath).toBe(taskPath);
+    expect(() => JSON.stringify(authority)).toThrow(/cannot be serialized/i);
+    expect(openTaskFromLaunchAuthority(authority).taskPath).toBe(taskPath);
+    expect("runtime" in authority).toBe(false);
+    expect(() => bootstrapStage("make-decision", {
+      mode: "launcher", projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", launcherAuthority: {},
+    })).toThrow(/TaskLaunchAuthority capability/i);
+  });
+
+  it("forbids caller-supplied taskPath in launcher mode", () => {
+    const { storageRoot, taskPath } = fixture();
+    expect(() => bootstrapStage("make-decision", {
+      mode: "launcher", home: storageRoot, env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+      projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", taskPath,
+    })).toThrow(/caller-supplied taskPath is forbidden/i);
+  });
+
+  it("derives the same task authority independently of process cwd", () => {
+    const { storageRoot, taskPath } = fixture();
+    const original = process.cwd();
+    const other = mkdtempSync(join(tmpdir(), "workflowhub-unrelated-cwd-"));
+    temporaryDirs.push(other);
+    try {
+      process.chdir(other);
+      const context = bootstrapStage("make-decision", {
+        mode: "launcher", home: storageRoot, env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+        projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation",
+      });
+      expect(context.task.taskPath).toBe(taskPath);
+    } finally {
+      process.chdir(original);
+    }
   });
 
   it("sidecar mode uses absolute taskPath and never reads storage-root env", () => {
@@ -168,6 +211,7 @@ describe("bootstrapStage", () => {
       taskId: "paperbuilder-phase-foundation",
       env: { WORKFLOWHUB_TASK_DIR: storageRoot },
       workspaceLifecycle: "prepare",
+      confirmationVerification: testConfirmationVerification,
     });
     const worktreeRoot = join(storageRoot, "PaperBuilder-paperbuilder-phase-foundation");
     expect(context.candidateWorkspace).toMatchObject({ worktreeRoot: realpathSync(worktreeRoot), baselineCommit });

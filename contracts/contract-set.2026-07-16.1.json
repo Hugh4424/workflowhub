@@ -1,0 +1,460 @@
+{
+  "schema_version": "1.0.0",
+  "contract_set_id": "2026-07-16.1",
+  "contracts": [
+    {
+      "schema_id": "https://workflowhub.dev/schemas/cli-input.v1.schema.json",
+      "schema_ref": "schemas/cli-input.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "public-cli",
+      "consumer": "public-cli",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/cli-input.v1.schema.json",
+        "schema_version": "1.0.0",
+        "command": "doctor",
+        "input_source": "@-"
+      },
+      "fixture_hash": "26c1d280ed723ef78c63c064965cc6f3cbc663b2351130b762cd00eb3ab7c6b3"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/cli-output.v1.schema.json",
+      "schema_ref": "schemas/cli-output.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "public-cli",
+      "consumer": "caller",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/cli-output.v1.schema.json",
+        "schema_version": "1.0.0",
+        "status": "ok",
+        "exit_code": 0,
+        "result_ref": "results/doctor.json"
+      },
+      "fixture_hash": "31cdce6136bc2e3b03f1ce4d2b45d361a9db13b095b401bd769dd07b3bb81454"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-create-input.v1.schema.json",
+      "schema_ref": "schemas/task-create-input.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "task-command",
+      "consumer": "task-kernel",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-create-input.v1.schema.json",
+        "schema_version": "1.0.0",
+        "project_name": "Demo",
+        "task_id": "task-one",
+        "source_ref": "source:one",
+        "target_repository_ref": "repo:demo"
+      },
+      "fixture_hash": "8782b86bdc32300759d81279f46e08661b8131823f0de4bc036db7a6857df38b"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-manifest.v1.schema.json",
+      "schema_ref": "schemas/task-manifest.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "task-kernel",
+      "consumer": "stage-context",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-manifest.v1.schema.json",
+        "schema_version": "1.0.0",
+        "project_name": "Demo",
+        "task_id": "task-one",
+        "created_at": "2026-07-16T00:00:00.000Z",
+        "target_repository_ref": "repo:demo",
+        "release_manifest_ref": "releases/1/manifest.json",
+        "release_manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "9e60b82ef11d6ffa8a486d0841a10effc89a51e052a41a027112e32241589c1f"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/source-envelope.v1.schema.json",
+      "schema_ref": "schemas/source-envelope.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "adapter",
+      "consumer": "task-command",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/source-envelope.v1.schema.json",
+        "schema_version": "1.0.0",
+        "source_type": "offline-fixture",
+        "source_ref": "source:one",
+        "payload_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "bd1dfa68acaaca482925dfcc394f76ec621c152dbb6461e23593fc11858ad4a4"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/adapter-envelope.v1.schema.json",
+      "schema_ref": "schemas/adapter-envelope.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "adapter",
+      "consumer": "public-cli",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/adapter-envelope.v1.schema.json",
+        "schema_version": "1.0.0",
+        "adapter_id": "offline-fixture",
+        "adapter_version": "1.0.0",
+        "operation": "normalize-source",
+        "source_ref": "source:one"
+      },
+      "fixture_hash": "bb32a3e23557d247bbe1e70babba67b5b5544b1bd47cd58ff28b10aaa5cdda3b"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-attempt.v1.schema.json",
+      "schema_ref": "schemas/task-attempt.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "stage-runtime",
+      "consumer": "stage-runtime",
+      "migration": "legacy-v2-read-only",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-attempt.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "stage": "make-decision",
+        "attempt_id": "attempt-0001",
+        "created_at": "2026-07-16T00:00:00.000Z",
+        "facts": {},
+        "evidence_refs": [
+          {
+            "ref": "evidence/a.json",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "missing_items": [],
+        "upstream_refs": []
+      },
+      "fixture_hash": "3d2dd9baed3ff60ace412f48b3f6d0263a9d501803727103655e99400b733310"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-accepted.v1.schema.json",
+      "schema_ref": "schemas/task-accepted.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "stage-runtime",
+      "consumer": "stage-context",
+      "migration": "legacy-v2-read-only",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-accepted.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "stage": "build-spec",
+        "attempt_ref": "results/build-spec/attempt-0001.json",
+        "attempt_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "acceptance_mode": "automatic",
+        "accepted_at": "2026-07-16T00:00:00.000Z",
+        "upstream_refs": [
+          {
+            "ref": "evidence/a.json",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "snapshot_ref": "snapshots/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "snapshot_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "d5e4e8cf9894987c9bb4aa6458aa04ac4493a7f5924a453a1af7dc2640f2c6ae"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-snapshot.v1.schema.json",
+      "schema_ref": "schemas/task-snapshot.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "task-snapshot",
+      "consumer": "task-commit",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-snapshot.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "baseline_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "tree_oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "diff_ref": "evidence/diff.patch",
+        "diff_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "blob_refs": [
+          {
+            "ref": "evidence/a.json",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "worktree_status": [],
+        "captured_at": "2026-07-16T00:00:00.000Z"
+      },
+      "fixture_hash": "226e761990253f2601f79e4085f8ace27a71afdc805b723694f54ae7ad5055af"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/stage-receipt-input.v1.schema.json",
+      "schema_ref": "schemas/stage-receipt-input.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "stage-command",
+      "consumer": "receipt-writer",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/stage-receipt-input.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "stage": "build-code",
+        "component": "implementation",
+        "content_ref": "staging:implementation",
+        "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "925b2ab362c8ef3cf362dc13251135e1d3142d30212391d4f5956362e2367408"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/stage-run-input.v1.schema.json",
+      "schema_ref": "schemas/stage-run-input.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "stage-command",
+      "consumer": "stage-runtime",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/stage-run-input.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "stage": "build-code",
+        "receipt_refs": [
+          {
+            "ref": "evidence/a.json",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      "fixture_hash": "25332eb5fd0047b9acd436eda589b729485f9a6973be2bc2c714301f92482030"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/human-confirmation-envelope.v1.schema.json",
+      "schema_ref": "schemas/human-confirmation-envelope.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "confirmation-verifier",
+      "consumer": "stage-commit-close",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/human-confirmation-envelope.v1.schema.json",
+        "schema_version": "1.0.0",
+        "purpose": "stage",
+        "task_id": "task-one",
+        "bound_ref": "results/verify-code/attempt-0001.json",
+        "bound_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "actor": {
+          "id": "human-1",
+          "type": "human"
+        },
+        "source_event": {
+          "ref": "event:comment-42",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "occurred_at": "2026-07-16T00:00:00.000Z"
+        },
+        "authentication": {
+          "method": "platform-readback",
+          "verified_at": "2026-07-16T00:00:00.000Z",
+          "proof_ref": "authentication/comment-42.json",
+          "proof_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "decision": "accepted",
+        "confirmed_at": "2026-07-16T00:00:00.000Z"
+      },
+      "fixture_hash": "e5ff5010086f760cf331e4acf675d387012d15a1253ce1814bc3758c6b1a45f5"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-commit-plan.v1.schema.json",
+      "schema_ref": "schemas/task-commit-plan.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "task-commit",
+      "consumer": "task-commit",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-commit-plan.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "release_ref": "releases/1/manifest.json",
+        "release_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "lineage_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "parent_oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "candidate_tree_oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "diff_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "target_ref": "refs/heads/main",
+        "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "ce9dcf61cedd66a198dc300bda2ce4ec33f7e7446f9256238483611bbeaf883f"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-close-plan.v1.schema.json",
+      "schema_ref": "schemas/task-close-plan.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "task-close",
+      "consumer": "task-close",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-close-plan.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "release_ref": "releases/1/manifest.json",
+        "release_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "lineage_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "steps": [
+          {
+            "step_id": "remove",
+            "operation": "remove-worktree",
+            "precondition_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "postcondition_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "1a31a7ace20978ea8e4181fc5e5fe87715265bbef72e08a5c22ea427e406b455"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/task-operation.v1.schema.json",
+      "schema_ref": "schemas/task-operation.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "operation-executor",
+      "consumer": "operation-status",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/task-operation.v1.schema.json",
+        "schema_version": "1.0.0",
+        "task_id": "task-one",
+        "operation_id": "operation-0001",
+        "operation_type": "commit",
+        "plan_ref": "operations/commit/plan.json",
+        "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "prepared",
+        "updated_at": "2026-07-16T00:00:00.000Z"
+      },
+      "fixture_hash": "7cc98c95c56fd08bd21b992c56cb9605da607b542cdbe32e01eb7e30a9a91758"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/release-manifest.v1.schema.json",
+      "schema_ref": "schemas/release-manifest.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "release-builder",
+      "consumer": "doctor",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/release-manifest.v1.schema.json",
+        "schema_version": "1.0.0",
+        "release_version": "1.0.0",
+        "release_kind": "preview",
+        "runtime": {
+          "ref": "artifacts/a.tgz",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "skills": [
+          {
+            "ref": "skills/0.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "ref": "skills/1.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "ref": "skills/2.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "ref": "skills/3.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "ref": "skills/4.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "ref": "skills/5.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "adapter": {
+          "ref": "artifacts/a.tgz",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "lock": {
+          "ref": "artifacts/a.tgz",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "contract_set": {
+          "ref": "artifacts/a.tgz",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "created_at": "2026-07-16T00:00:00.000Z"
+      },
+      "fixture_hash": "38525136d98a6f741c098706e7a906f61b5ffb3115bb09f7619d68523f4f577d"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/multica-skills-lock.v1.schema.json",
+      "schema_ref": "schemas/multica-skills-lock.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "release-builder",
+      "consumer": "doctor",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/multica-skills-lock.v1.schema.json",
+        "schema_version": "1.0.0",
+        "skills": [
+          {
+            "name": "orchestrator",
+            "version": "1.0.0",
+            "ref": "skills/orchestrator.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "name": "make-decision",
+            "version": "1.0.0",
+            "ref": "skills/make-decision.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "name": "build-spec",
+            "version": "1.0.0",
+            "ref": "skills/build-spec.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "name": "build-plan",
+            "version": "1.0.0",
+            "ref": "skills/build-plan.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "name": "build-code",
+            "version": "1.0.0",
+            "ref": "skills/build-code.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "name": "verify-code",
+            "version": "1.0.0",
+            "ref": "skills/verify-code.tgz",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      "fixture_hash": "fbd07dc18244888de062b3d9e2267d549f0ce2186122e2d063cf530ea56cdbca"
+    },
+    {
+      "schema_id": "https://workflowhub.dev/schemas/switch-plan.v1.schema.json",
+      "schema_ref": "schemas/switch-plan.v1.schema.json",
+      "version": "1.0.0",
+      "producer": "production-switch",
+      "consumer": "production-switch",
+      "migration": "none",
+      "fixture": {
+        "schema_id": "https://workflowhub.dev/schemas/switch-plan.v1.schema.json",
+        "schema_version": "1.0.0",
+        "from_routing_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "to_routing_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "release_manifest_ref": "releases/1/manifest.json",
+        "release_manifest_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "fact_packet_ref": "facts/production-switch.json",
+        "fact_packet_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rollback_target_ref": "routing/releases/previous.json",
+        "rollback_target_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "live_pointer_ref": "routing/production.json",
+        "expected_live_pointer_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "current_live_pointer_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "fixture_hash": "17b1451245c2b95c72051a85a2715c3bcf5f5a8bbf2f1fd9c5b0ad501d0bf8cc"
+    }
+  ]
+}

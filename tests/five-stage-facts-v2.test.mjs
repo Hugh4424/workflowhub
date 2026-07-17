@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { validateStageFacts } from "../core/task-kernel.mjs";
 
-const checkpoint=(stage,path)=>({schema_version:"git-checkpoint-plan.v1",stage,parent_commit:"a".repeat(40),artifacts:[{path,blob_oid:"b".repeat(40),content_hash:"c".repeat(64)}],plan_hash:"d".repeat(64)});
-const testFacts=(prefix)=>({ command: "npm test", exit_code: 0, command_hash: "1".repeat(64), snapshot_head:"a".repeat(40),snapshot_tree: "a".repeat(40),snapshot_commit: "b".repeat(40),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z", receipt_ref: `receipts/${prefix}-receipt.json`, receipt_hash: "2".repeat(64), output_ref: `evidence/${prefix}-output.txt`, output_hash: "3".repeat(64) });
+const taskSnapshot=()=>({schema_id:"https://workflowhub.dev/schemas/task-snapshot.v1.schema.json",schema_version:"1.0.0",task_id:"task",baseline_commit:"a".repeat(40),tree_oid:"b".repeat(40),diff_ref:`git-diff:sha256:${"c".repeat(64)}`,diff_hash:"c".repeat(64),blob_refs:[],worktree_status:[],captured_at:"2026-07-16T00:00:00.000Z"});
+const testFacts=(prefix)=>({ command: "npm test", exit_code: 0, command_hash: "1".repeat(64), snapshot_head:"a".repeat(40),snapshot_tree: "a".repeat(40),snapshot_ref:`snapshots/${prefix}.json`,snapshot_hash:"5".repeat(64),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z", receipt_ref: `receipts/${prefix}-receipt.json`, receipt_hash: "2".repeat(64), output_ref: `evidence/${prefix}-output.txt`, output_hash: "3".repeat(64) });
 const valid = {
   "make-decision": { worktree_root: "/repo/worktree", baseline_commit: "a".repeat(40), decision: "go" },
-  "build-spec": { spec_ref: "specs/task/spec.md", checkpoint: checkpoint("build-spec","specs/task/spec.md") },
-  "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", checkpoint: {...checkpoint("build-plan","specs/task/plan.md"),artifacts:[{path:"specs/task/plan.md",blob_oid:"b".repeat(40),content_hash:"c".repeat(64)},{path:"specs/task/tasks.md",blob_oid:"c".repeat(40),content_hash:"d".repeat(64)}]} },
+  "build-spec": { spec_ref: "specs/task/spec.md", checkpoint: taskSnapshot() },
+  "build-plan": { plan_ref: "specs/task/plan.md", tasks_ref: "specs/task/tasks.md", checkpoint: taskSnapshot() },
   "build-code": {
     changed: [], phase_completion: true,
     tests: testFacts("build-test"),

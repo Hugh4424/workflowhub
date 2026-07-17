@@ -9,6 +9,10 @@ import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const snapshotBinding = (snapshot) => {
+  const snapshotRef = `git-tree:${snapshot.tree}`;
+  return { snapshot_ref: snapshotRef, snapshot_hash: sha256(`${snapshot.head}\n${snapshot.tree}\n`) };
+};
 const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "content", ref: "receipts/decision.json" }),
@@ -20,7 +24,7 @@ const OFFICIAL_COMPONENTS = Object.freeze({
 });
 
 function workspaceCommand(workspace, command, args, label) {
-  const result = runWorkspaceCommand(workspace, command, args);
+  const result = runWorkspaceCommand(workspace, "stage", command, args);
   if (result.error || result.status !== 0) {
     throw new Error(`${label} failed: ${result.stderr?.trim() || result.error?.message || `exit ${result.status}`}`);
   }
@@ -60,7 +64,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     const diff = `${JSON.stringify({ schema_version: "workflowhub-diff-evidence.v1", baseline_commit: safeWorkspace.baselineCommit, snapshot_head: snapshotHead, snapshot_tree: snapshotTree, patch, untracked: untracked.map((path) => ({ path, blob_oid: workspaceGit(safeWorkspace, ["hash-object", "--", path]) })) }, null, 2)}\n`;
     const diffHash = sha256(diff), diffRef = `evidence/implementation-${diffHash}.diff`;
     write(diffRef, diff);
-    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, phase_completion: structuredClone(payload.phase_completion), snapshot_head: snapshotHead, snapshot_tree: snapshotTree, snapshot_commit: snapshot.commit, diff_ref: diffRef, diff_hash: diffHash };
+    value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, changed, phase_completion: structuredClone(payload.phase_completion), snapshot_head: snapshotHead, snapshot_tree: snapshotTree, ...snapshotBinding(snapshot), diff_ref: diffRef, diff_hash: diffHash };
   } else {
     if (!Array.isArray(payload.refs) || Object.keys(payload).some((key) => key !== "refs")) throw new TypeError("verify evidence aggregate requires refs only");
     const acceptanceIds = new Set();
@@ -107,7 +111,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
       if (!/^receipts\/[a-zA-Z0-9._/-]+\.json$/.test(receiptRef ?? "") || !/^evidence\/[a-zA-Z0-9._/-]+$/.test(outputRef ?? "")) throw new Error("canonical tests receipt/output namespace required");
       const before = captureWorkspaceSnapshot(safeWorkspace), headBefore = before.head, treeBefore = before.tree;
       const startedAt = now();
-      const proc = runWorkspaceCommand(safeWorkspace, "/bin/sh", ["-c", command]);
+      const proc = runWorkspaceCommand(safeWorkspace, "stage", "/bin/sh", ["-c", command]);
       const completedAt = now();
       const output = `${proc.stdout ?? ""}\n${proc.stderr ?? ""}`;
       const after = captureWorkspaceSnapshot(safeWorkspace);
@@ -115,7 +119,7 @@ export function createCanonicalReceiptWriter({ task, workspace, stage, component
       const exitCode = proc.status ?? (proc.error ? 1 : 128);
       const outputHash = sha256(output), commandHash = sha256(command);
       write(outputRef, output);
-      const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, snapshot_commit: before.commit, started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
+      const receipt = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer: { stage, component, version }, command, command_hash: commandHash, exit_code: exitCode, snapshot_head: headBefore, snapshot_tree: treeBefore, ...snapshotBinding(before), started_at: startedAt, completed_at: completedAt, output_ref: outputRef, output_hash: outputHash };
       const raw = `${JSON.stringify(receipt, null, 2)}\n`; write(receiptRef, raw);
       return Object.freeze({ ...receipt, receipt_ref: receiptRef, receipt_hash: sha256(raw) });
     },

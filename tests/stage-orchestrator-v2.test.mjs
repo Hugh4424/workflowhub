@@ -4,8 +4,9 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../core/task-handle.mjs";
-import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
+import { testConfirmationVerification, writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
+import { captureTaskSnapshotV1Sync } from "../core/task-snapshot.mjs";
 
 const temporary = [];
 function fixture() {
@@ -32,17 +33,11 @@ describe("stage-runner capability unit", () => {
   });
   it("keeps a cross-task decision read-only while the consumer owns its Workspace", async () => {
     const { root, task, taskPath, worktree, oid }=fixture(); const { runStage,acceptStageAttempt }=await import("../core/stage-runner.mjs"); const { bootstrapStage,prepareMakeDecisionWorkspace }=await import("../core/stage-context.mjs");
-    const sourceContext=bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}); const decision=await runStage("make-decision",sourceContext,async()=>({facts:{worktree_root:worktree,baseline_commit:oid}})); acceptStageAttempt("make-decision",sourceContext,{attemptRef:decision.attempt_ref,humanConfirmationRef:writeHumanConfirmation(sourceContext.kernel,"make-decision",decision)});
+    const sourceContext=prepareMakeDecisionWorkspace(bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task",confirmationVerification:testConfirmationVerification})); const decision=await runStage("make-decision",sourceContext,async()=>({facts:{worktree_root:worktree,baseline_commit:oid}})); acceptStageAttempt("make-decision",sourceContext,{attemptRef:decision.attempt_ref,humanConfirmationRef:writeHumanConfirmation(sourceContext.kernel,"make-decision",decision)});
     const consumerPath=join(root,"Projects","Demo","tasks","ZHI-138"); createTask({storageRoot:root,taskPath:consumerPath,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:"ZHI-138",created_at:new Date().toISOString(),target_repo_root:task.manifest.target_repo_root,issue_ids:["ZHI-138"],inputs:{decision:join(task.taskPath,"results","make-decision","accepted.json")}}});
     expect(()=>bootstrapStage("build-spec",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"})).toThrow(/current task.*accepted make-decision/i);
-    const consumerDecisionContext=prepareMakeDecisionWorkspace(bootstrapStage("make-decision",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"}));
-    const consumerDecision=await runStage("make-decision",consumerDecisionContext,async(ctx,upstream)=>{expect(upstream.accepted.task_id).toBe("chain-task");return{facts:{worktree_root:ctx.candidateWorkspace.worktreeRoot,baseline_commit:ctx.candidateWorkspace.baselineCommit}};});
-    expect(consumerDecision.attempt.upstream_refs[0].task_id).toBe("chain-task");
-    acceptStageAttempt("make-decision",consumerDecisionContext,{attemptRef:consumerDecision.attempt_ref,humanConfirmationRef:writeHumanConfirmation(consumerDecisionContext.kernel,"make-decision",consumerDecision)});
-    const consumer=bootstrapStage("build-spec",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138"});
-    expect(consumer.workspace.worktreeRoot).not.toBe(worktree);
-    const attempt=await runStage("build-spec",consumer,async(ctx,upstream)=>{expect(upstream.accepted.task_id).toBe("ZHI-138");ctx.artifacts.writeAtomic("spec.md","spec\n");const checkpoint=ctx.createCheckpoint("build-spec");return{facts:{spec_ref:"specs/ZHI-138/spec.md",checkpoint}};});
-    expect(attempt.attempt.upstream_refs[0].task_id).toBe("ZHI-138");
+    const consumerDecisionContext=prepareMakeDecisionWorkspace(bootstrapStage("make-decision",{mode:"sidecar",taskPath:consumerPath,projectName:"Demo",taskId:"ZHI-138",confirmationVerification:testConfirmationVerification}));
+    await expect(runStage("make-decision",consumerDecisionContext,async(ctx)=>({facts:{worktree_root:ctx.candidateWorkspace.worktreeRoot,baseline_commit:ctx.candidateWorkspace.baselineCommit}}))).rejects.toThrow(/must not declare an accepted upstream|same task/i);
     expect(()=>execFileSync("git",["status","--porcelain"],{cwd:worktree,encoding:"utf8"})).not.toThrow();
   });
   it("acceptance cannot override checkpoint data", async () => {
@@ -58,28 +53,28 @@ describe("stage-runner capability unit", () => {
   it("bootstraps, reads accepted upstream, invokes handlers, publishes and accepts a real v2 chain", async () => {
     const { task, taskPath, worktree, oid } = fixture();
     const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
-    const { bootstrapStage } = await import("../core/stage-context.mjs");
+    const { bootstrapStage, prepareMakeDecisionWorkspace } = await import("../core/stage-context.mjs");
     const seen = [];
     const tree=execFileSync("git",["rev-parse","HEAD^{tree}"],{cwd:worktree,encoding:"utf8"}).trim(), hash="a".repeat(64);
-    const testFacts=(prefix)=>({command:"npm test",exit_code:0,command_hash:hash,snapshot_head:oid,snapshot_tree:tree,snapshot_commit:"b".repeat(40),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z",receipt_ref:`evidence/${prefix}-receipt.json`,receipt_hash:hash,output_ref:`evidence/${prefix}-output.txt`,output_hash:hash});
-    const reviewFacts=(stage)=>({verdict:"pass",result_ref:`reviews/results/${stage}.json`,result_hash:hash,snapshot_tree:tree});
-    const contextFor = (stage) => bootstrapStage(stage, { mode:"sidecar", taskPath, projectName:"Demo", taskId:"chain-task" });
+    const testFacts=(prefix,snapshotTree=tree)=>({command:"npm test",exit_code:0,command_hash:hash,snapshot_head:oid,snapshot_tree:snapshotTree,snapshot_commit:"b".repeat(40),started_at:"2026-07-16T00:00:00.000Z",completed_at:"2026-07-16T00:00:01.000Z",receipt_ref:`evidence/${prefix}-receipt.json`,receipt_hash:hash,output_ref:`evidence/${prefix}-output.txt`,output_hash:hash});
+    const reviewFacts=(stage,snapshotTree=tree)=>({verdict:"pass",result_ref:`reviews/results/${stage}.json`,result_hash:hash,snapshot_tree:snapshotTree});
+    const contextFor = (stage) => { const context=bootstrapStage(stage, { mode:"sidecar", taskPath, projectName:"Demo", taskId:"chain-task", confirmationVerification:testConfirmationVerification }); return stage === "make-decision" ? prepareMakeDecisionWorkspace(context) : context; };
     const execute = async (stage, handler) => { const context=contextFor(stage); const attempt=await runStage(stage,context,handler); const request={attemptRef:attempt.attempt_ref}; if(requiresHumanConfirmation(stage)) request.humanConfirmationRef=writeHumanConfirmation(context.kernel,stage,attempt); acceptStageAttempt(stage,context,request); };
     await execute("make-decision", async (context, upstream) => { seen.push([context.stage, upstream]); return { facts: { worktree_root: worktree, baseline_commit: oid } }; });
     await execute("build-spec", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("spec.md","spec\n"); const cp=context.createCheckpoint("build-spec"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: cp } }; });
     await execute("build-plan", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("plan.md","plan\n"); context.artifacts.writeAtomic("tasks.md","tasks\n"); const cp=context.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: cp } }; });
-    await execute("build-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { changed: [], tests: testFacts("build"), review: reviewFacts("build-code"), phase_completion: true } }; });
-    await execute("verify-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { tests: testFacts("verify"), review: reviewFacts("verify-code"), evidence_refs: [] } }; });
+    await execute("build-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); const liveTree=captureTaskSnapshotV1Sync({taskId:"chain-task",workspaceRoot:worktree,baselineCommit:oid}).tree_oid; return { facts: { changed: [], tests: testFacts("build",liveTree), review: reviewFacts("build-code",liveTree), phase_completion: true } }; });
+    await execute("verify-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); const liveTree=captureTaskSnapshotV1Sync({taskId:"chain-task",workspaceRoot:worktree,baselineCommit:oid}).tree_oid; return { facts: { tests: testFacts("verify",liveTree), review: reviewFacts("verify-code",liveTree), evidence_refs: [] } }; });
     expect(seen).toEqual([["make-decision", null], ["build-spec", "make-decision"], ["build-plan", "build-spec"], ["build-code", "build-plan"], ["verify-code", "build-code"]]);
     for (const stage of ["make-decision","build-spec","build-plan","build-code","verify-code"]) {
-      expect(JSON.parse(task.readRecord(`results/${stage}/accepted.json`))).toMatchObject({ schema_version: "task-accepted.v2", stage });
+      expect(JSON.parse(task.readRecord(`results/${stage}/accepted.json`))).toMatchObject({ schema_version: "1.0.0", stage });
     }
   });
 
   it("can publish without accepting when the caller omits human confirmation", async () => {
     const { task, taskPath, worktree, oid } = fixture(); const { runStage } = await import("../core/stage-runner.mjs"); const { bootstrapStage } = await import("../core/stage-context.mjs");
     const result = await runStage("make-decision", bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}), async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
-    expect(task.readRecord(`results/make-decision/${result.attempt_ref}`)).toContain("task-attempt.v2");
+    expect(task.readRecord(`results/make-decision/${result.attempt_ref}`)).toContain("task-attempt.v1");
     expect(() => task.readRecord("results/make-decision/accepted.json")).toThrow(/ENOENT|no such/i);
   });
 });

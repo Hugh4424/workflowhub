@@ -1,0 +1,22 @@
+{
+  "schema_version": "task-accepted.v2",
+  "task_id": "legacy-task",
+  "stage": "build-spec",
+  "attempt_ref": "attempt-0001.json",
+  "integrity_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "human_confirmation_ref": "confirmations/build-spec/attempt-0001.json",
+  "accepted_at": "2026-07-15T00:01:00.000Z",
+  "upstream_refs": [],
+  "checkpoint": {
+    "ref": "refs/workflowhub/checkpoints/Demo/legacy-task/build-spec/plan-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "commit_oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "tree_oid": "cccccccccccccccccccccccccccccccccccccccc",
+    "artifacts": [
+      {
+        "path": "specs/legacy-task/spec.md",
+        "blob_oid": "dddddddddddddddddddddddddddddddddddddddd",
+        "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    ]
+  }
+}

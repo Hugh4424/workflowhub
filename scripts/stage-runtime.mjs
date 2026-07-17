@@ -25,20 +25,23 @@ function parseArgs(argv) {
   return { command, values };
 }
 
-export async function stageRuntimeMain(argv = process.argv.slice(2)) {
+export async function stageRuntimeMain(argv = process.argv.slice(2), options = {}) {
   const { command, values } = parseArgs(argv);
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
-  if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
-  if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
+  if (command === "receipt" && (!values.component || values.input !== "@-")) throw new TypeError("receipt requires --component and --input=@-");
+  if (command === "run" && values.input !== "@-") throw new TypeError("run requires --input=@-");
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
     projectName: values.project,
     taskId: values.task,
+    ...(options.taskLaunchAuthority ? { launcherAuthority: options.taskLaunchAuthority } : {}),
+    ...(options.repositoryAuthority ? { repositoryAuthority: options.repositoryAuthority } : {}),
+    ...(options.confirmationVerification ? { confirmationVerification: options.confirmationVerification } : {}),
   });
-  const input = new Set(["receipt", "run"]).has(command)
-    ? JSON.parse(readFileSync(values.input, "utf8"))
+  const input = new Set(["receipt", "run", "confirm"]).has(command) && values.input === "@-"
+    ? (options.input ?? JSON.parse(readFileSync(0, "utf8")))
     : undefined;
   if (command === "prepare") {
     if (values.stage !== "make-decision") throw new TypeError("prepare is only valid for make-decision");
@@ -57,7 +60,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "run") {
     return runOfficialStage(values.stage, context, input);
   }
-  if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
+  if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, confirmation: input });
   return acceptStageAttempt(values.stage, context, {
     attemptRef: values.attempt,
     humanConfirmationRef: values["human-confirmation-ref"],
@@ -65,10 +68,6 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  stageRuntimeMain().then((result) => {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  }).catch((error) => {
-    process.stderr.write(`${error?.stack ?? error}\n`);
-    process.exitCode = 1;
-  });
+  process.stderr.write("stage-runtime.mjs is an internal handler; use the workflowhub public CLI\n");
+  process.exitCode = 2;
 }

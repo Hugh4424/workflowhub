@@ -1,170 +1,121 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { execFile, execFileSync } from "node:child_process";
-import { promisify } from "node:util";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { createTask } from "../task-handle.mjs";
-import { createTaskKernel, validateAccepted } from "../task-kernel.mjs";
-import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
 import { ArtifactDir } from "../artifact-dir.mjs";
-import { verifyGitCheckpoint } from "../git-checkpoint.mjs";
+import { readLegacyRecord, writeLegacyRecord } from "../legacy-record-reader.mjs";
+import { createTask } from "../task-handle.mjs";
+import { createTaskKernel } from "../task-kernel.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
 
 const temporary = [];
-const execFileAsync = promisify(execFile);
-function confirmation(kernel, stage, attemptRef) {
-  return kernel.confirmAttempt(stage, attemptRef, "accepted").ref;
-}
-function fixture(inputs = {}) {
-  const storageRoot = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-kernel-publish-")));
-  temporary.push(storageRoot);
-  const repo = join(storageRoot, "repo");
-  mkdirSync(repo);
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function fixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-kernel-v1-"))); temporary.push(root);
+  const repo = join(root, "repo"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
   writeFileSync(join(repo, "README.md"), "fixture\n");
   execFileSync("git", ["add", "README.md"], { cwd: repo });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
-  const taskPath = join(storageRoot, "Projects", "Demo", "tasks", "task-one");
-  const task = createTask({ storageRoot, taskPath, manifest: {
-    schema_version: "1.0.0", project_name: "Demo", task_id: "task-one",
-    created_at: "2026-07-16T00:00:00.000Z", target_repo_root: repo,
-    issue_ids: [], inputs,
-  } });
-  return { task, kernel: createTaskKernel(task) };
+  const task = createTask({ storageRoot: root, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "task-one", created_at: "2026-07-17T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {} } });
+  const candidate = prepareTaskWorkspace(task);
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate, confirmationVerification: { verifyPlatformReadback: () => true } });
+  return { task, candidate, kernel, repo };
 }
+
+function decisionFacts(candidate, decision = "go") {
+  return { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit, snapshot_tree: candidate.captureSnapshot().tree, decision };
+}
+
+function confirmation(task, stage, attemptRef, index = 1, decision = "accepted") {
+  const attemptPath = `results/${stage}/${attemptRef}`;
+  const attemptRaw = task.readRecord(attemptPath);
+  return {
+    schema_id: "https://workflowhub.dev/schemas/human-confirmation-envelope.v1.schema.json", schema_version: "1.0.0",
+    purpose: "stage", task_id: task.identity.taskId, bound_ref: attemptPath, bound_hash: sha256(attemptRaw),
+    actor: { id: "human-1", type: "human" },
+    source_event: { ref: `source-events/comment-${index}.json`, sha256: String(index).repeat(64), occurred_at: "2026-07-17T00:00:00.000Z" },
+    authentication: { method: "platform-readback", verified_at: "2026-07-17T00:00:01.000Z", proof_ref: `authentication/comment-${index}.json`, proof_hash: "a".repeat(64) },
+    decision, confirmed_at: "2026-07-17T00:00:02.000Z",
+  };
+}
+
+function acceptDecision(f, attempt, index = 1) {
+  const confirmed = f.kernel.confirmAttempt("make-decision", attempt.attempt_ref, confirmation(f.task, "make-decision", attempt.attempt_ref, index));
+  return f.kernel.acceptAttempt("make-decision", attempt.attempt_ref, confirmed.ref);
+}
+
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
-describe("TaskKernel append-only publication", () => {
-  it("rejects an upstream reference whose task identity is forged", () => {
-    const { kernel } = fixture();
-    const cp = { ref: "refs/checkpoint", commit_oid: "a".repeat(40), tree_oid: "b".repeat(40), artifacts: [] };
-    expect(() => kernel.publishAttempt("build-spec", {
-      facts: { spec_ref: "specs/task-one/spec.md", checkpoint: cp }, checkpoint: cp,
-      upstream_refs: [{ task_id: "other-task", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }],
-    })).toThrow(/task|identity|upstream/i);
-  });
-  it("rejects a syntactically valid upstream ref when no authentic accepted record exists", () => {
-    const { kernel } = fixture();
-    const cp = { ref: "refs/checkpoint", commit_oid: "a".repeat(40), tree_oid: "b".repeat(40), artifacts: [] };
-    expect(() => kernel.publishAttempt("build-spec", {
-      facts: { spec_ref: "specs/task-one/spec.md", checkpoint: cp }, checkpoint: cp,
-      upstream_refs: [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }],
-    })).toThrow(/accepted|upstream|not found|ENOENT/i);
-  });
-  it("publishes monotonically numbered attempts without overwrite", () => {
-    const { task, kernel } = fixture();
-    const first = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });
-    const second = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "revise" } });
-    expect(first.attempt_ref).toBe("attempt-0001.json");
-    expect(second.attempt_ref).toBe("attempt-0002.json");
-    expect(JSON.parse(task.readRecord(`results/make-decision/${first.attempt_ref}`)).facts.decision).toBe("go");
+describe("TaskKernel v1 append-only publication", () => {
+  it("publishes closed v1 attempts with facts behind exact ref/hash", () => {
+    const f = fixture();
+    const first = f.kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate, "go") });
+    const second = f.kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate, "revise") });
+    expect([first.attempt_ref, second.attempt_ref]).toEqual(["attempt-0001.json", "attempt-0002.json"]);
+    expect(first.attempt).toMatchObject({ schema_version: "1.0.0", attempt_id: "attempt-0001", facts: { result_ref: "evidence/stage-results/make-decision/attempt-0001.json" } });
+    const resultRaw = f.task.readRecord(first.attempt.facts.result_ref);
+    expect(sha256(resultRaw)).toBe(first.attempt.facts.result_hash);
+    expect(JSON.parse(resultRaw).decision).toBe("go");
   });
 
-  it("accepts create-only with human confirmation and exact attempt hash", () => {
-    const { kernel } = fixture();
-    const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });
-    const accepted = kernel.acceptAttempt("make-decision", attempt.attempt_ref, confirmation(kernel, "make-decision", attempt.attempt_ref));
-    expect(accepted).toMatchObject({ task_id: "task-one", stage: "make-decision", attempt_ref: attempt.attempt_ref,
-      human_confirmation_ref: `confirmations/make-decision/${attempt.attempt_ref}`, integrity_hash: attempt.integrity_hash });
-    expect(() => kernel.acceptAttempt("make-decision", attempt.attempt_ref, "journal:2")).toThrow();
-    expect(() => kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40) } }))
-      .toThrow(/accepted|closed/i);
+  it("accepts only an authenticated exact attempt and binds a pure snapshot", () => {
+    const f = fixture();
+    const attempt = f.kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate) });
+    const accepted = acceptDecision(f, attempt);
+    expect(accepted).toMatchObject({ schema_id: "https://workflowhub.dev/schemas/task-accepted.v1.schema.json", schema_version: "1.0.0", attempt_ref: `results/make-decision/${attempt.attempt_ref}`, attempt_hash: attempt.integrity_hash, acceptance_mode: "human", snapshot_ref: expect.stringMatching(/^snapshots\/[a-f0-9]{64}\.json$/) });
+    expect(sha256(f.task.readRecord(accepted.snapshot_ref))).toBe(accepted.snapshot_hash);
+    expect(() => f.kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate) })).toThrow(/accepted|closed/i);
   });
 
-  it("requires checkpoint provenance for accepted design stages", () => {
-    const { task, kernel } = fixture();
-    const candidate = prepareTaskWorkspace(task);
-    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
-    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
-    const upstream_refs = [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }];
-    expect(() => kernel.publishAttempt("build-spec", { facts: { spec_ref: "specs/task-one/spec.md", checkpoint: {} }, upstream_refs }))
-      .toThrow(/checkpoint/i);
-    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
-    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
-    artifacts.writeAtomic("spec.md", "# Spec\n");
-    const boundKernel = createTaskKernel(task, { workspace, artifacts });
-    const checkpoint = boundKernel.createCheckpoint("build-spec");
-    expect(checkpoint).toMatchObject({ schema_version: "git-checkpoint-plan.v1",
-      artifacts: [{ path: "specs/task-one/spec.md" }],
-    });
-    expect(() => execFileSync("git", ["show-ref", "--verify", checkpoint.ref], { cwd: task.manifest.target_repo_root, stdio: "ignore" })).toThrow();
-    expect(() => boundKernel.publishAttempt("build-spec", {
-      facts: { spec_ref: "specs/task-one/spec.md", checkpoint: structuredClone(checkpoint) }, upstream_refs,
-    })).toThrow(/authentic GitCheckpoint/i);
-    artifacts.writeAtomic("spec.md", "tampered\n");
-    expect(() => boundKernel.publishAttempt("build-spec", {
-      facts: { spec_ref: "specs/task-one/spec.md", checkpoint }, upstream_refs,
-    })).toThrow(/differs|checkpoint|artifact/i);
-    const revisedCheckpoint = boundKernel.createCheckpoint("build-spec");
-    expect(revisedCheckpoint).not.toHaveProperty("ref");
-    const attempt = boundKernel.publishAttempt("build-spec", { facts: { spec_ref: "specs/task-one/spec.md", checkpoint: revisedCheckpoint }, upstream_refs });
-    expect(String(execFileSync("git", ["for-each-ref", "--format=%(refname)", "refs/workflowhub/checkpoints/"], { cwd: task.manifest.target_repo_root }))).toBe("");
-    expect(() => boundKernel.confirmAttempt("build-spec", attempt.attempt_ref, "accepted")).toThrow(/automatic acceptance/i);
-    expect(() => boundKernel.acceptAttempt("build-spec", attempt.attempt_ref, "human:forged")).toThrow(/automatic acceptance/i);
-    const acceptedSpec = boundKernel.acceptAttempt("build-spec", attempt.attempt_ref);
-    expect(acceptedSpec).toMatchObject({ acceptance_mode: "automatic" });
-    expect(acceptedSpec).not.toHaveProperty("human_confirmation_ref");
-    expect(acceptedSpec.checkpoint.ref).toMatch(/^refs\/workflowhub\/checkpoints\/Demo\/task-one\/build-spec\//);
-    expect(() => verifyGitCheckpoint({ repoRoot: workspace.worktreeRoot, checkpoint: acceptedSpec.checkpoint, projectName: "Demo", taskId: "task-one", stage: "build-spec" })).not.toThrow();
-    artifacts.writeAtomic("plan.md", "# Plan\n");
-    artifacts.writeAtomic("tasks.md", "# Tasks\n");
-    const planCheckpoint = boundKernel.createCheckpoint("build-plan");
-    const planUpstream = [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }];
-    const planAttempt = boundKernel.publishAttempt("build-plan", {
-      facts: { plan_ref: "specs/task-one/plan.md", tasks_ref: "specs/task-one/tasks.md", checkpoint: planCheckpoint },
-      upstream_refs: planUpstream,
-    });
-    const acceptedPlan = boundKernel.acceptAttempt("build-plan", planAttempt.attempt_ref, confirmation(boundKernel, "build-plan", planAttempt.attempt_ref));
-    expect(acceptedPlan).toMatchObject({ acceptance_mode: "human" });
-    expect(() => execFileSync("git", ["merge-base", "--is-ancestor", acceptedSpec.checkpoint.commit_oid, acceptedPlan.checkpoint.commit_oid], { cwd: task.manifest.target_repo_root })).not.toThrow();
+  it("records rejected confirmation without accepted and consumes its source event once", () => {
+    const f = fixture();
+    const attempt = f.kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate) });
+    const rejected = confirmation(f.task, "make-decision", attempt.attempt_ref, 2, "rejected");
+    expect(f.kernel.confirmAttempt("make-decision", attempt.attempt_ref, rejected)).toMatchObject({ accepted: false, decision: "rejected" });
+    expect(() => f.kernel.acceptAttempt("make-decision", attempt.attempt_ref, `confirmations/make-decision/${attempt.attempt_ref}`)).toThrow(/authenticated|decision/i);
+    expect(() => f.kernel.confirmAttempt("make-decision", attempt.attempt_ref, rejected)).toThrow(/replay|consum/i);
   });
 
-  it("reads legacy automatic-stage accepted records that have a human ref and no acceptance mode", () => {
-    const { kernel } = fixture();
-    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });
-    const accepted = kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
-    const legacy = { ...accepted, stage: "build-code", human_confirmation_ref: "confirmations/build-code/attempt-0001.json" };
-    delete legacy.acceptance_mode;
-    expect(() => validateAccepted(legacy, { taskId: "task-one", stage: "build-code" })).not.toThrow();
+  it("rejects a task-local proof hash when no launcher verifier capability exists", () => {
+    const f = fixture(), kernel = createTaskKernel(f.task, { candidateWorkspace: f.candidate });
+    const attempt = kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate) });
+    const proofRef = "evidence/authentication/attacker-proof.json", proofRaw = "attacker-controlled\n";
+    kernel.publishCanonicalRecord(proofRef, proofRaw);
+    const forged = confirmation(f.task, "make-decision", attempt.attempt_ref, 9);
+    forged.authentication = { method: "signature", verified_at: forged.authentication.verified_at, proof_ref: proofRef, proof_hash: sha256(proofRaw), signature: sha256(proofRaw) };
+    expect(() => kernel.confirmAttempt("make-decision", attempt.attempt_ref, forged)).toThrow(/trusted signature proof is invalid/i);
+    expect(() => f.task.readRecord("results/make-decision/accepted.json")).toThrow();
   });
 
-  it("resolves only declared upstream slots and keeps source read-only", () => {
-    const source = fixture();
-    const published = source.kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });
-    source.kernel.acceptAttempt("make-decision", published.attempt_ref, confirmation(source.kernel, "make-decision", published.attempt_ref));
-    const consumer = fixture({ decision: `${source.task.taskPath}/results/make-decision/accepted.json` });
-    expect(consumer.kernel.readInput("decision").facts.decision).toBe("go");
-    expect(() => consumer.kernel.readInput("unknown")).toThrow(/slot|input/i);
-    expect(() => consumer.kernel.publishInput("decision", {})).toThrow(/read-only|unsupported/i);
+  it("requires exact same-task upstream ref/hash and never moves Git refs", () => {
+    const f = fixture();
+    const decision = f.kernel.publishAttempt("make-decision", { facts: decisionFacts(f.candidate) });
+    acceptDecision(f, decision);
+    const acceptedRaw = f.task.readRecord("results/make-decision/accepted.json");
+    const upstream = [{ ref: "results/make-decision/accepted.json", sha256: sha256(acceptedRaw) }];
+    const workspace = openAcceptedWorkspace(f.task, f.kernel.readAccepted("make-decision"));
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, f.task); artifacts.writeAtomic("spec.md", "# Spec\n");
+    const kernel = createTaskKernel(f.task, { workspace, artifacts });
+    const snapshot = kernel.createCheckpoint("build-spec");
+    const refsBefore = execFileSync("git", ["for-each-ref"], { cwd: workspace.worktreeRoot, encoding: "utf8" });
+    expect(() => kernel.publishAttempt("build-spec", { facts: { spec_ref: "specs/task-one/spec.md", checkpoint: snapshot }, upstream_refs: [{ ...upstream[0], sha256: "f".repeat(64) }] })).toThrow(/hash/i);
+    const attempt = kernel.publishAttempt("build-spec", { facts: { spec_ref: "specs/task-one/spec.md", checkpoint: snapshot }, upstream_refs: upstream });
+    const accepted = kernel.acceptAttempt("build-spec", attempt.attempt_ref);
+    expect(accepted).toMatchObject({ acceptance_mode: "automatic", upstream_refs: upstream, snapshot_ref: expect.any(String) });
+    expect(accepted).not.toHaveProperty("confirmation_ref");
+    expect(execFileSync("git", ["for-each-ref"], { cwd: workspace.worktreeRoot, encoding: "utf8" })).toBe(refsBefore);
   });
 
-  it("linearizes publish and accept across processes", async () => {
-    const { task, kernel } = fixture();
-    const initial = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40) } });
-    const confirmationRef = confirmation(kernel, "make-decision", initial.attempt_ref);
-    const handleModule = pathToFileURL(join(process.cwd(), "core/task-handle.mjs")).href;
-    const kernelModule = pathToFileURL(join(process.cwd(), "core/task-kernel.mjs")).href;
-    const worker = async (operation) => execFileAsync(process.execPath, ["--input-type=module", "-e", `
-      import { openTask } from ${JSON.stringify(handleModule)};
-      import { createTaskKernel } from ${JSON.stringify(kernelModule)};
-      const task = openTask(${JSON.stringify(task.taskPath)}, { projectName: "Demo", taskId: "task-one" });
-      const kernel = createTaskKernel(task);
-      try {
-        if (${JSON.stringify(operation)} === "accept") kernel.acceptAttempt("make-decision", ${JSON.stringify(initial.attempt_ref)}, ${JSON.stringify(confirmationRef)});
-        else kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "b".repeat(40) } });
-        process.stdout.write("ok");
-      } catch (error) {
-        process.stdout.write("blocked:" + error.message);
-      }
-    `]);
-    const [accept, publish] = await Promise.all([worker("accept"), worker("publish")]);
-    expect(accept.stdout).toBe("ok");
-    expect(publish.stdout === "ok" || /accepted|closed/i.test(publish.stdout)).toBe(true);
-    expect(() => kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "c".repeat(40) } }))
-      .toThrow(/accepted|closed/i);
+  it("keeps v2 records read-only through the legacy reader", () => {
+    const raw = JSON.stringify({ schema_version: "task-attempt.v2", task_id: "legacy", stage: "make-decision" });
+    expect(readLegacyRecord(raw, { expectedSchema: "task-attempt.v2" })).toMatchObject({ task_id: "legacy" });
+    expect(() => writeLegacyRecord()).toThrow(/disabled|read-only/i);
   });
 });

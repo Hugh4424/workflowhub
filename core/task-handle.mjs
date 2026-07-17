@@ -62,9 +62,23 @@ function validateManifest(manifest) {
   if (typeof manifest.created_at !== "string" || !Number.isFinite(Date.parse(manifest.created_at))) {
     throw new TypeError("task manifest created_at must be an ISO-compatible timestamp");
   }
-  if (typeof manifest.target_repo_root !== "string" || !isAbsolute(manifest.target_repo_root)) {
-    throw new TypeError("task manifest target_repo_root must be an absolute path");
+  if (manifest.schema_id === "https://workflowhub.dev/schemas/task-manifest.v1.schema.json") {
+    for (const field of ["target_repository_ref", "release_manifest_ref"]) {
+      if (typeof manifest[field] !== "string" || manifest[field].length === 0) throw new TypeError(`task manifest ${field} is required`);
+    }
+    if (!/^[a-f0-9]{64}$/.test(manifest.release_manifest_hash)) throw new TypeError("task manifest release_manifest_hash must be SHA-256");
+    if (Object.prototype.hasOwnProperty.call(manifest, "target_repo_root")) throw new TypeError("task manifest must not serialize target_repo_root");
+    if (manifest.inputs !== undefined) {
+      assertPlainObject(manifest.inputs, "task manifest inputs");
+      for (const value of Object.values(manifest.inputs)) {
+        assertPlainObject(value, "task manifest input ref");
+        if (typeof value.ref !== "string" || !/^[a-f0-9]{64}$/.test(value.sha256) || Object.keys(value).some((key) => !["ref", "sha256"].includes(key))) throw new TypeError("task manifest inputs must contain canonical ref/hash pairs");
+      }
+    }
+    for (const field of ["issue_ids"]) if (Object.prototype.hasOwnProperty.call(manifest, field)) throw new TypeError(`task manifest v1 must not contain ${field}`);
+    return { projectName, taskId };
   }
+  if (typeof manifest.target_repo_root !== "string" || !isAbsolute(manifest.target_repo_root)) throw new TypeError("task manifest target_repo_root must be an absolute path");
   if (!Array.isArray(manifest.issue_ids) || !manifest.issue_ids.every((id) => typeof id === "string" && id.trim() !== "")) {
     throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
   }
@@ -386,10 +400,10 @@ function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 
   return candidate;
 }
 
-function publishTaskDirectory(parent, taskPath, manifest, testHooks) {
+function publishTaskDirectory(parent, taskPath, taskId, prepareManifest, testHooks) {
   const nonce = randomUUID();
-  const temporary = resolve(parent, `.${manifest.task_id}.${nonce}.tmp`);
-  const claimPath = resolve(parent, `.${manifest.task_id}.create.lock`);
+  const temporary = resolve(parent, `.${taskId}.${nonce}.tmp`);
+  const claimPath = resolve(parent, `.${taskId}.create.lock`);
   let claimFd;
   let claimed = false;
   try {
@@ -404,6 +418,7 @@ function publishTaskDirectory(parent, taskPath, manifest, testHooks) {
     fsyncSync(claimFd);
     testHooks?.afterClaim?.();
     if (existsSync(taskPath)) throw new Error(`task already exists: ${taskPath}`);
+    const manifest = prepareManifest();
     mkdirSync(temporary, { mode: 0o700 });
     testHooks?.afterTemporary?.();
     writeAtomicAt(temporary, "task.json", `${JSON.stringify(manifest, null, 2)}\n`);
@@ -495,7 +510,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted)|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted)|confirmations\/(?:(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4}|source-events\/[a-f0-9]{64}))\.json|(?:receipts|reviews|evidence|snapshots)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
@@ -513,8 +528,29 @@ export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) 
   if (taskPath !== undefined && resolve(taskPath) !== derived) throw new Error(`taskPath does not match trusted storageRoot: ${taskPath}`);
   const parent = ensureChildDirectories(root, ["Projects", identity.projectName, "tasks"]);
   if (existsSync(derived)) throw new Error(`task already exists: ${derived}`);
-  publishTaskDirectory(parent, derived, manifest, testHooks);
+  const prepareManifest = () => manifest;
+  publishTaskDirectory(parent, derived, identity.taskId, prepareManifest, testHooks);
   return openTask(derived, identity);
+}
+
+/** Prepare the immutable manifest while the task create lock is held. */
+export function createTaskUnderLock({ storageRoot, projectName, taskId, prepareManifest, testHooks } = {}) {
+  const identity = { projectName: validateProjectName(projectName), taskId: validateTaskId(taskId) };
+  if (typeof prepareManifest !== "function") throw new TypeError("prepareManifest function is required");
+  if (typeof storageRoot !== "string" || !isAbsolute(storageRoot)) throw new TypeError("storageRoot must be absolute");
+  assertNoSymlinkChain(storageRoot, "storageRoot");
+  const root = realDirectoryNoSymlink(resolve(storageRoot), "storageRoot");
+  const derived = deriveTaskPath(root, identity.projectName, identity.taskId);
+  const parent = ensureChildDirectories(root, ["Projects", identity.projectName, "tasks"]);
+  if (existsSync(derived)) throw new Error(`task already exists: ${derived}`);
+  const lockedPrepare = () => {
+    const manifest = prepareManifest();
+    const actual = validateManifest(manifest);
+    if (actual.projectName !== identity.projectName || actual.taskId !== identity.taskId) throw new Error("prepared task manifest identity mismatch");
+    return manifest;
+  };
+  publishTaskDirectory(parent, derived, identity.taskId, lockedPrepare, testHooks);
+  return openTask(derived, identity.projectName, identity.taskId);
 }
 
 /** Open a task after path, expected identity, and manifest agree. */

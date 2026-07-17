@@ -1,0 +1,118 @@
+#!/usr/bin/env node
+
+import { existsSync, readFileSync } from "node:fs";
+
+import { createDoctorAuthority } from "../core/doctor-command.mjs";
+import { createLauncherAuthority, createReleaseAuthority } from "../core/launcher-authority.mjs";
+import { openTaskFromLaunchAuthority, taskAuthorityFor } from "../core/launcher-authority.mjs";
+import { createLauncherExecutor, runPublicCli } from "../core/public-cli.mjs";
+import { bindTaskRepository, createRepositoryRegistry } from "../core/repository-registry.mjs";
+import { createTaskKernel } from "../core/task-kernel.mjs";
+import { openAcceptedWorkspace } from "../core/workspace.mjs";
+import {
+  confirmTaskCommitOperation,
+  executeTaskCommitOperation,
+  prepareTaskCommitOperation,
+  taskCommitOperationStatus,
+} from "../core/task-commit.mjs";
+import {
+  confirmTaskCloseOperation,
+  executeTaskCloseOperation,
+  prepareTaskCloseOperation,
+  taskCloseOperationStatus,
+} from "../core/task-close.mjs";
+import { workflowHubConfigPath } from "../core/storage-root.mjs";
+import { createPinnedTask } from "../scripts/task-bootstrap.mjs";
+import { stageRuntimeMain } from "../scripts/stage-runtime.mjs";
+import { createTrustedSignatureVerifier } from "../core/human-confirmation.mjs";
+
+function trustedLauncherConfig() {
+  const path = workflowHubConfigPath();
+  if (!existsSync(path)) return {};
+  const config = JSON.parse(readFileSync(path, "utf8"));
+  if (!config || typeof config !== "object" || Array.isArray(config)) throw new TypeError("WorkflowHub launcher config must be an object");
+  return config;
+}
+
+function defaultExecutor() {
+  const launcherAuthority = createLauncherAuthority();
+  const config = trustedLauncherConfig();
+  const repositoryAuthority = createRepositoryRegistry(launcherAuthority, config.repositories ?? {});
+  const current = config.current_release;
+  const releaseAuthority = createReleaseAuthority(launcherAuthority, {
+    readCurrent: () => current,
+    // T023 replaces this Phase-1 interface with the immutable routing/doctor implementation.
+    doctor: (release) => ({ ok: release === current, manifest_ref: release?.ref, manifest_hash: release?.sha256 }),
+  });
+  const openBoundTask = (request) => {
+    const authority = taskAuthorityFor(launcherAuthority, { projectName: request.options.project, taskId: request.options.task });
+    const task = openTaskFromLaunchAuthority(authority);
+    bindTaskRepository(task, repositoryAuthority);
+    return { authority, task };
+  };
+  const openRepoTask = (request) => {
+    const bound = openBoundTask(request);
+    const { task } = bound;
+    const baseKernel = createTaskKernel(task);
+    const decision = baseKernel.readAccepted("make-decision");
+    const workspace = openAcceptedWorkspace(task, decision);
+    return { ...bound, workspace, kernel: createTaskKernel(task, { workspace }) };
+  };
+  const confirmationVerificationFor = () => {
+    if (config.confirmation_signing_key === undefined) return Object.freeze({});
+    return Object.freeze({ verifyTrustedSignature: createTrustedSignatureVerifier(config.confirmation_signing_key) });
+  };
+  return createLauncherExecutor({
+    launcherAuthority,
+    repositoryAuthority,
+    releaseAuthority,
+    doctorAuthority: createDoctorAuthority(() => ({ ok: true, facts_refs: ["doctor/runtime-authority.json"] })),
+    createTask: createPinnedTask,
+    stageHandler: async (request) => {
+      const values = request.options;
+      const opened = openBoundTask(request);
+      const args = [request.action, `--stage=${values.stage}`, `--project=${values.project}`, `--task=${values.task}`];
+      for (const name of ["component", "attempt", "decision", "human-confirmation-ref"]) if (values[name]) args.push(`--${name}=${values[name]}`);
+      if (request.input) args.push("--input=@-");
+      const result = await stageRuntimeMain(args, {
+        input: request.input?.payload?.stage_payload,
+        taskLaunchAuthority: opened.authority,
+        repositoryAuthority,
+        confirmationVerification: confirmationVerificationFor(),
+      });
+      const resultRef = result?.attempt_ref ?? result?.receipt_ref ?? result?.ref ?? result?.accepted_ref
+        ?? `projects/${values.project}/tasks/${values.task}/stage/${values.stage}/${request.action}`;
+      return { result_ref: resultRef };
+    },
+    commitHandler: async (request) => {
+      const opened = openRepoTask(request);
+      if (request.action === "prepare") prepareTaskCommitOperation(opened);
+      else if (request.action === "confirm") confirmTaskCommitOperation({ ...opened, confirmation: request.input?.payload?.operation_payload, confirmationVerification: confirmationVerificationFor() });
+      else if (request.action === "execute") await executeTaskCommitOperation(opened);
+      else if (request.action !== "status") throw new TypeError(`unsupported commit action: ${request.action}`);
+      return { result_ref: taskCommitOperationStatus(opened.task).record_ref ?? "operations/commit/status" };
+    },
+    closeHandler: async (request) => {
+      const opened = openRepoTask(request);
+      if (request.action === "prepare") prepareTaskCloseOperation(opened);
+      else if (request.action === "confirm") confirmTaskCloseOperation({ ...opened, confirmation: request.input?.payload?.operation_payload, confirmationVerification: confirmationVerificationFor() });
+      else if (request.action === "execute") await executeTaskCloseOperation(opened);
+      else if (request.action !== "status") throw new TypeError(`unsupported close action: ${request.action}`);
+      return { result_ref: taskCloseOperationStatus(opened.task).record_ref ?? "operations/close/status" };
+    },
+  });
+}
+
+process.exitCode = await runPublicCli({
+  argv: process.argv.slice(2),
+  stdin: process.stdin.isTTY ? "" : await new Promise((resolve, reject) => {
+    let value = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => { value += chunk; });
+    process.stdin.on("end", () => resolve(value));
+    process.stdin.on("error", reject);
+  }),
+  stdout: process.stdout,
+  stderr: process.stderr,
+  executor: async (request) => defaultExecutor()(request),
+});

@@ -6,20 +6,20 @@ import { join } from "node:path";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
-import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
+import { prepareTaskWorkspace } from "../core/workspace.mjs";
+import { testConfirmationVerification, writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 import { runCapture } from "../workflows/verify-code/capture.mjs";
 
 const temporary = []; const STUB_SHA = "0".repeat(40);
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "verify-capture-v2-"))); temporary.push(root);
-  const repo = join(root, "repo"), worktree = join(root, "repo-verify-task"); mkdirSync(repo);
+  const repo = join(root, "repo"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo }); execFileSync("git", ["config", "user.email", "t@e.co"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "T"], { cwd: repo }); execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
-  const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/verify-task", worktree, sha], { cwd: repo });
   const recordRoot = join(root, "Projects", "Demo", "tasks", "verify-task");
   const task = createTask({ storageRoot: root, taskPath: recordRoot, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "verify-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
-  const kernel = createTaskKernel(task); const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: sha } }); kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
+  const candidate = prepareTaskWorkspace(task), worktree = candidate.worktreeRoot, sha = candidate.baselineCommit;
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate, confirmationVerification: testConfirmationVerification }); const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: sha, snapshot_tree: candidate.captureSnapshot().tree } }); kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
   const context = bootstrapStage("verify-code", { mode: "sidecar", taskPath: recordRoot, projectName: "Demo", taskId: "verify-task" });
   let n = 0; return { ...context, cwd: worktree, sha, ref: () => `receipts/capture-${++n}.json` };
 }

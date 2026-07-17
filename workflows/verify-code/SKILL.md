@@ -16,7 +16,7 @@ only in `ctx.workspace.worktreeRoot` supplied by the accepted decision.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
 --project=<project> --task=<task> --input=<component-receipts.json>`. Use the
-`confirm --attempt=<attempt> --decision=accepted|rejected` records the human
+`confirm --attempt=<attempt> --input=@-` records the authenticated human confirmation envelope and human
 decision. Pass its returned ref to `accept --human-confirmation-ref`.
 
 Create the evidence aggregate with `stage-runtime.mjs receipt --stage=verify-code --project=<project> --task=<task> --component=evidence --input=<refs-payload.json>`; every referenced hash is verified first.

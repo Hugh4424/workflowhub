@@ -1,0 +1,19 @@
+{
+  "schema_version": "task-attempt.v2",
+  "task_id": "legacy-task",
+  "stage": "build-spec",
+  "attempt_id": "attempt-0001",
+  "created_at": "2026-07-15T00:00:00.000Z",
+  "facts": {
+    "spec_ref": "specs/legacy-task/spec.md"
+  },
+  "evidence_refs": [],
+  "missing_items": [],
+  "upstream_refs": [
+    {
+      "task_id": "legacy-task",
+      "stage": "make-decision",
+      "accepted_ref": "results/make-decision/accepted.json"
+    }
+  ]
+}

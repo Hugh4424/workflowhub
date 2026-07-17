@@ -9,4 +9,7 @@ export function runtimeCutover(argv = process.argv.slice(2)) {
   if (command === "rebind-root" || command === "cutover") return rebindRuntimeRoot({ sourceRoot: values["source-root"], targetRoot: values["target-root"], expectedEpoch: values.epoch });
   throw new TypeError("usage: runtime-cutover.mjs <status|quiesce|rebind-root|cutover> ...");
 }
-if (import.meta.url === pathToFileURL(process.argv[1]).href) { try { process.stdout.write(`${JSON.stringify(runtimeCutover(), null, 2)}\n`); } catch (error) { process.stderr.write(`${error.stack ?? error}\n`); process.exitCode = 1; } }
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.stderr.write("runtime-cutover.mjs is an internal handler; use the workflowhub public CLI\n");
+  process.exitCode = 2;
+}

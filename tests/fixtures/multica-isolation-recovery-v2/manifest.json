@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "baseline_commit": "35a7299f2b3504108a565fbfafcadffbd4cbbb29",
+  "accepted_spec_hash": "fed12afa8a63299f1e14df2c3ce8f5ff46e33edb4c9cc02d9fe44e5e40d23343",
+  "frozen_files": [
+    {
+      "kind": "task-attempt.v2",
+      "path": "tests/fixtures/multica-isolation-recovery-v2/task-attempt.v2.json",
+      "sha256": "0e078baffa5f1ff1e2500078a7a4afcdd11f78b554d3ad07e9a8bf9618bd1df1"
+    },
+    {
+      "kind": "task-accepted.v2",
+      "path": "tests/fixtures/multica-isolation-recovery-v2/task-accepted.v2.json",
+      "sha256": "1a2cdb01da0d7ab2b441a1baa4fd5b66edcbee3012d6ae5b9ceed208172b0d8d"
+    },
+    {
+      "kind": "git-checkpoint",
+      "path": "tests/fixtures/multica-isolation-recovery-v2/git-checkpoint.v1.json",
+      "sha256": "80a79fe7d9422b7d26861437cf4c2a0bece1b0800a0c4824a55e538e9fdc0e0b"
+    },
+    {
+      "kind": "execution-record",
+      "path": "tests/fixtures/multica-isolation-recovery-v2/execution-record.legacy.json",
+      "sha256": "88c5904bbe2e4f98456d85d5634ce747930e89f931450e552d58ac1291a4e01f"
+    }
+  ]
+}

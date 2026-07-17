@@ -9,22 +9,22 @@ import { runCapture } from "../workflows/build-code/capture.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
-import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
+import { prepareTaskWorkspace } from "../core/workspace.mjs";
+import { testConfirmationVerification, writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const temporary = [];
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-capture-v2-"))); temporary.push(root);
-  const repo = join(root, "repo"); const worktree = join(root, "repo-capture-task"); mkdirSync(repo);
+  const repo = join(root, "repo"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
   execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
-  const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim();
-  execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/capture-task", worktree, sha], { cwd: repo });
   const taskPath = join(root, "Projects", "Demo", "tasks", "capture-task");
   const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "capture-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
-  const kernel = createTaskKernel(task);
-  const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: sha } });
+  const candidate = prepareTaskWorkspace(task), worktree = candidate.worktreeRoot;
+  const kernel = createTaskKernel(task, { candidateWorkspace: candidate, confirmationVerification: testConfirmationVerification });
+  const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: candidate.baselineCommit, snapshot_tree: candidate.captureSnapshot().tree } });
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
   const context = bootstrapStage("build-code", { mode: "sidecar", taskPath, projectName: "Demo", taskId: "capture-task" });
   return { cwd: worktree, task: context.task, workspace: context.workspace, outputPath: "receipts/capture.json" };

@@ -11,7 +11,7 @@ export function taskIndexEntry(taskHandle) {
   return Object.freeze({
     taskId: task.identity.taskId,
     projectKey: task.identity.projectName,
-    repo: task.manifest.target_repo_root,
+    repo: task.manifest.target_repository_ref ?? task.manifest.target_repo_root,
   });
 }
 

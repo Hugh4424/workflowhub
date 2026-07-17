@@ -22,7 +22,7 @@ runtime deterministically creates or validates the task worktree from the
 TaskHandle; callers must not supply a worktree path or baseline. Acceptance is
 a separate `accept` invocation with `--attempt` and
 `--human-confirmation-ref`. First record the decision with
-`confirm --attempt=<attempt> --decision=accepted|rejected`, then pass its
+`confirm --attempt=<attempt> --input=@-` with an authenticated human-confirmation-envelope.v1, then pass its
 returned ref to `accept`; execution never accepts its own result.
 
 Before any code inspection or `grill-with-docs` write, call

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 /** Capture tracked, dirty, and untracked files without moving HEAD or refs. */
-export function captureGitWorktreeSnapshot(root) {
+export function captureGitWorktreeSnapshot(root, { injectCrash } = {}) {
   const head = String(execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
   })).trim();
@@ -20,16 +20,8 @@ export function captureGitWorktreeSnapshot(root) {
     run(["read-tree", head]);
     run(["add", "-A", "--", "."]);
     const tree = run(["write-tree"]);
-    const commit = run(["commit-tree", tree, "-p", head, "-m", "workflowhub ephemeral workspace snapshot"], {
-      env: {
-        ...env,
-        GIT_AUTHOR_NAME: "WorkflowHub",
-        GIT_AUTHOR_EMAIL: "workflowhub@local",
-        GIT_COMMITTER_NAME: "WorkflowHub",
-        GIT_COMMITTER_EMAIL: "workflowhub@local",
-      },
-    });
-    return Object.freeze({ head, tree, commit });
+    if (injectCrash === "after-write-tree") throw new Error("injected crash after write-tree");
+    return Object.freeze({ head, tree });
   } finally {
     rmSync(index, { force: true });
   }

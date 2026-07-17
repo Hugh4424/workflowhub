@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { resolve } from "node:path";
 import { officialStageHandler } from "../core/stage-handlers.mjs";
+import { captureTaskSnapshotV1Sync } from "../core/task-snapshot.mjs";
 
 describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
@@ -180,18 +184,27 @@ describe("final cutover guard contracts", () => {
     expect(authority).toMatch(/assertMigrationAuthority[\s\S]*quiescing[\s\S]*epoch/i);
   });
 
-  it("keeps checkpoint refs unpublished until a plan-hash-bound confirmation is accepted", () => {
-    const checkpoint = readFileSync(resolve("core/git-checkpoint.mjs"), "utf8");
-    const kernel = readFileSync(resolve("core/task-kernel-implementation.mjs"), "utf8");
-    expect(checkpoint).not.toMatch(/update-ref/);
-    expect(kernel).toMatch(/confirmation[^\n]*plan_hash|plan_hash[^\n]*confirmation/i);
-    expect(kernel).toMatch(/acceptAttempt[\s\S]*update-ref/);
-    expect(kernel).toMatch(/reject[\s\S]*(?:delete-ref|no ref|unpublished)/i);
+  it("keeps exact Git ref bytes unchanged while capturing a v1 task snapshot", () => {
+    const repo = mkdtempSync(join(tmpdir(), "workflowhub-final-ref-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: repo });
+      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+      execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+      writeFileSync(join(repo, "tracked.txt"), "base\n");
+      execFileSync("git", ["add", "tracked.txt"], { cwd: repo });
+      execFileSync("git", ["commit", "-qm", "base"], { cwd: repo });
+      writeFileSync(join(repo, "tracked.txt"), "changed\n");
+      const refs = () => execFileSync("git", ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(objecttype)%00"], { cwd: repo });
+      const before = refs();
+      expect(captureTaskSnapshotV1Sync({ taskId: "task", workspaceRoot: repo })).toMatchObject({ schema_version: "1.0.0", tree_oid: expect.stringMatching(/^[a-f0-9]{40}$/) });
+      expect(refs()).toEqual(before);
+    } finally { rmSync(repo, { recursive: true, force: true }); }
   });
 
-  it("verifies checkpoint ancestry at acceptance", () => {
+  it("binds acceptance to immutable snapshot ref/hash instead of checkpoint ancestry", () => {
     const kernel = readFileSync(resolve("core/task-kernel-implementation.mjs"), "utf8");
-    expect(kernel).toMatch(/acceptAttempt[\s\S]*(?:merge-base|isAncestor|ancestry)/i);
+    expect(kernel).toMatch(/acceptAttempt[\s\S]*snapshot_ref[\s\S]*snapshot_hash/i);
+    expect(kernel).not.toMatch(/acceptAttempt[\s\S]*update-ref/i);
   });
 
   it("does not exempt test directories wholesale and keeps fixture exceptions file-scoped", () => {

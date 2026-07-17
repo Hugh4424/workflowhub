@@ -11,6 +11,8 @@
 - `TaskHandle`：当前进程从 taskPath 验证得到的任务记录能力对象。
 - `Workspace`：make-decision accepted 提供的受控 worktree 能力对象。
 - `ArtifactDir`：Workspace 下 `specs/${task}/` 的受控设计文件能力对象。
+- `LauncherAuthority`：launcher 从受信本机配置重建的进程内能力；不可序列化或跨进程复用。
+- `TaskLaunchAuthority`：launcher 从 canonical project/task ref 派生的单任务进程内能力。
 
 ## 唯一调用链
 
@@ -21,6 +23,15 @@ Launcher → bootstrapStage() → StageContext → Stage / Pure Worker
 Launcher 唯一允许读取全局配置和 `WORKFLOWHUB_TASK_DIR` 覆盖并派生 taskPath。stage 和 sidecar 不得读取
 storage root。独立官方 sidecar 只接绝对 `--task-path` 并验证 manifest；provider/worker
 只收材料内容、父进程解析的绝对路径或受控回调。
+
+launcher mode 不接受调用方 taskPath。它只接受 launcher 在同一进程签发的
+`TaskLaunchAuthority`，或由 `bootstrapStage` 在 launcher 入口即时重建该能力。能力对象的
+品牌与私有状态只存在于进程内，JSON 序列化必须失败。
+
+公开命令分类固定如下：
+
+- `repo_bound`：stage、commit、close；只有这些命令可通过 WorkspaceRunner 获得目标仓 cwd。
+- `launcher_bound`：doctor、task、status、release、routing、admin-repin；它们使用各自受信能力，禁止接收 Workspace cwd。
 
 ## StageContext
 

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
+import { assertRepoBoundCommand } from "./launcher-authority.mjs";
 
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024;
 
@@ -25,11 +26,17 @@ function runBoundCommand(worktreeRoot, command, args) {
   });
 }
 
-export function runWorkspaceCommand(workspace, command, args = []) {
+export function runWorkspaceCommand(workspace, workflowCommand, command, args = []) {
+  assertRepoBoundCommand(workflowCommand);
   return runBoundCommand(assertWorkspace(workspace).worktreeRoot, command, args);
 }
 
 /** Run a make-decision component in the authenticated candidate worktree. */
 export function runCandidateWorkspaceCommand(candidateWorkspace, command, args = []) {
   return runBoundCommand(assertCandidateWorkspace(candidateWorkspace).worktreeRoot, command, args);
+}
+
+/** Public command routing guard: repo-bound operations alone may acquire cwd. */
+export function runRepoBoundCommand(workspace, workflowCommand, command, args = []) {
+  return runWorkspaceCommand(workspace, workflowCommand, command, args);
 }

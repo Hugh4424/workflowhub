@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.dev/schemas/multica-skills-lock.v1.schema.json",
+  "type": "object",
+  "required": ["schema_id", "schema_version", "skills"],
+  "properties": {
+    "schema_id": { "const": "https://workflowhub.dev/schemas/multica-skills-lock.v1.schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "skills": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/orchestrator" },
+        { "$ref": "#/$defs/make-decision" },
+        { "$ref": "#/$defs/build-spec" },
+        { "$ref": "#/$defs/build-plan" },
+        { "$ref": "#/$defs/build-code" },
+        { "$ref": "#/$defs/verify-code" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "orchestrator": { "$ref": "#/$defs/skill", "properties": { "name": { "const": "orchestrator" } } },
+    "make-decision": { "$ref": "#/$defs/skill", "properties": { "name": { "const": "make-decision" } } },
+    "build-spec": { "$ref": "#/$defs/skill", "properties": { "name": { "const": "build-spec" } } },
+    "build-plan": { "$ref": "#/$defs/skill", "properties": { "name": { "const": "build-plan" } } },
+    "build-code": { "$ref": "#/$defs/skill", "properties": { "name": { "const": "build-code" } } },
+    "verify-code": { "$ref": "#/$defs/skill", "properties": { "name": { "const": "verify-code" } } },
+    "skill": {
+      "type": "object",
+      "required": ["name", "version", "ref", "sha256"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "ref": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

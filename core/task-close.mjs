@@ -1,13 +1,13 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
-import { createTaskWorktreeRemoval } from "./workspace.mjs";
+import { consumeTaskHumanConfirmation } from "./human-confirmation.mjs";
+import { repositoryRootForTask } from "./repository-registry.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
 const STEP_ID = /^[a-z0-9](?:[a-z0-9._-]{0,62})$/;
-const GOVERNED_EXECUTORS = new WeakSet();
 
 function plain(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -33,27 +33,6 @@ function canonical(value, label = "close plan") {
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 
-export function closePlanHash(plan) { return sha256(canonical(plain(plan, "close plan"))); }
-
-function validatePlan(plan, task) {
-  plain(plan, "close plan");
-  if (plan.schema_version !== "task-close-plan.v1") throw new TypeError("close plan schema_version must be task-close-plan.v1");
-  if (plan.task_id !== task.identity.taskId) throw new Error("close plan task identity mismatch");
-  if (!Array.isArray(plan.steps)) throw new TypeError("close plan steps must be an array");
-  const seen = new Set();
-  for (const [index, step] of plan.steps.entries()) {
-    plain(step, `close plan step ${index}`);
-    if (!STEP_ID.test(step.step_id ?? "")) throw new TypeError(`close plan step ${index} has an invalid step_id`);
-    if (seen.has(step.step_id)) throw new Error(`duplicate close plan step_id: ${step.step_id}`);
-    seen.add(step.step_id);
-    if (typeof step.operation !== "string" || step.operation.trim() === "") throw new TypeError(`close plan step ${step.step_id} operation is required`);
-  }
-  // Canonicalization also rejects functions, undefined, class instances, and
-  // other values whose meaning could change between confirmation and execution.
-  canonical(plan);
-  return plan;
-}
-
 function readOptional(task, path) {
   try { return task.readRecord(path); }
   catch (error) { if (error?.code === "ENOENT") return undefined; throw error; }
@@ -74,196 +53,202 @@ function createOrVerify(task, path, record, label) {
   return record;
 }
 
-/** Persist one immutable, plan-bound close decision. */
-export function confirmClosePlan({ task: taskHandle, kernel: taskKernel, plan, outcome, now = () => new Date().toISOString() } = {}) {
+const CLOSE_PLAN_SCHEMA_ID = "https://workflowhub.dev/schemas/task-close-plan.v1.schema.json";
+function validateV1Plan(plan, task) {
+  plain(plan, "close plan");
+  if (plan.schema_id !== CLOSE_PLAN_SCHEMA_ID || plan.schema_version !== "1.0.0") throw new Error("close plan schema is invalid");
+  if (plan.task_id !== task.identity.taskId) throw new Error("close plan task identity mismatch");
+  if (!HASH.test(plan.plan_hash ?? "") || !HASH.test(plan.release_hash ?? "") || !HASH.test(plan.lineage_hash ?? "")) throw new Error("close plan hash binding is invalid");
+  const unsigned = { ...plan }; delete unsigned.plan_hash;
+  if (sha256(canonical(unsigned)) !== plan.plan_hash) throw new Error("close plan hash mismatch");
+  if (!Array.isArray(plan.steps) || plan.steps.length === 0) throw new Error("close plan steps are required");
+  plan.steps.forEach(v1Step);
+  return plan;
+}
+
+function v1Step(step, index = 0) {
+  plain(step, `close step ${index}`);
+  if (!STEP_ID.test(step.step_id ?? "")) throw new TypeError(`close step ${index} has an invalid step_id`);
+  if (typeof step.operation !== "string" || step.operation === "") throw new TypeError(`close step ${step.step_id} operation is required`);
+  for (const field of ["precondition_hash", "postcondition_hash"]) if (!HASH.test(step[field] ?? "")) throw new TypeError(`close step ${step.step_id} ${field} is invalid`);
+  return step;
+}
+
+/** Build a v1 close plan. Cleanup remains opt-in and ancestry exists only for a final commit. */
+function prepareClosePlan(input = {}) {
+  const taskId = input.taskId ?? input.task_id;
+  const releaseRef = input.releaseRef ?? input.release_ref;
+  const releaseHash = input.releaseHash ?? input.release_hash;
+  const lineageHash = input.lineageHash ?? input.lineage_hash;
+  const supplied = Array.isArray(input.steps) ? input.steps.map((step) => ({ ...v1Step(step) })) : [];
+  const steps = supplied.length ? supplied : [{
+    step_id: "logical-close",
+    operation: "close-task",
+    precondition_hash: sha256(canonical({ task_id: taskId, status: "accepted", lineage_hash: lineageHash })),
+    postcondition_hash: sha256(canonical({ task_id: taskId, status: "closed", lineage_hash: lineageHash })),
+  }];
+  if (input.finalCommit) {
+    steps.push({
+      step_id: "final-commit-ancestry",
+      operation: "ancestry",
+      final_commit: input.finalCommit,
+      target_ref: input.targetRef,
+      precondition_hash: sha256(canonical({ final_commit: input.finalCommit, target_ref: input.targetRef, verified: false })),
+      postcondition_hash: sha256(canonical({ final_commit: input.finalCommit, target_ref: input.targetRef, verified: true })),
+    });
+  }
+  if (input.authorizeCleanup === true) {
+    steps.push({
+      step_id: "cleanup",
+      operation: "cleanup",
+      precondition_hash: sha256(canonical({ task_id: taskId, cleanup: "present" })),
+      postcondition_hash: sha256(canonical({ task_id: taskId, cleanup: "removed" })),
+    });
+  }
+  const plan = {
+    schema_id: input.schemaId ?? CLOSE_PLAN_SCHEMA_ID,
+    schema_version: "1.0.0",
+    task_id: taskId,
+    release_ref: releaseRef,
+    release_hash: releaseHash,
+    lineage_hash: lineageHash,
+    steps,
+  };
+  plan.plan_hash = sha256(canonical(plan));
+  return Object.freeze({ ...plan, steps: Object.freeze(steps.map(Object.freeze)) });
+}
+
+/** Prepare close only from the accepted verify-code lineage and commit fact. */
+export function prepareTaskCloseOperation({ task: taskHandle, kernel: taskKernel, authorizeCleanup = false } = {}) {
   const task = assertTaskHandle(taskHandle);
   const kernel = assertTaskKernel(taskKernel);
-  if (kernel.task !== task) throw new Error("close confirmation TaskHandle/TaskKernel mismatch");
-  validatePlan(plan, task);
-  if (!new Set(["confirmed", "rejected", "timeout"]).has(outcome)) throw new TypeError("close confirmation outcome must be confirmed, rejected, or timeout");
-  if (typeof now !== "function") throw new TypeError("close confirmation now must be a function");
-  const planHash = closePlanHash(plan);
-  const ref = `operations/close/confirmations/${planHash}/${randomUUID()}.json`;
-  const confirmation = {
+  if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
+  if (authorizeCleanup) throw new Error("close cleanup requires a separate cleanup authorization and operation");
+  const accepted = kernel.readAccepted("verify-code");
+  const acceptedRaw = task.readRecord(accepted.accepted_ref);
+  const commitRaw = readOptional(task, "operations/commit/completed.json");
+  const commit = commitRaw === undefined ? undefined : JSON.parse(commitRaw);
+  const plan = prepareClosePlan({
+    taskId: task.identity.taskId,
+    releaseRef: task.manifest.release_manifest_ref,
+    releaseHash: task.manifest.release_manifest_hash,
+    lineageHash: sha256(acceptedRaw),
+    finalCommit: commit?.commit_oid,
+    targetRef: commit?.target_ref,
+    authorizeCleanup,
+  });
+  return task.withRecordLock("locks/close.operation.lock", () => Object.freeze(createOrVerify(task, "operations/close/plan.json", plan, "close plan")));
+}
+
+export function confirmTaskCloseOperation({ task: taskHandle, kernel: taskKernel, confirmation, confirmationVerification = {} } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
+  if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
+  const plan = validateV1Plan(JSON.parse(task.readRecord("operations/close/plan.json")), task);
+  const outcome = consumeTaskHumanConfirmation(task, confirmation, {
+    purpose: "close",
+    taskId: task.identity.taskId,
+    boundRef: "operations/close/plan.json",
+    boundHash: plan.plan_hash,
+    verifyPlatformReadback: confirmationVerification.verifyPlatformReadback,
+    verifyTrustedSignature: confirmationVerification.verifyTrustedSignature,
+  });
+  const record = {
     schema_version: "task-close-confirmation.v1",
     task_id: task.identity.taskId,
-    plan_hash: planHash,
-    outcome,
-    confirmed_at: now(),
+    plan_hash: plan.plan_hash,
+    decision: outcome.decision,
+    confirmation_ref: outcome.confirmationRef,
   };
-  createOrVerify(task, ref, confirmation, "close confirmation");
-  return Object.freeze({ ref, confirmation: Object.freeze(confirmation) });
+  createOrVerify(task, "operations/close/confirmation.json", record, "close confirmation");
+  return Object.freeze(record);
 }
 
-function executorFor(executors, step) {
-  if (!GOVERNED_EXECUTORS.has(executors)) throw new TypeError("governed close executor registry required");
-  const executor = executors.executorFor(step);
-  plain(executor, `close executor ${step.step_id}`);
-  if (typeof executor.probe !== "function" || typeof executor.execute !== "function" || typeof executor.verify !== "function") throw new TypeError(`close executor ${step.step_id} requires probe, execute, and verify functions`);
-  return executor;
-}
-
-async function probeSatisfied(executor, step, phase) {
-  const observation = plain(await executor.probe(step), `close step ${step.step_id} ${phase} probe`);
-  if (typeof observation.satisfied !== "boolean") throw new TypeError(`close step ${step.step_id} probe must return satisfied boolean`);
-  if (observation.satisfied && executor.verify) {
-    const verified = await executor.verify(observation, step);
-    if (verified !== true) throw new Error(`close step ${step.step_id} physical state verification failed`);
-  }
-  return observation;
-}
-
-function completedRecord(task, planHash, step, observation, mode, now) {
-  const physical = canonical(observation, `close step ${step.step_id} observation`);
-  return {
-    schema_version: "task-close-operation.v1",
-    task_id: task.identity.taskId,
-    plan_hash: planHash,
-    step_id: step.step_id,
-    operation: step.operation,
-    status: "completed",
-    completion_mode: mode,
-    physical_state_hash: sha256(physical),
-    physical_state: structuredClone(observation),
-    completed_at: now(),
-  };
-}
-
-function git(cwd, args, { allowFailure = false } = {}) {
-  const result = execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", allowFailure ? "ignore" : "pipe"] });
-  return String(result).trim();
-}
-
-/** Mint the only supported close executors from a verified repository root. */
-export function createGovernedCloseExecutorRegistry({ task, kernel } = {}) {
-  const safeTask = assertTaskHandle(task);
-  const safeKernel = assertTaskKernel(kernel);
-  if (safeKernel.task !== safeTask) throw new Error("close executor TaskHandle/TaskKernel mismatch");
-  const root = safeTask.manifest.target_repo_root;
-  if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
-  let removal;
-  const registry = {
-    executorFor(step) {
-      if (step.operation === "verify-checkpoint-ancestry") {
-        const { checkpoint_oid: checkpoint, final_oid: final } = step;
-        if (!/^[a-f0-9]{40}$/i.test(checkpoint ?? "") || !/^[a-f0-9]{40}$/i.test(final ?? "")) throw new TypeError("checkpoint ancestry step requires commit OIDs");
-        const observe = () => {
-          let satisfied = false;
-          try { execFileSync("git", ["merge-base", "--is-ancestor", checkpoint, final], { cwd: root, stdio: "ignore" }); satisfied = true; } catch {}
-          return { satisfied, checkpoint_oid: checkpoint, final_oid: final };
-        };
-        return { probe: observe, execute: async () => { if (!observe().satisfied) throw new Error("checkpoint is not an ancestor of final commit"); }, verify: async (value) => value.satisfied && value.checkpoint_oid === checkpoint && value.final_oid === final };
-      }
-      if (step.operation === "remove-worktree") {
-        if (Object.prototype.hasOwnProperty.call(step, "worktree_root")) throw new TypeError("remove-worktree path is selected only by the current accepted Workspace");
-        const acceptedDecision = safeKernel.readAccepted("make-decision");
-        const acceptedBinding = Object.freeze({
-          taskId: acceptedDecision.accepted.task_id,
-          stage: acceptedDecision.accepted.stage,
-          worktreeRoot: acceptedDecision.facts.worktree_root,
-          baselineCommit: acceptedDecision.facts.baseline_commit,
-        });
-        removal ??= createTaskWorktreeRemoval(safeTask, acceptedBinding);
-        return removal;
-      }
-      throw new Error(`unsupported governed close operation: ${step.operation}`);
-    },
-  };
-  GOVERNED_EXECUTORS.add(registry);
-  return Object.freeze(registry);
-}
-
-/**
- * Execute a confirmed immutable close plan.
- *
- * `executors` is keyed by plan step_id. Each executor probes physical state,
- * performs the operation only when needed, then probes/verifies again. Durable
- * task records are create-only; after a crash, physical state is authoritative.
- */
-export async function executeClosePlan(options = {}) {
-  const task = assertTaskHandle(options.task);
-  const kernel = assertTaskKernel(options.kernel);
+export async function executeTaskCloseOperation({ task: taskHandle, kernel: taskKernel } = {}) {
+  const task = assertTaskHandle(taskHandle);
+  const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("close TaskHandle/TaskKernel mismatch");
-  const plan = validatePlan(options.plan, task);
-  const planRaw = canonical(plan);
-  const planHash = sha256(planRaw);
-  const confirmationRef = options.closeConfirmationRef;
-  const confirmationPrefix = `operations/close/confirmations/${planHash}/`;
-  if (typeof confirmationRef !== "string" || !confirmationRef.startsWith(confirmationPrefix) || !/^operations\/close\/confirmations\/[a-f0-9]{64}\/[a-f0-9-]{36}\.json$/.test(confirmationRef)) {
-    throw new TypeError("canonical plan-bound closeConfirmationRef is required");
-  }
-  const confirmation = plain(JSON.parse(task.readRecord(confirmationRef)), "close confirmation");
-  const confirmationKeys = new Set(["schema_version", "task_id", "plan_hash", "outcome", "confirmed_at"]);
-  if (Object.keys(confirmation).some((key) => !confirmationKeys.has(key))) throw new Error("close confirmation contains unknown fields");
-  if (confirmation.schema_version !== "task-close-confirmation.v1" || confirmation.task_id !== task.identity.taskId || !Number.isFinite(Date.parse(confirmation.confirmed_at))) {
-    throw new Error("close confirmation identity is invalid");
-  }
-  if (!HASH.test(confirmation.plan_hash ?? "") || confirmation.plan_hash !== planHash) {
-    throw new Error("close confirmation plan hash mismatch");
-  }
-  if (confirmation.outcome !== "confirmed") return Object.freeze({ status: "blocked", confirmationOutcome: confirmation.outcome });
-  const executors = options.executors;
-  // Validate every executable boundary before creating a record or performing a
-  // physical probe. A malformed later step must have zero side effects.
-  for (const step of plan.steps) executorFor(executors, step);
-  const now = options.now ?? (() => new Date().toISOString());
-  if (typeof now !== "function") throw new TypeError("close now must be a function");
-
-  return task.withRecordLock("locks/close.execution.lock", async () => {
-    const base = `operations/close/plans/${planHash}`;
-    createOrVerify(task, `${base}/plan.json`, {
-      schema_version: "task-close-plan-record.v1",
-      task_id: task.identity.taskId,
-      plan_hash: planHash,
-      plan: structuredClone(plan),
-    }, "close plan");
-    createOrVerify(task, `${base}/confirmation.json`, {
-      schema_version: "task-close-confirmation.v1",
-      task_id: task.identity.taskId,
-      plan_hash: planHash,
-      confirmation_ref: confirmationRef,
-      outcome: "confirmed",
-    }, "close confirmation");
-
-    const existingCompletion = readOptional(task, "operations/close/completed.json");
-    let acceptedCompletion;
-    if (existingCompletion !== undefined) {
-      const completed = JSON.parse(existingCompletion);
-      if (completed.plan_hash !== planHash || completed.task_id !== task.identity.taskId) throw new Error("task close completed by a conflicting plan");
-      if (completed.schema_version !== "task-close-completed.v1" || completed.status !== "completed") throw new Error("task close completed record is invalid");
-      acceptedCompletion = completed;
+  return task.withRecordLock("locks/close.operation.lock", async () => {
+    const plan = validateV1Plan(JSON.parse(task.readRecord("operations/close/plan.json")), task);
+    if (task.manifest.release_manifest_ref !== plan.release_ref || task.manifest.release_manifest_hash !== plan.release_hash) {
+      throw new Error("close authorization invalidated by release pin drift");
     }
-
-    for (const step of plan.steps) {
-      const executor = executorFor(executors, step);
-      const recordPath = `${base}/steps/${step.step_id}.json`;
-      const priorRaw = readOptional(task, recordPath);
-      const before = await probeSatisfied(executor, step, priorRaw === undefined ? "initial" : "reconcile");
-      if (priorRaw !== undefined) {
-        const prior = JSON.parse(priorRaw);
-        if (prior.plan_hash !== planHash || prior.step_id !== step.step_id || prior.status !== "completed") throw new Error(`close step ${step.step_id} record conflicts with plan`);
-        if (!before.satisfied) throw new Error(`close step ${step.step_id} completed record conflicts with physical state`);
-        continue;
+    const confirmation = JSON.parse(task.readRecord("operations/close/confirmation.json"));
+    if (confirmation.plan_hash !== plan.plan_hash || confirmation.decision !== "accepted") throw new Error("close has no accepted plan-bound confirmation");
+    const accepted = kernel.readAccepted("verify-code");
+    if (sha256(task.readRecord(accepted.accepted_ref)) !== plan.lineage_hash) throw new Error("close authorization invalidated by accepted lineage drift");
+    const commitRaw = readOptional(task, "operations/commit/completed.json");
+    const commit = commitRaw === undefined ? undefined : JSON.parse(commitRaw);
+    const root = repositoryRootForTask(task);
+    const logicalStateRef = "operations/close/logical-state.json";
+    const probe = (step) => {
+      if (step.operation === "close-task") {
+        const stateRaw = readOptional(task, logicalStateRef);
+        if (stateRaw === undefined) return step.precondition_hash;
+        try {
+          const state = JSON.parse(stateRaw);
+          if (state.schema_version === "task-logical-close.v1" && state.task_id === task.identity.taskId && state.plan_hash === plan.plan_hash && state.lineage_hash === plan.lineage_hash && state.status === "closed") return step.postcondition_hash;
+        } catch {}
+        return sha256(stateRaw);
       }
-      if (before.satisfied) {
-        createOrVerify(task, recordPath, completedRecord(task, planHash, step, before, "reconciled", now), `close step ${step.step_id}`);
-        continue;
+      if (step.operation === "ancestry") {
+        if (!commit?.commit_oid || !commit?.target_ref || commit.commit_oid !== step.final_commit || commit.target_ref !== step.target_ref) return sha256("final-commit-binding-drift");
+        try {
+          execFileSync("git", ["merge-base", "--is-ancestor", commit.commit_oid, commit.target_ref], { cwd: root, stdio: "ignore" });
+          return step.postcondition_hash;
+        } catch { return step.precondition_hash; }
       }
-      await executor.execute(step, before);
-      const after = await probeSatisfied(executor, step, "post-execution");
-      if (!after.satisfied) throw new Error(`close step ${step.step_id} did not reach its declared physical state`);
-      createOrVerify(task, recordPath, completedRecord(task, planHash, step, after, "executed", now), `close step ${step.step_id}`);
-    }
-
-    if (acceptedCompletion) return Object.freeze(acceptedCompletion);
-    const completion = {
-      schema_version: "task-close-completed.v1",
-      task_id: task.identity.taskId,
-      plan_hash: planHash,
-      status: "completed",
-      completed_at: now(),
+      return sha256(`unsupported:${step.operation}`);
     };
-    createOrVerify(task, "operations/close/completed.json", completion, "close completion");
-    return Object.freeze(completion);
+    for (const step of plan.steps) {
+      const stepRef = `operations/close/steps/${step.step_id}.json`;
+      const priorStepRaw = readOptional(task, stepRef);
+      const before = probe(step);
+      if (priorStepRaw !== undefined) {
+        const priorStep = JSON.parse(priorStepRaw);
+        if (priorStep.plan_hash !== plan.plan_hash || priorStep.step_id !== step.step_id || priorStep.status !== "completed") throw new Error(`close step ${step.step_id} record conflicts with plan`);
+        if (before !== step.postcondition_hash) throw new Error(`close authorization invalidated: ${step.step_id} completed record conflicts with live postcondition`);
+        continue;
+      }
+      if (before === step.postcondition_hash) {
+        createOrVerify(task, stepRef, { schema_version: "task-close-step.v1", task_id: task.identity.taskId, plan_hash: plan.plan_hash, step_id: step.step_id, operation: step.operation, status: "completed", completion_mode: "reconciled", observed_hash: before }, `close step ${step.step_id}`);
+        continue;
+      }
+      if (before !== step.precondition_hash) throw new Error(`close authorization invalidated: ${step.step_id} live state matches neither exact precondition nor postcondition`);
+      if (step.operation === "close-task") {
+        createOrVerify(task, logicalStateRef, { schema_version: "task-logical-close.v1", task_id: task.identity.taskId, plan_hash: plan.plan_hash, lineage_hash: plan.lineage_hash, status: "closed" }, "logical close state");
+      } else if (step.operation === "ancestry") {
+        throw new Error("close final commit ancestry precondition is not satisfied");
+      } else {
+        throw new Error(`unsupported close operation: ${step.operation}`);
+      }
+      const after = probe(step);
+      if (after !== step.postcondition_hash) throw new Error(`close step ${step.step_id} postcondition verification failed`);
+      createOrVerify(task, stepRef, { schema_version: "task-close-step.v1", task_id: task.identity.taskId, plan_hash: plan.plan_hash, step_id: step.step_id, operation: step.operation, status: "completed", completion_mode: "executed", observed_hash: after }, `close step ${step.step_id}`);
+    }
+    const prior = readOptional(task, "operations/close/completed.json");
+    if (prior !== undefined) {
+      const completed = JSON.parse(prior);
+      if (completed.task_id !== task.identity.taskId || completed.plan_hash !== plan.plan_hash || completed.status !== "completed") throw new Error("close completion conflicts with current plan");
+      return Object.freeze(completed);
+    }
+    const completed = {
+      schema_version: "task-close-operation.v1",
+      task_id: task.identity.taskId,
+      plan_hash: plan.plan_hash,
+      status: "completed",
+      cleanup: "not-authorized",
+    };
+    createOrVerify(task, "operations/close/completed.json", completed, "close completion");
+    return Object.freeze(completed);
   });
+}
+
+export function taskCloseOperationStatus(taskHandle) {
+  const task = assertTaskHandle(taskHandle);
+  for (const [ref, status] of [["operations/close/completed.json", "completed"], ["operations/close/confirmation.json", "confirmed"], ["operations/close/plan.json", "prepared"]]) {
+    const raw = readOptional(task, ref);
+    if (raw !== undefined) return Object.freeze({ status, record_ref: ref, record: JSON.parse(raw) });
+  }
+  return Object.freeze({ status: "unprepared" });
 }

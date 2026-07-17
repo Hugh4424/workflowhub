@@ -73,6 +73,7 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["core/storage-root.mjs", new Set(["stage/component must not read the storage-root environment"])],
   ["core/task-identity.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/task-handle.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["core/launcher-authority.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/stage-context.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/runtime-mode.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],

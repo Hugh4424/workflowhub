@@ -15,9 +15,9 @@ Follow `docs/contracts/task-context.md`; runtime implementation is
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=build-plan
 --project=<project> --task=<task> --input=<component-receipts.json>`. Use the
-`confirm --attempt=<attempt> --decision=accepted|rejected` records the human
+`confirm --attempt=<attempt> --input=@-` records the authenticated human confirmation envelope and
 decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
-confirmations never publish checkpoint refs.
+rejected or timed-out confirmations never publish accepted records.
 
 Create `plan` and `tasks` through `stage-runtime.mjs receipt` with fixed `--component=plan|tasks`; pass those refs plus the canonical `wh-review` result ref as `plan`, `tasks`, and `review`. Missing review evidence stops the official run.
 

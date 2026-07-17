@@ -20,6 +20,29 @@ const UPSTREAM_INPUT = Object.freeze({
   "verify-code": null,
 });
 
+export function verifyStageLineage({ taskId, accepted, expected } = {}) {
+  if (typeof taskId !== "string" || !Array.isArray(accepted)) throw new TypeError("task lineage input is required");
+  if (accepted.length !== Object.keys(UPSTREAM_STAGE).length) throw new Error("stage lineage is incomplete or skipped");
+  const stages = Object.keys(UPSTREAM_STAGE);
+  for (const [index, record] of accepted.entries()) {
+    const stage = stages[index];
+    if (!record || record.task_id !== taskId || record.stage !== stage) throw new Error(`stage lineage task/stage mismatch at ${stage}`);
+    if (!/^[a-f0-9]{64}$/.test(record.attempt_hash ?? "")) throw new Error(`stage lineage attempt hash invalid at ${stage}`);
+    const refs = record.upstream_refs;
+    if (!Array.isArray(refs)) throw new Error(`stage lineage upstream refs invalid at ${stage}`);
+    if (index === 0) {
+      if (refs.length !== 0) throw new Error("make-decision lineage must not have upstream refs");
+    } else {
+      const previous = accepted[index - 1];
+      if (refs.length !== 1 || refs[0].ref !== `results/${previous.stage}/accepted.json` || refs[0].sha256 !== previous.attempt_hash) {
+        throw new Error(`stage lineage upstream hash/ref mismatch at ${stage}`);
+      }
+    }
+    if (expected && JSON.stringify(record) !== JSON.stringify(expected[index])) throw new Error(`stage lineage differs from expected record at ${stage}`);
+  }
+  return Object.freeze({ ok: true });
+}
+
 function upstreamForStage(ctx, stage, upstreamStage) {
   const slot = UPSTREAM_INPUT[stage];
   const hasInput = slot && Object.prototype.hasOwnProperty.call(ctx.manifest.inputs ?? {}, slot);
@@ -84,9 +107,8 @@ export async function runStage(stage, context, handler) {
   const upstream = upstreamForStage(ctx, stage, upstreamStage);
   const result = plainResult(await handler(workerContext(ctx), upstream));
   const upstreamRefs = upstream ? [{
-    task_id: upstream.accepted.task_id,
-    stage: upstream.accepted.stage,
-    accepted_ref: `results/${upstream.accepted.stage}/accepted.json`,
+    ref: upstream.accepted_ref ?? `results/${upstream.accepted.stage}/accepted.json`,
+    sha256: upstream.accepted_hash,
   }] : [];
 
   return ctx.kernel.publishAttempt(stage, {
@@ -162,10 +184,10 @@ export function runOfficialStage(stage, context, invocation) {
 }
 
 /** Persist the user's explicit decision before acceptance. */
-export function confirmStageAttempt(stage, context, { attemptRef, decision } = {}) {
+export function confirmStageAttempt(stage, context, { attemptRef, confirmation } = {}) {
   const ctx = assertContext(context, stage);
   if (!requiresHumanConfirmation(stage)) throw new Error(`${stage} uses automatic acceptance and does not require confirmation`);
-  return ctx.kernel.confirmAttempt(stage, attemptRef, decision);
+  return ctx.kernel.confirmAttempt(stage, attemptRef, confirmation);
 }
 
 /** Acceptance stays separate from execution; only decision gates require a human ref. */

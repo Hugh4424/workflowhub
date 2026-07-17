@@ -1,12 +1,25 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, readFileSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+
+import { bootstrapStage, prepareMakeDecisionWorkspace } from "../core/stage-context.mjs";
+import { acceptStageAttempt, runStage } from "../core/stage-runner.mjs";
+import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 import { createTask } from "../core/task-handle.mjs";
-import { createTaskKernel } from "../core/task-kernel.mjs";
-import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
+import { captureTaskSnapshotV1Sync } from "../core/task-snapshot.mjs";
+import { createTrustedSignatureProof } from "../core/human-confirmation.mjs";
+import {
+  confirmTaskCloseOperation,
+  executeTaskCloseOperation,
+  prepareTaskCloseOperation,
+  taskCloseOperationStatus,
+} from "../core/task-close.mjs";
+import { TEST_CONFIRMATION_SIGNING_KEY, testConfirmationVerification, writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 describe("stage runtime terminal contracts", () => {
   it("does not expose checkpoint override through the formal CLI", () => {
@@ -28,102 +41,127 @@ describe("stage runtime terminal contracts", () => {
     const source = readFileSync(resolve("scripts/stage-runtime.mjs"), "utf8");
     const handlers = readFileSync(resolve("core/stage-handlers.mjs"), "utf8");
     expect(source).not.toMatch(/handler-module/);
-    for (const stage of ["make-decision","build-spec","build-plan","build-code","verify-code"]) expect(handlers).toContain(stage);
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) expect(handlers).toContain(stage);
   });
 
   it("runStage resolves declared cross-task input mappings", () => {
-    const source = readFileSync(resolve("core/stage-runner.mjs"), "utf8");
-    expect(source).toMatch(/readInput\s*\(/);
+    expect(readFileSync(resolve("core/stage-runner.mjs"), "utf8")).toMatch(/readInput\s*\(/);
   });
-
 });
 
-describe("verify close executor fail-stop", () => {
-  const roots=[];
-  afterEach(()=>{while(roots.length)rmSync(roots.pop(),{recursive:true,force:true})});
-  const governed=async(steps,outcome="confirmed")=>{const root=realpathSync(mkdtempSync(join(tmpdir(),"workflowhub-close-")));roots.push(root);const repo=join(root,"repo"),taskId=`close-${roots.length}`,worktree=`${repo}-${taskId}`;mkdirSync(repo);execFileSync("git",["init","-q"],{cwd:repo});execFileSync("git",["config","user.email","t@e.co"],{cwd:repo});execFileSync("git",["config","user.name","T"],{cwd:repo});execFileSync("git",["commit","--allow-empty","-qm","base"],{cwd:repo});const head=String(execFileSync("git",["rev-parse","HEAD"],{cwd:repo})).trim();execFileSync("git",["worktree","add","-qb",`task/Demo/${taskId}`,worktree,head],{cwd:repo});const task=createTask({storageRoot:root,manifest:{schema_version:"1.0.0",project_name:"Demo",task_id:taskId,created_at:new Date().toISOString(),target_repo_root:repo,issue_ids:[],inputs:{}}});const kernel=createTaskKernel(task),decision=kernel.publishAttempt("make-decision",{facts:{worktree_root:worktree,baseline_commit:head}});kernel.acceptAttempt("make-decision",decision.attempt_ref,writeHumanConfirmation(kernel,"make-decision",decision));const resolvedSteps=typeof steps==="function"?steps({head,worktree}):steps;const plan={schema_version:"task-close-plan.v1",task_id:task.identity.taskId,steps:resolvedSteps??[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:head,final_oid:head}]};const {confirmClosePlan,createGovernedCloseExecutorRegistry}=await import("../core/task-close.mjs");const closeConfirmationRef=confirmClosePlan({task,kernel,plan,outcome}).ref;return{task,kernel,decision,plan,repo,worktree,head,executors:createGovernedCloseExecutorRegistry({task,kernel}),closeConfirmationRef};};
-  it("rejects the transitional in-memory close adapter", async () => {
-    const { executeClosePlan } = await import("../core/task-close.mjs");
-    await expect(executeClosePlan({ confirmationOutcome: "confirmed", steps: [async () => {}] }))
-      .rejects.toThrow(/TaskHandle|TaskKernel|durable|adapter.*forbidden/i);
+describe("TaskHandle-backed close fail-stop", () => {
+  const roots = [];
+  afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+
+  async function governed(decision = "accepted", { authorizeCleanup = false } = {}) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-close-operation-")));
+    roots.push(root);
+    const repo = join(root, "repo"), taskId = `close-${roots.length}`, projectName = "Demo";
+    mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "base"], { cwd: repo });
+    const taskPath = join(root, "Projects", projectName, "tasks", taskId);
+    const task = createTask({ storageRoot: root, taskPath, manifest: {
+      schema_version: "1.0.0", project_name: projectName, task_id: taskId,
+      created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {},
+      release_manifest_ref: "releases/test/manifest.json", release_manifest_hash: "a".repeat(64),
+    } });
+    const decisionContext = prepareMakeDecisionWorkspace(bootstrapStage("make-decision", { mode: "sidecar", taskPath, projectName, taskId, confirmationVerification: testConfirmationVerification }));
+    const contextFor = (stage) => stage === "make-decision" ? decisionContext : bootstrapStage(stage, { mode: "sidecar", taskPath, projectName, taskId, confirmationVerification: testConfirmationVerification });
+    const execute = async (stage, handler) => {
+      const context = contextFor(stage), attempt = await runStage(stage, context, handler);
+      const request = { attemptRef: attempt.attempt_ref };
+      if (requiresHumanConfirmation(stage)) request.humanConfirmationRef = writeHumanConfirmation(context.kernel, stage, attempt);
+      acceptStageAttempt(stage, context, request);
+    };
+    const worktree = decisionContext.candidateWorkspace.worktreeRoot;
+    const baseline = decisionContext.candidateWorkspace.baselineCommit;
+    const initialTree = decisionContext.candidateWorkspace.captureSnapshot().tree;
+    await execute("make-decision", async () => ({ facts: { worktree_root: worktree, baseline_commit: baseline, snapshot_tree: initialTree } }));
+    await execute("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); return { facts: { spec_ref: `specs/${taskId}/spec.md`, checkpoint: worker.createCheckpoint("build-spec") } }; });
+    await execute("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); return { facts: { plan_ref: `specs/${taskId}/plan.md`, tasks_ref: `specs/${taskId}/tasks.md`, checkpoint: worker.createCheckpoint("build-plan") } }; });
+    const testFacts = (prefix, tree) => ({ command: "true", exit_code: 0, command_hash: "b".repeat(64), snapshot_head: baseline, snapshot_tree: tree, snapshot_commit: baseline, started_at: "2026-07-17T00:00:00.000Z", completed_at: "2026-07-17T00:00:01.000Z", receipt_ref: `receipts/${prefix}.json`, receipt_hash: "c".repeat(64), output_ref: `evidence/${prefix}.txt`, output_hash: "d".repeat(64) });
+    const reviewFacts = (stage, tree) => ({ verdict: "pass", result_ref: `reviews/results/${stage}.json`, result_hash: "e".repeat(64), snapshot_tree: tree });
+    await execute("build-code", async (worker) => { const tree = captureTaskSnapshotV1Sync({ taskId, workspaceRoot: worker.workspace.worktreeRoot, baselineCommit: worker.workspace.baselineCommit }).tree_oid; return { facts: { changed: [], tests: testFacts("build", tree), review: reviewFacts("build-code", tree), phase_completion: true } }; });
+    await execute("verify-code", async (worker) => { const tree = captureTaskSnapshotV1Sync({ taskId, workspaceRoot: worker.workspace.worktreeRoot, baselineCommit: worker.workspace.baselineCommit }).tree_oid; return { facts: { tests: testFacts("verify", tree), review: reviewFacts("verify-code", tree), evidence_refs: [] } }; });
+    const context = contextFor("verify-code"), kernel = context.kernel, activeTask = context.task;
+    const plan = prepareTaskCloseOperation({ task: activeTask, kernel, authorizeCleanup });
+    const proofRef = `evidence/authentication/close-${taskId}.json`, proofRaw = "close-proof\n";
+    kernel.publishCanonicalRecord(proofRef, proofRaw);
+    const now = "2026-07-17T00:00:02.000Z";
+    const confirmation = {
+      schema_id: "https://workflowhub.dev/schemas/human-confirmation-envelope.v1.schema.json", schema_version: "1.0.0",
+      purpose: "close", task_id: taskId, bound_ref: "operations/close/plan.json", bound_hash: plan.plan_hash,
+      actor: { id: "human-reviewer", type: "human" },
+      source_event: { ref: `source-events/close-${taskId}.json`, sha256: "f".repeat(64), occurred_at: "2026-07-17T00:00:00.000Z" },
+      authentication: { method: "signature", verified_at: "2026-07-17T00:00:01.000Z", proof_ref: proofRef, proof_hash: sha256(proofRaw), signature: "0".repeat(64) },
+      decision, confirmed_at: now,
+    };
+    confirmation.authentication.signature = createTrustedSignatureProof(TEST_CONFIRMATION_SIGNING_KEY, confirmation);
+    confirmTaskCloseOperation({ task: activeTask, kernel, confirmation, confirmationVerification: testConfirmationVerification });
+    return { root, repo, task: activeTask, kernel, plan, worktree };
+  }
+
+  it("exposes only the four TaskHandle-backed close APIs", async () => {
+    expect(Object.keys(await import("../core/task-close.mjs")).sort()).toEqual([
+      "confirmTaskCloseOperation", "executeTaskCloseOperation", "prepareTaskCloseOperation", "taskCloseOperationStatus",
+    ]);
   });
 
-  it("requires an independent verify capability for every physical close step", async () => {
-    const source = readFileSync(resolve("core/task-close.mjs"), "utf8");
-    expect(source).not.toMatch(/executor\.verify\s*!==\s*undefined/);
-    expect(source).toMatch(/typeof executor\.verify[^\n]+function[^\n]+throw/i);
-  });
-  it.each(["rejected", "timeout"])("does not execute close steps after %s confirmation", async (outcome) => {
-    const taskClose = await import("../core/task-close.mjs");
-    const f=await governed(undefined,outcome), result = await taskClose.executeClosePlan(f);
-    expect(result.status).toBe("blocked"); expect(existsSync(f.worktree)).toBe(true);
+  it("rejects forged capabilities before any close record or side effect", async () => {
+    expect(() => prepareTaskCloseOperation({ task: {}, kernel: {} })).toThrow(/TaskHandle capability/i);
+    expect(() => confirmTaskCloseOperation({ task: {}, kernel: {}, confirmation: {} })).toThrow(/TaskHandle capability/i);
+    await expect(executeTaskCloseOperation({ task: {}, kernel: {} })).rejects.toThrow(/TaskHandle capability/i);
+    expect(() => taskCloseOperationStatus({})).toThrow(/TaskHandle capability/i);
   });
 
-  it("allows a later explicit close confirmation after an earlier rejection", async () => {
-    const taskClose = await import("../core/task-close.mjs"), f = await governed(undefined, "rejected");
-    const confirmed = taskClose.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: f.plan, outcome: "confirmed" });
-    expect(confirmed.ref).not.toBe(f.closeConfirmationRef);
-    await expect(taskClose.executeClosePlan({ ...f, closeConfirmationRef: confirmed.ref })).resolves.toMatchObject({ status: "completed" });
+  it.each(["rejected", "timeout"])("does not close after a %s confirmation", async (decision) => {
+    const fixture = await governed(decision);
+    await expect(executeTaskCloseOperation(fixture)).rejects.toThrow(/no accepted.*confirmation/i);
+    expect(taskCloseOperationStatus(fixture.task).status).toBe("confirmed");
+    expect(() => fixture.task.readRecord("operations/close/completed.json")).toThrow();
+    expect(existsSync(fixture.worktree)).toBe(true);
   });
 
-  it("stops after the first failed close step", async () => {
-    const taskClose = await import("../core/task-close.mjs");
-    const bad="f".repeat(40),f=await governed(({head})=>[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:bad,final_oid:head},{step_id:"remove",operation:"remove-worktree"}]);
-    await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/ancestor|commit|Git/i);
-    expect(existsSync(f.worktree)).toBe(true);
+  it("does not let a later decision overwrite an immutable rejected confirmation", async () => {
+    const fixture = await governed("rejected");
+    const confirmation = JSON.parse(fixture.task.readRecord("confirmations/source-events/" + sha256(`source-events/close-${fixture.task.identity.taskId}.json`) + ".json"));
+    expect(confirmation.decision).toBe("rejected");
+    expect(() => fixture.task.createRecordAtomic("operations/close/confirmation.json", "{}\n")).toThrow(/exist|immutable/i);
   });
 
-  it("rejects a close plan hash mismatch before any step side effect", async () => {
-    const taskClose = await import("../core/task-close.mjs"), f=await governed();
-    f.plan.steps.push({step_id:"changed",operation:"verify-checkpoint-ancestry",checkpoint_oid:f.head,final_oid:f.head});
-    await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/closeConfirmationRef|hash|plan/i);
-    expect(existsSync(f.worktree)).toBe(true);
+  it("rejects plan mutation before logical close", async () => {
+    const fixture = await governed();
+    const path = join(fixture.task.taskPath, "operations/close/plan.json"), plan = JSON.parse(readFileSync(path, "utf8"));
+    plan.steps[0].operation = "forged";
+    writeFileSync(path, `${JSON.stringify(plan)}\n`);
+    await expect(executeTaskCloseOperation(fixture)).rejects.toThrow(/plan hash mismatch/i);
+    expect(() => fixture.task.readRecord("operations/close/completed.json")).toThrow();
   });
 
-  it("persists step progress so restart reconciles without replay and writes completed last", async () => {
-    const taskClose = await import("../core/task-close.mjs"),f=await governed(({head})=>[{step_id:"ancestry",operation:"verify-checkpoint-ancestry",checkpoint_oid:head,final_oid:head},{step_id:"remove",operation:"remove-worktree"}]);
-    await taskClose.executeClosePlan(f); expect(existsSync(f.worktree)).toBe(false);
-    await expect(taskClose.executeClosePlan(f)).resolves.toMatchObject({status:"completed"});
-    expect(JSON.parse(f.task.readRecord("operations/close/completed.json")).status).toBe("completed");
+  it("persists completion last and retries idempotently", async () => {
+    const fixture = await governed();
+    const first = await executeTaskCloseOperation(fixture), second = await executeTaskCloseOperation(fixture);
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({ status: "completed", cleanup: "not-authorized" });
+    expect(taskCloseOperationStatus(fixture.task).status).toBe("completed");
+    expect(existsSync(fixture.worktree)).toBe(true);
   });
-  it("rebuilds authority after a crash between physical remove and step recording", async () => {
-    const taskClose=await import("../core/task-close.mjs"),f=await governed(()=>[{step_id:"remove",operation:"remove-worktree"}]);
-    const first=f.executors.executorFor(f.plan.steps[0]);await first.execute();expect(existsSync(f.worktree)).toBe(false);
-    const stepPath=`operations/close/plans/${taskClose.closePlanHash(f.plan)}/steps/remove.json`;expect(()=>f.task.readRecord(stepPath)).toThrow();
-    const restartedKernel=createTaskKernel(f.task),restartedExecutors=taskClose.createGovernedCloseExecutorRegistry({task:f.task,kernel:restartedKernel});
-    await expect(taskClose.executeClosePlan({...f,kernel:restartedKernel,executors:restartedExecutors})).resolves.toMatchObject({status:"completed"});
-    expect(JSON.parse(f.task.readRecord(stepPath))).toMatchObject({completion_mode:"reconciled",physical_state:{satisfied:true,worktree_root:f.worktree}});
+
+  it("requires cleanup to use its separate authorization and operation", async () => {
+    await expect(governed("accepted", { authorizeCleanup: true })).rejects.toThrow(/separate cleanup authorization/i);
   });
-  it("fails closed when the task worktree branch drifts before remove", async () => {
-    const taskClose=await import("../core/task-close.mjs"),f=await governed(()=>[{step_id:"remove",operation:"remove-worktree"}]);
-    execFileSync("git",["switch","-qc","drift"],{cwd:f.worktree});
-    await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/branch|registration/i);
-    expect(existsSync(f.worktree)).toBe(true);
-  });
-  it("rejects a caller-selected worktree removal path", async () => {
-    const taskClose = await import("../core/task-close.mjs"), f = await governed(({worktree}) => [{step_id:"remove",operation:"remove-worktree",worktree_root:worktree}]);
-    await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/path.*accepted Workspace|selected only/i);
-    expect(existsSync(f.worktree)).toBe(true);
-  });
-  it("rejects an arbitrary or verify-stage confirmation ref", async () => {
-    const taskClose = await import("../core/task-close.mjs"), f = await governed();
-    await expect(taskClose.executeClosePlan({ ...f, closeConfirmationRef: `confirmations/make-decision/${f.decision.attempt_ref}` })).rejects.toThrow(/canonical.*closeConfirmationRef/i);
-    await expect(taskClose.executeClosePlan({ ...f, closeConfirmationRef: "human:test" })).rejects.toThrow(/canonical.*closeConfirmationRef/i);
-    expect(existsSync(f.worktree)).toBe(true);
-  });
+
   it.each([
-    ["accepted identity", (f) => {
-      const path=join(f.task.taskPath,"results","make-decision","accepted.json"),record=JSON.parse(readFileSync(path,"utf8"));record.task_id="forged";writeFileSync(path,`${JSON.stringify(record)}\n`);
-    }],
-    ["attempt content", (f) => {
-      const path=join(f.task.taskPath,"results","make-decision",f.decision.attempt_ref),record=JSON.parse(readFileSync(path,"utf8"));record.facts.baseline_commit="f".repeat(40);writeFileSync(path,`${JSON.stringify(record)}\n`);
-    }],
-    ["accepted integrity", (f) => {
-      const path=join(f.task.taskPath,"results","make-decision","accepted.json"),record=JSON.parse(readFileSync(path,"utf8"));record.integrity_hash=`sha256:${"0".repeat(64)}`;writeFileSync(path,`${JSON.stringify(record)}\n`);
-    }],
-  ])("fails closed before remove when %s is tampered", async (_label, tamper) => {
-    const taskClose=await import("../core/task-close.mjs"),f=await governed(()=>[{step_id:"remove",operation:"remove-worktree"}]);tamper(f);
-    await expect(taskClose.executeClosePlan(f)).rejects.toThrow(/accepted|attempt|integrity|identity|hash/i);
-    expect(existsSync(f.worktree)).toBe(true);
+    ["accepted identity", (fixture) => { const path = join(fixture.task.taskPath, "results", "verify-code", "accepted.json"), record = JSON.parse(readFileSync(path, "utf8")); record.task_id = "forged"; writeFileSync(path, `${JSON.stringify(record)}\n`); }],
+    ["accepted attempt hash", (fixture) => { const path = join(fixture.task.taskPath, "results", "verify-code", "accepted.json"), record = JSON.parse(readFileSync(path, "utf8")); record.attempt_hash = "0".repeat(64); writeFileSync(path, `${JSON.stringify(record)}\n`); }],
+    ["attempt content", (fixture) => { const accepted = JSON.parse(fixture.task.readRecord("results/verify-code/accepted.json")); writeFileSync(join(fixture.task.taskPath, accepted.attempt_ref), "{}\n"); }],
+  ])("fails closed when %s is tampered", async (_label, tamper) => {
+    const fixture = await governed();
+    tamper(fixture);
+    await expect(executeTaskCloseOperation(fixture)).rejects.toThrow(/accepted|attempt|integrity|identity|hash/i);
+    expect(() => fixture.task.readRecord("operations/close/completed.json")).toThrow();
   });
 });

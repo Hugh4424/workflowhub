@@ -2,6 +2,7 @@ import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { assertTaskHandle } from "./task-handle.mjs";
+import { repositoryRootForTask } from "./repository-registry.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 
 const WORKSPACES = new WeakSet();
@@ -29,7 +30,7 @@ function realGitToplevel(path, label) {
 }
 
 function deterministicWorkspace(task) {
-  const targetRepoRoot = realGitToplevel(task.manifest.target_repo_root, "target repository");
+  const targetRepoRoot = realGitToplevel(repositoryRootForTask(task), "target repository");
   const branch = `task/${task.identity.projectName}/${task.identity.taskId}`;
   const worktreeRoot = resolve(dirname(targetRepoRoot), `${basename(targetRepoRoot)}-${task.identity.taskId}`);
   return { targetRepoRoot, branch, worktreeRoot };

@@ -6,8 +6,48 @@ import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../core/runtime-mode.mjs";
+import { assertCanonicalRef, createReleaseAuthority, createTaskWithLauncherAuthority, releaseAuthorityOperations } from "../core/launcher-authority.mjs";
+import { resolveRepositoryRef } from "../core/repository-registry.mjs";
 import { resolveStorageRoot } from "../core/storage-root.mjs";
-import { createTask } from "../core/task-handle.mjs";
+import { createTask, createTaskUnderLock } from "../core/task-handle.mjs";
+
+const TASK_MANIFEST_SCHEMA = "https://workflowhub.dev/schemas/task-manifest.v1.schema.json";
+const TASK_CREATE_SCHEMA = "https://workflowhub.dev/schemas/task-create-input.v1.schema.json";
+
+export function createPinnedTask(input, { launcherAuthority, repositoryAuthority, releaseAuthority, now = () => new Date().toISOString() } = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("task create input must be an object");
+  const allowed = new Set(["schema_id", "schema_version", "project_name", "task_id", "source_ref", "target_repository_ref"]);
+  const forbidden = ["release_manifest_ref", "release_manifest_hash", "target_repo_root", "target-repo", "cwd", "worktree"];
+  const bad = Object.keys(input).find((key) => !allowed.has(key) || forbidden.includes(key));
+  if (bad) throw new TypeError(`caller task input field is forbidden: ${bad}`);
+  if (input.schema_id !== TASK_CREATE_SCHEMA || input.schema_version !== "1.0.0") throw new TypeError("task create input schema mismatch");
+  for (const field of ["project_name", "task_id", "source_ref", "target_repository_ref"]) if (typeof input[field] !== "string" || input[field].length === 0) throw new TypeError(`task create ${field} is required`);
+  resolveRepositoryRef(repositoryAuthority, input.target_repository_ref);
+  const release = releaseAuthorityOperations(releaseAuthority);
+
+  return createTaskWithLauncherAuthority(launcherAuthority, {
+    projectName: input.project_name,
+    taskId: input.task_id,
+    prepareManifest() {
+      const current = release.readCurrent();
+      if (!current || typeof current.ref !== "string" || !/^[a-f0-9]{64}$/.test(current.sha256)) throw new Error("current release pointer is invalid");
+      assertCanonicalRef(current.ref, "current release manifest ref");
+      const diagnosis = release.doctor(current);
+      if (!diagnosis?.ok || diagnosis.manifest_ref !== current.ref || diagnosis.manifest_hash !== current.sha256) throw new Error("current release failed exact doctor verification");
+      assertCanonicalRef(diagnosis.manifest_ref, "doctor release manifest ref");
+      return {
+        schema_id: TASK_MANIFEST_SCHEMA,
+        schema_version: "1.0.0",
+        project_name: input.project_name,
+        task_id: input.task_id,
+        created_at: now(),
+        target_repository_ref: input.target_repository_ref,
+        release_manifest_ref: current.ref,
+        release_manifest_hash: current.sha256,
+      };
+    },
+  });
+}
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
 export function bootstrapTask(values, { env = process.env, home } = {}) {
@@ -27,6 +67,6 @@ export function bootstrapTask(values, { env = process.env, home } = {}) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { process.stdout.write(`${JSON.stringify(bootstrapTask(args(process.argv.slice(2))), null, 2)}\n`); }
-  catch (error) { process.stderr.write(`${error?.stack ?? error}\n`); process.exitCode = 1; }
+  process.stderr.write("task-bootstrap.mjs is an internal handler; use the workflowhub public CLI\n");
+  process.exitCode = 2;
 }
