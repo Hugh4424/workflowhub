@@ -6,6 +6,8 @@ import {
   closePlanHash,
   completeDeliveryClosePlan,
   confirmClosePlan,
+  createDeliveryCloseExecutorRegistry,
+  executeClosePlan,
   inspectDeliveryCloseState,
   prepareDeliveryClosePlan,
 } from "../core/task-close.mjs";
@@ -49,6 +51,7 @@ function usage() {
     "Usage:",
     "  task-close.mjs prepare --task-path=... --project=... --task=... --task-branch=... --target-branch=... --remote=... --task-commit=... --spec-source=... --spec-archive=...",
     "  task-close.mjs confirm --task-path=... --project=... --task=... --plan-hash=... --decision=confirmed|rejected|timeout",
+    "  task-close.mjs execute --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs complete --task-path=... --project=... --task=... --plan-hash=... --confirmation-ref=...",
     "  task-close.mjs status --task-path=... --project=... --task=... --plan-hash=...",
   ].join("\n");
@@ -56,7 +59,7 @@ function usage() {
 
 async function main() {
   const { command, values } = args(process.argv.slice(2));
-  if (!new Set(["prepare", "confirm", "complete", "status"]).has(command)) throw new TypeError(usage());
+  if (!new Set(["prepare", "confirm", "execute", "complete", "status"]).has(command)) throw new TypeError(usage());
   const { task, kernel } = context(values);
   if (command === "prepare") {
     return prepareDeliveryClosePlan({ task, kernel, delivery: {
@@ -70,6 +73,7 @@ async function main() {
   }
   const plan = preparedPlan(task, required(values, "plan-hash"));
   if (command === "confirm") return confirmClosePlan({ task, kernel, plan, outcome: required(values, "decision") });
+  if (command === "execute") return executeClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref"), executors: createDeliveryCloseExecutorRegistry({ task, kernel, plan }) });
   if (command === "complete") return completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });
   const completion = optionalCompletion(task);
   if (completion && (completion.schema_version !== "task-close-completed.v1" || completion.task_id !== task.identity.taskId || completion.plan_hash !== closePlanHash(plan))) {
