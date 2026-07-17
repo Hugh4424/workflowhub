@@ -40,13 +40,15 @@ make-decision direction 和 verify-code 保持不加载。所有生成/实现步
 
 保留“执行自己的 Skill、完成后回报工头”的短规则，删除 Launcher/runtime/identity/lineage 黑话。
 
-- Decision Maker：实质歧义直接问用户；最终展示方向摘要和 `decision-log`，取得方向确认后才能 accepted；
+- Decision Maker：实质歧义直接问用户；最终展示方向摘要和 `decision-log`，取得方向确认后才能 accepted；完成评论末尾附正式入口实际使用的 `project/task`；
 - Spec Builder：产品口径问题在当前 Issue 直接问用户，工头只知会；
 - Plan Builder：普通技术拆分自主完成，计划边界最终按宪法确认；
 - Code Builder：按 accepted plan 自主推进 phase；删除“每个 phase 都等用户确认”；只有实质歧义、明显阻塞、权限、安全和不可逆动作才升级；
 - Code Verifier：fresh 验证后执行 WorkflowHub close；没有 `completed` 不得宣称完成。
 
 每个 Agent 只保留自己的 stage Skill，全部解绑 `caveman`。
+
+工头推进 build-spec 及后续 stage 时，只把 Decision Maker 完成评论中的 `project/task` 原样写入下一 Issue 末尾“内部引用”。缺值就回原 make-decision Issue 真实 mention 补齐；不从 Issue、分支或目录推断。正文七段仍保持大白话，不恢复 Launcher/runtime 黑话。
 
 ### Coder
 
@@ -88,7 +90,7 @@ Squad instructions 只保留：Squad 只路由 leader；工头创建/复用五�
 
 Code Verifier 从主 checkout 执行：
 
-1. 确认任务 worktree 已提交且干净；
+1. 将任务分支原子更新到 plan 绑定的已验证 snapshot commit，再 `git reset --mixed` 到该 commit，确认工作区字节不变且变为 clean；
 2. 在任务分支 `git mv` spec 到 archive 并 commit，随后该 archive commit 必须被合并到目标分支；
 3. 合并任务分支到目标分支；
 4. push 目标分支；
@@ -101,7 +103,7 @@ Code Verifier 从主 checkout 执行：
 
 新增薄脚本 `scripts/task-close.mjs`，复用现有 close plan/confirmation/completed records；在 `core/task-close.mjs` 增加一个窄的 delivery-state verifier。脚本只提供 `prepare`、`confirm`、`complete`、`status`：
 
-- `prepare` 冻结上述计划和前置 Git facts；
+- `prepare` 冻结上述计划和前置 Git facts；若 snapshot 尚未发布，要求 snapshot parent 等于任务分支 tip，且实时工作区 tree 精确等于 snapshot tree；
 - `confirm` 复用现有 plan-hash confirmation；
 - Code Verifier 在调用 `complete` 前显式 fetch remote；`complete` 只读探测最终 Git/spec 事实，核实任务 commit 和 archive commit 均在目标分支、已刷新 remote ref 与目标分支一致、路径与 cleanup 状态正确；全部成立后调用现有完成记录；
 - `status` 回读完成记录并显示当前物理事实；若 merge 已完成但 push 或 cleanup 未完成，明确列出已完成和未完成动作，不把部分完成显示成 completed。

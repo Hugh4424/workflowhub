@@ -50,7 +50,10 @@ Declared runtime components: `test-strategy`, `wh-review`, conditional
    `accept`. This confirmation accepts verification facts only.
 7. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
-   commit, accepted spec path, and archive path. The frozen plan contains exactly
+   snapshot commit from the accepted verification facts, accepted spec path,
+   and archive path. `prepare` accepts the still-uncommitted worktree only when
+   its freshly captured tree exactly matches that snapshot commit and the
+   snapshot parent is the current task-branch tip. The frozen plan contains exactly
    six actions: commit delivery, archive and commit the spec, merge the task
    branch from the main checkout, push the target branch, remove the task
    worktree, and remove the merged local task branch. Show the full hashed close plan
@@ -60,7 +63,11 @@ Declared runtime components: `test-strategy`, `wh-review`, conditional
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.
 9. The Code Verifier performs the Git writes, stopping at the first failure and
-   resuming from current Git facts: ensure the task worktree is clean; `git mv`
+   resuming from current Git facts. Immediately before the first write, rerun
+   `prepare` and require the same plan hash. Publish the already verified commit
+   without changing worktree bytes by atomically updating the task branch from
+   the plan-bound parent to `task_commit`, then run `git reset --mixed
+   <task_commit>` in the task worktree and require a clean status. Next, `git mv`
    the spec to the planned archive path and commit it; merge the task branch into
    the target branch from the main checkout; push the target branch; remove the
    task worktree; then delete the merged local task branch. Immediately before

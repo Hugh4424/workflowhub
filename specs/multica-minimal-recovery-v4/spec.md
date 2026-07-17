@@ -84,7 +84,7 @@ make-decision 依赖组件必须作为可解析的 Skill 闭包随包部署；�
 
 ### FR-006 Issue 必须让人看懂
 
-五个 stage Issue 标题固定为：`{stage name}｜{父任务标题}`。技术 ID 只放正文末尾。
+五个 stage Issue 标题固定为：`{stage name}｜{父任务标题}`。技术 ID 只放正文末尾。make-decision 完成评论必须附官方入口实际使用的 `project/task`；工头将其原样写入后续 stage Issue 末尾的“内部引用”，缺值时回原 Issue mention Decision Maker 补齐，禁止推断。
 
 正文只写七项：背景、本阶段目标、不做什么、已有输入、产物、完成标准、完成后交给谁。不得让 runtime、hash、lineage、receipt 等内部术语占据正文。
 
@@ -102,7 +102,9 @@ make-decision 依赖组件必须作为可解析的 Skill 闭包随包部署；�
 
 ### FR-008 close 必须完成真实交付
 
-verify-code 通过后生成并展示具体 close plan：确认交付已 commit、归档当前 spec 并 commit、从主 checkout 合并任务分支、push 目标分支、删除任务 worktree、删除已合并的本地任务分支。
+verify-code 通过后生成并展示具体 close plan：发布已验证的候选 snapshot commit、归档当前 spec 并 commit、从主 checkout 合并任务分支、push 目标分支、删除任务 worktree、删除已合并的本地任务分支。
+
+`prepare` 允许候选 snapshot 尚未发布到任务分支，但必须同时满足：snapshot commit 的父提交等于当前任务分支 tip，且 freshly captured 工作区 tree 精确等于该 snapshot tree。任何额外改动都必须失败。close 授权后先把任务分支更新到该 snapshot commit，并确认工作区字节不变且变为 clean，再执行后续动作。
 
 用户对该 plan 一次确认后，由 Code Verifier 执行；无需为每条命令再次确认。
 
@@ -124,7 +126,7 @@ Code Verifier 只有取得 WorkflowHub close `completed` 后才能把 verify-cod
 
 - AC-001：四个指定 review bundle 含 `simplicity-guard`，两个排除项和所有生成步骤不含；
 - AC-002：实时回读显示工头无 stage Skill、Coder 无 `build-code`、七个执行 Agent 无 `caveman`；
-- AC-003：新父 Issue 只产生一套五阶段 Issue，标题和正文符合 FR-006；
+- AC-003：新父 Issue 只产生一套五阶段 Issue，标题和正文符合 FR-006，后续 stage 能从内部引用取得精确 `project/task`；
 - AC-004：make-decision 有真实用户交互、可读 `decision-log` 和方向确认，缺任一项时不能 accepted；
 - AC-005：普通技术选择自主完成，实质需求歧义直接问用户，工头不代答；
 - AC-006：ZHI-194 类恢复使用原 Issue 的真实 UUID mention，Agent 能重新接手；

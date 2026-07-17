@@ -5,6 +5,7 @@ import { isAbsolute, resolve } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
+import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { createTaskWorktreeRemoval } from "./workspace.mjs";
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -215,10 +216,22 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   if (git(root, ["rev-parse", "--show-toplevel"]) !== root) throw new Error("task target repository must be the Git toplevel");
   const worktree = resolve(accepted.facts.worktree_root);
   if (!existsSync(worktree)) throw new Error("accepted task worktree does not exist");
-  if (git(worktree, ["status", "--porcelain"]) !== "") throw new Error("task worktree has uncommitted delivery changes");
   const taskCommit = oid(input.task_commit, "delivery task_commit");
   const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
-  if (!branchTip.ok || branchTip.stdout.toLowerCase() !== taskCommit) throw new Error("task commit must be the clean task branch tip before archive");
+  if (!branchTip.ok) throw new Error("task branch does not exist");
+  const tip = branchTip.stdout.toLowerCase();
+  if (tip === taskCommit) {
+    if (git(worktree, ["status", "--porcelain"]) !== "") throw new Error("published task commit requires a clean task worktree");
+  } else {
+    const parent = gitResult(root, ["rev-parse", `${taskCommit}^`]);
+    const taskTree = gitResult(root, ["rev-parse", `${taskCommit}^{tree}`]);
+    if (!parent.ok || parent.stdout.toLowerCase() !== tip) throw new Error("task snapshot commit must have the current task branch tip as its parent");
+    if (!taskTree.ok) throw new Error("task snapshot commit does not exist");
+    const snapshot = captureGitWorktreeSnapshot(worktree);
+    if (snapshot.head.toLowerCase() !== tip || snapshot.tree.toLowerCase() !== taskTree.stdout.toLowerCase()) {
+      throw new Error("task worktree does not match the verified task snapshot commit");
+    }
+  }
   const plan = {
     schema_version: "task-close-plan.v1",
     task_id: task.identity.taskId,

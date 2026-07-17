@@ -35,3 +35,18 @@
 - 实现前的独立 scope review 曾发现 archive 可篡改/夹带、评论引用只判非空；修复后复审 `PASS`，相应反例和全量测试均通过。
 - 最新全量结果：94 个测试文件、749 项测试通过；Skill closure、structure、task record paths、anti-host、`git diff --check` 全部通过。
 - 真实 Canary 仍是上线验收项，未在本节冒充完成。
+
+## 真实 Canary 与后续修订
+
+上述 build-code 审查只覆盖 commit `908827e` 及其冻结材料，不覆盖 Canary 后的最新 close 修订。
+
+- 父 Issue：ZHI-204；五阶段：ZHI-209、ZHI-206、ZHI-205、ZHI-208、ZHI-207，均按顺序执行；
+- build-code snapshot tree：`f6ed5c45ce1f249c2de2dc0dfca8e5177e1d3959`；verify snapshot commit：`c8356046d6a96d3e55daff9b5bac951614c997ab`；
+- Canary 发现 `prepare` 错误要求候选先提交且 clean，导致 plan 无法在授权前生成；修复仅允许 parent/tree 双绑定的已验证 snapshot，不增加 Git executor；
+- close plan hash：`94babe5e489e3ca3e2ab3d471112ac045425d8d8702c65397e3dc64a66304265`；最终本地/远端临时目标 OID：`3693c090a34ab2be17bd37cec9d39acc219028b4`；worktree 和本地任务分支均已清理；
+- Code Builder 从旧 DeepSeek/OpenCode runtime 切换到现有 Codex runtime，是因为旧 runtime 两次越权自行实现或使用错误工作区；这是现有 Agent 的运行配置纠正，不是 provider 框架或新增产品需求；
+- `project/task` 两值交接保留，因为 Canary 实际出现后续阶段身份缺失；只写在 Issue 末尾内部引用，不恢复 Launcher、lineage 或 provider 设计。
+
+最新回归：close 聚焦测试 8/8；全量 94 files、750 tests 中 746 pass、2 skip，剩余 2 test failure 和 2 suite error 均来自 sandbox 禁止测试写工作树；对应写入型 3 files/31 tests 在可写临时副本全部通过。structure、Skill closure、task-record paths、anti-host、`run-checks`、five-stage smoke 和 `git diff --check` 均 exit 0。
+
+最新正式复审状态为 `unavailable`，不是 `pass`：冻结 snapshot tree `882eae7f742703fd401449457d3daa18de58ba89`，66 项 file-only material hash `7127f3552932a0798fea6689299258dd484d43d888d395d6821e4c1b28863886`，并确认 build-code bundle 含 `simplicity-guard`。联合 attempt `5ae20d35-ab8f-4881-87e6-edc2d5eccafd` 中 OpenCode 为 `PROCESS_EXIT_NONZERO`、Claude 为 `PROVIDER_OUTPUT_INVALID`；tier0 Kimi attempt `1d8f1cf3-9c9a-4992-8027-e3e8f09fd677` 为 `PROVIDER_PERMISSION_DENIED`；tier1 Claude 单独重试 attempt `c0082828-30c1-4112-a045-52108645d2f8` 仍为 `PROVIDER_OUTPUT_INVALID`。没有有效 reviewer JSON，因此不把空 findings 冒充审查通过；代码、方案和 provider 架构均未为此扩张。

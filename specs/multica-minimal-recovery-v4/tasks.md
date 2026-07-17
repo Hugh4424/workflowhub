@@ -29,8 +29,8 @@
 
 ## E. 整体验证与 Canary
 
-- [x] T015 运行 wh-review、make-decision、close、five-stage E2E、offline、TaskKernel 及受影响测试，执行 lint 和 `git diff --check`；核对 close 生产代码 220–340 行、测试 220–350 行、新依赖/schema/通用抽象为 0。映射：AC-001、004、007、008。依赖：T001、T002、T010、T014。
-- [ ] T016 创建一个低风险真实 Multica Issue，先验证 assignee + `backlog→todo` 确实让 Agent 接手，再完整验证五阶段顺序、可读 Issue、make-decision 交互、产品问题直达用户、真实 mention 恢复、业务仓无伪 runtime 文件和完整 close。失败先修复并重跑受影响部分，不机械创建第二个 Canary。映射：FR-010，AC-003–009。依赖：T009、T015。
+- [x] T015 运行 wh-review、make-decision、close、five-stage E2E、offline、TaskKernel 及受影响测试，执行 lint 和 `git diff --check`；核对 close 生产代码 220–340 行、测试 220–350 行、新依赖/schema/通用抽象为 0。映射：AC-001、004、007、008。依赖：T001、T002、T010、T014。最新证据：close 8/8；全量 94 files、750 tests 中 746 pass、2 skip，剩余 2 test failure 和 2 suite error 均为 sandbox 禁止测试写工作树；对应写入型 3 files/31 tests 在可写临时副本全部通过；structure、closure、task-record、anti-host、run-checks、five-stage smoke 和 `git diff --check` 均 exit 0。
+- [x] T016 创建一个低风险真实 Multica Issue，先验证 assignee + `backlog→todo` 确实让 Agent 接手，再完整验证五阶段顺序、可读 Issue、make-decision 交互、精确 `project/task` 交接、产品问题直达用户、真实 mention 恢复、业务仓无伪 runtime 文件和完整 close。失败先修复并重跑受影响部分，不机械创建第二个 Canary。映射：FR-010，AC-003–009。依赖：T009、T015。证据：父 Issue ZHI-204 及 stage ZHI-209/206/205/208/207 均 done；verify snapshot `c8356046d6a96d3e55daff9b5bac951614c997ab`；close plan `94babe5e489e3ca3e2ab3d471112ac045425d8d8702c65397e3dc64a66304265`；`task-close-completed.v1`；远端临时目标 `3693c090a34ab2be17bd37cec9d39acc219028b4`。
 
 ## 删除检查
 

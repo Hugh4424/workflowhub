@@ -71,7 +71,11 @@ async function main() {
   const plan = preparedPlan(task, required(values, "plan-hash"));
   if (command === "confirm") return confirmClosePlan({ task, kernel, plan, outcome: required(values, "decision") });
   if (command === "complete") return completeDeliveryClosePlan({ task, kernel, plan, closeConfirmationRef: required(values, "confirmation-ref") });
-  return { plan_hash: closePlanHash(plan), record_status: optionalCompletion(task)?.status ?? "not_completed", physical_state: inspectDeliveryCloseState({ task, kernel, plan }) };
+  const completion = optionalCompletion(task);
+  if (completion && (completion.schema_version !== "task-close-completed.v1" || completion.task_id !== task.identity.taskId || completion.plan_hash !== closePlanHash(plan))) {
+    throw new Error("completed close record conflicts with the requested plan");
+  }
+  return { plan_hash: closePlanHash(plan), record_status: completion?.status ?? "not_completed", physical_state: inspectDeliveryCloseState({ task, kernel, plan }) };
 }
 
 main().then((result) => console.log(JSON.stringify(result, null, 2))).catch((error) => {

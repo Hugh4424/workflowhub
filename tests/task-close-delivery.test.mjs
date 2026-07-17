@@ -125,11 +125,30 @@ describe("delivery close verifier", () => {
     await expect(api.completeDeliveryClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref })).resolves.toEqual(completed);
   });
 
-  it("refuses to prepare while the task worktree contains uncommitted delivery", async () => {
+  it("prepares from an uncommitted worktree only when it matches the verified snapshot commit", async () => {
     const api = await import("../core/task-close.mjs");
     const f = fixture();
+    const parent = git(f.worktree, "rev-parse", `${f.taskCommit}^`);
+    git(f.worktree, "reset", "--mixed", parent);
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    expect(prepared.plan.delivery.task_commit).toBe(f.taskCommit);
+
     writeFileSync(join(f.worktree, "dirty.txt"), "not committed\n");
-    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) })).toThrow(/uncommitted|dirty/i);
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) })).toThrow(/does not match.*snapshot/i);
+  });
+
+  it("publishes the plan-bound snapshot commit without changing verified worktree bytes", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const parent = git(f.worktree, "rev-parse", `${f.taskCommit}^`);
+    git(f.worktree, "reset", "--mixed", parent);
+    const before = readFileSync(join(f.worktree, "delivery.txt"), "utf8");
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    git(f.repo, "update-ref", "refs/heads/task/Demo/close-task", prepared.plan.delivery.task_commit, parent);
+    git(f.worktree, "reset", "--mixed", prepared.plan.delivery.task_commit);
+    expect(readFileSync(join(f.worktree, "delivery.txt"), "utf8")).toBe(before);
+    expect(git(f.worktree, "status", "--porcelain")).toBe("");
+    expect(git(f.worktree, "rev-parse", "HEAD")).toBe(f.taskCommit);
   });
 
   it("does not complete after a rejected close authorization", async () => {

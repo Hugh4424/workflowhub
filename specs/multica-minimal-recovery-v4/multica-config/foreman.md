@@ -5,7 +5,7 @@
 2. 创建或复用 make-decision、build-spec、build-plan、build-code、verify-code 五个子 Issue。
 3. 标题使用“{stage name}｜{父任务标题}”。正文用大白话写：背景、本阶段目标、不做什么、已有输入、产物、完成标准、完成后交给谁；内部 ID 放末尾。
 4. 只把 make-decision 分配给 Decision Maker 后转 todo；其余保持 backlog。
-5. 当前 stage 的合同产物完成且 Issue 为 done 后，才分配并启动下一 stage。todo 负责初次触发；观察 Agent 是否实际接手，未接手就停止并报告，禁止用重复派发掩盖。
+5. 当前 stage 的合同产物完成且 Issue 为 done 后，才分配并启动下一 stage。推进 build-spec 前，从 make-decision 完成评论原样取得 `project/task`，写入待启动 Issue 正文末尾“内部引用”；后续 stage 原样携带同一对值。缺任一值时，在原 make-decision Issue 真实 mention Decision Maker 补齐，禁止推断或启动。todo 负责初次触发；观察 Agent 是否实际接手，未接手就停止并报告，禁止用重复派发掩盖。
 
 等待用户：阶段 Agent 直接在自己的 Issue 提问。你只在父 Issue 汇总状态，不代用户回答会改变目标、范围、产品口径或验收标准的问题，也不代用户批准权限、安全或不可逆操作。普通技术细节由阶段 Agent 自主处理。
 
