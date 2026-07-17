@@ -102,19 +102,8 @@ function checkDiffScan(phaseResult, baseDir, errors, checked) {
     return null;
   }
 
-  if (scan.safe !== true) {
-    errors.push("diff scan safe must be true");
-  }
-  for (const key of ["violations", "c2_violations", "allowlist_violations"]) {
-    if (!Array.isArray(scan[key])) {
-      errors.push(`diff scan ${key} must be an array`);
-      continue;
-    }
-    const violations = scan[key];
-    if (violations.length > 0) {
-      errors.push(`diff scan ${key} must be empty (got ${violations.length})`);
-    }
-  }
+  if (scan.schema_version !== "1.0.0") errors.push("diff scan must use phase-diff-scan v1.0.0");
+  if (scan.allowed !== true) errors.push("diff scan allowlist result must be true");
   return scan;
 }
 
@@ -128,11 +117,15 @@ function checkReview(phaseResult, scan, worktreeRoot, errors, warnings, checked,
   if (!options.reviewDataRoot) { errors.push("review data root missing; pass --review-data-root explicitly"); return; }
   try {
     if (!scan) throw new Error("phase diff evidence is unavailable");
-    const subject = validatePhaseReviewEvidence({ phaseResult, scan, sourceRoot: worktreeRoot, phaseId: phaseResult.phase_id });
+    const subjectRef = scan.subject?.ref; const diffRef = phaseResult.diff_scan?.path;
+    if (!nonEmptyString(subjectRef) || isAbsolute(subjectRef) || subjectRef.split("/").includes("..")) throw new Error("phase subject ref must be task-relative");
+    const subject = readJson(resolve(options.baseDir ?? worktreeRoot, subjectRef));
+    const validated = validatePhaseReviewEvidence({ subject, scan, sourceRoot: worktreeRoot, phaseId: phaseResult.phase_id, subjectRef, diffRef });
     const { result } = readReviewResult(review, resolve(options.reviewDataRoot), { stage: options.reviewStage ?? "build-code", track: null, requirePass: false });
     if (result.subject_kind !== "phase" || typeof result.phase_id !== "string") throw new Error("phase review identity is missing");
-    if (result.phase_id !== subject.phaseId) throw new Error(`phase review identity mismatch: expected ${subject.phaseId}`);
-    if (result.base_tree !== subject.baseTree || result.candidate_tree !== subject.candidateTree) throw new Error("phase review tree identity mismatch");
+    if (result.phase_id !== validated.phaseId) throw new Error(`phase review identity mismatch: expected ${validated.phaseId}`);
+    if (result.base_tree !== validated.baseTree || result.candidate_tree !== validated.candidateTree) throw new Error("phase review tree identity mismatch");
+    if (result.phase_evidence?.subject_ref !== subjectRef || result.phase_evidence?.subject_hash !== validated.subjectHash || result.phase_evidence?.diff_ref !== diffRef || result.phase_evidence?.diff_hash !== validated.diffHash) throw new Error("phase review canonical evidence mismatch");
     if (result.verdict !== "pass") warnings.push(`review verdict is ${result.verdict}; preserve this quality fact`);
   }
   catch (error) { errors.push(`review is not a formal result: ${error.message}`); }

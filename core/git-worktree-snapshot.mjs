@@ -34,3 +34,20 @@ export function captureGitWorktreeSnapshot(root) {
     rmSync(index, { force: true });
   }
 }
+
+/** Capture the complete worktree as a tree object without creating a commit or ref. */
+export function captureGitWorktreeTree(root) {
+  const head = String(execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  })).trim();
+  const index = resolve(tmpdir(), `workflowhub-tree-${randomUUID()}.index`);
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  const run = (args) => String(execFileSync("git", args, {
+    cwd: root, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+  })).trim();
+  try {
+    run(["read-tree", head]);
+    run(["add", "-A", "--", "."]);
+    return Object.freeze({ head, tree: run(["write-tree"]) });
+  } finally { rmSync(index, { force: true }); }
+}

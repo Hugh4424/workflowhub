@@ -14,12 +14,14 @@ const errorPriority = ["MATERIAL_INCOMPLETE", "PROTOCOL_INCOMPATIBLE", "OUTPUT_I
 const providerPrompt = "Read review-instructions.md and the complete frozen bundle. Return the requested JSON object only.";
 const FIXTURE_SOURCE_TOKEN = Symbol("wh-review fixture source");
 
-function sourceRecord(source) {
+function sourceRecord(source, phaseId) {
+  if (phaseId) return { baseline_tree: source.baseTree, implementation_tree: source.snapshotTree };
   return { target_commit: source.targetCommit, base_commit: source.baseCommit, base_tree: source.baseTree, captured_head: source.capturedHead };
 }
 
 function subjectRecord(source, phaseId) {
-  return { subject_kind: phaseId ? "phase" : "worktree", phase_id: phaseId ?? null, base_tree: source.baseTree, candidate_tree: source.snapshotTree };
+  return { subject_kind: phaseId ? "phase" : "worktree", phase_id: phaseId ?? null, base_tree: source.baseTree, candidate_tree: source.snapshotTree,
+    ...(phaseId && source.phaseEvidence ? { phase_evidence: { subject_ref: source.phaseEvidence.subjectRef, subject_hash: source.phaseEvidence.subjectHash, diff_ref: source.phaseEvidence.diffRef, diff_hash: source.phaseEvidence.diffHash } } : {}) };
 }
 
 function failedProvider(provider, error) {
@@ -104,7 +106,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace
   const unavailableError = primaryError(reviewed);
   const attempt = {
     version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: taskId, stage, review_track: reviewTrack,
-    ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
+    ...subject, source: sourceRecord(source, phaseId), snapshot_tree: source.snapshotTree, material_id: bundle.materialId,
     provider_attempts: providerAttempts, terminal_status: aggregation.status === "semantic" ? "semantic" : "unavailable",
     error: aggregation.status === "semantic" ? null : { code: unavailableError.code, message: `${unavailableError.message}; only ${aggregation.valid.length} valid reviewer result(s); ${minimumReviewers} required` }
   };
@@ -113,7 +115,7 @@ export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace
   const providerResults = aggregation.valid.map((item) => ({ provider: item.provider, output: item.review }));
   const findings = providerResults.flatMap((item) => item.output.findings.map((finding) => ({ provider: item.provider, ...finding })));
   const result = {
-    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source), snapshot_tree: source.snapshotTree,
+    version: "wh-review-result.v1", task_id: taskId, stage, review_track: reviewTrack, ...subject, source: sourceRecord(source, phaseId), snapshot_tree: source.snapshotTree,
     material_id: bundle.materialId, attempt_ref: refs.attemptRef, provider_results: providerResults,
     verdict: aggregation.verdict, findings
   };

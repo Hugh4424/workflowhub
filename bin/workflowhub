@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+import { runPublicCli } from "../core/public-cli.mjs";
+try { process.stdout.write(`${JSON.stringify(runPublicCli(process.argv.slice(2)))}\n`); }
+catch (error) { process.stderr.write(`${error?.stack ?? error}\n`); process.exitCode = 1; }

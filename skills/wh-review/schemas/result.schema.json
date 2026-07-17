@@ -12,6 +12,7 @@
     "phase_id": { "type": ["string", "null"], "minLength": 1 },
     "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "phase_evidence": { "type": "object", "required": ["subject_ref", "subject_hash", "diff_ref", "diff_hash"], "properties": { "subject_ref": { "type": "string", "pattern": "^evidence/phases/" }, "subject_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "diff_ref": { "type": "string", "pattern": "^evidence/phases/" }, "diff_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false },
     "source": { "$ref": "attempt.schema.json#/properties/source" },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },

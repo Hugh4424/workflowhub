@@ -6,6 +6,12 @@ import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint,
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
 import { assertCandidateWorkspace } from "./workspace.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
+import { validatePhaseLineage } from "./phase-lineage.mjs";
+import { hashCanonical } from "./task-snapshot.mjs";
+import { validatePhaseEvidence } from "./phase-evidence-contract.mjs";
+import { readPhaseSubject } from "./phase-subject.mjs";
+import { scanPhaseTreeDiff } from "./tree-diff-scanner.mjs";
+import { validateSchema as validateWhReviewSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
 const ATTEMPT_REF = /^attempt-([0-9]{4})\.json$/;
@@ -316,6 +322,12 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       if (typeof relativePath !== "string" || !/^(?:receipts|reviews|evidence)\//.test(relativePath) || relativePath.includes("..")) throw new Error("canonical receipt namespace required");
       return createKernelRecord(relativePath, data);
     },
+    publishPhaseSubject(value) {
+      validatePhaseLineage(kernel, value);
+      return publishPhase("subject", value);
+    },
+    publishPhaseDiff(value) { return publishPhase("diff", value); },
+    publishPhaseResult(value) { return publishPhase("result", value); },
     createCheckpoint(stage) {
       if (!workspace || !artifacts) throw new Error("Git checkpoint requires Workspace and ArtifactDir capabilities");
       return createGitCheckpoint({ workspace, artifacts, task, stage: stageName(stage) });
@@ -469,6 +481,48 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       throw new Error(`input slot ${slot} is read-only; publishing inputs is unsupported`);
     },
   };
+  function publishPhase(kind, value) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || value.schema_version !== "1.0.0" || typeof value.phase_id !== "string" || value.task_id !== task.identity.taskId) throw new TypeError(`canonical phase ${kind} identity invalid`);
+    validatePhaseEvidence(kind, value);
+    if (kind === "diff") {
+      const subjectRef = `evidence/phases/${value.phase_id}/subject.json`; const subject = parseJson(task.readRecord(subjectRef), "canonical phase subject");
+      if (value.subject.ref !== subjectRef || value.subject.hash !== hashCanonical(subject)) throw new Error("phase diff does not bind canonical subject");
+      if (value.baseline_tree !== subject.baseline.tree_oid || value.implementation_tree !== subject.implementation.tree_oid) throw new Error("phase diff tree pair mismatch");
+      if (!workspace) throw new Error("phase diff publication requires authenticated Workspace");
+      const recomputed = scanPhaseTreeDiff(workspace, readPhaseSubject(task, value.phase_id, workspace)).value;
+      if (hashCanonical(recomputed) !== hashCanonical(value)) throw new Error("phase diff differs from trusted tree recomputation");
+    }
+    if (kind === "result") {
+      const subjectRef = `evidence/phases/${value.phase_id}/subject.json`; const diffRef = `evidence/phases/${value.phase_id}/diff.json`;
+      const subject = parseJson(task.readRecord(subjectRef), "canonical phase subject"); const diff = parseJson(task.readRecord(diffRef), "canonical phase diff");
+      if (value.subject.ref !== subjectRef || value.subject.hash !== hashCanonical(subject) || value.diff.ref !== diffRef || value.diff.hash !== hashCanonical(diff)) throw new Error("phase result does not bind canonical subject/diff");
+      const reviewRaw = task.readRecord(value.review.ref);
+      if (hash(reviewRaw) !== value.review.hash) throw new Error("phase result review hash mismatch");
+      const review = parseJson(reviewRaw, "canonical phase review");
+      validateWhReviewSchema("result", review);
+      if (review.subject_kind !== "phase" || review.phase_id !== value.phase_id || review.base_tree !== subject.baseline.tree_oid || review.candidate_tree !== subject.implementation.tree_oid || review.verdict !== value.review.verdict) throw new Error("phase result review subject mismatch");
+      if (review.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId || review.stage !== "build-code" || review.phase_evidence?.subject_ref !== subjectRef || review.phase_evidence?.subject_hash !== hashCanonical(subject) || review.phase_evidence?.diff_ref !== diffRef || review.phase_evidence?.diff_hash !== hashCanonical(diff)) throw new Error("phase result requires formally bound wh-review provenance");
+      if (!Array.isArray(review.provider_results) || review.provider_results.length === 0 || review.provider_results.some((entry) => typeof entry?.provider !== "string" || !entry.output || !["pass", "revise_required"].includes(entry.output.verdict))) throw new Error("phase result review provider provenance invalid");
+      const reviewAttempt = parseJson(task.readRecord(review.attempt_ref), "canonical wh-review attempt"); validateWhReviewSchema("attempt", reviewAttempt);
+      if (reviewAttempt.task_id !== task.identity.taskId || reviewAttempt.stage !== "build-code" || reviewAttempt.phase_id !== value.phase_id || reviewAttempt.terminal_status !== "semantic" || JSON.stringify(reviewAttempt.phase_evidence) !== JSON.stringify(review.phase_evidence)) throw new Error("phase result wh-review attempt provenance mismatch");
+      for (const providerResult of review.provider_results) {
+        const providerAttempt = reviewAttempt.provider_attempts.find((entry) => entry.provider === providerResult.provider && entry.status === "completed" && typeof entry.output_ref === "string");
+        if (!providerAttempt) throw new Error(`phase result missing completed provider attempt: ${providerResult.provider}`);
+        const output = parseJson(task.readRecord(providerAttempt.output_ref), "canonical provider output");
+        if (output.schema_version !== "wh-review-provider-output.v1" || output.task_id !== task.identity.taskId || output.stage !== "build-code" || output.attempt_id !== reviewAttempt.attempt_id || output.provider !== providerResult.provider || hash(output.content) !== output.content_hash) throw new Error("phase result provider output provenance mismatch");
+        if (JSON.stringify(parseJson(output.content, "provider semantic content")) !== JSON.stringify(providerResult.output)) throw new Error("phase result provider semantic output mismatch");
+      }
+    }
+    const ref = `evidence/phases/${value.phase_id}/${kind}.json`;
+    const raw = `${JSON.stringify(value, null, 2)}\n`;
+    try { createKernelRecord(ref, raw); return deepFreeze({ ref, hash: hashCanonical(value), created: true }); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const existing = parseJson(task.readRecord(ref), `existing phase ${kind}`);
+      if (hashCanonical(existing) !== hashCanonical(value)) throw new Error(`immutable phase ${kind} conflict: ${ref}`);
+      return deepFreeze({ ref, hash: hashCanonical(existing), created: false });
+    }
+  }
   return kernel;
 }
 

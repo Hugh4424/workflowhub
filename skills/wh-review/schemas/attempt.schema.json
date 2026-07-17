@@ -13,17 +13,11 @@
     "phase_id": { "type": ["string", "null"], "minLength": 1 },
     "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "candidate_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-    "source": {
-      "type": "object",
-      "required": ["target_commit", "base_commit", "base_tree", "captured_head"],
-      "properties": {
-        "target_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "base_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
-        "captured_head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }
-      },
-      "additionalProperties": false
-    },
+    "phase_evidence": { "type": "object", "required": ["subject_ref", "subject_hash", "diff_ref", "diff_hash"], "properties": { "subject_ref": { "type": "string", "pattern": "^evidence/phases/" }, "subject_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "diff_ref": { "type": "string", "pattern": "^evidence/phases/" }, "diff_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false },
+    "source": { "oneOf": [
+      { "type": "object", "required": ["target_commit", "base_commit", "base_tree", "captured_head"], "properties": { "target_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }, "base_commit": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }, "base_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }, "captured_head": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" } }, "additionalProperties": false },
+      { "type": "object", "required": ["baseline_tree", "implementation_tree"], "properties": { "baseline_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" }, "implementation_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" } }, "additionalProperties": false }
+    ] },
     "snapshot_tree": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "material_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "provider_attempts": {

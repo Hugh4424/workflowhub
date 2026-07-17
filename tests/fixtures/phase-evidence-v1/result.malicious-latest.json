@@ -1,0 +1,11 @@
+{
+  "schema_version": "latest",
+  "phase_id": "phase-0",
+  "task_id": "other-task",
+  "subject": { "ref": "latest", "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "diff": { "ref": "latest", "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+  "review": { "ref": "latest", "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "verdict": "pass" },
+  "tests": [],
+  "eligibility": { "next_phase": "p2", "structurally_complete": true },
+  "range": "HEAD~1..HEAD"
+}

@@ -3,29 +3,34 @@ import { mkdtempSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { validatePhaseGate } from "../scripts/phase-gate.mjs";
+import { hashCanonical } from "../core/task-snapshot.mjs";
 
 let root, outside;
 let tree, baseTree, baselineCommit, implementationCommit;
 function git(args) { return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim(); }
 function write(path, value) { mkdirSync(join(path, ".."), { recursive: true }); writeFileSync(path, JSON.stringify(value)); }
+let subject, scan;
 function result(verdict = "pass", snapshot = tree) {
   return { version: "wh-review-result.v1", task_id: "fixture", stage: "build-code", review_track: null,
     source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: snapshot,
     subject_kind: "phase", phase_id: "phase-1", base_tree: baseTree, candidate_tree: tree,
+    phase_evidence: { subject_ref: "evidence/phases/phase-1/subject.json", subject_hash: hashCanonical(subject), diff_ref: "evidence/phases/phase-1/diff.json", diff_hash: hashCanonical(scan) },
     material_id: "a".repeat(64), attempt_ref: "reviews/attempts/a/attempt.json", provider_results: [{ provider: "kimi" }], verdict, findings: [] };
 }
 function fixture(verdict = "pass") {
   mkdirSync(join(root, "evidence"), { recursive: true });
   write(join(root, "evidence/RED.json"), { exit_code: 1 });
   write(join(root, "evidence/GREEN.json"), { exit_code: 0 });
-  write(join(root, "evidence/diff.json"), { schema_version: "phase-diff-scan.v1", phase_id: "phase-1",
-    baseline_commit: baselineCommit, implementation_commit: implementationCommit,
-    snapshot_tree: tree, safe: true, violations: [], c2_violations: [], allowlist_violations: [] });
+  subject = { schema_version: "1.0.0", phase_id: "phase-1", task_id: "fixture", release: { ref: "releases/r.json", hash: "a".repeat(64) }, baseline: { ref: "evidence/snapshots/base.json", hash: "b".repeat(64), tree_oid: baseTree }, implementation: { ref: "evidence/snapshots/implementation.json", hash: "c".repeat(64), tree_oid: tree }, allowed_files: ["source.txt"], upstream: null };
+  const patch = execFileSync("git", ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-renames", baseTree, tree], { cwd: root, encoding: "utf8" }).replace(/\r\n/g, "\n");
+  scan = { schema_version: "1.0.0", phase_id: "phase-1", task_id: "fixture", subject: { ref: "evidence/phases/phase-1/subject.json", hash: hashCanonical(subject) }, baseline_tree: baseTree, implementation_tree: tree, changed_files: ["source.txt"], allowed: true, patch, patch_hash: createHash("sha256").update(patch).digest("hex") };
+  write(join(root, "evidence/phases/phase-1/subject.json"), subject); write(join(root, "evidence/phases/phase-1/diff.json"), scan);
   write(join(root, "reviews/results/build-code.json"), result(verdict));
   return { phase_id: "phase-1", status: "done", needs_human: false,
     tests: { red: { path: "evidence/RED.json" }, green: { path: "evidence/GREEN.json" } },
-    diff_scan: { path: "evidence/diff.json" }, review: { result_ref: "reviews/results/build-code.json", snapshot_tree: tree } };
+    diff_scan: { path: "evidence/phases/phase-1/diff.json" }, review: { result_ref: "reviews/results/build-code.json", snapshot_tree: tree } };
 }
 beforeEach(() => {
   outside = null;
@@ -105,9 +110,7 @@ describe("phase-gate formal review result", () => {
     const unfinished = fixture(); unfinished.status = "blocked"; unfinished.needs_human = true;
     expect(validatePhaseGate(unfinished, root, { reviewDataRoot: root }).ok).toBe(false);
     const outsideScope = fixture();
-    write(join(root, "evidence/diff.json"), { schema_version: "phase-diff-scan.v1", phase_id: "phase-1",
-      baseline_commit: baselineCommit, implementation_commit: implementationCommit, snapshot_tree: tree,
-      safe: false, violations: ["scope"], c2_violations: [], allowlist_violations: ["x"] });
+    write(join(root, "evidence/phases/phase-1/diff.json"), { ...scan, allowed: false });
     expect(validatePhaseGate(outsideScope, root, { reviewDataRoot: root }).ok).toBe(false);
   });
 });

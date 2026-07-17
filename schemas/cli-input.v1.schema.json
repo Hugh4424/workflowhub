@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+  "required": ["project", "task", "phase_id", "input"],
+  "properties": { "project": { "type": "string", "minLength": 1 }, "task": { "type": "string", "minLength": 1 }, "phase_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }, "input": { "const": "@-" } },
+  "additionalProperties": false
+}

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { capturePhaseReviewSource, captureReviewSource } from "../review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor } from "../review-materials.mjs";
 import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
+import { hashCanonical } from "../../../../core/task-snapshot.mjs";
 
 function git(cwd, args, options = {}) {
   return execFileSync("git", args, { cwd, encoding: "utf8", ...options }).trim();
@@ -64,8 +65,12 @@ describe("review source capture", () => {
     writeFileSync(join(f.source, "later.txt"), "later\n");
     git(f.source, ["add", "later.txt"]); git(f.source, ["commit", "-m", "later"]);
     const task = evidenceTask(f, Buffer.from("{}\n"), Buffer.from(""));
-    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({ phase_id: "phase-1", evidence: { diff: "evidence/phase-1-diff-scan.json" } })}\n`);
-    createTaskKernel(task).publishCanonicalRecord("evidence/phase-1-diff-scan.json", Buffer.from(`${JSON.stringify({ schema_version: "phase-diff-scan.v1", phase_id: "phase-1", baseline_commit: baselineCommit, implementation_commit: implementationCommit, snapshot_tree: git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]) })}\n`));
+    const baseTree = git(f.source, ["rev-parse", `${baselineCommit}^{tree}`]); const candidateTree = git(f.source, ["rev-parse", `${implementationCommit}^{tree}`]);
+    const releaseValue = { schema_version: "release-pin.v1", task_id: task.identity.taskId, build_plan: { accepted_ref: "results/build-plan/accepted.json", accepted_raw_hash: "a".repeat(64), attempt_ref: "results/build-plan/attempt-0001.json", attempt_raw_hash: "b".repeat(64) }, checkpoint: { ref: `refs/workflowhub/checkpoints/Demo/${task.identity.taskId}/build-plan/plan-x`, commit_oid: "c".repeat(40), tree_oid: "d".repeat(40) } }; const release = { ref: "evidence/releases/pin.json", hash: hashCanonical(releaseValue) };
+    const subject = { schema_version: "1.0.0", phase_id: "phase-1", task_id: task.identity.taskId, release, baseline: { ref: "evidence/snapshots/base.json", hash: "b".repeat(64), tree_oid: baseTree }, implementation: { ref: "evidence/snapshots/implementation.json", hash: "c".repeat(64), tree_oid: candidateTree }, allowed_files: ["phase.txt", "phase-two.txt"], upstream: null };
+    const patch = execFileSync("git", ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-renames", baseTree, candidateTree], { cwd: f.source, encoding: "utf8" }).replace(/\r\n/g, "\n");
+    const scan = { schema_version: "1.0.0", phase_id: "phase-1", task_id: task.identity.taskId, subject: { ref: "evidence/phases/phase-1/subject.json", hash: hashCanonical(subject) }, baseline_tree: baseTree, implementation_tree: candidateTree, changed_files: ["phase-two.txt", "phase.txt"].sort(), allowed: true, patch, patch_hash: createHash("sha256").update(patch).digest("hex") };
+    const kernel = createTaskKernel(task); kernel.publishCanonicalRecord(release.ref, `${JSON.stringify(releaseValue)}\n`); kernel.publishCanonicalRecord("evidence/phases/phase-1/subject.json", `${JSON.stringify(subject)}\n`); kernel.publishCanonicalRecord("evidence/phases/phase-1/diff.json", `${JSON.stringify(scan)}\n`);
 
     const result = capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1" });
     expect(result.diff).toContain("phase.txt");
@@ -78,7 +83,6 @@ describe("review source capture", () => {
 
   it("rejects a phase id or evidence record that does not match", () => {
     const f = fixture(); const task = evidenceTask(f, Buffer.from("{}\n"), Buffer.from(""));
-    task.writeRecordAtomic("phase-result.json", `${JSON.stringify({ phase_id: "phase-2", evidence: { diff: "scan.json" } })}\n`);
     expect(() => capturePhaseReviewSource({ sourceRoot: f.source, task, phaseId: "phase-1" })).toThrow(/PHASE_EVIDENCE_INVALID/);
   });
 

@@ -34,6 +34,7 @@
     "scripts/schema-validator.mjs",
     "scripts/third-review-host-config.mjs",
     "scripts/wh-review-cli.mjs",
+    "scripts/wh-review.mjs",
     "stage-materials.json",
     "stage-skill-plan.json"
   ]

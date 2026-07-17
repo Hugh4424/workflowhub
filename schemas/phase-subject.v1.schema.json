@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/schemas/phase-subject.v1.schema.json",
+  "type": "object",
+  "required": ["schema_version", "phase_id", "task_id", "release", "baseline", "implementation", "allowed_files", "upstream"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "phase_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "release": { "$ref": "#/$defs/ref" },
+    "baseline": { "$ref": "#/$defs/snapshot" },
+    "implementation": { "$ref": "#/$defs/snapshot" },
+    "allowed_files": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } },
+    "upstream": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/upstream" }] }
+  },
+  "$defs": {
+    "ref": { "type": "object", "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "pattern": "^(?!/)(?!.*\\.\\.).+$" }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false },
+    "snapshot": { "type": "object", "required": ["ref", "hash", "tree_oid"], "properties": { "ref": { "type": "string", "pattern": "^evidence/snapshots/" }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "tree_oid": { "type": "string", "pattern": "^[a-f0-9]{40}$" } }, "additionalProperties": false },
+    "upstream": { "type": "object", "required": ["subject_ref", "subject_hash", "result_ref", "result_hash", "implementation"], "properties": { "subject_ref": { "type": "string", "minLength": 1 }, "subject_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "result_ref": { "type": "string", "minLength": 1 }, "result_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "implementation": { "$ref": "#/$defs/snapshot" } }, "additionalProperties": false }
+  },
+  "additionalProperties": false
+}

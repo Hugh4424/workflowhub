@@ -1,0 +1,13 @@
+{
+  "execution_id": "legacy-execution-0001",
+  "progress": {
+    "state": "completed"
+  },
+  "facts": {
+    "result": "legacy"
+  },
+  "metrics": {},
+  "feedback": {},
+  "boundary_decisions": {},
+  "trace_index": {}
+}

@@ -52,8 +52,8 @@ audit aggregator 负责计算 canonical verdict；stage-result 只携带其摘�
 **consumer/evidence matrix**：
 跨 stage 复用盘点表。以真实消费者、重复度、typed I/O、失败/skip/human gate 语义为证据，决定正文应成为 skill、reference、component、contract，或保留在 stage。
 
-**generic core / Multica adapter**：
-需求保真机制的边界。generic core 只处理 canonical source bundle、ledger、coverage 与验证；Multica adapter 只读取并规范化 issue/comment 等平台对象，不计算 coverage、不裁决语义冲突。
+**独立 WorkflowHub core / platform adapter**：
+WorkflowHub 五阶段执行内核、task storage、StageContext、skills 与通用 contracts 可在没有 Multica 时独立运行。Multica 只是可选 platform adapter；offline fixture 或其他 adapter 经同一 canonical port 接入。adapter 不进入 core 业务裁决。既有文档中的 generic core / Multica adapter 是这一边界的旧称。
 
 **3rd-review**：
 全局通用的纯异源审查引擎（skill）。接口输入 `{mode, contract, materials}`，做环境探测、派审查 agent，返回 `{verdict, findings, actual_mode}`。不含任何 stage 或轮次知识，可跨项目复用。2026-07-05 重设计决策（ADR 0001）后，3rd-review 瘦身为纯引擎层，原来挂在其下的 workflowhub 专属知识迁移到 wh-review。

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://workflowhub.local/schemas/phase-diff-scan.v1.schema.json",
+  "type": "object", "required": ["schema_version", "phase_id", "task_id", "subject", "baseline_tree", "implementation_tree", "changed_files", "allowed", "patch", "patch_hash"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" }, "phase_id": { "type": "string" }, "task_id": { "type": "string" },
+    "subject": { "$ref": "#/$defs/ref" }, "baseline_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" }, "implementation_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "changed_files": { "type": "array", "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" }, "uniqueItems": true }, "allowed": { "type": "boolean" },
+    "patch": { "type": "string" }, "patch_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }, "$defs": { "ref": { "type": "object", "required": ["ref", "hash"], "properties": { "ref": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false } }, "additionalProperties": false
+}

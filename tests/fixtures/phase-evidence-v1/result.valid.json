@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "phase_id": "phase-0",
+  "task_id": "fixture-task",
+  "subject": { "ref": "evidence/phases/phase-0/subject.json", "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "diff": { "ref": "evidence/phases/phase-0/diff.json", "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+  "review": { "ref": "reviews/results/phase-0.json", "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "verdict": "pass" },
+  "tests": [],
+  "eligibility": { "next_phase": "p0-a", "structurally_complete": true }
+}

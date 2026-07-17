@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "phase_id": "phase-0",
+  "task_id": "fixture-task",
+  "release": { "ref": "releases/r.json", "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "baseline": { "ref": "evidence/snapshots/base.json", "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "tree_oid": "cccccccccccccccccccccccccccccccccccccccc" },
+  "implementation": { "ref": "evidence/snapshots/implementation.json", "hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "tree_oid": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" },
+  "allowed_files": ["core/example.mjs"],
+  "upstream": null,
+  "commit": "ffffffffffffffffffffffffffffffffffffffff",
+  "diff": "caller-built patch"
+}

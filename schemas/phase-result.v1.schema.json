@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workflowhub.local/schemas/phase-result.v1.schema.json",
+  "type": "object",
+  "required": ["schema_version", "phase_id", "task_id", "subject", "diff", "review", "tests", "eligibility"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "phase_id": { "type": "string" },
+    "task_id": { "type": "string" },
+    "subject": { "$ref": "#/$defs/ref" },
+    "diff": { "$ref": "#/$defs/ref" },
+    "review": { "$ref": "#/$defs/review" },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "exit_code", "output_ref", "output_hash"],
+        "properties": {
+          "command": { "type": "string" },
+          "exit_code": { "type": "integer" },
+          "output_ref": { "type": "string" },
+          "output_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "eligibility": {
+      "type": "object",
+      "required": ["next_phase", "structurally_complete"],
+      "properties": {
+        "next_phase": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "structurally_complete": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object", "required": ["ref", "hash"],
+      "properties": { "ref": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" } },
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object", "required": ["ref", "hash", "verdict"],
+      "properties": { "ref": { "type": "string", "pattern": "^reviews/results/" }, "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "verdict": { "type": "string" } },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

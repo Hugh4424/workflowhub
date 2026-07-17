@@ -146,11 +146,9 @@ export function capturePhaseReviewSource({ sourceRoot, task, phaseId } = {}) {
   const changedFiles = parseChangedFiles(source, subject.baseTree, subject.candidateTree);
   return Object.freeze({
     sourceRoot: source,
-    targetCommit: subject.baselineCommit,
-    capturedHead: subject.implementationCommit,
-    baseCommit: subject.baselineCommit,
     baseTree: subject.baseTree,
     snapshotTree: subject.candidateTree,
+    phaseEvidence: Object.freeze({ subjectRef: subject.subjectRef, subjectHash: subject.subjectHash, diffRef: subject.diffRef, diffHash: subject.diffHash }),
     diff,
     changedFiles: Object.freeze(changedFiles),
     readSnapshotFile(path) {

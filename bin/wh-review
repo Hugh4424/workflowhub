@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+import { runPhaseReviewCli } from "../skills/wh-review/scripts/wh-review.mjs";
+try { process.stdout.write(`${JSON.stringify(await runPhaseReviewCli(process.argv.slice(2)))}\n`); }
+catch (error) { process.stderr.write(`${error?.stack ?? error}\n`); process.exitCode = 1; }

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "phase_id": "phase-0",
+  "task_id": "fixture-task",
+  "subject": { "ref": "evidence/phases/phase-0/subject.json", "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "baseline_tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "implementation_tree": "cccccccccccccccccccccccccccccccccccccccc",
+  "changed_files": ["core/example.mjs"],
+  "allowed": true,
+  "patch": "",
+  "patch_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}

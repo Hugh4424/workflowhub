@@ -1,0 +1,8 @@
+{
+  "schema_version": "contract-set.v1", "set_id": "2026-07-16.1",
+  "contracts": [
+    { "id": "phase-subject.v1", "schema": "schemas/phase-subject.v1.schema.json", "version": "1.0.0", "producer": "phase-publisher", "consumers": ["tree-diff-scanner", "wh-review", "phase-lineage"], "migration": "create-only; no legacy rewrite", "fixtures": [{ "path": "tests/fixtures/phase-evidence-v1/subject.valid.json", "sha256": "2c4a2ac88ecafbdc4888449c17e5aa3f62ea081adcc2ff800ea58dbaba1e922b" }, { "path": "tests/fixtures/phase-evidence-v1/subject.malicious-selector.json", "sha256": "255007374053be1299493ea103cc52a25cb62f351d6928898510ca28401e93af" }] },
+    { "id": "phase-diff-scan.v1", "schema": "schemas/phase-diff-scan.v1.schema.json", "version": "1.0.0", "producer": "tree-diff-scanner", "consumers": ["wh-review", "phase-result"], "migration": "create-only; no legacy rewrite", "fixtures": [{ "path": "tests/fixtures/phase-evidence-v1/diff.valid.json", "sha256": "1a1094f262e94e007e5132c0cb48cc818afbf3a887e1f49867438010ccdc74ea" }, { "path": "tests/fixtures/phase-evidence-v1/diff.malicious-path.json", "sha256": "4daefa9e7b35a36ee4067896e2a6cde70189e83426f01a004c0e278da191df0b" }] },
+    { "id": "phase-result.v1", "schema": "schemas/phase-result.v1.schema.json", "version": "1.0.0", "producer": "phase-publisher", "consumers": ["phase-lineage", "stage-runner"], "migration": "create-only; no legacy rewrite", "fixtures": [{ "path": "tests/fixtures/phase-evidence-v1/result.valid.json", "sha256": "12e92b932c59eba8d689d6be546a07191dff7d5d96b1c0f5d654d2ade3051849" }, { "path": "tests/fixtures/phase-evidence-v1/result.malicious-latest.json", "sha256": "72b4b3277c724b6952976c9c354e8f5f8105858b41cbf73498904e8a788b1119" }] }
+  ]
+}
