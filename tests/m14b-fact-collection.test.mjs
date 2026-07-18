@@ -19,7 +19,7 @@ import {
   parseJsonl,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildHealthProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
@@ -125,12 +125,18 @@ function reversedBytes(merge, candidates) {
 describe("M14b fact collection pure contracts", () => {
   it("AC-006 merges idempotent transcript candidates deterministically", () => {
     const base = { record_kind: "transcript", id: "turn-1", run_id: "run-1", status: "present", payload: { text: "hello" } };
-    const records = reversedBytes(mergeTranscriptRecords, [
+    const candidates = [
+      createTranscriptRecord({ ...base, source_ref: "source-z" }),
       createTranscriptRecord({ ...base, source_ref: "source-z" }),
       createTranscriptRecord({ ...base, source_ref: "source-a" }),
-    ]);
-    expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({ source_ref: "source-a", status: "present" });
+    ];
+    const forward = mergeTranscriptRecords(candidates);
+    const reverse = mergeTranscriptRecords([...candidates].reverse());
+
+    expect(forward).toMatchObject({ ok: true });
+    expect(reverse).toMatchObject({ ok: true });
+    expect(toJsonl(forward.records)).toBe(toJsonl(reverse.records));
+    expect(forward.records).toEqual([expect.objectContaining({ source_ref: "source-a", status: "present" })]);
   });
 
   it("AC-007 keeps a transcript conflict visible instead of choosing first or last", () => {
@@ -190,6 +196,28 @@ describe("M14b fact collection pure contracts", () => {
       createHealthFact({ fact_id: "same", domain: "review", status: "missing", observed_value: null, reason: "not_found" }),
     ]);
     expect(conflict.records[0]).toMatchObject({ status: "unknown", reason: "duplicate_id_conflict", error: { code: "DUPLICATE_ID_CONFLICT" } });
+  });
+
+  it("projects review, verify, and handoff health with unknown then missing precedence", () => {
+    const projections = [
+      ["review", { record_kind: "review", stage: "build-code" }],
+      ["verify", { record_kind: "stage_result", stage: "verify-code" }],
+      ["handoff", { record_kind: "handoff", stage: "build-code" }],
+    ];
+    const healthStatus = (domain, kind, statuses) => buildHealthProjection(
+      { snapshot: { tree: "clean" } }, [],
+      statuses.map((status, index) => createArtifactRecord({
+        ...kind, id: `${kind.record_kind}-${index}`, ref: `results/${index}.json`, source_ref: `results/${index}.json`, status,
+      })),
+      { closure: { ok: true } },
+    ).find((fact) => fact.domain === domain).status;
+
+    for (const [domain, kind] of projections) {
+      expect(healthStatus(domain, kind, [])).toBe("unknown");
+      expect(healthStatus(domain, kind, ["present"])).toBe("present");
+      expect(healthStatus(domain, kind, ["present", "missing"])).toBe("missing");
+      expect(healthStatus(domain, kind, ["present", "missing", "unknown"])).toBe("unknown");
+    }
   });
 
   it("keeps skills inventory closed, ordered, conflict-safe, and clock-driven", () => {
