@@ -17,7 +17,8 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
@@ -32,9 +33,12 @@ const TASK_HANDLES = new WeakSet();
 const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
+const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const TARGET_REPO_ROOT_MIGRATION_REF = /^identity\/migrations\/target-repo-root\/[a-f0-9]{64}\.json$/;
+const HASH = /^[a-f0-9]{64}$/;
 
 export function assertTaskHandle(value) {
   if (!value || typeof value !== "object" || !TASK_HANDLES.has(value)) {
@@ -72,10 +76,72 @@ function validateManifest(manifest) {
     throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
   }
   assertPlainObject(manifest.inputs, "task manifest inputs");
+  if (manifest.target_repo_root_migration !== undefined) {
+    assertPlainObject(manifest.target_repo_root_migration, "task manifest target_repo_root_migration");
+    const migration = manifest.target_repo_root_migration;
+    if (Object.keys(migration).some((key) => !["ref", "integrity_hash"].includes(key)) || !TARGET_REPO_ROOT_MIGRATION_REF.test(migration.ref ?? "") || !HASH.test(migration.integrity_hash ?? "")) {
+      throw new TypeError("task manifest target_repo_root_migration is invalid");
+    }
+  }
   for (const field of FORBIDDEN_MANIFEST_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(manifest, field)) throw new TypeError(`task manifest must not contain mutable field: ${field}`);
   }
   return { projectName, taskId };
+}
+
+function sha256(raw) { return createHash("sha256").update(raw).digest("hex"); }
+
+function gitValue(root, args, label) {
+  try { return String(execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
+  catch (error) { throw new Error(`${label} validation failed: ${error.stderr?.toString().trim() || error.message}`); }
+}
+
+function gitCheckout(path, branch, label) {
+  const root = realDirectoryNoSymlink(resolve(path), label);
+  const top = realpathSync(gitValue(root, ["rev-parse", "--show-toplevel"], label));
+  if (top !== root) throw new Error(`${label} must be a Git toplevel directory`);
+  const commonRaw = gitValue(root, ["rev-parse", "--git-common-dir"], label);
+  const common = realpathSync(resolve(root, commonRaw));
+  const checkedOut = gitValue(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], label);
+  if (checkedOut !== branch) throw new Error(`${label} must have target branch checked out`);
+  const head = gitValue(root, ["rev-parse", "--verify", "HEAD^{commit}"], label).toLowerCase();
+  if (!/^[a-f0-9]{40}$/.test(head)) throw new Error(`${label} HEAD must be a full Git commit OID`);
+  return { root, common, branch: checkedOut, head };
+}
+
+function gitRepository(path, label) {
+  const root = realDirectoryNoSymlink(resolve(path), label);
+  const top = realpathSync(gitValue(root, ["rev-parse", "--show-toplevel"], label));
+  if (top !== root) throw new Error(`${label} must be a Git toplevel directory`);
+  return { root, common: realpathSync(resolve(root, gitValue(root, ["rev-parse", "--git-common-dir"], label))) };
+}
+
+function validateTargetRepoRootMigration(task, manifest) {
+  const pointer = manifest.target_repo_root_migration;
+  if (!pointer) return;
+  const raw = task.readRecord(pointer.ref);
+  if (sha256(raw) !== pointer.integrity_hash) throw new Error("target repository migration integrity hash mismatch");
+  const record = JSON.parse(raw);
+  const allowed = new Set(["schema_version", "project_name", "task_id", "previous_target_repo_root", "previous_manifest_hash", "previous_migration_ref", "previous_migration_hash", "target_repo_root", "target_git_common_dir", "target_branch", "target_head", "migrated_at"]);
+  if (!record || typeof record !== "object" || Array.isArray(record) || Object.keys(record).some((key) => !allowed.has(key)) || record.schema_version !== "task-target-repo-root-migration.v1" || record.project_name !== task.identity.projectName || record.task_id !== task.identity.taskId || record.target_repo_root !== manifest.target_repo_root || !isAbsolute(record.previous_target_repo_root ?? "") || !HASH.test(record.previous_manifest_hash ?? "") || !isAbsolute(record.target_git_common_dir ?? "") || typeof record.target_branch !== "string" || !/^[a-f0-9]{40}$/.test(record.target_head ?? "") || !Number.isFinite(Date.parse(record.migrated_at))) {
+    throw new Error("target repository migration record is invalid");
+  }
+  if ((record.previous_migration_ref === undefined) !== (record.previous_migration_hash === undefined) || (record.previous_migration_ref !== undefined && (!TARGET_REPO_ROOT_MIGRATION_REF.test(record.previous_migration_ref) || !HASH.test(record.previous_migration_hash)))) throw new Error("target repository migration source chain is invalid");
+  const seen = new Set([pointer.ref]);
+  let successor = record;
+  while (successor.previous_migration_ref !== undefined) {
+    const ref = successor.previous_migration_ref;
+    if (seen.has(ref)) throw new Error("target repository migration source chain contains a cycle");
+    seen.add(ref);
+    const previousRaw = task.readRecord(ref);
+    if (sha256(previousRaw) !== successor.previous_migration_hash) throw new Error("target repository migration source chain hash mismatch");
+    const previous = JSON.parse(previousRaw);
+    if (!previous || typeof previous !== "object" || Array.isArray(previous) || previous.schema_version !== "task-target-repo-root-migration.v1" || previous.project_name !== task.identity.projectName || previous.task_id !== task.identity.taskId || previous.target_repo_root !== successor.previous_target_repo_root) throw new Error("target repository migration source chain mismatch");
+    if ((previous.previous_migration_ref === undefined) !== (previous.previous_migration_hash === undefined)) throw new Error("target repository migration source chain is invalid");
+    successor = previous;
+  }
+  const target = gitRepository(manifest.target_repo_root, "migrated target repository");
+  if (target.root !== record.target_repo_root || target.common !== record.target_git_common_dir) throw new Error("target repository migration repository identity mismatch");
 }
 
 function expectedIdentity(expected = {}, expectedTaskId) {
@@ -314,6 +380,7 @@ function relativeSegments(relativePath, label) {
 }
 
 function assertPublicRecordWritable(relativePath) {
+  if (/^identity\//.test(relativePath)) throw new Error(`record is identity-owned and cannot be written through TaskHandle: ${relativePath}`);
   if (relativePath === "task.json" || /^results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)\.json$/.test(relativePath) || /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/.test(relativePath) || /^confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4}\.json$/.test(relativePath)) {
     throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   }
@@ -546,6 +613,19 @@ function makeTaskHandle(taskPath, manifest) {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
   });
+  TARGET_REPO_ROOT_MIGRATORS.set(frozen, ({ recordRef, recordRaw, manifestRaw, testHooks } = {}) => {
+    if (!TARGET_REPO_ROOT_MIGRATION_REF.test(recordRef ?? "")) throw new Error("target repository migration record path is invalid");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    try { createOnlyAt(realTaskPath, recordRef, recordRaw); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (readRegularFileNoFollow(resolveRecord(realTaskPath, recordRef).candidate, "target repository migration", taskRootIdentity.real) !== recordRaw) throw new Error("target repository migration conflicts with immutable record");
+    }
+    testHooks?.beforeManifestReplace?.();
+    writeAtomicAt(realTaskPath, "task.json", manifestRaw);
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+  });
   return frozen;
 }
 
@@ -576,7 +656,62 @@ export function openTask(taskPath, expected, expectedTaskId) {
   if (actual.projectName !== wanted.projectName || actual.taskId !== wanted.taskId) {
     throw new Error(`task identity mismatch: expected ${wanted.projectName}/${wanted.taskId}, manifest has ${actual.projectName}/${actual.taskId}`);
   }
-  return makeTaskHandle(realTaskPath, manifest);
+  const handle = makeTaskHandle(realTaskPath, manifest);
+  validateTargetRepoRootMigration(handle, manifest);
+  return handle;
+}
+
+/** Atomically rebind one task to a checked-out branch in the same Git repository. */
+export function migrateTaskTargetRepoRoot({ taskPath, projectName, taskId, targetRepoRoot, targetBranch, now = () => new Date().toISOString(), testHooks } = {}) {
+  if (typeof targetBranch !== "string" || targetBranch.trim() === "" || /[\0\r\n\t]/.test(targetBranch)) throw new TypeError("target branch is required");
+  if (typeof now !== "function") throw new TypeError("migration clock must be a function");
+  const task = openTask(taskPath, { projectName, taskId });
+  const source = gitRepository(task.manifest.target_repo_root, "current target repository");
+  const target = gitCheckout(targetRepoRoot, targetBranch, "new target repository");
+  if (source.common !== target.common) throw new Error("new target repository must share the current target Git common directory");
+  if (source.root === target.root) {
+    const pointer = task.manifest.target_repo_root_migration;
+    return Object.freeze({ task, migration_ref: pointer?.ref, integrity_hash: pointer?.integrity_hash, previous_target_repo_root: source.root, target_repo_root: target.root, target_branch: target.branch, target_head: target.head, idempotent_replay: true });
+  }
+  const decision = createTaskKernel(task).readAccepted("make-decision");
+  if (gitRepository(decision.facts.worktree_root, "accepted make-decision worktree").common !== target.common) throw new Error("new target repository must share the accepted make-decision worktree Git common directory");
+  const manifestRaw = task.readRecord("task.json");
+  const oldManifest = JSON.parse(manifestRaw);
+  const prior = oldManifest.target_repo_root_migration;
+  const recordRef = `identity/migrations/target-repo-root/${sha256(`${sha256(manifestRaw)}\0${target.root}`)}.json`;
+  return task.withRecordLock("locks/task-identity-migration.lock", () => {
+    const record = {
+      schema_version: "task-target-repo-root-migration.v1",
+      project_name: task.identity.projectName,
+      task_id: task.identity.taskId,
+      previous_target_repo_root: source.root,
+      previous_manifest_hash: sha256(manifestRaw),
+      ...(prior ? { previous_migration_ref: prior.ref, previous_migration_hash: prior.integrity_hash } : {}),
+      target_repo_root: target.root,
+      target_git_common_dir: target.common,
+      target_branch: target.branch,
+      target_head: target.head,
+      migrated_at: now(),
+    };
+    let recordRaw = `${JSON.stringify(record, null, 2)}\n`;
+    try {
+      const existing = task.readRecord(recordRef);
+      const replay = JSON.parse(existing);
+      const comparable = { ...record }; delete comparable.migrated_at;
+      const existingComparable = { ...replay }; delete existingComparable.migrated_at;
+      if (JSON.stringify(existingComparable) !== JSON.stringify(comparable)) throw new Error("target repository migration conflicts with immutable record");
+      recordRaw = existing;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const nextManifest = { ...oldManifest, target_repo_root: target.root, target_repo_root_migration: { ref: recordRef, integrity_hash: sha256(recordRaw) } };
+    const nextManifestRaw = `${JSON.stringify(nextManifest, null, 2)}\n`;
+    const migrator = TARGET_REPO_ROOT_MIGRATORS.get(task);
+    if (typeof migrator !== "function") throw new TypeError("authentic TaskHandle target repository migrator required");
+    migrator({ recordRef, recordRaw, manifestRaw: nextManifestRaw, testHooks });
+    const migrated = openTask(task.taskPath, task.identity);
+    return Object.freeze({ task: migrated, migration_ref: recordRef, integrity_hash: sha256(recordRaw), previous_target_repo_root: source.root, target_repo_root: target.root, target_branch: target.branch, target_head: target.head });
+  });
 }
 
 /** Create the only canonical publication capability for an authentic task. */

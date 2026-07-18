@@ -67,6 +67,13 @@ close operations.
    worktree, and remove the merged local task branch. Show the full hashed close plan
    for one separate close authorization bound to the plan hash.
    Never reuse the verify-code confirmation ref.
+   If `prepare` rejects the recorded target because it is not the real checked-out
+   target branch, do not edit `task.json`. Use the official
+   `node scripts/task-migrate-target-repo.mjs --project=<project> --task=<task>
+   --target-repo-root=<main-checkout> --target-branch=<branch>` entrypoint. It
+   requires the same Git common directory as the accepted workspace, records
+   immutable migration lineage, atomically updates the target identity, and must
+   finish before a fresh `prepare` run.
 8. Record that one decision with `scripts/task-close.mjs confirm`. Only a
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.
