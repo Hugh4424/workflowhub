@@ -53,6 +53,24 @@ function parseJson(raw, label) {
 
 function hash(raw) { return createHash("sha256").update(raw).digest("hex"); }
 
+function jsonEquals(left, right) {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length
+      && left.every((value, index) => jsonEquals(value, right[index]));
+  }
+  const leftKeys = Object.keys(left).sort(), rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index] && jsonEquals(left[key], right[key]));
+}
+
+function sameAcceptedIdentity(left, right) {
+  const { accepted_at: _leftAcceptedAt, ...leftIdentity } = left;
+  const { accepted_at: _rightAcceptedAt, ...rightIdentity } = right;
+  return jsonEquals(leftIdentity, rightIdentity);
+}
+
 function validateRefs(refs, label) {
   if (!Array.isArray(refs)) throw new TypeError(`${label} must be an array`);
   for (const ref of refs) {
@@ -528,7 +546,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         try { createKernelRecord(archiveRef, priorRaw); }
         catch (error) {
           if (error?.code !== "EEXIST") throw error;
-          if (task.readRecord(archiveRef) !== priorRaw) throw new Error("build-code accepted archive conflicts with canonical record");
+          const archived = readAcceptedAt("build-code", archivedAcceptedFileFor(current.accepted.attempt_ref));
+          if (!sameAcceptedIdentity(archived.accepted, current.accepted)) throw new Error("build-code accepted archive conflicts with canonical record");
         }
         replaceKernelAccepted("results/build-code/accepted.json", acceptedRaw);
         return deepFreeze(accepted);
