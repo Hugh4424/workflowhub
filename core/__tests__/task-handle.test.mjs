@@ -55,6 +55,47 @@ afterEach(() => {
 });
 
 describe("TaskHandle", () => {
+  it("enumerates only sorted regular canonical stage attempts", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const stageRoot = join(taskPath, "results", "build-code");
+    mkdirSync(stageRoot, { recursive: true });
+    writeFileSync(join(stageRoot, "attempt-0010.json"), "{}");
+    writeFileSync(join(stageRoot, "attempt-0002.json"), "{}");
+    writeFileSync(join(stageRoot, "accepted.json"), "{}");
+    writeFileSync(join(stageRoot, "attempt-12.json"), "{}");
+
+    expect(task.listStageAttemptRefs("build-code")).toEqual([
+      "results/build-code/attempt-0002.json",
+      "results/build-code/attempt-0010.json",
+    ]);
+    expect(task.listStageAttemptRefs("verify-code")).toEqual([]);
+    expect(() => task.listStageAttemptRefs("other")).toThrow(/unsupported stage/i);
+  });
+
+  it("rejects symlinked stage attempts", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const stageRoot = join(taskPath, "results", "build-code");
+    const outside = mkdtempSync(join(tmpdir(), "workflowhub-attempt-outside-"));
+    temporaryDirs.push(outside);
+    mkdirSync(stageRoot, { recursive: true });
+    writeFileSync(join(outside, "attempt-0001.json"), "{}");
+    symlinkSync(join(outside, "attempt-0001.json"), join(stageRoot, "attempt-0001.json"));
+
+    expect(() => task.listStageAttemptRefs("build-code")).toThrow(/symlink|regular/i);
+  });
+
+  it("rejects attempt enumeration after the trusted task directory changes identity", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    const original = `${taskPath}-original`;
+    renameSync(taskPath, original);
+    mkdirSync(taskPath);
+
+    expect(() => task.listStageAttemptRefs("build-code")).toThrow(/identity|changed|stale/i);
+  });
+
   it("creates task.json once and opens it only with matching path and identity", () => {
     const { storageRoot, taskPath } = fixture();
     const manifest = {

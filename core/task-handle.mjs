@@ -9,6 +9,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -32,6 +33,7 @@ const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
+const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 
 export function assertTaskHandle(value) {
   if (!value || typeof value !== "object" || !TASK_HANDLES.has(value)) {
@@ -446,6 +448,34 @@ function makeTaskHandle(taskPath, manifest) {
       const value = readRegularFileNoFollow(candidate, "record", taskRootIdentity.real);
       verifyDirectoryIdentity(taskRootIdentity, "task root");
       return value;
+    },
+    /** Enumerate only canonical attempt envelopes in one trusted stage namespace. */
+    listStageAttemptRefs(stage) {
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      verifyManifest();
+      if (!CANONICAL_STAGES.has(stage)) throw new TypeError(`unsupported stage: ${stage}`);
+      const resultsRoot = resolve(realTaskPath, "results");
+      const stageRoot = resolve(resultsRoot, stage);
+      assertInside(realTaskPath, resultsRoot, "results directory");
+      assertInside(realTaskPath, stageRoot, "stage results directory");
+      if (!existsSync(stageRoot)) return [];
+      const resultsIdentity = directorySnapshot(realTaskPath, resultsRoot);
+      const stageIdentity = directorySnapshot(realTaskPath, stageRoot);
+      const refs = readdirSync(stageRoot, { withFileTypes: true })
+        .filter((entry) => /^attempt-[0-9]{4}\.json$/.test(entry.name))
+        .map((entry) => {
+          const candidate = resolve(stageRoot, entry.name);
+          const stat = lstatSync(candidate);
+          if (!entry.isFile() || stat.isSymbolicLink() || !stat.isFile()) {
+            throw new Error(`stage attempt must be a regular non-symlink file: ${entry.name}`);
+          }
+          return `results/${stage}/${entry.name}`;
+        })
+        .sort((left, right) => left.localeCompare(right));
+      verifyDirectorySnapshot(stageIdentity);
+      verifyDirectorySnapshot(resultsIdentity);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+      return Object.freeze(refs);
     },
     writeRecordAtomic(relativePath, data, options) {
       verifyDirectoryIdentity(taskRootIdentity, "task root");
