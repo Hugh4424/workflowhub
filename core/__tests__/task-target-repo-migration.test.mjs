@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,9 @@ import { join } from "node:path";
 import { createTask, migrateTaskTargetRepoRoot, openTask } from "../task-handle.mjs";
 import { createTaskKernel } from "../task-kernel.mjs";
 import { bootstrapStage } from "../stage-context.mjs";
+import { acceptStageAttempt, runStage } from "../stage-runner.mjs";
 import { createTaskWorktreeRemoval, openAcceptedWorkspace, prepareTaskWorkspace } from "../workspace.mjs";
+import { requiresHumanConfirmation } from "../stage-acceptance-policy.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
 import { runCapture as captureBuild } from "../../workflows/build-code/capture.mjs";
 import { runCapture as captureVerify } from "../../workflows/verify-code/capture.mjs";
@@ -65,11 +68,11 @@ describe("target repository migration", () => {
     const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration", targetRepoRoot: f.repo, targetBranch: "main" });
 
     const contexts = {};
-    for (const stage of ["build-code", "verify-code"]) {
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       const context = bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
       contexts[stage] = context;
       expect(context.manifest.target_repo_root).toBe(f.repo);
-      expect(context.workspace.worktreeRoot).toBe(f.candidate.worktreeRoot);
+      if (stage !== "make-decision") expect(context.workspace.worktreeRoot).toBe(f.candidate.worktreeRoot);
     }
     const snapshotHead = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD"]);
     const snapshotTree = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]);
@@ -78,6 +81,36 @@ describe("target repository migration", () => {
     expect(() => openAcceptedWorkspace(migrated.task, { facts: {
       worktree_root: `${f.repo}-migration`, baseline_commit: f.candidate.baselineCommit,
     } })).toThrow(/does not match the deterministic task worktree/i);
+  });
+
+  it("publishes an authenticated verify failure through the migrated five-stage chain", async () => {
+    const f = acceptedWorkspaceFixture();
+    const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration", targetRepoRoot: f.repo, targetBranch: "main" });
+    const hash = "a".repeat(64);
+    const tree = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]);
+    const testFacts = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: f.candidate.baselineCommit, snapshot_tree: tree, snapshot_commit: "b".repeat(40), started_at: "2026-07-18T00:00:00.000Z", completed_at: "2026-07-18T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
+    const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
+    const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
+    const publishAndAccept = async (stage, handler) => {
+      const stageContext = context(stage);
+      const result = await runStage(stage, stageContext, handler);
+      const request = { attemptRef: result.attempt_ref };
+      if (requiresHumanConfirmation(stage)) request.humanConfirmationRef = writeHumanConfirmation(stageContext.kernel, stage, result);
+      acceptStageAttempt(stage, stageContext, request);
+      return result;
+    };
+
+    await publishAndAccept("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); return { facts: { spec_ref: "specs/migration/spec.md", checkpoint: worker.createCheckpoint("build-spec") } }; });
+    await publishAndAccept("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); return { facts: { plan_ref: "specs/migration/plan.md", tasks_ref: "specs/migration/tasks.md", checkpoint: worker.createCheckpoint("build-plan") } }; });
+    await publishAndAccept("build-code", async () => ({ facts: { changed: [], tests: testFacts("build"), review: review("pass"), phase_completion: true } }));
+
+    const verifyContext = context("verify-code");
+    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2)}\n`;
+    verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
+    const failed = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: testFacts("verify"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] } }));
+
+    expect(JSON.parse(migrated.task.readRecord(`results/verify-code/${failed.attempt_ref}`))).toMatchObject({ facts: { review: { verdict: "fail" }, evidence_refs: [{ ref: "evidence/acceptance-ac-005.json" }] } });
+    expect(verifyContext.workspace.worktreeRoot).toBe(f.candidate.worktreeRoot);
   });
 
   it("uses the accepted legacy Workspace for close removal after migration", async () => {
