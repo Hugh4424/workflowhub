@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -119,7 +120,7 @@ describe("stage-runner capability unit", () => {
     expect(() => verifyContext.kernel.buildCodeReopenProvenance(reopen.reopen_ref)).toThrow(/not authorized|active accepted/i);
   });
 
-  it("keeps a historical build-code archive when only accepted_at differs and rejects other archive conflicts", async () => {
+  it("preserves canonical bytes in a collision-safe archive without rewriting a legacy archive", async () => {
     const setup = async () => {
       const { task, taskPath, worktree, oid } = fixture();
       const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
@@ -144,32 +145,33 @@ describe("stage-runner capability unit", () => {
       await publish("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true } }));
       const verifyContext = context("verify-code"), failureRaw = JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2) + "\n";
       verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
-      const failureHash = (await import("node:crypto")).createHash("sha256").update(failureRaw).digest("hex");
-      const failedVerify = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: failureHash }] } }));
+      const failedVerify = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] } }));
       const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
       const revisedContext = context("build-code"), revised = await runStage("build-code", revisedContext, async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true } }), { reopenProvenance: reopen });
       return { task, revisedContext, revised, accept };
     };
-    for (const conflict of ["accepted_at", "integrity_hash", "upstream_refs", "attempt_ref"]) {
-      const { task, revisedContext, revised, accept } = await setup();
-      const canonicalRef = "results/build-code/accepted.json", archiveRef = "results/build-code/accepted-attempt-0001.json";
-      const canonicalBefore = task.readRecord(canonicalRef), archive = JSON.parse(canonicalBefore);
-      if (conflict === "accepted_at") archive.accepted_at = "2026-07-18T05:07:06.447Z";
-      if (conflict === "integrity_hash") archive.integrity_hash = "c".repeat(64);
-      if (conflict === "upstream_refs") archive.upstream_refs = [];
-      if (conflict === "attempt_ref") { archive.attempt_ref = revised.attempt_ref; archive.integrity_hash = revised.integrity_hash; }
-      writeFileSync(task.recordPath(archiveRef), `${JSON.stringify(archive, null, 2)}\n`);
-      const archiveBefore = task.readRecord(archiveRef);
-      if (conflict === "accepted_at") {
-        accept("build-code", revisedContext, revised);
-        expect(JSON.parse(task.readRecord(canonicalRef))).toMatchObject({ attempt_ref: revised.attempt_ref });
-        expect(task.readRecord(archiveRef)).toBe(archiveBefore);
-      } else {
-        expect(() => accept("build-code", revisedContext, revised)).toThrow(/archive conflicts|integrity hash mismatch|upstream refs mismatch/);
-        expect(task.readRecord(canonicalRef)).toBe(canonicalBefore);
-        expect(task.readRecord(archiveRef)).toBe(archiveBefore);
-      }
-    }
+    const { task, revisedContext, revised, accept } = await setup();
+    const canonicalRef = "results/build-code/accepted.json", archiveRef = "results/build-code/accepted-attempt-0001.json";
+    const canonicalBefore = task.readRecord(canonicalRef), legacy = { ...JSON.parse(canonicalBefore), accepted_at: "2026-07-18T05:07:06.447Z" };
+    const legacyRaw = `${JSON.stringify(legacy, null, 2)}\n`;
+    writeFileSync(task.recordPath(archiveRef), legacyRaw);
+    const collisionArchiveRef = `results/build-code/accepted-attempt-0001-canonical-${createHash("sha256").update(canonicalBefore).digest("hex")}.json`;
+    expect(legacy).toMatchObject({ attempt_ref: "attempt-0001.json", integrity_hash: JSON.parse(canonicalBefore).integrity_hash });
+    expect(legacy.accepted_at).not.toBe(JSON.parse(canonicalBefore).accepted_at);
+    accept("build-code", revisedContext, revised);
+    expect(JSON.parse(task.readRecord(canonicalRef))).toMatchObject({ attempt_ref: revised.attempt_ref });
+    expect(task.readRecord(archiveRef)).toBe(legacyRaw);
+    expect(task.readRecord(collisionArchiveRef)).toBe(canonicalBefore);
+    expect(() => task.createRecordAtomic("results/build-code/not-an-archive.json", "forged\n")).toThrow(/kernel-owned/i);
+    const failed = await setup(), failedCanonical = failed.task.readRecord(canonicalRef);
+    const failedLegacyRaw = `${JSON.stringify({ ...JSON.parse(failedCanonical), accepted_at: "2026-07-18T05:07:06.447Z" }, null, 2)}\n`;
+    const failedCollisionRef = `results/build-code/accepted-attempt-0001-canonical-${createHash("sha256").update(failedCanonical).digest("hex")}.json`;
+    writeFileSync(failed.task.recordPath(archiveRef), failedLegacyRaw);
+    writeFileSync(failed.task.recordPath(failedCollisionRef), "conflicting collision archive\n");
+    expect(() => failed.accept("build-code", failed.revisedContext, failed.revised)).toThrow(/collision archive conflicts/i);
+    expect(failed.task.readRecord(canonicalRef)).toBe(failedCanonical);
+    expect(failed.task.readRecord(archiveRef)).toBe(failedLegacyRaw);
+    expect(failed.task.readRecord(failedCollisionRef)).toBe("conflicting collision archive\n");
   });
 
   it("can publish without accepting when the caller omits human confirmation", async () => {
