@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 
 import { createTask, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { bootstrapStage } from "../core/stage-context.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const roots = [];
@@ -16,7 +17,8 @@ function fixture({ targetRepo = "main" } = {}) {
   roots.push(root);
   const remote = join(root, "remote.git");
   const repo = join(root, "repo");
-  const worktree = `${repo}-close-task`;
+  const source = `${repo}-generation-two`;
+  const worktree = targetRepo === "worktree" ? `${source}-close-task` : `${repo}-close-task`;
   execFileSync("git", ["init", "--bare", "-q", remote]);
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   git(repo, "config", "user.email", "test@example.com");
@@ -32,6 +34,7 @@ function fixture({ targetRepo = "main" } = {}) {
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "base");
   git(repo, "push", "-q", "-u", "origin", "main");
+  if (targetRepo === "worktree") git(repo, "worktree", "add", "-qb", "generation-two", source, "main");
   git(repo, "worktree", "add", "-qb", "task/Demo/close-task", worktree, "main");
   writeFileSync(join(worktree, "delivery.txt"), "done\n");
   git(worktree, "add", "delivery.txt");
@@ -45,7 +48,7 @@ function fixture({ targetRepo = "main" } = {}) {
       project_name: "Demo",
       task_id: "close-task",
       created_at: new Date().toISOString(),
-      target_repo_root: targetRepo === "worktree" ? worktree : repo,
+      target_repo_root: targetRepo === "worktree" ? source : repo,
       issue_ids: [],
       inputs: {},
     },
@@ -53,7 +56,7 @@ function fixture({ targetRepo = "main" } = {}) {
   const kernel = createTaskKernel(task);
   const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main") } });
   kernel.acceptAttempt("make-decision", decision.attempt_ref, writeHumanConfirmation(kernel, "make-decision", decision));
-  return { root, remote, repo, worktree, taskCommit, task, kernel };
+  return { root, remote, repo, source, worktree, taskCommit, task, kernel };
 }
 
 function delivery(f) {
@@ -101,6 +104,8 @@ describe("delivery close verifier", () => {
     const kernel = createTaskKernel(migrated.task);
     expect(migrated.task.manifest.target_repo_root).toBe(f.repo);
     expect(migrated.task.readRecord(migrated.migration_ref)).toContain("task-target-repo-root-migration.v1");
+    const verifyContext = bootstrapStage("verify-code", { mode: "sidecar", taskPath: migrated.task.taskPath, projectName: "Demo", taskId: "close-task" });
+    expect(verifyContext.workspace.worktreeRoot).toBe(f.worktree);
     expect(api.prepareDeliveryClosePlan({ task: migrated.task, kernel, delivery: delivery(f) }).plan.delivery.target_repo_root).toBe(f.repo);
     expect(migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" })).toMatchObject({ idempotent_replay: true });
   });
