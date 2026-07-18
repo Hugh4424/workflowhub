@@ -78,10 +78,24 @@ describe("official five-stage CLI", () => {
 
     writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan\n" } });
     writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan\n");
+    const revisedPlanInput = join(root, "revised-plan.json");
+    writeFileSync(revisedPlanInput, `${JSON.stringify({ content: "# Plan, revised after review\n" })}\n`);
+    const revisedPlan = run(root, repo, ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--revision=true", "--recover=receipts/plan.json"]);
+    expect(revisedPlan).toMatchObject({ revision: true, previous_receipt_ref: "receipts/plan.json" });
+    expect(revisedPlan.receipt_ref).toMatch(/^receipts\/revisions\/plan\/[a-f0-9]{64}\.json$/);
+    expect(JSON.parse(task.readRecord("receipts/plan.json"))).toMatchObject({ content: "# Plan\n" });
+    for (const args of [
+      ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--revision=true"],
+      ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--recover=receipts/plan.json"],
+      ["run", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--revision=true"],
+    ]) {
+      const invalid = spawnSync(process.execPath, [runtime, ...args], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+      expect(invalid.status).not.toBe(0);
+    }
+    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan, revised after review\n");
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks\n");
     const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
-    const buildPlan = invoke("build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: planReview.resultRef });
+    const buildPlan = invoke("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",
       "specs/official-chain/tasks.md",
