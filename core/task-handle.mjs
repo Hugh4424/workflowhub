@@ -351,11 +351,13 @@ function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode =
     assertOpenedPath(fd, temporary, ancestorSnapshot[0].real, "record temporary");
     openedTemporary = realpathSync(temporary);
     writeFileSync(fd, data, { encoding });
+    testHooks?.beforeFileFsync?.();
     fsyncSync(fd);
     closeSync(fd); fd = undefined;
     testHooks?.afterOpenBeforeRename?.();
     verifyDirectorySnapshot(ancestorSnapshot);
     renameSync(temporary, candidate);
+    testHooks?.beforeDirectoryFsync?.();
     fsyncDirectory(parent);
     verifyDirectorySnapshot(ancestorSnapshot);
   } finally {

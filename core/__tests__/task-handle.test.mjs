@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -376,6 +377,53 @@ describe("TaskHandle", () => {
       }),
     ).toThrow(/changed|symlink|nofollow|race/i);
     expect(existsSync(join(outside, "result.json"))).toBe(false);
+  });
+
+  it("keeps the old record, cleans the temporary, and recovers after a file-fsync failure", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    task.writeRecordAtomic("records/result.json", '{"value":"old"}\n');
+
+    expect(() => task.writeRecordAtomic("records/result.json", '{"value":"new"}\n', {
+      testHooks: { beforeFileFsync() { throw new Error("file fsync failure"); } },
+    })).toThrow("file fsync failure");
+    expect(task.readRecord("records/result.json")).toBe('{"value":"old"}\n');
+    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "old" });
+    expect(readdirSync(join(taskPath, "records")).filter((name) => /^\.[0-9a-f-]+\.tmp$/.test(name))).toEqual([]);
+
+    task.writeRecordAtomic("records/result.json", '{"value":"recovered"}\n');
+    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "recovered" });
+  });
+
+  it("leaves a complete record and recovers after a directory-fsync failure", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    task.writeRecordAtomic("records/result.json", '{"value":"old"}\n');
+
+    expect(() => task.writeRecordAtomic("records/result.json", '{"value":"new"}\n', {
+      testHooks: { beforeDirectoryFsync() { throw new Error("directory fsync failure"); } },
+    })).toThrow("directory fsync failure");
+    expect(task.readRecord("records/result.json")).toBe('{"value":"new"}\n');
+    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "new" });
+    expect(readdirSync(join(taskPath, "records")).filter((name) => /^\.[0-9a-f-]+\.tmp$/.test(name))).toEqual([]);
+
+    task.writeRecordAtomic("records/result.json", '{"value":"recovered"}\n');
+    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "recovered" });
+  });
+
+  it("keeps the old record and recovers after a rename-preparation failure", () => {
+    const { storageRoot, taskPath } = fixture();
+    const task = createTask({ storageRoot, taskPath, manifest: manifest() });
+    task.writeRecordAtomic("records/result.json", '{"value":"old"}\n');
+
+    expect(() => task.writeRecordAtomic("records/result.json", '{"value":"new"}\n', {
+      testHooks: { afterOpenBeforeRename() { throw new Error("rename preparation failure"); } },
+    })).toThrow("rename preparation failure");
+    expect(task.readRecord("records/result.json")).toBe('{"value":"old"}\n');
+    expect(readdirSync(join(taskPath, "records")).filter((name) => /^\.[0-9a-f-]+\.tmp$/.test(name))).toEqual([]);
+
+    task.writeRecordAtomic("records/result.json", '{"value":"recovered"}\n');
+    expect(JSON.parse(task.readRecord("records/result.json"))).toEqual({ value: "recovered" });
   });
 
   it("invalidates an open TaskHandle when its task root is replaced at the same path", () => {

@@ -13,7 +13,10 @@ import {
   mergeHealthFacts,
   mergeSkills,
   mergeTranscriptRecords,
+  parseJsonl,
   safeError,
+  toJsonl,
+  validateSkillsInventory,
   validateSkillsSchemaContract,
 } from "./fact-indexes.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
@@ -21,6 +24,12 @@ import { assertTaskHandle, assertTaskKernel } from "./task-handle.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 
 const STAGES = Object.freeze(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
+const INDEX_REFS = Object.freeze([
+  "indexes/transcript-index.jsonl",
+  "indexes/artifact-index.jsonl",
+  "indexes/flow-health-facts.jsonl",
+  "indexes/skills-inventory.json",
+]);
 const REGISTRIES = new WeakSet();
 const READERS = new WeakSet();
 const ENTRY_FIELDS = new Set(["source_id", "source_ref", "source_format", "source_version", "required", "reader"]);
@@ -276,12 +285,103 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   return merged.records;
 }
 
-/** Phase-2 projection entry. Persistence and launcher wiring remain Phase 3. */
 export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date() } = {}) {
   const preflight = preflightFactCollection(ctx);
-  const transcript = buildTranscriptProjection(assertRegistry(transcriptRegistry));
-  const artifacts = buildArtifactProjection(preflight);
-  const skills = buildSkillsProjection(preflight, now);
-  const health = buildHealthProjection(preflight, transcript, artifacts, skills);
-  return Object.freeze({ preflight: Object.freeze({ snapshot: preflight.snapshot }), transcript, artifacts, health, skills: skills.inventory, warnings: skills.closure.ok ? [] : [{ code: "SKILL_CLOSURE_FAILED", message: "Skill closure validation failed" }] });
+  assertRegistry(transcriptRegistry);
+  const warnings = [];
+  let lockFailed = false;
+  const files = new Map(INDEX_REFS.map((ref) => [ref, { ref, saved: false, error: null }]));
+  const fail = (ref, error) => {
+    files.set(ref, { ref, saved: false, error: resultError(error) });
+  };
+  const save = (ref) => files.set(ref, { ref, saved: true, error: null });
+
+  try {
+    const result = preflight.task.withRecordLock("locks/indexes/fact-collection.lock", () => {
+      const transcript = persistJsonl(preflight.task, INDEX_REFS[0], "transcript", mergeTranscriptRecords,
+        () => buildTranscriptProjection(transcriptRegistry));
+      transcript.saved ? save(INDEX_REFS[0]) : fail(INDEX_REFS[0], transcript.error);
+
+      const artifacts = persistJsonl(preflight.task, INDEX_REFS[1], "artifact", mergeArtifactRecords,
+        () => buildArtifactProjection(preflight));
+      artifacts.saved ? save(INDEX_REFS[1]) : fail(INDEX_REFS[1], artifacts.error);
+
+      let skills;
+      try { skills = buildSkillsProjection(preflight, now); }
+      catch (error) { skills = { error, closure: { ok: false } }; }
+      if (!skills.closure.ok) warnings.push({ code: "SKILL_CLOSURE_FAILED", message: "Skill closure validation failed" });
+
+      const health = persistJsonl(preflight.task, INDEX_REFS[2], "health", mergeHealthFacts,
+        () => buildHealthProjection(preflight, transcript.records, artifacts.records, skills));
+      health.saved ? save(INDEX_REFS[2]) : fail(INDEX_REFS[2], health.error);
+
+      const savedSkills = persistSkills(preflight.task, skills);
+      savedSkills.saved ? save(INDEX_REFS[3]) : fail(INDEX_REFS[3], savedSkills.error);
+    });
+    if (result && typeof result.then === "function") throw new Error("asynchronous record locks are unsupported by collectTaskFacts");
+  } catch (error) {
+    lockFailed = true;
+    for (const ref of INDEX_REFS) if (!files.get(ref).saved) fail(ref, error);
+    warnings.push({ code: "RECORD_LOCK_FAILED", message: "Fact index lock operation failed" });
+  }
+  const ordered = INDEX_REFS.map((ref) => files.get(ref));
+  return { status: !lockFailed && ordered.every((file) => file.saved) ? "success" : "failed", files: ordered, warnings };
+}
+
+function resultError(error) {
+  const code = typeof error?.code === "string" && error.code ? error.code : "WRITE_FAILED";
+  return { code, message: safeError(code, "Fact index write failed").message };
+}
+
+function existingJsonl(task, ref, index) {
+  try { return parseJsonl(task.readRecord(ref), { index, source_ref: ref }); }
+  catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+function finalJsonl(task, ref, index, fallback) {
+  try { return existingJsonl(task, ref, index); }
+  catch { return fallback; }
+}
+
+function persistJsonl(task, ref, index, merge, candidates) {
+  let existing = [];
+  try {
+    existing = existingJsonl(task, ref, index);
+    const merged = merge([...existing, ...candidates()]);
+    if (!merged.ok) return { saved: false, error: merged.error ?? { code: merged.code }, records: existing };
+    task.writeRecordAtomic(ref, toJsonl(merged.records));
+    return { saved: true, records: merged.records };
+  } catch (error) {
+    return { saved: false, error, records: finalJsonl(task, ref, index, existing) };
+  }
+}
+
+function existingSkills(task) {
+  try {
+    const parsed = JSON.parse(task.readRecord(INDEX_REFS[3]));
+    if (parsed?.schema_version !== "v1") throw Object.assign(new Error("skills inventory schema is unsupported"), { code: "UNSUPPORTED_FORMAT" });
+    if (!validateSkillsInventory(parsed).ok) throw Object.assign(new Error("skills inventory is invalid"), { code: "INVALID_RECORD" });
+    return parsed.skills;
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+function persistSkills(task, skills) {
+  if (skills.error) return { saved: false, error: skills.error };
+  try {
+    const merged = mergeSkills([...existingSkills(task), ...skills.inventory.skills], {
+      schema_version: skills.inventory.schema_version,
+      generated_at: skills.inventory.generated_at,
+    });
+    if (!merged.ok) return { saved: false, error: merged.error ?? { code: merged.code } };
+    task.writeRecordAtomic(INDEX_REFS[3], `${JSON.stringify(merged.inventory, null, 2)}\n`);
+    return { saved: true };
+  } catch (error) {
+    return { saved: false, error };
+  }
 }
