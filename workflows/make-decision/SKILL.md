@@ -35,8 +35,9 @@ its receipt with `stage-runtime.mjs receipt --stage=make-decision
 direction and detail result refs as `decision`, `direction_review`, and
 `detail_review` in the `run` input. Missing review refs stop the official run.
 The decision payload is `{ "decision_log": "..." }`. Missing decision-log
-content stops receipt creation. Multica instructions own the conversational
-wait-and-resume behavior; WorkflowHub does not authenticate comment authors.
+content stops receipt creation. Invoking-host instructions own the
+conversational wait-and-resume behavior; WorkflowHub does not authenticate host
+message authors.
 
 The stage and every component must not discover identity from the shell, Git,
 an issue number, a branch, or directory scanning. Components receive frozen
