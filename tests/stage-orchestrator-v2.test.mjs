@@ -119,6 +119,59 @@ describe("stage-runner capability unit", () => {
     expect(() => verifyContext.kernel.buildCodeReopenProvenance(reopen.reopen_ref)).toThrow(/not authorized|active accepted/i);
   });
 
+  it("keeps a historical build-code archive when only accepted_at differs and rejects other archive conflicts", async () => {
+    const setup = async () => {
+      const { task, taskPath, worktree, oid } = fixture();
+      const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+      const { bootstrapStage } = await import("../core/stage-context.mjs");
+      const hash = "a".repeat(64), tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
+      const tests = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: oid, snapshot_tree: tree, snapshot_commit: "b".repeat(40), started_at: "2026-07-16T00:00:00.000Z", completed_at: "2026-07-16T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
+      const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
+      const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath, projectName: "Demo", taskId: "chain-task" });
+      const accept = (stage, stageContext, result) => {
+        const request = { attemptRef: result.attempt_ref };
+        if (requiresHumanConfirmation(stage)) request.humanConfirmationRef = writeHumanConfirmation(stageContext.kernel, stage, result);
+        return acceptStageAttempt(stage, stageContext, request);
+      };
+      const publish = async (stage, handler, publication) => {
+        const stageContext = context(stage), result = await runStage(stage, stageContext, handler, publication);
+        accept(stage, stageContext, result);
+        return result;
+      };
+      await publish("make-decision", async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
+      await publish("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: worker.createCheckpoint("build-spec") } }; });
+      await publish("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: worker.createCheckpoint("build-plan") } }; });
+      await publish("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true } }));
+      const verifyContext = context("verify-code"), failureRaw = JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2) + "\n";
+      verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
+      const failureHash = (await import("node:crypto")).createHash("sha256").update(failureRaw).digest("hex");
+      const failedVerify = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: failureHash }] } }));
+      const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
+      const revisedContext = context("build-code"), revised = await runStage("build-code", revisedContext, async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true } }), { reopenProvenance: reopen });
+      return { task, revisedContext, revised, accept };
+    };
+    for (const conflict of ["accepted_at", "integrity_hash", "upstream_refs", "attempt_ref"]) {
+      const { task, revisedContext, revised, accept } = await setup();
+      const canonicalRef = "results/build-code/accepted.json", archiveRef = "results/build-code/accepted-attempt-0001.json";
+      const canonicalBefore = task.readRecord(canonicalRef), archive = JSON.parse(canonicalBefore);
+      if (conflict === "accepted_at") archive.accepted_at = "2026-07-18T05:07:06.447Z";
+      if (conflict === "integrity_hash") archive.integrity_hash = "c".repeat(64);
+      if (conflict === "upstream_refs") archive.upstream_refs = [];
+      if (conflict === "attempt_ref") { archive.attempt_ref = revised.attempt_ref; archive.integrity_hash = revised.integrity_hash; }
+      writeFileSync(task.recordPath(archiveRef), `${JSON.stringify(archive, null, 2)}\n`);
+      const archiveBefore = task.readRecord(archiveRef);
+      if (conflict === "accepted_at") {
+        accept("build-code", revisedContext, revised);
+        expect(JSON.parse(task.readRecord(canonicalRef))).toMatchObject({ attempt_ref: revised.attempt_ref });
+        expect(task.readRecord(archiveRef)).toBe(archiveBefore);
+      } else {
+        expect(() => accept("build-code", revisedContext, revised)).toThrow(/archive conflicts|integrity hash mismatch|upstream refs mismatch/);
+        expect(task.readRecord(canonicalRef)).toBe(canonicalBefore);
+        expect(task.readRecord(archiveRef)).toBe(archiveBefore);
+      }
+    }
+  });
+
   it("can publish without accepting when the caller omits human confirmation", async () => {
     const { task, taskPath, worktree, oid } = fixture(); const { runStage } = await import("../core/stage-runner.mjs"); const { bootstrapStage } = await import("../core/stage-context.mjs");
     const result = await runStage("make-decision", bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}), async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
