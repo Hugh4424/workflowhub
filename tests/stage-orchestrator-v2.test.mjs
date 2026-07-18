@@ -18,7 +18,7 @@ function fixture() {
   const oid = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim(); execFileSync("git", ["worktree", "add", "-q", "-b", "task/Demo/chain-task", worktree, oid], { cwd: repo });
   const taskPath = join(root, "Projects", "Demo", "tasks", "chain-task");
   const task = createTask({ storageRoot: root, taskPath, manifest: { schema_version: "1.0.0", project_name: "Demo", task_id: "chain-task", created_at: new Date().toISOString(), target_repo_root: repo, issue_ids: [], inputs: {} } });
-  return { root, task, taskPath, worktree, oid };
+  return { root, repo, task, taskPath, worktree, oid };
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 describe("stage-runner capability unit", () => {
@@ -196,5 +196,28 @@ describe("stage-runner capability unit", () => {
     const result = await runStage("make-decision", bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}), async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
     expect(task.readRecord(`results/make-decision/${result.attempt_ref}`)).toContain("task-attempt.v2");
     expect(() => task.readRecord("results/make-decision/accepted.json")).toThrow(/ENOENT|no such/i);
+  });
+
+  it("recovers an automatic build-spec attempt with the explicit accept command after publish interruption", async () => {
+    const { root, repo, task, taskPath, worktree, oid } = fixture();
+    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { bootstrapStage } = await import("../core/stage-context.mjs");
+    const decisionContext = bootstrapStage("make-decision", { mode: "sidecar", taskPath, projectName: "Demo", taskId: "chain-task" });
+    const decision = await runStage("make-decision", decisionContext, async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
+    acceptStageAttempt("make-decision", decisionContext, { attemptRef: decision.attempt_ref, humanConfirmationRef: writeHumanConfirmation(decisionContext.kernel, "make-decision", decision) });
+    const specContext = bootstrapStage("build-spec", { mode: "sidecar", taskPath, projectName: "Demo", taskId: "chain-task" });
+    const published = await runStage("build-spec", specContext, async (worker) => {
+      worker.artifacts.writeAtomic("spec.md", "spec\n");
+      return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint: worker.createCheckpoint("build-spec") } };
+    });
+
+    expect(() => task.readRecord("results/build-spec/accepted.json")).toThrow(/ENOENT|no such/i);
+    const runtime = new URL("../scripts/stage-runtime.mjs", import.meta.url).pathname;
+    const accepted = JSON.parse(execFileSync(process.execPath, [runtime,
+      "accept", "--stage=build-spec", "--project=Demo", "--task=chain-task", `--attempt=${published.attempt_ref}`,
+    ], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" }));
+
+    expect(accepted).toMatchObject({ stage: "build-spec", attempt_ref: published.attempt_ref, acceptance_mode: "automatic" });
+    expect(JSON.parse(task.readRecord("results/build-spec/accepted.json"))).toMatchObject({ attempt_ref: published.attempt_ref });
   });
 });

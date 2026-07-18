@@ -16,10 +16,11 @@ import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createTask, openTask } from "../task-handle.mjs";
+import { createTask, inspectRunnerIdentity, openTask } from "../task-handle.mjs";
 
 const temporaryDirs = [];
 const modulePath = resolve(dirname(fileURLToPath(import.meta.url)), "../task-handle.mjs");
+const runnerIdentity = inspectRunnerIdentity(resolve(dirname(modulePath), ".."));
 
 function manifest(overrides = {}) {
   return {
@@ -114,16 +115,15 @@ describe("TaskHandle", () => {
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
     });
-    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
-      manifest,
-    );
+    const persistedManifest = { ...manifest, ...runnerIdentity };
+    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(persistedManifest);
 
     const opened = openTask(
       taskPath,
       "PaperBuilder",
       "paperbuilder-phase-foundation",
     );
-    expect(opened.manifest).toEqual(manifest);
+    expect(opened.manifest).toEqual(persistedManifest);
     expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
   });
 
@@ -499,7 +499,7 @@ describe("TaskHandle", () => {
 
     expect(statuses.sort((a, b) => a - b)).toEqual([0, 23]);
     expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
-      taskManifest,
+      { ...taskManifest, ...runnerIdentity },
     );
   });
 });

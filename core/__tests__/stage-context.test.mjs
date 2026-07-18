@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -124,6 +124,21 @@ describe("bootstrapStage", () => {
     });
 
     expect(context.task.taskPath).toBe(taskPath);
+  });
+
+  it("sidecar mode rejects runner drift immediately after opening the task", () => {
+    const { taskPath } = fixture();
+    const manifestPath = join(taskPath, "task.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.runner_oid = manifest.runner_oid === "f".repeat(40) ? "e".repeat(40) : "f".repeat(40);
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+    expect(() => bootstrapStage("verify-code", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+    })).toThrow(/runner identity mismatch/i);
   });
 
   it("rejects taskPath, expected identity, and manifest disagreement", () => {

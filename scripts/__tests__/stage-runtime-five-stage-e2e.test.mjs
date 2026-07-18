@@ -55,8 +55,10 @@ describe("official five-stage CLI", () => {
         : ["confirm", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, "--decision=accepted", ...extra];
       const invalid = spawnSync(process.execPath, [runtime, ...invalidArgs], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
       expect(invalid.status).not.toBe(0);
-      const acceptedArgs = ["accept", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, ...(human ? [`--human-confirmation-ref=${confirmation.ref}`] : []), ...extra];
-      const accepted = run(root, repo, acceptedArgs);
+      const accepted = human
+        ? run(root, repo, ["accept", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, `--human-confirmation-ref=${confirmation.ref}`, ...extra])
+        : JSON.parse(task.readRecord(`results/${stage}/accepted.json`));
+      expect(accepted.attempt_ref).toBe(attempt.attempt_ref);
       expect(accepted.acceptance_mode).toBe(human ? "human" : "automatic");
       if (!human) expect(accepted).not.toHaveProperty("human_confirmation_ref");
       if (["build-spec", "build-plan"].includes(stage)) expect(accepted.checkpoint.ref).toMatch(/^refs\/workflowhub\/checkpoints\//);

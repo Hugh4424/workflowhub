@@ -21,6 +21,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
 import { buildTaskKernel } from "./task-kernel-implementation.mjs";
@@ -34,11 +35,13 @@ const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
+const RUNNER_IDENTITY_MIGRATORS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const TARGET_REPO_ROOT_MIGRATION_REF = /^identity\/migrations\/target-repo-root\/[a-f0-9]{64}\.json$/;
 const HASH = /^[a-f0-9]{64}$/;
+const PACKAGE_RUNNER_ROOT = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 
 export function assertTaskHandle(value) {
   if (!value || typeof value !== "object" || !TASK_HANDLES.has(value)) {
@@ -76,6 +79,13 @@ function validateManifest(manifest) {
     throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
   }
   assertPlainObject(manifest.inputs, "task manifest inputs");
+  const hasRunnerRoot = Object.prototype.hasOwnProperty.call(manifest, "runner_root");
+  const hasRunnerOid = Object.prototype.hasOwnProperty.call(manifest, "runner_oid");
+  if (hasRunnerRoot !== hasRunnerOid) throw new TypeError("task manifest runner_root and runner_oid must be present together");
+  if (hasRunnerRoot) {
+    if (typeof manifest.runner_root !== "string" || !isAbsolute(manifest.runner_root)) throw new TypeError("task manifest runner_root must be an absolute path");
+    if (typeof manifest.runner_oid !== "string" || !/^[a-f0-9]{40}$/.test(manifest.runner_oid)) throw new TypeError("task manifest runner_oid must be a 40-character lowercase Git commit OID");
+  }
   if (manifest.target_repo_root_migration !== undefined) {
     assertPlainObject(manifest.target_repo_root_migration, "task manifest target_repo_root_migration");
     const migration = manifest.target_repo_root_migration;
@@ -114,6 +124,40 @@ function gitRepository(path, label) {
   const top = realpathSync(gitValue(root, ["rev-parse", "--show-toplevel"], label));
   if (top !== root) throw new Error(`${label} must be a Git toplevel directory`);
   return { root, common: realpathSync(resolve(root, gitValue(root, ["rev-parse", "--git-common-dir"], label))) };
+}
+
+/** Read the current identity of one real WorkflowHub runner checkout. */
+export function inspectRunnerIdentity(runnerRoot) {
+  if (typeof runnerRoot !== "string" || !isAbsolute(runnerRoot)) throw new TypeError("runner root must be an absolute path");
+  const runner = gitRepository(runnerRoot, "WorkflowHub runner");
+  const oid = gitValue(runner.root, ["rev-parse", "--verify", "HEAD^{commit}"], "WorkflowHub runner HEAD").toLowerCase();
+  if (!/^[a-f0-9]{40}$/.test(oid)) throw new Error("WorkflowHub runner HEAD must be a 40-character Git commit OID");
+  return Object.freeze({ runner_root: runner.root, runner_oid: oid });
+}
+
+/** Fail before stage capabilities are created when the pinned runner moved. */
+export function assertTaskRunner(taskHandle, runnerRoot) {
+  const task = assertTaskHandle(taskHandle);
+  const expectedRoot = task.manifest.runner_root;
+  const expectedOid = task.manifest.runner_oid;
+  if (expectedRoot === undefined || expectedOid === undefined) throw new Error("task runner identity is missing; explicit runner migration is required");
+  const actual = inspectRunnerIdentity(runnerRoot);
+  if (actual.runner_root !== expectedRoot || actual.runner_oid !== expectedOid) {
+    throw new Error(`runner identity mismatch: expected ${expectedRoot}@${expectedOid}, actual ${actual.runner_root}@${actual.runner_oid}`);
+  }
+  return actual;
+}
+
+function assertRunnerIsNotCandidate(manifest, taskId, runnerRoot) {
+  const target = resolve(manifest.target_repo_root);
+  const candidate = resolve(dirname(target), `${basename(target)}-${taskId}`);
+  if (runnerRoot === candidate) throw new Error("candidate Workspace cannot be used as the WorkflowHub runner");
+}
+
+function assertRunnerIsNotTaskCandidate(task, runnerRoot) {
+  const target = gitRepository(task.manifest.target_repo_root, "target repository").root;
+  const candidate = resolve(dirname(target), `${basename(target)}-${task.identity.taskId}`);
+  if (runnerRoot === candidate) throw new Error("candidate Workspace cannot be used as the WorkflowHub runner");
 }
 
 function validateTargetRepoRootMigration(task, manifest) {
@@ -626,12 +670,32 @@ function makeTaskHandle(taskPath, manifest) {
     writeAtomicAt(realTaskPath, "task.json", manifestRaw);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
   });
+  RUNNER_IDENTITY_MIGRATORS.set(frozen, ({ manifestRaw } = {}) => {
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    const next = JSON.parse(manifestRaw);
+    const nextIdentity = validateManifest(next);
+    if (nextIdentity.projectName !== identity.projectName || nextIdentity.taskId !== identity.taskId
+      || next.target_repo_root !== manifest.target_repo_root
+      || JSON.stringify(next.inputs) !== JSON.stringify(manifest.inputs)
+      || JSON.stringify(next.issue_ids) !== JSON.stringify(manifest.issue_ids)) {
+      throw new Error("runner migration may change only runner_root and runner_oid");
+    }
+    writeAtomicAt(realTaskPath, "task.json", manifestRaw);
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+  });
   return frozen;
 }
 
 /** Create and atomically publish a complete task directory under a trusted storage root. */
 export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) {
-  const identity = validateManifest(manifest);
+  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_oid"))) {
+    throw new TypeError("createTask derives runner identity; caller-supplied runner fields are forbidden");
+  }
+  const runner = inspectRunnerIdentity(PACKAGE_RUNNER_ROOT);
+  const persistedManifest = { ...manifest, ...runner };
+  const identity = validateManifest(persistedManifest);
+  assertRunnerIsNotCandidate(persistedManifest, identity.taskId, runner.runner_root);
   if (typeof storageRoot !== "string" || !isAbsolute(storageRoot)) throw new TypeError("storageRoot must be absolute");
   assertNoSymlinkChain(storageRoot, "storageRoot");
   const root = realDirectoryNoSymlink(resolve(storageRoot), "storageRoot");
@@ -639,7 +703,7 @@ export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) 
   if (taskPath !== undefined && resolve(taskPath) !== derived) throw new Error(`taskPath does not match trusted storageRoot: ${taskPath}`);
   const parent = ensureChildDirectories(root, ["Projects", identity.projectName, "tasks"]);
   if (existsSync(derived)) throw new Error(`task already exists: ${derived}`);
-  publishTaskDirectory(parent, derived, manifest, testHooks);
+  publishTaskDirectory(parent, derived, persistedManifest, testHooks);
   return openTask(derived, identity);
 }
 
@@ -659,6 +723,30 @@ export function openTask(taskPath, expected, expectedTaskId) {
   const handle = makeTaskHandle(realTaskPath, manifest);
   validateTargetRepoRootMigration(handle, manifest);
   return handle;
+}
+
+/** Explicitly re-pin an existing task to the checkout running this migration. */
+export function migrateTaskRunnerIdentity(options = {}) {
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("runner migration options must be an object");
+  if (Object.prototype.hasOwnProperty.call(options, "runnerRoot")) throw new TypeError("runnerRoot is forbidden; runner identity is derived from the WorkflowHub checkout");
+  const { taskPath, projectName, taskId } = options;
+  const task = openTask(taskPath, { projectName, taskId });
+  const runner = inspectRunnerIdentity(PACKAGE_RUNNER_ROOT);
+  assertRunnerIsNotTaskCandidate(task, runner.runner_root);
+  if (task.manifest.runner_root === runner.runner_root && task.manifest.runner_oid === runner.runner_oid) {
+    return Object.freeze({ task, ...runner, idempotent_replay: true });
+  }
+  return task.withRecordLock("locks/task-runner-migration.lock", () => {
+    const currentRaw = task.readRecord("task.json");
+    const current = JSON.parse(currentRaw);
+    const freshRunner = inspectRunnerIdentity(runner.runner_root);
+    assertRunnerIsNotTaskCandidate(task, freshRunner.runner_root);
+    const nextRaw = `${JSON.stringify({ ...current, ...freshRunner }, null, 2)}\n`;
+    const migrator = RUNNER_IDENTITY_MIGRATORS.get(task);
+    if (typeof migrator !== "function") throw new TypeError("authentic TaskHandle runner migrator required");
+    migrator({ manifestRaw: nextRaw });
+    return Object.freeze({ task: openTask(task.taskPath, task.identity), ...freshRunner, idempotent_replay: false });
+  });
 }
 
 /** Atomically rebind one task to a checked-out branch in the same Git repository. */

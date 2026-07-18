@@ -9,6 +9,7 @@ import {
   validateMakeDecisionWorkspaceAttempt,
 } from "../core/stage-context.mjs";
 import { acceptStageAttempt, confirmStageAttempt, runOfficialStage } from "../core/stage-runner.mjs";
+import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 
 function parseArgs(argv) {
@@ -64,7 +65,10 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     return { receipt_ref: result.ref, receipt_hash: result.sha256, revision: result.revision, ...(result.revision ? { previous_receipt_ref: result.previous_ref, previous_receipt_hash: result.previous_hash, content_hash: result.content_hash } : {}) };
   }
   if (command === "run") {
-    return runOfficialStage(values.stage, context, input, values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : undefined);
+    const attempt = await runOfficialStage(values.stage, context, input, values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : undefined);
+    if (requiresHumanConfirmation(values.stage)) return attempt;
+    const accepted = acceptStageAttempt(values.stage, context, { attemptRef: attempt.attempt_ref });
+    return { ...attempt, accepted };
   }
   if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
   return acceptStageAttempt(values.stage, context, {

@@ -1,10 +1,12 @@
-import { isAbsolute, resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { resolveStorageRoot } from "./storage-root.mjs";
 import { assertRuntimeAuthority } from "./runtime-mode.mjs";
 import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
-import { openTask } from "./task-handle.mjs";
+import { assertTaskRunner, openTask } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import {
   assertWorkspace,
@@ -20,6 +22,7 @@ const STAGES = new Set([
   "build-code",
   "verify-code",
 ]);
+const RUNNER_ROOT = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 export { assertWorkspace } from "./workspace.mjs";
 
 function bindCandidateWorkspace(context, candidate) {
@@ -117,6 +120,7 @@ export function bootstrapStage(
   }
 
   const taskHandle = openTask(resolvedTaskPath, project, task);
+  assertTaskRunner(taskHandle, RUNNER_ROOT);
   if (workspaceLifecycle !== undefined && normalizedStage !== "make-decision") {
     throw new TypeError("workspaceLifecycle is only valid for make-decision");
   }
