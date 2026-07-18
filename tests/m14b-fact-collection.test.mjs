@@ -19,7 +19,7 @@ import {
   parseJsonl,
   toJsonl,
 } from "../core/fact-indexes.mjs";
-import { buildHealthProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { buildArtifactProjection, buildHealthProjection, collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
@@ -235,6 +235,41 @@ describe("M14b fact collection pure contracts", () => {
     expect(fixture).toMatchObject({ baseline: expect.stringMatching(/^[0-9a-f]{40}$/), clock: expect.any(Function) });
     expect(fixture.clock()).toBe("2026-07-18T00:00:00.000Z");
     await fixture.sentinel("before-indexes");
+  });
+
+  it("REQ-020 reuses formal hashes and leaves unhashed artifact references null", () => {
+    const taskId = "hash-projection";
+    const attemptRef = "results/make-decision/attempt-0001.json";
+    const formalStageHash = "a".repeat(64);
+    const formalEvidenceHash = "b".repeat(64);
+    const recordsByRef = new Map([
+      [attemptRef, JSON.stringify({ task_id: taskId, stage: "make-decision", facts: {
+        evidence_refs: [{ ref: "evidence/no-hash.json" }, { ref: "evidence/formal-hash.json", sha256: formalEvidenceHash }],
+      } })],
+      ["evidence/no-hash.json", "unhashed artifact bytes"],
+      ["evidence/formal-hash.json", "different artifact bytes"],
+    ]);
+    const missing = () => { throw errorWithCode("ENOENT"); };
+    const projection = buildArtifactProjection({
+      task: {
+        identity: { taskId },
+        listStageAttemptRefs: (stage) => stage === "make-decision" ? [attemptRef] : [],
+        readRecord: (ref) => recordsByRef.has(ref) ? recordsByRef.get(ref) : missing(),
+      },
+      kernel: {
+        readAccepted: (stage) => {
+          if (stage === "make-decision") return { accepted: { attempt_ref: "attempt-0001.json", integrity_hash: formalStageHash } };
+          return missing();
+        },
+      },
+      artifacts: { read: missing },
+    });
+
+    expect(projection).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_kind: "stage_result", id: "make-decision:attempt-0001.json", content_hash: formalStageHash }),
+      expect.objectContaining({ record_kind: "evidence", id: "evidence/no-hash.json", content_hash: null }),
+      expect.objectContaining({ record_kind: "evidence", id: "evidence/formal-hash.json", content_hash: formalEvidenceHash }),
+    ]));
   });
 });
 
