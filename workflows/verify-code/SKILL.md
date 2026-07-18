@@ -51,6 +51,16 @@ unaccepted verify attempt. It rejects duplicate publication, changed bindings,
 non-failure evidence, and Workspace drift during publication. Use that returned
 attempt only for the controlled build-code reopen; never accept it.
 
+After the repair produces a revised accepted build-code result, publish the
+fresh passing verification through
+`node scripts/stage-runtime.mjs publish-verify-passing --stage=verify-code
+--project=<project> --task=<task> --input=<component-receipts.json>`. The input
+uses the same official tests, review, and evidence receipt shape as `run`. The
+kernel requires a new active accepted build and fresh passing test, independent
+review, and acceptance-evidence records, then binds their hashes plus the old
+accepted verify result and current Workspace HEAD/tree into one new unaccepted
+verify attempt. It does not accept the attempt or replace the accepted result.
+
 ## Procedure
 
 1. Validate StageContext and read the accepted build-code result through

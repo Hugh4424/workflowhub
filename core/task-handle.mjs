@@ -441,7 +441,7 @@ function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode =
   return candidate;
 }
 
-function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600 } = {}) {
+function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks } = {}) {
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const temporary = resolve(parent, `.${randomUUID()}.tmp`);
@@ -450,10 +450,13 @@ function createOnlyAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 
     fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, mode);
     assertOpenedPath(fd, temporary, ancestorSnapshot[0].real, "create-only temporary");
     writeFileSync(fd, data, { encoding });
+    testHooks?.beforeFileFsync?.();
     fsyncSync(fd);
     closeSync(fd); fd = undefined;
+    testHooks?.afterOpenBeforeRename?.();
     verifyDirectorySnapshot(ancestorSnapshot);
     linkSync(temporary, candidate);
+    testHooks?.beforeDirectoryFsync?.();
     fsyncDirectory(parent);
     verifyDirectorySnapshot(ancestorSnapshot);
   } finally {

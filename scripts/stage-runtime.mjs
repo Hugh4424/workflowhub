@@ -8,7 +8,7 @@ import {
   prepareMakeDecisionWorkspace,
   validateMakeDecisionWorkspaceAttempt,
 } from "../core/stage-context.mjs";
-import { acceptStageAttempt, confirmStageAttempt, runOfficialStage } from "../core/stage-runner.mjs";
+import { acceptStageAttempt, confirmStageAttempt, publishOfficialVerifyPassing, runOfficialStage } from "../core/stage-runner.mjs";
 import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 
 function parseArgs(argv) {
@@ -19,8 +19,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "receipt", "run", "confirm", "accept", "reopen", "publish-verify-failure"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|receipt|run|confirm|accept|reopen|publish-verify-failure> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "receipt", "run", "confirm", "accept", "reopen", "publish-verify-failure", "publish-verify-passing"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|receipt|run|confirm|accept|reopen|publish-verify-failure|publish-verify-passing> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -34,6 +34,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
   if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
   if (command === "publish-verify-failure" && (values.stage !== "verify-code" || !values["failure-evidence"])) throw new TypeError("publish-verify-failure requires --stage=verify-code --failure-evidence=<evidence/ref.json>");
+  if (command === "publish-verify-passing" && (values.stage !== "verify-code" || !values.input)) throw new TypeError("publish-verify-passing requires --stage=verify-code --input=<component-receipts.json>");
   if (Object.prototype.hasOwnProperty.call(values, "reopen") && (command !== "run" || values.stage !== "build-code")) throw new TypeError("--reopen is only valid for build-code run");
   if (Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
   if (Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
@@ -44,7 +45,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     projectName: values.project,
     taskId: values.task,
   });
-  const input = new Set(["receipt", "run"]).has(command)
+  const input = new Set(["receipt", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -57,6 +58,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   }
   if (command === "reopen") return context.kernel.reopenBuildCode({ verifyAttemptRef: values["verify-attempt"], failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-failure") return context.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: values["failure-evidence"] });
+  if (command === "publish-verify-passing") return publishOfficialVerifyPassing(context, input);
   if (values.stage === "make-decision" && command === "run") context = prepareMakeDecisionWorkspace(context);
   if (values.stage === "make-decision" && command === "accept") context = validateMakeDecisionWorkspaceAttempt(context, values.attempt);
   if (command === "receipt") {

@@ -116,6 +116,10 @@ describe("official five-stage CLI", () => {
     createTaskKernel(task).publishCanonicalRecord("evidence/acceptance-AC-1.json", acceptanceRaw);
     writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref: "evidence/acceptance-AC-1.json", sha256: createHash("sha256").update(acceptanceRaw).digest("hex") }] } });
     invoke("verify-code", { tests: "receipts/verify-tests.json", review: verifyReview.resultRef, evidence: "evidence/verify-evidence.json" });
+    const prematurePassing = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${join(root, "verify-code-input.json")}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(prematurePassing.status).not.toBe(0);
+    expect(prematurePassing.stderr).toMatch(/new active accepted build/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0002.json")).toThrow(/ENOENT|no such/i);
     const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "WORKSPACE-LINEAGE", result: "fail", refs: [] }, null, 2)}\n`;
     createTaskKernel(task).publishCanonicalRecord("evidence/workspace-lineage-failure.json", failureRaw);
     const controlledFailure = run(root, repo, ["publish-verify-failure", "--stage=verify-code", "--project=Demo", "--task=official-chain", "--failure-evidence=evidence/workspace-lineage-failure.json"]);
@@ -123,6 +127,129 @@ describe("official five-stage CLI", () => {
     const duplicate = spawnSync(process.execPath, [runtime, "publish-verify-failure", "--stage=verify-code", "--project=Demo", "--task=official-chain", "--failure-evidence=evidence/workspace-lineage-failure.json"], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
     expect(duplicate.status).not.toBe(0);
     expect(duplicate.stderr).toMatch(/already exists/i);
+
+    const reopen = run(root, repo, ["reopen", "--stage=build-code", "--project=Demo", "--task=official-chain", `--verify-attempt=${controlledFailure.attempt_ref}`, "--failure-evidence=evidence/workspace-lineage-failure.json"]);
+    const revisedImplementation = { ref: "receipts/implementation-revised.json", value: JSON.parse(task.readRecord("receipts/implementation.json")) };
+    createTaskKernel(task).publishCanonicalRecord(revisedImplementation.ref, task.readRecord("receipts/implementation.json"));
+    createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf revised-build", receiptRef: "receipts/build-tests-revised.json", outputRef: "evidence/build-output-revised.txt" });
+    const revisedBuildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: revisedImplementation.value.snapshot_tree });
+    const revisedBuildInput = join(root, "build-code-revised-input.json");
+    writeFileSync(revisedBuildInput, `${JSON.stringify({ receipts: { implementation: revisedImplementation.ref, tests: "receipts/build-tests-revised.json", review: revisedBuildReview.resultRef } })}\n`);
+    const revisedBuild = run(root, repo, ["run", "--stage=build-code", "--project=Demo", "--task=official-chain", `--input=${revisedBuildInput}`, `--reopen=${reopen.reopen_ref}`]);
+    run(root, repo, ["accept", "--stage=build-code", "--project=Demo", "--task=official-chain", `--attempt=${revisedBuild.attempt_ref}`]);
+
+    const freshVerifyTests = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "tests" }).captureTests({ command: "printf fresh-verify", receiptRef: "receipts/verify-tests-revised.json", outputRef: "evidence/verify-output-revised.txt" });
+    const freshVerifyReview = writeFormalReviewFixture({ task, stage: "verify-code", snapshotTree: freshVerifyTests.snapshot_tree });
+    const freshAcceptanceRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: freshVerifyTests.output_ref, sha256: freshVerifyTests.output_hash }] }, null, 2)}\n`;
+    createTaskKernel(task).publishCanonicalRecord("evidence/acceptance-AC-1-revised.json", freshAcceptanceRaw);
+    const freshEvidence = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref: "evidence/acceptance-AC-1-revised.json", sha256: createHash("sha256").update(freshAcceptanceRaw).digest("hex") }] }, revisionOf: "evidence/verify-evidence.json" });
+    const passingInput = join(root, "verify-code-passing-input.json");
+    writeFileSync(passingInput, `${JSON.stringify({ receipts: { tests: freshVerifyTests.receipt_ref, review: freshVerifyReview.resultRef, evidence: freshEvidence.ref } })}\n`);
+    const copiedTestRef = "receipts/verify-tests-copied.json";
+    createTaskKernel(task).publishCanonicalRecord(copiedTestRef, task.readRecord(verifyTests.receipt_ref));
+    const copiedTestInput = join(root, "verify-code-copied-test-input.json");
+    writeFileSync(copiedTestInput, `${JSON.stringify({ receipts: { tests: copiedTestRef, review: freshVerifyReview.resultRef, evidence: freshEvidence.ref } })}\n`);
+    const rejectedCopiedTest = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${copiedTestInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedCopiedTest.status).not.toBe(0);
+    expect(rejectedCopiedTest.stderr).toMatch(/fresh test receipt content/i);
+    const copiedReviewRef = "reviews/results/verify-copied.json";
+    createTaskKernel(task).publishCanonicalRecord(copiedReviewRef, task.readRecord(verifyReview.resultRef));
+    const copiedReviewInput = join(root, "verify-code-copied-review-input.json");
+    writeFileSync(copiedReviewInput, `${JSON.stringify({ receipts: { tests: freshVerifyTests.receipt_ref, review: copiedReviewRef, evidence: freshEvidence.ref } })}\n`);
+    const rejectedCopiedReview = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${copiedReviewInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedCopiedReview.status).not.toBe(0);
+    expect(rejectedCopiedReview.stderr).toMatch(/fresh independent review content/i);
+    const copiedAcceptanceRef = "evidence/acceptance-AC-1-copied.json";
+    createTaskKernel(task).publishCanonicalRecord(copiedAcceptanceRef, acceptanceRaw);
+    const copiedEvidence = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref: copiedAcceptanceRef, sha256: createHash("sha256").update(acceptanceRaw).digest("hex") }] }, revisionOf: "evidence/verify-evidence.json" });
+    const copiedEvidenceInput = join(root, "verify-code-copied-evidence-input.json");
+    writeFileSync(copiedEvidenceInput, `${JSON.stringify({ receipts: { tests: freshVerifyTests.receipt_ref, review: freshVerifyReview.resultRef, evidence: copiedEvidence.ref } })}\n`);
+    const rejectedCopiedEvidence = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${copiedEvidenceInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedCopiedEvidence.status).not.toBe(0);
+    expect(rejectedCopiedEvidence.stderr).toMatch(/fresh acceptance evidence content/i);
+    const wrongCriterionRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-2", result: "pass", refs: [{ ref: freshVerifyTests.output_ref, sha256: freshVerifyTests.output_hash }] }, null, 2)}\n`;
+    createTaskKernel(task).publishCanonicalRecord("evidence/acceptance-AC-2-revised.json", wrongCriterionRaw);
+    const wrongCriterionEvidence = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref: "evidence/acceptance-AC-2-revised.json", sha256: createHash("sha256").update(wrongCriterionRaw).digest("hex") }] }, revisionOf: "evidence/verify-evidence.json" });
+    const wrongCriterionInput = join(root, "verify-code-wrong-criterion-input.json");
+    writeFileSync(wrongCriterionInput, `${JSON.stringify({ receipts: { tests: freshVerifyTests.receipt_ref, review: freshVerifyReview.resultRef, evidence: wrongCriterionEvidence.ref } })}\n`);
+    const rejectedCriterionSet = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${wrongCriterionInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedCriterionSet.status).not.toBe(0);
+    expect(rejectedCriterionSet.stderr).toMatch(/criterion set does not match/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const rejectedInput = join(root, "verify-code-rejected-input.json");
+    writeFileSync(rejectedInput, `${JSON.stringify({ receipts: { tests: freshVerifyTests.receipt_ref, review: verifyReview.resultRef, evidence: freshEvidence.ref } })}\n`);
+    const rejectedBinding = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${rejectedInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedBinding.status).not.toBe(0);
+    expect(rejectedBinding.stderr).toMatch(/fresh independent review content/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const failedAcceptanceRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "fail", refs: [{ ref: freshVerifyTests.output_ref, sha256: freshVerifyTests.output_hash }] }, null, 2)}\n`;
+    createTaskKernel(task).publishCanonicalRecord("evidence/acceptance-AC-1-revised-fail.json", failedAcceptanceRaw);
+    const failedEvidence = writeOfficialComponentReceipt({ task, stage: "verify-code", component: "evidence", payload: { refs: [{ ref: "evidence/acceptance-AC-1-revised-fail.json", sha256: createHash("sha256").update(failedAcceptanceRaw).digest("hex") }] }, revisionOf: "evidence/verify-evidence.json" });
+    const failedInput = join(root, "verify-code-failed-input.json");
+    writeFileSync(failedInput, `${JSON.stringify({ receipts: { tests: freshVerifyTests.receipt_ref, review: freshVerifyReview.resultRef, evidence: failedEvidence.ref } })}\n`);
+    const rejectedFailure = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${failedInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedFailure.status).not.toBe(0);
+    expect(rejectedFailure.stderr).toMatch(/result=pass/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const staleTestInput = join(root, "verify-code-stale-test-input.json");
+    writeFileSync(staleTestInput, `${JSON.stringify({ receipts: { tests: verifyTests.receipt_ref, review: freshVerifyReview.resultRef, evidence: freshEvidence.ref } })}\n`);
+    const rejectedReceipt = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${staleTestInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedReceipt.status).not.toBe(0);
+    expect(rejectedReceipt.stderr).toMatch(/fresh test receipt content/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    writeFileSync(join(workspace.worktreeRoot, "src", "feature.txt"), "implemented\ndrift\n");
+    const rejectedDrift = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${passingInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedDrift.status).not.toBe(0);
+    expect(rejectedDrift.stderr).toMatch(/Workspace snapshot must match/i);
+    writeFileSync(join(workspace.worktreeRoot, "src", "feature.txt"), "implemented\n");
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const acceptedVerifyRaw = task.readRecord("results/verify-code/accepted.json");
+    const acceptedVerify = JSON.parse(acceptedVerifyRaw);
+    writeFileSync(task.recordPath("results/verify-code/accepted.json"), `${JSON.stringify({ ...acceptedVerify, integrity_hash: "0".repeat(64) }, null, 2)}\n`);
+    const rejectedTamper = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${passingInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedTamper.status).not.toBe(0);
+    expect(rejectedTamper.stderr).toMatch(/accepted integrity hash mismatch/i);
+    writeFileSync(task.recordPath("results/verify-code/accepted.json"), acceptedVerifyRaw);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const activeBuildAcceptedRaw = task.readRecord("results/build-code/accepted.json");
+    const activeBuildAccepted = JSON.parse(activeBuildAcceptedRaw);
+    const activeBuildAttemptRef = `results/build-code/${activeBuildAccepted.attempt_ref}`;
+    const activeBuildAttemptRaw = task.readRecord(activeBuildAttemptRef);
+    const activeBuildAttempt = JSON.parse(activeBuildAttemptRaw);
+    const tamperedBuildAttemptRaw = `${JSON.stringify({ ...activeBuildAttempt, reopen_provenance: { ...activeBuildAttempt.reopen_provenance, verify_failure_hash: "0".repeat(64) } }, null, 2)}\n`;
+    writeFileSync(task.recordPath(activeBuildAttemptRef), tamperedBuildAttemptRaw);
+    writeFileSync(task.recordPath("results/build-code/accepted.json"), `${JSON.stringify({ ...activeBuildAccepted, integrity_hash: createHash("sha256").update(tamperedBuildAttemptRaw).digest("hex") }, null, 2)}\n`);
+    const rejectedBuildLineage = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${passingInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedBuildLineage.status).not.toBe(0);
+    expect(rejectedBuildLineage.stderr).toMatch(/active build reopen provenance mismatch/i);
+    writeFileSync(task.recordPath(activeBuildAttemptRef), activeBuildAttemptRaw);
+    writeFileSync(task.recordPath("results/build-code/accepted.json"), activeBuildAcceptedRaw);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const freshReviewRaw = task.readRecord(freshVerifyReview.resultRef);
+    const freshReviewValue = JSON.parse(freshReviewRaw);
+    const freshAcceptanceHash = createHash("sha256").update(freshAcceptanceRaw).digest("hex");
+    const injectedKernel = createTaskKernel(task, { workspace, attemptPublicationTestHooks: { afterOpenBeforeRename() { throw new Error("injected passing attempt write failure"); } } });
+    expect(() => injectedKernel.publishVerifyPassingFromAccepted({
+      facts: {
+        tests: { command: freshVerifyTests.command, exit_code: freshVerifyTests.exit_code, command_hash: freshVerifyTests.command_hash, snapshot_head: freshVerifyTests.snapshot_head, snapshot_tree: freshVerifyTests.snapshot_tree, snapshot_commit: freshVerifyTests.snapshot_commit, started_at: freshVerifyTests.started_at, completed_at: freshVerifyTests.completed_at, receipt_ref: freshVerifyTests.receipt_ref, receipt_hash: freshVerifyTests.receipt_hash, output_ref: freshVerifyTests.output_ref, output_hash: freshVerifyTests.output_hash },
+        review: { verdict: freshReviewValue.verdict, result_ref: freshVerifyReview.resultRef, result_hash: createHash("sha256").update(freshReviewRaw).digest("hex"), snapshot_tree: freshReviewValue.snapshot_tree },
+        evidence_refs: [{ ref: "evidence/acceptance-AC-1-revised.json", sha256: freshAcceptanceHash }],
+      },
+      evidenceRefs: [
+        { ref: freshVerifyTests.receipt_ref, sha256: freshVerifyTests.receipt_hash },
+        { ref: freshVerifyReview.resultRef, sha256: createHash("sha256").update(freshReviewRaw).digest("hex") },
+        { ref: freshEvidence.ref, sha256: createHash("sha256").update(task.readRecord(freshEvidence.ref)).digest("hex") },
+        { ref: "evidence/acceptance-AC-1-revised.json", sha256: freshAcceptanceHash },
+        { ref: freshVerifyTests.output_ref, sha256: freshVerifyTests.output_hash },
+      ],
+    })).toThrow(/injected passing attempt write failure/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0003.json")).toThrow(/ENOENT|no such/i);
+    const passing = run(root, repo, ["publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${passingInput}`]);
+    expect(passing).toMatchObject({ attempt_ref: "attempt-0003.json", attempt: { verify_passing_publication: { previous_accepted_ref: "results/verify-code/accepted.json", active_build_attempt_ref: revisedBuild.attempt_ref, test_receipt_ref: freshVerifyTests.receipt_ref, review_result_ref: freshVerifyReview.resultRef, workspace_head: freshVerifyTests.snapshot_head, workspace_tree: freshVerifyTests.snapshot_tree } } });
+    expect(JSON.parse(task.readRecord("results/verify-code/accepted.json"))).toMatchObject({ attempt_ref: "attempt-0001.json" });
+    const duplicatePassing = spawnSync(process.execPath, [runtime, "publish-verify-passing", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${passingInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(duplicatePassing.status).not.toBe(0);
+    expect(duplicatePassing.stderr).toMatch(/already exists/i);
 
     for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
       expect(JSON.parse(task.readRecord(`results/${stage}/accepted.json`))).toMatchObject({ schema_version: "task-accepted.v2", task_id: "official-chain", stage });

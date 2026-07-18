@@ -98,6 +98,20 @@ function validateVerifyFailurePublication(value) {
   for (const key of ["workspace_head", "workspace_tree"]) gitOid(value[key], `verify_failure_publication.${key}`);
 }
 
+function validateVerifyPassingPublication(value) {
+  if (value === undefined) return;
+  plain(value, "verify_passing_publication");
+  rejectUnknown(value, new Set(["previous_accepted_ref", "previous_accepted_hash", "previous_attempt_ref", "previous_attempt_hash", "active_build_accepted_ref", "active_build_accepted_hash", "active_build_attempt_ref", "active_build_attempt_hash", "test_receipt_ref", "test_receipt_hash", "review_result_ref", "review_result_hash", "acceptance_evidence_refs", "workspace_head", "workspace_tree"]), "verify_passing_publication");
+  if (value.previous_accepted_ref !== "results/verify-code/accepted.json" || !ATTEMPT_REF.test(value.previous_attempt_ref ?? "")) throw new Error("verify_passing_publication previous verify acceptance is invalid");
+  if (value.active_build_accepted_ref !== "results/build-code/accepted.json" || !ATTEMPT_REF.test(value.active_build_attempt_ref ?? "")) throw new Error("verify_passing_publication active build-code acceptance is invalid");
+  if (!/^receipts\/[A-Za-z0-9][A-Za-z0-9._/-]*\.json$/.test(value.test_receipt_ref ?? "")) throw new Error("verify_passing_publication test receipt reference is invalid");
+  if (!/^reviews\/results\/[A-Za-z0-9][A-Za-z0-9._/-]*\.json$/.test(value.review_result_ref ?? "")) throw new Error("verify_passing_publication review result reference is invalid");
+  validateEvidenceRefs(value.acceptance_evidence_refs, "verify_passing_publication.acceptance_evidence_refs");
+  if (value.acceptance_evidence_refs.length === 0 || value.acceptance_evidence_refs.some((entry) => !entry.ref.startsWith("evidence/"))) throw new Error("verify_passing_publication requires canonical acceptance evidence");
+  for (const key of ["previous_accepted_hash", "previous_attempt_hash", "active_build_accepted_hash", "active_build_attempt_hash", "test_receipt_hash", "review_result_hash"]) if (!HASH.test(value[key] ?? "")) throw new TypeError(`verify_passing_publication.${key} must be sha256`);
+  for (const key of ["workspace_head", "workspace_tree"]) gitOid(value[key], `verify_passing_publication.${key}`);
+}
+
 function validateStageUpstream(stage, _taskId, refs) {
   const expected = EXPECTED_UPSTREAM[stage];
   if (expected === null) {
@@ -264,8 +278,11 @@ export function validateAttempt(attempt, expected = {}) {
   validateUpstreamAcceptances(attempt.upstream_acceptances);
   validateReopenProvenance(attempt.reopen_provenance);
   validateVerifyFailurePublication(attempt.verify_failure_publication);
+  validateVerifyPassingPublication(attempt.verify_passing_publication);
   if (attempt.reopen_provenance !== undefined && stage !== "build-code") throw new Error("reopen_provenance is only valid for build-code");
   if (attempt.verify_failure_publication !== undefined && stage !== "verify-code") throw new Error("verify_failure_publication is only valid for verify-code");
+  if (attempt.verify_passing_publication !== undefined && stage !== "verify-code") throw new Error("verify_passing_publication is only valid for verify-code");
+  if (attempt.verify_failure_publication !== undefined && attempt.verify_passing_publication !== undefined) throw new Error("verify publication modes are mutually exclusive");
   validateStageUpstream(stage, attempt.task_id, attempt.upstream_refs);
   if (expected.taskId && attempt.task_id !== expected.taskId) throw new Error("attempt task identity mismatch");
   if (expected.stage && stage !== expected.stage) throw new Error("attempt stage identity mismatch");
@@ -300,7 +317,7 @@ export function validateAccepted(accepted, expected = {}) {
   return accepted;
 }
 
-export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString(), workspace, artifacts, candidateWorkspace } = {}, authority) {
+export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString(), workspace, artifacts, candidateWorkspace, attemptPublicationTestHooks } = {}, authority) {
   const { assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor } = authority;
   const task = assertTaskHandle(taskHandle);
   const createKernelRecord = createKernelRecordFor(task);
@@ -405,7 +422,73 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     if (entry.sha256 !== failure.hash) throw new Error("failure evidence hash mismatch");
     return failure;
   };
+  const readPassingEvidence = (entry) => {
+    const raw = task.readRecord(entry.ref);
+    if (hash(raw) !== entry.sha256) throw new Error(`verify-code passing acceptance evidence hash mismatch: ${entry.ref}`);
+    const value = parseJson(raw, "passing acceptance evidence");
+    if (!value || value.schema_version !== "acceptance-evidence.v1" || typeof value.acceptance_criterion_id !== "string" || value.acceptance_criterion_id.trim() === "" || value.result !== "pass" || !Array.isArray(value.refs) || value.refs.length === 0) {
+      throw new Error("verify-code passing publication requires acceptance-evidence.v1 with result=pass and evidence refs");
+    }
+    for (const nested of value.refs) {
+      if (!nested || typeof nested.ref !== "string" || !/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(nested.ref) || !HASH.test(nested.sha256 ?? "")) throw new Error("verify-code passing acceptance evidence contains an invalid nested reference");
+      if (hash(task.readRecord(nested.ref)) !== nested.sha256) throw new Error(`verify-code passing nested evidence hash mismatch: ${nested.ref}`);
+    }
+    return { ref: entry.ref, hash: hash(raw), value };
+  };
+  const assertPassingMaterials = (publication, facts, attemptEvidenceRefs, previousVerify, activeBuild) => {
+    if (facts.tests.exit_code !== 0) throw new Error("verify-code passing publication requires tests with exit_code=0");
+    if (facts.review.verdict !== "pass") throw new Error("verify-code passing publication requires an independent review verdict=pass");
+    const snapshot = captureGitWorktreeSnapshot(assertWorkspace(workspace).worktreeRoot);
+    if (publication.workspace_head !== snapshot.head || publication.workspace_tree !== snapshot.tree || facts.tests.snapshot_head !== snapshot.head || facts.tests.snapshot_tree !== snapshot.tree || facts.review.snapshot_tree !== snapshot.tree) {
+      throw new Error("verify-code passing publication Workspace binding changed before publication");
+    }
+    const oldBuildBinding = (previousVerify.attempt.upstream_acceptances ?? []).find((entry) => entry.task_id === task.identity.taskId && entry.stage === "build-code");
+    if (!oldBuildBinding || oldBuildBinding.integrity_hash === String(activeBuild.accepted.integrity_hash).replace(/^sha256:/, "")) throw new Error("verify-code passing publication requires a new active accepted build");
+    const reopenProvenance = activeBuild.attempt.reopen_provenance;
+    validateReopenProvenance(reopenProvenance);
+    if (!reopenProvenance) throw new Error("verify-code passing publication requires active build reopen provenance");
+    const reopen = readReopen(reopenProvenance.reopen_ref);
+    if (reopenProvenance.reopen_hash !== reopen.hash || reopenProvenance.verify_failure_ref !== reopen.record.verify_failure_ref || reopenProvenance.verify_failure_hash !== reopen.record.verify_failure_hash) throw new Error("verify-code passing publication active build reopen provenance mismatch");
+    const verifyFailureRaw = task.readRecord(reopen.record.verify_failure_ref);
+    if (hash(verifyFailureRaw) !== reopen.record.verify_failure_hash) throw new Error("verify-code passing publication verify failure attempt hash mismatch");
+    const verifyFailureRef = basename(reopen.record.verify_failure_ref);
+    const verifyFailure = validateAttempt(parseJson(verifyFailureRaw, "verify-code failure attempt"), { taskId: task.identity.taskId, stage: "verify-code", attemptId: `verify-code:${verifyFailureRef.slice(0, -5)}` });
+    const failurePublication = verifyFailure.verify_failure_publication;
+    if (!failurePublication || failurePublication.previous_accepted_ref !== previousVerify.accepted_ref || failurePublication.previous_accepted_hash !== previousVerify.accepted_hash || failurePublication.previous_attempt_ref !== previousVerify.accepted.attempt_ref || failurePublication.previous_attempt_hash !== String(previousVerify.accepted.integrity_hash).replace(/^sha256:/, "")) throw new Error("verify-code passing publication active build does not descend from the accepted verify result");
+    if (previousVerify.facts.tests.receipt_hash === publication.test_receipt_hash) throw new Error("verify-code passing publication requires fresh test receipt content");
+    if (previousVerify.facts.review.result_hash === publication.review_result_hash) throw new Error("verify-code passing publication requires fresh independent review content");
+    const oldEvidence = previousVerify.facts.evidence_refs.map(readPassingEvidence);
+    const oldEvidenceHashes = new Set(oldEvidence.map((entry) => entry.hash));
+    if (publication.acceptance_evidence_refs.some((entry) => oldEvidenceHashes.has(entry.sha256))) throw new Error("verify-code passing publication requires fresh acceptance evidence content");
+
+    const testRaw = task.readRecord(publication.test_receipt_ref);
+    if (hash(testRaw) !== publication.test_receipt_hash) throw new Error("verify-code passing test receipt changed before publication");
+    const testReceipt = parseJson(testRaw, "verify-code passing test receipt");
+    if (testReceipt.schema_version !== "workflowhub-receipt.v1" || testReceipt.task_id !== task.identity.taskId || testReceipt.stage !== "verify-code") throw new Error("verify-code passing test receipt provenance mismatch");
+    const testFields = ["command", "exit_code", "command_hash", "snapshot_head", "snapshot_tree", "snapshot_commit", "started_at", "completed_at", "output_ref", "output_hash"];
+    if (testFields.some((key) => testReceipt[key] !== facts.tests[key]) || facts.tests.receipt_ref !== publication.test_receipt_ref || facts.tests.receipt_hash !== publication.test_receipt_hash) throw new Error("verify-code passing test facts do not match the fresh receipt");
+    if (hash(task.readRecord(facts.tests.output_ref)) !== facts.tests.output_hash) throw new Error("verify-code passing test output changed before publication");
+
+    const reviewRaw = task.readRecord(publication.review_result_ref);
+    if (hash(reviewRaw) !== publication.review_result_hash) throw new Error("verify-code passing review result changed before publication");
+    const review = parseJson(reviewRaw, "verify-code passing review result");
+    if (review.version !== "wh-review-result.v1" || review.task_id !== task.identity.taskId || review.stage !== "verify-code" || review.verdict !== facts.review.verdict || review.snapshot_tree !== facts.review.snapshot_tree || facts.review.result_ref !== publication.review_result_ref || facts.review.result_hash !== publication.review_result_hash) throw new Error("verify-code passing review result provenance mismatch");
+
+    if (JSON.stringify(facts.evidence_refs) !== JSON.stringify(publication.acceptance_evidence_refs)) throw new Error("verify-code passing acceptance evidence binding mismatch");
+    const criterionIds = new Set();
+    for (const entry of publication.acceptance_evidence_refs) {
+      const evidence = readPassingEvidence(entry);
+      if (criterionIds.has(evidence.value.acceptance_criterion_id)) throw new Error(`verify-code passing publication contains duplicate acceptance criterion: ${evidence.value.acceptance_criterion_id}`);
+      criterionIds.add(evidence.value.acceptance_criterion_id);
+    }
+    const previousCriterionIds = new Set(oldEvidence.map((entry) => entry.value.acceptance_criterion_id));
+    if (criterionIds.size !== previousCriterionIds.size || [...criterionIds].some((id) => !previousCriterionIds.has(id))) throw new Error("verify-code passing publication acceptance criterion set does not match the accepted verify result");
+    for (const entry of attemptEvidenceRefs) {
+      if (hash(task.readRecord(entry.ref)) !== entry.sha256) throw new Error(`verify-code passing attempt evidence changed before publication: ${entry.ref}`);
+    }
+  };
   const controlledVerifyFailurePublications = new WeakSet();
+  const controlledVerifyPassingPublications = new WeakSet();
   const duplicateVerifyFailurePublication = (publication) => {
     for (let sequence = 1; sequence <= 9999; sequence += 1) {
       const attemptRef = `attempt-${String(sequence).padStart(4, "0")}.json`;
@@ -416,6 +499,19 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       const existing = attempt.verify_failure_publication;
       if (existing && existing.previous_accepted_hash === publication.previous_accepted_hash && existing.active_build_accepted_hash === publication.active_build_accepted_hash) {
         throw new Error("verify-code controlled failure publication already exists for this accepted verify/build-code binding");
+      }
+    }
+  };
+  const duplicateVerifyPassingPublication = (publication) => {
+    for (let sequence = 1; sequence <= 9999; sequence += 1) {
+      const attemptRef = `attempt-${String(sequence).padStart(4, "0")}.json`;
+      let raw;
+      try { raw = task.readRecord(`results/verify-code/${attemptRef}`); }
+      catch (error) { if (error?.code === "ENOENT") continue; throw error; }
+      const attempt = validateAttempt(parseJson(raw, "verify-code attempt"), { taskId: task.identity.taskId, stage: "verify-code", attemptId: `verify-code:${attemptRef.slice(0, -5)}` });
+      const existing = attempt.verify_passing_publication;
+      if (existing && existing.previous_accepted_hash === publication.previous_accepted_hash && existing.active_build_accepted_hash === publication.active_build_accepted_hash) {
+        throw new Error("verify-code controlled passing publication already exists for this accepted verify/build-code binding");
       }
     }
   };
@@ -434,12 +530,16 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       if (data.verify_failure_publication !== undefined && !controlledVerifyFailurePublications.has(data)) {
         throw new Error("verify-code controlled failure publication requires the official kernel entrypoint");
       }
+      if (data.verify_passing_publication !== undefined && !controlledVerifyPassingPublications.has(data)) {
+        throw new Error("verify-code controlled passing publication requires the official kernel entrypoint");
+      }
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         let current;
         try { current = readAcceptedLocal(name); }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
         const controlledVerifyFailure = data.verify_failure_publication !== undefined;
-        if (current && name !== "build-code" && !controlledVerifyFailure) throw new Error(`${name} is accepted and closed`);
+        const controlledVerifyPassing = data.verify_passing_publication !== undefined;
+        if (current && name !== "build-code" && !controlledVerifyFailure && !controlledVerifyPassing) throw new Error(`${name} is accepted and closed`);
         if (controlledVerifyFailure) {
           if (name !== "verify-code" || !current) throw new Error("controlled verify failure publication requires an accepted verify-code stage");
           const activeBuild = readAcceptedLocal("build-code");
@@ -452,6 +552,16 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           const failure = readFailureEvidence(publication.failure_evidence_ref);
           if (failure.hash !== publication.failure_evidence_hash) throw new Error("controlled verify failure publication evidence changed before publication");
           duplicateVerifyFailurePublication(publication);
+        }
+        if (controlledVerifyPassing) {
+          if (name !== "verify-code" || !current) throw new Error("controlled verify passing publication requires an accepted verify-code stage");
+          const activeBuild = readAcceptedLocal("build-code");
+          const publication = data.verify_passing_publication;
+          if (publication.previous_accepted_ref !== current.accepted_ref || publication.previous_accepted_hash !== current.accepted_hash || publication.previous_attempt_ref !== current.accepted.attempt_ref || publication.previous_attempt_hash !== String(current.accepted.integrity_hash).replace(/^sha256:/, "") || publication.active_build_accepted_ref !== activeBuild.accepted_ref || publication.active_build_accepted_hash !== activeBuild.accepted_hash || publication.active_build_attempt_ref !== activeBuild.accepted.attempt_ref || publication.active_build_attempt_hash !== String(activeBuild.accepted.integrity_hash).replace(/^sha256:/, "")) {
+            throw new Error("controlled verify passing publication binding changed before publication");
+          }
+          assertPassingMaterials(publication, data.facts, data.evidence_refs ?? [], current, activeBuild);
+          duplicateVerifyPassingPublication(publication);
         }
         if (current && name === "build-code") assertReopenProvenance(data.reopen_provenance, current);
         if (!current && data.reopen_provenance !== undefined) throw new Error("build-code reopen provenance requires an accepted build-code stage");
@@ -483,13 +593,14 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             ...(upstreamAcceptances.length ? { upstream_acceptances: upstreamAcceptances } : {}),
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
             ...(data.verify_failure_publication ? { verify_failure_publication: structuredClone(data.verify_failure_publication) } : {}),
+            ...(data.verify_passing_publication ? { verify_passing_publication: structuredClone(data.verify_passing_publication) } : {}),
             ...((data.checkpoint ?? data.facts.checkpoint) ? { checkpoint: structuredClone(data.checkpoint ?? data.facts.checkpoint) } : {}),
             ...(data.reason !== undefined ? { reason: String(data.reason) } : {}),
           };
           validateAttempt(attempt, { taskId: task.identity.taskId, stage: name, attemptId: attempt.attempt_id });
           const raw = `${JSON.stringify(attempt, null, 2)}\n`;
           try {
-            createKernelRecord(`results/${name}/${filename}`, raw);
+            createKernelRecord(`results/${name}/${filename}`, raw, attemptPublicationTestHooks === undefined ? undefined : { testHooks: attemptPublicationTestHooks });
             return deepFreeze({ attempt_ref: filename, integrity_hash: hash(raw), attempt });
           } catch (error) {
             if (error?.code !== "EEXIST") throw error;
@@ -527,6 +638,40 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         verify_failure_publication: publication,
       };
       controlledVerifyFailurePublications.add(data);
+      return kernel.publishAttempt("verify-code", data);
+    },
+    publishVerifyPassingFromAccepted({ facts, evidenceRefs = [], missingItems = [], reason } = {}) {
+      validateStageFacts("verify-code", facts);
+      validateEvidenceRefs(evidenceRefs, "verify-code passing attempt evidence_refs");
+      const previousVerify = readAcceptedLocal("verify-code");
+      const activeBuild = readAcceptedLocal("build-code");
+      const snapshot = captureGitWorktreeSnapshot(assertWorkspace(workspace).worktreeRoot);
+      const publication = {
+        previous_accepted_ref: previousVerify.accepted_ref,
+        previous_accepted_hash: previousVerify.accepted_hash,
+        previous_attempt_ref: previousVerify.accepted.attempt_ref,
+        previous_attempt_hash: String(previousVerify.accepted.integrity_hash).replace(/^sha256:/, ""),
+        active_build_accepted_ref: activeBuild.accepted_ref,
+        active_build_accepted_hash: activeBuild.accepted_hash,
+        active_build_attempt_ref: activeBuild.accepted.attempt_ref,
+        active_build_attempt_hash: String(activeBuild.accepted.integrity_hash).replace(/^sha256:/, ""),
+        test_receipt_ref: facts.tests.receipt_ref,
+        test_receipt_hash: facts.tests.receipt_hash,
+        review_result_ref: facts.review.result_ref,
+        review_result_hash: facts.review.result_hash,
+        acceptance_evidence_refs: structuredClone(facts.evidence_refs),
+        workspace_head: snapshot.head,
+        workspace_tree: snapshot.tree,
+      };
+      const data = {
+        facts: structuredClone(facts),
+        evidence_refs: structuredClone(evidenceRefs),
+        missing_items: structuredClone(missingItems),
+        upstream_refs: [{ task_id: task.identity.taskId, stage: "build-code", accepted_ref: "results/build-code/accepted.json" }],
+        verify_passing_publication: publication,
+        ...(reason !== undefined ? { reason } : {}),
+      };
+      controlledVerifyPassingPublications.add(data);
       return kernel.publishAttempt("verify-code", data);
     },
     confirmAttempt(stage, attemptRef, decision) {
