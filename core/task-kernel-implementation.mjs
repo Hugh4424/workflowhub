@@ -362,6 +362,22 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const name = stageName(stage);
     return readAcceptedAt(name, "accepted.json");
   };
+  const checkpointBase = (stage) => {
+    const name = stageName(stage);
+    if (name === "build-spec") {
+      const decision = readAcceptedLocal("make-decision");
+      const baseCommit = decision.facts.baseline_commit;
+      const baseTree = decision.facts.snapshot_tree ?? String(execFileSync("git", ["rev-parse", `${baseCommit}^{tree}`], {
+        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      })).trim();
+      return { baseCommit, baseTree };
+    }
+    if (name === "build-plan") {
+      const spec = readAcceptedLocal("build-spec");
+      return { baseCommit: spec.accepted.checkpoint.commit_oid, baseTree: spec.accepted.checkpoint.tree_oid };
+    }
+    throw new Error(`stage does not produce a Git checkpoint: ${name}`);
+  };
   const verifyUpstream = (stage, refs) => {
     validateStageUpstream(stage, task.identity.taskId, refs);
     const bindings = [];
@@ -442,7 +458,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     },
     createCheckpoint(stage) {
       if (!workspace || !artifacts) throw new Error("Git checkpoint requires Workspace and ArtifactDir capabilities");
-      return createGitCheckpoint({ workspace, artifacts, task, stage: stageName(stage) });
+      const name = stageName(stage);
+      return createGitCheckpoint({ workspace, artifacts, task, stage: name, ...checkpointBase(name) });
     },
     publishAttempt(stage, data = {}) {
       const name = stageName(stage);
@@ -481,7 +498,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
           if (data.checkpoint !== undefined && data.checkpoint !== data.facts.checkpoint) throw new Error("caller checkpoint override is forbidden");
-          verifyGitCheckpointPlan({ workspace, artifacts, task, plan: data.facts.checkpoint });
+          verifyGitCheckpointPlan({ workspace, artifacts, task, plan: data.facts.checkpoint, ...checkpointBase(name) });
         }
         for (let sequence = 1; sequence <= 9999; sequence += 1) {
           const filename = `attempt-${String(sequence).padStart(4, "0")}.json`;
@@ -596,7 +613,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (["build-spec", "build-plan"].includes(name)) {
           if (!workspace || !artifacts) throw new Error("accepting a design checkpoint requires Workspace and ArtifactDir capabilities");
           if (acceptanceMode === "human" && confirmation.checkpoint_plan_hash !== attempt.checkpoint.plan_hash) throw new Error("human confirmation checkpoint plan hash mismatch");
-          acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, publishRef: (ref, commit, zeroOid) => {
+          acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, ...checkpointBase(name), publishRef: (ref, commit, zeroOid) => {
             execFileSync("git", ["update-ref", ref, commit, zeroOid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
           } });
           execFileSync("git", ["merge-base", "--is-ancestor", attempt.checkpoint.parent_commit, acceptedCheckpoint.commit_oid], { cwd: workspace.worktreeRoot, stdio: "ignore" });

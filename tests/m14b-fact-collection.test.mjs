@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
+import { ArtifactDir } from "../core/artifact-dir.mjs";
 import {
   createArtifactRecord,
   createHealthFact,
@@ -20,7 +21,6 @@ import {
   toJsonl,
 } from "../core/fact-indexes.mjs";
 import { collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
-import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
@@ -75,8 +75,15 @@ async function createM14bFixture() {
 }
 
 function collectionContext(fixture) {
-  return bootstrapStage("build-code", {
-    mode: "sidecar", projectName: fixture.task.identity.projectName, taskId: fixture.task.identity.taskId, taskPath: fixture.task.taskPath,
+  const artifacts = ArtifactDir.open(fixture.workspace.worktreeRoot, fixture.task);
+  return Object.freeze({
+    stage: "build-code",
+    task: fixture.task,
+    kernel: createTaskKernel(fixture.task, { workspace: fixture.workspace, artifacts }),
+    workspace: fixture.workspace,
+    artifacts,
+    identity: fixture.task.identity,
+    manifest: fixture.task.manifest,
   });
 }
 
@@ -364,11 +371,18 @@ describe("M14b fact collection acceptance", () => {
   it("AC-012 serializes two collector processes and makes health use the final merged transcript", async () => {
     const fixture = await createM14bFixture();
     const collector = join(repositoryRoot, "core/fact-collector.mjs");
-    const contextModule = join(repositoryRoot, "core/stage-context.mjs");
+    const artifactModule = join(repositoryRoot, "core/artifact-dir.mjs");
+    const taskModule = join(repositoryRoot, "core/task-handle.mjs");
+    const workspaceModule = join(repositoryRoot, "core/workspace.mjs");
     const script = `
-      import { bootstrapStage } from ${JSON.stringify(contextModule)};
+      import { ArtifactDir } from ${JSON.stringify(artifactModule)};
+      import { createTaskKernel, openTask } from ${JSON.stringify(taskModule)};
+      import { openAcceptedWorkspace } from ${JSON.stringify(workspaceModule)};
       import { collectTaskFacts, createTranscriptSourceReader, createTranscriptSourceRegistry } from ${JSON.stringify(collector)};
-      const ctx = bootstrapStage("build-code", { mode: "sidecar", projectName: "Fixture", taskId: "m14b-fixture", taskPath: process.env.M14B_TASK_PATH });
+      const task = openTask(process.env.M14B_TASK_PATH, "Fixture", "m14b-fixture");
+      const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
+      const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+      const ctx = Object.freeze({ stage: "build-code", task, kernel: createTaskKernel(task, { workspace, artifacts }), workspace, artifacts, identity: task.identity, manifest: task.manifest });
       const id = process.env.M14B_TRANSCRIPT_ID;
       const registry = createTranscriptSourceRegistry([{ source_id: id, source_ref: "registered/transcript.jsonl", source_format: "jsonl", source_version: "v1", required: true, reader: createTranscriptSourceReader(() => JSON.stringify({ id, payload: { id } })) }]);
       const result = collectTaskFacts(ctx, { transcriptRegistry: registry, now: () => new Date("2026-07-18T00:00:00.000Z") });

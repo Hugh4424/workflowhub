@@ -55,19 +55,25 @@ attempt only for the controlled build-code reopen; never accept it.
 
 1. Validate StageContext and read the accepted build-code result through
    `ctx.kernel.readAccepted("build-code")`.
-2. Take the fresh test command only from accepted build-code facts. Missing
+2. Read only the accepted build-code facts and `evidence_refs` from its
+   authenticated accepted attempt. Resolve formal artifacts, dependencies, and
+   unresolved risks from those existing records; the human brief is display,
+   not a handoff API. For every accepted AC, consume its `covered`, `missing`,
+   or `unknown` row from the referenced evidence; never silently turn `missing`
+   or `unknown` into a pass.
+3. Take the fresh test command only from accepted build-code facts. Missing
    command is a fail-loud lineage error; never reuse an older command.
-3. Run tests in the explicit Workspace and record command, exit code, output,
+4. Run tests in the explicit Workspace and record command, exit code, output,
    commit, and timestamp.
-4. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
+5. For UI scope, invoke `isolated-browser-qa` with the explicit workspace and
    frozen acceptance material. It must report tool, login-state reuse, and
    cleanup completion.
-5. Run independent verification review from frozen diff/test packets.
-6. Publish an append-only verify-code attempt with all facts and unresolved
+6. Run independent verification review from frozen diff/test packets.
+7. Publish an append-only verify-code attempt with all facts and unresolved
    items. Present the gate brief from `docs/human-brief-template.md`; record the
    verification-stage decision with `confirm`, and pass only its accepted ref to
    `accept`. This confirmation accepts verification facts only.
-7. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
+8. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
    snapshot commit from the accepted verification facts, accepted spec path,
    and archive path. `prepare` accepts the still-uncommitted worktree only when
@@ -85,16 +91,16 @@ attempt only for the controlled build-code reopen; never accept it.
    requires the same Git common directory as the accepted workspace, records
    immutable migration lineage, atomically updates the target identity, and must
    finish before a fresh `prepare` run.
-8. Record that one decision with `scripts/task-close.mjs confirm`. Only a
+9. Record that one decision with `scripts/task-close.mjs confirm`. Only a
    `confirmed` result authorizes all six plan-bound actions; rejection or timeout
    performs none of them. Do not ask again before each command.
-9. Run `scripts/task-close.mjs execute` with the plan hash and close confirmation
+10. Run `scripts/task-close.mjs execute` with the plan hash and close confirmation
    ref. The controlled executor rechecks the target checkout, clean state, and
    frozen local/remote baselines before its first Git write, then performs the
    fixed six actions in order. It uses `--no-ff --no-edit` merge and a non-force
    push, stops at the first failure, and reconciles already completed physical
    actions on retry. Do not issue the six Git operations by hand.
-10. Run `scripts/task-close.mjs status` with the same explicit identity and plan
+11. Run `scripts/task-close.mjs status` with the same explicit identity and plan
     hash. It reads live local and remote facts and reports completed and missing
     actions. Only `record_status: completed` together with physical
     `status: ready` permits reporting close complete. Never infer a task path

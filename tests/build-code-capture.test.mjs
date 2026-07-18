@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runCapture } from "../workflows/build-code/capture.mjs";
-import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { openAcceptedWorkspace } from "../core/workspace.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const temporary = [];
@@ -26,8 +26,8 @@ function fixture() {
   const kernel = createTaskKernel(task);
   const attempt = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: sha } });
   kernel.acceptAttempt("make-decision", attempt.attempt_ref, writeHumanConfirmation(kernel, "make-decision", attempt));
-  const context = bootstrapStage("build-code", { mode: "sidecar", taskPath, projectName: "Demo", taskId: "capture-task" });
-  return { cwd: worktree, task: context.task, workspace: context.workspace, outputPath: "receipts/capture.json" };
+  const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+  return { cwd: worktree, task, workspace, outputPath: "receipts/capture.json" };
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 

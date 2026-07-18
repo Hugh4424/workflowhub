@@ -196,7 +196,7 @@ describe("bootstrapStage", () => {
     expect(() => context.kernel.acceptAttempt("make-decision", correct.attempt_ref, writeHumanConfirmation(context.kernel, "make-decision", correct))).not.toThrow();
   });
 
-  it.each(["build-spec", "build-plan", "build-code", "verify-code"])(
+  it.each(["build-spec", "build-plan", "verify-code"])(
     "builds %s Workspace and ArtifactDir only from accepted make-decision facts",
     (stage) => {
       const { storageRoot, worktreeRoot, baselineCommit } = fixture();
@@ -220,6 +220,17 @@ describe("bootstrapStage", () => {
       );
     },
   );
+
+  it("rejects build-code bootstrap without accepted spec and plan", () => {
+    const { storageRoot } = fixture();
+    expect(() => bootstrapStage("build-code", {
+      mode: "launcher",
+      home: storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+    })).toThrow(/accepted spec and plan/i);
+  });
 
   it("invalidates Workspace automatically when its worktree path is replaced", () => {
     const { storageRoot, worktreeRoot } = fixture();

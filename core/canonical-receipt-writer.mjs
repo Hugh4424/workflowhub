@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
+import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
 import { assertWorkspace } from "./workspace.mjs";
@@ -103,6 +104,13 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   } else if (registration.kind === "implementation") {
     const safeWorkspace = assertWorkspace(workspace);
     if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");
+    const acceptedKernel = createTaskKernel(safeTask, { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
+    try {
+      acceptedKernel.readAccepted("build-spec");
+      acceptedKernel.readAccepted("build-plan");
+    } catch (error) {
+      throw new Error(`build-code implementation receipt requires current accepted spec and plan: ${error.message}`);
+    }
     const snapshot = captureWorkspaceSnapshot(safeWorkspace), snapshotHead = snapshot.head, snapshotTree = snapshot.tree;
     const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
     const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);

@@ -62,8 +62,17 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
 3. Split work into implementation phases. Show each phase scope as a progress
    update and continue automatically. Escalate only when the requested work
    would change the accepted plan or allowed scope.
-4. Invoke coding workers with frozen phase material and the explicit workspace
-   root. Workers do not receive task storage information.
+4. Give the Coder one complete **Coder Phase card** for each Phase, in this
+   order: goal, accepted AC IDs, authenticated Workspace root, allowed files
+   allowlist, non-goals, exact test commands, and upstream findings.
+   Do not create or bind a Coder or Phase Skill. Invoke the Coder with this
+   frozen card and no task-storage information.
+   When applicable, the Coder must produce RED, then minimal GREEN, then run
+   focused tests and necessary regression, and return a scoped diff.
+   Coder must return the exact test command and raw output. Code Builder writes
+   the canonical evidence refs.
+   Coder must not commit; Coder must not review; Coder must not accept.
+   Coder must not merge; Coder must not push; Coder must not close.
 5. Run the target project's real test command in the Workspace. Record command,
    exit code, freshness, and output reference without turning the observation
    into an automatic quality decision.
@@ -74,7 +83,16 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    `--allowed-files-json=<json-array-file>` and prints JSON to stdout. Save the
    `phase-diff-scan.v1` JSON as task-relative evidence and point the current
    `phase-result.json.diff_scan.path` at it.
-7. Run independent code review with only the current `phase_id` as its scope
+7. Before review, use the fixed table `| AC | status | refs | reason |`. Give
+   each accepted AC exactly one row with status `covered`, `missing`, or
+   `unknown`. `covered` requires authenticated canonical refs. `missing` or
+   `unknown` may use `无` for refs but must include a reason.
+   Any omitted AC is `missing` or `unknown`, never `covered`. Put the same table in
+   existing test evidence and the human brief; do not add a receipt producer or
+   schema for it. Derive the review baseline only from the authenticated Workspace;
+   never infer it from a comment or cwd. Actual Agent adherence is
+   verified by the Phase 7 Canary, not inferred from this text contract alone.
+8. Run independent code review with only the current `phase_id` as its scope
    selector. `wh-review` resolves the frozen commit pair from the current diff
    scan and regenerates the complete phase diff. Do not pass paths, commits,
    ranges, or a caller-built diff. Address actionable revisions in a new phase
@@ -85,9 +103,11 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    generator and implementation workers never invoke it. Its lens may reject
    concrete scope creep or speculative code in the current diff, but it may not
    reopen accepted product scope.
-8. Publish a build-code attempt containing baseline/head commits, changed
+9. Publish a build-code attempt containing baseline/head commits, changed
    files, fresh test command, test facts, review facts, and missing items.
-9. Present the automatic-progress brief from `docs/human-brief-template.md`.
+10. Present the automatic-progress brief from `docs/human-brief-template.md`.
+   Its concise handoff points downstream to the formal artifacts and evidence
+   refs; it does not copy their full text or logs.
    The trusted runtime immediately runs `accept --attempt=<attempt>` without a
    confirmation and advances to verify-code.
 
