@@ -4,14 +4,14 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { createTask } from "../core/task-handle.mjs";
+import { createTask, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const roots = [];
 const git = (cwd, ...args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
 
-function fixture() {
+function fixture({ targetRepo = "main" } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-delivery-close-")));
   roots.push(root);
   const remote = join(root, "remote.git");
@@ -45,7 +45,7 @@ function fixture() {
       project_name: "Demo",
       task_id: "close-task",
       created_at: new Date().toISOString(),
-      target_repo_root: repo,
+      target_repo_root: targetRepo === "worktree" ? worktree : repo,
       issue_ids: [],
       inputs: {},
     },
@@ -93,6 +93,18 @@ afterEach(() => {
 });
 
 describe("delivery close verifier", () => {
+  it("migrates an authenticated task target from its worktree to the checked-out main repository before close preparation", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture({ targetRepo: "worktree" });
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) })).toThrow(/target branch|checked out/i);
+    const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" });
+    const kernel = createTaskKernel(migrated.task);
+    expect(migrated.task.manifest.target_repo_root).toBe(f.repo);
+    expect(migrated.task.readRecord(migrated.migration_ref)).toContain("task-target-repo-root-migration.v1");
+    expect(api.prepareDeliveryClosePlan({ task: migrated.task, kernel, delivery: delivery(f) }).plan.delivery.target_repo_root).toBe(f.repo);
+    expect(migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" })).toMatchObject({ idempotent_replay: true });
+  });
+
   it("keeps fetch out of both the core executor and verifier instructions", () => {
     const core = readFileSync(join(process.cwd(), "core", "task-close.mjs"), "utf8");
     const skill = readFileSync(join(process.cwd(), "workflows", "verify-code", "SKILL.md"), "utf8");
