@@ -4,7 +4,8 @@ import { basename, dirname, isAbsolute, normalize, resolve } from "node:path";
 
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
-import { assertCandidateWorkspace } from "./workspace.mjs";
+import { assertCandidateWorkspace, assertWorkspace } from "./workspace.mjs";
+import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import factsContract from "../contracts/facts-subschema.json" with { type: "json" };
 
 const STAGES = ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"];
@@ -84,6 +85,17 @@ function validateReopenProvenance(value) {
   if (!/^results\/build-code\/accepted(?:-attempt-[0-9]{4})?\.json$/.test(value.previous_accepted_ref ?? "")) throw new TypeError("reopen_provenance.previous_accepted_ref invalid");
   if (!/^results\/verify-code\/attempt-[0-9]{4}\.json$/.test(value.verify_failure_ref ?? "")) throw new TypeError("reopen_provenance.verify_failure_ref invalid");
   for (const key of ["reopen_hash", "previous_accepted_hash", "verify_failure_hash"]) if (!HASH.test(value[key] ?? "")) throw new TypeError(`reopen_provenance.${key} must be sha256`);
+}
+
+function validateVerifyFailurePublication(value) {
+  if (value === undefined) return;
+  plain(value, "verify_failure_publication");
+  rejectUnknown(value, new Set(["previous_accepted_ref", "previous_accepted_hash", "previous_attempt_ref", "previous_attempt_hash", "active_build_accepted_ref", "active_build_accepted_hash", "active_build_attempt_ref", "active_build_attempt_hash", "failure_evidence_ref", "failure_evidence_hash", "workspace_head", "workspace_tree"]), "verify_failure_publication");
+  if (value.previous_accepted_ref !== "results/verify-code/accepted.json" || !ATTEMPT_REF.test(value.previous_attempt_ref ?? "")) throw new Error("verify_failure_publication previous verify acceptance is invalid");
+  if (value.active_build_accepted_ref !== "results/build-code/accepted.json" || !ATTEMPT_REF.test(value.active_build_attempt_ref ?? "")) throw new Error("verify_failure_publication active build-code acceptance is invalid");
+  if (!/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value.failure_evidence_ref ?? "")) throw new Error("verify_failure_publication failure evidence reference is invalid");
+  for (const key of ["previous_accepted_hash", "previous_attempt_hash", "active_build_accepted_hash", "active_build_attempt_hash", "failure_evidence_hash"]) if (!HASH.test(value[key] ?? "")) throw new TypeError(`verify_failure_publication.${key} must be sha256`);
+  for (const key of ["workspace_head", "workspace_tree"]) gitOid(value[key], `verify_failure_publication.${key}`);
 }
 
 function validateStageUpstream(stage, _taskId, refs) {
@@ -251,7 +263,9 @@ export function validateAttempt(attempt, expected = {}) {
   validateRefs(attempt.upstream_refs, "upstream_refs");
   validateUpstreamAcceptances(attempt.upstream_acceptances);
   validateReopenProvenance(attempt.reopen_provenance);
+  validateVerifyFailurePublication(attempt.verify_failure_publication);
   if (attempt.reopen_provenance !== undefined && stage !== "build-code") throw new Error("reopen_provenance is only valid for build-code");
+  if (attempt.verify_failure_publication !== undefined && stage !== "verify-code") throw new Error("verify_failure_publication is only valid for verify-code");
   validateStageUpstream(stage, attempt.task_id, attempt.upstream_refs);
   if (expected.taskId && attempt.task_id !== expected.taskId) throw new Error("attempt task identity mismatch");
   if (expected.stage && stage !== expected.stage) throw new Error("attempt stage identity mismatch");
@@ -375,17 +389,35 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     }
     return reopen;
   };
-  const verifyFailureEvidence = (verifyAttempt, evidenceRef) => {
+  const readFailureEvidence = (evidenceRef) => {
     if (!/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(evidenceRef ?? "")) throw new Error("failure evidence must be a canonical evidence reference");
-    const entry = verifyAttempt.facts.evidence_refs.find((item) => item.ref === evidenceRef);
-    if (!entry) throw new Error("failure evidence is not declared by the verify-code attempt");
-    const raw = task.readRecord(entry.ref);
-    if (hash(raw) !== entry.sha256) throw new Error("failure evidence hash mismatch");
+    const raw = task.readRecord(evidenceRef);
     const value = parseJson(raw, "failure evidence");
     if (!value || value.schema_version !== "acceptance-evidence.v1" || typeof value.acceptance_criterion_id !== "string" || value.acceptance_criterion_id.trim() === "" || value.result !== "fail" || !Array.isArray(value.refs)) {
       throw new Error("failure evidence must be acceptance-evidence.v1 with result=fail");
     }
-    return { ref: entry.ref, hash: entry.sha256 };
+    return { ref: evidenceRef, hash: hash(raw) };
+  };
+  const verifyFailureEvidence = (verifyAttempt, evidenceRef) => {
+    const failure = readFailureEvidence(evidenceRef);
+    const entry = verifyAttempt.facts.evidence_refs.find((item) => item.ref === failure.ref);
+    if (!entry) throw new Error("failure evidence is not declared by the verify-code attempt");
+    if (entry.sha256 !== failure.hash) throw new Error("failure evidence hash mismatch");
+    return failure;
+  };
+  const controlledVerifyFailurePublications = new WeakSet();
+  const duplicateVerifyFailurePublication = (publication) => {
+    for (let sequence = 1; sequence <= 9999; sequence += 1) {
+      const attemptRef = `attempt-${String(sequence).padStart(4, "0")}.json`;
+      let raw;
+      try { raw = task.readRecord(`results/verify-code/${attemptRef}`); }
+      catch (error) { if (error?.code === "ENOENT") continue; throw error; }
+      const attempt = validateAttempt(parseJson(raw, "verify-code attempt"), { taskId: task.identity.taskId, stage: "verify-code", attemptId: `verify-code:${attemptRef.slice(0, -5)}` });
+      const existing = attempt.verify_failure_publication;
+      if (existing && existing.previous_accepted_hash === publication.previous_accepted_hash && existing.active_build_accepted_hash === publication.active_build_accepted_hash) {
+        throw new Error("verify-code controlled failure publication already exists for this accepted verify/build-code binding");
+      }
+    }
   };
   const kernel = {
     task,
@@ -399,12 +431,29 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     },
     publishAttempt(stage, data = {}) {
       const name = stageName(stage);
+      if (data.verify_failure_publication !== undefined && !controlledVerifyFailurePublications.has(data)) {
+        throw new Error("verify-code controlled failure publication requires the official kernel entrypoint");
+      }
       return task.withRecordLock(`locks/${name}.publication.lock`, () => {
         let current;
         try { current = readAcceptedLocal(name); }
         catch (error) { if (error?.code !== "ENOENT") throw error; }
-        if (current && name !== "build-code") throw new Error(`${name} is accepted and closed`);
-        if (current) assertReopenProvenance(data.reopen_provenance, current);
+        const controlledVerifyFailure = data.verify_failure_publication !== undefined;
+        if (current && name !== "build-code" && !controlledVerifyFailure) throw new Error(`${name} is accepted and closed`);
+        if (controlledVerifyFailure) {
+          if (name !== "verify-code" || !current) throw new Error("controlled verify failure publication requires an accepted verify-code stage");
+          const activeBuild = readAcceptedLocal("build-code");
+          const publication = data.verify_failure_publication;
+          const workspaceCapability = assertWorkspace(workspace);
+          const snapshot = captureGitWorktreeSnapshot(workspaceCapability.worktreeRoot);
+          if (publication.previous_accepted_ref !== current.accepted_ref || publication.previous_accepted_hash !== current.accepted_hash || publication.previous_attempt_ref !== current.accepted.attempt_ref || publication.previous_attempt_hash !== String(current.accepted.integrity_hash).replace(/^sha256:/, "") || publication.active_build_accepted_ref !== activeBuild.accepted_ref || publication.active_build_accepted_hash !== activeBuild.accepted_hash || publication.active_build_attempt_ref !== activeBuild.accepted.attempt_ref || publication.active_build_attempt_hash !== String(activeBuild.accepted.integrity_hash).replace(/^sha256:/, "") || publication.workspace_head !== snapshot.head || publication.workspace_tree !== snapshot.tree) {
+            throw new Error("controlled verify failure publication binding changed before publication");
+          }
+          const failure = readFailureEvidence(publication.failure_evidence_ref);
+          if (failure.hash !== publication.failure_evidence_hash) throw new Error("controlled verify failure publication evidence changed before publication");
+          duplicateVerifyFailurePublication(publication);
+        }
+        if (current && name === "build-code") assertReopenProvenance(data.reopen_provenance, current);
         if (!current && data.reopen_provenance !== undefined) throw new Error("build-code reopen provenance requires an accepted build-code stage");
         validateRefs(data.upstream_refs ?? [], "upstream_refs");
         if (data.upstream_acceptances !== undefined) throw new Error("upstream_acceptances are kernel-derived and cannot be supplied");
@@ -433,6 +482,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
             upstream_refs: structuredClone(data.upstream_refs ?? []),
             ...(upstreamAcceptances.length ? { upstream_acceptances: upstreamAcceptances } : {}),
             ...(data.reopen_provenance ? { reopen_provenance: structuredClone(data.reopen_provenance) } : {}),
+            ...(data.verify_failure_publication ? { verify_failure_publication: structuredClone(data.verify_failure_publication) } : {}),
             ...((data.checkpoint ?? data.facts.checkpoint) ? { checkpoint: structuredClone(data.checkpoint ?? data.facts.checkpoint) } : {}),
             ...(data.reason !== undefined ? { reason: String(data.reason) } : {}),
           };
@@ -447,6 +497,37 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         }
         throw new Error(`${name} attempt sequence exhausted`);
       });
+    },
+    publishVerifyFailureFromAccepted({ failureEvidenceRef } = {}) {
+      const previousVerify = readAcceptedLocal("verify-code");
+      const activeBuild = readAcceptedLocal("build-code");
+      const workspaceCapability = assertWorkspace(workspace);
+      const snapshot = captureGitWorktreeSnapshot(workspaceCapability.worktreeRoot);
+      const failure = readFailureEvidence(failureEvidenceRef);
+      const evidenceRefs = [...previousVerify.facts.evidence_refs];
+      if (!evidenceRefs.some((entry) => entry.ref === failure.ref && entry.sha256 === failure.hash)) evidenceRefs.push({ ref: failure.ref, sha256: failure.hash });
+      const publication = {
+        previous_accepted_ref: previousVerify.accepted_ref,
+        previous_accepted_hash: previousVerify.accepted_hash,
+        previous_attempt_ref: previousVerify.accepted.attempt_ref,
+        previous_attempt_hash: String(previousVerify.accepted.integrity_hash).replace(/^sha256:/, ""),
+        active_build_accepted_ref: activeBuild.accepted_ref,
+        active_build_accepted_hash: activeBuild.accepted_hash,
+        active_build_attempt_ref: activeBuild.accepted.attempt_ref,
+        active_build_attempt_hash: String(activeBuild.accepted.integrity_hash).replace(/^sha256:/, ""),
+        failure_evidence_ref: failure.ref,
+        failure_evidence_hash: failure.hash,
+        workspace_head: snapshot.head,
+        workspace_tree: snapshot.tree,
+      };
+      const data = {
+        facts: { ...structuredClone(previousVerify.facts), evidence_refs: evidenceRefs },
+        evidence_refs: [{ ref: failure.ref, sha256: failure.hash }],
+        upstream_refs: [{ task_id: task.identity.taskId, stage: "build-code", accepted_ref: "results/build-code/accepted.json" }],
+        verify_failure_publication: publication,
+      };
+      controlledVerifyFailurePublications.add(data);
+      return kernel.publishAttempt("verify-code", data);
     },
     confirmAttempt(stage, attemptRef, decision) {
       const name = stageName(stage);

@@ -40,6 +40,17 @@ It binds this attempt and evidence hash to the old build-code acceptance, then
 permits one append-only replacement attempt. A failed verdict never authorizes
 close operations.
 
+If verify-code is already accepted but current Workspace evidence exposes a
+lineage failure, do not edit or bypass its accepted record. First write the new
+canonical `acceptance-evidence.v1` failure, then use
+`node scripts/stage-runtime.mjs publish-verify-failure --stage=verify-code
+--project=<project> --task=<task> --failure-evidence=<evidence/ref.json>`.
+The kernel binds the existing accepted verify result, the active build-code
+acceptance, the evidence hash, and the current Workspace snapshot into one new,
+unaccepted verify attempt. It rejects duplicate publication, changed bindings,
+non-failure evidence, and Workspace drift during publication. Use that returned
+attempt only for the controlled build-code reopen; never accept it.
+
 ## Procedure
 
 1. Validate StageContext and read the accepted build-code result through

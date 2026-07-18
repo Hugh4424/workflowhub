@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTask } from "../core/task-handle.mjs";
+import { captureGitWorktreeSnapshot } from "../core/git-worktree-snapshot.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 
@@ -71,6 +72,22 @@ describe("stage-runner capability unit", () => {
     await execute("build-plan", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); context.artifacts.writeAtomic("plan.md","plan\n"); context.artifacts.writeAtomic("tasks.md","tasks\n"); const cp=context.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint: cp } }; });
     await execute("build-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { changed: [], tests: testFacts("build"), review: reviewFacts("build-code"), phase_completion: true } }; });
     await execute("verify-code", async (context, upstream) => { seen.push([context.stage, upstream.attempt.stage]); return { facts: { tests: testFacts("verify"), review: reviewFacts("verify-code"), evidence_refs: [] } }; });
+    const verifyContext = contextFor("verify-code");
+    expect(() => verifyContext.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: "evidence/missing-failure.json" })).toThrow(/ENOENT|no such/i);
+    expect(() => task.readRecord("results/verify-code/attempt-0002.json")).toThrow();
+    expect(() => verifyContext.kernel.publishAttempt("verify-code", { verify_failure_publication: {} })).toThrow(/official kernel entrypoint/i);
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "workspace drift"], { cwd: worktree });
+    const driftHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: worktree, encoding: "utf8" }).trim();
+    const driftTree = captureGitWorktreeSnapshot(worktree).tree;
+    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "WORKSPACE-LINEAGE", result: "fail", refs: [] }, null, 2)}\n`;
+    verifyContext.kernel.publishCanonicalRecord("evidence/workspace-lineage-failure.json", failureRaw);
+    const controlledFailure = verifyContext.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: "evidence/workspace-lineage-failure.json" });
+    expect(controlledFailure).toMatchObject({ attempt_ref: "attempt-0002.json" });
+    expect(controlledFailure.attempt).toMatchObject({
+      upstream_refs: [{ task_id: "chain-task", stage: "build-code", accepted_ref: "results/build-code/accepted.json" }],
+      verify_failure_publication: { previous_accepted_ref: "results/verify-code/accepted.json", active_build_accepted_ref: "results/build-code/accepted.json", workspace_head: driftHead, workspace_tree: driftTree, failure_evidence_ref: "evidence/workspace-lineage-failure.json" },
+    });
+    expect(() => verifyContext.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: "evidence/workspace-lineage-failure.json" })).toThrow(/already exists/i);
     expect(seen).toEqual([["make-decision", null], ["build-spec", "make-decision"], ["build-plan", "build-spec"], ["build-code", "build-plan"], ["verify-code", "build-code"]]);
     for (const stage of ["make-decision","build-spec","build-plan","build-code","verify-code"]) {
       expect(JSON.parse(task.readRecord(`results/${stage}/accepted.json`))).toMatchObject({ schema_version: "task-accepted.v2", stage });
