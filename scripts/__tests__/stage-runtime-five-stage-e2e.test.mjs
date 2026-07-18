@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -72,32 +72,33 @@ describe("official five-stage CLI", () => {
     invoke("make-decision", { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef });
     const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
 
-    writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     mkdirSync(join(workspace.worktreeRoot, "specs", "official-chain"), { recursive: true });
+    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec draft\n");
+    writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
+    expect(existsSync(join(task.taskPath, "receipts", "spec.json"))).toBe(false);
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec\n");
     const specReview = writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
+    writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
+    expect(readdirSync(join(task.taskPath, "reviews", "results")).map((name) => JSON.parse(task.readRecord(`reviews/results/${name}`))).filter((result) => result.stage === "build-spec")).toHaveLength(2);
+    expect(readdirSync(join(task.taskPath, "receipts")).filter((name) => name === "spec.json")).toEqual(["spec.json"]);
+    expect(existsSync(join(task.taskPath, "receipts", "revisions", "spec"))).toBe(false);
     invoke("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
 
-    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan\n" } });
-    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });
-    const revisedPlanInput = join(root, "revised-plan.json");
-    writeFileSync(revisedPlanInput, `${JSON.stringify({ content: "# Plan, revised after review\n" })}\n`);
-    const revisedPlan = run(root, repo, ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--revision=true", "--recover=receipts/plan.json"]);
-    expect(revisedPlan).toMatchObject({ revision: true, previous_receipt_ref: "receipts/plan.json" });
-    expect(revisedPlan.receipt_ref).toMatch(/^receipts\/revisions\/plan\/[a-f0-9]{64}\.json$/);
-    expect(JSON.parse(task.readRecord("receipts/plan.json"))).toMatchObject({ content: "# Plan\n" });
-    for (const args of [
-      ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--revision=true"],
-      ["receipt", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--component=plan", `--input=${revisedPlanInput}`, "--recover=receipts/plan.json"],
-      ["run", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--revision=true"],
-    ]) {
-      const invalid = spawnSync(process.execPath, [runtime, ...args], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
-      expect(invalid.status).not.toBe(0);
-    }
+    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan draft\n");
+    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks draft\n");
+    writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
+    expect(existsSync(join(task.taskPath, "receipts", "plan.json"))).toBe(false);
+    expect(existsSync(join(task.taskPath, "receipts", "tasks.json"))).toBe(false);
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan, revised after review\n");
     writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks\n");
     const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
-    const buildPlan = invoke("build-plan", { plan: revisedPlan.receipt_ref, tasks: "receipts/tasks.json", review: planReview.resultRef });
+    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan, revised after review\n" } });
+    writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });
+    expect(readdirSync(join(task.taskPath, "reviews", "results")).map((name) => JSON.parse(task.readRecord(`reviews/results/${name}`))).filter((result) => result.stage === "build-plan")).toHaveLength(2);
+    expect(readdirSync(join(task.taskPath, "receipts")).filter((name) => new Set(["plan.json", "tasks.json"]).has(name)).sort()).toEqual(["plan.json", "tasks.json"]);
+    expect(existsSync(join(task.taskPath, "receipts", "revisions", "plan"))).toBe(false);
+    expect(existsSync(join(task.taskPath, "receipts", "revisions", "tasks"))).toBe(false);
+    const buildPlan = invoke("build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: planReview.resultRef });
     expect(buildPlan.accepted.checkpoint.artifacts.map((item) => item.path).sort()).toEqual([
       "specs/official-chain/plan.md",
       "specs/official-chain/tasks.md",

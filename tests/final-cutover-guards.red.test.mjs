@@ -3,11 +3,12 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { officialStageHandler } from "../core/stage-handlers.mjs";
+import { validateStageFacts } from "../core/task-kernel.mjs";
 
 describe("final cutover guard contracts", () => {
   const sha = "a".repeat(64), tree = "b".repeat(40);
   const canonical = (stage, overrides = {}) => ({ schema_version: "workflowhub-receipt.v1", producer: { stage, component: "tests", version: "1" }, task_id: "task", stage, ...overrides });
-  const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "now", completed_at: "now", output_ref: "evidence/test.txt", output_hash: sha });
+  const testsReceipt = (stage, snapshotTree = tree) => canonical(stage, { command: "true", exit_code: 0, command_hash: sha, snapshot_head: tree, snapshot_tree: snapshotTree, snapshot_commit: tree, started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z", output_ref: "evidence/test.txt", output_hash: sha });
   const reviewReceipt = (stage, verdict = "pass", snapshotTree = tree) => {
     const providerFinding = { severity: "major", path: "fixture", issue: "fixture", recommendation: "revise" };
     const providerOutput = { verdict, summary: "fixture review", findings: verdict === "pass" ? [] : [providerFinding] };
@@ -85,6 +86,65 @@ describe("final cutover guard contracts", () => {
       "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
     };
     await expect(officialStageHandler(stage)(workerFor(stage, values), { receipts: { tests: "receipts/tests.json", review: "reviews/results/review.json", evidence: "evidence/manifest.json" } })).resolves.toMatchObject({ facts: { review: { verdict: "revise_required" } } });
+  });
+
+  it("serializes an unavailable review attempt as a real fact without inventing pass", async () => {
+    const stage = "verify-code", attemptRef = "reviews/attempts/verify-unavailable/attempt.json";
+    const earlierOutputRef = "reviews/attempts/verify-unavailable/providers/fixture-provider.output.json";
+    const earlierContent = JSON.stringify({ verdict: "pass", summary: "superseded output", findings: [] });
+    const unavailable = {
+      version: "wh-review-attempt.v1", attempt_id: "verify-unavailable", task_id: "task", stage, review_track: null,
+      source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+      material_id: sha, provider_attempts: [{
+        provider: "fixture-provider", status: "completed", session_id: "old", runtime_id: "old", output_ref: earlierOutputRef, error: null,
+      }, {
+        provider: "fixture-provider", status: "failed", session_id: null, runtime_id: null, output_ref: null,
+        error: { code: "PROVIDER_UNAVAILABLE", message: "provider timed out" },
+      }], terminal_status: "unavailable",
+      error: { code: "PROVIDER_UNAVAILABLE", message: "provider timed out" },
+    };
+    const values = {
+      "receipts/tests.json": testsReceipt(stage),
+      [attemptRef]: unavailable,
+      [earlierOutputRef]: {
+        schema_version: "wh-review-provider-output.v1", task_id: "task", stage, attempt_id: "verify-unavailable",
+        provider: "fixture-provider", content: earlierContent, content_hash: createHash("sha256").update(earlierContent).digest("hex"),
+      },
+      "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    const result = await officialStageHandler(stage)(workerFor(stage, values), {
+      receipts: { tests: "receipts/tests.json", review: attemptRef, evidence: "evidence/manifest.json" },
+    });
+    expect(result).toMatchObject({
+      facts: { review: { status: "unavailable", attempt_ref: attemptRef, attempt_hash: sha, snapshot_tree: tree, error: unavailable.error } },
+      missing_items: [expect.stringMatching(/review.*unavailable.*PROVIDER_UNAVAILABLE/i)],
+    });
+    expect(result.facts.review).not.toHaveProperty("verdict", "pass");
+    expect(() => validateStageFacts(stage, result.facts)).not.toThrow();
+  });
+
+  it("rejects an unavailable attempt when the latest provider output is a sufficient pass", async () => {
+    const stage = "verify-code", attemptId = "false-unavailable", attemptRef = `reviews/attempts/${attemptId}/attempt.json`;
+    const outputRef = `reviews/attempts/${attemptId}/providers/fixture-provider.output.json`;
+    const content = JSON.stringify({ verdict: "pass", summary: "review passed", findings: [] });
+    const values = {
+      "receipts/tests.json": testsReceipt(stage),
+      [attemptRef]: {
+        version: "wh-review-attempt.v1", attempt_id: attemptId, task_id: "task", stage, review_track: null,
+        source: { target_commit: tree, base_commit: tree, base_tree: tree, captured_head: tree }, snapshot_tree: tree,
+        material_id: sha, provider_attempts: [{
+          provider: "fixture-provider", status: "completed", session_id: "session", runtime_id: "runtime", output_ref: outputRef, error: null,
+        }], terminal_status: "unavailable", error: { code: "PROVIDER_UNAVAILABLE", message: "claimed unavailable" },
+      },
+      [outputRef]: {
+        schema_version: "wh-review-provider-output.v1", task_id: "task", stage, attempt_id: attemptId,
+        provider: "fixture-provider", content, content_hash: createHash("sha256").update(content).digest("hex"),
+      },
+      "evidence/manifest.json": canonical(stage, { producer: { stage, component: "evidence", version: "1" }, refs: [] }),
+    };
+    await expect(officialStageHandler(stage)(workerFor(stage, values), {
+      receipts: { tests: "receipts/tests.json", review: attemptRef, evidence: "evidence/manifest.json" },
+    })).rejects.toThrow(/claims unavailable.*semantic result/i);
   });
 
   it("still rejects an unknown formal review verdict as an integrity error", async () => {

@@ -23,6 +23,17 @@ function fixture() {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
+  it.each([
+    ["build-spec", "spec"],
+    ["build-plan", "plan"],
+    ["build-plan", "tasks"],
+  ])("reproduces the %s/%s EEXIST accident when a draft is frozen before review", (stage, component) => {
+    const { task } = fixture();
+    const first = writeOfficialComponentReceipt({ task, stage, component, payload: { content: "draft\n" } });
+    expect(() => writeOfficialComponentReceipt({ task, stage, component, payload: { content: "revised after review\n" } })).toThrow(/exist/i);
+    expect(JSON.parse(task.readRecord(first.ref))).toMatchObject({ content: "draft\n" });
+  });
+
   it("publishes allowlisted content and physical implementation receipts create-only", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });

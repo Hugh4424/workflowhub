@@ -18,7 +18,12 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
 is an automatic stage: the trusted runtime publishes the attempt, materializes
 its checkpoint, and accepts it without a human confirmation command.
 
-Create the spec input first with `stage-runtime.mjs receipt --stage=build-spec --project=<project> --task=<task> --component=spec --input=<content-payload.json>`. Pass its ref and the canonical `wh-review` result ref as `spec` and `review`; missing review evidence stops the official run.
+Write and revise the draft through the named ArtifactDir writer. Do not create
+the official spec receipt before review is finished. After review, create that
+receipt exactly once with `stage-runtime.mjs receipt --stage=build-spec
+--project=<project> --task=<task> --component=spec
+--input=<content-payload.json>`, then pass it with the canonical `wh-review`
+result or unavailable-attempt ref as `spec` and `review`.
 
 The accepted make-decision result is read only through `ctx.kernel`. Design
 files are accessed only through ArtifactDir. Components receive the content of
@@ -40,20 +45,23 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
 
 1. Validate StageContext before invoking a component.
 2. Read accepted decision/scope from `ctx.kernel.readAccepted("make-decision")`.
-3. Invoke `spec-specify` with decision material and a controlled writer for
-   `spec.md`.
+3. Create the draft by invoking `spec-specify` with decision material and a
+   controlled writer for `spec.md`.
 4. Invoke `spec-clarify` with the current `spec.md` content and the same named
    writer when clarification is needed.
 5. Apply the constitutional checklist. Record findings; do not silently rewrite
    scope.
-6. Run independent review using a frozen packet built from `spec.md`, decision
+6. Run the initial review using a frozen packet built from `spec.md`, decision
    facts, and relevant evidence.
-7. Publish an append-only attempt containing named artifact hashes, review
-   facts, and missing items. Actionable findings are revised and reviewed again
-   without asking the user. If independent review capability is unavailable,
-   publish the diagnostic and stop as blocked; a human confirmation cannot
-   substitute for the missing independent source.
-8. Present the progress brief from `docs/human-brief-template.md`. The trusted
+7. If that review has actionable findings, revise the draft once and run at most one revision review.
+   There is no third review in this stage.
+8. After the review sequence finishes, create one final create-only receipt
+   from the current `spec.md`. The normal path must not use a revision receipt
+   or create an official receipt from a draft. Publish the append-only stage
+   attempt with the review facts and missing items. When review is unavailable,
+   pass its canonical attempt ref so the runtime records the failure reason and
+   provenance; never describe it as a pass or invent a result.
+9. Present the progress brief from `docs/human-brief-template.md`. The trusted
    runtime immediately runs `accept --attempt=<attempt>` without a confirmation,
    creates the checkpoint, and accepts the attempt.
    Checkpoint failure is an integrity error; quality facts never become a gate.

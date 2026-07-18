@@ -132,11 +132,13 @@ export function validateStageFacts(stage, facts) {
   if (name === "build-spec") {
     artifactRef(facts.spec_ref, "build-spec facts.spec_ref");
     validateCheckpointPlan(facts.checkpoint);
+    if (facts.review !== undefined) validateReview(facts.review, "build-spec facts.review");
   }
   if (name === "build-plan") {
     artifactRef(facts.plan_ref, "build-plan facts.plan_ref");
     artifactRef(facts.tasks_ref, "build-plan facts.tasks_ref");
     validateCheckpointPlan(facts.checkpoint);
+    if (facts.review !== undefined) validateReview(facts.review, "build-plan facts.review");
   }
   if (name === "build-code") {
     if (!Array.isArray(facts.changed)) throw new TypeError("build-code facts.changed must be an array");
@@ -201,6 +203,19 @@ function validateTests(value, label) {
 
 function validateReview(value, label) {
   plain(value, label);
+  if (value.status === "unavailable") {
+    rejectUnknown(value, new Set(["status", "attempt_ref", "attempt_hash", "snapshot_tree", "material_id", "error", "review_track"]), label);
+    if (!/^reviews\/attempts\/[a-zA-Z0-9._-]+\/attempt\.json$/.test(value.attempt_ref ?? "")) throw new TypeError(`${label}.attempt_ref must reference a formal wh-review attempt`);
+    if (!HASH.test(value.attempt_hash ?? "")) throw new TypeError(`${label}.attempt_hash must be sha256`);
+    gitOid(value.snapshot_tree, `${label}.snapshot_tree`);
+    if (!HASH.test(value.material_id ?? "")) throw new TypeError(`${label}.material_id must be sha256`);
+    plain(value.error, `${label}.error`);
+    rejectUnknown(value.error, new Set(["code", "message"]), `${label}.error`);
+    nonemptyString(value.error.code, `${label}.error.code`);
+    nonemptyString(value.error.message, `${label}.error.message`);
+    if (value.review_track !== undefined && !["direction", "detail"].includes(value.review_track)) throw new TypeError(`${label}.review_track must be direction or detail`);
+    return;
+  }
   rejectUnknown(value, new Set(["verdict", "result_ref", "result_hash", "snapshot_tree"]), label);
   nonemptyString(value.verdict, `${label}.verdict`);
   artifactRef(value.result_ref, `${label}.result_ref`);
