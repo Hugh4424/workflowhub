@@ -73,7 +73,7 @@ function plainResult(value) {
  * The handler receives capabilities and already verified upstream data; it does
  * not discover task identity or publish records itself.
  */
-export async function runStage(stage, context, handler) {
+export async function runStage(stage, context, handler, publication = {}) {
   if (!Object.prototype.hasOwnProperty.call(UPSTREAM_STAGE, stage)) {
     throw new TypeError(`unsupported stage: ${stage}`);
   }
@@ -89,6 +89,7 @@ export async function runStage(stage, context, handler) {
     accepted_ref: `results/${upstream.accepted.stage}/accepted.json`,
   }] : [];
 
+  if (!publication || typeof publication !== "object" || Array.isArray(publication)) throw new TypeError("stage publication options must be an object");
   return ctx.kernel.publishAttempt(stage, {
     facts: result.facts,
     evidence_refs: result.evidence_refs ?? [],
@@ -96,6 +97,7 @@ export async function runStage(stage, context, handler) {
     upstream_refs: upstreamRefs,
     ...(result.checkpoint !== undefined ? { checkpoint: result.checkpoint } : {}),
     ...(result.reason !== undefined ? { reason: result.reason } : {}),
+    ...(publication.reopenProvenance !== undefined ? { reopen_provenance: publication.reopenProvenance } : {}),
   });
 }
 
@@ -154,11 +156,11 @@ function verifyOfficialEvidence(ctx, result) {
 }
 
 /** Fixed repository-owned handler path; callers provide receipt references, never facts or code. */
-export function runOfficialStage(stage, context, invocation) {
+export function runOfficialStage(stage, context, invocation, publication) {
   const ctx = assertContext(context, stage);
   const handler = officialStageHandler(stage);
   const input = Object.freeze(structuredClone(invocation));
-  return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)));
+  return runStage(stage, ctx, async () => verifyOfficialEvidence(ctx, await handler(officialWorkerContext(ctx), input)), publication);
 }
 
 /** Persist the user's explicit decision before acceptance. */

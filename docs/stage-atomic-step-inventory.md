@@ -38,14 +38,14 @@ Source of truth for IDs: `workflows/<stage>/steps.json`. `SKILL.md` sections bel
 | build-code | 5 | scan-diff | diff scan | record scope violations; requested scope expansion escalates, accidental drift is repaired |
 | build-code | 6 | review-change | independent review | actionable findings return to implementation; unavailable/unresolved review remains visible |
 | build-code | 7 | capture-implementation | immutable snapshot | capture evidence without moving a Git ref or requiring phase confirmation |
-| build-code | 8 | publish-code-result | automatic acceptance | publish facts and automatically advance to verify-code |
+| build-code | 8 | publish-code-result | automatic acceptance | publish facts and automatically advance to verify-code; a verified failure may authorize one append-only reopen with immutable old-accepted and failure lineage |
 | verify-code | 1 | read-build-result | §2 pre-read | D7 worktree validation failure fails loud; skip quality/3rd-review/irreversible work and emit escalation result |
 | verify-code | 2 | verify-receipts | §5 freshness + §7 trace | stale SHA is info; receipt/trace issue follows D7; intentional no-browser-test is the only L3 skip trace |
 | verify-code | 3 | run-verification-tests | §4 fresh tests + §6 strategy + §8 browser | run fresh; required L3 missing/mismatch is D7 red; no UI skips with record |
 | verify-code | 4 | assemble-facts | AC coverage + human brief | record every AC result; quality anomalies remain visible for the verify stage gate |
 | verify-code | 5 | review-verification | independent review | record pass/revise/unavailable facts; no review result can authorize close |
 | verify-code | 6 | publish-verification-attempt | verification facts | publish all facts, including failures and unknowns, for the verification-stage decision |
-| verify-code | 7 | approve-verification | human checkpoint | accepts verification facts only; does not authorize close |
+| verify-code | 7 | approve-verification | human checkpoint | accepts passing verification facts only; a failed AC remains an unaccepted attempt and may authorize controlled build-code reopen, never close |
 | verify-code | 8 | publish-verification-result | accepted handoff | close remains an independent plan-hash-bound operation |
 
 ## P0 boundary

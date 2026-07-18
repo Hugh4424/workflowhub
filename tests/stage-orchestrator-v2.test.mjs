@@ -76,6 +76,45 @@ describe("stage-runner capability unit", () => {
     }
   });
 
+  it("reopens build-code only from authenticated verify failure evidence and preserves both accepted records", async () => {
+    const { task, taskPath, worktree, oid } = fixture();
+    const { runStage, acceptStageAttempt } = await import("../core/stage-runner.mjs");
+    const { bootstrapStage } = await import("../core/stage-context.mjs");
+    const hash = "a".repeat(64), tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: worktree, encoding: "utf8" }).trim();
+    const tests = (label) => ({ command: "npm test", exit_code: 0, command_hash: hash, snapshot_head: oid, snapshot_tree: tree, snapshot_commit: "b".repeat(40), started_at: "2026-07-16T00:00:00.000Z", completed_at: "2026-07-16T00:00:01.000Z", receipt_ref: `evidence/${label}-receipt.json`, receipt_hash: hash, output_ref: `evidence/${label}-output.txt`, output_hash: hash });
+    const review = (verdict) => ({ verdict, result_ref: "reviews/results/review.json", result_hash: hash, snapshot_tree: tree });
+    const context = (stage) => bootstrapStage(stage, { mode: "sidecar", taskPath, projectName: "Demo", taskId: "chain-task" });
+    const execute = async (stage, handler, publication) => {
+      const stageContext = context(stage), result = await runStage(stage, stageContext, handler, publication);
+      const request = { attemptRef: result.attempt_ref };
+      if (requiresHumanConfirmation(stage)) request.humanConfirmationRef = writeHumanConfirmation(stageContext.kernel, stage, result);
+      acceptStageAttempt(stage, stageContext, request);
+      return result;
+    };
+    await execute("make-decision", async () => ({ facts: { worktree_root: worktree, baseline_commit: oid } }));
+    await execute("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); const checkpoint = worker.createCheckpoint("build-spec"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint } }; });
+    await execute("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); const checkpoint = worker.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint } }; });
+    await execute("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true } }));
+    const verifyContext = context("verify-code");
+    const passRaw = JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-004", result: "pass", refs: [] }, null, 2) + "\n";
+    verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-004.json", passRaw);
+    const passHash = (await import("node:crypto")).createHash("sha256").update(passRaw).digest("hex");
+    const nonFailure = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-pass"), review: review("pass"), evidence_refs: [{ ref: "evidence/acceptance-ac-004.json", sha256: passHash }] } }));
+    expect(() => verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: nonFailure.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-004.json" })).toThrow(/result=fail/i);
+    const failureRaw = JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2) + "\n";
+    verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
+    const failureHash = (await import("node:crypto")).createHash("sha256").update(failureRaw).digest("hex");
+    const failedVerify = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-one"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: failureHash }] } }));
+    const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
+    expect(() => verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" })).toThrow(/reopen already exists/i);
+    const revised = await execute("build-code", async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true } }), { reopenProvenance: reopen });
+    expect(JSON.parse(task.readRecord("results/build-code/accepted.json"))).toMatchObject({ attempt_ref: "attempt-0001.json" });
+    expect(JSON.parse(task.readRecord("results/build-code/accepted-attempt-0002.json"))).toMatchObject({ attempt_ref: revised.attempt_ref });
+    expect(JSON.parse(task.readRecord(`results/build-code/${revised.attempt_ref}`))).toMatchObject({ reopen_provenance: { reopen_ref: reopen.reopen_ref, verify_failure_ref: `results/verify-code/${failedVerify.attempt_ref}` } });
+    expect(context("verify-code").kernel.readAccepted("build-code")).toMatchObject({ accepted_ref: "results/build-code/accepted-attempt-0002.json", accepted: { attempt_ref: revised.attempt_ref } });
+    expect(() => verifyContext.kernel.buildCodeReopenProvenance(reopen.reopen_ref)).toThrow(/not authorized|active accepted/i);
+  });
+
   it("can publish without accepting when the caller omits human confirmation", async () => {
     const { task, taskPath, worktree, oid } = fixture(); const { runStage } = await import("../core/stage-runner.mjs"); const { bootstrapStage } = await import("../core/stage-context.mjs");
     const result = await runStage("make-decision", bootstrapStage("make-decision",{mode:"sidecar",taskPath,projectName:"Demo",taskId:"chain-task"}), async()=>({facts:{worktree_root:worktree,baseline_commit:oid}}));
