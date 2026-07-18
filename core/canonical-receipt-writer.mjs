@@ -19,6 +19,52 @@ const OFFICIAL_COMPONENTS = Object.freeze({
   evidence: Object.freeze({ stage: "verify-code", kind: "evidence-aggregate", ref: "evidence/verify-evidence.json" }),
 });
 
+function canonicalJson(value) {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function receiptProvenance(value, { taskId, stage, component }) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || value.schema_version !== "workflowhub-receipt.v1"
+    || value.task_id !== taskId
+    || value.stage !== stage
+    || !value.producer || typeof value.producer !== "object"
+    || value.producer.stage !== stage
+    || value.producer.component !== component) {
+    throw new Error("revision source receipt provenance mismatch");
+  }
+}
+
+function readCanonicalRecord(task, ref) {
+  try {
+    return task.readRecord(ref);
+  } catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function publishIdempotently({ task, write, ref, raw, label }) {
+  const existing = readCanonicalRecord(task, ref);
+  if (existing === undefined) {
+    try {
+      write(ref, raw);
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const recovered = readCanonicalRecord(task, ref);
+      if (recovered === raw) return;
+      throw new Error(`${label} already exists with different content`);
+    }
+    return;
+  }
+  if (existing !== raw) throw new Error(`${label} already exists with different content`);
+}
+
+function revisionRefFor(ref, component, contentHash) {
+  const namespace = ref.slice(0, ref.indexOf("/"));
+  return `${namespace}/revisions/${component}/${contentHash}.json`;
+}
+
 function workspaceCommand(workspace, command, args, label) {
   const result = runWorkspaceCommand(workspace, command, args);
   if (result.error || result.status !== 0) {
@@ -38,7 +84,7 @@ export function captureWorkspaceSnapshot(workspace) {
 }
 
 /** Fixed registry for official non-test component receipts. */
-export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0" } = {}) {
+export function writeOfficialComponentReceipt({ task, workspace, stage, component, payload, version = "1.0.0", revisionOf } = {}) {
   const safeTask = assertTaskHandle(task);
   const registration = OFFICIAL_COMPONENTS[component];
   if (!registration || registration.stage !== stage) throw new Error("component is not allowlisted for this stage");
@@ -84,8 +130,30 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
     });
     value = { schema_version: "workflowhub-receipt.v1", task_id: safeTask.identity.taskId, stage, producer, refs };
   }
-  const raw = `${JSON.stringify(value, null, 2)}\n`; write(registration.ref, raw);
-  return Object.freeze({ ref: registration.ref, sha256: sha256(raw), value: Object.freeze(value) });
+  const raw = canonicalJson(value);
+  if (revisionOf === undefined) {
+    publishIdempotently({ task: safeTask, write, ref: registration.ref, raw, label: "official component receipt" });
+    return Object.freeze({ ref: registration.ref, sha256: sha256(raw), value: Object.freeze(value), revision: false });
+  }
+  if (typeof revisionOf !== "string" || revisionOf.trim() === "") throw new TypeError("revision source receipt ref required");
+  const previousRaw = readCanonicalRecord(safeTask, revisionOf);
+  if (previousRaw === undefined) throw new Error(`revision source receipt does not exist: ${revisionOf}`);
+  let previous;
+  try { previous = JSON.parse(previousRaw); } catch { throw new Error("revision source receipt must be JSON"); }
+  receiptProvenance(previous, { taskId: safeTask.identity.taskId, stage, component });
+  const contentHash = sha256(raw);
+  const ref = revisionRefFor(registration.ref, component, contentHash);
+  const revision = Object.freeze({ previous_ref: revisionOf, previous_hash: sha256(previousRaw), content_hash: contentHash });
+  const revised = { ...value, revision };
+  const revisedRaw = canonicalJson(revised);
+  const existing = readCanonicalRecord(safeTask, ref);
+  if (existing !== undefined && existing !== revisedRaw) {
+    let existingRevision;
+    try { existingRevision = JSON.parse(existing).revision; } catch { /* publishIdempotently reports malformed conflicts below */ }
+    if (existingRevision?.content_hash === contentHash) throw new Error("revision source mismatch");
+  }
+  publishIdempotently({ task: safeTask, write, ref, raw: revisedRaw, label: "official component receipt revision" });
+  return Object.freeze({ ref, sha256: sha256(revisedRaw), value: Object.freeze(revised), revision: true, previous_ref: revisionOf, previous_hash: revision.previous_hash, content_hash: contentHash });
 }
 
 export function validateAcceptanceEvidence(value, label = "acceptance evidence") {

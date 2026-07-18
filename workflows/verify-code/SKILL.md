@@ -32,6 +32,14 @@ Declared runtime components: `test-strategy`, `wh-review`, conditional
 - Product code is read-only during verification. A required fix returns to a
   new build-code attempt.
 
+When an acceptance criterion fails, publish the verify-code attempt and retain
+the exact `acceptance-evidence.v1` reference whose `result` is `fail`; do not
+accept that failed verification attempt. The only repair handoff is the
+controlled build-code reopen command documented in `workflows/build-code/SKILL.md`.
+It binds this attempt and evidence hash to the old build-code acceptance, then
+permits one append-only replacement attempt. A failed verdict never authorizes
+close operations.
+
 ## Procedure
 
 1. Validate StageContext and read the accepted build-code result through

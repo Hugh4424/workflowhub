@@ -19,8 +19,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "receipt", "run", "confirm", "accept"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|receipt|run|confirm|accept> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "receipt", "run", "confirm", "accept", "reopen"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|receipt|run|confirm|accept|reopen> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -30,7 +30,13 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
+  if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
+  if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
+  if (Object.prototype.hasOwnProperty.call(values, "reopen") && (command !== "run" || values.stage !== "build-code")) throw new TypeError("--reopen is only valid for build-code run");
+  if (Object.prototype.hasOwnProperty.call(values, "revision") && values.revision !== "true") throw new TypeError("--revision must be --revision=true");
+  if (Object.prototype.hasOwnProperty.call(values, "recover") && values.revision !== "true") throw new TypeError("--recover requires --revision=true");
+  if (command === "receipt" && values.revision === "true" && !values.recover) throw new TypeError("receipt revision requires --recover=<previous-receipt-ref>");
   if (command === "run" && !values.input) throw new TypeError("run requires --input=<component-receipts.json>");
   let context = bootstrapStage(values.stage, {
     mode: "launcher",
@@ -48,14 +54,15 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       baseline_commit: context.candidateWorkspace.baselineCommit,
     };
   }
+  if (command === "reopen") return context.kernel.reopenBuildCode({ verifyAttemptRef: values["verify-attempt"], failureEvidenceRef: values["failure-evidence"] });
   if (values.stage === "make-decision" && command === "run") context = prepareMakeDecisionWorkspace(context);
   if (values.stage === "make-decision" && command === "accept") context = validateMakeDecisionWorkspaceAttempt(context, values.attempt);
   if (command === "receipt") {
-    const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload: input });
-    return { receipt_ref: result.ref, receipt_hash: result.sha256 };
+    const result = writeOfficialComponentReceipt({ task: context.task, workspace: context.workspace, stage: values.stage, component: values.component, payload: input, ...(values.revision === "true" ? { revisionOf: values.recover } : {}) });
+    return { receipt_ref: result.ref, receipt_hash: result.sha256, revision: result.revision, ...(result.revision ? { previous_receipt_ref: result.previous_ref, previous_receipt_hash: result.previous_hash, content_hash: result.content_hash } : {}) };
   }
   if (command === "run") {
-    return runOfficialStage(values.stage, context, input);
+    return runOfficialStage(values.stage, context, input, values.reopen ? { reopenProvenance: context.kernel.buildCodeReopenProvenance(values.reopen) } : undefined);
   }
   if (command === "confirm") return confirmStageAttempt(values.stage, context, { attemptRef: values.attempt, decision: values.decision });
   return acceptStageAttempt(values.stage, context, {

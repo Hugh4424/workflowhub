@@ -21,6 +21,24 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-code
 is an automatic stage: the trusted runtime publishes and accepts its attempt
 without a human confirmation command.
 
+## Controlled revision after verification failure
+
+An accepted build-code stage is closed unless the trusted runtime issued a
+reopen authorization from an authenticated failed verify-code attempt. Do not
+edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
+
+1. Keep the failed verify attempt unaccepted. Its `facts.evidence_refs` must
+   include an `acceptance-evidence.v1` record with `result: "fail"`.
+2. Create the authorization:
+   `node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project> --task=<task> --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ac-005.json>`.
+3. Re-run only the original task's build-code with the returned immutable ref:
+   `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
+
+The new attempt carries the prior accepted record and verify failure hashes.
+Its acceptance is stored as `accepted-attempt-0002.json`; the former
+`accepted.json` remains immutable. Reusing an authorization, a source from a
+different task, a non-failure, or a non-build-code stage fails loudly.
+
 Create implementation provenance with `stage-runtime.mjs receipt --stage=build-code --project=<project> --task=<task> --component=implementation --input=<phase-payload.json>`; HEAD/tree/diff evidence is derived by the writer.
 
 Declared runtime components: `wh-review`, conditional `test-routing-advisor`,

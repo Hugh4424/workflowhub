@@ -27,6 +27,7 @@ describe("official component receipt authority", () => {
     const { task, worktree, workspace } = fixture();
     const spec = writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     expect(spec.ref).toBe("receipts/spec.json");
+    expect(writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } })).toMatchObject({ ref: spec.ref, sha256: spec.sha256, revision: false });
     expect(() => task.writeRecordAtomic("receipts/forged.json", "{}" )).toThrow(/canonical-receipt-owned/);
     writeFileSync(join(worktree, "tracked.txt"), "dirty\n");
     writeFileSync(join(worktree, "new.txt"), "new\n");
@@ -37,6 +38,26 @@ describe("official component receipt authority", () => {
     expect(diff).toContain("tracked.txt");
     expect(diff).toContain("new.txt");
     expect(() => writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "changed" } })).toThrow(/exist/i);
+  });
+
+  it("publishes hash-addressed component revisions without replacing the original receipt", () => {
+    const { task } = fixture();
+    const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v1\n" } });
+    const revised = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v2\n" }, revisionOf: first.ref });
+    const repeated = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan v2\n" }, revisionOf: first.ref });
+    expect(first.ref).toBe("receipts/plan.json");
+    expect(task.readRecord(first.ref)).toContain("# Plan v1");
+    expect(revised).toMatchObject({ revision: true, previous_ref: first.ref, previous_hash: first.sha256 });
+    expect(revised.ref).toMatch(/^receipts\/revisions\/plan\/[a-f0-9]{64}\.json$/);
+    expect(revised.value.revision).toMatchObject({ previous_ref: first.ref, previous_hash: first.sha256, content_hash: revised.content_hash });
+    expect(repeated).toMatchObject({ ref: revised.ref, sha256: revised.sha256, content_hash: revised.content_hash });
+  });
+
+  it("rejects a revision whose deterministic content ref is bound to another source", () => {
+    const { task } = fixture();
+    const first = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v1\n" } });
+    const middle = writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v2\n" }, revisionOf: first.ref });
+    expect(() => writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks v2\n" }, revisionOf: middle.ref })).toThrow(/revision source mismatch/i);
   });
 
   it("records pass and fail acceptance facts with unique identities and closed refs", () => {
