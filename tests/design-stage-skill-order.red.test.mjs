@@ -12,4 +12,3 @@ describe("design stage operator order", () => {
     expect(skill).toMatch(/normal path[\s\S]*(?:must not|不得)[^\n]*(?:revision receipt|receipt revision)/i);
   });
 });
-
