@@ -59,7 +59,7 @@ export function createTranscriptSourceRegistry(entries) {
     if (!plain(entry) || Object.keys(entry).length !== ENTRY_FIELDS.size || Object.keys(entry).some((field) => !ENTRY_FIELDS.has(field))) {
       throw new TypeError("transcript source entry must contain exactly the registered fields");
     }
-    if (!text(entry.source_id) || !safeRef(entry.source_ref) || entry.source_format !== "jsonl" || !text(entry.source_version) || typeof entry.required !== "boolean") {
+    if (!text(entry.source_id) || !safeRef(entry.source_ref) || !text(entry.source_format) || !text(entry.source_version) || typeof entry.required !== "boolean") {
       throw new TypeError("invalid transcript source entry");
     }
     if (ids.has(entry.source_id)) throw new TypeError(`duplicate transcript source_id: ${entry.source_id}`);
