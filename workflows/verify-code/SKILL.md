@@ -40,6 +40,13 @@ It binds this attempt and evidence hash to the old build-code acceptance, then
 permits one append-only replacement attempt. A failed verdict never authorizes
 close operations.
 
+After that replacement build is accepted, run verify-code again from its new
+accepted snapshot, tests, and review. If a canonical component receipt already
+exists from the prior accepted verification, only this controlled fresh-verify
+path may use `receipt --revision=true --recover=<previous-receipt-ref>`.
+Normal verify-code remains create-only and never reuses an old test or review
+verdict.
+
 If verify-code is already accepted but current Workspace evidence exposes a
 lineage failure, do not edit or bypass its accepted record. First write the new
 canonical `acceptance-evidence.v1` failure, then use

@@ -106,7 +106,9 @@ describe("target repository migration", () => {
     await publishAndAccept("build-code", async () => ({ facts: { changed: [], tests: testFacts("build"), review: review("pass"), phase_completion: true } }));
 
     const verifyContext = context("verify-code");
-    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2)}\n`;
+    const failureDetail = "AC-005 failed\n";
+    verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.txt", failureDetail);
+    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [{ ref: "evidence/acceptance-ac-005.txt", sha256: createHash("sha256").update(failureDetail).digest("hex") }] }, null, 2)}\n`;
     verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
     const failed = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: testFacts("verify"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] } }));
 

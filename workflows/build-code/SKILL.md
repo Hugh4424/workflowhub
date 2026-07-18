@@ -33,6 +33,10 @@ edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
    `node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project> --task=<task> --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ac-005.json>`.
 3. Re-run only the original task's build-code with the returned immutable ref:
    `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
+   If a canonical component receipt already exists from the accepted build,
+   this controlled re-run may use the existing `receipt --revision=true
+   --recover=<previous-receipt-ref>` path. Normal build-code must keep using
+   create-only receipts and must not create revisions.
 
 The new attempt carries the prior accepted record and verify failure hashes.
 The runtime preserves the former canonical bytes as `accepted-attempt-<n>.json`

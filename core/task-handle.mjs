@@ -652,7 +652,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (relativePath !== "results/build-code/accepted.json") throw new Error("only build-code canonical accepted record may be replaced");
+    if (!new Set(["results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) throw new Error("only controlled build-code or verify-code canonical accepted records may be replaced");
     const result = writeAtomicAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
