@@ -1,10 +1,12 @@
-import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
+import Ajv2020 from "ajv/dist/2020.js";
 
 import {
   createArtifactRecord,
@@ -17,6 +19,8 @@ import {
   parseJsonl,
   toJsonl,
 } from "../core/fact-indexes.mjs";
+import { collectTaskFacts, createFactCollectorWriteTestHooks, createTranscriptSourceReader, createTranscriptSourceRegistry } from "../core/fact-collector.mjs";
+import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
@@ -24,6 +28,11 @@ import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.m
 const cleanup = [];
 afterEach(async () => Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true }))));
 const exec = promisify(execFile);
+const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
+const INDEX_REFS = [
+  "indexes/transcript-index.jsonl", "indexes/artifact-index.jsonl",
+  "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json",
+];
 
 async function createM14bFixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), "workflowhub-m14b-")));
@@ -40,22 +49,59 @@ async function createM14bFixture() {
     created_at: "2026-07-18T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {},
   } });
   const candidate = prepareTaskWorkspace(task);
+  const decisionRef = `specs/${task.identity.taskId}/decision.md`;
+  await mkdir(join(candidate.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
+  await writeFile(join(candidate.worktreeRoot, decisionRef), "# Decision\n");
   const kernel = createTaskKernel(task);
-  const published = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+  const published = kernel.publishAttempt("make-decision", { facts: {
+    worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
+    decision_ref: decisionRef, decision_hash: "d".repeat(64),
+  } });
   const confirmation = kernel.confirmAttempt("make-decision", published.attempt_ref, "accepted").ref;
   kernel.acceptAttempt("make-decision", published.attempt_ref, confirmation);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
   const baseline = workspace.baselineCommit;
   await mkdir(join(workspace.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
-  await mkdir(join(workspace.worktreeRoot, "skills"), { recursive: true });
-  await writeFile(join(workspace.worktreeRoot, "skills", "catalog.yaml"), "skills: []\n");
-  await writeFile(join(workspace.worktreeRoot, "bundle.json"), "{}\n");
+  for (const relative of ["config", "schemas", "skills", "workflows", "specs/m14a-audit-contract-layer"]) {
+    await cp(join(repositoryRoot, relative), join(workspace.worktreeRoot, relative), { recursive: true });
+  }
+  await cp(join(repositoryRoot, "THIRD_PARTY_NOTICES.md"), join(workspace.worktreeRoot, "THIRD_PARTY_NOTICES.md"));
   const sentinel = async (name, value = "sentinel") => {
     const path = join(task.taskPath, name);
     await writeFile(path, value);
     return path;
   };
-  return { root, task, repo, workspace, baseline, catalog: join(workspace.worktreeRoot, "skills", "catalog.yaml"), bundle: join(workspace.worktreeRoot, "bundle.json"), clock: () => "2026-07-18T00:00:00.000Z", sentinel };
+  return { root, task, kernel, repo, workspace, baseline, catalog: join(workspace.worktreeRoot, "skills", "catalog.yaml"), clock: () => "2026-07-18T00:00:00.000Z", sentinel };
+}
+
+function collectionContext(fixture) {
+  return bootstrapStage("build-code", {
+    mode: "sidecar", projectName: fixture.task.identity.projectName, taskId: fixture.task.identity.taskId, taskPath: fixture.task.taskPath,
+  });
+}
+
+function registry(entries = []) {
+  return createTranscriptSourceRegistry(entries.map((entry) => ({
+    source_id: entry.source_id, source_ref: entry.source_ref ?? "registered/transcript.jsonl",
+    source_format: entry.source_format ?? "jsonl", source_version: entry.source_version ?? "v1",
+    required: entry.required ?? true, reader: createTranscriptSourceReader(entry.read),
+  })));
+}
+
+function records(task, ref) {
+  return task.readRecord(ref).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
+function file(task, ref) {
+  return task.readRecord(ref);
+}
+
+function errorWithCode(code) {
+  return Object.assign(new Error(code), { code });
+}
+
+function resultFor(result, ref) {
+  return result.files.find((entry) => entry.ref === ref);
 }
 
 function skill(overrides = {}) {
@@ -75,7 +121,7 @@ function reversedBytes(merge, candidates) {
 }
 
 describe("M14b fact collection pure contracts", () => {
-  it("merges idempotent transcript candidates deterministically", () => {
+  it("AC-006 merges idempotent transcript candidates deterministically", () => {
     const base = { record_kind: "transcript", id: "turn-1", run_id: "run-1", status: "present", payload: { text: "hello" } };
     const records = reversedBytes(mergeTranscriptRecords, [
       createTranscriptRecord({ ...base, source_ref: "source-z" }),
@@ -85,7 +131,7 @@ describe("M14b fact collection pure contracts", () => {
     expect(records[0]).toMatchObject({ source_ref: "source-a", status: "present" });
   });
 
-  it("keeps a transcript conflict visible instead of choosing first or last", () => {
+  it("AC-007 keeps a transcript conflict visible instead of choosing first or last", () => {
     const records = reversedBytes(mergeTranscriptRecords, [
       createTranscriptRecord({ record_kind: "transcript", id: "same", status: "present", source_ref: "z", payload: { value: 1 } }),
       createTranscriptRecord({ record_kind: "transcript", id: "same", status: "present", source_ref: "a", payload: { value: 2 } }),
@@ -122,10 +168,13 @@ describe("M14b fact collection pure contracts", () => {
     expect(health[0]).toMatchObject({ fact_id: "bad-line:flow-health:1", domain: "artifact_missing", status: "unknown", reason: "malformed_line" });
   });
 
-  it("rejects unsupported schema versions per file", () => {
+  it("AC-005/015 rejects unsupported schema versions while collector version stays independent", () => {
     expect(mergeTranscriptRecords([createTranscriptRecord({ id: "old", schema_version: "v2" })])).toMatchObject({ ok: false, code: "UNSUPPORTED_FORMAT" });
     expect(mergeArtifactRecords([createArtifactRecord({ id: "old", ref: "ref", schema_version: "v2" })])).toMatchObject({ ok: false, code: "UNSUPPORTED_FORMAT" });
     expect(mergeHealthFacts([createHealthFact({ fact_id: "old", schema_version: "v2" })])).toMatchObject({ ok: false, code: "UNSUPPORTED_FORMAT" });
+    const parserFix = createTranscriptRecord({ id: "same-schema", collector_version: "v2" });
+    expect(parserFix).toMatchObject({ schema_version: "v1", collector_version: "v2" });
+    expect(mergeTranscriptRecords([parserFix])).toMatchObject({ ok: true });
   });
 
   it("sorts health facts and exposes conflicts", () => {
@@ -156,5 +205,201 @@ describe("M14b fact collection pure contracts", () => {
     expect(fixture).toMatchObject({ baseline: expect.stringMatching(/^[0-9a-f]{40}$/), clock: expect.any(Function) });
     expect(fixture.clock()).toBe("2026-07-18T00:00:00.000Z");
     await fixture.sentinel("before-indexes");
+  });
+});
+
+describe("M14b fact collection acceptance", () => {
+  it("AC-001/002 collects all four task-local indexes with the deterministic no-source fact", async () => {
+    const fixture = await createM14bFixture();
+    const result = collectTaskFacts(collectionContext(fixture), { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
+
+    expect(result).toMatchObject({ status: "success" });
+    expect(result.files.map((file) => file.ref)).toEqual([
+      "indexes/transcript-index.jsonl", "indexes/artifact-index.jsonl",
+      "indexes/flow-health-facts.jsonl", "indexes/skills-inventory.json",
+    ]);
+    expect(result.files.every((file) => file.saved)).toBe(true);
+    expect(fixture.task.readRecord("indexes/transcript-index.jsonl")).toContain('"id":"transcript-source-registry"');
+    expect(fixture.task.readRecord("indexes/transcript-index.jsonl")).toContain('"reason":"no_registered_source"');
+    expect(records(fixture.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_kind: "artifact", id: `specs/${fixture.task.identity.taskId}/decision.md`, status: "present" }),
+    ]));
+  });
+
+  it("AC-003/004/005 records missing, read failure, malformed JSONL, and unsupported sources without blocking legal records", async () => {
+    const fixture = await createM14bFixture();
+    const mixed = [
+      JSON.stringify({ id: "first", run_id: "run-a", payload: { ordinal: 1 } }),
+      "not-json",
+      JSON.stringify({ id: "last", run_id: "run-a", payload: { ordinal: 3 } }),
+    ].join("\n");
+    const result = collectTaskFacts(collectionContext(fixture), {
+      transcriptRegistry: registry([
+        { source_id: "mixed", read: () => mixed },
+        { source_id: "missing", read: () => { throw errorWithCode("ENOENT"); } },
+        { source_id: "unreadable", read: () => { throw errorWithCode("EACCES"); } },
+        { source_id: "future", source_version: "v2", read: () => "ignored" },
+      ]), now: () => new Date(fixture.clock()),
+    });
+    const transcript = records(fixture.task, "indexes/transcript-index.jsonl");
+
+    expect(result.status).toBe("success");
+    expect(transcript).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "first", status: "present", line_number: 1 }),
+      expect.objectContaining({ id: "last", status: "present", line_number: 3 }),
+      expect.objectContaining({ id: "bad-line:mixed:2", status: "unknown", reason: "malformed_line", error: expect.objectContaining({ code: "MALFORMED_LINE" }) }),
+      expect.objectContaining({ id: "missing", status: "missing", reason: "not_found" }),
+      expect.objectContaining({ id: "unreadable", status: "unknown", reason: "read_error", error: expect.objectContaining({ code: "READ_ERROR" }) }),
+      expect.objectContaining({ id: "future", status: "unknown", reason: "unsupported_format", error: expect.objectContaining({ code: "UNSUPPORTED_FORMAT" }) }),
+    ]));
+    expect(mixed).toBe([JSON.stringify({ id: "first", run_id: "run-a", payload: { ordinal: 1 } }), "not-json", JSON.stringify({ id: "last", run_id: "run-a", payload: { ordinal: 3 } })].join("\n"));
+  });
+
+  it("AC-008 projects only explicit artifact references and records a declared missing target", async () => {
+    const present = await createM14bFixture();
+    collectTaskFacts(collectionContext(present), { transcriptRegistry: registry(), now: () => new Date(present.clock()) });
+    const ref = `specs/${present.task.identity.taskId}/decision.md`;
+    expect(records(present.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_kind: "artifact", id: ref, ref, required: true, status: "present" }),
+    ]));
+
+    const absent = await createM14bFixture();
+    await rm(join(absent.workspace.worktreeRoot, `specs/${absent.task.identity.taskId}/decision.md`));
+    const result = collectTaskFacts(collectionContext(absent), { transcriptRegistry: registry(), now: () => new Date(absent.clock()) });
+    expect(result.status).toBe("success");
+    expect(records(absent.task, "indexes/artifact-index.jsonl")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ record_kind: "artifact", id: `specs/${absent.task.identity.taskId}/decision.md`, status: "missing", reason: "not_found", required: true }),
+    ]));
+  });
+
+  it("AC-009/010/014 validates the original M14a schema, all nine health domains, and non-blocking facts", async () => {
+    const fixture = await createM14bFixture();
+    const first = collectTaskFacts(collectionContext(fixture), {
+      transcriptRegistry: registry([{ source_id: "failed-review-context", read: () => { throw errorWithCode("EACCES"); } }]),
+      now: () => new Date(fixture.clock()),
+    });
+    const skills = JSON.parse(file(fixture.task, "indexes/skills-inventory.json"));
+    const health = records(fixture.task, "indexes/flow-health-facts.jsonl");
+    const schema = JSON.parse(await readFile(join(fixture.workspace.worktreeRoot, "specs/m14a-audit-contract-layer/skills-inventory.schema.json"), "utf8"));
+    const validate = new Ajv2020({ strict: false, formats: { "date-time": true } }).compile(schema);
+    const before = file(fixture.task, "indexes/skills-inventory.json");
+    const second = collectTaskFacts(collectionContext(fixture), {
+      transcriptRegistry: registry([{ source_id: "failed-review-context", read: () => { throw errorWithCode("EACCES"); } }]),
+      now: () => new Date(fixture.clock()),
+    });
+
+    expect(first.status).toBe("success");
+    expect(second.status).toBe("success");
+    expect(validate(skills), JSON.stringify(validate.errors)).toBe(true);
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties.skills.items.additionalProperties).toBe(false);
+    expect(JSON.stringify(skills)).not.toContain("run_id");
+    expect(JSON.stringify(skills)).not.toContain("entrypoint");
+    expect(file(fixture.task, "indexes/skills-inventory.json")).toBe(before);
+    expect(health.map((fact) => fact.domain)).toEqual([
+      "artifact_missing", "handoff", "review", "skill_missing", "task_dir", "token_waste", "transcript", "verify", "worktree",
+    ]);
+    expect(health.find((fact) => fact.domain === "token_waste")).toMatchObject({ status: "unknown", observed_value: null });
+    expect(health.every((fact) => !("severity" in fact) && !("root_cause" in fact) && !("fix" in fact))).toBe(true);
+  });
+
+  it("AC-011 rejects a forged identity before reader invocation or index rewrite", async () => {
+    const fixture = await createM14bFixture();
+    const context = collectionContext(fixture);
+    collectTaskFacts(context, { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
+    const sentinels = new Map(INDEX_REFS.map((ref) => [ref, file(fixture.task, ref)]));
+    let reads = 0;
+    const forged = Object.freeze({ ...context, identity: { ...context.identity, taskId: "forged-task" } });
+
+    expect(() => collectTaskFacts(forged, {
+      transcriptRegistry: registry([{ source_id: "must-not-read", read: () => { reads += 1; return ""; } }]),
+    })).toThrow(/WRONG_WORKTREE/);
+    expect(reads).toBe(0);
+    for (const [ref, bytes] of sentinels) expect(file(fixture.task, ref)).toBe(bytes);
+  });
+
+  it("AC-007/013 makes a skills conflict and a single unsupported target fail without false success", async () => {
+    const fixture = await createM14bFixture();
+    const initial = collectTaskFacts(collectionContext(fixture), { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
+    expect(initial.status).toBe("success");
+    const skills = JSON.parse(file(fixture.task, "indexes/skills-inventory.json"));
+    const conflict = structuredClone(skills.skills[0]);
+    conflict.owner = "conflicting-owner";
+    fixture.task.writeRecordAtomic("indexes/skills-inventory.json", `${JSON.stringify({ ...skills, skills: [conflict] }, null, 2)}\n`);
+    const skillFailure = collectTaskFacts(collectionContext(fixture), { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
+
+    expect(skillFailure.status).toBe("failed");
+    expect(resultFor(skillFailure, "indexes/skills-inventory.json")).toMatchObject({ saved: false, error: expect.objectContaining({ code: "DUPLICATE_ID_CONFLICT" }) });
+    expect(resultFor(skillFailure, "indexes/transcript-index.jsonl")).toMatchObject({ saved: true });
+
+    const unsupported = `${JSON.stringify(createTranscriptRecord({ id: "old", schema_version: "v2" }))}\n`;
+    fixture.task.writeRecordAtomic("indexes/transcript-index.jsonl", unsupported);
+    const writeFailure = collectTaskFacts(collectionContext(fixture), { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
+    expect(writeFailure.status).toBe("failed");
+    expect(resultFor(writeFailure, "indexes/transcript-index.jsonl")).toMatchObject({ saved: false, error: expect.objectContaining({ code: "UNSUPPORTED_FORMAT" }) });
+    expect(file(fixture.task, "indexes/transcript-index.jsonl")).toBe(unsupported);
+    expect(resultFor(writeFailure, "indexes/artifact-index.jsonl")).toMatchObject({ saved: true });
+  });
+
+  it("AC-012 serializes two collector processes and makes health use the final merged transcript", async () => {
+    const fixture = await createM14bFixture();
+    const collector = join(repositoryRoot, "core/fact-collector.mjs");
+    const contextModule = join(repositoryRoot, "core/stage-context.mjs");
+    const script = `
+      import { bootstrapStage } from ${JSON.stringify(contextModule)};
+      import { collectTaskFacts, createTranscriptSourceReader, createTranscriptSourceRegistry } from ${JSON.stringify(collector)};
+      const ctx = bootstrapStage("build-code", { mode: "sidecar", projectName: "Fixture", taskId: "m14b-fixture", taskPath: process.env.M14B_TASK_PATH });
+      const id = process.env.M14B_TRANSCRIPT_ID;
+      const registry = createTranscriptSourceRegistry([{ source_id: id, source_ref: "registered/transcript.jsonl", source_format: "jsonl", source_version: "v1", required: true, reader: createTranscriptSourceReader(() => JSON.stringify({ id, payload: { id } })) }]);
+      const result = collectTaskFacts(ctx, { transcriptRegistry: registry, now: () => new Date("2026-07-18T00:00:00.000Z") });
+      process.stdout.write(JSON.stringify(result));
+    `;
+    const run = (id) => exec(process.execPath, ["--input-type=module", "--eval", script], {
+      env: { ...process.env, M14B_TASK_PATH: fixture.task.taskPath, M14B_TRANSCRIPT_ID: id },
+    });
+    const [left, right] = await Promise.all([run("left"), run("right")]);
+    const outcomes = [JSON.parse(left.stdout), JSON.parse(right.stdout)];
+    const transcript = records(fixture.task, "indexes/transcript-index.jsonl");
+    const health = records(fixture.task, "indexes/flow-health-facts.jsonl");
+
+    expect(outcomes, JSON.stringify(outcomes)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: "success" }), expect.objectContaining({ status: "success" }),
+    ]));
+    expect(transcript.filter((record) => record.record_kind === "transcript").map((record) => record.id)).toEqual(["left", "right"]);
+    expect(health.find((fact) => fact.domain === "transcript")).toMatchObject({ status: "present", observed_value: 2 });
+  });
+
+  it.each([
+    ["afterParentPrecheck", "pre-rename"],
+    ["beforeFileFsync", "pre-rename"],
+    ["afterOpenBeforeRename", "pre-rename"],
+    ["beforeDirectoryFsync", "post-rename"],
+  ])("AC-013 reports %s failure without false success or a partial transcript", async (hookName, boundary) => {
+    const fixture = await createM14bFixture();
+    const context = collectionContext(fixture);
+    collectTaskFacts(context, { transcriptRegistry: registry(), now: () => new Date(fixture.clock()) });
+    const oldBytes = file(fixture.task, "indexes/transcript-index.jsonl");
+    let fired = false;
+    const hooks = createFactCollectorWriteTestHooks({
+      [hookName]() {
+        if (!fired) {
+          fired = true;
+          throw Object.assign(new Error(`${hookName} injected`), { code: "INJECTED_WRITE_FAILURE" });
+        }
+      },
+    });
+    const result = collectTaskFacts(context, {
+      transcriptRegistry: registry([{ source_id: "new-record", read: () => JSON.stringify({ id: "new-record", payload: { ok: true } }) }]),
+      now: () => new Date(fixture.clock()), writeTestHooks: hooks,
+    });
+    const finalBytes = file(fixture.task, "indexes/transcript-index.jsonl");
+
+    expect(fired).toBe(true);
+    expect(result.status).toBe("failed");
+    expect(resultFor(result, "indexes/transcript-index.jsonl")).toMatchObject({ saved: false, error: expect.objectContaining({ code: "INJECTED_WRITE_FAILURE" }) });
+    expect(resultFor(result, "indexes/artifact-index.jsonl")).toMatchObject({ saved: true });
+    expect(() => records(fixture.task, "indexes/transcript-index.jsonl")).not.toThrow();
+    if (boundary === "pre-rename") expect(finalBytes).toBe(oldBytes);
+    else expect(finalBytes === oldBytes || finalBytes.includes('"id":"new-record"')).toBe(true);
   });
 });
