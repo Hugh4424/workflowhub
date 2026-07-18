@@ -32,7 +32,9 @@ const INDEX_REFS = Object.freeze([
 ]);
 const REGISTRIES = new WeakSet();
 const READERS = new WeakSet();
+const WRITE_TEST_HOOKS = new WeakSet();
 const ENTRY_FIELDS = new Set(["source_id", "source_ref", "source_format", "source_version", "required", "reader"]);
+const WRITE_HOOK_NAMES = new Set(["afterParentPrecheck", "beforeFileFsync", "afterOpenBeforeRename", "beforeDirectoryFsync"]);
 const text = (value) => typeof value === "string" && value.trim() !== "";
 const plain = (value) => value && typeof value === "object" && !Array.isArray(value);
 
@@ -68,6 +70,16 @@ export function createTranscriptSourceRegistry(entries) {
   const registry = Object.freeze(normalized);
   REGISTRIES.add(registry);
   return registry;
+}
+
+/** Test-only capability. Launchers never receive raw atomic-write hooks. */
+export function createFactCollectorWriteTestHooks(hooks) {
+  if (!plain(hooks) || Object.keys(hooks).some((name) => !WRITE_HOOK_NAMES.has(name) || typeof hooks[name] !== "function")) {
+    throw new TypeError("fact collector write test hooks must be known functions");
+  }
+  const capability = Object.freeze({ ...hooks });
+  WRITE_TEST_HOOKS.add(capability);
+  return capability;
 }
 
 function assertRegistry(registry) {
@@ -284,9 +296,10 @@ export function buildHealthProjection(preflight, transcript, artifacts, skills) 
   return merged.records;
 }
 
-export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date() } = {}) {
+export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date(), writeTestHooks } = {}) {
   const preflight = preflightFactCollection(ctx);
   assertRegistry(transcriptRegistry);
+  const atomicWriteOptions = writeTestHooks === undefined ? undefined : { testHooks: assertWriteTestHooks(writeTestHooks) };
   const warnings = [];
   let lockFailed = false;
   const files = new Map(INDEX_REFS.map((ref) => [ref, { ref, saved: false, error: null }]));
@@ -297,11 +310,11 @@ export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date
 
   try {
     const result = preflight.task.withRecordLock("locks/indexes/fact-collection.lock", () => {
-      const transcript = persistJsonl(preflight.task, INDEX_REFS[0], "transcript", mergeTranscriptRecords,
+      const transcript = persistJsonl(preflight.task, INDEX_REFS[0], "transcript", mergeTranscriptRecords, atomicWriteOptions,
         () => buildTranscriptProjection(transcriptRegistry));
       transcript.saved ? save(INDEX_REFS[0]) : fail(INDEX_REFS[0], transcript.error);
 
-      const artifacts = persistJsonl(preflight.task, INDEX_REFS[1], "artifact", mergeArtifactRecords,
+      const artifacts = persistJsonl(preflight.task, INDEX_REFS[1], "artifact", mergeArtifactRecords, atomicWriteOptions,
         () => buildArtifactProjection(preflight));
       artifacts.saved ? save(INDEX_REFS[1]) : fail(INDEX_REFS[1], artifacts.error);
 
@@ -310,11 +323,12 @@ export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date
       catch (error) { skills = { error, closure: { ok: false } }; }
       if (!skills.closure.ok) warnings.push({ code: "SKILL_CLOSURE_FAILED", message: "Skill closure validation failed" });
 
-      const health = persistJsonl(preflight.task, INDEX_REFS[2], "health", mergeHealthFacts,
-        () => buildHealthProjection(preflight, transcript.records, artifacts.records, skills));
+      const health = persistJsonl(preflight.task, INDEX_REFS[2], "health", mergeHealthFacts, atomicWriteOptions,
+        () => buildHealthProjection(preflight, transcript.records, artifacts.records, skills),
+        (existing, fresh) => fresh.some((fact) => fact.fact_id === existing.fact_id));
       health.saved ? save(INDEX_REFS[2]) : fail(INDEX_REFS[2], health.error);
 
-      const savedSkills = persistSkills(preflight.task, skills);
+      const savedSkills = persistSkills(preflight.task, skills, atomicWriteOptions);
       savedSkills.saved ? save(INDEX_REFS[3]) : fail(INDEX_REFS[3], savedSkills.error);
     });
     if (result && typeof result.then === "function") throw new Error("asynchronous record locks are unsupported by collectTaskFacts");
@@ -325,6 +339,11 @@ export function collectTaskFacts(ctx, { transcriptRegistry, now = () => new Date
   }
   const ordered = INDEX_REFS.map((ref) => files.get(ref));
   return { status: !lockFailed && ordered.every((file) => file.saved) ? "success" : "failed", files: ordered, warnings };
+}
+
+function assertWriteTestHooks(value) {
+  if (!WRITE_TEST_HOOKS.has(value)) throw new TypeError("branded fact collector write test hooks required");
+  return value;
 }
 
 function resultError(error) {
@@ -345,13 +364,14 @@ function finalJsonl(task, ref, index, fallback) {
   catch { return fallback; }
 }
 
-function persistJsonl(task, ref, index, merge, candidates) {
+function persistJsonl(task, ref, index, merge, atomicWriteOptions, candidates, replacesExisting = () => false) {
   let existing = [];
   try {
     existing = existingJsonl(task, ref, index);
-    const merged = merge([...existing, ...candidates()]);
+    const fresh = candidates();
+    const merged = merge([...existing.filter((record) => !replacesExisting(record, fresh)), ...fresh]);
     if (!merged.ok) return { saved: false, error: merged.error ?? { code: merged.code }, records: existing };
-    task.writeRecordAtomic(ref, toJsonl(merged.records));
+    task.writeRecordAtomic(ref, toJsonl(merged.records), atomicWriteOptions);
     return { saved: true, records: merged.records };
   } catch (error) {
     return { saved: false, error, records: finalJsonl(task, ref, index, existing) };
@@ -370,7 +390,7 @@ function existingSkills(task) {
   }
 }
 
-function persistSkills(task, skills) {
+function persistSkills(task, skills, atomicWriteOptions) {
   if (skills.error) return { saved: false, error: skills.error };
   try {
     const merged = mergeSkills([...existingSkills(task), ...skills.inventory.skills], {
@@ -378,7 +398,7 @@ function persistSkills(task, skills) {
       generated_at: skills.inventory.generated_at,
     });
     if (!merged.ok) return { saved: false, error: merged.error ?? { code: merged.code } };
-    task.writeRecordAtomic(INDEX_REFS[3], `${JSON.stringify(merged.inventory, null, 2)}\n`);
+    task.writeRecordAtomic(INDEX_REFS[3], `${JSON.stringify(merged.inventory, null, 2)}\n`, atomicWriteOptions);
     return { saved: true };
   } catch (error) {
     return { saved: false, error };

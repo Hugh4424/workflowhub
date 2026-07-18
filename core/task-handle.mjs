@@ -133,7 +133,11 @@ function ensureChildDirectories(root, segments) {
     cursor = resolve(cursor, segment);
     assertInside(root, cursor);
     if (existsSync(cursor)) realDirectoryNoSymlink(cursor, "trusted directory");
-    else mkdirSync(cursor);
+    else {
+      try { mkdirSync(cursor); }
+      catch (error) { if (error?.code !== "EEXIST") throw error; }
+      realDirectoryNoSymlink(cursor, "trusted directory");
+    }
     assertInside(root, realpathSync(cursor));
   }
   return cursor;
