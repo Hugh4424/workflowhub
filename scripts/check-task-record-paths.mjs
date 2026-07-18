@@ -89,6 +89,7 @@ const DIRECT_WRITER_AUTHORITIES = new Map([
   ["core/git-checkpoint.mjs", "verified Git checkpoint authority"],
   ["core/canonical-receipt-writer.mjs", "canonical evidence authority"],
   ["core/git-worktree-snapshot.mjs", "private Git snapshot temp index"],
+  ["core/task-close.mjs", "confirmed plan-bound delivery close authority"],
   ["metrics/collector.mjs", "launcher-branded global metrics authority"],
   ["skills/wh-review/scripts/review-materials.mjs", "trusted attachment packet authority"],
   ["skills/wh-review/scripts/review-provider-client.mjs", "private provider transport temp files"],

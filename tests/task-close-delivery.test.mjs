@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -12,7 +12,7 @@ import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 const roots = [];
 const git = (cwd, ...args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
 
-function fixture({ targetRepo = "main" } = {}) {
+function fixture({ targetRepo = "main", archiveParent = true } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-delivery-close-")));
   roots.push(root);
   const remote = join(root, "remote.git");
@@ -25,8 +25,10 @@ function fixture({ targetRepo = "main" } = {}) {
   git(repo, "config", "user.name", "Test");
   git(repo, "remote", "add", "origin", remote);
   mkdirSync(join(repo, "specs", "task"), { recursive: true });
-  mkdirSync(join(repo, "specs", "archive"), { recursive: true });
-  writeFileSync(join(repo, "specs", "archive", ".gitkeep"), "");
+  if (archiveParent) {
+    mkdirSync(join(repo, "specs", "archive"), { recursive: true });
+    writeFileSync(join(repo, "specs", "archive", ".gitkeep"), "");
+  }
   writeFileSync(join(repo, "specs", "task", "spec.md"), "accepted spec\n");
   writeFileSync(join(repo, "specs", "task", "plan.md"), "accepted plan\n");
   mkdirSync(join(repo, "specs", "task", "notes"));
@@ -194,6 +196,40 @@ describe("delivery close verifier", () => {
     expect(git(f.repo, "rev-parse", "main")).toBe(git(f.repo, "ls-remote", "origin", "refs/heads/main").split(/\s+/)[0]);
     expect(git(f.repo, "rev-list", "--parents", "-n", "1", "main").split(" ")).toHaveLength(3);
     await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).resolves.toEqual(result);
+  });
+
+  it("creates a missing archive parent before the exact directory rename and reconciles a second run", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture({ archiveParent: false });
+    expect(existsSync(join(f.worktree, "specs", "archive"))).toBe(false);
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+
+    const result = await api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) });
+    expect(result).toMatchObject({ status: "completed", physical_state: { archive: true, archive_only_rename: true } });
+    expect(git(f.repo, "diff-tree", "--no-commit-id", "--name-status", "--find-renames=100%", "-r", `${result.physical_state.archive_commit}^`, result.physical_state.archive_commit).split("\n").sort()).toEqual([
+      "R100\tspecs/task/notes/review.md\tspecs/archive/task/notes/review.md",
+      "R100\tspecs/task/plan.md\tspecs/archive/task/plan.md",
+      "R100\tspecs/task/spec.md\tspecs/archive/task/spec.md",
+    ]);
+    await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).resolves.toEqual(result);
+  });
+
+  it("rejects an archive parent symlink that escapes the task worktree", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture({ archiveParent: false });
+    const outside = join(f.root, "outside-archive");
+    mkdirSync(outside);
+    symlinkSync(outside, join(f.worktree, "specs", "archive"));
+    git(f.worktree, "add", "specs/archive");
+    git(f.worktree, "commit", "-qm", "add archive symlink");
+    f.taskCommit = git(f.worktree, "rev-parse", "HEAD");
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+
+    await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).rejects.toThrow(/symbolic link|escapes the task worktree/i);
+    expect(existsSync(join(outside, "task"))).toBe(false);
+    expect(git(f.worktree, "status", "--porcelain", "--untracked-files=all")).toBe("");
   });
 
   it.each([1, 2, 3, 4, 5, 6])("reconciles when %i physical steps finish before their records", async (count) => {

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
@@ -152,6 +152,28 @@ function repositoryPath(value, label) {
     throw new TypeError(`${label} must be a repository-relative path`);
   }
   return value;
+}
+
+function inside(root, candidate) {
+  const path = relative(root, candidate);
+  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+}
+
+function createArchiveParent(worktree, archivePath) {
+  const root = realpathSync(worktree);
+  const parent = dirname(resolve(root, repositoryPath(archivePath, "delivery spec_archive_path")));
+  if (!inside(root, parent)) throw new Error("spec archive parent escapes the task worktree");
+  let cursor = root;
+  for (const part of relative(root, parent).split(sep).filter(Boolean)) {
+    cursor = join(cursor, part);
+    let stat;
+    try { stat = lstatSync(cursor); }
+    catch (error) { if (error?.code === "ENOENT") break; throw error; }
+    if (stat.isSymbolicLink()) throw new Error("spec archive parent must not traverse symbolic links");
+    if (!stat.isDirectory()) throw new Error("spec archive parent ancestor must be a directory");
+  }
+  mkdirSync(parent, { recursive: true });
+  if (!inside(root, realpathSync(parent))) throw new Error("spec archive parent escapes the task worktree");
 }
 
 function treeEntry(root, commit, path) {
@@ -482,6 +504,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(worktree, delivery.spec_source_path))) {
             if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("task worktree changed before spec archive");
+            createArchiveParent(worktree, delivery.spec_archive_path);
             git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
           } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
             throw new Error("partial spec archive does not match the planned directory move");
