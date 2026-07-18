@@ -192,6 +192,14 @@ export function assertWorkspace(value) {
   return value;
 }
 
+/** Return the immutable repository binding carried by an authentic accepted Workspace. */
+export function reviewSourceForWorkspace(value) {
+  const workspace = assertWorkspace(value);
+  const binding = WORKSPACE_BINDINGS.get(workspace);
+  if (!binding) throw new TypeError("Workspace review binding is unavailable");
+  return Object.freeze({ worktreeRoot: workspace.worktreeRoot, targetRepoRoot: binding.targetRepoRoot, baselineCommit: workspace.baselineCommit });
+}
+
 export function assertCandidateWorkspace(value) {
   if (!value || typeof value !== "object" || !CANDIDATE_WORKSPACES.has(value)) throw new TypeError("authentic CandidateWorkspace capability required");
   value.assertValid();

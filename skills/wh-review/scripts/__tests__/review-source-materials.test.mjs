@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { capturePhaseReviewSource, captureReviewSource } from "../review-source.mjs";
 import { buildReviewMaterials, canonicalMaterialManifest, reviewInstructionsFor } from "../review-materials.mjs";
 import { createTask, createTaskKernel } from "../../../../core/task-handle.mjs";
+import { openAcceptedWorkspace } from "../../../../core/workspace.mjs";
 
 function git(cwd, args, options = {}) {
   return execFileSync("git", args, { cwd, encoding: "utf8", ...options }).trim();
@@ -48,6 +49,19 @@ function changeAll(source) {
   git(source, ["mv", "rename.txt", "renamed.txt"]);
   chmodSync(join(source, "keep.txt"), 0o755);
   symlinkSync("added.txt", join(source, "link.txt"));
+}
+
+function acceptedWorkspaceFixture() {
+  const f = fixture();
+  const taskId = "full-review";
+  const worktree = join(f.root, `target-${taskId}`);
+  const baselineCommit = git(f.target, ["rev-parse", "HEAD"]);
+  git(f.target, ["worktree", "add", "-b", `task/Demo/${taskId}`, worktree]);
+  const task = createTask({ storageRoot: f.root, manifest: {
+    schema_version: "1.0.0", project_name: "Demo", task_id: taskId, created_at: new Date().toISOString(), target_repo_root: f.target, issue_ids: [], inputs: {}
+  } });
+  const workspace = openAcceptedWorkspace(task, { facts: { worktree_root: worktree, baseline_commit: baselineCommit } });
+  return { ...f, task, workspace, worktree, baselineCommit };
 }
 
 describe("review source capture", () => {
@@ -108,6 +122,33 @@ describe("review source capture", () => {
     expect(result.baseCommit).toBe(git(f.target, ["rev-parse", "HEAD"]));
     expect(result.diff).toContain("feature.txt");
     expect(result.diff).not.toContain("main.txt");
+  });
+
+  it("uses the authenticated Workspace baseline after target main already contains task history", () => {
+    const f = acceptedWorkspaceFixture();
+    const paths = ["core/fact-indexes.mjs", "core/fact-collector.mjs", "scripts/collect-task-facts.mjs", "config/transcript-sources.mjs", "tests/m14b-fact-collection.test.mjs"];
+    for (const path of paths) {
+      mkdirSync(join(f.worktree, ...path.split("/").slice(0, -1)), { recursive: true });
+      writeFileSync(join(f.worktree, path), `export const fixture = ${JSON.stringify(path)};\n`);
+    }
+    git(f.worktree, ["add", "-A"]); git(f.worktree, ["commit", "-m", "M14b implementation"]);
+    git(f.target, ["merge", "--ff-only", `task/Demo/${f.task.identity.taskId}`]);
+
+    const source = captureReviewSource({ workspace: f.workspace, reviewDataRoot: f.data });
+    expect(source.baseCommit).toBe(f.baselineCommit);
+    expect(source.targetCommit).toBe(git(f.target, ["rev-parse", "HEAD"]));
+    expect(source.changedFiles.map(({ path }) => path)).toEqual(expect.arrayContaining(paths));
+    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-code",
+      materials: { approved_spec: "spec", acceptance_criteria: "ac", test_evidence: "tests", review_instructions: reviewInstructionsFor("build-code") } });
+    expect(bundle.files).toEqual(expect.arrayContaining(paths.map((path) => `changed/${path}`)));
+  });
+
+  it("rejects a missing or non-ancestor supplied baseline", () => {
+    const f = fixture();
+    expect(() => captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, baselineCommit: "0".repeat(40), reviewDataRoot: f.data })).toThrow(/SOURCE_UNAVAILABLE/);
+    writeFileSync(join(f.target, "target-only.txt"), "target only\n");
+    git(f.target, ["add", "-A"]); git(f.target, ["commit", "-m", "target only"]);
+    expect(() => captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, baselineCommit: git(f.target, ["rev-parse", "HEAD"]), reviewDataRoot: f.data })).toThrow(/ancestor/);
   });
 
   it("rejects review data inside the source repository", () => {
