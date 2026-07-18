@@ -34,7 +34,7 @@ function fixture(inputs = {}) {
     created_at: "2026-07-16T00:00:00.000Z", target_repo_root: repo,
     issue_ids: [], inputs,
   } });
-  return { task, kernel: createTaskKernel(task) };
+  return { repo, task, kernel: createTaskKernel(task) };
 }
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
@@ -121,6 +121,44 @@ describe("TaskKernel append-only publication", () => {
     const acceptedPlan = boundKernel.acceptAttempt("build-plan", planAttempt.attempt_ref, confirmation(boundKernel, "build-plan", planAttempt.attempt_ref));
     expect(acceptedPlan).toMatchObject({ acceptance_mode: "human" });
     expect(() => execFileSync("git", ["merge-base", "--is-ancestor", acceptedSpec.checkpoint.commit_oid, acceptedPlan.checkpoint.commit_oid], { cwd: task.manifest.target_repo_root })).not.toThrow();
+  });
+
+  it("accepts a checkpoint when the controlled artifact already matches its parent", () => {
+    const { repo, task, kernel } = fixture();
+    const artifactRoot = join(repo, "specs", "task-one");
+    mkdirSync(artifactRoot, { recursive: true });
+    writeFileSync(join(artifactRoot, "spec.md"), "# Existing Spec\n");
+    execFileSync("git", ["add", "specs/task-one/spec.md"], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "existing spec"], { cwd: repo });
+
+    const candidate = prepareTaskWorkspace(task);
+    const decision = kernel.publishAttempt("make-decision", {
+      facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit },
+    });
+    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    const boundKernel = createTaskKernel(task, { workspace, artifacts });
+    const checkpoint = boundKernel.createCheckpoint("build-spec");
+    const upstream_refs = [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }];
+    const attempt = boundKernel.publishAttempt("build-spec", {
+      facts: { spec_ref: "specs/task-one/spec.md", checkpoint },
+      upstream_refs,
+    });
+
+    const accepted = boundKernel.acceptAttempt("build-spec", attempt.attempt_ref);
+    expect(accepted).toMatchObject({ acceptance_mode: "automatic" });
+    expect(accepted.checkpoint.artifacts).toEqual([
+      expect.objectContaining({ path: "specs/task-one/spec.md" }),
+    ]);
+    expect(() => verifyGitCheckpoint({
+      repoRoot: workspace.worktreeRoot,
+      checkpoint: accepted.checkpoint,
+      projectName: "Demo",
+      taskId: "task-one",
+      stage: "build-spec",
+      artifacts,
+    })).not.toThrow();
   });
 
   it("reads legacy automatic-stage accepted records that have a human ref and no acceptance mode", () => {

@@ -125,7 +125,8 @@ export function materializeGitCheckpoint({ workspace, artifacts, task, plan, pub
     git(repoRoot, ["read-tree", parent], { env });
     git(repoRoot, ["add", "--", ...paths], { env });
     const changed = String(git(repoRoot, ["diff", "--cached", "--name-only", parent], { env })).trim().split("\n").filter(Boolean).sort();
-    if (JSON.stringify(changed) !== JSON.stringify([...paths].sort())) throw new Error(`checkpoint staged artifact set mismatch: ${changed.join(", ")}`);
+    const unexpected = changed.filter((path) => !paths.includes(path));
+    if (unexpected.length > 0) throw new Error(`checkpoint staged artifact set contains unexpected paths: ${unexpected.join(", ")}`);
     const tree = String(git(repoRoot, ["write-tree"], { env })).trim();
     const commit = String(git(repoRoot, ["commit-tree", tree, "-p", parent, "-m", `workflowhub checkpoint ${safeTask.identity.projectName}/${safeTask.identity.taskId}/${stage}`], {
       env: { ...env, GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local", GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local" },
