@@ -255,6 +255,26 @@ describe("M14b fact collection acceptance", () => {
     expect(mixed).toBe([JSON.stringify({ id: "first", run_id: "run-a", payload: { ordinal: 1 } }), "not-json", JSON.stringify({ id: "last", run_id: "run-a", payload: { ordinal: 3 } })].join("\n"));
   });
 
+  it("AC-005 records an unsupported format while a registered JSONL source continues", async () => {
+    const fixture = await createM14bFixture();
+    let unsupportedReads = 0;
+    const result = collectTaskFacts(collectionContext(fixture), {
+      transcriptRegistry: registry([
+        { source_id: "unsupported-text", source_format: "text", read: () => { unsupportedReads += 1; return "not parsed"; } },
+        { source_id: "supported-jsonl", source_format: "jsonl", read: () => JSON.stringify({ id: "legal-jsonl", payload: { retained: true } }) },
+      ]), now: () => new Date(fixture.clock()),
+    });
+    const transcript = records(fixture.task, "indexes/transcript-index.jsonl");
+
+    expect(result.status).toBe("success");
+    expect(result.files.every((entry) => entry.saved)).toBe(true);
+    expect(unsupportedReads).toBe(0);
+    expect(transcript).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "unsupported-text", status: "unknown", reason: "unsupported_format", error: expect.objectContaining({ code: "UNSUPPORTED_FORMAT" }) }),
+      expect.objectContaining({ id: "legal-jsonl", record_kind: "transcript", status: "present" }),
+    ]));
+  });
+
   it("AC-008 projects only explicit artifact references and records a declared missing target", async () => {
     const present = await createM14bFixture();
     collectTaskFacts(collectionContext(present), { transcriptRegistry: registry(), now: () => new Date(present.clock()) });
