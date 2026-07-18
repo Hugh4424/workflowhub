@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -12,7 +12,7 @@ import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 const roots = [];
 const git = (cwd, ...args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
 
-function fixture({ targetRepo = "main" } = {}) {
+function fixture({ targetRepo = "main", archiveParent = true } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-delivery-close-")));
   roots.push(root);
   const remote = join(root, "remote.git");
@@ -25,8 +25,10 @@ function fixture({ targetRepo = "main" } = {}) {
   git(repo, "config", "user.name", "Test");
   git(repo, "remote", "add", "origin", remote);
   mkdirSync(join(repo, "specs", "task"), { recursive: true });
-  mkdirSync(join(repo, "specs", "archive"), { recursive: true });
-  writeFileSync(join(repo, "specs", "archive", ".gitkeep"), "");
+  if (archiveParent) {
+    mkdirSync(join(repo, "specs", "archive"), { recursive: true });
+    writeFileSync(join(repo, "specs", "archive", ".gitkeep"), "");
+  }
   writeFileSync(join(repo, "specs", "task", "spec.md"), "accepted spec\n");
   writeFileSync(join(repo, "specs", "task", "plan.md"), "accepted plan\n");
   mkdirSync(join(repo, "specs", "task", "notes"));
@@ -89,6 +91,25 @@ function advanceRemote(f) {
   git(competitor, "config", "user.name", "Other");
   git(competitor, "commit", "--allow-empty", "-qm", "remote advance");
   git(competitor, "push", "-q", "origin", "main");
+}
+
+function confirmationCount(f, planHash) {
+  return readdirSync(join(f.task.taskPath, "operations", "close", "confirmations", planHash)).length;
+}
+
+function installRemoteFailure(f, kind, stderr) {
+  const bin = join(f.root, `remote-helper-${kind}`);
+  mkdirSync(bin);
+  const helper = join(bin, `git-remote-${kind}`);
+  writeFileSync(helper, `#!/bin/sh\necho ${JSON.stringify(stderr)} >&2\nexit 73\n`);
+  chmodSync(helper, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${bin}:${previousPath}`;
+  git(f.repo, "remote", "set-url", "origin", `${kind}::fixture`);
+  return () => {
+    git(f.repo, "remote", "set-url", "origin", f.remote);
+    process.env.PATH = previousPath;
+  };
 }
 
 afterEach(() => {
@@ -196,19 +217,126 @@ describe("delivery close verifier", () => {
     await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).resolves.toEqual(result);
   });
 
+  it("creates a missing archive parent and preserves the complete spec directory", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture({ archiveParent: false });
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const result = await api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) });
+    expect(result).toMatchObject({ status: "completed", physical_state: { archive: true } });
+    expect(git(f.repo, "show", "main:specs/archive/task/spec.md")).toBe("accepted spec");
+    expect(git(f.repo, "show", "main:specs/archive/task/plan.md")).toBe("accepted plan");
+    expect(git(f.repo, "show", "main:specs/archive/task/notes/review.md")).toBe("accepted review");
+  });
+
+  it("rejects an archive parent symlink without writing outside the accepted Workspace", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const unsafeDelivery = { ...delivery(f), spec_archive_path: "specs/bait/task" };
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: unsafeDelivery });
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const outside = join(f.root, "outside-archive");
+    mkdirSync(outside);
+    writeFileSync(join(f.repo, ".git", "info", "exclude"), "specs/bait\n", { flag: "a" });
+    symlinkSync(outside, join(f.worktree, "specs", "bait"), "dir");
+    await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).rejects.toThrow(/real directory|symbolic link|symlink/i);
+    expect(readdirSync(outside)).toEqual([]);
+    expect(existsSync(join(f.worktree, "specs", "task"))).toBe(true);
+  });
+
+  it("rejects .git in either delivery spec path", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: { ...delivery(f), spec_source_path: "specs/.git/task" } })).toThrow(/repository-relative path/i);
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: { ...delivery(f), spec_archive_path: "specs/.git/task" } })).toThrow(/repository-relative path/i);
+  });
+
   it.each([1, 2, 3, 4, 5, 6])("reconciles when %i physical steps finish before their records", async (count) => {
     const api = await import("../core/task-close.mjs");
     const f = fixture();
     const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
     const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const confirmationsBefore = confirmationCount(f, prepared.plan_hash);
     const first = api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan });
     for (const step of prepared.plan.steps.slice(0, count)) await first.executorFor(step).execute(step, {});
     const result = await api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) });
     expect(result.status).toBe("completed");
+    expect(confirmationCount(f, prepared.plan_hash)).toBe(confirmationsBefore);
     for (const step of prepared.plan.steps) {
       const record = JSON.parse(f.task.readRecord(`operations/close/plans/${prepared.plan_hash}/steps/${step.step_id}.json`));
       expect(record).toMatchObject({ status: "completed", step_id: step.step_id });
     }
+  });
+
+  it.each([
+    ["network", "NETWORK SENTINEL: connection refused"],
+    ["authentication", "AUTH SENTINEL: credentials rejected"],
+    ["proxy", "PROXY SENTINEL: tunnel unavailable"],
+  ])("preserves ls-remote exit and stderr for %s failures, then reuses the same confirmation", async (kind, sentinel) => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const confirmationsBefore = confirmationCount(f, prepared.plan_hash);
+    const before = {
+      task: git(f.repo, "rev-parse", "task/Demo/close-task"),
+      target: git(f.repo, "rev-parse", "main"),
+    };
+    const restore = installRemoteFailure(f, kind, sentinel);
+    let failure;
+    try {
+      await api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) });
+    } catch (error) {
+      failure = error;
+    } finally {
+      restore();
+    }
+    expect({ task: git(f.repo, "rev-parse", "task/Demo/close-task"), target: git(f.repo, "rev-parse", "main") }).toEqual(before);
+    expect(failure?.message).toContain("exit 128");
+    expect(failure?.message).toContain(sentinel);
+    expect(failure?.message).not.toMatch(/baseline changed/i);
+    expect(confirmationCount(f, prepared.plan_hash)).toBe(confirmationsBefore);
+    await expect(api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) })).resolves.toMatchObject({ status: "completed" });
+    expect(confirmationCount(f, prepared.plan_hash)).toBe(confirmationsBefore);
+  });
+
+  it("fails loud on archive permission errors and leaves later close steps untouched", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    const archiveParent = join(f.worktree, "specs", "archive");
+    chmodSync(archiveParent, 0o500);
+    let failure;
+    try {
+      await api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) });
+    } catch (error) {
+      failure = error;
+    } finally {
+      chmodSync(archiveParent, 0o755);
+    }
+    expect(failure?.message).toMatch(/permission denied|operation not permitted/i);
+    expect(existsSync(f.worktree)).toBe(true);
+    expect(api.inspectDeliveryCloseState({ task: f.task, kernel: f.kernel, plan: prepared.plan }).missing).toEqual(expect.arrayContaining(["archive", "merge", "push", "worktree_cleanup", "branch_cleanup"]));
+  });
+
+  it("keeps delivery close non-force and rejects rebase, rollback, or altered merge policy", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
+    for (const mergeStrategy of ["--force", "--rebase", "--rollback"]) {
+      const changed = structuredClone(prepared.plan);
+      changed.delivery.merge_strategy = mergeStrategy;
+      expect(() => api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: changed })).toThrow(/merge strategy must be --no-ff --no-edit/i);
+    }
+    for (const operation of ["force-push-target-branch", "auto-rebase", "rollback"]) {
+      const changed = structuredClone(prepared.plan);
+      changed.steps.push({ step_id: operation, operation });
+      expect(() => api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: changed })).toThrow(/exactly the fixed six steps/i);
+    }
+    const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
+    await api.executeClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, closeConfirmationRef: confirmation.ref, executors: api.createDeliveryCloseExecutorRegistry({ task: f.task, kernel: f.kernel, plan: prepared.plan }) });
+    expect(git(f.repo, "rev-parse", "main")).toBe(git(f.repo, "ls-remote", "origin", "refs/heads/main").split(/\s+/)[0]);
   });
 
   it("recovers after update-ref but before worktree reset", async () => {

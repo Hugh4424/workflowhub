@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { existsSync, lstatSync, mkdirSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertTaskKernel } from "./task-kernel.mjs";
@@ -139,7 +139,7 @@ function git(cwd, args, { allowFailure = false } = {}) {
 
 function gitResult(cwd, args) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return { ok: result.status === 0, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim() };
+  return { ok: result.status === 0, status: result.status, stdout: String(result.stdout ?? "").trim(), stderr: String(result.stderr ?? "").trim(), error: result.error ?? null };
 }
 
 function oid(value, label) {
@@ -148,10 +148,21 @@ function oid(value, label) {
 }
 
 function repositoryPath(value, label) {
-  if (typeof value !== "string" || value === "" || /[\0\r\n\t]/.test(value) || isAbsolute(value) || value.split("/").includes("..")) {
+  const segments = typeof value === "string" ? value.split("/") : [];
+  if (typeof value !== "string" || value === "" || /[\0\r\n\t]/.test(value) || isAbsolute(value) || segments.includes("..") || segments.includes(".git")) {
     throw new TypeError(`${label} must be a repository-relative path`);
   }
   return value;
+}
+
+function ensureArchiveParent(worktree, archivePath) {
+  let cursor = resolve(worktree);
+  for (const segment of dirname(archivePath).split("/").filter((entry) => entry !== "" && entry !== ".")) {
+    cursor = join(cursor, segment);
+    if (!existsSync(cursor)) mkdirSync(cursor);
+    const stat = lstatSync(cursor);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`spec archive parent must be a real directory: ${cursor}`);
+  }
 }
 
 function treeEntry(root, commit, path) {
@@ -164,8 +175,14 @@ function treeEntry(root, commit, path) {
 
 function remoteOid(root, remote, branch) {
   const result = gitResult(root, ["ls-remote", "--exit-code", remote, `refs/heads/${branch}`]);
-  const value = result.ok ? result.stdout.split(/\s+/)[0]?.toLowerCase() : null;
-  return /^[a-f0-9]{40}$/.test(value ?? "") ? value : null;
+  if (result.error) {
+    const detail = [result.error.message, result.stderr].filter(Boolean).join(": ");
+    throw new Error(`git ls-remote failed to start: ${detail}`);
+  }
+  if (!result.ok) throw new Error(`git ls-remote failed (exit ${result.status ?? "unknown"}): ${result.stderr || result.stdout || "no output"}`);
+  const value = result.stdout.split(/\s+/)[0]?.toLowerCase();
+  if (!/^[a-f0-9]{40}$/.test(value ?? "")) throw new Error(`git ls-remote returned an invalid OID: ${result.stdout || "empty output"}`);
+  return value;
 }
 
 function branchOid(root, branch) {
@@ -482,6 +499,7 @@ export function createDeliveryCloseExecutorRegistry({ task: taskHandle, kernel: 
           const staged = gitResult(worktree, ["diff", "--cached", "--name-status", "--find-renames=100%", "-z"]).stdout;
           if (existsSync(join(worktree, delivery.spec_source_path))) {
             if (git(worktree, ["status", "--porcelain", "--untracked-files=all"]) !== "") throw new Error("task worktree changed before spec archive");
+            ensureArchiveParent(worktree, delivery.spec_archive_path);
             git(worktree, ["mv", "--", delivery.spec_source_path, delivery.spec_archive_path]);
           } else if (!existsSync(join(worktree, delivery.spec_archive_path)) || !exactDirectoryRenames(staged, delivery.spec_source_path, delivery.spec_archive_path)) {
             throw new Error("partial spec archive does not match the planned directory move");
