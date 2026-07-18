@@ -287,9 +287,10 @@ export function validateAccepted(accepted, expected = {}) {
 }
 
 export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString(), workspace, artifacts, candidateWorkspace } = {}, authority) {
-  const { assertTaskHandle, openTask, createKernelRecordFor } = authority;
+  const { assertTaskHandle, openTask, createKernelRecordFor, replaceKernelAcceptedFor } = authority;
   const task = assertTaskHandle(taskHandle);
   const createKernelRecord = createKernelRecordFor(task);
+  const replaceKernelAccepted = typeof replaceKernelAcceptedFor === "function" ? replaceKernelAcceptedFor(task) : undefined;
   const candidate = candidateWorkspace === undefined ? undefined : assertCandidateWorkspace(candidateWorkspace);
   const verifyCandidateSnapshot = (facts) => {
     if (!candidate) return;
@@ -312,7 +313,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     stage,
     artifacts: live ? artifacts : undefined,
   });
-  const acceptedFileFor = (sequence) => sequence === 1 ? "accepted.json" : `accepted-attempt-${String(sequence).padStart(4, "0")}.json`;
+  const archivedAcceptedFileFor = (attemptRef) => `accepted-${attemptRef}`;
   const readAcceptedAt = (name, acceptedFile) => {
     if (!ACCEPTED_FILE.test(acceptedFile)) throw new Error("invalid accepted record name");
     const acceptedRef = `results/${name}/${acceptedFile}`;
@@ -329,25 +330,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   };
   const readAcceptedLocal = (stage) => {
     const name = stageName(stage);
-    let latest;
-    for (let sequence = 1; sequence <= 9999; sequence += 1) {
-      const attemptRef = `results/${name}/attempt-${String(sequence).padStart(4, "0")}.json`;
-      try { task.readRecord(attemptRef); }
-      catch (error) {
-        if (error?.code === "ENOENT") break;
-        throw error;
-      }
-      try { latest = readAcceptedAt(name, acceptedFileFor(sequence)); }
-      catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-      }
-    }
-    if (!latest) {
-      // Preserve a loud failure for a malformed accepted record whose attempt
-      // was deleted or renamed instead of silently treating the stage as open.
-      return readAcceptedAt(name, "accepted.json");
-    }
-    return latest;
+    return readAcceptedAt(name, "accepted.json");
   };
   const verifyUpstream = (stage, refs) => {
     validateStageUpstream(stage, task.identity.taskId, refs);
@@ -534,9 +517,20 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           ...(acceptedCheckpoint ? { checkpoint: structuredClone(acceptedCheckpoint) } : {}),
         };
         validateAccepted(accepted, { taskId: task.identity.taskId, stage: name });
-        const sequence = Number(ATTEMPT_REF.exec(attemptRef)?.[1]);
-        const acceptedFile = current ? acceptedFileFor(sequence) : "accepted.json";
-        createKernelRecord(`results/${name}/${acceptedFile}`, `${JSON.stringify(accepted, null, 2)}\n`);
+        const acceptedRaw = `${JSON.stringify(accepted, null, 2)}\n`;
+        if (!current) {
+          createKernelRecord(`results/${name}/accepted.json`, acceptedRaw);
+          return deepFreeze(accepted);
+        }
+        if (typeof replaceKernelAccepted !== "function") throw new Error("kernel canonical accepted replacement authority is required");
+        const priorRaw = task.readRecord("results/build-code/accepted.json");
+        const archiveRef = `results/build-code/${archivedAcceptedFileFor(current.accepted.attempt_ref)}`;
+        try { createKernelRecord(archiveRef, priorRaw); }
+        catch (error) {
+          if (error?.code !== "EEXIST") throw error;
+          if (task.readRecord(archiveRef) !== priorRaw) throw new Error("build-code accepted archive conflicts with canonical record");
+        }
+        replaceKernelAccepted("results/build-code/accepted.json", acceptedRaw);
         return deepFreeze(accepted);
       });
     },
@@ -557,7 +551,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           const reopenRef = `results/build-code/revisions/reopen-${String(sequence).padStart(4, "0")}.json`;
           try {
             const existing = readReopen(reopenRef);
-            if (existing.record.verify_failure_ref === verifyRef || existing.record.previous_accepted_ref === current.accepted_ref) throw new Error("build-code reopen already exists for this failure or accepted record");
+            if (existing.record.verify_failure_ref === verifyRef || existing.record.previous_accepted_hash === current.accepted_hash) throw new Error("build-code reopen already exists for this failure or accepted record");
           } catch (error) {
             if (error?.code !== "ENOENT") throw error;
             const record = {

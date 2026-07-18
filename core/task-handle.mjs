@@ -31,6 +31,7 @@ const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 const TASK_HANDLES = new WeakSet();
 const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
+const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
@@ -536,6 +537,14 @@ function makeTaskHandle(taskPath, manifest) {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
   });
+  CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    if (relativePath !== "results/build-code/accepted.json") throw new Error("only build-code canonical accepted record may be replaced");
+    const result = writeAtomicAt(realTaskPath, relativePath, data, options);
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    return result;
+  });
   return frozen;
 }
 
@@ -579,6 +588,12 @@ export function createTaskKernel(taskHandle, options) {
       const writer = CANONICAL_RECORD_WRITERS.get(task);
       if (typeof writer !== "function") throw new TypeError("authentic TaskHandle canonical writer required");
       return writer;
+    },
+    replaceKernelAcceptedFor(task) {
+      assertTaskHandle(task);
+      const replacer = CANONICAL_ACCEPTED_REPLACERS.get(task);
+      if (typeof replacer !== "function") throw new TypeError("authentic TaskHandle accepted-record replacer required");
+      return replacer;
     },
   }));
   TASK_KERNELS.add(kernel);

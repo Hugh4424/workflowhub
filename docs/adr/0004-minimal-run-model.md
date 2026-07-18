@@ -143,11 +143,16 @@ handle；不得接收 task ID/root 后自行拼路径或调用 parser。
 必须失败。`publishAttempt()` 在锁内分配下一序号并原子写，永不覆盖旧 attempt。
 
 阶段失败、`revise_required`、人工暂停和取消都必须发布 attempt，之后可重跑并产生新
-attempt。`accepted.json` 是不可变边界记录，包含被接受 attempt 的相对引用、hash 与
+attempt。`accepted.json` 是 canonical 边界记录，包含被接受 attempt 的相对引用、hash 与
 acceptance。make-decision、build-plan、verify-code 的 acceptance 必须引用人工确认；
 build-spec、build-code 由固定 stage policy 自动接受。下一阶段只读取前一阶段的
 `accepted.json`。质量事实失败必须原样浮现，不能改写成 pass，也不能阻止自动 stage
 写 accepted。
+
+唯一例外是已接受 build-code 被已认证的 verify-code 失败受控重开：runtime 先把旧
+canonical bytes 追加归档为 `accepted-attempt-<n>.json`，再原子替换 canonical
+`accepted.json`。读取协议仍只认 canonical 文件；归档和 reopen provenance 只用于完整
+lineage，不是下游旁路输入。
 
 accepted 引用 attempt 的完整性 hash 属于边界完整性，必须成功计算和校验；失败则不能
 创建 accepted。它不同于测试、review、artifact 等质量事实采集 hash，后者失败可记

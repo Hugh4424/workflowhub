@@ -95,12 +95,14 @@ describe("stage-runner capability unit", () => {
     await execute("build-spec", async (worker) => { worker.artifacts.writeAtomic("spec.md", "spec\n"); const checkpoint = worker.createCheckpoint("build-spec"); return { facts: { spec_ref: "specs/chain-task/spec.md", checkpoint } }; });
     await execute("build-plan", async (worker) => { worker.artifacts.writeAtomic("plan.md", "plan\n"); worker.artifacts.writeAtomic("tasks.md", "tasks\n"); const checkpoint = worker.createCheckpoint("build-plan"); return { facts: { plan_ref: "specs/chain-task/plan.md", tasks_ref: "specs/chain-task/tasks.md", checkpoint } }; });
     await execute("build-code", async () => ({ facts: { changed: [], tests: tests("build-one"), review: review("pass"), phase_completion: true } }));
+    const firstCanonicalRaw = task.readRecord("results/build-code/accepted.json");
     const verifyContext = context("verify-code");
     const passRaw = JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-004", result: "pass", refs: [] }, null, 2) + "\n";
     verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-004.json", passRaw);
     const passHash = (await import("node:crypto")).createHash("sha256").update(passRaw).digest("hex");
     const nonFailure = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: tests("verify-pass"), review: review("pass"), evidence_refs: [{ ref: "evidence/acceptance-ac-004.json", sha256: passHash }] } }));
     expect(() => verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: nonFailure.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-004.json" })).toThrow(/result=fail/i);
+    expect(task.readRecord("results/build-code/accepted.json")).toBe(firstCanonicalRaw);
     const failureRaw = JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2) + "\n";
     verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
     const failureHash = (await import("node:crypto")).createHash("sha256").update(failureRaw).digest("hex");
@@ -108,10 +110,12 @@ describe("stage-runner capability unit", () => {
     const reopen = verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" });
     expect(() => verifyContext.kernel.reopenBuildCode({ verifyAttemptRef: failedVerify.attempt_ref, failureEvidenceRef: "evidence/acceptance-ac-005.json" })).toThrow(/reopen already exists/i);
     const revised = await execute("build-code", async () => ({ facts: { changed: [], tests: tests("build-two"), review: review("pass"), phase_completion: true } }), { reopenProvenance: reopen });
-    expect(JSON.parse(task.readRecord("results/build-code/accepted.json"))).toMatchObject({ attempt_ref: "attempt-0001.json" });
-    expect(JSON.parse(task.readRecord("results/build-code/accepted-attempt-0002.json"))).toMatchObject({ attempt_ref: revised.attempt_ref });
+    const canonical = JSON.parse(task.readRecord("results/build-code/accepted.json"));
+    expect(canonical).toMatchObject({ attempt_ref: revised.attempt_ref });
+    expect(task.readRecord("results/build-code/accepted-attempt-0001.json")).toBe(firstCanonicalRaw);
+    expect(canonical.integrity_hash).toBe(revised.integrity_hash);
     expect(JSON.parse(task.readRecord(`results/build-code/${revised.attempt_ref}`))).toMatchObject({ reopen_provenance: { reopen_ref: reopen.reopen_ref, verify_failure_ref: `results/verify-code/${failedVerify.attempt_ref}` } });
-    expect(context("verify-code").kernel.readAccepted("build-code")).toMatchObject({ accepted_ref: "results/build-code/accepted-attempt-0002.json", accepted: { attempt_ref: revised.attempt_ref } });
+    expect(context("verify-code").kernel.readAccepted("build-code")).toMatchObject({ accepted_ref: "results/build-code/accepted.json", accepted: { attempt_ref: revised.attempt_ref } });
     expect(() => verifyContext.kernel.buildCodeReopenProvenance(reopen.reopen_ref)).toThrow(/not authorized|active accepted/i);
   });
 

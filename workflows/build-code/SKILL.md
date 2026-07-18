@@ -35,9 +35,11 @@ edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
    `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
 
 The new attempt carries the prior accepted record and verify failure hashes.
-Its acceptance is stored as `accepted-attempt-0002.json`; the former
-`accepted.json` remains immutable. Reusing an authorization, a source from a
-different task, a non-failure, or a non-build-code stage fails loudly.
+The runtime preserves the former canonical bytes as `accepted-attempt-<n>.json`
+and atomically updates canonical `accepted.json` to the revised attempt.
+Consumers always read only `accepted.json`; archives and reopen records are
+lineage evidence, never input side channels. Reusing an authorization, a source
+from a different task, a non-failure, or a non-build-code stage fails loudly.
 
 Create implementation provenance with `stage-runtime.mjs receipt --stage=build-code --project=<project> --task=<task> --component=implementation --input=<phase-payload.json>`; HEAD/tree/diff evidence is derived by the writer.
 

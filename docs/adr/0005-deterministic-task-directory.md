@@ -148,7 +148,9 @@ create 失败；继续任务必须使用 stage/resume 命令。
 issue ID 只是 metadata，不参与路径。
 
 `task.json` 不放可变 status、stage map、updated_at、lock 或 worktree 状态。状态由 immutable
-attempt/accepted 与 journal 推导。worktree 只来自 make-decision accepted result。
+attempt、accepted archive、canonical accepted 指针与 journal 推导。worktree 只来自
+make-decision accepted result。受控 build-code reopen 会归档旧 accepted bytes 后原子替换
+其 canonical `accepted.json`；读取者始终只读 canonical 指针。
 
 ### Task 模块
 
