@@ -91,15 +91,14 @@ export function preflightFactCollection(ctx) {
   if (ctx.identity?.projectName !== task.identity.projectName || ctx.identity?.taskId !== task.identity.taskId || kernel.task !== task) {
     throw wrongWorktree("WRONG_WORKTREE: StageContext identity mismatch");
   }
-  let accepted;
-  try { accepted = kernel.readAccepted("make-decision"); }
+  let decision;
+  try { decision = kernel.readAccepted("make-decision"); }
   catch (error) { throw wrongWorktree(`WRONG_WORKTREE: accepted make-decision unavailable (${error.code ?? "invalid"})`); }
+  const accepted = decision?.accepted;
+  const attempt = decision?.attempt;
+  const facts = decision?.facts;
   const attemptRef = accepted?.attempt_ref;
   if (!text(attemptRef) || !/^attempt-[0-9]{4}\.json$/.test(attemptRef)) throw wrongWorktree("WRONG_WORKTREE: accepted make-decision attempt reference invalid");
-  let attempt;
-  try { attempt = JSON.parse(task.readRecord(`results/make-decision/${attemptRef}`)); }
-  catch { throw wrongWorktree("WRONG_WORKTREE: accepted make-decision attempt unreadable"); }
-  const facts = attempt?.facts;
   if (attempt?.task_id !== task.identity.taskId || attempt?.stage !== "make-decision" || !plain(facts)
       || facts.worktree_root !== workspace.worktreeRoot || facts.baseline_commit !== workspace.baselineCommit) {
     throw wrongWorktree("WRONG_WORKTREE: accepted Workspace binding mismatch");
@@ -216,7 +215,7 @@ export function buildArtifactProjection(preflight) {
   for (const stage of STAGES) {
     const refs = new Set(preflight.task.listStageAttemptRefs(stage));
     try {
-      const accepted = preflight.kernel.readAccepted(stage);
+      const accepted = preflight.kernel.readAccepted(stage).accepted;
       if (/^attempt-[0-9]{4}\.json$/.test(accepted?.attempt_ref ?? "")) refs.add(`results/${stage}/${accepted.attempt_ref}`);
     } catch (error) { if (error?.code && error.code !== "ENOENT") candidates.push(createArtifactRecord({ record_kind: "stage_result", id: `${stage}:accepted`, stage, status: "unknown", ref: `results/${stage}/accepted.json`, required: false, source_ref: `results/${stage}/accepted.json`, reason: "read_error", error: safeError("READ_ERROR", "READ_ERROR") })); }
     for (const ref of [...refs].sort()) attempts.push({ stage, ref });
