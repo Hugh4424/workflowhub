@@ -314,9 +314,10 @@ function relativeSegments(relativePath, label) {
 }
 
 function assertPublicRecordWritable(relativePath) {
-  if (relativePath === "task.json" || /^results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4})?)\.json$/.test(relativePath) || /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/.test(relativePath) || /^confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4}\.json$/.test(relativePath)) {
+  if (relativePath === "task.json" || /^results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)\.json$/.test(relativePath) || /^results\/build-code\/revisions\/reopen-[0-9]{4}\.json$/.test(relativePath) || /^confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4}\.json$/.test(relativePath)) {
     throw new Error(`record is kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   }
+  if (relativePath.startsWith("results/")) throw new Error(`results records are kernel-owned and cannot be written through TaskHandle: ${relativePath}`);
   if (/^(?:receipts|reviews|evidence)\//.test(relativePath)) throw new Error(`record is canonical-receipt-owned and cannot be written through TaskHandle: ${relativePath}`);
 }
 
@@ -532,7 +533,7 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_RECORD_WRITERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4})?)|results\/build-code\/revisions\/reopen-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
+    if (!/^(?:(?:results\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/(?:attempt-[0-9]{4}|accepted(?:-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?)?)|results\/build-code\/revisions\/reopen-[0-9]{4}|confirmations\/(?:make-decision|build-spec|build-plan|build-code|verify-code)\/attempt-[0-9]{4})\.json|(?:receipts|reviews|evidence)\/[a-zA-Z0-9][a-zA-Z0-9._/-]*)$/.test(relativePath) || relativePath.includes("..")) throw new Error("kernel record path required");
     const result = createOnlyAt(realTaskPath, relativePath, data, options);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
