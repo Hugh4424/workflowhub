@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
@@ -7,6 +8,8 @@ import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 const WORKSPACES = new WeakSet();
 const CANDIDATE_WORKSPACES = new WeakSet();
 const WORKSPACE_BINDINGS = new WeakMap();
+const TARGET_REPO_ROOT_MIGRATION_REF = /^identity\/migrations\/target-repo-root\/[a-f0-9]{64}\.json$/;
+const HASH = /^[a-f0-9]{64}$/;
 
 function gitValue(cwd, args, label) {
   try { return String(execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
@@ -33,6 +36,47 @@ function deterministicWorkspace(task) {
   const branch = `task/${task.identity.projectName}/${task.identity.taskId}`;
   const worktreeRoot = resolve(dirname(targetRepoRoot), `${basename(targetRepoRoot)}-${task.identity.taskId}`);
   return { targetRepoRoot, branch, worktreeRoot };
+}
+
+function acceptedWorkspaceExpectation(task) {
+  const expected = deterministicWorkspace(task);
+  const migration = task.manifest.target_repo_root_migration;
+  if (!migration) return expected;
+
+  if (!TARGET_REPO_ROOT_MIGRATION_REF.test(migration.ref ?? "") || !HASH.test(migration.integrity_hash ?? "")) {
+    throw new Error("target repository migration lineage is invalid");
+  }
+  const seen = new Set();
+  let targetRepoRoot = task.manifest.target_repo_root;
+  let ref = migration.ref;
+  let integrityHash = migration.integrity_hash;
+  let record;
+  while (ref !== undefined) {
+    if (seen.has(ref)) throw new Error("target repository migration lineage contains a cycle");
+    seen.add(ref);
+    const raw = task.readRecord(ref);
+    if (createHash("sha256").update(raw).digest("hex") !== integrityHash) throw new Error("target repository migration integrity hash mismatch");
+    try { record = JSON.parse(raw); } catch { throw new Error("target repository migration lineage record is invalid"); }
+    if (!record || typeof record !== "object" || Array.isArray(record)
+      || record.schema_version !== "task-target-repo-root-migration.v1"
+      || record.project_name !== task.identity.projectName || record.task_id !== task.identity.taskId
+      || record.target_repo_root !== targetRepoRoot || !isAbsolute(record.previous_target_repo_root ?? "")) {
+      throw new Error("target repository migration lineage record is invalid");
+    }
+    const hasPreviousRef = record.previous_migration_ref !== undefined;
+    if (hasPreviousRef !== (record.previous_migration_hash !== undefined)
+      || (hasPreviousRef && (!TARGET_REPO_ROOT_MIGRATION_REF.test(record.previous_migration_ref) || !HASH.test(record.previous_migration_hash)))) {
+      throw new Error("target repository migration lineage source chain is invalid");
+    }
+    targetRepoRoot = record.previous_target_repo_root;
+    ref = record.previous_migration_ref;
+    integrityHash = record.previous_migration_hash;
+  }
+  const previousTargetRepoRoot = realGitToplevel(record.previous_target_repo_root, "migration previous target repository");
+  return {
+    ...expected,
+    worktreeRoot: resolve(dirname(previousTargetRepoRoot), `${basename(previousTargetRepoRoot)}-${task.identity.taskId}`),
+  };
 }
 
 function workspaceForCreation(task) {
@@ -201,7 +245,7 @@ export function openAcceptedWorkspace(taskHandle, accepted) {
   if (!facts || typeof facts !== "object" || Array.isArray(facts)) throw new Error("make-decision accepted result must contain facts");
   if (typeof facts.worktree_root !== "string" || !isAbsolute(facts.worktree_root)) throw new Error("make-decision accepted facts.worktree_root must be absolute");
   if (typeof facts.baseline_commit !== "string" || !/^[a-f0-9]{40}$/i.test(facts.baseline_commit.trim())) throw new Error("make-decision accepted facts.baseline_commit must be a Git commit OID");
-  const expected = deterministicWorkspace(task);
+  const expected = acceptedWorkspaceExpectation(task);
   if (resolve(facts.worktree_root) !== expected.worktreeRoot) throw new Error("accepted worktree_root does not match the deterministic task worktree");
   const worktreeRoot = realGitToplevel(facts.worktree_root, "accepted worktree_root");
   const targetRepoRoot = expected.targetRepoRoot;
@@ -237,7 +281,7 @@ export function openAcceptedWorkspace(taskHandle, accepted) {
 export function createTaskWorktreeRemoval(taskHandle, acceptedBinding) {
   if (arguments.length !== 2) throw new TypeError("createTaskWorktreeRemoval requires TaskHandle and authenticated accepted binding");
   const task = assertTaskHandle(taskHandle);
-  const expected = deterministicWorkspace(task);
+  const expected = acceptedWorkspaceExpectation(task);
   if (acceptedBinding?.taskId !== task.identity.taskId || acceptedBinding?.stage !== "make-decision") {
     throw new Error("authenticated accepted make-decision identity mismatch for worktree removal");
   }
