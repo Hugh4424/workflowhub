@@ -20,7 +20,11 @@ decision. Pass its returned ref to `accept --human-confirmation-ref`; rejected
 confirmations never publish checkpoint refs.
 
 Write and revise draft `plan.md` and `tasks.md` through their named ArtifactDir
-writers. Do not create their official receipts before review is finished. After
+writers. The public entries are `stage-runtime.mjs artifact --stage=build-plan
+--project=<project> --task=<task> --name=plan.md|tasks.md --input=<draft-file>`.
+Run both before each review so the review snapshot contains the exact pair under
+review. Temporary files may be authoring inputs, but are never the reviewed
+artifacts by themselves. Do not create their official receipts before review is finished. After
 review, create each final receipt exactly once through `stage-runtime.mjs
 receipt --component=plan|tasks`, then pass them with the canonical `wh-review`
 result or unavailable-attempt ref as `plan`, `tasks`, and `review`.
@@ -55,8 +59,8 @@ planning step.
    Components do not locate files themselves.
 7. If that review has actionable findings, revise both drafts as needed and run
    at most one revision review. There is no third review in this stage.
-8. After the review sequence finishes, create one final create-only receipt for
-   `plan.md` and one for `tasks.md`. The normal path must not use a revision receipt
+8. After the review sequence finishes, without changing either artifact, create
+   one final create-only receipt for `plan.md` and one for `tasks.md`. The normal path must not use a revision receipt
    or create official receipts from drafts. Publish the append-only
    stage attempt with requirement mapping, research status, review facts, and
    missing items. When review is unavailable, pass its canonical attempt ref so

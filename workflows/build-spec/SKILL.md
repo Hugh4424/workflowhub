@@ -18,7 +18,12 @@ Executable entry: `node scripts/stage-runtime.mjs run --stage=build-spec
 is an automatic stage: the trusted runtime publishes the attempt, materializes
 its checkpoint, and accepts it without a human confirmation command.
 
-Write and revise the draft through the named ArtifactDir writer. Do not create
+Write and revise the draft through the named ArtifactDir writer. The public
+entry is `node scripts/stage-runtime.mjs artifact --stage=build-spec
+--project=<project> --task=<task> --name=spec.md --input=<draft-file>`.
+Run it before each review so the review snapshot contains the exact `spec.md`
+under review. A temporary file may be authoring input, but it is never the
+reviewed artifact by itself. Do not create
 the official spec receipt before review is finished. After review, create that
 receipt exactly once with `stage-runtime.mjs receipt --stage=build-spec
 --project=<project> --task=<task> --component=spec
@@ -55,8 +60,8 @@ provider-visible only inside `wh-review`; it is not a spec generation step.
    facts, and relevant evidence.
 7. If that review has actionable findings, revise the draft once and run at most one revision review.
    There is no third review in this stage.
-8. After the review sequence finishes, create one final create-only receipt
-   from the current `spec.md`. The normal path must not use a revision receipt
+8. After the review sequence finishes, without changing `spec.md`, create one final create-only receipt
+   from its exact content. The normal path must not use a revision receipt
    or create an official receipt from a draft. Publish the append-only stage
    attempt with the review facts and missing items. When review is unavailable,
    pass its canonical attempt ref so the runtime records the failure reason and

@@ -12,6 +12,11 @@ import { acceptStageAttempt, confirmStageAttempt, runOfficialStage } from "../co
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 
+const DESIGN_ARTIFACTS = Object.freeze({
+  "build-spec": new Set(["spec.md"]),
+  "build-plan": new Set(["plan.md", "tasks.md"]),
+});
+
 function parseArgs(argv) {
   const [command, ...raw] = argv;
   const values = {};
@@ -20,8 +25,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "receipt", "run", "confirm", "accept", "reopen", "publish-verify-failure"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|receipt|run|confirm|accept|reopen|publish-verify-failure> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "artifact", "receipt", "run", "confirm", "accept", "reopen", "publish-verify-failure"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|run|confirm|accept|reopen|publish-verify-failure> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -33,6 +38,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   }
   if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
+  if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
   if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
   if (command === "publish-verify-failure" && (values.stage !== "verify-code" || !values["failure-evidence"])) throw new TypeError("publish-verify-failure requires --stage=verify-code --failure-evidence=<evidence/ref.json>");
   if (Object.prototype.hasOwnProperty.call(values, "reopen") && (command !== "run" || values.stage !== "build-code")) throw new TypeError("--reopen is only valid for build-code run");
@@ -55,6 +61,11 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
       worktree_root: context.candidateWorkspace.worktreeRoot,
       baseline_commit: context.candidateWorkspace.baselineCommit,
     };
+  }
+  if (command === "artifact") {
+    if (!DESIGN_ARTIFACTS[values.stage]?.has(values.name)) throw new TypeError(`unsupported ${values.stage} artifact: ${values.name}`);
+    context.artifacts.writeAtomic(values.name, readFileSync(values.input, "utf8"));
+    return { artifact_ref: context.artifacts.reference(values.name) };
   }
   if (command === "reopen") return context.kernel.reopenBuildCode({ verifyAttemptRef: values["verify-attempt"], failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-failure") return context.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: values["failure-evidence"] });

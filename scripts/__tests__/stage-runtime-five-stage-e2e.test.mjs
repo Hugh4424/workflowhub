@@ -72,11 +72,16 @@ describe("official five-stage CLI", () => {
     invoke("make-decision", { decision: "receipts/decision.json", direction_review: direction.resultRef, detail_review: detail.resultRef });
     const workspace = openAcceptedWorkspace(task, createTaskKernel(task).readAccepted("make-decision"));
 
-    mkdirSync(join(workspace.worktreeRoot, "specs", "official-chain"), { recursive: true });
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec draft\n");
+    const specDraft = join(root, "spec-draft.md");
+    writeFileSync(specDraft, "# Spec draft\n");
+    const invalidArtifact = spawnSync(process.execPath, [runtime, "artifact", "--stage=build-spec", "--project=Demo", "--task=official-chain", "--name=plan.md", `--input=${specDraft}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(invalidArtifact.status).not.toBe(0);
+    expect(invalidArtifact.stderr).toMatch(/unsupported build-spec artifact/i);
+    expect(run(root, repo, ["artifact", "--stage=build-spec", "--project=Demo", "--task=official-chain", "--name=spec.md", `--input=${specDraft}`])).toMatchObject({ artifact_ref: "specs/official-chain/spec.md" });
     writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
     expect(existsSync(join(task.taskPath, "receipts", "spec.json"))).toBe(false);
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "spec.md"), "# Spec\n");
+    writeFileSync(specDraft, "# Spec\n");
+    run(root, repo, ["artifact", "--stage=build-spec", "--project=Demo", "--task=official-chain", "--name=spec.md", `--input=${specDraft}`]);
     const specReview = writeFormalReviewFixture({ task, stage: "build-spec", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
     writeOfficialComponentReceipt({ task, stage: "build-spec", component: "spec", payload: { content: "# Spec\n" } });
     expect(readdirSync(join(task.taskPath, "reviews", "results")).map((name) => JSON.parse(task.readRecord(`reviews/results/${name}`))).filter((result) => result.stage === "build-spec")).toHaveLength(2);
@@ -84,13 +89,19 @@ describe("official five-stage CLI", () => {
     expect(existsSync(join(task.taskPath, "receipts", "revisions", "spec"))).toBe(false);
     invoke("build-spec", { spec: "receipts/spec.json", review: specReview.resultRef });
 
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan draft\n");
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks draft\n");
+    const planDraft = join(root, "plan-draft.md");
+    const tasksDraft = join(root, "tasks-draft.md");
+    writeFileSync(planDraft, "# Plan draft\n");
+    writeFileSync(tasksDraft, "# Tasks draft\n");
+    run(root, repo, ["artifact", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--name=plan.md", `--input=${planDraft}`]);
+    run(root, repo, ["artifact", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--name=tasks.md", `--input=${tasksDraft}`]);
     writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree, verdict: "revise_required" });
     expect(existsSync(join(task.taskPath, "receipts", "plan.json"))).toBe(false);
     expect(existsSync(join(task.taskPath, "receipts", "tasks.json"))).toBe(false);
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "plan.md"), "# Plan, revised after review\n");
-    writeFileSync(join(workspace.worktreeRoot, "specs", "official-chain", "tasks.md"), "# Tasks\n");
+    writeFileSync(planDraft, "# Plan, revised after review\n");
+    writeFileSync(tasksDraft, "# Tasks\n");
+    run(root, repo, ["artifact", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--name=plan.md", `--input=${planDraft}`]);
+    run(root, repo, ["artifact", "--stage=build-plan", "--project=Demo", "--task=official-chain", "--name=tasks.md", `--input=${tasksDraft}`]);
     const planReview = writeFormalReviewFixture({ task, stage: "build-plan", snapshotTree: captureWorkspaceSnapshot(workspace).tree });
     writeOfficialComponentReceipt({ task, stage: "build-plan", component: "plan", payload: { content: "# Plan, revised after review\n" } });
     writeOfficialComponentReceipt({ task, stage: "build-plan", component: "tasks", payload: { content: "# Tasks\n" } });

@@ -67,6 +67,40 @@ describe("final cutover guard contracts", () => {
     await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/review.*receipt ref/i);
   });
 
+  it.each([
+    ["missing spec", "build-spec", { spec: "receipts/spec.json", review: "reviews/results/review.json" }, { spec: "# Spec\n" }, {}],
+    ["different spec", "build-spec", { spec: "receipts/spec.json", review: "reviews/results/review.json" }, { spec: "# Spec\n" }, { "spec.md": "wrong\n" }],
+    ["missing tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: "# Plan\n", tasks: "# Tasks\n" }, { "plan.md": "# Plan\n" }],
+    ["different tasks", "build-plan", { plan: "receipts/plan.json", tasks: "receipts/tasks.json", review: "reviews/results/review.json" }, { plan: "# Plan\n", tasks: "# Tasks\n" }, { "plan.md": "# Plan\n", "tasks.md": "wrong\n" }],
+  ])("rejects %s when the reviewed design artifact differs from its final receipt without mutating the Workspace", async (_case, stage, receipts, contents, artifacts) => {
+    const values = { "reviews/results/review.json": reviewReceipt(stage) };
+    for (const [component, content] of Object.entries(contents)) values[`receipts/${component}.json`] = canonical(stage, {
+      producer: { stage, component, version: "1" }, content, content_hash: createHash("sha256").update(content).digest("hex"),
+    });
+    let checkpointCalls = 0, writeCalls = 0;
+    const worker = {
+      ...workerFor(stage, values),
+      readArtifact: (name) => artifacts[name],
+      writeArtifact: () => { writeCalls += 1; },
+      createCheckpoint: () => { checkpointCalls += 1; return {}; },
+      artifactRef: (name) => `specs/task/${name}`,
+    };
+    await expect(officialStageHandler(stage)(worker, { receipts })).rejects.toThrow(/artifact.*receipt|differ/i);
+    expect(writeCalls).toBe(0);
+    expect(checkpointCalls).toBe(0);
+  });
+
+  it("rejects a stale build-spec review tree before creating a checkpoint", async () => {
+    const stage = "build-spec", content = "# Spec\n", values = {
+      "receipts/spec.json": canonical(stage, { producer: { stage, component: "spec", version: "1" }, content, content_hash: createHash("sha256").update(content).digest("hex") }),
+      "reviews/results/review.json": reviewReceipt(stage),
+    };
+    let checkpointCalls = 0;
+    const worker = { ...workerFor(stage, values, "c".repeat(40)), readArtifact: () => content, createCheckpoint: () => { checkpointCalls += 1; return {}; }, artifactRef: () => "specs/task/spec.md" };
+    await expect(officialStageHandler(stage)(worker, { receipts: { spec: "receipts/spec.json", review: "reviews/results/review.json" } })).rejects.toThrow(/same snapshot tree/i);
+    expect(checkpointCalls).toBe(0);
+  });
+
   it("records a real failing test command as a quality fact", async () => {
     const stage = "verify-code";
     const values = {
