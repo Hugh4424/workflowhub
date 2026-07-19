@@ -39,6 +39,29 @@ function evidenceTask(f, receipt, output, { includeOutput = true } = {}) {
   return task;
 }
 
+function verifyEvidenceFixture(f) {
+  const output = Buffer.from("verify output\n");
+  const outputHash = createHash("sha256").update(output).digest("hex");
+  const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: outputHash })}\n`);
+  const task = evidenceTask(f, receipt, output);
+  const acceptance = Buffer.from(`${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-1", result: "pass", refs: [{ ref: "evidence/tests-output.txt", sha256: outputHash }] })}\n`);
+  const acceptanceHash = createHash("sha256").update(acceptance).digest("hex");
+  const aggregate = Buffer.from(`${JSON.stringify({ schema_version: "workflowhub-receipt.v1", refs: [{ ref: "evidence/acceptance-ac-1.json", sha256: acceptanceHash }] })}\n`);
+  const kernel = createTaskKernel(task);
+  kernel.publishCanonicalRecord("evidence/acceptance-ac-1.json", acceptance);
+  kernel.publishCanonicalRecord("evidence/verify-evidence.json", aggregate);
+  return {
+    task,
+    acceptanceEvidence: {
+      summary: "Fresh canonical tests: 1/1 passed.",
+      test_receipt_ref: "receipts/tests.json",
+      test_receipt_hash: createHash("sha256").update(receipt).digest("hex"),
+      evidence_ref: "evidence/verify-evidence.json",
+      evidence_hash: createHash("sha256").update(aggregate).digest("hex"),
+    },
+  };
+}
+
 function changeAll(source) {
   writeFileSync(join(source, "keep.txt"), "modified\n");
   writeFileSync(join(source, "added.txt"), "added\n");
@@ -156,14 +179,28 @@ describe("review materials", () => {
 
   it("freezes the same canonical evidence closure for verify-code", () => {
     const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
-    const output = Buffer.from("verify output\n");
-    const receipt = Buffer.from(`${JSON.stringify({ output_ref: "evidence/tests-output.txt", output_hash: createHash("sha256").update(output).digest("hex") })}\n`);
-    const task = evidenceTask(f, receipt, output);
-    const acceptanceEvidence = { receipt_ref: "receipts/tests.json", receipt_hash: createHash("sha256").update(receipt).digest("hex") };
+    const { task, acceptanceEvidence } = verifyEvidenceFixture(f);
     const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { acceptance_criteria: "ac", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") } });
-    expect(readFileSync(join(bundle.bundleRoot, "canonical/receipts/tests.json"))).toEqual(receipt);
-    expect(readFileSync(join(bundle.bundleRoot, "canonical/evidence/tests-output.txt"))).toEqual(output);
-    expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"))).toHaveLength(2);
+    const refs = JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8")).map(({ source_ref }) => source_ref).sort();
+    expect(refs).toEqual(["evidence/acceptance-ac-1.json", "evidence/tests-output.txt", "evidence/verify-evidence.json", "receipts/tests.json"]);
+    for (const ref of refs) expect(bundle.manifest.map(({ path }) => path)).toContain(`canonical/${ref}`);
+  });
+
+  it("rejects prose or incomplete verify evidence before provider delivery", () => {
+    const f = fixture(); changeAll(f.source); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const base = { acceptance_criteria: "ac", open_exceptions: "none", review_instructions: reviewInstructionsFor("verify-code") };
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { ...base, acceptance_evidence: "receipts/tests.json and evidence/verify-evidence.json" } }))
+      .toThrow(/MATERIAL_INCOMPLETE.*structured.*roots/i);
+    expect(() => buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code", materials: { ...base, acceptance_evidence: { test_receipt_ref: "receipts/tests.json", test_receipt_hash: "0".repeat(64) } } }))
+      .toThrow(/MATERIAL_INCOMPLETE.*evidence_ref/i);
+  });
+
+  it("writes an empty canonical evidence manifest when a stage has no evidence refs", () => {
+    const f = fixture(); const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
+    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "build-spec",
+      materials: { raw_requirement: "need", approved_decision: "yes", draft_spec: "spec", review_instructions: reviewInstructionsFor("build-spec") } });
+    expect(JSON.parse(readFileSync(join(bundle.bundleRoot, "canonical-evidence.json"), "utf8"))).toEqual([]);
+    expect(bundle.manifest.map(({ path }) => path)).toContain("canonical-evidence.json");
   });
 
   it.each([
@@ -181,8 +218,9 @@ describe("review materials", () => {
     const f = fixture(); changeAll(f.source);
     const source = captureReviewSource({ sourceRoot: f.source, targetRepoRoot: f.target, reviewDataRoot: f.data });
     const instructions = reviewInstructionsFor("verify-code");
-    const bundle = buildReviewMaterials({ reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code",
-      materials: { acceptance_criteria: "ac", acceptance_evidence: "tests", open_exceptions: "none", review_instructions: instructions } });
+    const { task, acceptanceEvidence } = verifyEvidenceFixture(f);
+    const bundle = buildReviewMaterials({ task, reviewDataRoot: f.data, attachmentRoot: f.data, source, taskId: "task", stage: "verify-code",
+      materials: { acceptance_criteria: "ac", acceptance_evidence: acceptanceEvidence, open_exceptions: "none", review_instructions: instructions } });
     const declared = bundle.manifest.map(({ path }) => path).filter((path) => path.startsWith("skills/"));
     const instructed = [...instructions.matchAll(/skills\/[A-Za-z0-9._-]+\/SKILL\.md/g)].map(([path]) => path);
     expect(declared.sort()).toEqual(instructed.sort());

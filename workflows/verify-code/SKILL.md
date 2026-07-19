@@ -21,6 +21,26 @@ decision. Pass its returned ref to `accept --human-confirmation-ref`.
 
 Create the evidence aggregate with `stage-runtime.mjs receipt --stage=verify-code --project=<project> --task=<task> --component=evidence --input=<refs-payload.json>`; every referenced hash is verified first.
 
+When invoking `wh-review`, pass `materials.acceptance_evidence` as structured
+canonical roots, never as prose or Markdown path references:
+
+```json
+{
+  "summary": "Fresh verification evidence and acceptance results.",
+  "test_receipt_ref": "receipts/verify-tests.json",
+  "test_receipt_hash": "<sha256 returned by the canonical test writer>",
+  "evidence_ref": "evidence/verify-evidence.json",
+  "evidence_hash": "<sha256 returned by the canonical evidence writer>"
+}
+```
+
+Use only writer-returned refs and hashes; do not guess them or copy hashes from
+display text. The review bundle recursively freezes and verifies both roots and
+their referenced closure before provider delivery. Report test totals from the
+canonical test output. If parameterized or unchanged tests make a static
+`test()` source count differ, explain the difference instead of treating that
+source count as executed evidence.
+
 Declared runtime components: `test-strategy`, `wh-review`, conditional
 `isolated-browser-qa`, and the review lenses declared by the manifest.
 
