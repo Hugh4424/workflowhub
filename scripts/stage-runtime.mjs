@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   bootstrapStage,
@@ -17,6 +17,7 @@ const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
   "build-plan": new Set(["plan.md", "tasks.md"]),
 });
+const RUNNER_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 function parseArgs(argv) {
   const [command, ...raw] = argv;
@@ -37,6 +38,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   if (Object.prototype.hasOwnProperty.call(values, "worktree-root") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) {
     throw new TypeError("--worktree-root/--baseline-commit are no longer supported; make-decision owns deterministic worktree preparation");
   }
+  if (Object.prototype.hasOwnProperty.call(values, "runner-root")) throw new TypeError("--runner-root is forbidden; stage-runtime authenticates its own repository root");
   if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
   if (command === "capture-tests" && (values.stage !== "build-code" || !values.input)) throw new TypeError("capture-tests requires --stage=build-code --input=<test-capture.json>");
@@ -53,7 +55,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     mode: "launcher",
     projectName: values.project,
     taskId: values.task,
-    runnerRoot: values["runner-root"],
+    runnerRoot: RUNNER_ROOT,
   });
   const input = new Set(["receipt", "capture-tests", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))

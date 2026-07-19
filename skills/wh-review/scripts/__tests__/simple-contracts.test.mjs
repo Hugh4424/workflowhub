@@ -28,6 +28,10 @@ describe("simple wh-review contracts", () => {
       stage_skill_plan: "stage-skill-plan.json",
       provider_result_contract: "contracts/workflowhub-result.v1.json"
     });
+    const providerProtocol = readFileSync(join(root, "wh-review", "contracts", "provider-protocol.md"), "utf8");
+    expect(providerProtocol).toMatch(/`pass`[^\n]*`minor`/);
+    expect(providerProtocol).toMatch(/`major`[^\n]*`blocking`[^\n]*`revise_required`/);
+    expect(providerProtocol).toMatch(/`revise_required`[^\n]*至少包含一条具体 finding/);
     const bundle = readJson(join(root, "wh-review", "skill-bundle.json"));
     for (const file of [
       "contracts/workflowhub-result.v1.json",

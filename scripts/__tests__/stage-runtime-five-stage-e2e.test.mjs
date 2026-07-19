@@ -1,11 +1,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createTask } from "../../core/task-handle.mjs";
+import { createTask, migrateTaskRunnerRoot } from "../../core/task-handle.mjs";
 import { captureWorkspaceSnapshot, createCanonicalReceiptWriter, writeOfficialComponentReceipt } from "../../core/canonical-receipt-writer.mjs";
 import { createTaskKernel } from "../../core/task-kernel.mjs";
 import { openAcceptedWorkspace } from "../../core/workspace.mjs";
@@ -41,6 +41,38 @@ function run(root, repo, args) {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official five-stage CLI", () => {
+  it("derives a bound runner from its own module and rejects caller injection or HEAD drift", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-stage-runtime-runner-"))); temporary.push(root);
+    const projectRoot = realpathSync(join(import.meta.dirname, "../.."));
+    const runner = join(root, "runner"), repo = join(root, "repo");
+    execFileSync("git", ["clone", "-q", "--no-local", projectRoot, runner]);
+    execFileSync("git", ["checkout", "-qb", "task/Demo/runtime-bound"], { cwd: runner });
+    cpSync(join(projectRoot, "core"), join(runner, "core"), { recursive: true, force: true });
+    cpSync(join(projectRoot, "scripts", "stage-runtime.mjs"), join(runner, "scripts", "stage-runtime.mjs"), { force: true });
+    symlinkSync(realpathSync(join(projectRoot, "node_modules")), join(runner, "node_modules"));
+    execFileSync("git", ["add", "core", "scripts/stage-runtime.mjs"], { cwd: runner });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "runner"], { cwd: runner });
+    mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const task = createTask({ storageRoot: root, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "runtime-bound", created_at: "2026-07-19T00:00:00.000Z",
+      target_repo_root: repo, issue_ids: [], inputs: {},
+    } });
+    migrateTaskRunnerRoot({ taskPath: task.taskPath, projectName: "Demo", taskId: "runtime-bound", runnerRoot: realpathSync(runner), stage: "make-decision" });
+    const boundRuntime = join(runner, "scripts", "stage-runtime.mjs");
+    const env = { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root };
+    const args = ["prepare", "--stage=make-decision", "--project=Demo", "--task=runtime-bound"];
+    expect(spawnSync(process.execPath, [boundRuntime, ...args], { cwd: repo, env, encoding: "utf8" }).status).toBe(0);
+    const injected = spawnSync(process.execPath, [boundRuntime, ...args, `--runner-root=${repo}`], { cwd: repo, env, encoding: "utf8" });
+    expect(injected.status).not.toBe(0);
+    expect(injected.stderr).toMatch(/runner-root is forbidden/i);
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--allow-empty", "-qm", "runner drift"], { cwd: runner });
+    const drifted = spawnSync(process.execPath, [boundRuntime, ...args], { cwd: repo, env, encoding: "utf8" });
+    expect(drifted.status).not.toBe(0);
+    expect(drifted.stderr).toMatch(/runner identity mismatch/i);
+  });
+
   it("runs repository-owned handlers and accepts the complete chain", () => {
     const { root, repo, task, baseline, mainStatus } = fixture();
     const invoke = (stage, receipts, extra = []) => {

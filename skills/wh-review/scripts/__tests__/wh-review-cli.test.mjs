@@ -1,26 +1,28 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createTask, migrateTaskRunnerRoot } from "../../../../core/task-handle.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
 const roots = [];
 afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
-function runnerBoundFixture() {
+async function runnerBoundFixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-runner-"))); roots.push(root);
-  const repo = join(root, "repo"), runner = join(root, "runner"); mkdirSync(repo); mkdirSync(runner);
+  const repo = join(root, "repo"), runner = join(root, "runner"); mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
   execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
-  execFileSync("git", ["init", "-q", "-b", "task/Demo/task"], { cwd: runner });
-  writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
-  mkdirSync(join(runner, "workflows", "make-decision"), { recursive: true });
-  writeFileSync(join(runner, "workflows", "make-decision", "SKILL.md"), "# make-decision\n");
-  execFileSync("git", ["add", "."], { cwd: runner });
+  execFileSync("git", ["clone", "-q", "--no-local", realpathSync(join(import.meta.dirname, "../../../..")), runner]);
+  execFileSync("git", ["checkout", "-qb", "task/Demo/task"], { cwd: runner });
+  cpSync(realpathSync(join(import.meta.dirname, "../../../..", "core")), join(runner, "core"), { recursive: true, force: true });
+  cpSync(realpathSync(join(import.meta.dirname, "../..")), join(runner, "skills", "wh-review"), { recursive: true, force: true });
+  symlinkSync(realpathSync(join(import.meta.dirname, "../../../..", "node_modules")), join(runner, "node_modules"));
+  execFileSync("git", ["add", "core", "skills/wh-review"], { cwd: runner });
   execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "runner"], { cwd: runner });
   const taskPath = join(root, "Projects", "Demo", "tasks", "task");
   const task = createTask({ storageRoot: root, taskPath, manifest: {
@@ -28,7 +30,8 @@ function runnerBoundFixture() {
     target_repo_root: repo, issue_ids: [], inputs: {},
   } });
   migrateTaskRunnerRoot({ taskPath: task.taskPath, projectName: "Demo", taskId: "task", runnerRoot: realpathSync(runner), stage: "make-decision" });
-  return { taskPath, repo, runner: realpathSync(runner) };
+  const module = await import(`${pathToFileURL(join(runner, "skills", "wh-review", "scripts", "wh-review-cli.mjs")).href}?fixture=${Date.now()}`);
+  return { taskPath, repo, runner: realpathSync(runner), module };
 }
 
 describe("wh-review production CLI", () => {
@@ -75,17 +78,17 @@ describe("wh-review production CLI", () => {
   });
 
   it("uses a runner-bound TaskHandle without exposing a public runner field", async () => {
-    const fixture = runnerBoundFixture();
-    const { resolveTrustedReviewSubject } = await import(cli.href);
+    const fixture = await runnerBoundFixture();
+    const { resolveTrustedReviewSubject } = fixture.module;
     const subject = resolveTrustedReviewSubject({ task_path: fixture.taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" });
     expect(subject.candidateWorkspace.worktreeRoot).toBe(`${fixture.repo}-task`);
     expect(() => resolveTrustedReviewSubject({ task_path: fixture.taskPath, project_name: "Demo", task_id: "task", stage: "make-decision", runner_root: fixture.runner })).toThrow(/runner_root is forbidden/i);
   });
 
   it("fails loud when a manifest-bound runner HEAD drifts", async () => {
-    const fixture = runnerBoundFixture();
+    const fixture = await runnerBoundFixture();
     execFileSync("git", ["commit", "--allow-empty", "-qm", "runner drift"], { cwd: fixture.runner });
-    const { resolveTrustedReviewSubject } = await import(cli.href);
+    const { resolveTrustedReviewSubject } = fixture.module;
     expect(() => resolveTrustedReviewSubject({ task_path: fixture.taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" })).toThrow(/runner identity mismatch/i);
   });
 

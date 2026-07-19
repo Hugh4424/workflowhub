@@ -78,4 +78,10 @@ request 声明：
 
 `severity` 只能是 `blocking`、`major` 或 `minor`。`path` 必须是 provider 可见的材料相对路径；没有可靠行号时 `line` 可以省略或为 `null`，不得猜测行号。
 
+语义一致性是硬合同：
+
+- `pass` 只能包含 `minor` finding，也可以没有 finding。
+- 只要存在 `major` 或 `blocking` finding，`verdict` 必须是 `revise_required`。
+- `revise_required` 必须至少包含一条具体 finding，不得只给空泛结论。
+
 不要求 reviewer 输出 checklist、pass items、skillResults、checked objects、bundle hash、material hash、finding ID、closure bundle 或 session 信息。格式错误最多在同一 session 请求一次只重发 JSON；仍失败时本次 provider 结果不可用，原文继续保存，但不得提升为 pass。
