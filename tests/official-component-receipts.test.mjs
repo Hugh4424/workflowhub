@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { validatePhaseCompletion } from "../core/task-kernel-implementation.mjs";
 import { openAcceptedWorkspace } from "../core/workspace.mjs";
 
 const temporary = [];
@@ -23,6 +24,27 @@ function fixture() {
 afterEach(() => { while (temporary.length) rmSync(temporary.pop(), { recursive: true, force: true }); });
 
 describe("official component receipt authority", () => {
+  it.each([true, false])("accepts boolean phase completion: %s", (value) => {
+    expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it("accepts structured phase completion with a task-relative evidence ref", () => {
+    const value = { status: "completed", evidence_ref: "evidence/phase-result.json" };
+    expect(validatePhaseCompletion(value)).toBe(value);
+  });
+
+  it.each([
+    null,
+    [],
+    "complete",
+    { evidence_ref: "evidence/phase-result.json" },
+    { status: "completed" },
+    { status: "completed", evidence_ref: "/tmp/phase-result.json" },
+    { status: "completed", evidence_ref: "evidence/../phase-result.json" },
+  ])("rejects invalid phase completion before publication: %j", (value) => {
+    expect(() => validatePhaseCompletion(value)).toThrow(/phase_completion|status|evidence_ref/i);
+  });
+
   it.each([
     ["build-spec", "spec"],
     ["build-plan", "plan"],

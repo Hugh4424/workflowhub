@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
-import { validateAcceptanceEvidence } from "./task-kernel-implementation.mjs";
+import { validateAcceptanceEvidence, validatePhaseCompletion } from "./task-kernel-implementation.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
@@ -104,6 +104,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   } else if (registration.kind === "implementation") {
     const safeWorkspace = assertWorkspace(workspace);
     if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");
+    validatePhaseCompletion(payload.phase_completion);
     const acceptedKernel = createTaskKernel(safeTask, { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
     try {
       acceptedKernel.readAccepted("build-spec");

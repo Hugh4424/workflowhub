@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { basename, dirname, isAbsolute, normalize, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
@@ -159,13 +159,7 @@ export function validateStageFacts(stage, facts) {
     facts.changed.forEach((ref, index) => artifactRef(ref, `build-code facts.changed[${index}]`));
     validateTests(facts.tests, "build-code facts.tests");
     validateReview(facts.review, "build-code facts.review");
-    if (typeof facts.phase_completion !== "boolean" && (!facts.phase_completion || typeof facts.phase_completion !== "object" || Array.isArray(facts.phase_completion))) {
-      throw new TypeError("build-code facts.phase_completion must be a boolean or object");
-    }
-    if (typeof facts.phase_completion === "object") {
-      nonemptyString(facts.phase_completion.status, "build-code facts.phase_completion.status");
-      artifactRef(facts.phase_completion.evidence_ref, "build-code facts.phase_completion.evidence_ref");
-    }
+    validatePhaseCompletion(facts.phase_completion);
   }
   if (name === "verify-code") {
     validateTests(facts.tests, "verify-code facts.tests");
@@ -198,7 +192,18 @@ function gitOid(value, label) {
 
 function artifactRef(value, label) {
   nonemptyString(value, label);
-  if (isAbsolute(value) || normalize(value).split(/[\\/]/).includes("..")) throw new TypeError(`${label} must be a task-relative reference`);
+  if (isAbsolute(value) || value.split(/[\\/]/).includes("..")) throw new TypeError(`${label} must be a task-relative reference`);
+  return value;
+}
+
+export function validatePhaseCompletion(value, label = "build-code facts.phase_completion") {
+  if (typeof value !== "boolean" && (!value || typeof value !== "object" || Array.isArray(value))) {
+    throw new TypeError(`${label} must be a boolean or object`);
+  }
+  if (typeof value === "object") {
+    nonemptyString(value.status, `${label}.status`);
+    artifactRef(value.evidence_ref, `${label}.evidence_ref`);
+  }
   return value;
 }
 

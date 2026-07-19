@@ -118,6 +118,14 @@ describe("official five-stage CLI", () => {
     const code = "require('node:fs').mkdirSync('src',{recursive:true});require('node:fs').writeFileSync('src/feature.txt','implemented\\n')";
     expect(runWorkspaceCommand(workspace, process.execPath, ["-e", code]).status).toBe(0);
 
+    const malformedImplementation = join(root, "malformed-implementation.json");
+    writeFileSync(malformedImplementation, `${JSON.stringify({ phase_completion: { phases: [], acceptance: [] } })}\n`);
+    const rejectedImplementation = spawnSync(process.execPath, [runtime, "receipt", "--stage=build-code", "--project=Demo", "--task=official-chain", "--component=implementation", `--input=${malformedImplementation}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(rejectedImplementation.status).not.toBe(0);
+    expect(rejectedImplementation.stderr).toMatch(/phase_completion\.status must be a non-empty string/i);
+    expect(existsSync(join(task.taskPath, "receipts", "implementation.json"))).toBe(false);
+    expect(existsSync(join(task.taskPath, "evidence"))).toBe(false);
+
     const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
     expect(implementation.value.changed).toContain("src/feature.txt");
     createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf fixture-output", receiptRef: "receipts/build-tests.json", outputRef: "evidence/build-output.txt" });

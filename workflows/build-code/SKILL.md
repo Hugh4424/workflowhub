@@ -46,6 +46,12 @@ lineage evidence, never input side channels. Reusing an authorization, a source
 from a different task, a non-failure, or a non-build-code stage fails loudly.
 
 Create implementation provenance with `stage-runtime.mjs receipt --stage=build-code --project=<project> --task=<task> --component=implementation --input=<phase-payload.json>`; HEAD/tree/diff evidence is derived by the writer.
+For a normal completed build, use the smallest valid payload:
+`{"phase_completion":true}`. A structured value is allowed only as
+`{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.
+Keep Phase lists and the AC table in the existing test evidence and human brief;
+do not put them inside `phase_completion`. The receipt command validates this
+shape before publishing any create-only receipt or diff evidence.
 
 Declared runtime components: `wh-review`, conditional `test-routing-advisor`,
 conditional `diagnosing-bugs`, and conditional `review-response`.
@@ -75,6 +81,11 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    focused tests and necessary regression, and return a scoped diff.
    Coder must return the exact test command and raw output. Code Builder writes
    the canonical evidence refs.
+   The card's Workspace root must be copied from the accepted make-decision
+   record. Never substitute the target repository root, current checkout, or
+   current shell directory. The Coder must return its completion evidence to
+   the Code Builder before the Phase is marked complete; a missing handoff is
+   recoverable in the same Phase and is not a product decision.
    Coder must not commit; Coder must not review; Coder must not accept.
    Coder must not merge; Coder must not push; Coder must not close.
 5. Run the target project's real test command in the Workspace. Record command,
