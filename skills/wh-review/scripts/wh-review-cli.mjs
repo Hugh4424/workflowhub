@@ -30,8 +30,6 @@ function trustedTaskWorktree(input) {
     taskId,
     task: context.task,
     workspace,
-    sourceRoot: workspace.worktreeRoot,
-    targetRepoRoot: context.task.manifest.target_repo_root,
   };
 }
 
