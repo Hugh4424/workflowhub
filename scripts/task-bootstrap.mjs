@@ -6,12 +6,27 @@ import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { assertRuntimeAuthority } from "../core/runtime-mode.mjs";
+import { assertTaskRunnerIdentity } from "../core/runner-identity.mjs";
 import { resolveStorageRoot } from "../core/storage-root.mjs";
-import { createTask } from "../core/task-handle.mjs";
+import { createTask, openTask } from "../core/task-handle.mjs";
 
 function args(argv) { const out = {}; for (const item of argv) { const at = item.indexOf("="); if (!item.startsWith("--") || at < 3) throw new TypeError(`invalid argument: ${item}`); out[item.slice(2, at)] = item.slice(at + 1); } return out; }
 export function bootstrapTask(values, { env = process.env, home } = {}) {
   if (Object.prototype.hasOwnProperty.call(values, "candidate-worktree") || Object.prototype.hasOwnProperty.call(values, "baseline-commit")) throw new TypeError("--candidate-worktree/--baseline-commit are no longer supported; make-decision owns worktree preparation");
+  if (Object.prototype.hasOwnProperty.call(values, "task-path")) {
+    for (const key of ["task-path", "project", "task", "runner-root", "stage"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required for existing task bootstrap`);
+    const allowed = new Set(["task-path", "project", "task", "runner-root", "stage"]);
+    const unexpected = Object.keys(values).find((key) => !allowed.has(key));
+    if (unexpected) throw new TypeError(`--${unexpected} is invalid for existing task bootstrap`);
+    const task = openTask(values["task-path"], values.project, values.task);
+    const runnerIdentity = assertTaskRunnerIdentity(task, { runnerRoot: values["runner-root"], stage: values.stage });
+    return Object.freeze({
+      task_path: task.taskPath,
+      project: task.identity.projectName,
+      task: task.identity.taskId,
+      runner_identity: runnerIdentity,
+    });
+  }
   for (const key of ["project", "task", "target-repo"]) if (typeof values[key] !== "string" || values[key].trim() === "") throw new TypeError(`--${key} is required`);
   const target = realpathSync(values["target-repo"]);
   let targetTop;

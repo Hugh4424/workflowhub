@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { createTask, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
+import { createTask, migrateTaskRunnerRoot, migrateTaskTargetRepoRoot } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
@@ -108,6 +108,16 @@ function delivery(f) {
   };
 }
 
+function createRunner(f) {
+  const runner = join(f.root, "runner");
+  mkdirSync(runner);
+  execFileSync("git", ["init", "-q", "-b", "task/Demo/close-task"], { cwd: runner });
+  writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
+  mkdirSync(join(runner, "workflows", "verify-code"), { recursive: true });
+  writeFileSync(join(runner, "workflows", "verify-code", "SKILL.md"), "# verify-code\n");
+  return realpathSync(runner);
+}
+
 function archive(f) {
   git(f.worktree, "mv", "specs/task", "specs/archive/task");
   git(f.worktree, "commit", "-qm", "archive spec");
@@ -156,12 +166,14 @@ describe("delivery close verifier", () => {
     const f = fixture({ targetRepo: "worktree" });
     expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) })).toThrow(/target branch|checked out/i);
     const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" });
-    const kernel = createTaskKernel(migrated.task);
+    const runnerRoot = createRunner(f);
+    const runnerMigrated = migrateTaskRunnerRoot({ taskPath: migrated.task.taskPath, projectName: "Demo", taskId: "close-task", runnerRoot, stage: "verify-code" });
+    const kernel = createTaskKernel(runnerMigrated.task);
     expect(migrated.task.manifest.target_repo_root).toBe(f.repo);
-    expect(migrated.task.readRecord(migrated.migration_ref)).toContain("task-target-repo-root-migration.v1");
-    const verifyContext = bootstrapStage("verify-code", { mode: "sidecar", taskPath: migrated.task.taskPath, projectName: "Demo", taskId: "close-task" });
+    expect(runnerMigrated.task.readRecord(migrated.migration_ref)).toContain("task-target-repo-root-migration.v1");
+    const verifyContext = bootstrapStage("verify-code", { mode: "sidecar", taskPath: runnerMigrated.task.taskPath, projectName: "Demo", taskId: "close-task", runnerRoot });
     expect(verifyContext.workspace.worktreeRoot).toBe(f.worktree);
-    expect(api.prepareDeliveryClosePlan({ task: migrated.task, kernel, delivery: delivery(f) }).plan.delivery.target_repo_root).toBe(f.repo);
+    expect(api.prepareDeliveryClosePlan({ task: runnerMigrated.task, kernel, delivery: delivery(f) }).plan.delivery.target_repo_root).toBe(f.repo);
     expect(migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "close-task", targetRepoRoot: f.repo, targetBranch: "main" })).toMatchObject({ idempotent_replay: true });
   });
 

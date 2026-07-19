@@ -51,6 +51,7 @@ const FIXTURE_ALLOWLIST = new Set([
   "core/__tests__/task-kernel-publish.test.mjs",
   "core/__tests__/task-kernel-security.test.mjs",
   "core/__tests__/task-target-repo-migration.test.mjs",
+  "core/__tests__/task-runner-root-migration.test.mjs",
   "core/__tests__/workspace-manager.test.mjs",
   "core/__tests__/workspace-runner.test.mjs",
   "scripts/__tests__/ci-chain-check.test.mjs",
@@ -76,6 +77,7 @@ const CAPABILITY_AUTHORITIES = new Map([
   ["core/task-handle.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/stage-context.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["core/runtime-mode.mjs", new Set(["caller-supplied storage/task path capability"])],
+  ["scripts/task-migrate-runner-root.mjs", new Set(["caller-supplied storage/task path capability"])],
   ["skills/wh-review/scripts/wh-review-cli.mjs", new Set(["caller-supplied storage/task path capability"])],
 ]);
 

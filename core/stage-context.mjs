@@ -6,6 +6,7 @@ import { assertRuntimeAuthority } from "./runtime-mode.mjs";
 import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
 import { openTask } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
+import { assertTaskRunnerIdentity } from "./runner-identity.mjs";
 import {
   assertWorkspace,
   openAcceptedWorkspace,
@@ -95,6 +96,7 @@ export function bootstrapStage(
     projectName,
     taskId,
     taskPath,
+    runnerRoot,
     env,
     home,
     workspaceLifecycle,
@@ -117,6 +119,9 @@ export function bootstrapStage(
   }
 
   const taskHandle = openTask(resolvedTaskPath, project, task);
+  if (taskHandle.manifest.runner_root !== undefined) {
+    assertTaskRunnerIdentity(taskHandle, { runnerRoot, stage: normalizedStage });
+  }
   if (workspaceLifecycle !== undefined && normalizedStage !== "make-decision") {
     throw new TypeError("workspaceLifecycle is only valid for make-decision");
   }

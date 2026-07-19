@@ -44,6 +44,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     mode: "launcher",
     projectName: values.project,
     taskId: values.task,
+    runnerRoot: values["runner-root"],
   });
   const input = new Set(["receipt", "run", "publish-verify-passing"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))

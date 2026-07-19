@@ -22,6 +22,19 @@ Launcher 唯一允许读取全局配置和 `WORKFLOWHUB_TASK_DIR` 覆盖并派�
 storage root。独立官方 sidecar 只接绝对 `--task-path` 并验证 manifest；provider/worker
 只收材料内容、父进程解析的绝对路径或受控回调。
 
+## 既有任务 runner 迁移
+
+既有任务只能通过 `scripts/task-migrate-runner-root.mjs` 写入 `runner_root`。调用方必须显式提供
+绝对 `task-path`、project、task、runner root 和 stage。入口不从 cwd、target repository 或主
+checkout 推断 runner。runner 必须是 Git 顶层，当前 branch 必须精确等于
+`task/<project>/<task>`，并具有可读的根级 `AGENTS.md` 与对应
+`workflows/<stage>/SKILL.md`。迁移后的 stage bootstrap 必须显式传入实际 runner root，不能用
+manifest 中的期望值代替实际值完成自证。
+
+迁移写 create-only identity ref，记录替换前后 manifest SHA-256 与 runner identity，再原子替换
+`task.json`。既有 task 的只读认证使用 `task-bootstrap.mjs --task-path=... --runner-root=...
+--stage=...`；该模式不读取 storage 配置，也不创建任务。
+
 ## StageContext
 
 ```text

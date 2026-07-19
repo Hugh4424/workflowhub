@@ -23,6 +23,7 @@ import { hostname } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 import { deriveTaskPath, validateProjectName, validateTaskId } from "./task-identity.mjs";
+import { inspectRunnerIdentity } from "./runner-identity.mjs";
 import { buildTaskKernel } from "./task-kernel-implementation.mjs";
 
 const FORBIDDEN_MANIFEST_FIELDS = new Set([
@@ -34,10 +35,12 @@ const TASK_KERNELS = new WeakSet();
 const CANONICAL_RECORD_WRITERS = new WeakMap();
 const CANONICAL_ACCEPTED_REPLACERS = new WeakMap();
 const TARGET_REPO_ROOT_MIGRATORS = new WeakMap();
+const RUNNER_ROOT_MIGRATORS = new WeakMap();
 const CREATE_CLAIM_MAX_AGE_MS = 15 * 60 * 1000;
 const RECORD_LOCK_WAIT_MS = 10_000;
 const CANONICAL_STAGES = new Set(["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]);
 const TARGET_REPO_ROOT_MIGRATION_REF = /^identity\/migrations\/target-repo-root\/[a-f0-9]{64}\.json$/;
+const RUNNER_ROOT_MIGRATION_REF = /^identity\/migrations\/runner-root\/[a-f0-9]{64}\.json$/;
 const HASH = /^[a-f0-9]{64}$/;
 
 export function assertTaskHandle(value) {
@@ -76,6 +79,17 @@ function validateManifest(manifest) {
     throw new TypeError("task manifest issue_ids must be an array of non-empty strings");
   }
   assertPlainObject(manifest.inputs, "task manifest inputs");
+  const hasRunnerRoot = Object.prototype.hasOwnProperty.call(manifest, "runner_root");
+  const hasRunnerMigration = Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration");
+  if (hasRunnerRoot !== hasRunnerMigration) throw new TypeError("task manifest runner_root and runner_root_migration must be present together");
+  if (hasRunnerRoot) {
+    if (typeof manifest.runner_root !== "string" || !isAbsolute(manifest.runner_root)) throw new TypeError("task manifest runner_root must be an absolute path");
+    assertPlainObject(manifest.runner_root_migration, "task manifest runner_root_migration");
+    const migration = manifest.runner_root_migration;
+    if (Object.keys(migration).some((key) => key !== "ref") || !RUNNER_ROOT_MIGRATION_REF.test(migration.ref ?? "")) {
+      throw new TypeError("task manifest runner_root_migration is invalid");
+    }
+  }
   if (manifest.target_repo_root_migration !== undefined) {
     assertPlainObject(manifest.target_repo_root_migration, "task manifest target_repo_root_migration");
     const migration = manifest.target_repo_root_migration;
@@ -90,6 +104,10 @@ function validateManifest(manifest) {
 }
 
 function sha256(raw) { return createHash("sha256").update(raw).digest("hex"); }
+
+function runnerMigrationRef(previousManifestHash, runnerIdentity) {
+  return `identity/migrations/runner-root/${sha256(`${previousManifestHash}\0${JSON.stringify(runnerIdentity)}`)}.json`;
+}
 
 function gitValue(root, args, label) {
   try { return String(execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })).trim(); }
@@ -142,6 +160,52 @@ function validateTargetRepoRootMigration(task, manifest) {
   }
   const target = gitRepository(manifest.target_repo_root, "migrated target repository");
   if (target.root !== record.target_repo_root || target.common !== record.target_git_common_dir) throw new Error("target repository migration repository identity mismatch");
+}
+
+function validateRunnerRootMigration(task, manifest, manifestRaw) {
+  const pointer = manifest.runner_root_migration;
+  if (!pointer) return;
+  const raw = task.readRecord(pointer.ref);
+  let record;
+  try { record = JSON.parse(raw); }
+  catch (error) { throw new Error(`runner root migration record is invalid: ${error.message}`); }
+  const allowed = new Set(["schema_version", "project_name", "task_id", "previous_manifest_hash", "new_manifest_hash", "runner_identity"]);
+  if (!record || typeof record !== "object" || Array.isArray(record) || Object.keys(record).some((key) => !allowed.has(key)) ||
+      record.schema_version !== "task-runner-root-migration.v1" || record.project_name !== task.identity.projectName ||
+      record.task_id !== task.identity.taskId || !HASH.test(record.previous_manifest_hash ?? "") || !HASH.test(record.new_manifest_hash ?? "")) {
+    throw new Error("runner root migration record is invalid");
+  }
+  const identity = record.runner_identity;
+  const identityKeys = new Set(["runner_root", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
+  if (!identity || typeof identity !== "object" || Array.isArray(identity) || Object.keys(identity).some((key) => !identityKeys.has(key)) ||
+      identity.runner_root !== manifest.runner_root || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
+      typeof identity.stage !== "string" || identity.agents_ref !== "AGENTS.md" || identity.stage_skill_ref !== `workflows/${identity.stage}/SKILL.md`) {
+    throw new Error("runner root migration identity mismatch");
+  }
+  if (runnerMigrationRef(record.previous_manifest_hash, identity) !== pointer.ref) throw new Error("runner root migration lineage mismatch");
+  let migrationManifest = manifest;
+  let migrationManifestRaw = manifestRaw;
+  let targetPointer = manifest.target_repo_root_migration;
+  while (sha256(migrationManifestRaw) !== record.new_manifest_hash && targetPointer) {
+    const targetRecord = JSON.parse(task.readRecord(targetPointer.ref));
+    const prior = { ...migrationManifest, target_repo_root: targetRecord.previous_target_repo_root };
+    if (targetRecord.previous_migration_ref) {
+      prior.target_repo_root_migration = { ref: targetRecord.previous_migration_ref, integrity_hash: targetRecord.previous_migration_hash };
+    } else {
+      delete prior.target_repo_root_migration;
+    }
+    const priorRaw = `${JSON.stringify(prior, null, 2)}\n`;
+    if (sha256(priorRaw) !== targetRecord.previous_manifest_hash) throw new Error("target repository migration previous manifest hash mismatch");
+    migrationManifest = prior;
+    migrationManifestRaw = priorRaw;
+    targetPointer = prior.target_repo_root_migration;
+  }
+  if (sha256(migrationManifestRaw) !== record.new_manifest_hash) throw new Error("runner root migration new manifest hash mismatch");
+  const previousManifest = { ...migrationManifest };
+  delete previousManifest.runner_root;
+  delete previousManifest.runner_root_migration;
+  const reconstructedPreviousRaw = `${JSON.stringify(previousManifest, null, 2)}\n`;
+  if (sha256(reconstructedPreviousRaw) !== record.previous_manifest_hash) throw new Error("runner root migration previous manifest hash mismatch");
 }
 
 function expectedIdentity(expected = {}, expectedTaskId) {
@@ -692,11 +756,60 @@ function makeTaskHandle(taskPath, manifest) {
     writeAtomicAt(realTaskPath, "task.json", manifestRaw);
     verifyDirectoryIdentity(taskRootIdentity, "task root");
   });
+  RUNNER_ROOT_MIGRATORS.set(frozen, ({ recordRef, recordRaw, previousManifestRaw, manifestRaw, revalidate, testHooks } = {}) => {
+    if (!RUNNER_ROOT_MIGRATION_REF.test(recordRef ?? "")) throw new Error("runner root migration record path is invalid");
+    if (typeof revalidate !== "function") throw new TypeError("runner root migration revalidator is required");
+    verifyDirectoryIdentity(taskRootIdentity, "task root");
+    verifyManifest();
+    try { createOnlyAt(realTaskPath, recordRef, recordRaw); }
+    catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (readRegularFileNoFollow(resolveRecord(realTaskPath, recordRef).candidate, "runner root migration", taskRootIdentity.real) !== recordRaw) {
+        throw new Error("runner root migration conflicts with immutable record");
+      }
+    }
+    testHooks?.beforeManifestReplace?.();
+    const atomicHooks = {
+      ...testHooks,
+      afterRevalidateBeforeRename() {
+        testHooks?.afterRevalidateBeforeRename?.();
+        revalidate();
+      },
+    };
+    try {
+      writeAtomicAt(realTaskPath, "task.json", manifestRaw, {
+        expectedPriorRaw: previousManifestRaw,
+        validator: () => revalidate(),
+        testHooks: atomicHooks,
+      });
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
+    } catch (error) {
+      let current;
+      try { current = readRegularFileNoFollow(resolve(realTaskPath, "task.json"), "task manifest", realTaskPath); }
+      catch (readError) { throw new Error("runner root migration failed and task manifest could not be read", { cause: readError }); }
+      if (current === manifestRaw) {
+        try {
+          writeAtomicAt(realTaskPath, "task.json", previousManifestRaw, {
+            expectedPriorRaw: manifestRaw,
+            validator: () => {},
+          });
+        } catch (rollbackError) {
+          throw new Error("runner root migration failed and rollback did not restore the previous manifest", { cause: rollbackError });
+        }
+      }
+      const restored = readRegularFileNoFollow(resolve(realTaskPath, "task.json"), "task manifest", realTaskPath);
+      if (restored !== previousManifestRaw) throw new Error("runner root migration failure left task manifest changed", { cause: error });
+      throw error;
+    }
+  });
   return frozen;
 }
 
 /** Create and atomically publish a complete task directory under a trusted storage root. */
 export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) {
+  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration"))) {
+    throw new TypeError("createTask cannot set runner_root; use controlled runner migration for an existing task");
+  }
   const identity = validateManifest(manifest);
   if (typeof storageRoot !== "string" || !isAbsolute(storageRoot)) throw new TypeError("storageRoot must be absolute");
   assertNoSymlinkChain(storageRoot, "storageRoot");
@@ -716,7 +829,11 @@ export function openTask(taskPath, expected, expectedTaskId) {
   const realTaskPath = realDirectoryNoSymlink(normalized, "taskPath");
   assertTaskPathShape(realTaskPath, wanted.projectName, wanted.taskId);
   let manifest;
-  try { manifest = JSON.parse(readRegularFileNoFollow(resolve(realTaskPath, "task.json"), "task manifest", realTaskPath)); }
+  let manifestRaw;
+  try {
+    manifestRaw = readRegularFileNoFollow(resolve(realTaskPath, "task.json"), "task manifest", realTaskPath);
+    manifest = JSON.parse(manifestRaw);
+  }
   catch (error) { throw new Error(`invalid task manifest ${realTaskPath}/task.json: ${error.message}`); }
   const actual = validateManifest(manifest);
   if (actual.projectName !== wanted.projectName || actual.taskId !== wanted.taskId) {
@@ -724,6 +841,7 @@ export function openTask(taskPath, expected, expectedTaskId) {
   }
   const handle = makeTaskHandle(realTaskPath, manifest);
   validateTargetRepoRootMigration(handle, manifest);
+  validateRunnerRootMigration(handle, manifest, manifestRaw);
   return handle;
 }
 
@@ -777,6 +895,73 @@ export function migrateTaskTargetRepoRoot({ taskPath, projectName, taskId, targe
     migrator({ recordRef, recordRaw, manifestRaw: nextManifestRaw, testHooks });
     const migrated = openTask(task.taskPath, task.identity);
     return Object.freeze({ task: migrated, migration_ref: recordRef, integrity_hash: sha256(recordRaw), previous_target_repo_root: source.root, target_repo_root: target.root, target_branch: target.branch, target_head: target.head });
+  });
+}
+
+/** One-shot migration that binds an existing task to one explicit runner root. */
+export function migrateTaskRunnerRoot({ taskPath, projectName, taskId, runnerRoot, stage, testHooks } = {}) {
+  const task = openTask(taskPath, { projectName, taskId });
+  const identity = inspectRunnerIdentity({
+    runnerRoot,
+    projectName: task.identity.projectName,
+    taskId: task.identity.taskId,
+    stage,
+  });
+  if (task.manifest.runner_root !== undefined) {
+    const record = JSON.parse(task.readRecord(task.manifest.runner_root_migration.ref));
+    if (task.manifest.runner_root !== identity.runner_root || JSON.stringify(record.runner_identity) !== JSON.stringify(identity)) {
+      throw new Error("task runner_root is already bound to a different runner identity");
+    }
+    return Object.freeze({
+      task,
+      migration_ref: task.manifest.runner_root_migration.ref,
+      runner_identity: identity,
+      idempotent_replay: true,
+    });
+  }
+  const previousManifestRaw = task.readRecord("task.json");
+  const previousManifestHash = sha256(previousManifestRaw);
+  const recordRef = runnerMigrationRef(previousManifestHash, identity);
+  return task.withRecordLock("locks/task-identity-migration.lock", () => {
+    const freshPreviousRaw = task.readRecord("task.json");
+    if (freshPreviousRaw !== previousManifestRaw) throw new Error("task manifest changed before runner root migration");
+    const nextManifest = {
+      ...task.manifest,
+      runner_root: identity.runner_root,
+      runner_root_migration: { ref: recordRef },
+    };
+    const nextManifestRaw = `${JSON.stringify(nextManifest, null, 2)}\n`;
+    const record = {
+      schema_version: "task-runner-root-migration.v1",
+      project_name: task.identity.projectName,
+      task_id: task.identity.taskId,
+      previous_manifest_hash: previousManifestHash,
+      new_manifest_hash: sha256(nextManifestRaw),
+      runner_identity: identity,
+    };
+    let recordRaw = `${JSON.stringify(record, null, 2)}\n`;
+    try {
+      const existingRaw = task.readRecord(recordRef);
+      const existing = JSON.parse(existingRaw);
+      if (JSON.stringify(existing) !== JSON.stringify(record)) throw new Error("runner root migration conflicts with immutable record");
+      recordRaw = existingRaw;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const revalidate = () => {
+      const actual = inspectRunnerIdentity({
+        runnerRoot: identity.runner_root,
+        projectName: task.identity.projectName,
+        taskId: task.identity.taskId,
+        stage: identity.stage,
+      });
+      if (JSON.stringify(actual) !== JSON.stringify(identity)) throw new Error("runner identity changed during migration");
+    };
+    const migrator = RUNNER_ROOT_MIGRATORS.get(task);
+    if (typeof migrator !== "function") throw new TypeError("authentic TaskHandle runner root migrator required");
+    migrator({ recordRef, recordRaw, previousManifestRaw, manifestRaw: nextManifestRaw, revalidate, testHooks });
+    const migrated = openTask(task.taskPath, task.identity);
+    return Object.freeze({ task: migrated, migration_ref: recordRef, runner_identity: identity, idempotent_replay: false });
   });
 }
 

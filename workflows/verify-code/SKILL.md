@@ -15,11 +15,15 @@ and TaskKernel. Product artifacts use ArtifactDir. Test and Git commands run
 only in `ctx.workspace.worktreeRoot` supplied by the accepted decision.
 
 Executable entry: `node scripts/stage-runtime.mjs run --stage=verify-code
---project=<project> --task=<task> --input=<component-receipts.json>`. Use the
+--project=<project> --task=<task> --runner-root=<runner-root>
+--input=<component-receipts.json>`. Use the
 `confirm --attempt=<attempt> --decision=accepted|rejected` records the human
 decision. Pass its returned ref to `accept --human-confirmation-ref`.
 
-Create the evidence aggregate with `stage-runtime.mjs receipt --stage=verify-code --project=<project> --task=<task> --component=evidence --input=<refs-payload.json>`; every referenced hash is verified first.
+Create the evidence aggregate with `stage-runtime.mjs receipt
+--stage=verify-code --project=<project> --task=<task>
+--runner-root=<runner-root> --component=evidence
+--input=<refs-payload.json>`; every referenced hash is verified first.
 
 Declared runtime components: `test-strategy`, `wh-review`, conditional
 `isolated-browser-qa`, and the review lenses declared by the manifest.
@@ -44,7 +48,8 @@ If verify-code is already accepted but current Workspace evidence exposes a
 lineage failure, do not edit or bypass its accepted record. First write the new
 canonical `acceptance-evidence.v1` failure, then use
 `node scripts/stage-runtime.mjs publish-verify-failure --stage=verify-code
---project=<project> --task=<task> --failure-evidence=<evidence/ref.json>`.
+--project=<project> --task=<task> --runner-root=<runner-root>
+--failure-evidence=<evidence/ref.json>`.
 The kernel binds the existing accepted verify result, the active build-code
 acceptance, the evidence hash, and the current Workspace snapshot into one new,
 unaccepted verify attempt. It rejects duplicate publication, changed bindings,
@@ -54,7 +59,8 @@ attempt only for the controlled build-code reopen; never accept it.
 After the repair produces a revised accepted build-code result, publish the
 fresh passing verification through
 `node scripts/stage-runtime.mjs publish-verify-passing --stage=verify-code
---project=<project> --task=<task> --input=<component-receipts.json>`. The input
+--project=<project> --task=<task> --runner-root=<runner-root>
+--input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
 kernel requires a new active accepted build and fresh passing test, independent
 review, and acceptance-evidence records. The active build's accepted tests and
@@ -100,6 +106,14 @@ idempotent. Other attempts against a closed stage remain rejected.
    worktree, and remove the merged local task branch. Show the full hashed close plan
    for one separate close authorization bound to the plan hash.
    Never reuse the verify-code confirmation ref.
+   For a legacy task without `runner_root`, do not edit `task.json`. First run
+   `node scripts/task-migrate-runner-root.mjs --task-path=<task-path>
+   --project=<project> --task=<task> --runner-root=<runner-root>
+   --stage=verify-code`, then authenticate the existing task read-only with
+   `node scripts/task-bootstrap.mjs --task-path=<task-path> --project=<project>
+   --task=<task> --runner-root=<runner-root> --stage=verify-code`. Every later
+   `stage-runtime.mjs` invocation for this task must also pass the same explicit
+   `--runner-root`; the stage bootstrap will compare it with the migrated manifest.
    If `prepare` rejects the recorded target because it is not the real checked-out
    target branch, do not edit `task.json`. Use the official
    `node scripts/task-migrate-target-repo.mjs --project=<project> --task=<task>
