@@ -7,6 +7,7 @@ import { ReviewProviderClient } from "./review-provider-client.mjs";
 import { runReview, verifyFinal } from "./review-runner.mjs";
 import { loadTrustedThirdReviewConfig } from "./third-review-host-config.mjs";
 import { bootstrapStage, assertWorkspace, prepareMakeDecisionWorkspace } from "../../../core/stage-context.mjs";
+import { openTask } from "../../../core/task-handle.mjs";
 
 export function resolveTrustedReviewSubject(input) {
   if (!isAbsolute(input.task_path ?? "")) throw new TypeError("task_path must be an absolute TaskHandle path");
@@ -16,11 +17,16 @@ export function resolveTrustedReviewSubject(input) {
   if (input.source_root !== undefined || input.sourceRoot !== undefined) {
     throw new TypeError("source_root is forbidden; Workspace comes from accepted make-decision facts");
   }
+  if (input.runner_root !== undefined || input.runnerRoot !== undefined) {
+    throw new TypeError("runner_root is forbidden; runner identity comes from the authenticated TaskHandle manifest");
+  }
+  const task = openTask(input.task_path, projectName, taskId);
   let context = bootstrapStage(stage, {
     mode: "sidecar",
     taskPath: input.task_path,
     projectName,
     taskId,
+    ...(task.manifest.runner_root === undefined ? {} : { runnerRoot: task.manifest.runner_root }),
   });
   if (stage === "make-decision") {
     context = prepareMakeDecisionWorkspace(context);
