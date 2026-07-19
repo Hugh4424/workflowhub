@@ -411,7 +411,7 @@ function displayRecordPath(taskRoot, relativePath) {
   return candidate;
 }
 
-function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks } = {}) {
+function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode = 0o600, testHooks, validator, expectedPriorRaw } = {}) {
   const { candidate, parent } = resolveRecord(taskRoot, relativePath, { createParents: true });
   const ancestorSnapshot = directorySnapshot(taskRoot, parent);
   const temporary = resolve(parent, `.${randomUUID()}.tmp`);
@@ -429,7 +429,26 @@ function writeAtomicAt(taskRoot, relativePath, data, { encoding = "utf8", mode =
     closeSync(fd); fd = undefined;
     testHooks?.afterOpenBeforeRename?.();
     verifyDirectorySnapshot(ancestorSnapshot);
+    if (validator !== undefined) {
+      if (typeof validator !== "function") throw new TypeError("atomic record validator must be a function");
+      if (typeof expectedPriorRaw !== "string") throw new TypeError("atomic record expectedPriorRaw must be a string");
+      validator("pre");
+      if (readRegularFileNoFollow(candidate, "atomic record compare-and-swap source", ancestorSnapshot[0].real) !== expectedPriorRaw) {
+        throw new Error("atomic record compare-and-swap source changed before replacement");
+      }
+      testHooks?.afterRevalidateBeforeRename?.();
+      verifyDirectorySnapshot(ancestorSnapshot);
+      if (readRegularFileNoFollow(candidate, "atomic record compare-and-swap source", ancestorSnapshot[0].real) !== expectedPriorRaw) {
+        throw new Error("atomic record compare-and-swap source changed before replacement");
+      }
+    }
     renameSync(temporary, candidate);
+    if (validator !== undefined) {
+      validator("post");
+      if (readRegularFileNoFollow(candidate, "atomic record replacement", ancestorSnapshot[0].real) !== data) {
+        throw new Error("atomic record replacement changed after rename");
+      }
+    }
     testHooks?.beforeDirectoryFsync?.();
     fsyncDirectory(parent);
     verifyDirectorySnapshot(ancestorSnapshot);
@@ -614,20 +633,50 @@ function makeTaskHandle(taskPath, manifest) {
     if (!new Set(["results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) {
       throw new Error("only controlled build-code or verify-code canonical accepted records may be replaced");
     }
+    if (relativePath === "results/verify-code/accepted.json" && (typeof options?.validator !== "function" || typeof options?.expectedPriorRaw !== "string")) {
+      throw new Error("verify-code canonical accepted replacement requires validator and prior record binding");
+    }
     const { candidate } = resolveRecord(realTaskPath, relativePath);
     const prior = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real);
+    if (options?.expectedPriorRaw !== undefined && options.expectedPriorRaw !== prior) {
+      throw new Error("canonical accepted replacement prior record binding mismatch");
+    }
+    const stage = relativePath.split("/")[1];
+    if (typeof options?.archiveRef !== "string" || !new RegExp(`^results/${stage}/accepted-attempt-[0-9]{4}(?:-canonical-[a-f0-9]{64})?\\.json$`).test(options.archiveRef)) {
+      throw new Error("canonical accepted replacement archive path is invalid");
+    }
+    if (options.archiveRaw !== prior) throw new Error("canonical accepted replacement archive does not match the prior record");
+    const { candidate: archiveCandidate, parent: archiveParent } = resolveRecord(realTaskPath, options.archiveRef);
+    const archiveExisted = existsSync(archiveCandidate);
+    if (archiveExisted && readRegularFileNoFollow(archiveCandidate, "canonical accepted archive", taskRootIdentity.real) !== prior) {
+      throw new Error("canonical accepted replacement archive conflicts with the prior record");
+    }
     let result;
     try {
       result = writeAtomicAt(realTaskPath, relativePath, data, options);
+      if (!archiveExisted) createOnlyAt(realTaskPath, options.archiveRef, options.archiveRaw);
+      verifyDirectoryIdentity(taskRootIdentity, "task root");
     } catch (error) {
-      const current = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real);
-      if (current === data) writeAtomicAt(realTaskPath, relativePath, prior);
-      if (readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real) !== prior) {
-        throw new Error("canonical accepted replacement failed and rollback did not restore the prior record", { cause: error });
+      let current;
+      try { current = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real); }
+      catch (readError) { if (readError?.code !== "ENOENT") throw readError; }
+      try {
+        if (current !== prior) writeAtomicAt(realTaskPath, relativePath, prior);
+        if (readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real) !== prior) {
+          throw new Error("canonical accepted rollback verification failed");
+        }
+      } catch (rollbackError) {
+        throw new Error("canonical accepted replacement failed and rollback did not restore the prior record", { cause: rollbackError });
+      }
+      if (!archiveExisted && existsSync(archiveCandidate)) {
+        const archiveCurrent = readRegularFileNoFollow(archiveCandidate, "canonical accepted rollback archive", taskRootIdentity.real);
+        if (archiveCurrent === prior) {
+          unlinkSync(archiveCandidate);
+          fsyncDirectory(archiveParent);
+        }
       }
       throw error;
     }
-    verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
   });
   TARGET_REPO_ROOT_MIGRATORS.set(frozen, ({ recordRef, recordRaw, manifestRaw, testHooks } = {}) => {

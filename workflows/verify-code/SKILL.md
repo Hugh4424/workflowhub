@@ -57,7 +57,10 @@ fresh passing verification through
 --project=<project> --task=<task> --input=<component-receipts.json>`. The input
 uses the same official tests, review, and evidence receipt shape as `run`. The
 kernel requires a new active accepted build and fresh passing test, independent
-review, and acceptance-evidence records, then binds their hashes plus the old
+review, and acceptance-evidence records. The active build's accepted tests and
+review snapshots must match those fresh materials and the live Workspace; a
+build accepted at snapshot A cannot validate later Workspace B evidence. The
+kernel then binds their hashes plus the old
 accepted verify result and current Workspace HEAD/tree into one new unaccepted
 verify attempt. Record a new human decision with `confirm` for that exact
 attempt, then pass its returned ref to the ordinary `accept` command. This is
