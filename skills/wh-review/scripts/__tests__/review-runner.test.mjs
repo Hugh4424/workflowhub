@@ -110,6 +110,14 @@ describe("aggregation and runner", () => {
       buildMaterials: () => ({ bundleRoot: attachmentRoot, materialId, manifest: [] }) };
     await expect(runReview({ ...options, sourceRoot: repo })).rejects.toThrow(/naked|CandidateWorkspace|forbid/i);
     await expect(runReview({ ...options, candidateWorkspace })).resolves.toMatchObject({ status: "semantic", verdict: "pass" });
+    const detail = {
+      ...options,
+      reviewTrack: "detail",
+      providers: ["kimi", "opencode"],
+      providerClient: { run: async ({ provider }) => ({ runtimeId: `r-${provider}`, provider: { provider, status: "completed", session_id: `s-${provider}`, output: pass, error: null } }) },
+    };
+    await expect(runReview({ ...detail, sourceRoot: repo })).rejects.toThrow(/naked|CandidateWorkspace|forbid/i);
+    await expect(runReview({ ...detail, candidateWorkspace })).resolves.toMatchObject({ status: "semantic", verdict: "pass" });
   });
   it("rejects a forged or wrong-worktree Workspace capability", async () => {
     const { attachmentRoot, task } = fixture("simple-review-wrong-worktree-");

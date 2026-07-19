@@ -69,8 +69,8 @@ export async function runReview({ sourceRoot, targetRepoRoot, candidateWorkspace
   if (providers.includes(hostProvider)) throw new TypeError("provider must differ from hostProvider");
   if (!previousRuntimeIds || typeof previousRuntimeIds !== "object" || Array.isArray(previousRuntimeIds)) throw new TypeError("previousRuntimeIds must be an object keyed by provider");
   if (phaseId !== null && (stage !== "build-code" || typeof phaseId !== "string" || phaseId.length === 0)) throw new TypeError("phase_id is supported only for build-code and must be non-empty");
-  if (stage === "make-decision" && reviewTrack === "direction" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
-    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision direction review forbids naked source/target paths; use CandidateWorkspace");
+  if (stage === "make-decision" && fixtureSourceToken !== FIXTURE_SOURCE_TOKEN) {
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision review forbids naked source/target paths; use CandidateWorkspace");
     const candidate = assertCandidateWorkspace(candidateWorkspace);
     sourceRoot = candidate.worktreeRoot;
     targetRepoRoot = candidate.targetRepoRoot;
@@ -138,8 +138,8 @@ export function verifyFinal({ resultRef, sourceRoot, targetRepoRoot, candidateWo
   if (taskId !== null && result.task_id !== taskId) throw new Error("RESULT_REF_INVALID: task does not match result");
   if (stage !== null && result.stage !== stage) throw new Error("RESULT_REF_INVALID: stage does not match result");
   if (reviewTrack !== undefined && result.review_track !== reviewTrack) throw new Error("RESULT_REF_INVALID: review track does not match result");
-  if (result.stage === "make-decision" && result.review_track === "direction") {
-    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision direction verification forbids naked source/target paths; use CandidateWorkspace");
+  if (result.stage === "make-decision") {
+    if (sourceRoot !== undefined || targetRepoRoot !== undefined) throw new TypeError("make-decision verification forbids naked source/target paths; use CandidateWorkspace");
     const candidate = assertCandidateWorkspace(candidateWorkspace);
     sourceRoot = candidate.worktreeRoot;
     targetRepoRoot = candidate.targetRepoRoot;
