@@ -15,8 +15,8 @@
  *   node scripts/check-anti-host.mjs --files f1 f2 ...  # scan specific files (for tests)
  *   node scripts/check-anti-host.mjs --list-files # print files that would be scanned
  *
- * Pattern: mirrors multica provider-name-scan.mjs convention (exit 0/1/2 + --self-test
- * + --list-files) but does NOT import it.
+ * The checker uses exit 0/1/2 plus --self-test and --list-files without
+ * importing any host runtime.
  */
 
 import { readFileSync } from "fs";
@@ -31,10 +31,10 @@ const CLASSES = [
   {
     id: 1,
     name: "hardcoded-path",
-    description: "Hardcoded absolute path (/Users/…, /home/…, multica-agenthub, Knowledge/Projects)",
+    description: "Hardcoded absolute path or host repository (/Users/…, /home/…, *-agenthub, Knowledge/Projects)",
     // Matches absolute paths that are clearly machine-local or repo-specific.
     // Intentionally avoids matching relative paths or generic /tmp.
-    regex: /(?:\/Users\/|\/home\/)[^\s"'`]+|multica-agenthub|Knowledge\/Projects/g,
+    regex: /(?:\/Users\/|\/home\/)[^\s"'`]+|[a-z0-9][a-z0-9._-]*-agenthub\b|Knowledge\/Projects/gi,
   },
   {
     id: 2,
@@ -106,7 +106,7 @@ function runSelfTest() {
     {
       id: 1,
       name: "hardcoded-path",
-      content: `export const DIR = "/Users/alice/Projects/multica-agenthub/config";`,
+      content: `export const DIR = "vendor-agenthub/config";`,
     },
     {
       id: 2,

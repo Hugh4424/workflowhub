@@ -46,6 +46,17 @@ export function inspectRunnerIdentity({ runnerRoot, projectName, taskId, stage }
     throw new Error(`runner identity branch validation failed: ${error.stderr?.toString().trim() || error.message}`);
   }
   if (branch !== expectedBranch) throw new Error(`runner identity mismatch: expected branch ${expectedBranch}, actual ${branch}`);
+  let oid;
+  try {
+    oid = String(execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    })).trim().toLowerCase();
+  } catch (error) {
+    throw new Error(`runner identity HEAD validation failed: ${error.stderr?.toString().trim() || error.message}`);
+  }
+  if (!/^[a-f0-9]{40}$/.test(oid)) throw new Error("runner identity HEAD must be a full Git commit OID");
   if (!STAGES.has(stage)) throw new TypeError(`unsupported runner stage: ${stage}`);
   const agentsRef = "AGENTS.md";
   const stageSkillRef = `workflows/${stage}/SKILL.md`;
@@ -53,6 +64,7 @@ export function inspectRunnerIdentity({ runnerRoot, projectName, taskId, stage }
   regularReadableFile(resolve(root, stageSkillRef), `runner ${stage} SKILL.md`);
   return Object.freeze({
     runner_root: root,
+    runner_oid: oid,
     runner_branch: branch,
     project,
     task,
@@ -65,13 +77,16 @@ export function inspectRunnerIdentity({ runnerRoot, projectName, taskId, stage }
 /** Bind a live explicit runner to the immutable identity of one task. */
 export function assertTaskRunnerIdentity(taskHandle, { runnerRoot, stage } = {}) {
   const expectedRoot = taskHandle?.manifest?.runner_root;
-  if (typeof expectedRoot !== "string") throw new Error("task runner_root is missing; controlled migration is required");
+  const expectedOid = taskHandle?.manifest?.runner_oid;
+  if (typeof expectedRoot !== "string" || !/^[a-f0-9]{40}$/.test(expectedOid ?? "")) throw new Error("task runner identity is missing; controlled migration is required");
   const identity = inspectRunnerIdentity({
     runnerRoot,
     projectName: taskHandle.identity.projectName,
     taskId: taskHandle.identity.taskId,
     stage,
   });
-  if (identity.runner_root !== expectedRoot) throw new Error("runner identity does not match task manifest runner_root");
+  if (identity.runner_root !== expectedRoot || identity.runner_oid !== expectedOid) {
+    throw new Error(`runner identity mismatch: expected ${expectedRoot}@${expectedOid}, actual ${identity.runner_root}@${identity.runner_oid}`);
+  }
   return identity;
 }

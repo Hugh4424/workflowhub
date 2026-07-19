@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { relative, resolve } from "node:path";
 
 import { artifactReference, assertArtifactDir } from "./artifact-dir.mjs";
+import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 
@@ -23,15 +24,27 @@ function git(cwd, args, { env, input, encoding = "utf8" } = {}) {
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 function checkpointPrefix(task, stage) { return `refs/workflowhub/checkpoints/${task.identity.projectName}/${task.identity.taskId}/${stage}`; }
-function checkpointRefs(repoRoot, task, stage) {
-  const prefix = checkpointPrefix(task, stage);
-  const output = String(git(repoRoot, ["for-each-ref", "--format=%(refname)", `${prefix}/`]));
-  return output.trim().split("\n").filter(Boolean).sort();
-}
 function expectedNames(stage) {
   const names = STAGE_ARTIFACTS[stage];
   if (!names) throw new TypeError(`stage does not produce a Git checkpoint: ${stage}`);
   return names;
+}
+
+function authenticatedBase(repoRoot, plan, baseCommit, baseTree) {
+  if (!/^[a-f0-9]{40}$/i.test(baseCommit ?? "") || !/^[a-f0-9]{40}$/i.test(baseTree ?? "")) throw new Error("authenticated checkpoint base commit/tree required");
+  if (plan.parent_commit !== baseCommit) throw new Error("checkpoint parent differs from authenticated upstream base");
+  git(repoRoot, ["cat-file", "-e", `${baseCommit}^{commit}`]);
+  git(repoRoot, ["cat-file", "-e", `${baseTree}^{tree}`]);
+}
+
+function overlayTree(repoRoot, baseTree, paths) {
+  const index = resolve(tmpdir(), `workflowhub-checkpoint-${randomUUID()}.index`);
+  const env = { GIT_INDEX_FILE: index };
+  try {
+    git(repoRoot, ["read-tree", baseTree], { env });
+    git(repoRoot, ["add", "--", ...paths], { env });
+    return String(git(repoRoot, ["write-tree"], { env })).trim();
+  } finally { rmSync(index, { force: true }); }
 }
 
 export function assertGitCheckpoint(value) {
@@ -44,18 +57,22 @@ export function assertGitCheckpointPlan(value) {
   return value;
 }
 
-export function verifyGitCheckpointPlan({ workspace, artifacts, task, plan } = {}) {
+export function verifyGitCheckpointPlan({ workspace, artifacts, task, plan, baseCommit, baseTree } = {}) {
   const safeWorkspace = assertWorkspace(workspace); const safeArtifacts = assertArtifactDir(artifacts); const safeTask = assertTaskHandle(task);
   if (!plan || typeof plan !== "object" || Array.isArray(plan) || plan.schema_version !== "git-checkpoint-plan.v1" || !expectedNames(plan.stage)) throw new Error("checkpoint plan shape invalid");
   const safePlan = plan;
   if (safeArtifacts.worktreeRoot !== safeWorkspace.worktreeRoot) throw new Error("ArtifactDir is not bound to Workspace");
   const payload = { schema_version: safePlan.schema_version, stage: safePlan.stage, parent_commit: safePlan.parent_commit, artifacts: safePlan.artifacts };
   if (safePlan.plan_hash !== sha256(`${JSON.stringify(payload)}\n`)) throw new Error("checkpoint plan hash mismatch");
+  authenticatedBase(safeWorkspace.worktreeRoot, safePlan, baseCommit, baseTree);
   for (const [index, name] of expectedNames(safePlan.stage).entries()) {
     const content = Buffer.from(safeArtifacts.read(name)); const blob = String(git(safeWorkspace.worktreeRoot, ["hash-object", "--no-filters", safeArtifacts.path(name)])).trim();
     const record = safePlan.artifacts[index];
     if (record?.path !== safeArtifacts.reference(name) || record.content_hash !== sha256(content) || record.blob_oid !== blob) throw new Error(`artifact differs from checkpoint plan: ${name}`);
   }
+  const paths = expectedNames(safePlan.stage).map((name) => relative(safeWorkspace.worktreeRoot, safeArtifacts.path(name)));
+  const expectedTree = overlayTree(safeWorkspace.worktreeRoot, baseTree, paths);
+  if (captureGitWorktreeSnapshot(safeWorkspace.worktreeRoot).tree !== expectedTree) throw new Error("checkpoint Workspace differs from authenticated upstream tree plus declared artifacts");
   CHECKPOINT_PLANS.add(safePlan);
   return safePlan;
 }
@@ -85,63 +102,52 @@ export function verifyGitCheckpoint({ repoRoot, checkpoint, projectName, taskId,
   return checkpoint;
 }
 
-export function createGitCheckpoint({ workspace, artifacts, task, stage } = {}) {
+export function createGitCheckpoint({ workspace, artifacts, task, stage, baseCommit, baseTree } = {}) {
   const safeWorkspace = assertWorkspace(workspace);
   const safeArtifacts = assertArtifactDir(artifacts);
   const safeTask = assertTaskHandle(task);
   if (safeArtifacts.worktreeRoot !== safeWorkspace.worktreeRoot) throw new Error("ArtifactDir is not bound to Workspace");
   const names = expectedNames(stage);
   const repoRoot = safeWorkspace.worktreeRoot;
-  const priorRefs = checkpointRefs(repoRoot, safeTask, stage);
-  const specRefs = stage === "build-plan" ? checkpointRefs(repoRoot, safeTask, "build-spec") : [];
-  const parentRef = priorRefs.at(-1) ?? specRefs.at(-1) ?? "HEAD";
-  const parentCommit = String(git(repoRoot, ["rev-parse", parentRef])).trim();
+  authenticatedBase(repoRoot, { parent_commit: baseCommit }, baseCommit, baseTree);
   const artifactRecords = names.map((name) => {
     const path = safeArtifacts.reference(name);
     const content = Buffer.from(safeArtifacts.read(name));
     return { path, blob_oid: String(git(repoRoot, ["hash-object", "--no-filters", safeArtifacts.path(name)])).trim(), content_hash: sha256(content) };
   });
-  const payload = { schema_version: "git-checkpoint-plan.v1", stage, parent_commit: parentCommit, artifacts: artifactRecords };
+  const payload = { schema_version: "git-checkpoint-plan.v1", stage, parent_commit: baseCommit, artifacts: artifactRecords };
   const plan = { ...payload, plan_hash: sha256(`${JSON.stringify(payload)}\n`) };
   CHECKPOINT_PLANS.add(plan);
   return Object.freeze(plan);
 }
 
-export function materializeGitCheckpoint({ workspace, artifacts, task, plan, publishRef } = {}) {
+export function materializeGitCheckpoint({ workspace, artifacts, task, plan, publishRef, baseCommit, baseTree } = {}) {
   const safeWorkspace = assertWorkspace(workspace);
   const safeArtifacts = assertArtifactDir(artifacts);
   const safeTask = assertTaskHandle(task);
-  const safePlan = verifyGitCheckpointPlan({ workspace: safeWorkspace, artifacts: safeArtifacts, task: safeTask, plan });
+  const safePlan = verifyGitCheckpointPlan({ workspace: safeWorkspace, artifacts: safeArtifacts, task: safeTask, plan, baseCommit, baseTree });
   const stage = safePlan.stage;
   const names = expectedNames(stage);
   const repoRoot = safeWorkspace.worktreeRoot;
   const finalRef = `${checkpointPrefix(safeTask, stage)}/plan-${safePlan.plan_hash}`;
   if (safeArtifacts.worktreeRoot !== repoRoot) throw new Error("ArtifactDir is not bound to Workspace");
-  const index = resolve(tmpdir(), `workflowhub-checkpoint-${randomUUID()}.index`);
-  const env = { GIT_INDEX_FILE: index };
   const paths = names.map((name) => relative(repoRoot, safeArtifacts.path(name)));
-  try {
-    const parent = safePlan.parent_commit;
-    git(repoRoot, ["read-tree", parent], { env });
-    git(repoRoot, ["add", "--", ...paths], { env });
-    const changed = String(git(repoRoot, ["diff", "--cached", "--name-only", parent], { env })).trim().split("\n").filter(Boolean).sort();
-    const unexpected = changed.filter((path) => !paths.includes(path));
-    if (unexpected.length > 0) throw new Error(`checkpoint staged artifact set contains unexpected paths: ${unexpected.join(", ")}`);
-    const tree = String(git(repoRoot, ["write-tree"], { env })).trim();
-    const commit = String(git(repoRoot, ["commit-tree", tree, "-p", parent, "-m", `workflowhub checkpoint ${safeTask.identity.projectName}/${safeTask.identity.taskId}/${stage}`], {
-      env: { ...env, GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local", GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local" },
-    })).trim();
-    const checkpoint = checkpointFromCommit(repoRoot, safeTask, stage, finalRef, commit);
-    for (const [artifactIndex, record] of checkpoint.artifacts.entries()) {
-      const name = names[artifactIndex];
-      if (record.path !== safeArtifacts.reference(name) || sha256(Buffer.from(safeArtifacts.read(name))) !== record.content_hash) throw new Error(`artifact changed while creating checkpoint: ${record.path}`);
-    }
-    if (typeof publishRef !== "function") throw new TypeError("checkpoint ref publisher authority required");
-    publishRef(finalRef, commit, ZERO_OID);
-    verifyGitCheckpoint({ repoRoot, checkpoint, projectName: safeTask.identity.projectName, taskId: safeTask.identity.taskId, stage, artifacts: safeArtifacts });
-    CHECKPOINTS.add(checkpoint);
-    return Object.freeze(checkpoint);
-  } finally { rmSync(index, { force: true }); }
+  const parent = safePlan.parent_commit;
+  const tree = overlayTree(repoRoot, baseTree, paths);
+  if (captureGitWorktreeSnapshot(repoRoot).tree !== tree) throw new Error("checkpoint Workspace changed during materialization");
+  const commit = String(git(repoRoot, ["commit-tree", tree, "-p", parent, "-m", `workflowhub checkpoint ${safeTask.identity.projectName}/${safeTask.identity.taskId}/${stage}`], {
+    env: { GIT_AUTHOR_NAME: "WorkflowHub", GIT_AUTHOR_EMAIL: "workflowhub@local", GIT_COMMITTER_NAME: "WorkflowHub", GIT_COMMITTER_EMAIL: "workflowhub@local" },
+  })).trim();
+  const checkpoint = checkpointFromCommit(repoRoot, safeTask, stage, finalRef, commit);
+  for (const [artifactIndex, record] of checkpoint.artifacts.entries()) {
+    const name = names[artifactIndex];
+    if (record.path !== safeArtifacts.reference(name) || sha256(Buffer.from(safeArtifacts.read(name))) !== record.content_hash) throw new Error(`artifact changed while creating checkpoint: ${record.path}`);
+  }
+  if (typeof publishRef !== "function") throw new TypeError("checkpoint ref publisher authority required");
+  publishRef(finalRef, commit, ZERO_OID);
+  verifyGitCheckpoint({ repoRoot, checkpoint, projectName: safeTask.identity.projectName, taskId: safeTask.identity.taskId, stage, artifacts: safeArtifacts });
+  CHECKPOINTS.add(checkpoint);
+  return Object.freeze(checkpoint);
 }
 
 function checkpointFromCommit(repoRoot, task, stage, ref, commit) {

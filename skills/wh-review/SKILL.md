@@ -16,7 +16,49 @@ node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
 ```
 
-There is no reset, recover, flow migration, projection repair, or trusted-base rewrite command. A failed invocation creates only an immutable attempt. Fix the reported problem and run again.
+Send the input JSON over stdin. Never place a transient review-input file in
+the runner, target repository, CandidateWorkspace, or TaskHandle. If the host
+cannot pipe stdin, use `mktemp` under its OS temporary directory and delete the
+file in the same foreground command; task storage is only for canonical output.
+
+Before the first call, read this file and `stage-materials.json`; do not guess
+field names or provider aliases. A normal review input has this exact shape:
+
+```json
+{
+  "task_path": "/absolute/task-handle/path",
+  "project_name": "project",
+  "task_id": "task",
+  "stage": "build-spec",
+  "host_provider": "codex",
+  "providers": ["claude-code"],
+  "materials": {
+    "raw_requirement": "...",
+    "approved_decision": "...",
+    "draft_spec": "..."
+  }
+}
+```
+
+`host_provider` is the exact current host ID. `providers` contains exact IDs
+from the configured 3rd-review provider registry and must not contain the host;
+never shorten `claude-code` to `claude` or invent names such as `gemini`.
+Required `materials` keys come directly from `stage-materials.json`:
+
+- make-decision/direction: `raw_requirement`, `objective_facts`;
+- make-decision/detail: `raw_requirement`, `approved_direction`,
+  `draft_spec_or_acceptance`;
+- build-spec: `raw_requirement`, `approved_decision`, `draft_spec`;
+- build-plan: `approved_spec`, `acceptance_criteria`, `draft_plan`;
+- build-code: `approved_spec`, `acceptance_criteria`, `test_evidence`;
+- verify-code: `acceptance_criteria`, `acceptance_evidence`, `open_exceptions`.
+
+The runner supplies `review_instructions`; callers must not add it. A
+`build-code` phase review also adds `phase_id`. `verify-final` replaces
+`materials`, `host_provider`, and `providers` with `result_ref` and reuses the
+same task/stage identity.
+
+There is no reset, recover, flow migration, projection repair, or trusted-base rewrite command. Local input validation fails before an attempt exists; fix the JSON from this public contract and call once. A provider or protocol failure creates an immutable unavailable attempt; do not retry the same material with guessed fields or provider names.
 
 ## Inputs
 

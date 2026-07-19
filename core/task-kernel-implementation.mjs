@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { basename, dirname, isAbsolute, normalize, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 
 import { assertGitCheckpointPlan, createGitCheckpoint, materializeGitCheckpoint, verifyGitCheckpoint, verifyGitCheckpointPlan } from "./git-checkpoint.mjs";
 import { acceptanceModeFor, requiresHumanConfirmation } from "./stage-acceptance-policy.mjs";
@@ -26,6 +26,7 @@ const INPUT_STAGES = Object.freeze({
   build_plan: "build-plan",
 });
 const GIT_OID = /^[a-f0-9]{40}$/i;
+const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 const REQUIRED_FACTS = Object.freeze(Object.fromEntries(
   Object.entries(factsContract.stages).map(([stage, contract]) => [stage, Object.freeze([...contract.required_keys])]),
@@ -53,6 +54,19 @@ function parseJson(raw, label) {
 }
 
 function hash(raw) { return createHash("sha256").update(raw).digest("hex"); }
+
+export function validateAcceptanceEvidence(value, label = "acceptance evidence") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
+  if (value.schema_version !== "acceptance-evidence.v1") throw new Error(`${label} schema_version must be acceptance-evidence.v1`);
+  if (typeof value.acceptance_criterion_id !== "string" || !ACCEPTANCE_ID.test(value.acceptance_criterion_id)) throw new Error(`${label} acceptance_criterion_id must be stable and non-empty`);
+  if (!new Set(["pass", "fail"]).has(value.result)) throw new Error(`${label} result must be pass or fail`);
+  if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`${label} refs must be a non-empty array`);
+  const refs = value.refs.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(entry.ref) || entry.ref.includes("..") || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
+    return { ref: entry.ref, sha256: entry.sha256 };
+  });
+  return Object.freeze({ schema_version: value.schema_version, acceptance_criterion_id: value.acceptance_criterion_id, result: value.result, refs: Object.freeze(refs) });
+}
 
 function validateRefs(refs, label) {
   if (!Array.isArray(refs)) throw new TypeError(`${label} must be an array`);
@@ -157,13 +171,7 @@ export function validateStageFacts(stage, facts) {
     facts.changed.forEach((ref, index) => artifactRef(ref, `build-code facts.changed[${index}]`));
     validateTests(facts.tests, "build-code facts.tests");
     validateReview(facts.review, "build-code facts.review");
-    if (typeof facts.phase_completion !== "boolean" && (!facts.phase_completion || typeof facts.phase_completion !== "object" || Array.isArray(facts.phase_completion))) {
-      throw new TypeError("build-code facts.phase_completion must be a boolean or object");
-    }
-    if (typeof facts.phase_completion === "object") {
-      nonemptyString(facts.phase_completion.status, "build-code facts.phase_completion.status");
-      artifactRef(facts.phase_completion.evidence_ref, "build-code facts.phase_completion.evidence_ref");
-    }
+    validatePhaseCompletion(facts.phase_completion);
   }
   if (name === "verify-code") {
     validateTests(facts.tests, "verify-code facts.tests");
@@ -196,7 +204,18 @@ function gitOid(value, label) {
 
 function artifactRef(value, label) {
   nonemptyString(value, label);
-  if (isAbsolute(value) || normalize(value).split(/[\\/]/).includes("..")) throw new TypeError(`${label} must be a task-relative reference`);
+  if (isAbsolute(value) || value.split(/[\\/]/).includes("..")) throw new TypeError(`${label} must be a task-relative reference`);
+  return value;
+}
+
+export function validatePhaseCompletion(value, label = "build-code facts.phase_completion") {
+  if (typeof value !== "boolean" && (!value || typeof value !== "object" || Array.isArray(value))) {
+    throw new TypeError(`${label} must be a boolean or object`);
+  }
+  if (typeof value === "object") {
+    nonemptyString(value.status, `${label}.status`);
+    artifactRef(value.evidence_ref, `${label}.evidence_ref`);
+  }
   return value;
 }
 
@@ -215,6 +234,20 @@ function validateTests(value, label) {
 
 function validateReview(value, label) {
   plain(value, label);
+  if (value.status === "unavailable") {
+    rejectUnknown(value, new Set(["status", "attempt_ref", "attempt_hash", "snapshot_tree", "material_id", "error", "review_track"]), label);
+    artifactRef(value.attempt_ref, `${label}.attempt_ref`);
+    if (!value.attempt_ref.startsWith("reviews/attempts/") || !value.attempt_ref.endsWith("/attempt.json")) throw new TypeError(`${label}.attempt_ref must reference a formal wh-review attempt`);
+    if (!HASH.test(value.attempt_hash ?? "")) throw new TypeError(`${label}.attempt_hash must be sha256`);
+    gitOid(value.snapshot_tree, `${label}.snapshot_tree`);
+    if (!HASH.test(value.material_id ?? "")) throw new TypeError(`${label}.material_id must be sha256`);
+    plain(value.error, `${label}.error`);
+    rejectUnknown(value.error, new Set(["code", "message"]), `${label}.error`);
+    nonemptyString(value.error.code, `${label}.error.code`);
+    nonemptyString(value.error.message, `${label}.error.message`);
+    if (value.review_track !== undefined && !new Set(["direction", "detail"]).has(value.review_track)) throw new TypeError(`${label}.review_track must be direction or detail`);
+    return;
+  }
   rejectUnknown(value, new Set(["verdict", "result_ref", "result_hash", "snapshot_tree"]), label);
   nonemptyString(value.verdict, `${label}.verdict`);
   artifactRef(value.result_ref, `${label}.result_ref`);
@@ -364,6 +397,22 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     const name = stageName(stage);
     return readAcceptedAt(name, "accepted.json");
   };
+  const checkpointBase = (stage) => {
+    const name = stageName(stage);
+    if (name === "build-spec") {
+      const decision = readAcceptedLocal("make-decision");
+      const baseCommit = decision.facts.baseline_commit;
+      const baseTree = decision.facts.snapshot_tree ?? String(execFileSync("git", ["rev-parse", `${baseCommit}^{tree}`], {
+        cwd: workspace.worktreeRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      })).trim();
+      return { baseCommit, baseTree };
+    }
+    if (name === "build-plan") {
+      const spec = readAcceptedLocal("build-spec");
+      return { baseCommit: spec.accepted.checkpoint.commit_oid, baseTree: spec.accepted.checkpoint.tree_oid };
+    }
+    throw new Error(`stage does not produce a Git checkpoint: ${name}`);
+  };
   const verifyUpstream = (stage, refs) => {
     validateStageUpstream(stage, task.identity.taskId, refs);
     const bindings = [];
@@ -409,9 +458,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
   const readFailureEvidence = (evidenceRef) => {
     if (!/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(evidenceRef ?? "")) throw new Error("failure evidence must be a canonical evidence reference");
     const raw = task.readRecord(evidenceRef);
-    const value = parseJson(raw, "failure evidence");
-    if (!value || value.schema_version !== "acceptance-evidence.v1" || typeof value.acceptance_criterion_id !== "string" || value.acceptance_criterion_id.trim() === "" || value.result !== "fail" || !Array.isArray(value.refs)) {
-      throw new Error("failure evidence must be acceptance-evidence.v1 with result=fail");
+    const value = validateAcceptanceEvidence(parseJson(raw, "failure evidence"), "failure evidence");
+    if (value.result !== "fail") throw new Error("failure evidence must be acceptance-evidence.v1 with result=fail");
+    for (const [index, nested] of value.refs.entries()) {
+      if (hash(task.readRecord(nested.ref)) !== nested.sha256) throw new Error(`failure evidence refs[${index}] hash mismatch`);
     }
     return { ref: evidenceRef, hash: hash(raw) };
   };
@@ -510,6 +560,20 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
       if (hash(task.readRecord(entry.ref)) !== entry.sha256) throw new Error(`verify-code passing attempt evidence changed before publication: ${entry.ref}`);
     }
   };
+  const visitAttempts = (stage, visitor) => {
+    for (let sequence = 1; sequence <= 9999; sequence += 1) {
+      const attemptRef = `attempt-${String(sequence).padStart(4, "0")}.json`;
+      let raw;
+      try { raw = task.readRecord(`results/${stage}/${attemptRef}`); }
+      catch (error) { if (error?.code === "ENOENT") return; throw error; }
+      const attempt = validateAttempt(parseJson(raw, `${stage} attempt`), { taskId: task.identity.taskId, stage, attemptId: `${stage}:${attemptRef.slice(0, -5)}` });
+      if (visitor(attempt, attemptRef)) return;
+    }
+  };
+  const rejectPublishedBuildReopen = (reopenRef) => visitAttempts("build-code", (attempt, attemptRef) => {
+    if (attempt.reopen_provenance?.reopen_ref !== reopenRef) return false;
+    throw new Error(`build-code reopen already published as ${attemptRef}; resume and accept that attempt`);
+  });
   const controlledVerifyFailurePublications = new WeakSet();
   const controlledVerifyPassingPublications = new WeakSet();
   const duplicateVerifyFailurePublication = (publication) => {
@@ -546,7 +610,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
     },
     createCheckpoint(stage) {
       if (!workspace || !artifacts) throw new Error("Git checkpoint requires Workspace and ArtifactDir capabilities");
-      return createGitCheckpoint({ workspace, artifacts, task, stage: stageName(stage) });
+      const name = stageName(stage);
+      return createGitCheckpoint({ workspace, artifacts, task, stage: name, ...checkpointBase(name) });
     },
     publishAttempt(stage, data = {}) {
       const name = stageName(stage);
@@ -586,7 +651,10 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
           assertPassingMaterials(publication, data.facts, data.evidence_refs ?? [], current, activeBuild);
           duplicateVerifyPassingPublication(publication);
         }
-        if (current && name === "build-code") assertReopenProvenance(data.reopen_provenance, current);
+        if (current && name === "build-code") {
+          const reopen = assertReopenProvenance(data.reopen_provenance, current);
+          rejectPublishedBuildReopen(reopen.ref);
+        }
         if (!current && data.reopen_provenance !== undefined) throw new Error("build-code reopen provenance requires an accepted build-code stage");
         validateRefs(data.upstream_refs ?? [], "upstream_refs");
         if (data.upstream_acceptances !== undefined) throw new Error("upstream_acceptances are kernel-derived and cannot be supplied");
@@ -598,8 +666,8 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (name === "make-decision") verifyCandidateSnapshot(data.facts);
         if (["build-spec", "build-plan"].includes(name)) {
           assertGitCheckpointPlan(data.facts.checkpoint);
+          verifyGitCheckpointPlan({ workspace, artifacts, task, plan: data.facts.checkpoint, ...checkpointBase(name) });
           if (data.checkpoint !== undefined && data.checkpoint !== data.facts.checkpoint) throw new Error("caller checkpoint override is forbidden");
-          verifyGitCheckpointPlan({ workspace, artifacts, task, plan: data.facts.checkpoint });
         }
         for (let sequence = 1; sequence <= 9999; sequence += 1) {
           const filename = `attempt-${String(sequence).padStart(4, "0")}.json`;
@@ -805,7 +873,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (["build-spec", "build-plan"].includes(name)) {
           if (!workspace || !artifacts) throw new Error("accepting a design checkpoint requires Workspace and ArtifactDir capabilities");
           if (acceptanceMode === "human" && confirmation.checkpoint_plan_hash !== attempt.checkpoint.plan_hash) throw new Error("human confirmation checkpoint plan hash mismatch");
-          acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, publishRef: (ref, commit, zeroOid) => {
+          acceptedCheckpoint = materializeGitCheckpoint({ workspace, artifacts, task, plan: attempt.checkpoint, ...checkpointBase(name), publishRef: (ref, commit, zeroOid) => {
             execFileSync("git", ["update-ref", ref, commit, zeroOid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
           } });
           execFileSync("git", ["merge-base", "--is-ancestor", attempt.checkpoint.parent_commit, acceptedCheckpoint.commit_oid], { cwd: workspace.worktreeRoot, stdio: "ignore" });
@@ -867,7 +935,7 @@ export function buildTaskKernel(taskHandle, { now = () => new Date().toISOString
         if (expectedUpstream.length !== 1) throw new Error("verify-code failure does not reference this task's build-code acceptance");
         const binding = (verifyAttempt.upstream_acceptances ?? []).find((entry) => entry.task_id === task.identity.taskId && entry.stage === "build-code");
         if (binding && (binding.accepted_ref !== current.accepted_ref || binding.integrity_hash !== String(current.accepted.integrity_hash).replace(/^sha256:/, ""))) throw new Error("verify-code failure source does not match the active build-code acceptance");
-        if (!binding && current.accepted_ref !== "results/build-code/accepted.json") throw new Error("legacy verify-code failure cannot reopen a revised build-code acceptance");
+        if (!binding && current.attempt.reopen_provenance !== undefined) throw new Error("legacy verify-code failure without upstream acceptance cannot reopen a revised build-code acceptance");
         const failure = verifyFailureEvidence(verifyAttempt, failureEvidenceRef);
         for (let sequence = 1; sequence <= 9999; sequence += 1) {
           const reopenRef = `results/build-code/revisions/reopen-${String(sequence).padStart(4, "0")}.json`;

@@ -114,16 +114,15 @@ describe("TaskHandle", () => {
       projectName: "PaperBuilder",
       taskId: "paperbuilder-phase-foundation",
     });
-    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(
-      manifest,
-    );
+    const persistedManifest = manifest;
+    expect(JSON.parse(readFileSync(join(taskPath, "task.json"), "utf8"))).toEqual(persistedManifest);
 
     const opened = openTask(
       taskPath,
       "PaperBuilder",
       "paperbuilder-phase-foundation",
     );
-    expect(opened.manifest).toEqual(manifest);
+    expect(opened.manifest).toEqual(persistedManifest);
     expect(() => createTask({ storageRoot, taskPath, manifest })).toThrow(/already exists|create-only/i);
   });
 

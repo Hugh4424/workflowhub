@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { bootstrapStage } from "../stage-context.mjs";
-import { createTask } from "../task-handle.mjs";
+import { createTask, migrateTaskRunnerRoot } from "../task-handle.mjs";
 import { createTaskKernel } from "../task-kernel.mjs";
 import { prepareTaskWorkspace } from "../workspace.mjs";
 import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.mjs";
@@ -13,7 +13,7 @@ import { writeHumanConfirmation } from "../../tests/helpers/human-confirmation.m
 const previousTaskDir = process.env.WORKFLOWHUB_TASK_DIR;
 const temporaryDirs = [];
 
-function fixture({ acceptDecision = true } = {}) {
+function fixture({ acceptDecision = true, migrateRunner = false } = {}) {
   const storageRoot = realpathSync(
     mkdtempSync(join(tmpdir(), "workflowhub-stage-context-")),
   );
@@ -44,7 +44,24 @@ function fixture({ acceptDecision = true } = {}) {
     inputs: {},
   });
   const task = createTask({ storageRoot, taskPath, manifest });
-  const kernel = createTaskKernel(task);
+  let activeTask = task;
+  let runnerRoot;
+  if (migrateRunner) {
+    runnerRoot = join(storageRoot, "runner");
+    mkdirSync(runnerRoot);
+    execFileSync("git", ["init", "-q", "-b", "task/PaperBuilder/paperbuilder-phase-foundation"], { cwd: runnerRoot });
+    execFileSync("git", ["config", "user.email", "tests@workflowhub.local"], { cwd: runnerRoot });
+    execFileSync("git", ["config", "user.name", "WorkflowHub Tests"], { cwd: runnerRoot });
+    writeFileSync(join(runnerRoot, "AGENTS.md"), "# Runner\n");
+    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+      mkdirSync(join(runnerRoot, "workflows", stage), { recursive: true });
+      writeFileSync(join(runnerRoot, "workflows", stage, "SKILL.md"), `# ${stage}\n`);
+    }
+    execFileSync("git", ["add", "."], { cwd: runnerRoot });
+    execFileSync("git", ["commit", "-qm", "runner"], { cwd: runnerRoot });
+    activeTask = migrateTaskRunnerRoot({ taskPath, projectName: "PaperBuilder", taskId: "paperbuilder-phase-foundation", runnerRoot: realpathSync(runnerRoot), stage: "verify-code" }).task;
+  }
+  const kernel = createTaskKernel(activeTask);
   if (acceptDecision) {
     const published = kernel.publishAttempt("make-decision", {
       facts: { worktree_root: worktreeRoot, baseline_commit: baselineCommit },
@@ -52,7 +69,7 @@ function fixture({ acceptDecision = true } = {}) {
     kernel.acceptAttempt("make-decision", published.attempt_ref, writeHumanConfirmation(kernel, "make-decision", published));
   }
   mkdirSync(join(worktreeRoot, "specs", manifest.task_id), { recursive: true });
-  return { storageRoot, taskPath, worktreeRoot, baselineCommit, manifest, task };
+  return { storageRoot, taskPath, worktreeRoot, baselineCommit, manifest, task: activeTask, runnerRoot: runnerRoot && realpathSync(runnerRoot) };
 }
 
 afterEach(() => {
@@ -126,6 +143,19 @@ describe("bootstrapStage", () => {
     expect(context.task.taskPath).toBe(taskPath);
   });
 
+  it("sidecar mode rejects runner drift immediately after opening the task", () => {
+    const { taskPath, runnerRoot } = fixture({ migrateRunner: true });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "runner drift"], { cwd: runnerRoot });
+
+    expect(() => bootstrapStage("verify-code", {
+      mode: "sidecar",
+      taskPath,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      runnerRoot,
+    })).toThrow(/runner identity mismatch/i);
+  });
+
   it("rejects taskPath, expected identity, and manifest disagreement", () => {
     const { taskPath } = fixture();
 
@@ -181,7 +211,7 @@ describe("bootstrapStage", () => {
     expect(() => context.kernel.acceptAttempt("make-decision", correct.attempt_ref, writeHumanConfirmation(context.kernel, "make-decision", correct))).not.toThrow();
   });
 
-  it.each(["build-spec", "build-plan", "build-code", "verify-code"])(
+  it.each(["build-spec", "build-plan", "verify-code"])(
     "builds %s Workspace and ArtifactDir only from accepted make-decision facts",
     (stage) => {
       const { storageRoot, worktreeRoot, baselineCommit } = fixture();
@@ -205,6 +235,17 @@ describe("bootstrapStage", () => {
       );
     },
   );
+
+  it("rejects build-code bootstrap without accepted spec and plan", () => {
+    const { storageRoot } = fixture();
+    expect(() => bootstrapStage("build-code", {
+      mode: "launcher",
+      home: storageRoot,
+      projectName: "PaperBuilder",
+      taskId: "paperbuilder-phase-foundation",
+      env: { WORKFLOWHUB_TASK_DIR: storageRoot },
+    })).toThrow(/accepted spec and plan/i);
+  });
 
   it("invalidates Workspace automatically when its worktree path is replaced", () => {
     const { storageRoot, worktreeRoot } = fixture();

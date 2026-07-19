@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createTask } from "../../../../core/task-handle.mjs";
 
 const cli = new URL("../wh-review-cli.mjs", import.meta.url);
+const roots = [];
+afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
 
 describe("wh-review production CLI", () => {
   it("exports only run and verify-final operations", async () => {
@@ -24,6 +30,26 @@ describe("wh-review production CLI", () => {
     const { runReviewRound, verifyFinalReview } = await import(cli.href);
     await expect(runReviewRound({ task_tracking_root: "relative", task_id: "task" })).rejects.toThrow(/absolute/);
     expect(() => verifyFinalReview({ task_tracking_root: "relative", task_id: "task" })).toThrow(/absolute/);
+  });
+
+  it("reconstructs an authenticated make-decision CandidateWorkspace from the TaskHandle", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "wh-review-cli-decision-"))); roots.push(root);
+    const repo = join(root, "repo"); mkdirSync(repo);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+    execFileSync("git", ["commit", "--allow-empty", "-qm", "baseline"], { cwd: repo });
+    const taskPath = join(root, "Projects", "Demo", "tasks", "task");
+    createTask({ storageRoot: root, taskPath, manifest: {
+      schema_version: "1.0.0", project_name: "Demo", task_id: "task", created_at: "2026-07-19T00:00:00.000Z",
+      target_repo_root: repo, issue_ids: [], inputs: {},
+    } });
+    const { resolveTrustedReviewSubject } = await import(cli.href);
+    const subject = resolveTrustedReviewSubject({ task_path: taskPath, project_name: "Demo", task_id: "task", stage: "make-decision" });
+    expect(subject.candidateWorkspace.worktreeRoot).toBe(`${repo}-task`);
+    expect(subject.candidateWorkspace.targetRepoRoot).toBe(realpathSync(repo));
+    expect(subject).not.toHaveProperty("sourceRoot");
+    expect(subject).not.toHaveProperty("targetRepoRoot");
   });
 
   it("accepts only phase_id as the phase scope selector", async () => {

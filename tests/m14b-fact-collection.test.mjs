@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Ajv2020 from "ajv/dist/2020.js";
 
 import {
@@ -23,9 +23,12 @@ import { buildArtifactProjection, buildHealthProjection, collectTaskFacts, creat
 import { bootstrapStage } from "../core/stage-context.mjs";
 import { createTask } from "../core/task-handle.mjs";
 import { createTaskKernel } from "../core/task-kernel.mjs";
+import { acceptStageAttempt, runStage } from "../core/stage-runner.mjs";
 import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
+import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const cleanup = [];
+vi.setConfig({ testTimeout: 15_000 });
 afterEach(async () => Promise.all(cleanup.splice(0).map((path) => rm(path, {
   recursive: true, force: true, maxRetries: 3, retryDelay: 100,
 }))));
@@ -55,13 +58,33 @@ async function createM14bFixture() {
   await mkdir(join(candidate.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
   await writeFile(join(candidate.worktreeRoot, decisionRef), "# Decision\n");
   const kernel = createTaskKernel(task);
+  const decisionSnapshot = candidate.captureSnapshot();
   const published = kernel.publishAttempt("make-decision", { facts: {
     worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit,
-    decision_ref: decisionRef, decision_hash: "d".repeat(64),
+    snapshot_tree: decisionSnapshot.tree, decision_ref: decisionRef, decision_hash: "d".repeat(64),
   } });
   const confirmation = kernel.confirmAttempt("make-decision", published.attempt_ref, "accepted").ref;
   kernel.acceptAttempt("make-decision", published.attempt_ref, confirmation);
   const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+  const contextFor = (stage) => bootstrapStage(stage, {
+    mode: "sidecar", projectName: task.identity.projectName, taskId: task.identity.taskId, taskPath: task.taskPath,
+  });
+  const execute = async (stage, handler) => {
+    const context = contextFor(stage);
+    const attempt = await runStage(stage, context, handler);
+    const request = { attemptRef: attempt.attempt_ref };
+    if (stage === "build-plan") request.humanConfirmationRef = writeHumanConfirmation(context.kernel, stage, attempt);
+    acceptStageAttempt(stage, context, request);
+  };
+  await execute("build-spec", async (worker) => {
+    worker.artifacts.writeAtomic("spec.md", "# Fixture spec\n");
+    return { facts: { spec_ref: worker.artifacts.reference("spec.md"), checkpoint: worker.createCheckpoint("build-spec") } };
+  });
+  await execute("build-plan", async (worker) => {
+    worker.artifacts.writeAtomic("plan.md", "# Fixture plan\n");
+    worker.artifacts.writeAtomic("tasks.md", "# Fixture tasks\n");
+    return { facts: { plan_ref: worker.artifacts.reference("plan.md"), tasks_ref: worker.artifacts.reference("tasks.md"), checkpoint: worker.createCheckpoint("build-plan") } };
+  });
   const baseline = workspace.baselineCommit;
   await mkdir(join(workspace.worktreeRoot, "specs", task.identity.taskId), { recursive: true });
   for (const relative of ["config", "schemas", "skills", "workflows", "specs/m14a-audit-contract-layer"]) {

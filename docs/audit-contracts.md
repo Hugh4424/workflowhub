@@ -16,7 +16,8 @@
 | Audit summary | audit aggregator | stage-result, validator, facts assembly, human review |
 | Summary reference/hash | stage-result producer | validator, facts assembly, next-stage caller |
 
-Generic core accepts only `CanonicalSourceInput`; Multica-specific fields stop at `core/multica-source-adapter.mjs`.
+Generic core accepts only `CanonicalSourceInput`. Invoking hosts normalize their
+native source material outside WorkflowHub and pass only canonical fields.
 
 ## P3 stage-result carrier
 
@@ -35,10 +36,20 @@ New stage-result producers use `core/audit-summary-carrier.mjs`. They emit one u
 | Retry | Use a new `attempt_id`; never join entry and exit across attempts. |
 | Human gate | Emit `needs_human`, preserve the aggregator verdict, and wait for an explicit human decision. |
 
-## Offline and Multica caller guidance
+## Caller guidance
 
-Offline callers create `CanonicalSourceInput` from a fixture. Multica callers normalize issue/comment material through `normalizeMulticaSource`; both paths must produce the same canonical shape, ledger, summary, and verdict for equivalent content. Callers pass evidence references and hashes, invoke the aggregator once, then carry its `audit_summary_ref`, `audit_verdict`, and `audit_summary_hash`. Do not pass Multica-native fields into generic core or compute a local verdict.
+Offline callers create `CanonicalSourceInput` from a fixture. Other invoking
+hosts normalize native material before calling WorkflowHub; equivalent content
+must produce the same canonical shape, ledger, summary, and verdict. Callers pass
+evidence references and hashes, invoke the aggregator once, then carry its
+`audit_summary_ref`, `audit_verdict`, and `audit_summary_hash`. Do not pass
+host-native fields into generic core or compute a local verdict.
 
 ## Cutover completion signal
 
-Cutover is complete only when all five stage manifests use canonical IDs, all eight registry consumers preserve the one-summary rule, legacy callers receive explicit mapping or `unknown`, and the relevant tests cover malformed, duplicate, out-of-order, tampered, stale, legacy, offline, and Multica inputs. Until then, legacy boundaries remain explicit; they never become a second authority.
+Cutover is complete only when all five stage manifests use canonical IDs, all
+eight registry consumers preserve the one-summary rule, legacy callers receive
+explicit mapping or `unknown`, and the relevant tests cover malformed,
+duplicate, out-of-order, tampered, stale, legacy, offline, and host-normalized
+inputs. Until then, legacy boundaries remain explicit; they never become a
+second authority.

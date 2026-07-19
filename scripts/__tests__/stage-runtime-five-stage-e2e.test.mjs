@@ -55,8 +55,10 @@ describe("official five-stage CLI", () => {
         : ["confirm", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, "--decision=accepted", ...extra];
       const invalid = spawnSync(process.execPath, [runtime, ...invalidArgs], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
       expect(invalid.status).not.toBe(0);
-      const acceptedArgs = ["accept", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, ...(human ? [`--human-confirmation-ref=${confirmation.ref}`] : []), ...extra];
-      const accepted = run(root, repo, acceptedArgs);
+      const accepted = human
+        ? run(root, repo, ["accept", `--stage=${stage}`, "--project=Demo", "--task=official-chain", `--attempt=${attempt.attempt_ref}`, `--human-confirmation-ref=${confirmation.ref}`, ...extra])
+        : JSON.parse(task.readRecord(`results/${stage}/accepted.json`));
+      expect(accepted.attempt_ref).toBe(attempt.attempt_ref);
       expect(accepted.acceptance_mode).toBe(human ? "human" : "automatic");
       if (!human) expect(accepted).not.toHaveProperty("human_confirmation_ref");
       if (["build-spec", "build-plan"].includes(stage)) expect(accepted.checkpoint.ref).toMatch(/^refs\/workflowhub\/checkpoints\//);
@@ -106,7 +108,13 @@ describe("official five-stage CLI", () => {
 
     const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
     expect(implementation.value.changed).toContain("src/feature.txt");
-    createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf fixture-output", receiptRef: "receipts/build-tests.json", outputRef: "evidence/build-output.txt" });
+    const buildTestCaptureInput = join(root, "build-test-capture.json");
+    writeFileSync(buildTestCaptureInput, `${JSON.stringify({ command: "printf fixture-output", receipt_ref: "receipts/build-tests.json", output_ref: "evidence/build-output.txt" })}\n`);
+    const capturedBuildTests = run(root, repo, ["capture-tests", "--stage=build-code", "--project=Demo", "--task=official-chain", `--input=${buildTestCaptureInput}`]);
+    expect(capturedBuildTests).toMatchObject({ receipt_ref: "receipts/build-tests.json", output_ref: "evidence/build-output.txt", exit_code: 0 });
+    const unsupportedCapture = spawnSync(process.execPath, [runtime, "capture-tests", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${buildTestCaptureInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(unsupportedCapture.status).not.toBe(0);
+    expect(unsupportedCapture.stderr).toMatch(/capture-tests requires --stage=build-code/i);
     const buildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: implementation.value.snapshot_tree });
     invoke("build-code", { implementation: "receipts/implementation.json", tests: "receipts/build-tests.json", review: buildReview.resultRef });
 
@@ -120,7 +128,9 @@ describe("official five-stage CLI", () => {
     expect(prematurePassing.status).not.toBe(0);
     expect(prematurePassing.stderr).toMatch(/new active accepted build/i);
     expect(() => task.readRecord("results/verify-code/attempt-0002.json")).toThrow(/ENOENT|no such/i);
-    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "WORKSPACE-LINEAGE", result: "fail", refs: [] }, null, 2)}\n`;
+    const failureDetail = "workspace lineage failed\n";
+    createTaskKernel(task).publishCanonicalRecord("evidence/workspace-lineage-failure.txt", failureDetail);
+    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "WORKSPACE-LINEAGE", result: "fail", refs: [{ ref: "evidence/workspace-lineage-failure.txt", sha256: createHash("sha256").update(failureDetail).digest("hex") }] }, null, 2)}\n`;
     createTaskKernel(task).publishCanonicalRecord("evidence/workspace-lineage-failure.json", failureRaw);
     const controlledFailure = run(root, repo, ["publish-verify-failure", "--stage=verify-code", "--project=Demo", "--task=official-chain", "--failure-evidence=evidence/workspace-lineage-failure.json"]);
     expect(controlledFailure).toMatchObject({ attempt_ref: "attempt-0002.json", attempt: { verify_failure_publication: { failure_evidence_ref: "evidence/workspace-lineage-failure.json", active_build_accepted_ref: "results/build-code/accepted.json" } } });
@@ -136,7 +146,6 @@ describe("official five-stage CLI", () => {
     const revisedBuildInput = join(root, "build-code-revised-input.json");
     writeFileSync(revisedBuildInput, `${JSON.stringify({ receipts: { implementation: revisedImplementation.ref, tests: "receipts/build-tests-revised.json", review: revisedBuildReview.resultRef } })}\n`);
     const revisedBuild = run(root, repo, ["run", "--stage=build-code", "--project=Demo", "--task=official-chain", `--input=${revisedBuildInput}`, `--reopen=${reopen.reopen_ref}`]);
-    run(root, repo, ["accept", "--stage=build-code", "--project=Demo", "--task=official-chain", `--attempt=${revisedBuild.attempt_ref}`]);
 
     writeFileSync(join(workspace.worktreeRoot, "src", "feature.txt"), "implemented\nworkspace-b\n");
     const workspaceBTests = createCanonicalReceiptWriter({ task, workspace, stage: "verify-code", component: "tests" }).captureTests({ command: "printf workspace-b-verify", receiptRef: "receipts/verify-tests-workspace-b.json", outputRef: "evidence/verify-output-workspace-b.txt" });

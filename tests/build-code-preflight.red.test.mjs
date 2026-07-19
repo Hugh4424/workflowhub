@@ -1,0 +1,139 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { ArtifactDir } from "../core/artifact-dir.mjs";
+import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
+import { bootstrapStage } from "../core/stage-context.mjs";
+import { createTask } from "../core/task-handle.mjs";
+import { createTaskKernel } from "../core/task-kernel.mjs";
+import { openAcceptedWorkspace, prepareTaskWorkspace } from "../core/workspace.mjs";
+
+const roots = [];
+
+function confirm(kernel, stage, attemptRef) {
+  return kernel.confirmAttempt(stage, attemptRef, "accepted").ref;
+}
+
+function acceptedDesignFixture() {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-build-code-preflight-")));
+  roots.push(root);
+  const repo = join(root, "repo");
+  mkdirSync(repo);
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repo });
+  writeFileSync(join(repo, "README.md"), "base\n");
+  execFileSync("git", ["add", "README.md"], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "base"], { cwd: repo });
+  const task = createTask({ storageRoot: root, manifest: {
+    schema_version: "1.0.0", project_name: "Demo", task_id: "build-code-preflight",
+    created_at: "2026-07-19T00:00:00.000Z", target_repo_root: repo, issue_ids: [], inputs: {},
+  } });
+  const candidate = prepareTaskWorkspace(task);
+  const kernel = createTaskKernel(task);
+  const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit, snapshot_tree: candidate.captureSnapshot().tree } });
+  kernel.acceptAttempt("make-decision", decision.attempt_ref, confirm(kernel, "make-decision", decision.attempt_ref));
+  const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+  const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+  const bound = createTaskKernel(task, { workspace, artifacts });
+  artifacts.writeAtomic("spec.md", "# Feature\n\n- AC-101: accepted behavior\n");
+  const specCheckpoint = bound.createCheckpoint("build-spec");
+  const specAttempt = bound.publishAttempt("build-spec", {
+    facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: specCheckpoint },
+    upstream_refs: [{ task_id: task.identity.taskId, stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }],
+  });
+  bound.acceptAttempt("build-spec", specAttempt.attempt_ref);
+  artifacts.writeAtomic("plan.md", "# Plan\n");
+  artifacts.writeAtomic("tasks.md", "# Tasks\n");
+  const planCheckpoint = bound.createCheckpoint("build-plan");
+  const planAttempt = bound.publishAttempt("build-plan", {
+    facts: { plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint: planCheckpoint },
+    upstream_refs: [{ task_id: task.identity.taskId, stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+  });
+  bound.acceptAttempt("build-plan", planAttempt.attempt_ref, confirm(bound, "build-plan", planAttempt.attempt_ref));
+  return { root, repo, task, workspace, artifacts, bound };
+}
+
+afterEach(() => { while (roots.length) rmSync(roots.pop(), { recursive: true, force: true }); });
+
+describe("build-code authenticated input preflight", () => {
+  it("rechecks accepted design at real build-code bootstrap", () => {
+    const { task, artifacts } = acceptedDesignFixture();
+    artifacts.writeAtomic("tasks.md", "# Tasks\n\nTampered before build-code entry.\n");
+    expect(() => bootstrapStage("build-code", {
+      mode: "sidecar", projectName: "Demo", taskId: "build-code-preflight", taskPath: task.taskPath,
+    })).toThrow(/accepted|checkpoint|plan|tasks|artifact.*changed/i);
+  });
+
+  it("rechecks accepted design immediately before a direct implementation receipt", () => {
+    const { task, workspace, artifacts, bound } = acceptedDesignFixture();
+    expect(() => bound.readAccepted("build-plan")).not.toThrow();
+    expect(() => workspace.worktreeRoot).not.toThrow();
+
+    artifacts.writeAtomic("tasks.md", "# Tasks\n\nTampered after the entry preflight.\n");
+    writeFileSync(join(workspace.worktreeRoot, "implementation.txt"), "implementation\n");
+
+    expect(() => writeOfficialComponentReceipt({
+      task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true },
+    })).toThrow(/accepted|checkpoint|plan|tasks|artifact.*changed/i);
+    expect(() => task.readRecord("receipts/implementation.json")).toThrow(/ENOENT|not found/i);
+  });
+});
+
+describe("build-code Coder, AC, and handoff contracts", () => {
+  const skill = readFileSync(resolve("workflows/build-code/SKILL.md"), "utf8");
+  const verifySkill = readFileSync(resolve("workflows/verify-code/SKILL.md"), "utf8");
+  const brief = readFileSync(resolve("docs/human-brief-template.md"), "utf8");
+
+  it("gives Coder one complete Phase card without binding a second orchestration skill", () => {
+    expect(skill).toMatch(/Coder[\s\S]*Phase[\s\S]*(?:goal|目标)[\s\S]*AC IDs[\s\S]*Workspace[\s\S]*(?:allowlist|allowed files|允许文件)[\s\S]*(?:non-goals|非目标)[\s\S]*(?:test commands|测试命令)[\s\S]*(?:upstream findings|上游 finding)/i);
+    expect(skill).toMatch(/do not (?:create|bind)[^\n]*(?:Coder|phase) Skill|不得[^\n]*(?:新增|绑定)[^\n]*(?:Coder|Phase)[^\n]*Skill/i);
+  });
+
+  it("requires applicable RED to minimal GREEN, focused tests, necessary regression, and scoped diff", () => {
+    expect(skill).toMatch(/(?:when applicable|适用时)[\s\S]*RED[\s\S]*(?:minimal GREEN|最小 GREEN)[\s\S]*(?:focused tests|聚焦测试)[\s\S]*(?:necessary regression|必要回归)[\s\S]*(?:scoped diff|范围内 diff)/i);
+    expect(skill).toMatch(/Coder[\s\S]{0,300}(?:return|返回)[^\n]*(?:exact test command|精确测试命令)[^\n]*(?:raw output|原始输出)/i);
+    expect(skill).toMatch(/Code Builder[\s\S]{0,100}(?:writes|写入)[\s\S]{0,100}(?:canonical evidence refs|canonical[\s\S]{0,40}证据引用)/i);
+  });
+
+  it("forbids Coder from owning publication and delivery actions", () => {
+    for (const action of ["commit", "review", "accept", "merge", "push", "close"]) {
+      expect(skill, `missing Coder prohibition for ${action}`).toMatch(new RegExp(`Coder[^\\n]*(?:must not|不得)[^\\n]*${action}`, "i"));
+    }
+  });
+
+  it("requires a complete AC table in existing test evidence and the human brief", () => {
+    expect(skill).toMatch(/each accepted AC|每(?:一|项).*AC/i);
+    for (const status of ["covered", "missing", "unknown"]) expect(skill).toContain(status);
+    expect(skill).toMatch(/(?:authenticated|canonical|可追溯)[^\n]*(?:refs|引用)[\s\S]*(?:test evidence|测试证据)[\s\S]*(?:human brief|大白话)/i);
+    expect(skill).toMatch(/review baseline[\s\S]*(?:authenticated|verified) Workspace/i);
+    expect(skill).toMatch(/exactly one row|恰好一行/i);
+    expect(skill).toMatch(/covered[^\n]*(?:requires|必须)[^\n]*(?:refs|引用)/i);
+    expect(skill).toMatch(/(?:missing|unknown)[^\n]*(?:无|none)[^\n]*(?:reason|原因)/i);
+    expect(skill).toMatch(/(?:omitted|遗漏)[^\n]*(?:missing|unknown)[^\n]*(?:never|不得)[^\n]*covered/i);
+    expect(verifySkill).toMatch(/accepted build-code facts[\s\S]*evidence_refs/i);
+  });
+
+  it("maps an omitted accepted AC to unknown rather than covered in the contract fixture", () => {
+    const accepted = ["AC-101", "AC-102"];
+    const supplied = [{ ac: "AC-101", status: "covered", refs: ["evidence/ac-101.json"], reason: "test passed" }];
+    const rows = accepted.map((ac) => supplied.find((row) => row.ac === ac)
+      ?? { ac, status: "unknown", refs: "无", reason: "上游未报告" });
+    expect(rows).toEqual([
+      supplied[0],
+      { ac: "AC-102", status: "unknown", refs: "无", reason: "上游未报告" },
+    ]);
+    expect(rows.find((row) => row.ac === "AC-102")?.status).not.toBe("covered");
+  });
+
+  it("defines a concise downstream handoff without copying full artifacts or logs", () => {
+    for (const heading of ["阶段结果", "关键决定", "正式产物", "测试和审查证据", "下一阶段依赖", "未解决风险", "下一步", "可追溯记录"]) {
+      expect(brief, `missing human brief handoff field: ${heading}`).toContain(heading);
+    }
+    expect(brief).toMatch(/(?:引用|refs)[\s\S]*(?:不得|不要|禁止)[^\n]*(?:复制|粘贴)[^\n]*(?:全文|完整)/i);
+    expect(verifySkill).toMatch(/accepted build-code facts[\s\S]*evidence_refs/i);
+  });
+});

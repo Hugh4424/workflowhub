@@ -6,7 +6,9 @@
 
 新 stage-result producer 使用 `core/audit-summary-carrier.mjs` 写 v1 tuple：`audit_contract_version`、`audit_summary_ref`、`audit_summary_hash`、`audit_verdict`。引用必须 task-relative；consumer 只能核对已发布 summary 的 hash/verdict，diff/test 仍是物理事实，不得成为第二个质量 verdict。旧 receipt 缺 tuple 时保留 legacy + migration hint/unknown，绝不推断 `pass`。
 
-旧 caller 先把来源规范化为 `CanonicalSourceInput`，再调用 generic core。offline caller 使用 fixture adapter；Multica caller 使用 `normalizeMulticaSource`。两者对等内容必须得到相同 ledger、summary、verdict；平台字段不得进入 generic core。
+旧 caller 先在 WorkflowHub 外把来源规范化为 `CanonicalSourceInput`，再调用
+generic core。offline fixture 与其他 invoking host 的对等内容必须得到相同
+ledger、summary、verdict；宿主字段不得进入 generic core。
 
 ## 四分支判定（D8/D11）
 
@@ -60,7 +62,7 @@ Source adapters return `SOURCE_INCOMPLETE` for missing or incomplete authoritati
 | Read `SKILL.md` labels as runtime steps | Resolve canonical `step_id` from the stage `steps.json` manifest | An unmapped label returns `UNKNOWN_STEP`; request migration, do not infer success. |
 | Treat journal as expected plan | Read expected steps from manifest and observed facts from journal/receipts | Preserve duplicate/out-of-order/unknown facts for aggregator findings. |
 | Locally decide a stage pass | Reference the aggregator `AuditSummary` and its hash | Missing/mismatched reference is failure or `unknown`, never a local pass. |
-| Send Multica-native source to core | Normalize to `CanonicalSourceInput` | Offline fixture and Multica source remain equivalent at the core boundary. |
+| Send host-native source to core | Normalize to `CanonicalSourceInput` outside WorkflowHub | Offline fixtures and host-normalized sources remain equivalent at the core boundary. |
 | Omit legacy identity or source completeness | Supply canonical field or return explicit error | Use `LEGACY_FIELDS_MISSING`, `SOURCE_INCOMPLETE`, or `SOURCE_UNKNOWN`; include migration hint. |
 
 ## Completion signals

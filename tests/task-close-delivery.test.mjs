@@ -115,6 +115,8 @@ function createRunner(f) {
   writeFileSync(join(runner, "AGENTS.md"), "# Runner\n");
   mkdirSync(join(runner, "workflows", "verify-code"), { recursive: true });
   writeFileSync(join(runner, "workflows", "verify-code", "SKILL.md"), "# verify-code\n");
+  execFileSync("git", ["add", "."], { cwd: runner });
+  execFileSync("git", ["-c", "user.name=WorkflowHub Tests", "-c", "user.email=tests@workflowhub.local", "commit", "-qm", "runner"], { cwd: runner });
   return realpathSync(runner);
 }
 

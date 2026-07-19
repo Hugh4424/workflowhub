@@ -44,7 +44,6 @@ reply.md
 .agent_context/
 .agents/
 .claude/
-.multica/
 .specify/
 
 # worktree-unification runtime artifacts (live in task_tracking_root, not repo)

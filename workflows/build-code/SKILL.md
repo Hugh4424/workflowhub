@@ -33,6 +33,10 @@ edit, replace, or delete `accepted.json`, prior attempts, or failure evidence.
    `node scripts/stage-runtime.mjs reopen --stage=build-code --project=<project> --task=<task> --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ac-005.json>`.
 3. Re-run only the original task's build-code with the returned immutable ref:
    `node scripts/stage-runtime.mjs run --stage=build-code --project=<project> --task=<task> --input=<component-receipts.json> --reopen=<results/build-code/revisions/reopen-0001.json>`.
+   If a canonical component receipt already exists from the accepted build,
+   this controlled re-run may use the existing `receipt --revision=true
+   --recover=<previous-receipt-ref>` path. Normal build-code must keep using
+   create-only receipts and must not create revisions.
 
 The new attempt carries the prior accepted record and verify failure hashes.
 The runtime preserves the former canonical bytes as `accepted-attempt-<n>.json`
@@ -42,6 +46,20 @@ lineage evidence, never input side channels. Reusing an authorization, a source
 from a different task, a non-failure, or a non-build-code stage fails loudly.
 
 Create implementation provenance with `stage-runtime.mjs receipt --stage=build-code --project=<project> --task=<task> --component=implementation --input=<phase-payload.json>`; HEAD/tree/diff evidence is derived by the writer.
+For a normal completed build, use the smallest valid payload:
+`{"phase_completion":true}`. A structured value is allowed only as
+`{"phase_completion":{"status":"<non-empty>","evidence_ref":"<task-relative-ref>"}}`.
+Keep Phase lists and the AC table in the existing test evidence and human brief;
+do not put them inside `phase_completion`. The receipt command validates this
+shape before publishing any create-only receipt or diff evidence.
+
+Create the canonical build test receipt only through:
+`node scripts/stage-runtime.mjs capture-tests --stage=build-code --project=<project> --task=<task> --input=<test-capture.json>`.
+The input contains only `command`, `receipt_ref`, and optional `output_ref`, for
+example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output_ref":"evidence/build-tests.output"}`.
+Use fresh task-relative refs for a controlled rework attempt. Do not pass
+`component=tests`, call internal receipt writers, or guess another component
+name; `capture-tests` is the single public producer for build-code test facts.
 
 Declared runtime components: `wh-review`, conditional `test-routing-advisor`,
 conditional `diagnosing-bugs`, and conditional `review-response`.
@@ -62,11 +80,26 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
 3. Split work into implementation phases. Show each phase scope as a progress
    update and continue automatically. Escalate only when the requested work
    would change the accepted plan or allowed scope.
-4. Invoke coding workers with frozen phase material and the explicit workspace
-   root. Workers do not receive task storage information.
-5. Run the target project's real test command in the Workspace. Record command,
-   exit code, freshness, and output reference without turning the observation
-   into an automatic quality decision.
+4. Give the Coder one complete **Coder Phase card** for each Phase, in this
+   order: goal, accepted AC IDs, authenticated Workspace root, allowed files
+   allowlist, non-goals, exact test commands, and upstream findings.
+   Do not create or bind a Coder or Phase Skill. Invoke the Coder with this
+   frozen card and no task-storage information.
+   When applicable, the Coder must produce RED, then minimal GREEN, then run
+   focused tests and necessary regression, and return a scoped diff.
+   Coder must return the exact test command and raw output. Code Builder writes
+   the canonical evidence refs.
+   The card's Workspace root must be copied from the accepted make-decision
+   record. Never substitute the target repository root, current checkout, or
+   current shell directory. The Coder must return its completion evidence to
+   the Code Builder before the Phase is marked complete; a missing handoff is
+   recoverable in the same Phase and is not a product decision.
+   Coder must not commit; Coder must not review; Coder must not accept.
+   Coder must not merge; Coder must not push; Coder must not close.
+5. Run the target project's real test command in the Workspace through the
+   public `capture-tests` entry above. It records command, exit code, freshness,
+   and output reference without turning the observation into an automatic
+   quality decision.
 6. Run `createPhaseDiffScan` from `diff-scanner.mjs` with the trusted Workspace
    root, phase ID, phase baseline commit, immutable implementation snapshot, and
    the plan's allowed files. Its CLI accepts repeated
@@ -74,7 +107,16 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    `--allowed-files-json=<json-array-file>` and prints JSON to stdout. Save the
    `phase-diff-scan.v1` JSON as task-relative evidence and point the current
    `phase-result.json.diff_scan.path` at it.
-7. Run independent code review with only the current `phase_id` as its scope
+7. Before review, use the fixed table `| AC | status | refs | reason |`. Give
+   each accepted AC exactly one row with status `covered`, `missing`, or
+   `unknown`. `covered` requires authenticated canonical refs. `missing` or
+   `unknown` may use `无` for refs but must include a reason.
+   Any omitted AC is `missing` or `unknown`, never `covered`. Put the same table in
+   existing test evidence and the human brief; do not add a receipt producer or
+   schema for it. Derive the review baseline only from the authenticated Workspace;
+   never infer it from a comment or cwd. Actual Agent adherence is
+   verified by the Phase 7 Canary, not inferred from this text contract alone.
+8. Run independent code review with only the current `phase_id` as its scope
    selector. `wh-review` resolves the frozen commit pair from the current diff
    scan and regenerates the complete phase diff. Do not pass paths, commits,
    ranges, or a caller-built diff. Address actionable revisions in a new phase
@@ -85,9 +127,11 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    generator and implementation workers never invoke it. Its lens may reject
    concrete scope creep or speculative code in the current diff, but it may not
    reopen accepted product scope.
-8. Publish a build-code attempt containing baseline/head commits, changed
+9. Publish a build-code attempt containing baseline/head commits, changed
    files, fresh test command, test facts, review facts, and missing items.
-9. Present the automatic-progress brief from `docs/human-brief-template.md`.
+10. Present the automatic-progress brief from `docs/human-brief-template.md`.
+   Its concise handoff points downstream to the formal artifacts and evidence
+   refs; it does not copy their full text or logs.
    The trusted runtime immediately runs `accept --attempt=<attempt>` without a
    confirmation and advances to verify-code.
 

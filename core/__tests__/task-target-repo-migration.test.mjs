@@ -63,20 +63,21 @@ describe("target repository migration", () => {
     expect(migrated.integrity_hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("opens the accepted Workspace and captures build-code and verify-code after migration", async () => {
+  it("opens the accepted Workspace after migration and rejects premature build-code", async () => {
     const f = acceptedWorkspaceFixture();
     const migrated = migrateTaskTargetRepoRoot({ taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration", targetRepoRoot: f.repo, targetBranch: "main" });
 
     const contexts = {};
-    for (const stage of ["make-decision", "build-spec", "build-plan", "build-code", "verify-code"]) {
+    for (const stage of ["make-decision", "build-spec", "build-plan", "verify-code"]) {
       const context = bootstrapStage(stage, { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" });
       contexts[stage] = context;
       expect(context.manifest.target_repo_root).toBe(f.repo);
       if (stage !== "make-decision") expect(context.workspace.worktreeRoot).toBe(f.candidate.worktreeRoot);
     }
+    expect(() => bootstrapStage("build-code", { mode: "sidecar", taskPath: f.task.taskPath, projectName: "Demo", taskId: "migration" })).toThrow(/accepted spec and plan/i);
     const snapshotHead = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD"]);
     const snapshotTree = git(f.candidate.worktreeRoot, ["rev-parse", "HEAD^{tree}"]);
-    expect(await captureBuild("true", "receipts/migrated-build.json", { workspace: contexts["build-code"].workspace, task: contexts["build-code"].task })).toMatchObject({ snapshot_head: snapshotHead, snapshot_tree: snapshotTree });
+    expect(await captureBuild("true", "receipts/migrated-build.json", { workspace: contexts["verify-code"].workspace, task: contexts["verify-code"].task })).toMatchObject({ snapshot_head: snapshotHead, snapshot_tree: snapshotTree });
     expect(await captureVerify("true", "receipts/migrated-verify.json", { workspace: contexts["verify-code"].workspace, task: contexts["verify-code"].task })).toMatchObject({ snapshot_head: snapshotHead, snapshot_tree: snapshotTree });
     expect(() => openAcceptedWorkspace(migrated.task, { facts: {
       worktree_root: `${f.repo}-migration`, baseline_commit: f.candidate.baselineCommit,
@@ -105,7 +106,9 @@ describe("target repository migration", () => {
     await publishAndAccept("build-code", async () => ({ facts: { changed: [], tests: testFacts("build"), review: review("pass"), phase_completion: true } }));
 
     const verifyContext = context("verify-code");
-    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [] }, null, 2)}\n`;
+    const failureDetail = "AC-005 failed\n";
+    verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.txt", failureDetail);
+    const failureRaw = `${JSON.stringify({ schema_version: "acceptance-evidence.v1", acceptance_criterion_id: "AC-005", result: "fail", refs: [{ ref: "evidence/acceptance-ac-005.txt", sha256: createHash("sha256").update(failureDetail).digest("hex") }] }, null, 2)}\n`;
     verifyContext.kernel.publishCanonicalRecord("evidence/acceptance-ac-005.json", failureRaw);
     const failed = await runStage("verify-code", verifyContext, async () => ({ facts: { tests: testFacts("verify"), review: review("fail"), evidence_refs: [{ ref: "evidence/acceptance-ac-005.json", sha256: createHash("sha256").update(failureRaw).digest("hex") }] } }));
 

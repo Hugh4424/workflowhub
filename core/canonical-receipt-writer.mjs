@@ -1,15 +1,16 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
+import { ArtifactDir } from "./artifact-dir.mjs";
 import { assertTaskHandle } from "./task-handle.mjs";
 import { createTaskKernel } from "./task-kernel.mjs";
+import { validateAcceptanceEvidence, validatePhaseCompletion } from "./task-kernel-implementation.mjs";
 import { assertWorkspace } from "./workspace.mjs";
 import { runWorkspaceCommand } from "./workspace-runner.mjs";
 import { captureGitWorktreeSnapshot } from "./git-worktree-snapshot.mjs";
 import { validateSchema } from "../skills/wh-review/scripts/schema-validator.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const ACCEPTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const OFFICIAL_COMPONENTS = Object.freeze({
   decision: Object.freeze({ stage: "make-decision", kind: "decision-log", ref: "receipts/decision.json" }),
   spec: Object.freeze({ stage: "build-spec", kind: "content", ref: "receipts/spec.json" }),
@@ -103,6 +104,14 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   } else if (registration.kind === "implementation") {
     const safeWorkspace = assertWorkspace(workspace);
     if (!Object.prototype.hasOwnProperty.call(payload, "phase_completion") || Object.keys(payload).some((key) => key !== "phase_completion")) throw new TypeError("implementation payload accepts only phase_completion");
+    validatePhaseCompletion(payload.phase_completion);
+    const acceptedKernel = createTaskKernel(safeTask, { workspace: safeWorkspace, artifacts: ArtifactDir.open(safeWorkspace.worktreeRoot, safeTask) });
+    try {
+      acceptedKernel.readAccepted("build-spec");
+      acceptedKernel.readAccepted("build-plan");
+    } catch (error) {
+      throw new Error(`build-code implementation receipt requires current accepted spec and plan: ${error.message}`);
+    }
     const snapshot = captureWorkspaceSnapshot(safeWorkspace), snapshotHead = snapshot.head, snapshotTree = snapshot.tree;
     const patch = workspaceCommand(safeWorkspace, "git", ["diff", "--binary", "--no-ext-diff", safeWorkspace.baselineCommit, "--"], "implementation diff");
     const tracked = workspaceGit(safeWorkspace, ["diff", "--name-only", safeWorkspace.baselineCommit, "--"]).split("\n").filter(Boolean);
@@ -156,18 +165,7 @@ export function writeOfficialComponentReceipt({ task, workspace, stage, componen
   return Object.freeze({ ref, sha256: sha256(revisedRaw), value: Object.freeze(revised), revision: true, previous_ref: revisionOf, previous_hash: revision.previous_hash, content_hash: contentHash });
 }
 
-export function validateAcceptanceEvidence(value, label = "acceptance evidence") {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
-  if (value.schema_version !== "acceptance-evidence.v1") throw new Error(`${label} schema_version must be acceptance-evidence.v1`);
-  if (typeof value.acceptance_criterion_id !== "string" || !ACCEPTANCE_ID.test(value.acceptance_criterion_id)) throw new Error(`${label} acceptance_criterion_id must be stable and non-empty`);
-  if (!new Set(["pass", "fail"]).has(value.result)) throw new Error(`${label} result must be pass or fail`);
-  if (!Array.isArray(value.refs) || value.refs.length === 0) throw new Error(`${label} refs must be a non-empty array`);
-  const refs = value.refs.map((entry, index) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry) || Object.keys(entry).some((key) => !["ref", "sha256"].includes(key)) || typeof entry.ref !== "string" || !/^evidence\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(entry.ref) || entry.ref.includes("..") || !/^[a-f0-9]{64}$/.test(entry.sha256 ?? "")) throw new Error(`${label} refs[${index}] must contain canonical ref and sha256`);
-    return { ref: entry.ref, sha256: entry.sha256 };
-  });
-  return Object.freeze({ schema_version: value.schema_version, acceptance_criterion_id: value.acceptance_criterion_id, result: value.result, refs: Object.freeze(refs) });
-}
+export { validateAcceptanceEvidence };
 
 export function createCanonicalReceiptWriter({ task, workspace, stage, component, version = "1.0.0", now = () => new Date().toISOString() } = {}) {
   const safeTask = assertTaskHandle(task), safeWorkspace = assertWorkspace(workspace);

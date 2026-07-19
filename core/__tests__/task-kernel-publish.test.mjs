@@ -161,6 +161,60 @@ describe("TaskKernel append-only publication", () => {
     })).not.toThrow();
   });
 
+  it.each(["tracked", "untracked"])("rejects a no-diff checkpoint when the Workspace also contains an unexpected %s path", (kind) => {
+    const { repo, task, kernel } = fixture();
+    const artifactRoot = join(repo, "specs", "task-one");
+    mkdirSync(artifactRoot, { recursive: true });
+    writeFileSync(join(artifactRoot, "spec.md"), "# Existing Spec\n");
+    execFileSync("git", ["add", "specs/task-one/spec.md"], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "existing spec"], { cwd: repo });
+    const candidate = prepareTaskWorkspace(task);
+    const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: candidate.worktreeRoot, baseline_commit: candidate.baselineCommit } });
+    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    const boundKernel = createTaskKernel(task, { workspace, artifacts });
+    const checkpoint = boundKernel.createCheckpoint("build-spec");
+    const unexpected = kind === "tracked" ? "README.md" : "unexpected.txt";
+    writeFileSync(join(workspace.worktreeRoot, unexpected), "must not enter the checkpoint\n");
+    const upstream_refs = [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }];
+
+    expect(() => boundKernel.publishAttempt("build-spec", {
+      facts: { spec_ref: "specs/task-one/spec.md", checkpoint }, upstream_refs,
+    })).toThrow(/unexpected|changed path|checkpoint/i);
+    expect(String(execFileSync("git", ["for-each-ref", "--format=%(refname)", "refs/workflowhub/checkpoints/"], { cwd: repo }))).toBe("");
+  });
+
+  it("derives checkpoint trees from authenticated upstream facts and rejects upstream drift", () => {
+    const { task, kernel } = fixture();
+    const candidate = prepareTaskWorkspace(task);
+    writeFileSync(join(candidate.worktreeRoot, "decision-context.txt"), "accepted context\n");
+    const decision = kernel.publishAttempt("make-decision", { facts: {
+      worktree_root: candidate.worktreeRoot,
+      baseline_commit: candidate.baselineCommit,
+      snapshot_tree: candidate.captureSnapshot().tree,
+    } });
+    kernel.acceptAttempt("make-decision", decision.attempt_ref, confirmation(kernel, "make-decision", decision.attempt_ref));
+    const workspace = openAcceptedWorkspace(task, kernel.readAccepted("make-decision"));
+    const artifacts = ArtifactDir.open(workspace.worktreeRoot, task);
+    const boundKernel = createTaskKernel(task, { workspace, artifacts });
+    artifacts.writeAtomic("spec.md", "# Spec\n");
+    const specAttempt = boundKernel.publishAttempt("build-spec", {
+      facts: { spec_ref: artifacts.reference("spec.md"), checkpoint: boundKernel.createCheckpoint("build-spec") },
+      upstream_refs: [{ task_id: "task-one", stage: "make-decision", accepted_ref: "results/make-decision/accepted.json" }],
+    });
+    const acceptedSpec = boundKernel.acceptAttempt("build-spec", specAttempt.attempt_ref);
+    expect(String(execFileSync("git", ["show", `${acceptedSpec.checkpoint.commit_oid}:decision-context.txt`], { cwd: workspace.worktreeRoot }))).toBe("accepted context\n");
+
+    writeFileSync(join(workspace.worktreeRoot, "decision-context.txt"), "drifted context\n");
+    artifacts.writeAtomic("plan.md", "# Plan\n");
+    artifacts.writeAtomic("tasks.md", "# Tasks\n");
+    expect(() => boundKernel.publishAttempt("build-plan", {
+      facts: { plan_ref: artifacts.reference("plan.md"), tasks_ref: artifacts.reference("tasks.md"), checkpoint: boundKernel.createCheckpoint("build-plan") },
+      upstream_refs: [{ task_id: "task-one", stage: "build-spec", accepted_ref: "results/build-spec/accepted.json" }],
+    })).toThrow(/upstream|checkpoint|changed|drift/i);
+  });
+
   it("reads legacy automatic-stage accepted records that have a human ref and no acceptance mode", () => {
     const { kernel } = fixture();
     const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: "/repo", baseline_commit: "a".repeat(40), decision: "go" } });

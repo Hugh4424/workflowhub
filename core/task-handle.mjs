@@ -80,10 +80,12 @@ function validateManifest(manifest) {
   }
   assertPlainObject(manifest.inputs, "task manifest inputs");
   const hasRunnerRoot = Object.prototype.hasOwnProperty.call(manifest, "runner_root");
+  const hasRunnerOid = Object.prototype.hasOwnProperty.call(manifest, "runner_oid");
   const hasRunnerMigration = Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration");
-  if (hasRunnerRoot !== hasRunnerMigration) throw new TypeError("task manifest runner_root and runner_root_migration must be present together");
+  if (hasRunnerRoot !== hasRunnerOid || hasRunnerRoot !== hasRunnerMigration) throw new TypeError("task manifest runner_root, runner_oid, and runner_root_migration must be present together");
   if (hasRunnerRoot) {
     if (typeof manifest.runner_root !== "string" || !isAbsolute(manifest.runner_root)) throw new TypeError("task manifest runner_root must be an absolute path");
+    if (!/^[a-f0-9]{40}$/.test(manifest.runner_oid ?? "")) throw new TypeError("task manifest runner_oid must be a full Git commit OID");
     assertPlainObject(manifest.runner_root_migration, "task manifest runner_root_migration");
     const migration = manifest.runner_root_migration;
     if (Object.keys(migration).some((key) => key !== "ref") || !RUNNER_ROOT_MIGRATION_REF.test(migration.ref ?? "")) {
@@ -176,9 +178,9 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
     throw new Error("runner root migration record is invalid");
   }
   const identity = record.runner_identity;
-  const identityKeys = new Set(["runner_root", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
+  const identityKeys = new Set(["runner_root", "runner_oid", "runner_branch", "project", "task", "stage", "agents_ref", "stage_skill_ref"]);
   if (!identity || typeof identity !== "object" || Array.isArray(identity) || Object.keys(identity).some((key) => !identityKeys.has(key)) ||
-      identity.runner_root !== manifest.runner_root || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
+      identity.runner_root !== manifest.runner_root || identity.runner_oid !== manifest.runner_oid || !/^[a-f0-9]{40}$/.test(identity.runner_oid ?? "") || identity.project !== task.identity.projectName || identity.task !== task.identity.taskId ||
       typeof identity.stage !== "string" || identity.agents_ref !== "AGENTS.md" || identity.stage_skill_ref !== `workflows/${identity.stage}/SKILL.md`) {
     throw new Error("runner root migration identity mismatch");
   }
@@ -203,6 +205,7 @@ function validateRunnerRootMigration(task, manifest, manifestRaw) {
   if (sha256(migrationManifestRaw) !== record.new_manifest_hash) throw new Error("runner root migration new manifest hash mismatch");
   const previousManifest = { ...migrationManifest };
   delete previousManifest.runner_root;
+  delete previousManifest.runner_oid;
   delete previousManifest.runner_root_migration;
   const reconstructedPreviousRaw = `${JSON.stringify(previousManifest, null, 2)}\n`;
   if (sha256(reconstructedPreviousRaw) !== record.previous_manifest_hash) throw new Error("runner root migration previous manifest hash mismatch");
@@ -807,7 +810,7 @@ function makeTaskHandle(taskPath, manifest) {
 
 /** Create and atomically publish a complete task directory under a trusted storage root. */
 export function createTask({ storageRoot, taskPath, manifest, testHooks } = {}) {
-  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration"))) {
+  if (manifest && (Object.prototype.hasOwnProperty.call(manifest, "runner_root") || Object.prototype.hasOwnProperty.call(manifest, "runner_oid") || Object.prototype.hasOwnProperty.call(manifest, "runner_root_migration"))) {
     throw new TypeError("createTask cannot set runner_root; use controlled runner migration for an existing task");
   }
   const identity = validateManifest(manifest);
@@ -909,7 +912,7 @@ export function migrateTaskRunnerRoot({ taskPath, projectName, taskId, runnerRoo
   });
   if (task.manifest.runner_root !== undefined) {
     const record = JSON.parse(task.readRecord(task.manifest.runner_root_migration.ref));
-    if (task.manifest.runner_root !== identity.runner_root || JSON.stringify(record.runner_identity) !== JSON.stringify(identity)) {
+    if (task.manifest.runner_root !== identity.runner_root || task.manifest.runner_oid !== identity.runner_oid || JSON.stringify(record.runner_identity) !== JSON.stringify(identity)) {
       throw new Error("task runner_root is already bound to a different runner identity");
     }
     return Object.freeze({
@@ -928,6 +931,7 @@ export function migrateTaskRunnerRoot({ taskPath, projectName, taskId, runnerRoo
     const nextManifest = {
       ...task.manifest,
       runner_root: identity.runner_root,
+      runner_oid: identity.runner_oid,
       runner_root_migration: { ref: recordRef },
     };
     const nextManifestRaw = `${JSON.stringify(nextManifest, null, 2)}\n`;
