@@ -11,6 +11,7 @@ import {
 import { acceptStageAttempt, confirmStageAttempt, runOfficialStage } from "../core/stage-runner.mjs";
 import { requiresHumanConfirmation } from "../core/stage-acceptance-policy.mjs";
 import { writeOfficialComponentReceipt } from "../core/canonical-receipt-writer.mjs";
+import { runCapture as captureBuildCodeTests } from "../workflows/build-code/capture.mjs";
 
 const DESIGN_ARTIFACTS = Object.freeze({
   "build-spec": new Set(["spec.md"]),
@@ -25,8 +26,8 @@ function parseArgs(argv) {
     if (!item.startsWith("--") || split < 3) throw new TypeError(`invalid argument: ${item}`);
     values[item.slice(2, split)] = item.slice(split + 1);
   }
-  if (!new Set(["prepare", "artifact", "receipt", "run", "confirm", "accept", "reopen", "publish-verify-failure"]).has(command)) {
-    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|run|confirm|accept|reopen|publish-verify-failure> --stage=<stage> --project=<project> --task=<task> [...]");
+  if (!new Set(["prepare", "artifact", "receipt", "capture-tests", "run", "confirm", "accept", "reopen", "publish-verify-failure"]).has(command)) {
+    throw new TypeError("usage: stage-runtime.mjs <prepare|artifact|receipt|capture-tests|run|confirm|accept|reopen|publish-verify-failure> --stage=<stage> --project=<project> --task=<task> [...]");
   }
   return { command, values };
 }
@@ -38,6 +39,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   }
   if (command !== "receipt" && (Object.prototype.hasOwnProperty.call(values, "revision") || Object.prototype.hasOwnProperty.call(values, "recover"))) throw new TypeError("--revision/--recover are only valid for receipt");
   if (command === "receipt" && (!values.component || !values.input)) throw new TypeError("receipt requires --component and --input=<payload.json>");
+  if (command === "capture-tests" && (values.stage !== "build-code" || !values.input)) throw new TypeError("capture-tests requires --stage=build-code --input=<test-capture.json>");
   if (command === "artifact" && (!values.name || !values.input)) throw new TypeError("artifact requires --name=<artifact.md> --input=<content-file>");
   if (command === "reopen" && (values.stage !== "build-code" || !values["verify-attempt"] || !values["failure-evidence"])) throw new TypeError("reopen requires --stage=build-code --verify-attempt=<attempt-0001.json> --failure-evidence=<evidence/ref.json>");
   if (command === "publish-verify-failure" && (values.stage !== "verify-code" || !values["failure-evidence"])) throw new TypeError("publish-verify-failure requires --stage=verify-code --failure-evidence=<evidence/ref.json>");
@@ -51,7 +53,7 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
     projectName: values.project,
     taskId: values.task,
   });
-  const input = new Set(["receipt", "run"]).has(command)
+  const input = new Set(["receipt", "capture-tests", "run"]).has(command)
     ? JSON.parse(readFileSync(values.input, "utf8"))
     : undefined;
   if (command === "prepare") {
@@ -69,6 +71,20 @@ export async function stageRuntimeMain(argv = process.argv.slice(2)) {
   }
   if (command === "reopen") return context.kernel.reopenBuildCode({ verifyAttemptRef: values["verify-attempt"], failureEvidenceRef: values["failure-evidence"] });
   if (command === "publish-verify-failure") return context.kernel.publishVerifyFailureFromAccepted({ failureEvidenceRef: values["failure-evidence"] });
+  if (command === "capture-tests") {
+    if (!input || typeof input !== "object" || Array.isArray(input)
+      || typeof input.command !== "string"
+      || typeof input.receipt_ref !== "string"
+      || (input.output_ref !== undefined && typeof input.output_ref !== "string")
+      || Object.keys(input).some((key) => !new Set(["command", "receipt_ref", "output_ref"]).has(key))) {
+      throw new TypeError("test capture input requires command, receipt_ref, and optional output_ref only");
+    }
+    return captureBuildCodeTests(input.command, input.receipt_ref, {
+      task: context.task,
+      workspace: context.workspace,
+      ...(input.output_ref === undefined ? {} : { outputRef: input.output_ref }),
+    });
+  }
   if (values.stage === "make-decision" && command === "run") context = prepareMakeDecisionWorkspace(context);
   if (values.stage === "make-decision" && command === "accept") context = validateMakeDecisionWorkspaceAttempt(context, values.attempt);
   if (command === "receipt") {

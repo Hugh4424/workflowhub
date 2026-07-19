@@ -128,7 +128,13 @@ describe("official five-stage CLI", () => {
 
     const implementation = writeOfficialComponentReceipt({ task, workspace, stage: "build-code", component: "implementation", payload: { phase_completion: true } });
     expect(implementation.value.changed).toContain("src/feature.txt");
-    createCanonicalReceiptWriter({ task, workspace, stage: "build-code", component: "tests" }).captureTests({ command: "printf fixture-output", receiptRef: "receipts/build-tests.json", outputRef: "evidence/build-output.txt" });
+    const buildTestCaptureInput = join(root, "build-test-capture.json");
+    writeFileSync(buildTestCaptureInput, `${JSON.stringify({ command: "printf fixture-output", receipt_ref: "receipts/build-tests.json", output_ref: "evidence/build-output.txt" })}\n`);
+    const capturedBuildTests = run(root, repo, ["capture-tests", "--stage=build-code", "--project=Demo", "--task=official-chain", `--input=${buildTestCaptureInput}`]);
+    expect(capturedBuildTests).toMatchObject({ receipt_ref: "receipts/build-tests.json", output_ref: "evidence/build-output.txt", exit_code: 0 });
+    const unsupportedCapture = spawnSync(process.execPath, [runtime, "capture-tests", "--stage=verify-code", "--project=Demo", "--task=official-chain", `--input=${buildTestCaptureInput}`], { cwd: repo, env: { ...process.env, HOME: root, WORKFLOWHUB_TASK_DIR: root }, encoding: "utf8" });
+    expect(unsupportedCapture.status).not.toBe(0);
+    expect(unsupportedCapture.stderr).toMatch(/capture-tests requires --stage=build-code/i);
     const buildReview = writeFormalReviewFixture({ task, stage: "build-code", snapshotTree: implementation.value.snapshot_tree });
     const firstBuild = invoke("build-code", { implementation: "receipts/implementation.json", tests: "receipts/build-tests.json", review: buildReview.resultRef });
     const firstBuildAcceptedRaw = task.readRecord("results/build-code/accepted.json");

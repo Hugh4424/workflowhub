@@ -53,6 +53,14 @@ Keep Phase lists and the AC table in the existing test evidence and human brief;
 do not put them inside `phase_completion`. The receipt command validates this
 shape before publishing any create-only receipt or diff evidence.
 
+Create the canonical build test receipt only through:
+`node scripts/stage-runtime.mjs capture-tests --stage=build-code --project=<project> --task=<task> --input=<test-capture.json>`.
+The input contains only `command`, `receipt_ref`, and optional `output_ref`, for
+example `{"command":"npm test","receipt_ref":"receipts/build-tests.json","output_ref":"evidence/build-tests.output"}`.
+Use fresh task-relative refs for a controlled rework attempt. Do not pass
+`component=tests`, call internal receipt writers, or guess another component
+name; `capture-tests` is the single public producer for build-code test facts.
+
 Declared runtime components: `wh-review`, conditional `test-routing-advisor`,
 conditional `diagnosing-bugs`, and conditional `review-response`.
 
@@ -88,9 +96,10 @@ conditional `diagnosing-bugs`, and conditional `review-response`.
    recoverable in the same Phase and is not a product decision.
    Coder must not commit; Coder must not review; Coder must not accept.
    Coder must not merge; Coder must not push; Coder must not close.
-5. Run the target project's real test command in the Workspace. Record command,
-   exit code, freshness, and output reference without turning the observation
-   into an automatic quality decision.
+5. Run the target project's real test command in the Workspace through the
+   public `capture-tests` entry above. It records command, exit code, freshness,
+   and output reference without turning the observation into an automatic
+   quality decision.
 6. Run `createPhaseDiffScan` from `diff-scanner.mjs` with the trusted Workspace
    root, phase ID, phase baseline commit, immutable implementation snapshot, and
    the plan's allowed files. Its CLI accepts repeated
