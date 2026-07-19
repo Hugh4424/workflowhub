@@ -611,8 +611,22 @@ function makeTaskHandle(taskPath, manifest) {
   CANONICAL_ACCEPTED_REPLACERS.set(frozen, (relativePath, data, options) => {
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     verifyManifest();
-    if (relativePath !== "results/build-code/accepted.json") throw new Error("only build-code canonical accepted record may be replaced");
-    const result = writeAtomicAt(realTaskPath, relativePath, data, options);
+    if (!new Set(["results/build-code/accepted.json", "results/verify-code/accepted.json"]).has(relativePath)) {
+      throw new Error("only controlled build-code or verify-code canonical accepted records may be replaced");
+    }
+    const { candidate } = resolveRecord(realTaskPath, relativePath);
+    const prior = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real);
+    let result;
+    try {
+      result = writeAtomicAt(realTaskPath, relativePath, data, options);
+    } catch (error) {
+      const current = readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real);
+      if (current === data) writeAtomicAt(realTaskPath, relativePath, prior);
+      if (readRegularFileNoFollow(candidate, "canonical accepted record", taskRootIdentity.real) !== prior) {
+        throw new Error("canonical accepted replacement failed and rollback did not restore the prior record", { cause: error });
+      }
+      throw error;
+    }
     verifyDirectoryIdentity(taskRootIdentity, "task root");
     return result;
   });

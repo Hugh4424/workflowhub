@@ -59,7 +59,15 @@ uses the same official tests, review, and evidence receipt shape as `run`. The
 kernel requires a new active accepted build and fresh passing test, independent
 review, and acceptance-evidence records, then binds their hashes plus the old
 accepted verify result and current Workspace HEAD/tree into one new unaccepted
-verify attempt. It does not accept the attempt or replace the accepted result.
+verify attempt. Record a new human decision with `confirm` for that exact
+attempt, then pass its returned ref to the ordinary `accept` command. This is
+the only closed-stage acceptance exception: acceptance rechecks the old
+canonical verify result, active accepted build, confirmation, lineage, fresh
+tests/review/acceptance evidence, and current Workspace snapshot. It archives
+the prior canonical bytes collision-safely and atomically replaces
+`results/verify-code/accepted.json`. Any mismatch leaves the prior canonical
+and stage state unchanged; accepting the same passing attempt again is
+idempotent. Other attempts against a closed stage remain rejected.
 
 ## Procedure
 
@@ -79,7 +87,8 @@ verify attempt. It does not accept the attempt or replace the accepted result.
    `accept`. This confirmation accepts verification facts only.
 7. After verify-code is accepted, run `scripts/task-close.mjs prepare` with the
    explicit task path and identity, task branch, target branch, remote, task
-   snapshot commit from the accepted verification facts, accepted spec path,
+   snapshot commit from the current canonical accepted verification facts,
+   accepted spec path,
    and archive path. `prepare` accepts the still-uncommitted worktree only when
    its freshly captured tree exactly matches that snapshot commit and the
    snapshot parent is the current task-branch tip. The frozen plan contains exactly

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,6 +12,40 @@ import { writeHumanConfirmation } from "./helpers/human-confirmation.mjs";
 
 const roots = [];
 const git = (cwd, ...args) => String(execFileSync("git", args, { cwd, encoding: "utf8" })).trim();
+const sha256 = (raw) => createHash("sha256").update(raw).digest("hex");
+
+function writeAcceptedVerifyFixture(task, taskCommit, snapshotTree) {
+  const attempt = {
+    schema_version: "task-attempt.v2",
+    task_id: "close-task",
+    stage: "verify-code",
+    attempt_id: "verify-code:attempt-0001",
+    created_at: "2026-07-19T00:00:00.000Z",
+    facts: {
+      tests: {
+        command: "npm test", exit_code: 0, command_hash: "1".repeat(64),
+        snapshot_head: taskCommit, snapshot_tree: snapshotTree, snapshot_commit: taskCommit,
+        started_at: "2026-07-19T00:00:00.000Z", completed_at: "2026-07-19T00:00:01.000Z",
+        receipt_ref: "receipts/verify-tests.json", receipt_hash: "2".repeat(64),
+        output_ref: "evidence/verify-tests.txt", output_hash: "3".repeat(64),
+      },
+      review: { verdict: "pass", result_ref: "reviews/results/verify.json", result_hash: "4".repeat(64), snapshot_tree: snapshotTree },
+      evidence_refs: [],
+    },
+    evidence_refs: [], missing_items: [],
+    upstream_refs: [{ task_id: "close-task", stage: "build-code", accepted_ref: "results/build-code/accepted.json" }],
+  };
+  const attemptRaw = `${JSON.stringify(attempt, null, 2)}\n`;
+  const accepted = {
+    schema_version: "task-accepted.v2", task_id: "close-task", stage: "verify-code",
+    attempt_ref: "attempt-0001.json", integrity_hash: sha256(attemptRaw), acceptance_mode: "human",
+    human_confirmation_ref: "confirmations/verify-code/attempt-0001.json", accepted_at: "2026-07-19T00:00:02.000Z",
+    upstream_refs: attempt.upstream_refs,
+  };
+  mkdirSync(join(task.taskPath, "results", "verify-code"), { recursive: true });
+  writeFileSync(join(task.taskPath, "results", "verify-code", "attempt-0001.json"), attemptRaw);
+  writeFileSync(join(task.taskPath, "results", "verify-code", "accepted.json"), `${JSON.stringify(accepted, null, 2)}\n`);
+}
 
 function fixture({ targetRepo = "main", archiveParent = true } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "workflowhub-delivery-close-")));
@@ -58,6 +93,7 @@ function fixture({ targetRepo = "main", archiveParent = true } = {}) {
   const kernel = createTaskKernel(task);
   const decision = kernel.publishAttempt("make-decision", { facts: { worktree_root: worktree, baseline_commit: git(repo, "rev-parse", "main") } });
   kernel.acceptAttempt("make-decision", decision.attempt_ref, writeHumanConfirmation(kernel, "make-decision", decision));
+  writeAcceptedVerifyFixture(task, taskCommit, git(worktree, "rev-parse", "HEAD^{tree}"));
   return { root, remote, repo, source, worktree, taskCommit, task, kernel };
 }
 
@@ -98,6 +134,23 @@ afterEach(() => {
 });
 
 describe("delivery close verifier", () => {
+  it("prepares only from the current canonical verify-code accepted snapshot", async () => {
+    const api = await import("../core/task-close.mjs");
+    const f = fixture();
+    const attemptPath = join(f.task.taskPath, "results", "verify-code", "attempt-0001.json");
+    const acceptedPath = join(f.task.taskPath, "results", "verify-code", "accepted.json");
+    const attempt = JSON.parse(readFileSync(attemptPath, "utf8"));
+    attempt.facts.tests.snapshot_commit = git(f.worktree, "rev-parse", "HEAD^");
+    const attemptRaw = `${JSON.stringify(attempt, null, 2)}\n`;
+    writeFileSync(attemptPath, attemptRaw);
+    const accepted = JSON.parse(readFileSync(acceptedPath, "utf8"));
+    accepted.integrity_hash = sha256(attemptRaw);
+    writeFileSync(acceptedPath, `${JSON.stringify(accepted, null, 2)}\n`);
+
+    expect(() => api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) }))
+      .toThrow(/accepted verify-code snapshot/i);
+  });
+
   it("migrates an authenticated task target from its worktree to the checked-out main repository before close preparation", async () => {
     const api = await import("../core/task-close.mjs");
     const f = fixture({ targetRepo: "worktree" });
@@ -224,6 +277,7 @@ describe("delivery close verifier", () => {
     git(f.worktree, "add", "specs/archive");
     git(f.worktree, "commit", "-qm", "add archive symlink");
     f.taskCommit = git(f.worktree, "rev-parse", "HEAD");
+    writeAcceptedVerifyFixture(f.task, f.taskCommit, git(f.worktree, "rev-parse", "HEAD^{tree}"));
     const prepared = api.prepareDeliveryClosePlan({ task: f.task, kernel: f.kernel, delivery: delivery(f) });
     const confirmation = api.confirmClosePlan({ task: f.task, kernel: f.kernel, plan: prepared.plan, outcome: "confirmed" });
 
@@ -299,6 +353,7 @@ describe("delivery close verifier", () => {
     writeFileSync(join(f.worktree, "specs", "task", "spec.md"), "task version\n");
     git(f.worktree, "commit", "-qam", "task changes spec");
     f.taskCommit = git(f.worktree, "rev-parse", "HEAD");
+    writeAcceptedVerifyFixture(f.task, f.taskCommit, git(f.worktree, "rev-parse", "HEAD^{tree}"));
     writeFileSync(join(f.repo, "specs", "task", "spec.md"), "target version\n");
     git(f.repo, "commit", "-qam", "target changes spec");
     git(f.repo, "push", "-q", "origin", "main");

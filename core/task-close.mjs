@@ -278,6 +278,7 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const kernel = assertTaskKernel(taskKernel);
   if (kernel.task !== task) throw new Error("delivery close TaskHandle/TaskKernel mismatch");
   const accepted = kernel.readAccepted("make-decision");
+  const acceptedVerify = kernel.readAccepted("verify-code");
   const input = plain(requested, "delivery close input");
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remote ?? "")) throw new TypeError("delivery remote must be an explicit remote name");
   const root = task.manifest.target_repo_root;
@@ -288,6 +289,9 @@ export function prepareDeliveryClosePlan({ task: taskHandle, kernel: taskKernel,
   const common = (cwd) => resolve(cwd, git(cwd, ["rev-parse", "--git-common-dir"]));
   if (common(root) !== common(worktree)) throw new Error("task worktree is not registered in the target repository");
   const taskCommit = oid(input.task_commit, "delivery task_commit");
+  if (taskCommit !== oid(acceptedVerify.facts.tests.snapshot_commit, "accepted verify-code snapshot_commit")) {
+    throw new Error("delivery task_commit does not match the accepted verify-code snapshot");
+  }
   const branchTip = gitResult(root, ["rev-parse", "--verify", `refs/heads/${input.task_branch}`]);
   if (!branchTip.ok) throw new Error("task branch does not exist");
   const tip = branchTip.stdout.toLowerCase();
