@@ -58,6 +58,9 @@ describe("simple wh-review contracts", () => {
     expect(skill).toMatch(/`review_instructions`; callers must not add it/);
     expect(skill).toMatch(/Local input validation fails before an attempt exists/);
     expect(skill).toMatch(/do not retry the same material with guessed fields or provider names/);
+    expect(skill).toMatch(/Send the input JSON over stdin/);
+    expect(skill).toMatch(/Never place a transient review-input file in/);
+    for (const root of ["runner", "target repository", "CandidateWorkspace", "TaskHandle"]) expect(skill).toContain(root);
   });
 
   it("keeps the stage skill plan limited to provider-visible lenses", () => {

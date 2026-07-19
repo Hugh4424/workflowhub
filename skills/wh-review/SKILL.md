@@ -16,6 +16,11 @@ node skills/wh-review/scripts/wh-review-cli.mjs run < input.json
 node skills/wh-review/scripts/wh-review-cli.mjs verify-final < input.json
 ```
 
+Send the input JSON over stdin. Never place a transient review-input file in
+the runner, target repository, CandidateWorkspace, or TaskHandle. If the host
+cannot pipe stdin, use `mktemp` under its OS temporary directory and delete the
+file in the same foreground command; task storage is only for canonical output.
+
 Before the first call, read this file and `stage-materials.json`; do not guess
 field names or provider aliases. A normal review input has this exact shape:
 
